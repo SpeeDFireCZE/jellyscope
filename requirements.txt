@@ -12,7 +12,7 @@ starlette==1.6.0           # what FastAPI is built on: routing, sessions,
                            # fixes below live here, not in FastAPI - an
                            # unpinned transitive dependency is exactly where
                            # an old version hides.
-uvicorn[standard]==0.34.0  # the server that actually runs the FastAPI app
+uvicorn[standard]==0.52.3  # the server that actually runs the FastAPI app
 httpx==0.28.1              # HTTP client - talks to the Jellyfin API
 jinja2==3.1.6              # templating - turns HTML templates into pages
                            # (3.1.6 fixes CVE-2025-27516; Jellyscope does not
