@@ -25,6 +25,29 @@ neither can answer alone:
 
 ---
 
+## What it looks like
+
+**Insights** — the page the whole project exists for. Behaviour meets
+technique: how much space is taken by things nobody watches, which files
+make the server transcode, what you have in 4K and never finished.
+
+![Insights](docs/screenshots/insights.png)
+
+**Overview** — what is playing right now, what was added, and the numbers
+for the chosen period.
+
+![Overview](docs/screenshots/overview.png)
+
+| Library | Languages |
+|---|---|
+| ![Library](docs/screenshots/library.png) | ![Languages](docs/screenshots/languages.png) |
+| Codecs, resolutions and sizes of what you really have. | What language people watch in — and what the library offers. |
+
+<sub>Screenshots are from the demo mode, so the data is made up and the
+posters are empty — a real installation loads them from Jellyfin.</sub>
+
+---
+
 ## What it does
 
 | Page | Contents |

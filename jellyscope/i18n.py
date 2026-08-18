@@ -328,6 +328,9 @@ EN: dict[str, str] = {
 
     # --- zjištění ------------------------------------------------------
     "Otázky, na které se dá odpovědět, jen když víš": "Questions you can only answer when you know",
+    # Spojka mezi dvema zvyraznenymi kusy vety na strance Zjisteni.
+    # Bez prekladu zustavala v anglickem rozhrani cesky.
+    "i": "and",
     "co se sleduje": "what gets watched",
     "co ty soubory jsou": "what the files actually are",
     "Místo, které nikdo nevyužívá": "Storage nobody uses",
