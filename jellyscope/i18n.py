@@ -1024,6 +1024,98 @@ EN: dict[str, str] = {
     "Posledního správce smazat nelze.": "The last administrator cannot be deleted.",
     "Původní heslo nesouhlasí.": "The current password is not correct.",
 
+    # --- hlasky po dokoncene akci (viz web._flash) ------------------------
+    # Cislo nebo jmeno se do vety dosazuje az PO prekladu, proto {znacky}.
+    "{uloha}: {stav}": "{uloha}: {stav}",
+    "Synchronizace knihovny spuštěna.": "Library sync started.",
+    "Analýza souborů spuštěna.": "File analysis started.",
+    "Žádná úloha zrovna neběží.": "No task is running right now.",
+    "Pokyn k zastavení předán. Úloha dokončí rozpracovanou položku a skončí - "
+    "stránka se pak obnoví sama.":
+        "The stop request has been passed on. The task will finish the item "
+        "it is on and stop - the page then refreshes itself.",
+    "Zdroj technických dat je nastavený na Jellyfin. Přepni ho na ffprobe "
+    "a ulož nastavení.":
+        "The technical data source is set to Jellyfin. Switch it to ffprobe "
+        "and save the settings.",
+    "Aplikace se restartuje. Stránka se obnoví sama, jakmile bude nahoře.":
+        "The application is restarting. The page refreshes itself once it is up.",
+
+    # import historie
+    "Playback Reporting: naimportováno {n} záznamů "
+    "(z {nalezeno} nalezených, {duplicit} už existovalo).":
+        "Playback Reporting: imported {n} records "
+        "(out of {nalezeno} found, {duplicit} already existed).",
+    "Playback Reporting (záloha): naimportováno {n} záznamů "
+    "(z {nalezeno} nalezených, {duplicit} už existovalo).":
+        "Playback Reporting (backup file): imported {n} records "
+        "(out of {nalezeno} found, {duplicit} already existed).",
+    "Jellystat: naimportováno {n} záznamů "
+    "(z {nalezeno} nalezených, {duplicit} už existovalo).":
+        "Jellystat: imported {n} records "
+        "(out of {nalezeno} found, {duplicit} already existed).",
+    "Dohledáno {co} ({n} záznamů).": "Matched {co} ({n} records).",
+    "{n} podle tmdb ID": "{n} by tmdb ID",
+    "{n} podle čísla dílu": "{n} by episode number",
+    "{n} podle názvu": "{n} by name",
+    "{n} záznamů už v databázi bylo z jiného zdroje (z collectoru nebo "
+    "z druhého importu), takže se nezdvojily.":
+        "{n} records were already in the database from another source (the "
+        "collector or a second import), so nothing was duplicated.",
+    "Soubor je větší než {n} MB.": "The file is larger than {n} MB.",
+
+    # uklid historie a dohledavani osirelych zaznamu
+    "Úklid historie: {co}": "History cleanup: {co}",
+    "nic k opravě, historie je v pořádku.":
+        "nothing to fix, the history is in order.",
+    "Není co dohledávat - osiřelé záznamy tu nejsou.":
+        "Nothing to look up - there are no orphaned records.",
+    "Jellyfin nezná ani jeden z {n} titulů. Jsou to tituly, které v knihovně "
+    "už nejsou.":
+        "Jellyfin knows none of the {n} titles. They are titles that are no "
+        "longer in the library.",
+    "Jellyfin zná {n} z {celkem}": "Jellyfin knows {n} out of {celkem}",
+    "navázáno na knihovnu: {n} titulů": "linked to the library: {n} titles",
+    "doplněno do knihovny: {n} titulů": "added to the library: {n} titles",
+    "doplněn seriál u {n} titulů": "series filled in for {n} titles",
+    "celkem {n} záznamů": "{n} records in total",
+    "Přiřazeno k „{nazev}“ – {n} záznamů.": "Assigned to „{nazev}“ – {n} records.",
+
+    # polozka, zalohy, databaze
+    "Metadata načtena znovu: {nazev}": "Metadata reloaded: {nazev}",
+    "(včetně změření souboru)": "(including measuring the file)",
+    "(soubor se změřit nepodařilo - viz Log)":
+        "(the file could not be measured - see the Log)",
+    "Smazáno: {nazev} (a {n} záznamů v historii).":
+        "Deleted: {nazev} (and {n} records from the history).",
+    "Záloha {nazev} smazána.": "Backup {nazev} deleted.",
+    "Takovou zálohu se nepodařilo najít.": "That backup could not be found.",
+    "Databáze obnovena ze zálohy {nazev}. Stav před obnovou zůstal uložený "
+    "jako {zaloha}. Aplikace se restartuje.":
+        "The database has been restored from backup {nazev}. The state before "
+        "the restore was saved as {zaloha}. The application is restarting.",
+    "Cílová databáze není dostupná: {duvod}":
+        "The target database is not reachable: {duvod}",
+    "Přeneseno {n} řádků. Ulož nastavení a restartuj, aby se aplikace na "
+    "novou databázi přepnula.":
+        "Transferred {n} rows. Save the settings and restart so the "
+        "application switches to the new database.",
+    "Neukládám - spojení nefunguje: {duvod}":
+        "Not saving - the connection does not work: {duvod}",
+
+    # jellyfin, blokace, ucty, jazyky
+    "Spojení v pořádku: {server} (Jellyfin {verze})":
+        "Connection works: {server} (Jellyfin {verze})",
+    "Spojení selhalo: {duvod}": "The connection failed: {duvod}",
+    "Chybí adresa.": "The address is missing.",
+    "Adresa {ip} je odblokovaná.": "Address {ip} has been unblocked.",
+    "Adresa {ip} je zablokovaná natrvalo.":
+        "Address {ip} has been blocked permanently.",
+    "Taková blokace v seznamu není.": "There is no such block in the list.",
+    "Účet '{jmeno}' vytvořen.": "Account '{jmeno}' created.",
+    "Preferovaný jazyk: {jazyk} ✓": "Preferred language: {jazyk} ✓",
+    "Tenhle jazyk v knihovně není.": "That language is not in the library.",
+
     # Hlasky slozene ze sablony a hodnoty. Preklada se sablona, cislo nebo
     # jmeno se dosazuje az potom - hotova veta by se ve slovniku nenasla.
     # Viz accounts.AccountError.prelozena() a web._blokace_hlaska().
@@ -1072,6 +1164,8 @@ LOG_EN: dict[str, str] = {
     'dohledano v Jellyfinu: %s z %s dotazanych, navazano %s, zalozeno %s, doplnen serial u %s':
         'looked up in Jellyfin: %s of %s asked, linked %s, created %s,'
         ' series filled in for %s',
+    'hlasku %r se nepodarilo doplnit hodnotami %r':
+        'could not fill message %r with values %r',
     'uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)':
         'removed %s items that do not belong in the library (series and seasons)',
     'z knihovny odstraneno %s polozek, ktere do ni nepatri':

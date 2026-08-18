@@ -40,6 +40,7 @@ from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, form
 # proto mají různá jména místo jednoho BASE_DIR.
 from .config import BASE_DIR as PROJECT_DIR
 from .config import load_config
+from .i18n import translate as _t
 from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
 
 log = logging.getLogger("jellyscope.web")
@@ -542,12 +543,14 @@ def _linked_note(result: dict[str, Any]) -> str:
         return ""
     casti = []
     if linked.get("by_tmdb"):
-        casti.append(f"{linked['by_tmdb']} podle tmdb ID")
+        casti.append(i18n.translate("{n} podle tmdb ID").format(n=linked["by_tmdb"]))
     if linked.get("by_episode"):
-        casti.append(f"{linked['by_episode']} podle čísla dílu")
+        casti.append(i18n.translate("{n} podle čísla dílu")
+                     .format(n=linked["by_episode"]))
     if linked.get("by_name"):
-        casti.append(f"{linked['by_name']} podle názvu")
-    return f" Dohledáno {', '.join(casti)} ({linked['rows']} záznamů)."
+        casti.append(i18n.translate("{n} podle názvu").format(n=linked["by_name"]))
+    return " " + i18n.translate("Dohledáno {co} ({n} záznamů).").format(
+        co=", ".join(casti), n=linked["rows"])
 
 
 def _known_note(result: dict[str, Any]) -> str:
@@ -560,11 +563,13 @@ def _known_note(result: dict[str, Any]) -> str:
     pocet = result.get("known_elsewhere") or 0
     if not pocet:
         return ""
-    return (f" {pocet} záznamů už v databázi bylo z jiného zdroje "
-            f"(z collectoru nebo z druhého importu), takže se nezdvojily.")
+    return " " + i18n.translate(
+        "{n} záznamů už v databázi bylo z jiného zdroje (z collectoru nebo "
+        "z druhého importu), takže se nezdvojily.").format(n=pocet)
 
 
-def _flash(request: Request, message: str, level: str = "info") -> None:
+def _flash(request: Request, message: str, level: str = "info",
+           **hodnoty: Any) -> None:
     """Ulozi hlasku, ktera se ukaze na nasledujici strance.
 
     Preklad se dela uz **tady**, ne az v sablone. Duvod: hlaska se uklada do
@@ -572,12 +577,33 @@ def _flash(request: Request, message: str, level: str = "info") -> None:
     jazyk, ukazala by se v tom starem. Prelozit ji v okamziku, kdy vznikla,
     je jednoznacne.
 
-    Hlasky slozene z f-retezce (obsahuji cislo nebo jmeno) preklad nenajde
-    a zustanou cesky. To je vedome: prekladat retezec, ktery se u kazdeho
-    volani lisi, nejde - musel by se rozlozit na sablonu a hodnoty, coz je
-    pro par hlasek zbytecna slozitost.
+    Hlasky s cislem nebo jmenem se predavaji jako **sablona a hodnoty
+    zvlast**:
+
+        _flash(request, "Naimportováno {n} záznamů.", "success", n=42)
+
+    Nejdriv se prelozi sablona, teprve pak se do ni hodnoty dosadi. Obracene
+    to nejde: hotova veta s cislem uvnitr v prekladovem slovniku neni
+    a nikdy nebude - a prave takhle drive vsechny hlasky po importu
+    a po dobehnuti ulohy zustavaly cesky, i kdyz mel clovek anglicke
+    rozhrani.
+
+    Kdyz se dosazeni nepovede (v sablone je jina znacka, nez jake prijdou
+    hodnoty), radeji ukazeme neprelozenou vetu nez padneme - hlaska
+    o vysledku ulohy nesmi shodit stranku.
     """
-    request.session["flash"] = {"message": i18n.translate(message), "level": level}
+    text = i18n.translate(message)
+    if hodnoty:
+        try:
+            text = text.format(**hodnoty)
+        except (KeyError, IndexError, ValueError):
+            # Zachranny scenar musi byt uplne hloupy: vratime syrovou
+            # sablonu. Kdybychom tu zkusili dosadit znovu, spadli bychom
+            # na tomtez - a shodili stranku kvuli hlasce o vysledku.
+            log.warning("hlasku %r se nepodarilo doplnit hodnotami %r",
+                        message, hodnoty)
+            text = message
+    request.session["flash"] = {"message": text, "level": level}
 
 
 def _context(request: Request, account: Optional[dict[str, Any]] = None,
@@ -894,12 +920,13 @@ async def item_refresh(
         _flash(request, vysledek.get("message", "Nepovedlo se."), "error")
         return RedirectResponse(f"/item/{item_id}", status_code=303)
 
-    zprava = f"Metadata načtena znovu: {vysledek.get('name', '')}".strip()
+    zprava = _t("Metadata načtena znovu: {nazev}").format(
+        nazev=vysledek.get("name", "")).strip()
     tech = vysledek.get("tech") or {}
     if tech.get("ok"):
-        zprava += " (včetně změření souboru)"
+        zprava += " " + _t("(včetně změření souboru)")
     elif tech.get("failed"):
-        zprava += " (soubor se změřit nepodařilo - viz Log)"
+        zprava += " " + _t("(soubor se změřit nepodařilo - viz Log)")
     _flash(request, zprava, "success")
     return RedirectResponse(f"/item/{item_id}", status_code=303)
 
@@ -926,8 +953,9 @@ def item_delete(
         nazev = f"{result['series_name']} - {nazev}"
     _flash(
         request,
-        f"Smazáno: {nazev} (a {result['plays']} záznamů v historii).",
+        "Smazáno: {nazev} (a {n} záznamů v historii).",
         "success",
+        nazev=nazev, n=result["plays"],
     )
     return RedirectResponse("/library", status_code=303)
 
@@ -1435,12 +1463,13 @@ async def settings_connection(
                     info = await client.system_info()
                 _flash(
                     request,
-                    f"Spojení v pořádku: {info.get('ServerName', '?')} "
-                    f"(Jellyfin {info.get('Version', '?')})",
+                    "Spojení v pořádku: {server} (Jellyfin {verze})",
                     "success",
+                    server=info.get("ServerName", "?"),
+                    verze=info.get("Version", "?"),
                 )
             except JellyfinError as exc:
-                _flash(request, f"Spojení selhalo: {exc}", "error")
+                _flash(request, "Spojení selhalo: {duvod}", "error", duvod=str(exc))
         return RedirectResponse("/settings?section=jellyfin", status_code=303)
 
     db.set_setting("jellyfin_url", url)
@@ -1505,7 +1534,8 @@ def settings_database(
     if action == "migrate":
         ok, message = db.test_connection(candidate)
         if not ok:
-            _flash(request, f"Cílová databáze není dostupná: {message}", "error")
+            _flash(request, "Cílová databáze není dostupná: {duvod}", "error",
+                   duvod=message)
             return RedirectResponse("/settings?section=database", status_code=303)
 
         result = dbmigrate.copy_all(current, candidate)
@@ -1514,15 +1544,17 @@ def settings_database(
         else:
             _flash(
                 request,
-                f"Přeneseno {result['total']} řádků. Ulož nastavení a restartuj, "
-                f"aby se aplikace na novou databázi přepnula.",
+                "Přeneseno {n} řádků. Ulož nastavení a restartuj, "
+                "aby se aplikace na novou databázi přepnula.",
                 "success",
+                n=result["total"],
             )
         return RedirectResponse("/settings?section=database", status_code=303)
 
     ok, message = db.test_connection(candidate)
     if not ok:
-        _flash(request, f"Neukládám - spojení nefunguje: {message}", "error")
+        _flash(request, "Neukládám - spojení nefunguje: {duvod}", "error",
+               duvod=message)
         return RedirectResponse("/settings?section=database", status_code=303)
 
     dialect.save_config(PROJECT_DIR, candidate)
@@ -1684,7 +1716,7 @@ def backup_delete(request: Request, name: str = Form(""),
                   account: dict[str, Any] = Depends(require_admin)):
     """Smaže jednu zálohu."""
     if tasks.delete_backup(name):
-        _flash(request, f"Záloha {name} smazána.", "success")
+        _flash(request, "Záloha {nazev} smazána.", "success", nazev=name)
     else:
         _flash(request, "Takovou zálohu se nepodařilo najít.", "error")
     return RedirectResponse("/settings?section=tasks", status_code=303)
@@ -1704,9 +1736,9 @@ async def backup_restore(request: Request, name: str = Form(""),
         return RedirectResponse("/settings?section=tasks", status_code=303)
 
     _flash(request,
-           f"Databáze obnovena ze zálohy {name}. Stav před obnovou zůstal "
-           f"uložený jako {vysledek['safety']}. Aplikace se restartuje.",
-           "success")
+           "Databáze obnovena ze zálohy {nazev}. Stav před obnovou zůstal "
+           "uložený jako {zaloha}. Aplikace se restartuje.",
+           "success", nazev=name, zaloha=vysledek["safety"])
     _naplanuj_restart()
     return RedirectResponse("/settings?section=tasks&wait=restart", status_code=303)
 
@@ -1733,8 +1765,9 @@ async def tasks_run(
         asyncio.create_task(tasks.run_now(key))
         # Název úlohy je česká konstanta z tasks.py - v anglickém
         # rozhraní se musí přeložit stejně jako zbytek hlášky.
-        _flash(request, f"{i18n.translate(task.name)}: "
-                        f"{i18n.translate('spuštěno.')}", "info")
+        _flash(request, "{uloha}: {stav}", "info",
+               uloha=i18n.translate(task.name),
+               stav=i18n.translate("spuštěno."))
         # Stranka si pocka a po dokonceni se obnovi sama - stejne jako
         # u synchronizace knihovny.
         return RedirectResponse("/settings?section=tasks&wait=task", status_code=303)
@@ -1766,8 +1799,10 @@ async def import_playback_reporting(
     if result.get("status") == "ok":
         _flash(
             request,
-            f"Playback Reporting: naimportováno {result['imported']} záznamů "
-            f"(z {result['found']} nalezených, {result['duplicate']} už existovalo)."
+            _t("Playback Reporting: naimportováno {n} záznamů "
+               "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
+                   n=result["imported"], nalezeno=result["found"],
+                   duplicit=result["duplicate"])
             + _known_note(result) + _linked_note(result),
             "success",
         )
@@ -1795,7 +1830,7 @@ async def import_playback_reporting_file(
         return RedirectResponse("/settings?section=import", status_code=303)
 
     if len(raw) > MAX_UPLOAD_MB * 1024 * 1024:
-        _flash(request, f"Soubor je větší než {MAX_UPLOAD_MB} MB.", "error")
+        _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
         return RedirectResponse("/settings?section=import", status_code=303)
 
     result = await importers.import_playback_reporting_tsv(
@@ -1804,8 +1839,10 @@ async def import_playback_reporting_file(
     if result.get("status") == "ok":
         _flash(
             request,
-            f"Playback Reporting (záloha): naimportováno {result['imported']} záznamů "
-            f"(z {result['found']} nalezených, {result['duplicate']} už existovalo)."
+            _t("Playback Reporting (záloha): naimportováno {n} záznamů "
+               "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
+                   n=result["imported"], nalezeno=result["found"],
+                   duplicit=result["duplicate"])
             + _known_note(result) + _linked_note(result),
             "success",
         )
@@ -1851,10 +1888,9 @@ def history_cleanup(request: Request,
         casti.append(f"srovnáno názvů podle knihovny: {nazvy['rows']} "
                      f"({nazvy['items']} titulů)")
 
-    _flash(request,
-           "Úklid historie: " + (", ".join(casti) if casti
-                                 else "nic k opravě, historie je v pořádku."),
-           "success")
+    _flash(request, "Úklid historie: {co}", "success",
+           co=", ".join(casti) if casti
+           else _t("nic k opravě, historie je v pořádku."))
     return RedirectResponse("/settings?section=import#uklid", status_code=303)
 
 
@@ -1891,8 +1927,8 @@ def history_assign(request: Request, item_id: str = Form(""),
     if vysledek.get("status") != "ok":
         _flash(request, vysledek.get("message", "Nepovedlo se."), "error")
     else:
-        _flash(request, f"Přiřazeno k „{vysledek['name']}“ – "
-                        f"{vysledek['rows']} záznamů.", "success")
+        _flash(request, "Přiřazeno k „{nazev}“ – {n} záznamů.", "success",
+               nazev=vysledek["name"], n=vysledek["rows"])
     return RedirectResponse("/settings/history/orphans", status_code=303)
 
 
@@ -1912,23 +1948,27 @@ async def history_lookup(request: Request,
         return RedirectResponse("/settings?section=import#uklid", status_code=303)
 
     if not vysledek["dotazano"]:
-        zprava = "Není co dohledávat - osiřelé záznamy tu nejsou."
+        zprava = _t("Není co dohledávat - osiřelé záznamy tu nejsou.")
     elif not vysledek["nalezeno"]:
-        zprava = (f"Jellyfin nezná ani jeden z {vysledek['dotazano']} titulů. "
-                  f"Jsou to tituly, které v knihovně už nejsou.")
+        zprava = _t("Jellyfin nezná ani jeden z {n} titulů. Jsou to tituly, "
+                    "které v knihovně už nejsou.").format(n=vysledek["dotazano"])
     else:
-        casti = [f"Jellyfin zná {vysledek['nalezeno']} z {vysledek['dotazano']}"]
+        casti = [_t("Jellyfin zná {n} z {celkem}").format(
+            n=vysledek["nalezeno"], celkem=vysledek["dotazano"])]
         if vysledek["navazano"]:
-            casti.append(f"navázáno na knihovnu: {vysledek['navazano']} titulů")
+            casti.append(_t("navázáno na knihovnu: {n} titulů").format(
+                n=vysledek["navazano"]))
         if vysledek["zalozeno"]:
-            casti.append(f"doplněno do knihovny: {vysledek['zalozeno']} titulů")
+            casti.append(_t("doplněno do knihovny: {n} titulů").format(
+                n=vysledek["zalozeno"]))
         # Záznam visel na id seriálu, ne dílu. Položku z toho udělat
         # nejde (seriál není soubor), ale jméno seriálu ano - a tím se
         # záznam v přehledech zařadí pod svůj seriál.
         if vysledek.get("doplneno"):
-            casti.append(f"doplněn seriál u {vysledek['doplneno']} titulů")
+            casti.append(_t("doplněn seriál u {n} titulů").format(
+                n=vysledek["doplneno"]))
         if vysledek["radku"]:
-            casti.append(f"celkem {vysledek['radku']} záznamů")
+            casti.append(_t("celkem {n} záznamů").format(n=vysledek["radku"]))
         zprava = ", ".join(casti) + "."
     _flash(request, zprava, "success")
     return RedirectResponse("/settings?section=import#uklid", status_code=303)
@@ -1949,7 +1989,7 @@ async def import_jellystat(
 
     # Rozumny strop - bez nej by slo pametí serveru poslat gigabajtovy soubor.
     if len(raw) > MAX_UPLOAD_MB * 1024 * 1024:
-        _flash(request, f"Soubor je větší než {MAX_UPLOAD_MB} MB.", "error")
+        _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
         return RedirectResponse("/settings?section=import", status_code=303)
 
     result = await importers.import_jellystat_json(
@@ -1958,8 +1998,10 @@ async def import_jellystat(
     if result.get("status") == "ok":
         _flash(
             request,
-            f"Jellystat: naimportováno {result['imported']} záznamů "
-            f"(z {result['found']} nalezených, {result['duplicate']} už existovalo)."
+            _t("Jellystat: naimportováno {n} záznamů "
+               "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
+                   n=result["imported"], nalezeno=result["found"],
+                   duplicit=result["duplicate"])
             + _known_note(result) + _linked_note(result),
             "success",
         )
@@ -1983,7 +2025,7 @@ def blocks_unblock(request: Request, ip: str = Form(""),
                    account: dict[str, Any] = Depends(require_admin)):
     """Zruší blokaci přihlašování pro jednu adresu."""
     if accounts.odblokuj(ip.strip()):
-        _flash(request, f"Adresa {ip.strip()} je odblokovaná.", "success")
+        _flash(request, "Adresa {ip} je odblokovaná.", "success", ip=ip.strip())
     else:
         _flash(request, "Taková blokace v seznamu není.", "warning")
     return RedirectResponse("/settings?section=blocks", status_code=303)
@@ -1998,7 +2040,8 @@ def blocks_permanent(request: Request, ip: str = Form(""),
         _flash(request, "Chybí adresa.", "error")
     else:
         accounts.zablokuj_natrvalo(adresa)
-        _flash(request, f"Adresa {adresa} je zablokovaná natrvalo.", "success")
+        _flash(request, "Adresa {ip} je zablokovaná natrvalo.", "success",
+               ip=adresa)
     return RedirectResponse("/settings?section=blocks", status_code=303)
 
 
@@ -2013,9 +2056,9 @@ def account_create(
 ):
     try:
         accounts.create(username, password, password_again, is_admin=bool(is_admin))
-        _flash(request, f"Účet '{username}' vytvořen.", "success")
+        _flash(request, "Účet '{jmeno}' vytvořen.", "success", jmeno=username)
     except accounts.AccountError as exc:
-        _flash(request, str(exc), "error")
+        _flash(request, exc.prelozena(), "error")
     return RedirectResponse("/settings?section=accounts", status_code=303)
 
 
@@ -2039,7 +2082,7 @@ def account_password(
         accounts.set_password(account_id, password, password_again)
         _flash(request, "Heslo změněno.", "success")
     except accounts.AccountError as exc:
-        _flash(request, str(exc), "error")
+        _flash(request, exc.prelozena(), "error")
     return RedirectResponse("/settings?section=accounts", status_code=303)
 
 
@@ -2054,7 +2097,7 @@ def account_role(
         accounts.set_admin(account_id, bool(is_admin))
         _flash(request, "Oprávnění změněno.", "success")
     except accounts.AccountError as exc:
-        _flash(request, str(exc), "error")
+        _flash(request, exc.prelozena(), "error")
     return RedirectResponse("/settings?section=accounts", status_code=303)
 
 
@@ -2072,7 +2115,7 @@ def account_delete(
         accounts.delete(account_id)
         _flash(request, "Účet smazán.", "success")
     except accounts.AccountError as exc:
-        _flash(request, str(exc), "error")
+        _flash(request, exc.prelozena(), "error")
     return RedirectResponse("/settings?section=accounts", status_code=303)
 
 
@@ -2131,7 +2174,8 @@ def languages_preferred(
     # v knihovně není, by vyrobil stránku samých nul.
     if kod and kod != languages.UNKNOWN and kod in povolene:
         db.set_setting(langstats.PREFERRED_SETTING, kod)
-        _flash(request, f"Preferovaný jazyk: {languages.display(kod)} ✓", "success")
+        _flash(request, "Preferovaný jazyk: {jazyk} ✓", "success",
+           jazyk=languages.display(kod))
     else:
         _flash(request, "Tenhle jazyk v knihovně není.", "error")
 
