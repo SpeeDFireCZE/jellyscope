@@ -5,7 +5,7 @@
 # Usage (the usual place is /opt/jellyscope):
 #     sudo mkdir -p /opt/jellyscope
 #     sudo chown -R $USER:$USER /opt/jellyscope
-#     git clone https://github.com/YOUR-NAME/jellyscope.git /opt/jellyscope
+#     git clone https://github.com/SpeeDFireCZE/jellyscope.git /opt/jellyscope
 #     /opt/jellyscope/deploy/install.sh
 #
 # The folder can be anywhere - all that matters is that it belongs to

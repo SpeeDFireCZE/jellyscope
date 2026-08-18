@@ -23,7 +23,7 @@
 
 [Unit]
 Description=Jellyscope - statistics for Jellyfin
-Documentation=https://github.com/YOUR-NAME/jellyscope
+Documentation=https://github.com/SpeeDFireCZE/jellyscope
 
 # Only after the network. Without this the app would try to reach
 # Jellyfin during boot, before the network is up.

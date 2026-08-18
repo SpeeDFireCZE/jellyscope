@@ -187,10 +187,18 @@ untouched.
 On a Linux server one command does it:
 
 ```bash
-git clone <your-repo-url> jellyscope
-cd jellyscope
+sudo mkdir -p /opt/jellyscope
+sudo chown "$USER" /opt/jellyscope
+git clone https://github.com/SpeeDFireCZE/jellyscope.git /opt/jellyscope
+cd /opt/jellyscope
 bash deploy/install.sh
 ```
+
+Anywhere else works too — the installer fills the real paths into the
+service configs it generates. Only mind one thing: the systemd unit has
+`ProtectHome=true`, so a service installed under `/home` cannot read its
+own files. Either keep it out of `/home`, or delete that line from the
+unit.
 
 The script installs what is missing, creates the virtual environment,
 writes `.env` with a generated key and prints how to hand the app over to

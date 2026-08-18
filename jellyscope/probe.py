@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -85,8 +84,13 @@ def apply_path_mappings(path: str, mappings: list[dict[str, str]]) -> str:
         normalised_source = source.replace("\\", "/")
         if normalised.lower().startswith(normalised_source.lower()):
             rest = normalised[len(normalised_source):].lstrip("/")
-            joined = os.path.join(target, rest.replace("/", os.sep))
-            return joined
+            # Oddelovac bereme z CILOVE cesty, ne ze systemu (os.sep).
+            # Cil popisuje, jak vypada cesta na stroji, kam se mapuje -
+            # a to nemusi byt ten, na kterem zrovna bezime. Podle os.sep
+            # by z mapovani na "D:\\media" vyslo na Linuxu
+            # "D:\\media/filmy/Duna.mkv", tedy pomichane lomitka.
+            oddelovac = "\\" if ("\\" in target and "/" not in target) else "/"
+            return target.rstrip("/\\") + oddelovac + rest.replace("/", oddelovac)
 
     return path
 

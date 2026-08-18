@@ -12,10 +12,18 @@ source, and the installer takes care of it.
 ## Install
 
 ```bash
-git clone <your-repo-url> jellyscope
-cd jellyscope
+sudo mkdir -p /opt/jellyscope
+sudo chown "$USER" /opt/jellyscope
+git clone https://github.com/SpeeDFireCZE/jellyscope.git /opt/jellyscope
+cd /opt/jellyscope
 bash deploy/install.sh
 ```
+
+`/opt/jellyscope` is what the rest of this document and the service
+templates assume. Another folder works — the installer writes the real
+paths into the `.ready` configs — but avoid `/home`: the systemd unit
+ships with `ProtectHome=true`, and a service that cannot see its own
+folder starts and dies with a puzzling `ModuleNotFoundError`.
 
 What the script installs — and nothing else, in particular never
 `apt upgrade`:
@@ -205,7 +213,7 @@ Supervisord is not installed by the script either way; add
 ```bash
 sudo apt update && sudo apt install python3 python3-venv ffmpeg
 sudo mkdir -p /opt/jellyscope && sudo chown "$USER" /opt/jellyscope
-git clone <your-repo-url> /opt/jellyscope && cd /opt/jellyscope
+git clone https://github.com/SpeeDFireCZE/jellyscope.git /opt/jellyscope && cd /opt/jellyscope
 
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt

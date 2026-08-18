@@ -74,7 +74,7 @@ with db.connect() as conn:
                                       parent_index_number, size_bytes, width, height,
                                       video_codec, is_missing, synced_at)
                    VALUES (?,?,'Episode','lib','serial-1','Kancelář',?,?,?,
-                           1_000_000_000,1920,1080,'hevc',0,?)""",
+                           1000000000,1920,1080,'hevc',0,?)""",
                 (f"ep-{rada}-{dil}", f"{rada}x{dil:02d} Díl", f"Řada {rada}",
                  dil, rada, db.utcnow()),
             )
