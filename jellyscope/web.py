@@ -310,9 +310,13 @@ def setup_submit(
         # Jazyk ulozime i pri chybe. Kdo si prepnul na anglictinu a spletl
         # se v hesle, ma dostat anglickou hlasku - ne zase ceskou stranku.
         db.set_setting("ui_language", ui_language)
+        # Hlasku prekladame VYSLOVNE do jazyka z formulare. Spolehnout se
+        # na ulozene nastaveni nejde: pri uplne prvnim spusteni je v nem
+        # jeste cestina a chyba by prisla cesky, i kdyz si clovek prave
+        # prepnul na anglictinu.
         return templates.TemplateResponse(
             request, "setup.html",
-            _setup_context(error=str(exc), username=username,
+            _setup_context(error=exc.prelozena(ui_language), username=username,
                            ui_language=ui_language),
             status_code=400,
         )
@@ -369,7 +373,8 @@ def login_submit(
         # to rozlisili, dal by se timhle zpusobem zjistit seznam uctu.
         return templates.TemplateResponse(
             request, "login.html",
-            {"error": "Spatne jmeno nebo heslo.", "username": username},
+            {"error": i18n.translate("Špatné jméno nebo heslo."),
+             "username": username},
             status_code=401,
         )
 
@@ -398,14 +403,18 @@ def _blokace_hlaska(zbyva: int) -> str:
 
     Záměrně neříká, kolikátá blokace to je ani po kolika pokusech přijde -
     tyhle údaje pomáhají jen tomu, kdo hádá.
+
+    Překládá se tady, ne v šabloně: čas se do věty dosazuje až po překladu,
+    jinak by hotová věta v slovníku nebyla k nalezení.
     """
     if zbyva < 0:
-        return ("Přihlašování z této adresy je zablokované. "
-                "Odblokovat ho může správce v Nastavení.")
+        return i18n.translate("Přihlašování z této adresy je zablokované. "
+                              "Odblokovat ho může správce v Nastavení.")
     minut = zbyva // 60
     if minut >= 1:
-        return f"Příliš mnoho pokusů. Zkus to za {minut} min."
-    return f"Příliš mnoho pokusů. Zkus to za {max(1, zbyva)} s."
+        return i18n.translate("Příliš mnoho pokusů. Zkus to za {n} min.").format(n=minut)
+    return i18n.translate("Příliš mnoho pokusů. Zkus to za {n} s.").format(
+        n=max(1, zbyva))
 
 
 def _adresa_klienta(request: Request) -> str:

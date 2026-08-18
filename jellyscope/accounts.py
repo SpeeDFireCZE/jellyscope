@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import db
+from .i18n import translate
 
 # Cim vic opakovani, tim pomalejsi zkouseni hesel - ale taky tim pomalejsi
 # prihlaseni. 600 000 je doporuceni OWASP pro PBKDF2 se SHA-256.
@@ -52,7 +53,26 @@ USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]{3,32}$")
 
 
 class AccountError(ValueError):
-    """Chyba, kterou ma smysl ukazat uzivateli (na rozdil od padu programu)."""
+    """Chyba, kterou je potreba ukazat cloveku - a tedy i prelozit.
+
+    Drzi si sablonu ("Heslo musi mit aspon {n} znaku.") a hodnoty zvlast,
+    ne az hotovou vetu. Duvod: prelozit se da jen sablona - hotova veta
+    s doplnenym cislem uz v prekladovem slovniku neni a nikdy nebude.
+
+    `str(chyby)` dal vraci cesky text s doplnenymi hodnotami, takze log
+    i testy se chovaji jako predtim. Preklad si vyzada ten, kdo hlasku
+    zobrazuje: `chyba.prelozena(jazyk)`.
+    """
+
+    def __init__(self, sablona: str, **hodnoty: Any) -> None:
+        self.sablona = sablona
+        self.hodnoty = hodnoty
+        super().__init__(sablona.format(**hodnoty) if hodnoty else sablona)
+
+    def prelozena(self, jazyk: str | None = None) -> str:
+        """Text v zadanem jazyce. Bez prekladu vrati cestinu."""
+        text = translate(self.sablona, jazyk)
+        return text.format(**self.hodnoty) if self.hodnoty else text
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +303,8 @@ def validate_username(username: str) -> str:
 def validate_password(password: str, again: str | None = None) -> str:
     password = password or ""
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise AccountError(f"Heslo musí mít aspoň {MIN_PASSWORD_LENGTH} znaků.")
+        raise AccountError("Heslo musí mít aspoň {n} znaků.",
+                           n=MIN_PASSWORD_LENGTH)
     if again is not None and password != again:
         raise AccountError("Hesla se neshodují.")
     return password
@@ -336,7 +357,7 @@ def create(username: str, password: str, again: str | None = None, is_admin: boo
     password = validate_password(password, again)
 
     if get_by_name(username) is not None:
-        raise AccountError(f"Účet '{username}' už existuje.")
+        raise AccountError("Účet '{jmeno}' už existuje.", jmeno=username)
 
     with db.connect() as conn:
         return conn.insert_returning_id(

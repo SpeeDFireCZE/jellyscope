@@ -1023,6 +1023,21 @@ EN: dict[str, str] = {
         "You cannot remove privileges from the last administrator.",
     "Posledního správce smazat nelze.": "The last administrator cannot be deleted.",
     "Původní heslo nesouhlasí.": "The current password is not correct.",
+
+    # Hlasky slozene ze sablony a hodnoty. Preklada se sablona, cislo nebo
+    # jmeno se dosazuje az potom - hotova veta by se ve slovniku nenasla.
+    # Viz accounts.AccountError.prelozena() a web._blokace_hlaska().
+    "Heslo musí mít aspoň {n} znaků.":
+        "The password must be at least {n} characters.",
+    "Účet '{jmeno}' už existuje.": "An account named '{jmeno}' already exists.",
+    "Příliš mnoho pokusů. Zkus to za {n} min.":
+        "Too many attempts. Try again in {n} min.",
+    "Příliš mnoho pokusů. Zkus to za {n} s.":
+        "Too many attempts. Try again in {n} s.",
+    "Přihlašování z této adresy je zablokované. "
+    "Odblokovat ho může správce v Nastavení.":
+        "Signing in from this address is blocked. "
+        "An administrator can lift it in Settings.",
 }
 
 
