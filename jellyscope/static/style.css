@@ -1,0 +1,1695 @@
+/* ---------------------------------------------------------------------------
+   Jellyscope - vzhled
+
+   Cely soubor stoji na jednom napadu: **barvy se nikde nepisou primo**.
+   Nahore je seznam pojmenovanych promennych (--surface-1, --series-1, ...)
+   a zbytek souboru pouziva jen ta jmena. Prepnuti do tmaveho rezimu je pak
+   otazkou prepsani seznamu, ne prochazeni tisice radku.
+
+   Barvy nejsou vybrane od oka. Poradi serii je sestavene tak, aby sousedni
+   dvojice rozeznal i clovek s poruchou barvocitu (deuteranopie, protanopie);
+   proto se poradi nemeni a devata barva se nepridava.
+   --------------------------------------------------------------------------- */
+
+:root {
+    color-scheme: light;
+
+    /* Plochy a pismo */
+    --page:            #f9f9f7;
+    --surface-1:       #fcfcfb;
+    --surface-2:       #f2f1ed;
+    --text-primary:    #0b0b0b;
+    --text-secondary:  #52514e;
+    --text-muted:      #898781;
+    --border:          rgba(11, 11, 11, 0.10);
+    --grid:            #e1e0d9;
+    --axis:            #c3c2b7;
+
+    /* Serie - pevne poradi, nikdy necyklit */
+    --series-1: #2a78d6;   /* modra   */
+    --series-2: #eb6834;   /* oranzova */
+    --series-3: #1baf7a;   /* tyrkysova */
+    --series-4: #eda100;   /* zluta   */
+    --series-5: #e87ba4;   /* ruzova  */
+    --series-6: #008300;   /* zelena  */
+    --series-7: #4a3aa7;   /* fialova */
+    --series-8: #e34948;   /* cervena */
+
+    /* Odstupnovana skala pro teplotni mapu (svetla -> tmava) */
+    --seq-250: #86b6ef;
+    --seq-350: #5598e7;
+    --seq-450: #2a78d6;
+    --seq-550: #1c5cab;
+    --seq-650: #104281;
+
+    /* Stavove barvy - vyhrazene, nikdy se nepouzivaji jako barva serie */
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --serious:  #ec835a;
+    --critical: #d03b3b;
+
+    --radius: 10px;
+    --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Tmavy rezim neni automaticke prevraceni svetleho. Kazdy odstin je vybrany
+   znovu, pro tmavy podklad - jinak by svetle barvy zarily a tmave zmizely. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+
+        --page:           #0d0d0d;
+        --surface-1:      #1a1a19;
+        --surface-2:      #232322;
+        --text-primary:   #ffffff;
+        --text-secondary: #c3c2b7;
+        --text-muted:     #898781;
+        --border:         rgba(255, 255, 255, 0.10);
+        --grid:           #2c2c2a;
+        --axis:           #383835;
+
+        --series-1: #3987e5;
+        --series-2: #d95926;
+        --series-3: #199e70;
+        --series-4: #c98500;
+        --series-5: #d55181;
+        --series-6: #008300;
+        --series-7: #9085e9;
+        --series-8: #e66767;
+
+        /* Na tmavem podkladu roste vyznam smerem ke svetlejsi, ne tmavsi. */
+        --seq-250: #184f95;
+        --seq-350: #256abf;
+        --seq-450: #3987e5;
+        --seq-550: #6da7ec;
+        --seq-650: #9ec5f4;
+    }
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --border:         rgba(255, 255, 255, 0.10);
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+
+    --seq-250: #184f95;
+    --seq-350: #256abf;
+    --seq-450: #3987e5;
+    --seq-550: #6da7ec;
+    --seq-650: #9ec5f4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.5;
+    background: var(--page);
+    color: var(--text-primary);
+}
+
+a { color: inherit; }
+
+/* --------------------------------------------------------------------- */
+/* Rozvrzeni                                                              */
+/* --------------------------------------------------------------------- */
+
+.layout {
+    display: grid;
+    grid-template-columns: 216px 1fr;
+    min-height: 100vh;
+}
+
+.sidebar {
+    background: var(--surface-1);
+    border-right: 1px solid var(--border);
+    padding: 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 650;
+    font-size: 17px;
+    text-decoration: none;
+    padding: 0 8px;
+}
+
+/* Značka je SVG, takže nepotřebuje barevný podklad ani vlastní barvu -
+   nese si přechod v sobě a zůstane ostrá ve světlém i tmavém režimu. */
+.brand-mark {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    display: block;
+}
+
+.nav { display: flex; flex-direction: column; gap: 2px; }
+
+.nav a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.nav a:hover { background: var(--surface-2); color: var(--text-primary); }
+.nav a.active { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+
+.sidebar-foot { margin-top: auto; font-size: 12px; color: var(--text-muted); }
+
+/* Obsah je dashboard - tabulky, mřížky plakátů, grafy. Ty šířku využijí,
+   na rozdíl od článku, kde by dlouhé řádky ubíraly na čitelnosti.
+   Strop je proto velkorysý a obsah se na širokých displejích centruje,
+   místo aby zůstávala prázdná polovina vpravo. */
+.main {
+    padding: 24px 32px 56px;
+    max-width: 1720px;
+    margin: 0 auto;
+    width: 100%;
+    /* min-width: 0 je tu nutnost, ne kosmetika. Prvek v gridu ma ve
+       vychozim stavu min-width: auto, takze se nesmrskne pod sirku sveho
+       obsahu - a pas plakatu (.poster-strip) je vnitrne siroky 2600 px.
+       Sloupec se kvuli nemu roztahl na 1720 px, stranka pretekla o 32 px
+       doprava a prave odsazeni skoncilo mimo obrazovku: obsah pak vypadal
+       nalepeny na posuvniku. S min-width: 0 se sloupec zuzi spravne a pas
+       se posouva sam v sobe, jak ma. */
+    min-width: 0;
+}
+
+.page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+h1 { font-size: 24px; margin: 0 0 4px; font-weight: 640; }
+h2 { font-size: 16px; margin: 0; font-weight: 620; }
+h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-secondary); }
+.subtitle { margin: 0; color: var(--text-secondary); font-size: 14px; }
+
+/* --------------------------------------------------------------------- */
+/* Filtr obdobi - jedna rada nad vsim, co ovlivnuje                       */
+/* --------------------------------------------------------------------- */
+
+.filters {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.chip {
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+}
+
+/* Výběr preferovaného jazyka na stránce Jazyky.
+
+   Vlastní třída, protože obecné pravidlo pro `select` dole roztahuje
+   políčko na celou šířku - to je správné ve formulářích v Nastavení,
+   ale v hlavičce karty by rozbilo řádek. */
+.lang-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+}
+
+.lang-picker select {
+    width: auto;
+    min-width: 170px;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.chip:hover { border-color: var(--axis); color: var(--text-primary); }
+.chip.active { background: var(--text-primary); color: var(--page); border-color: var(--text-primary); }
+
+/* Aktivní tlačítko má prohozené barvy: pozadí je barva písma a naopak.
+   Obecné .chip:hover ale písmo přebarvovalo zpátky na --text-primary,
+   takže po najetí myší splynulo s vlastním pozadím a text zmizel
+   (bílá na bílé ve světlém režimu, černá na černé v tmavém).
+   Aktivní tlačítko proto barvy při najetí nemění - jen se lehce
+   projasní, ať je zpětná vazba pořád vidět. */
+.chip.active:hover {
+    color: var(--page);
+    background: var(--text-primary);
+    border-color: var(--text-primary);
+    filter: brightness(1.15);
+}
+
+/* Karta se prave prekresluje. Zesvetleni je jemne schvalne - vymena trva
+   par desitek milisekund a vyrazny efekt by pusobil pomaleji, nez to je.
+   Vyska se nemeni, takze stranka pod tim nepodskoci. */
+.is-loading { opacity: 0.55; transition: opacity 0.12s ease; }
+.is-loading .chip { pointer-events: none; }
+
+/* --------------------------------------------------------------------- */
+/* Karty a dlazdice                                                       */
+/* --------------------------------------------------------------------- */
+
+.card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+
+.card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.card-note { color: var(--text-muted); font-size: 12.5px; margin: 0; }
+
+/* Svisly rytmus stranky drzi jedno cislo: 18 px pod kazdym blokem.
+   .card si ho nese sam, ale uvnitr .grid-2 se mu vynuluje - tam mezery
+   resi `gap`. Kvuli tomu musi mit spodni okraj i samotna mrizka, jinak
+   se dve mrizky pod sebou (nebo mrizka a karta) slepi k sobe.
+   Michat `gap` s okraji jednotlivych prvku je presne to misto, kde
+   mezery mizi - proto ho tady drzi kontejner, ne jeho deti. */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+}
+.grid-2 > .card { margin-bottom: 0; }
+
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+}
+
+.tile-label { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 6px; }
+
+/* Velke cislo ma proporcionalni cislice. tabular-nums (stejne siroke) je
+   pro sloupce v tabulkach - u velkeho cisla vypada rozvolnene. */
+.tile-value { font-size: 26px; font-weight: 650; line-height: 1.15; }
+
+.hero {
+    font-size: 50px;
+    font-weight: 660;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+}
+
+.delta { font-size: 12.5px; margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+.delta.up   { color: var(--good); }
+.delta.down { color: var(--critical); }
+.delta.flat { color: var(--text-muted); }
+
+/* height: auto je tu podstatné.
+   SVG má viewBox 760x64 a zmenšuje se rovnoměrně (nedeformujeme tvar).
+   Kdyby byla výška pevná, prohlížeč by měřítko zvolil podle ní - u výšky
+   30px by z 760px šířky zbylo 356px a graf by se scvrkl doprostřed karty.
+   S "auto" určuje měřítko šířka a výška se dopočítá. */
+.sparkline { width: 100%; height: auto; margin-top: 10px; display: block; }
+
+/* --------------------------------------------------------------------- */
+/* Grafy                                                                  */
+/* --------------------------------------------------------------------- */
+
+/* SVG graf (uz jen carovy/plosny) se zmensi na sirku okna.
+   Zadne min-width - prave to drive nutilo stranku posouvat do strany. */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* --- vodorovne sloupce (HTML, ne SVG) ------------------------------- */
+
+.hbars { display: flex; flex-direction: column; gap: 9px; }
+
+.hbar-row {
+    display: grid;
+    /* Popisek nikdy neni sirsi nez tretina karty, drazka si vezme zbytek.
+       Diky procentum se cely graf prizpusobi sirce okna sam. */
+    grid-template-columns: minmax(0, 30%) 1fr max-content;
+    align-items: center;
+    gap: 10px;
+}
+
+.hbar-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Popisek, ktery nekam vede. Podtrzeni az pri najeti - v zebricku deseti
+   radku by deset podtrzenych textu delalo z grafu seznam odkazu a odvedlo
+   pozornost od sloupcu, kvuli kterym tam graf je. */
+.hbar-link { text-decoration: none; color: inherit; }
+.hbar-link:hover { color: var(--text-primary); text-decoration: underline; }
+
+.hbar-track {
+    background: var(--grid);
+    border-radius: 4px;
+    height: 18px;
+    overflow: hidden;
+}
+
+.hbar-fill {
+    height: 100%;
+    /* Hranaty u zakladny, zaobleny na strane hodnoty - oko tak snadneji
+       najde spolecnou zakladnu, od ktere se vsechny sloupce meri. */
+    border-radius: 0 4px 4px 0;
+    min-width: 2px;
+}
+
+.hbar-value {
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* --- deleny pruh ---------------------------------------------------- */
+
+.stack {
+    display: flex;
+    /* Mezera v barve podkladu oddeluje casti. Delame to mezerou, ne
+       obrysem - obrys prida inkoust, ktery neni data. */
+    gap: 2px;
+    height: 34px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stack-seg {
+    display: grid;
+    place-items: center;
+    min-width: 3px;
+    overflow: hidden;
+}
+
+.stack-seg span {
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+}
+
+/* --- teplotni mapa -------------------------------------------------- */
+
+.heatmap {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 3px;
+    align-items: center;
+}
+
+.heatmap-corner { }
+
+.heatmap-hours,
+.heatmap-cells {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+}
+
+.heatmap-hours span {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.heatmap-day {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    padding-right: 4px;
+}
+
+.heatmap-cells i {
+    display: block;
+    /* Pevna vyska, sirku si bunka vezme podle okna.
+       Drive tu bylo aspect-ratio: 1/1 (ctvercove bunky). Na sirokem displeji
+       ale 24 sloupcu znamena 64px bunky, takze mapa narostla na 485 px -
+       dvakrat vic nez kterakoli jina karta, presto ze nese nejmene cisel.
+       Ctverec tu zadnou informaci nenese: hodnotu ukazuje barva, ne tvar.
+       Mrizka 24x7 je ze sve podstaty siroka a obdelnikove bunky jsou u
+       teplotni mapy den x hodina obvykly tvar. */
+    height: 26px;
+    border-radius: 2px;
+}
+
+.axis-label    { fill: var(--text-muted); font-size: 11px; font-family: var(--font); font-variant-numeric: tabular-nums; }
+.value-label   { fill: var(--text-primary); font-size: 12.5px; font-family: var(--font); font-weight: 600; }
+
+/* --- bublina s hodnotou pri najeti mysi ------------------------------ */
+
+/* Nativni title="" ma dve vady: objevi se az po vterine a vypada v kazdem
+   prohlizeci jinak. Vlastni bublina je okamzita a drzi styl stranky.
+   Hodnotu ale nikdy nenese jen ona - kazdy graf ma i tabulku nebo popisek,
+   takze se ke cteni cisla nikdo nemusi trefovat mysi. */
+.tooltip {
+    position: fixed;
+    z-index: 50;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--page);
+    font-size: 12.5px;
+    font-weight: 550;
+    padding: 6px 10px;
+    border-radius: 7px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    max-width: 320px;
+    opacity: 0;
+    transition: opacity 0.08s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tooltip.visible { opacity: 1; }
+
+/* Prvky, na kterych bublina funguje, dostanou kurzor "je tu co cist". */
+[data-tip] { cursor: default; }
+
+.hbar-row[data-tip]:hover .hbar-track { outline: 1px solid var(--axis); }
+.stack-seg[data-tip]:hover { filter: brightness(1.12); }
+.heatmap-cells i:hover { outline: 1.5px solid var(--text-primary); outline-offset: 1px; }
+
+/* Svisla cara a bod v carovem grafu se ukazou az pri najeti. */
+.chart-hit line, .chart-hit circle { opacity: 0; transition: opacity 0.08s ease; }
+.chart-hit:hover line, .chart-hit:hover circle { opacity: 1; }
+
+.chart-empty {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    padding: 28px 0;
+    text-align: center;
+    margin: 0;
+}
+
+.legend {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    padding: 0;
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.legend li { display: flex; align-items: center; gap: 7px; }
+
+.legend-swatch {
+    width: 11px; height: 11px;
+    border-radius: 3px;
+    display: inline-block;
+    flex: none;
+}
+
+/* --------------------------------------------------------------------- */
+/* Nadpis sekce na úvodní stránce                                         */
+/* --------------------------------------------------------------------- */
+
+.section-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 30px 0 14px;
+}
+
+.section-head h2 { font-size: 20px; font-weight: 640; letter-spacing: -0.01em; }
+.section-head a { text-decoration: none; }
+.section-head a:hover { color: var(--text-primary); }
+
+/* --------------------------------------------------------------------- */
+/* Právě běžící přehrávání                                                */
+/* --------------------------------------------------------------------- */
+
+.sessions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.session {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 14px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+}
+
+.session-poster {
+    display: block;
+    aspect-ratio: 2 / 3;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface-2);
+}
+
+.session-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.session-body { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+
+.session-title { font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+.session-title a { text-decoration: none; }
+.session-title a:hover { text-decoration: underline; }
+
+.session-facts { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; }
+.session-facts a { font-weight: 600; }
+
+.session-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.session-reason {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    word-break: break-word;
+}
+
+.session-progress {
+    margin-top: auto;
+    padding-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.session-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--grid);
+    overflow: hidden;
+}
+
+.session-bar i { display: block; height: 100%; background: var(--series-1); }
+
+.session-time { font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------------- */
+/* Pás plakátů (nedávno přidané)                                          */
+/* --------------------------------------------------------------------- */
+
+.poster-strip {
+    display: flex;
+    gap: 14px;
+    /* Dlouhý seznam se posouvá vodorovně. U mřížky médií to byla chyba
+       (tam se dá zalomit), ale "nedávno přidané" je ze své podstaty
+       řada seřazená podle času - a řada se posouvá. */
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scroll-snap-type: x proximity;
+
+    /* Rozměry plakátu na jednom místě. Karta po najetí roste do šířky
+       (viz níž) a výška přitom musí zůstat, jinak by se posunul celý
+       zbytek stránky pod pásem. */
+    --poster-w: 132px;
+    --poster-h: calc(var(--poster-w) * 1.5);
+}
+
+.poster-card {
+    flex: 0 0 var(--poster-w);
+    text-decoration: none;
+    color: inherit;
+    scroll-snap-align: start;
+    transition: flex-basis 0.16s ease;
+}
+
+.poster-frame {
+    position: relative;
+    height: var(--poster-h);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    margin-bottom: 7px;
+}
+
+.poster-frame { display: block; }
+.poster-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.poster-card:hover .poster-frame { border-color: var(--series-1); }
+
+.poster-badge {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    background: rgba(11, 11, 11, 0.82);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.poster-name {
+    font-size: 12.5px;
+    font-weight: 570;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+}
+
+/* Seznam dílů, které přišly v jedné dávce.
+
+   Leží PŘES plakát, ne pod kartou. Pás plakátů se posouvá do stran
+   (overflow-x), a to podle CSS znamená, že se ořízne i to, co vyčnívá
+   dolů - vysunutá nabídka pod kartou by se tedy nezobrazila celá.
+   Takhle zůstane uvnitř rámečku, který si sám hlídá své hranice. */
+/* Po najetí karta povyroste a teprve v ní se ukážou díly. Napřed vypadá
+   jako každá jiná - jen název seriálu.
+
+   Roste **do šířky, ne přes okolí**. Zvětšení přes `transform: scale()`
+   vypadalo dobře, dokud karta nebyla u kraje: pás se posouvá do stran
+   (`overflow-x: auto`), takže cokoliv, co z něj vyleze, se ořízne - a
+   hrana zvětšené karty mizela za okrajem. Takhle se změní její místo
+   v řádku, ostatní novinky se odsunou a ořezávat není co.
+   
+   Výška zůstává (`--poster-h`), aby se neposunul zbytek stránky pod pásem. */
+.poster-card.has-episodes:hover,
+.poster-card.has-episodes:focus-within {
+    flex-basis: calc(var(--poster-w) * 1.75);
+}
+
+.poster-card.has-episodes .poster-frame {
+    transition: border-color 0.14s ease;
+}
+
+.poster-card.has-episodes:hover .poster-frame,
+.poster-card.has-episodes:focus-within .poster-frame {
+    border-color: var(--series-1);
+}
+
+.poster-episodes {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 7px;
+    background: rgba(11, 11, 11, 0.88);
+    overflow-y: auto;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s ease;
+
+    /* Kolečko myši se nesmí přelít na stránku. Bez tohohle řádku se po
+       dojetí seznamu na konec začne posouvat celý přehled - kurzor přitom
+       sjede z karty, seznam se zavře a člověk skončí jinde, než chtěl.
+       `contain` posouvání zastaví na hranici seznamu. */
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+/* Nesmršťovat. Ve svislém flexu se položky ve výchozím stavu zmenšují,
+   aby se do rámečku vešly - u celé řady se tak řádky slisovaly na sebe
+   a text se překrýval. Takhle si každý díl podrží svou výšku a seznam
+   se místo toho posouvá. */
+.poster-episodes-head,
+.poster-episodes a { flex: 0 0 auto; }
+
+/* `focus-within` je tu kvůli klávesnici: kdo se do seznamu dostane
+   tabulátorem, musí ho taky vidět. */
+.poster-card.has-episodes:hover .poster-episodes,
+.poster-card.has-episodes:focus-within .poster-episodes {
+    opacity: 1;
+    visibility: visible;
+}
+
+.poster-episodes-head {
+    /* Zůstane nahoře i při posouvání - u dlouhé řady dílů je jinak
+       po pár otočkách kolečka vidět jen holý seznam bez popisku.
+       `top: -8px` je odsazení seznamu, aby nadpis dosedl na okraj. */
+    position: sticky;
+    top: -8px;
+    background: rgba(11, 11, 11, 0.95);
+    padding: 3px 0 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #b9b8b2;
+    margin-bottom: 2px;
+}
+
+.poster-episodes a {
+    display: block;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #fff;
+    text-decoration: none;
+    padding: 3px 5px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.poster-episodes a strong { color: var(--series-1); font-weight: 700; }
+.poster-episodes a:hover { background: rgba(255, 255, 255, 0.18); }
+
+.poster-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* --------------------------------------------------------------------- */
+/* Zalozky                                                                */
+/* --------------------------------------------------------------------- */
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.tabs a {
+    padding: 8px 16px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 550;
+    border-radius: 8px 8px 0 0;
+    /* Aktivni zalozku nese podtrzeni, ne jen barva - kdo barvy nerozlisi,
+       pozna ji podle cary. */
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.tabs a:hover { color: var(--text-primary); background: var(--surface-2); }
+
+.tabs a.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--series-1);
+    font-weight: 640;
+}
+
+/* --------------------------------------------------------------------- */
+/* Dlazdice knihoven                                                      */
+/* --------------------------------------------------------------------- */
+
+.lib-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+.lib-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.12s ease;
+}
+
+.lib-card:hover { border-color: var(--axis); }
+
+.lib-cover {
+    position: relative;
+    aspect-ratio: 16 / 5;
+    background: var(--surface-2);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.lib-cover img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.lib-cover-name {
+    position: relative;
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 700;
+    color: #fff;
+    /* Stin drzi nazev citelny i na svetlem obrazku. Bez nej by nazev
+       na nekterych plakatech zmizel. */
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.75), 0 0 3px rgba(0, 0, 0, 0.6);
+    padding: 0 16px;
+    text-align: center;
+}
+
+.lib-facts { padding: 14px 18px; display: flex; flex-direction: column; gap: 7px; }
+
+.lib-facts > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13.5px;
+}
+
+/* --------------------------------------------------------------------- */
+/* Mrizka medii                                                           */
+/* --------------------------------------------------------------------- */
+
+.media-grid {
+    display: grid;
+    /* auto-fill + minmax = pocet sloupcu si urci prohlizec podle sirky.
+       Zadny pevny pocet, zadne posouvani do strany. */
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.media-card { text-decoration: none; color: inherit; display: block; }
+
+.media-poster {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.media-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.media-card:hover .media-poster { border-color: var(--series-1); }
+
+.media-size {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    background: rgba(11, 11, 11, 0.82);
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- archivovana polozka ---------------------------------------------- */
+/* Titul, ktery uz v Jellyfinu neni. Rozostreny plakat je videt driv, nez
+   clovek stihne precist popisek - tvar nese informaci stejne jako text.
+   Blur davame obrazku, ne cele kartre: popisek pod plakatem musi zustat
+   citelny, jinak by slo o ozdobu, ne o sdeleni. */
+.media-card.is-archived .media-poster img {
+    filter: blur(3px) grayscale(0.7);
+    opacity: 0.55;
+}
+
+.media-card.is-archived .media-name,
+.media-card.is-archived .media-meta { opacity: 0.7; }
+
+.media-archived {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: center;
+    background: rgba(11, 11, 11, 0.72);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 4px;
+}
+
+.media-name {
+    font-size: 13px;
+    font-weight: 570;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.media-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+/* --------------------------------------------------------------------- */
+/* Detail polozky                                                         */
+/* --------------------------------------------------------------------- */
+
+.item-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 22px;
+    align-items: start;
+}
+
+.item-poster {
+    aspect-ratio: 2 / 3;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    position: sticky;
+    top: 20px;
+}
+
+.item-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Stejne jako u dlazdice v knihovne - archivovany titul je poznat na
+   prvni pohled, ne az z popisku. */
+.item-poster.is-archived { position: relative; }
+.item-poster.is-archived img { filter: blur(4px) grayscale(0.7); opacity: 0.55; }
+
+table.facts th {
+    width: 160px;
+    color: var(--text-secondary);
+    font-weight: 550;
+    vertical-align: top;
+}
+
+@media (max-width: 720px) {
+    .item-layout { grid-template-columns: 1fr; }
+    .item-poster { max-width: 180px; position: static; }
+}
+
+/* --------------------------------------------------------------------- */
+/* Tabulky - kazdy graf ma mit i ctenou podobu                            */
+/* --------------------------------------------------------------------- */
+
+.table-wrap { overflow-x: auto; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+tbody tr:hover { background: var(--surface-2); }
+tbody tr:last-child td { border-bottom: none; }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.muted { color: var(--text-muted); }
+.nowrap { white-space: nowrap; }
+.strong { font-weight: 600; }
+
+.truncate { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+details.paths summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; }
+details.paths pre {
+    margin: 6px 0 0;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------- */
+/* Stitky a stavy                                                         */
+/* --------------------------------------------------------------------- */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Stavova barva nikdy nestoji sama - vzdy ma vedle sebe tecku i popis,
+   aby informaci nenesla jen barva. */
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.badge.good     .dot { background: var(--good); }
+.badge.warning  .dot { background: var(--warning); }
+.badge.serious  .dot { background: var(--serious); }
+.badge.critical .dot { background: var(--critical); }
+.badge.neutral  .dot { background: var(--text-muted); }
+
+.flash {
+    padding: 11px 15px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    margin-bottom: 18px;
+    font-size: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.flash .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
+.flash.success .dot { background: var(--good); }
+.flash.error   .dot { background: var(--critical); }
+.flash.warning .dot { background: var(--warning); }
+.flash.info    .dot { background: var(--series-1); }
+
+/* --------------------------------------------------------------------- */
+/* Formulare a tlacitka                                                   */
+/* --------------------------------------------------------------------- */
+
+.field { margin-bottom: 16px; max-width: 560px; }
+.field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.field .hint { color: var(--text-muted); font-size: 12.5px; margin: 4px 0 0; }
+
+input[type="text"], input[type="number"], input[type="password"], input[type="search"],
+select, textarea {
+    width: 100%;
+    padding: 8px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--axis);
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+/* Cas u nocni ulohy: hodiny a minuty vedle sebe, dohromady stejne siroke
+   jako sousedni pole s minutami.
+   Zamerne dve obycejna cisla, ne `type="time"` ani `<select>`: obojí si
+   otevira vyskakovaci okno, ktere kresli prohlizec sam - CSS na nej
+   nedosahne a smer, kterym se rozbali, si urcuje podle mista na
+   obrazovce, takze u spodniho radku tabulky vyjelo nahoru. */
+.time-picker {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    width: 110px;
+    margin-left: auto;
+}
+
+.time-picker input {
+    width: 100%;
+    text-align: center;
+    padding-inline: 6px;
+    /* Cislice v jednom sloupci - jinak pole poskakuje podle toho,
+       jestli je v nem "03", nebo "11". */
+    font-variant-numeric: tabular-nums;
+}
+
+.time-picker span { color: var(--text-secondary); }
+
+textarea { min-height: 92px; resize: vertical; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 13px; }
+
+/* :focus-visible, ne :focus.
+   Rozdil je v tom, kdy prohlizec povazuje ramecek za uzitecny. Pri :focus
+   dostalo modry ramecek i zaskrtavatko, na ktere jsi jen klikl mysi - vis
+   prece, kam jsi klikl, takze ramecek nic nerika a jen prekazi. Naopak pri
+   pohybu tabulatorem je nutny, jinak clovek netusi, kde je.
+   :focus-visible presne tohle rozliseni dela za nas: u textovych poli
+   ramecek zustava vzdycky, u zaskrtavatek a prepinacu jen pri klavesnici. */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--series-1);
+    outline-offset: 1px;
+    border-color: var(--series-1);
+}
+
+/* Zaskrtavatka a prepinace maji barvu znacky, at nesplyvaji s pozadim. */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--series-1); }
+
+/* Stejny odstup pod skupinou jako pod .field - at je jedno, jestli za
+   ni nasleduje dalsi pole, nebo rada tlacitek. */
+.radio-set { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+
+/* --- nastaveni databaze: ukaz jen tu cast, ktera plati --------------- */
+/* Trida na formulari rika, ktery druh databaze je vybrany. Vykresli ji
+   uz server, takze pri nacteni stranky nic neproblikne a bez JavaScriptu
+   je videt spravna polovina. Skryta pole se dal odesilaji - diky tomu se
+   nastaveni te druhe databaze pri ulozeni nesmaze. */
+.db-form.is-sqlite   .db-part[data-for="postgres"] { display: none; }
+.db-form.is-postgres .db-part[data-for="sqlite"]   { display: none; }
+
+.radio-card {
+    display: flex;
+    gap: 11px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    background: var(--surface-1);
+}
+
+.radio-card:hover { border-color: var(--axis); }
+.radio-card input { margin-top: 3px; }
+/* Nazev na vlastni radek. Jako radkovy prvek splyval s popisem do jedne
+   souvisle vety ("Pouzivat zasobnik spojeni Drzi par spojeni...") a delsi
+   popisky se tim staly necitelne. */
+.radio-card .title { display: block; font-weight: 620; font-size: 14px; }
+.radio-card .desc {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 15px;
+    border-radius: 8px;
+    border: 1px solid var(--axis);
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 550;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.btn:hover { background: var(--surface-2); }
+
+.btn.primary {
+    background: var(--series-1);
+    border-color: var(--series-1);
+    color: #fff;
+}
+
+.btn.primary:hover { filter: brightness(1.07); }
+
+/* Nevratna akce. Barva je semanticka (--critical), ne dalsi odstin serie -
+   stavove barvy se s barvami grafu zamerne nemichaji. */
+.btn.danger {
+    background: var(--critical);
+    border-color: var(--critical);
+    color: #fff;
+}
+
+.btn.danger:hover { filter: brightness(1.07); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* --------------------------------------------------------------------- */
+/* Strankovani                                                            */
+/* --------------------------------------------------------------------- */
+
+.pager {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------- */
+/* Prihlaseni                                                             */
+/* --------------------------------------------------------------------- */
+
+.login-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.login-box {
+    width: 100%;
+    max-width: 340px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+}
+
+/* Řádek pod polem s heslem, zarovnaný doprava. */
+.forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+/* Tlačítko, které vypadá jako odkaz.
+   Musí to být <button>, ne <a>: nikam nevede, jen otevírá okno -
+   a čtečka obrazovky to má vědět.
+   Proto se z něj musí sundat výchozí vzhled tlačítka (pozadí, rámeček,
+   odsazení, vlastní písmo), jinak vypadá jako šedý obdélník. */
+.link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    font-size: 13px;
+    color: var(--series-1);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+}
+
+.link-button:hover { color: var(--text-primary); }
+.link-button:focus-visible { outline: 2px solid var(--series-1); outline-offset: 3px; border-radius: 3px; }
+
+/* --------------------------------------------------------------------- */
+/* Vyskakovací okno                                                       */
+/* --------------------------------------------------------------------- */
+
+.dialog {
+    max-width: 520px;
+    width: calc(100% - 32px);
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 26px 28px;
+    /* Okno kreslí prohlížeč mimo běžný tok stránky, takže barvy musí
+       přijít z tokenů znovu - nezdědí je od .login-page. */
+}
+
+.dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+
+.dialog h2 { font-size: 18px; margin: 0 0 12px; }
+.dialog p { margin: 0 0 14px; font-size: 14px; color: var(--text-secondary); }
+
+.dialog-label {
+    font-size: 11.5px !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted) !important;
+    margin: 0 0 5px !important;
+}
+
+.dialog pre {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 13px;
+    margin: 0 0 16px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.dialog pre code { font-family: ui-monospace, "Cascadia Code", monospace; }
+
+/* Místo, kam se doplní vlastní hodnota - odlišené, ale ne křiklavé. */
+.dialog pre em {
+    font-style: normal;
+    color: var(--series-1);
+    font-weight: 600;
+}
+
+.dialog code {
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    font-size: 12.5px;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.dialog form { margin-top: 4px; }
+
+/* Nabidka nahradni cesty ("Nefunguje import pres API?").
+
+   Musi se odlisit od poznamek kolem. V sede poznamek splyvalo s okolnim
+   textem a vypadalo to jako dalsi vysvetlivka - pritom je to jedina
+   zachrana pro toho, komu plugin pres API nefunguje. */
+details.fallback {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background: var(--surface-2);
+}
+
+details.fallback > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+details.fallback > summary:hover { color: var(--series-1); }
+details.fallback[open] > summary { margin-bottom: 4px; }
+
+/* --------------------------------------------------------------------- */
+/* Prohlizec logu (Nastaveni -> Log)                                      */
+/* --------------------------------------------------------------------- */
+
+.log-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.log-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.log-controls select { width: auto; }
+
+/* Vlastni posuvnik uvnitr ramecku. Log je ze sve podstaty dlouhy a siroky:
+   bez tohohle by rostl do vysky pres celou stranku a dlouhe radky by
+   roztahly celou stranku do sirky. */
+.log-view {
+    margin-top: 14px;
+    max-height: 60vh;
+    overflow: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+}
+
+.log-line {
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    /* Radek se nezalamuje - zalomeny cas a uroven by se spatne prohledavaly
+       okem. Misto toho se okno posouva do strany. */
+    white-space: pre;
+    color: var(--text-secondary);
+}
+
+/* Barva nese jen zvyrazneni, informaci nese samo slovo ERROR/WARNING
+   v textu radku - proto je citelny i pro toho, kdo barvy nerozezna. */
+.log-line.error,
+.log-line.critical { color: var(--critical); }
+.log-line.warning  { color: var(--serious); }
+.log-line.info     { color: var(--text-primary); }
+
+.code-block {
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 10px 0;
+}
+
+/* --------------------------------------------------------------------- */
+/* Uzsi obrazovky                                                         */
+/* --------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar {
+        position: static;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+    .nav { flex-direction: row; }
+    .sidebar-foot { display: none; }
+    .main { padding: 18px 16px 48px; }
+}
+
+@media print {
+    .sidebar, .filters, .btn-row { display: none; }
+    .card { break-inside: avoid; }
+}
+
+/* ---------------------------------------------------------------------
+   Ukazatel prubehu bezici ulohy
+   --------------------------------------------------------------------- */
+.task-progress { margin-top: 12px; }
+
+.task-progress-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.task-progress-bar i {
+    display: block;
+    height: 100%;
+    background: var(--series-1);
+    /* Prechod na novou sirku, at pruh neposkakuje po davkach. */
+    transition: width 0.4s ease;
+}
+
+/* Kdyz celkovy pocet nezname, pruh nic nemeri - proto pruhovany
+   a bez tvrzeni o procentech. */
+.task-progress-bar i.neurcity {
+    background: repeating-linear-gradient(
+        45deg, var(--series-1), var(--series-1) 10px,
+        var(--surface-2) 10px, var(--surface-2) 20px);
+    opacity: 0.7;
+}
+
+.task-progress-note {
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------
+   Barvy, ktere neoznacuji stav, ale identitu
+   ---------------------------------------------------------------------
+   Stavove barvy (good/warning/serious/critical) jsou vyhrazene pro stav
+   a nesmi se pouzit na neco jineho - jinak by zelena chvili znamenala
+   "v poradku" a chvili "role spravce". Tyhle znacky proto berou barvu
+   ze serie, ne ze stavu. Text u nich zustava vzdycky. */
+.badge.role     .dot { background: var(--series-7); }   /* spravce      */
+.badge.jellyfin .dot { background: var(--series-1); }   /* data z API   */
+.badge.ffprobe  .dot { background: var(--series-3); }   /* data ze souboru */
+.badge.chosen   .dot { background: var(--series-4); }   /* vychozi stopa */
+
+/* ---------------------------------------------------------------------
+   Kolacovy graf (prstenec)
+   --------------------------------------------------------------------- */
+.donut-wrap {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+}
+
+.donut { flex: none; transform: rotate(-90deg); }   /* zacatek nahore, ne vpravo */
+
+.donut-seg {
+    fill: none;
+    stroke-width: 26;
+    /* Uzka mezera mezi dily - jinak dva sousedni odstiny splynou v jeden. */
+    stroke-linecap: butt;
+    transition: opacity 0.15s ease;
+}
+.donut-seg:hover { opacity: 0.82; cursor: default; }
+
+/* Text uprostred se otaci zpatky - cely obrazek je otoceny o -90 stupnu. */
+.donut-total, .donut-unit {
+    transform: rotate(90deg);
+    transform-origin: center;
+    font-variant-numeric: tabular-nums;
+}
+.donut-total { fill: var(--text-primary); font-size: 20px; font-weight: 700; }
+.donut-unit  { fill: var(--text-muted);   font-size: 11px; }
+
+.donut-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1 1 190px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.donut-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.donut-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.donut-value {
+    flex: none;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Počet dílů na plakátu seriálu. Vlevo nahoře, aby se nepral
+   s velikostí souboru vpravo dole. */
+.media-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Vlastni vyber souboru. Nativni `type="file"` si prohlizec kresli sam
+   vcetne popisku ("Vybrat soubor", "Soubor nevybran") a rídi se pritom
+   svym jazykem, ne nastavenim aplikace. Skryjeme ho tedy do <label>
+   a vedle nakreslime vlastni tlacitko - klik na label pole otevre. */
+.file-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+/* `display: none` by pole vyradilo z ovladani klavesnici. Takhle je
+   dostupne, jen neni videt - a ramecek pri tabulatoru dostane tlacitko. */
+.file-picker input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.file-picker input[type="file"]:focus-visible + .btn {
+    outline: 2px solid var(--series-1);
+    outline-offset: 1px;
+}
+
+.file-picker .file-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --------------------------------------------------------------------- */
+/* Hlaska o vysledku akce                                                 */
+/* --------------------------------------------------------------------- */
+
+/* Drzi se u horni hrany okna, ne v toku stranky. Vetsina akci se spousti
+   tlacitkem dole (uklid historie, import, zalohy) a po presmerovani se
+   stranka vraci tam, kde clovek byl - hlaska v toku by mu utekla nahoru
+   a nikdo by se nedozvedel, jak to dopadlo. */
+.flash-toast {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    width: min(720px, calc(100vw - 28px));
+    animation: flash-prichod 0.18s ease-out;
+}
+
+.flash-toast .flash {
+    margin: 0;
+    align-items: center;
+    /* Vlastni podklad a stin: prekryva obsah stranky, takze nesmi byt
+       ani z casti pruhledna. */
+    background: var(--surface-1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+
+.flash-toast.odchazi { opacity: 0; transition: opacity 0.55s ease; }
+
+.flash-close {
+    margin-left: auto;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+}
+
+.flash-close:hover { color: var(--text-primary); }
+
+@keyframes flash-prichod {
+    from { opacity: 0; transform: translate(-50%, -8px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Kdo si vypnul animace, dostane hlasku rovnou. */
+@media (prefers-reduced-motion: reduce) {
+    .flash-toast { animation: none; }
+    .flash-toast.odchazi { transition: none; }
+}

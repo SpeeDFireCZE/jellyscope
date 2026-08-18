@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, tile %}
+{% block title %}{{ user.name }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ user.name }}</h1>
+        <p class="subtitle">
+            <a href="/users">&larr; {{ _("zpět na uživatele") }}</a>
+            &middot; {{ _("posledních") }} {{ _(day_labels[days]) }}
+        </p>
+    </div>
+    {{ period_filter(days, '/users/' ~ user.id) }}
+</div>
+
+<div class="kpi-row">
+    {{ tile(_("Odsledováno"), totals.hours | hours) }}
+    {{ tile(_("Spuštění"), totals.plays | number) }}
+    {{ tile(_("Různých titulů"), totals.item_count | number) }}
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejsledovanější") }}</h2>
+            <p class="card-note">{{ _("v hodinách, kliknutím na titul se otevře v knihovně") }}</p>
+        </div>
+        {{ charts.hbar_chart(top_items, 'label', 'hours',
+                     link_prefix='/item/', link_key='item_id') | safe }}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Zařízení") }}</h2>
+            <p class="card-note">{{ _("v hodinách") }}</p>
+        </div>
+        {{ charts.hbar_chart(devices, 'label', 'hours') | safe }}
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Zařízení") }}</th><th>{{ _("Přehrávače") }}</th>
+                    <th class="num">{{ _("Hodiny") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for row in devices %}
+                <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="muted">{{ row.client }}</td>
+                    <td class="num">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="btn-row">
+        <a class="btn" href="/history?user_id={{ user.id }}">
+            {{ _("Zobrazit celou historii tohoto uživatele") }}
+        </a>
+    </div>
+</div>
+
+{# Žánry. Kruhový výseč se čte hůř než sloupce, ale otázka "jaký díl
+   z celku" je přesně ta, kde se vyplatí - a dílů je málo. #}
+<div class="card" style="margin-top:18px">
+    <div class="card-head">
+        <h2>{{ _("Jaké žánry sleduje") }}</h2>
+        <p class="card-note">{{ _("podle odsledovaného času") }}</p>
+    </div>
+    {% if genres %}
+        {{ charts.donut_chart(genres, 'label', 'hours') | safe }}
+        <p class="card-note" style="margin-top:14px">
+            {{ _("Jeden titul má obvykle žánrů víc, takže se jeho čas počítá do každého z nich – procenta se proto nesčítají na sto. Žánry hlásí Jellyfin tak, jak je má u titulů vyplněné.") }}
+        </p>
+    {% else %}
+        <p class="card-note">
+            {{ _("Zatím nevíme – žánry se doplní při další synchronizaci knihovny.") }}
+        </p>
+    {% endif %}
+</div>
+
+{% endblock %}

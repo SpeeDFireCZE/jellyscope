@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# Jellyscope behind nginx
+#
+# Save as:  /etc/nginx/sites-available/jellyscope
+# Enable:   sudo ln -s /etc/nginx/sites-available/jellyscope \
+#                      /etc/nginx/sites-enabled/
+#           sudo nginx -t && sudo systemctl reload nginx
+#
+# Get a certificate with certbot:
+#   sudo certbot --nginx -d jellyscope.example.com
+# ---------------------------------------------------------------------------
+
+server {
+    listen 80;
+    server_name jellyscope.example.com;
+
+    # Everything to HTTPS. The app sends a login cookie, which has no
+    # business travelling over an unencrypted connection.
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name jellyscope.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/jellyscope.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/jellyscope.example.com/privkey.pem;
+
+    # Importing a Jellystat backup means uploading a file; nginx's default
+    # limit is 1 MB, which is not enough for a JSON full of history.
+    # Keep this at least as high as MAX_UPLOAD_MB in the app.
+    client_max_body_size 200M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8097;
+
+        # These headers tell the app who is really asking and that the
+        # connection came over HTTPS. For the app to trust them, .env
+        # must have FORWARDED_ALLOW_IPS=127.0.0.1
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Syncing a large library can take minutes. The default 60 seconds
+        # would cut it off halfway.
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
+    # Styles, the logo and posters do not change - let the browser stop
+    # downloading them over and over.
+    #
+    # A long lifetime is safe here: the app appends ?v=number to those
+    # addresses and the number changes whenever a file does. A different
+    # address means a different file, so a new version loads immediately.
+    # Without it a change of appearance would stay invisible for a week.
+    location /static/ {
+        proxy_pass http://127.0.0.1:8097;
+        proxy_cache_valid 200 7d;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+}
+
+# Once this works, add to /opt/jellyscope/.env:
+#
+#     SECURE_COOKIES=1
+#     FORWARDED_ALLOW_IPS=127.0.0.1
+#
+# and restart the service (systemctl restart jellyscope, or
+# supervisorctl restart jellyscope).
+#
+# Then, not before - without working HTTPS the browser would not send the
+# login cookie and nobody could sign in.

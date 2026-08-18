@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------
+# Jellyscope behind Caddy
+#
+# Copy into /etc/caddy/Caddyfile (or add the block to your existing one)
+# and run:
+#     sudo systemctl reload caddy
+#
+# Caddy gets a Let's Encrypt certificate on its own - all it needs is a
+# domain pointing at this server and ports 80 and 443 free. No certbot.
+# ---------------------------------------------------------------------------
+
+jellyscope.example.com {
+    reverse_proxy 127.0.0.1:8097
+
+    # Caddy sends the Host, X-Forwarded-For and X-Forwarded-Proto headers
+    # itself, so there is nothing to spell out. The upload size limit and
+    # the timeout need no attention either - Caddy's defaults are
+    # generous enough.
+}
+
+# Once this works, add to /opt/jellyscope/.env:
+#
+#     SECURE_COOKIES=1
+#     FORWARDED_ALLOW_IPS=127.0.0.1
+#
+# and restart the service (systemctl restart jellyscope, or
+# supervisorctl restart jellyscope).

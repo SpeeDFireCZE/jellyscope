@@ -1,0 +1,26 @@
+# Tajnosti - NIKDY do gitu
+.env
+
+# Vyplnene konfigurace, ktere generuje deploy/install.sh.
+# Sablony (jellyscope.service, jellyscope.conf) v gitu zustavaji, jejich
+# kopie s doplnenymi cestami uz jsou vlastnosti konkretniho serveru.
+deploy/*.ready
+
+# Data aplikace (databaze)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Editory / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

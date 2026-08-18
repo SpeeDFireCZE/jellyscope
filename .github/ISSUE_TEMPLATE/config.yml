@@ -1,0 +1,8 @@
+# Blank issues stay on: a question that fits no template is still worth
+# asking, and turning them off mostly teaches people to force their problem
+# into the wrong form.
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/SpeeDFireCZE/jellyscope/security/advisories/new
+    about: Report it privately, not as an issue - issues are public.

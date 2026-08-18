@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="{{ ui_language | default('cs') }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ _("Přihlásit") }} &middot; Jellyscope</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+    <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
+    <script>
+        (function () {
+            var saved = localStorage.getItem("jellyscope-theme");
+            if (saved === "dark" || saved === "light") {
+                document.documentElement.setAttribute("data-theme", saved);
+            }
+        })();
+    </script>
+</head>
+<body>
+<div class="login-page">
+    <form class="login-box" method="post" action="/login">
+        <div class="brand" style="margin-bottom:20px; padding:0">
+            <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
+            <span>Jellyscope</span>
+        </div>
+
+        {% if error %}
+            <div class="flash error"><span class="dot"></span><span>{{ error }}</span></div>
+        {% endif %}
+
+        <div class="field" style="margin-bottom:14px">
+            <label for="username">{{ _("Uživatelské jméno") }}</label>
+            {# autocomplete pomáhá správcům hesel správně vyplnit přihlášení #}
+            <input type="text" id="username" name="username" value="{{ username or '' }}"
+                   autocomplete="username" autofocus required>
+        </div>
+
+        <div class="field" style="margin-bottom:18px">
+            <label for="password">{{ _("Heslo") }}</label>
+            <input type="password" id="password" name="password"
+                   autocomplete="current-password" required>
+
+            {# Odkaz pod polem, zarovnaný doprava - tak, jak to lidé znají
+               odjinud a kde ho hledají. #}
+            <div class="forgot-row">
+                <button type="button" class="link-button"
+                        onclick="forgotDialog.showModal()">
+                    {{ _("Zapomenuté heslo?") }}
+                </button>
+            </div>
+        </div>
+
+        <button class="btn primary" type="submit" style="width:100%; justify-content:center">
+            {{ _("Přihlásit") }}
+        </button>
+    </form>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Okno se zapomenutým heslem                                          #}
+{#                                                                     #}
+{# Značka <dialog> je vestavěná v prohlížeči: sama řeší zavření        #}
+{# klávesou Esc, přesun fokusu i ztmavení pozadí. Není k ní potřeba    #}
+{# žádná knihovna ani vlastní obsluha klávesnice.                      #}
+{# ------------------------------------------------------------------ #}
+<dialog id="forgotDialog" class="dialog">
+    <h2>{{ _("Zapomenuté heslo") }}</h2>
+
+    <p>{{ _("Heslo se ukládá jako otisk, zpátky ho přečíst nejde – to je jeho smysl. Nastav si nové přímo na serveru:") }}</p>
+
+    <p class="dialog-label">Linux</p>
+    <pre><code>sudo -u jellyscope /opt/jellyscope/.venv/bin/python \
+     manage.py heslo <em>jméno</em></code></pre>
+
+    <p class="dialog-label">Windows</p>
+    <pre><code>.\.venv\Scripts\python.exe manage.py heslo <em>jméno</em></code></pre>
+
+    <p class="card-note">
+        {{ _("Nevíš, jaké účty existují? Vypíše je") }} <code>manage.py ucty</code>.
+    </p>
+
+    <form method="dialog">
+        <button class="btn primary" type="submit">{{ _("Rozumím") }}</button>
+    </form>
+</dialog>
+</body>
+</html>

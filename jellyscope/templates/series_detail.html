@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tile, tech_badge %}
+{% block title %}{{ series.name }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ series.name }}</h1>
+        <p class="subtitle">
+            {% if library %}
+                <a href="/library/{{ library.id }}?tab=media">{{ library.name }}</a> &middot;
+            {% endif %}
+            {{ series.episode_count }} {{ _("dílů") }}
+            {% if series.season_count > 1 %}
+                {{ _("v") }} {{ series.season_count }} {{ _("řadách") }}
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+{% if series.missing %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>{{ _("Tenhle seriál už v Jellyfinu není. Jellyscope ho nemaže – historie přehrávání na něj odkazuje.") }}</span>
+</div>
+{% endif %}
+
+{# Archivované díly se do počtu výše nepočítají. Právě rozdíl mezi
+   „kolik jich je v Jellyfinu" a „kolik jich vidím tady" jinak nejde
+   vysvětlit - a vypadá to jako chyba v součtu. #}
+{% if series.archived_count %}
+<div class="flash info">
+    <span class="dot"></span>
+    <span>
+        {{ _("V archivu je navíc") }} {{ series.archived_count | number }}
+        {{ _("dílů, které už v Jellyfinu nejsou") }} –
+        {{ _("do počtu nahoře se nepočítají. Historie přehrávání u nich zůstává.") }}
+        <details style="margin-top:6px">
+            <summary style="cursor:pointer">{{ _("Zobrazit je") }}</summary>
+            <ul style="margin:8px 0 0 18px">
+                {% for dil in series.archived %}
+                <li>
+                    <a href="/item/{{ dil.id }}">
+                        {%- if dil.parent_index_number is not none and dil.index_number is not none -%}
+                            S{{ '%02d' | format(dil.parent_index_number) }}E{{ '%02d' | format(dil.index_number) }} &middot;
+                        {% endif %}
+                        {{ dil.name }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </details>
+    </span>
+</div>
+{% endif %}
+
+<div class="kpi-row">
+    {{ tile(_("Dílů"), series.episode_count | number) }}
+    {{ tile(_("Řad"), series.season_count | number) }}
+    {{ tile(_("Velikost"), series.size_bytes | bytes) }}
+    {{ tile(_("Spuštění"), series.plays | number) }}
+</div>
+
+{# Každá řada zvlášť. Rozbalená je jen ta první - u seriálu o deseti
+   řadách by jinak stránka začínala stovkou řádků. #}
+{% for season in series.seasons %}
+<details class="card" style="margin-bottom:14px" {{ 'open' if loop.first }}>
+    <summary style="cursor:pointer; display:flex; justify-content:space-between; gap:12px; align-items:baseline">
+        <strong>{{ season.name }}</strong>
+        <span class="card-note">
+            {{ season.episodes | length }} {{ _("dílů") }}
+            &middot; {{ season.size_bytes | bytes }}
+            {% if season.plays %}&middot; {{ season.plays }}&times; {{ _("přehráno") }}{% endif %}
+        </span>
+    </summary>
+
+    <div class="table-wrap" style="margin-top:12px">
+        <table>
+            <thead>
+            <tr>
+                <th class="num">#</th>
+                <th>{{ _("Název") }}</th>
+                <th class="num">{{ _("Rozlišení") }}</th>
+                <th>{{ _("Kodek") }}</th>
+                <th class="num">{{ _("Velikost") }}</th>
+                <th class="num">{{ _("Spuštění") }}</th>
+                <th>{{ _("Zdroj dat") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for episode in season.episodes %}
+            <tr>
+                <td class="num muted">
+                    {{ episode.index_number if episode.index_number is not none else '–' }}
+                </td>
+                <td class="strong">
+                    <a href="/item/{{ episode.id }}">{{ episode.name }}</a>
+                    {% if episode.is_missing %}
+                        <span class="badge warning"><span class="dot"></span>{{ _("Archivováno") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ episode.height | resolution(episode.width) }}</td>
+                <td>{{ episode.video_codec | upper if episode.video_codec else '–' }}</td>
+                <td class="num">{{ episode.size_bytes | bytes }}</td>
+                <td class="num">{{ episode.plays | number }}</td>
+                <td>{{ tech_badge(episode.tech_source) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</details>
+{% endfor %}
+
+{% endblock %}

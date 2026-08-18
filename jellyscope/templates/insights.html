@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, tile %}
+{% block title %}{{ _("Zjištění") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Zjištění") }}</h1>
+        <p class="subtitle">
+            {{ _("Otázky, na které se dá odpovědět, jen když víš") }}
+            <em>{{ _("co se sleduje") }}</em> i <em>{{ _("co ty soubory jsou") }}</em>.
+        </p>
+    </div>
+    {{ period_filter(days, '/insights') }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 1. Mrtvé místo - nejsilnější číslo, které aplikace umí              #}
+{# ------------------------------------------------------------------ #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Místo, které nikdo nevyužívá") }}</h2>
+        <p class="card-note">
+            {{ _("nic nepřehráno za") }} {{ _(day_labels[days]) }}
+            &middot; {{ _("nově přidané tituly se nepočítají") }}
+        </p>
+    </div>
+
+    <div class="hero">{{ dead.size_bytes | bytes }}</div>
+    <div class="delta flat">
+        {{ dead.item_count | number }} {{ _("titulů") }} &middot;
+        {{ dead.share | percent(1) }} {{ _("z celkové velikosti knihovny") }}
+        ({{ dead.library_bytes | bytes }})
+    </div>
+
+    {% if dead.rows %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Titul") }}</th><th>{{ _("Knihovna") }}</th><th class="num">{{ _("Velikost") }}</th>
+                <th class="num">{{ _("Rozlišení") }}</th><th>{{ _("Kodek") }}</th>
+                <th class="num">{{ _("Přidáno") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in dead.rows %}
+            <tr>
+                <td class="strong truncate" title="{{ row.name }}">
+                    <a href="/item/{{ row.id }}">
+                        {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
+                        {{ row.name }}
+                    </a>
+                    {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
+                </td>
+                <td class="muted">{{ row.library_name or '-' }}</td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="muted">{{ (row.video_codec or '-') | upper }}</td>
+                <td class="num muted">{{ row.date_created | datetime }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Jellyscope nic nemaže a nic mazat neumí. Jen ti ukáže, kde se dívat.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("Žádný nesledovaný obsah – nebo ještě nemáš dost historie.") }}</p>
+    {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 2. Co nutí server přepočítávat                                      #}
+{# ------------------------------------------------------------------ #}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejčastěji transcodované soubory") }}</h2>
+        </div>
+        {% if transcodes %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr><th>{{ _("Titul") }}</th><th class="num">{{ _("Transcode") }}</th>
+                    <th class="num">{{ _("Rozlišení") }}</th><th>{{ _("Kodek") }}</th></tr>
+                </thead>
+                <tbody>
+                {% for row in transcodes %}
+                <tr>
+                    {# Proklik na detail: u seriálu na seriál, u filmu na
+                       soubor. Řádky bez odkazu jsou tituly, které už
+                       v knihovně nejsou - odkaz na 404 je horší než žádný. #}
+                    <td class="truncate" title="{{ row.label }}">
+                        {% if row.detail_url %}
+                            <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                        {% else %}
+                            {{ row.label }}
+                        {% endif %}
+                    </td>
+                    <td class="num strong">{{ row.transcodes | number }}</td>
+                    <td class="num">{{ row.height | resolution(row.width) }}</td>
+                    <td class="muted">{{ (row.video_codec or '-') | upper }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Převod těchto souborů do formátu, který tvoje přehrávače zvládnou přímo (obvykle H.264 + AAC), sundá zátěž z procesoru serveru.") }}
+        </p>
+        {% else %}
+        <p class="chart-empty">{{ _("Žádný transcode – to je dobrá zpráva.") }}</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Proč se transcoduje") }}</h2>
+            <p class="card-note">{{ _("důvod hlásí přímo Jellyfin") }}</p>
+        </div>
+        {% if reasons %}
+            {{ charts.hbar_chart(reasons, 'label', 'plays', unit='x') | safe }}
+        {% else %}
+            <p class="chart-empty">{{ _("Zatím žádný transcode k rozboru.") }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 3. Kvalita versus sledovanost                                       #}
+{# ------------------------------------------------------------------ #}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Díváš se na to hodně – ale ve slabé kvalitě") }}</h2>
+            <p class="card-note">{{ _("pod 1080p nebo pod 3 Mb/s") }}</p>
+        </div>
+        {% if upgrades %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr><th>{{ _("Titul") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                    <th class="num">{{ _("Rozlišení") }}</th><th class="num">Bitrate</th></tr>
+                </thead>
+                <tbody>
+                {% for row in upgrades %}
+                <tr>
+                    {# Proklik na detail: u seriálu na seriál, u filmu
+                       na soubor - odkud se dá rovnou zjistit, co je to
+                       za soubor a kde leží. #}
+                    <td class="truncate" title="{{ row.label }}">
+                        {% if row.detail_url %}
+                            <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                        {% else %}
+                            {{ row.label }}
+                        {% endif %}
+                    </td>
+                    <td class="num strong">{{ row.hours | hours }}</td>
+                    <td class="num">{{ row.height | resolution(row.width) }}</td>
+                    <td class="num muted">{{ row.bitrate | bitrate }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="card-note" style="margin-top:12px">{{ _("Kandidáti na sehnání lepší kopie.") }}</p>
+        {% else %}
+        <p class="chart-empty">{{ _("Vše, na co se díváš, je v pořádné kvalitě.") }}</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Zabírá hodně, sledováno skoro vůbec") }}</h2>
+            <p class="card-note">{{ _("gigabajty na jednu odsledovanou hodinu") }}</p>
+        </div>
+        {% if oversized %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr><th>{{ _("Titul") }}</th><th class="num">{{ _("Velikost") }}</th>
+                    <th class="num">GB / h</th><th class="num">{{ _("Přehrání") }}</th></tr>
+                </thead>
+                <tbody>
+                {% for row in oversized %}
+                <tr>
+                    <td class="truncate" title="{{ row.label }}">
+                        <a href="/item/{{ row.id }}">{{ row.label }}</a>
+                    </td>
+                    <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                    <td class="num">{{ '%.1f' | format(row.gb_per_hour or 0) | replace('.', ',') }}</td>
+                    <td class="num muted">{{ row.plays | number }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Kandidáti na překódování do úspornějšího formátu (např. HEVC).") }}
+        </p>
+        {% else %}
+        <p class="chart-empty">{{ _("Žádné neúměrně velké soubory.") }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 4. Využití knihoven                                                 #}
+{# ------------------------------------------------------------------ #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Využití knihoven") }}</h2>
+        <p class="card-note">{{ _("kolik místa zabírají versus kolik se z nich sleduje") }}</p>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Knihovna") }}</th><th class="num">{{ _("Titulů") }}</th>
+                <th class="num">{{ _("Velikost") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                <th class="num">{{ _("Sledovaných titulů") }}</th><th class="num">{{ _("Využití") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in efficiency %}
+            {% set usage = (row.watched_items / row.item_count * 100) if row.item_count else 0 %}
+            <tr>
+                <td class="strong">{{ row.label }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.watched_items | number }}</td>
+                <td class="num">
+                    {% if usage >= 40 %}
+                        <span class="badge good"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% elif usage >= 15 %}
+                        <span class="badge warning"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% else %}
+                        <span class="badge critical"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 5. Duplicity a nedokončené                                          #}
+{# ------------------------------------------------------------------ #}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Možné duplicity") }}</h2>
+            <p class="card-note">{{ _("shoda názvu a roku") }}</p>
+        </div>
+        {% if duplicates %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Film") }}</th><th class="num">{{ _("Kopií") }}</th>
+                    <th class="num">{{ _("Dohromady") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for row in duplicates %}
+                <tr>
+                    <td>
+                        <div class="strong">{{ row.label }}
+                            {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
+                        </div>
+                        <div class="muted" style="font-size:12.5px">{{ row.variants }}</div>
+                        {% if row.paths %}
+                        <details class="paths"><summary>{{ _("cesty") }}</summary><pre>{{ row.paths }}</pre></details>
+                        {% endif %}
+                    </td>
+                    <td class="num">{{ row.copies }}</td>
+                    <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Pozor: shoda názvu není důkaz. Může jít o režisérský sestřih vedle kinoverze – proto \"možné\".") }}
+        </p>
+        {% else %}
+        <p class="chart-empty">{{ _("Žádné duplicity nenalezeny.") }}</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Začaté a odložené") }}</h2>
+            <p class="card-note">{{ _("nikdo se nedostal dál než do 15 % délky") }}</p>
+        </div>
+        {% if abandoned %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Titul") }}</th><th class="num">{{ _("Pokusů") }}</th>
+                    <th class="num">{{ _("Nejdál") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for row in abandoned %}
+                <tr>
+                    <td class="truncate" title="{{ row.label }}">{{ row.label }}</td>
+                    <td class="num">{{ row.attempts }}</td>
+                    <td class="num muted">{{ row.best_percent | percent }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="chart-empty">{{ _("Nic odloženého.") }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

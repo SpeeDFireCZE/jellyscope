@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img"
+     aria-label="Jellyscope">
+    <title>Jellyscope</title>
+    <!--
+        Zaměřovač se sloupcovým grafem uvnitř.
+
+        Kroužek a čtyři rysky = "scope" z názvu: dívám se na jedno místo
+        a zvětšuji ho. Sloupce uvnitř říkají, co v tom hledáčku je - data.
+
+        Přechod z fialové do modré je značkový přechod Jellyfinu
+        (#AA5CC3 -> #00A4DC). Logo se tím hlásí k tomu, čeho je nástavbou;
+        vlastní barvy grafů v aplikaci s ním schválně nesouvisí.
+
+        POZOR na tvar okraje. Zkoušel jsem variantu, kde je kroužek
+        přerušený a z konců oblouků vybíhají ramena ven. Vzniknou tím
+        čtyři háky s rotační symetrií kolem středu - a to je struktura
+        hákového kříže. Kroužek proto zůstává souvislý a rysky jsou
+        od něj oddělené: čtyři samostatné čárky nemají rotační smysl.
+
+        Kreslí se do čtverce 64x64 a je celé z kruhů, čar a obdélníků,
+        takže zůstane ostré v jakékoliv velikosti.
+    -->
+    <defs>
+        <linearGradient id="js-brand" x1="8" y1="6" x2="56" y2="58"
+                        gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#AA5CC3"/>
+            <stop offset="1" stop-color="#00A4DC"/>
+        </linearGradient>
+    </defs>
+
+    <g fill="none" stroke="url(#js-brand)" stroke-width="5" stroke-linecap="round">
+        <!-- souvislý kroužek hledáčku -->
+        <circle cx="32" cy="32" r="19"/>
+        <!-- čtyři oddělené rysky vně kroužku -->
+        <path d="M32 2v6M32 56v6M2 32h6M56 32h6"/>
+    </g>
+
+    <!-- sloupcový graf uvnitř: tři vzestupné sloupce na společné základně -->
+    <g fill="url(#js-brand)">
+        <rect x="22.5" y="32" width="5" height="10" rx="2.5"/>
+        <rect x="29.5" y="26" width="5" height="16" rx="2.5"/>
+        <rect x="36.5" y="21" width="5" height="21" rx="2.5"/>
+    </g>
+</svg>

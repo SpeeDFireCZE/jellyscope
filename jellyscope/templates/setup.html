@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="{{ ui_language | default('cs') }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ _("Vytvoř si správcovský účet") }} &middot; Jellyscope</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+    <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
+    <script>
+        (function () {
+            var saved = localStorage.getItem("jellyscope-theme");
+            if (saved === "dark" || saved === "light") {
+                document.documentElement.setAttribute("data-theme", saved);
+            }
+        })();
+    </script>
+</head>
+<body>
+<div class="login-page">
+    <form class="login-box" method="post" action="/setup" style="max-width:400px">
+        <div class="brand" style="margin-bottom:8px; padding:0">
+            <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
+            <span>Jellyscope</span>
+        </div>
+
+        <h1 style="font-size:19px; margin:14px 0 6px">{{ _("Vytvoř si správcovský účet") }}</h1>
+        <p class="card-note" style="margin-bottom:18px">
+            {{ _("Tohle je první spuštění. Účet, který teď založíš, bude mít plná práva – další uživatele přidáš později v Nastavení.") }}
+        </p>
+
+        {% if error %}
+            <div class="flash error"><span class="dot"></span><span>{{ error }}</span></div>
+        {% endif %}
+
+        <div class="field" style="margin-bottom:14px">
+            <label for="username">{{ _("Uživatelské jméno") }}</label>
+            <input type="text" id="username" name="username" value="{{ username or '' }}"
+                   autocomplete="username" autofocus required>
+            <p class="hint">{{ _("3 až 32 znaků, bez diakritiky a mezer.") }}</p>
+        </div>
+
+        <div class="field" style="margin-bottom:14px">
+            <label for="password">{{ _("Heslo") }}</label>
+            <input type="password" id="password" name="password"
+                   autocomplete="new-password" required>
+            <p class="hint">{{ _("Alespoň 8 znaků. Uloží se jen jeho otisk, ne heslo samotné.") }}</p>
+        </div>
+
+        <div class="field" style="margin-bottom:14px">
+            <label for="password_again">{{ _("Heslo znovu") }}</label>
+            <input type="password" id="password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+
+        {# Jazyk hned tady, ne až v Nastavení. Kdo aplikaci vidí poprvé,
+           má ji mít v řeči, které rozumí - jinak si první obrazovku
+           přeluští a teprve pak hledá, kde se to přepíná. #}
+        <div class="field" style="margin-bottom:18px">
+            <label for="ui_language">{{ _("Jazyk rozhraní") }}</label>
+            <select id="ui_language" name="ui_language">
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}"
+                            {{ 'selected' if code == (ui_language or 'cs') }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <p class="hint">{{ _("Platí pro celou aplikaci. Změnit ho jde kdykoliv v Nastavení.") }}</p>
+        </div>
+
+        <button class="btn primary" type="submit" style="width:100%; justify-content:center">
+            {{ _("Založit účet a pokračovat") }}
+        </button>
+    </form>
+</div>
+</body>
+</html>

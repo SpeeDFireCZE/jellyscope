@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter %}
+{% block title %}{{ _("Uživatelé") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Uživatelé") }}</h1>
+        <p class="subtitle">
+            {{ _("Kdo kolik sleduje za posledních") }} {{ _(day_labels[days]) }}.
+        </p>
+    </div>
+    {{ period_filter(days, '/users') }}
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Sledovanost podle uživatele") }}</h2>
+        <p class="card-note">{{ _("v hodinách") }}</p>
+    </div>
+    {{ charts.hbar_chart(rows | selectattr('hours') | list, 'name', 'hours') | safe }}
+</div>
+
+<div class="card">
+    <div class="card-head"><h2>{{ _("Přehled") }}</h2></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Uživatel") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                <th class="num">{{ _("Spuštění") }}</th><th class="num">{{ _("Titulů") }}</th>
+                <th class="num">{{ _("Z toho transcode") }}</th><th class="num">{{ _("Naposledy") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="strong">
+                    <a href="/users/{{ row.id }}">{{ row.name }}</a>
+                    {% if row.is_administrator %}
+                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.plays | number }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num muted">{{ row.transcoded_hours | hours }}</td>
+                <td class="num muted">{{ row.last_seen | relative }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not rows %}
+        <p class="chart-empty">{{ _("Žádní uživatelé. Spusť synchronizaci knihovny v Nastavení.") }}</p>
+    {% endif %}
+</div>
+{% endblock %}

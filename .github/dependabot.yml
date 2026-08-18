@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+# Dependabot - watches the pinned versions for known vulnerabilities.
+#
+# Why it matters here: the versions in requirements.txt are pinned, which
+# makes installs reproducible but not safe. A pin that worked fine for a
+# year had 21 known holes by the time anyone looked (starlette and
+# python-multipart, see the comment in requirements.txt). Dependabot opens
+# a pull request when that happens, and the test workflow says right away
+# whether the new version breaks anything.
+# ---------------------------------------------------------------------------
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    # Security fixes are the point; the rest is noise for a project with
+    # this few dependencies, so minor and patch bumps come grouped.
+    groups:
+      minor-a-patch:
+        update-types: ["minor", "patch"]
+
+  # The workflow itself has dependencies too (actions/checkout and friends).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"

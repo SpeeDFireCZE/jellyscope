@@ -1,0 +1,63 @@
+# Jellyscope - dependencies
+#
+# Deliberately as few as possible. Every extra library is one more thing
+# that can break, and one more thing you have to learn.
+
+# Needs Python 3.10 or newer - that is FastAPI's own floor since 0.116.
+
+fastapi==0.141.1           # web framework - routing, validation, async
+starlette==1.6.0           # what FastAPI is built on: routing, sessions,
+                           # static files, multipart. Pinned explicitly even
+                           # though FastAPI pulls it in, because the security
+                           # fixes below live here, not in FastAPI - an
+                           # unpinned transitive dependency is exactly where
+                           # an old version hides.
+uvicorn[standard]==0.34.0  # the server that actually runs the FastAPI app
+httpx==0.28.1              # HTTP client - talks to the Jellyfin API
+jinja2==3.1.6              # templating - turns HTML templates into pages
+                           # (3.1.6 fixes CVE-2025-27516; Jellyscope does not
+                           #  run templates in a sandbox, so it was a formality)
+itsdangerous==2.2.0        # signs the login cookie
+python-multipart==0.0.32   # reads HTML form data (POST)
+
+# Why these versions and not the older ones that worked fine:
+#
+# The pins used to sit at fastapi 0.115.6 / starlette 0.41.3 /
+# python-multipart 0.0.20. Asking the OSV vulnerability database (the same
+# source pip-audit and Dependabot use) about exactly those versions came
+# back with 21 known holes - none in our own code, all in libraries:
+#
+#   starlette 0.41.3        CVE-2026-48710  a missing Host header check
+#                                           poisons request.url.path
+#                           CVE-2026-48818  SSRF and NTLM credential theft
+#                                           through UNC paths in StaticFiles
+#                           + five more, mostly denial of service
+#   python-multipart 0.0.20 CVE-2026-24486  file write outside the target
+#                           + six more, mostly denial of service when a
+#                             file is uploaded - and uploading is how
+#                             history import works
+#
+# Check it yourself whenever you like, no extra tools needed:
+#
+#   .venv/bin/python -m pip install pip-audit && .venv/bin/pip-audit
+#
+# Do this from time to time. A pinned version is stable, not safe - the
+# world keeps finding holes in code that has not changed.
+
+# --- optional ----------------------------------------------------------
+# Only needed when you switch the database to PostgreSQL in Settings.
+# With SQLite (the default) this library is not used at all - which is why
+# it is commented out and the app asks for it only when it needs it.
+#
+# deploy/install.sh tries to install it, so on a server you usually do not
+# have to do anything. It is deliberately not listed here: when no wheel
+# exists for the platform (typically Alpine/musl), pip would try to build
+# it from source and take the whole installation down with it - including
+# for people who only ever wanted SQLite. This way you just get a warning.
+#
+# Manually, into the same virtualenv the app runs in:
+#
+#   .venv/bin/python -m pip install "psycopg[binary,pool]"
+#
+# The "pool" extra enables connection pooling; without it the app still
+# connects, it just opens a new connection per query.

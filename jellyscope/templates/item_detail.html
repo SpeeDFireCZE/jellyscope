@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tile, tech_badge, method_badge %}
+{% block title %}{{ item.name }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="subtitle" style="margin-bottom:2px">
+            {% if item.library_id %}
+                <a href="/library/{{ item.library_id }}?tab=media">&larr; {{ item.library_name }}</a>
+            {% else %}
+                <a href="/library">&larr; {{ _("Knihovny") }}</a>
+            {% endif %}
+        </p>
+        <h1>
+            {% if item.series_name %}<span class="muted">{% if item.series_id %}<a href="/series/{{ item.series_id }}">{{ item.series_name }}</a>{% else %}{{ item.series_name }}{% endif %} &ndash;</span> {% endif %}
+            {{ item.name }}
+        </h1>
+        <p class="subtitle">
+            {% if item.production_year %}{{ item.production_year }} &middot; {% endif %}
+            {% if item.parent_index_number and item.index_number %}
+                S{{ '%02d' | format(item.parent_index_number) }}E{{ '%02d' | format(item.index_number) }} &middot;
+            {% endif %}
+            {{ tech_badge(item.tech_source) }}
+        </p>
+    </div>
+
+    {# Načtení metadat jen pro tenhle titul. Když v Jellyfinu opravíš rok
+       nebo jazyk stopy, nemusíš kvůli jedné položce pouštět synchronizaci
+       celé knihovny. Archivovaný titul v Jellyfinu není, tak není co číst. #}
+    {% if account.is_admin and not item.is_missing %}
+    <form method="post" action="/item/{{ item.id }}/refresh">
+        <button class="btn" type="submit"
+                title="{{ _("Zeptá se Jellyfinu znovu na tenhle jeden titul. Nic se do Jellyfinu nezapisuje.") }}">
+            &#8635; {{ _("Načíst metadata znovu") }}
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if item.tech_error %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>{{ _("Analýza tohoto souboru selhala") }}: {{ item.tech_error }}</span>
+</div>
+{% endif %}
+
+{% if item.is_missing %}
+{# Archivovaná položka. Mazání je schválně až tady a jen ruční: automaticky
+   se nemaže nikdy, protože výpadek Jellyfinu by jinak sebral historii. #}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("Tenhle titul už v Jellyfinu není – je v archivu. Historie přehrávání zůstává, aby ve statistikách nezůstaly bezejmenné záznamy. Když se soubor vrátí, Jellyscope ho podle tmdb ID zase spáruje.") }}
+    </span>
+</div>
+{% if account.is_admin %}
+<div class="card" style="margin-bottom:18px">
+    <div class="card-head">
+        <h2>{{ _("Smazat natrvalo") }}</h2>
+    </div>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("Odstraní titul i všechna jeho přehrání z databáze. Statistiky se o ten čas sníží. Vrátit to nejde.") }}
+    </p>
+    <form method="post" action="/item/{{ item.id }}/delete"
+          onsubmit="return confirm('{{ _("Opravdu smazat i s historií přehrávání? Vrátit to nejde.") }}')">
+        <button class="btn danger" type="submit">
+            {{ _("Smazat titul i historii") }}
+            {% if summary.plays %}({{ summary.plays }}&times;){% endif %}
+        </button>
+    </form>
+</div>
+{% endif %}
+{% endif %}
+
+<div class="item-layout">
+    <div>
+        <div class="item-poster {{ 'is-archived' if item.is_missing }}">
+            <img src="/image/{{ item.id }}?kind=Primary&w=400" alt="" loading="lazy"
+                 onerror="this.parentElement.style.display='none'">
+            {% if item.is_missing %}
+                <span class="media-archived">{{ _("Archivováno") }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="kpi-row" style="margin-bottom:16px">
+            {{ tile(_("Velikost"), item.size_bytes | bytes) }}
+            {{ tile(_("Rozlišení"), item.height | resolution(item.width)) }}
+            {{ tile("Bitrate", item.bitrate | bitrate) }}
+            {{ tile(_("Přehrání"), summary.plays | number,
+                    note=_("Naposledy") ~ ' ' ~ (summary.last_played | relative)) }}
+        </div>
+
+        {# --------------------------------------------------------- #}
+        {# Soubor                                                     #}
+        {# --------------------------------------------------------- #}
+        <div class="card">
+            <div class="card-head"><h2>{{ _("Soubor") }}</h2></div>
+            <div class="table-wrap">
+                <table class="facts">
+                    <tbody>
+                    <tr><th>{{ _("Kontejner") }}</th><td>{{ (item.container or '-') | upper }}</td></tr>
+                    <tr><th>{{ _("Velikost") }}</th><td>{{ item.size_bytes | bytes }}</td></tr>
+                    <tr><th>{{ _("Celkový bitrate") }}</th><td>{{ item.bitrate | bitrate }}</td></tr>
+                    <tr><th>{{ _("Dynamický rozsah") }}</th><td>{{ item.video_range or '-' }}</td></tr>
+                    <tr><th>{{ _("Knihovna") }}</th><td>{{ item.library_name or '-' }}</td></tr>
+                    <tr><th>{{ _("Přidáno") }}</th><td>{{ item.date_created | datetime }}</td></tr>
+                    <tr><th>{{ _("Data změřena") }}</th><td>{{ item.tech_updated_at | relative }}</td></tr>
+                    <tr>
+                        <th>{{ _("Cesta") }}</th>
+                        <td><code style="font-size:12px; word-break:break-all">{{ item.path or '-' }}</code></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {# --------------------------------------------------------- #}
+        {# Stopy - to hlavní, kvůli čemu detail vznikl                #}
+        {# --------------------------------------------------------- #}
+        <div class="card">
+            <div class="card-head">
+                <h2>{{ _("Obraz") }}</h2>
+                <p class="card-note">{{ streams.Video | length }} {{ _("stopa") }}</p>
+            </div>
+            {% if streams.Video %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr><th>#</th><th>{{ _("Kodek") }}</th><th class="num">{{ _("Rozlišení") }}</th>
+                        <th class="num">Bitrate</th><th>{{ _("Popis") }}</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for s in streams.Video %}
+                    <tr>
+                        <td class="muted">{{ s.stream_index }}</td>
+                        <td class="strong">{{ (s.codec or '-') | upper }}</td>
+                        <td class="num">
+                            {% if s.width and s.height %}{{ s.width }}&times;{{ s.height }}{% else %}-{% endif %}
+                        </td>
+                        <td class="num">{{ s.bitrate | bitrate }}</td>
+                        <td class="muted">{{ s.title or '' }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="chart-empty">{{ _("Data o stopách nejsou k dispozici. Spusť analýzu v Nastavení.") }}</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h2>{{ _("Zvukové stopy") }}</h2>
+                <p class="card-note">{{ streams.Audio | length }} {{ _("celkem") }}</p>
+            </div>
+            {% if streams.Audio %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr><th>#</th><th>{{ _("Jazyk") }}</th><th>{{ _("Kodek") }}</th>
+                        <th class="num">{{ _("Kanály") }}</th><th>{{ _("Popis") }}</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                    {% for s in streams.Audio %}
+                    <tr>
+                        <td class="muted">{{ s.stream_index }}</td>
+                        <td class="strong">
+                            {{ lang.display(s.language) }}
+                            <span class="muted">{{ s.language | upper }}</span>
+                        </td>
+                        <td>{{ (s.codec or '-') | upper }}</td>
+                        <td class="num">
+                            {% if s.channels %}{{ s.channels }}{% if s.channel_layout %}
+                                <span class="muted">{{ s.channel_layout }}</span>{% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="muted truncate">{{ s.title or '' }}</td>
+                        <td>
+                            {% if s.is_default %}
+                                <span class="badge chosen"><span class="dot"></span>{{ _("výchozí") }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="chart-empty">{{ _("Žádné zvukové stopy neznáme.") }}</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h2>{{ _("Titulky") }}</h2>
+                <p class="card-note">{{ streams.Subtitle | length }} {{ _("celkem") }}</p>
+            </div>
+            {% if streams.Subtitle %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr><th>#</th><th>{{ _("Jazyk") }}</th><th>{{ _("Formát") }}</th>
+                        <th>{{ _("Popis") }}</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                    {% for s in streams.Subtitle %}
+                    <tr>
+                        <td class="muted">{{ s.stream_index }}</td>
+                        <td class="strong">
+                            {{ lang.display(s.language) }}
+                            <span class="muted">{{ s.language | upper }}</span>
+                        </td>
+                        <td>{{ (s.codec or '-') | upper }}</td>
+                        <td class="muted truncate">{{ s.title or '' }}</td>
+                        <td>
+                            {% if s.is_forced %}
+                                <span class="badge warning"><span class="dot"></span>{{ _("vynucené") }}</span>
+                            {% endif %}
+                            {% if s.is_default %}
+                                <span class="badge chosen"><span class="dot"></span>{{ _("výchozí") }}</span>
+                            {% endif %}
+                            {% if s.is_external %}
+                                <span class="badge neutral"><span class="dot"></span>{{ _("externí soubor") }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="chart-empty">{{ _("Žádné titulky.") }}</p>
+            {% endif %}
+        </div>
+
+        {# --------------------------------------------------------- #}
+        {# Historie přehrávání této položky                           #}
+        {# --------------------------------------------------------- #}
+        <div class="card">
+            <div class="card-head">
+                <h2>{{ _("Historie přehrávání") }}</h2>
+                <p class="card-note">
+                    {{ summary.plays | number }}&times; &middot; {{ summary.hours | hours }}
+                    &middot; {{ summary.users | number }} {{ _("diváků") }}
+                </p>
+            </div>
+            {% if playback %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr><th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Jazyk") }}</th>
+                        <th>{{ _("Zařízení") }}</th><th>{{ _("Způsob") }}</th>
+                        <th class="num">{{ _("Délka") }}</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for row in playback %}
+                    <tr>
+                        <td class="nowrap muted">{{ row.started_at | datetime }}</td>
+                        <td><a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a></td>
+                        <td>
+                            {{ lang.display(row.audio_language) if row.audio_language else '-' }}
+                            {% if row.subtitle_language %}
+                                <span class="muted">+ {{ _("titulky") }} {{ row.subtitle_language | upper }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="muted">{{ row.device_name or '?' }}</td>
+                        <td>{{ method_badge(row.play_method) }}</td>
+                        <td class="num">{{ row.watched_seconds | seconds }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="chart-empty">{{ _("Tenhle titul zatím nikdo nepřehrál.") }}</p>
+            {% endif %}
+        </div>
+
+        {% if siblings %}
+        <div class="card">
+            <div class="card-head">
+                <h2>{{ _("Ostatní epizody") }}</h2>
+                <p class="card-note">{{ siblings | length }} {{ _("v seriálu") }}</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>{{ _("Epizoda") }}</th><th>{{ _("Název") }}</th>
+                        <th class="num">{{ _("Rozlišení") }}</th><th class="num">{{ _("Velikost") }}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for s in siblings %}
+                    <tr {{ 'style=font-weight:600' if s.id == item.id }}>
+                        <td class="nowrap muted">
+                            {% if s.parent_index_number and s.index_number %}
+                                S{{ '%02d' | format(s.parent_index_number) }}E{{ '%02d' | format(s.index_number) }}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td><a href="/item/{{ s.id }}">{{ s.name }}</a></td>
+                        <td class="num">{{ s.height | resolution(s.width) }}</td>
+                        <td class="num">{{ s.size_bytes | bytes }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

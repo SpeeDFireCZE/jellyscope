@@ -1,0 +1,43 @@
+{# Karta "Nejsledovanější tituly".
+
+   Vlastní šablona, protože se kreslí ze dvou míst: při načtení Přehledu
+   a pak znovu při přepnutí filtru (viz /partials/top-items). Kdyby
+   existovala dvakrát, jedna kopie by se časem od druhé odchýlila. #}
+
+<div class="card-head">
+    <div>
+        <h2>{{ _("Nejsledovanější tituly") }}</h2>
+        <p class="card-note">{{ _("seriály jsou sečteny dohromady") }}</p>
+    </div>
+    {# Vlastní filtr, nezávislý na tom u sledovanosti po dnech - jinak by
+       přepnutí u jedné karty beze slova překreslilo i druhou.
+
+       Zůstávají to obyčejné odkazy: bez JavaScriptu se načte celá stránka
+       a `data-keep-scroll` vrátí posun tam, kde byl. S JavaScriptem se
+       vymění jen tahle karta a stránka se nehne vůbec. #}
+    <div class="filters">
+        <a class="chip {{ 'active' if top_kind == 'both' }}"
+           data-kind="both" data-keep-scroll href="/?top_kind=both">{{ _("Obojí") }}</a>
+        <a class="chip {{ 'active' if top_kind == 'movies' }}"
+           data-kind="movies" data-keep-scroll href="/?top_kind=movies">{{ _("Filmy") }}</a>
+        <a class="chip {{ 'active' if top_kind == 'series' }}"
+           data-kind="series" data-keep-scroll href="/?top_kind=series">{{ _("Seriály") }}</a>
+    </div>
+</div>
+
+{# Prázdná předpona: seriál vede na /series/, film na /item/, takže si
+   každý řádek nese celou adresu sám. Řádky bez ní (titul, který už
+   v knihovně není) zůstanou textem - odkaz na 404 je horší než žádný. #}
+{{ charts.hbar_chart(top_items, 'label', 'hours',
+             link_prefix='', link_key='detail_url') | safe }}
+
+{# Skrývání se nikdy neděje potichu. Odsledovaný čas se nikde neztrácí,
+   Historie ho ukazuje dál - jen tady by řádek, který nejde prokliknout
+   a tváří se jako neexistující film, nic neřekl. #}
+{% if top_items and top_items[0]._skryto %}
+<p class="card-note" style="margin-top:12px">
+    {{ _("Nezobrazuje se") }} {{ top_items[0]._skryto | number }}
+    {{ _("titulů, ke kterým v knihovně ani v archivu nic nevede – ze záznamu se nedá zjistit, o co šlo.") }}
+    <a href="/settings?section=import">{{ _("Zkusit je navázat") }}</a>
+</p>
+{% endif %}

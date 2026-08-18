@@ -1,0 +1,128 @@
+{#
+  Makra = kousky šablony, které se používají na víc stránkách.
+  Napíše se jednou, volá se všude. Přesně jako funkce v Pythonu.
+#}
+
+{# Přepínač období. Patří nad všechny grafy, které ovlivňuje - nikdy
+   dovnitř jednotlivých karet. Zvolená hodnota platí i po přechodu na
+   jinou záložku, takže okno je napříč aplikací synchronní. #}
+{# Změna období překreslí celou stránku - jiné období znamená jiná čísla
+   ve všech grafech i v souhrnu, ne jen v jedné kartě. Načtení stránky ale
+   vždycky skočí na začátek, což je u filtru dole na stránce otravné.
+   `data-keep-scroll` řekne skriptu v base.html, ať si pozici zapamatuje
+   a po načtení ji vrátí. #}
+{% macro period_filter(current_days, base_url) %}
+<div class="filters">
+    {% for days in allowed_days %}
+        <a class="chip {{ 'active' if days == current_days }}" data-keep-scroll
+           href="{{ base_url }}?days={{ days }}">{{ _(day_labels[days]) }}</a>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+
+{# Běžící úloha a tlačítko na její zastavení.
+
+   Je na třech místech v Nastavení (Jellyfin, Data, Úlohy), proto makro -
+   jinak by se stejný kus musel udržovat třikrát.
+
+   `back` říká, do které sekce se po kliknutí vrátit. #}
+{% macro running_task(scan_running, stop_pending, back) %}
+{% if scan_running %}
+<div class="flash info" style="margin-top:14px">
+    <span class="dot"></span>
+    <span>
+        {% if stop_pending %}
+            {{ _("Zastavuji – úloha dokončí rozpracovanou položku a skončí.") }}
+        {% else %}
+            {{ _("Úloha právě běží.") }}
+        {% endif %}
+    </span>
+</div>
+
+{# Ukazatel průběhu. Čísla doplňuje JavaScript z /health, protože se mění
+   za běhu - stránka je jen připravená. Bez JavaScriptu zůstane skrytý,
+   takže se neukáže prázdný pruh, který se nikdy nepohne. #}
+<div class="task-progress" id="task-progress" hidden>
+    <div class="task-progress-bar"><i id="task-progress-fill" style="width:0%"></i></div>
+    <div class="task-progress-note">
+        <span id="task-progress-text"></span>
+    </div>
+</div>
+{% if not stop_pending %}
+{# Červená: je to jediná akce na stránce, která do běžícího děje zasahuje,
+   a hledá se ve chvíli, kdy je člověk nervózní. Musí být vidět hned. #}
+<form method="post" action="/settings/stop" style="margin-top:12px">
+    <input type="hidden" name="back" value="{{ back }}">
+    <button class="btn danger" type="submit">&#9632; {{ _("Zastavit úlohu") }}</button>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("Nepřeruší se uprostřed práce: dokončí položku, kterou má rozdělanou, a teprve pak skončí. Co se stihlo, zůstane uložené.") }}
+    </p>
+</form>
+{% endif %}
+{% endif %}
+{% endmacro %}
+
+
+{# Stránkování pod dlouhou tabulkou. #}
+{% macro pager(page, pages, total, base_url, extra='') %}
+{% if pages > 1 %}
+<div class="pager">
+    {% if page > 1 %}
+        <a class="btn" href="{{ base_url }}?page={{ page - 1 }}{{ extra }}">{{ _("Předchozí") }}</a>
+    {% endif %}
+    <span>{{ _("Strana") }} {{ page }} {{ _("z") }} {{ pages }} &middot;
+        {{ _("celkem") }} {{ total | number }}</span>
+    {% if page < pages %}
+        <a class="btn" href="{{ base_url }}?page={{ page + 1 }}{{ extra }}">{{ _("Další") }}</a>
+    {% endif %}
+</div>
+{% else %}
+<div class="pager"><span>{{ _("Celkem") }} {{ total | number }} {{ _("záznamů") }}</span></div>
+{% endif %}
+{% endmacro %}
+
+
+{# Dlaždice s jedním číslem. Když je hodnota jedno číslo, dlaždice je
+   správný tvar - sloupcový graf o jednom sloupci by byl chyba. #}
+{% macro tile(label, value, delta=None, note=None) %}
+<div class="tile">
+    <p class="tile-label">{{ label }}</p>
+    <div class="tile-value">{{ value }}</div>
+    {% if delta is not none %}
+        {% if delta > 1 %}
+            <div class="delta up">&#9650; {{ delta | percent }} {{ _("oproti minulému období") }}</div>
+        {% elif delta < -1 %}
+            <div class="delta down">&#9660; {{ (delta * -1) | percent }} {{ _("oproti minulému období") }}</div>
+        {% else %}
+            <div class="delta flat">{{ _("beze změny") }}</div>
+        {% endif %}
+    {% elif note %}
+        <div class="delta flat">{{ note }}</div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# Značka zdroje technických dat. Uživatel má vidět, jak spolehlivý údaj je. #}
+{% macro tech_badge(source) %}
+{% if source == 'ffprobe' %}
+    <span class="badge ffprobe"><span class="dot"></span>{{ _("čteno ze souboru") }} (ffprobe)</span>
+{% elif source == 'jellyfin' %}
+    <span class="badge jellyfin"><span class="dot"></span>{{ _("hlásí Jellyfin") }}</span>
+{% else %}
+    <span class="badge warning"><span class="dot"></span>{{ _("chybí") }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{# Značka způsobu doručení. Barva nikdy nestojí sama - vedle je vždy text. #}
+{% macro method_badge(method) %}
+{% if method == 'Transcode' %}
+    <span class="badge serious"><span class="dot"></span>{{ _("transcode") }}</span>
+{% elif method == 'DirectStream' %}
+    <span class="badge neutral"><span class="dot"></span>{{ _("přebalení") }}</span>
+{% else %}
+    <span class="badge good"><span class="dot"></span>{{ _("přímé") }}</span>
+{% endif %}
+{% endmacro %}

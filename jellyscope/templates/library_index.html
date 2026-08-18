@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tile %}
+{% block title %}{{ _("Knihovna") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Knihovny") }}</h1>
+        <p class="subtitle">{{ _("Vyber knihovnu a podívej se, co v ní doopravdy je.") }}</p>
+    </div>
+</div>
+
+{% if libraries %}
+<div class="lib-grid">
+    {% for row in libraries %}
+    <a class="lib-card" href="/library/{{ row.id }}">
+        <div class="lib-cover">
+            {% if row.poster_id %}
+                {# loading="lazy" - obrázky mimo obrazovku se stáhnou až
+                   ve chvíli, kdy k nim uživatel doroluje. #}
+                <img src="/image/{{ row.poster_id }}?kind=Backdrop&w=600"
+                     alt="" loading="lazy" onerror="this.remove()">
+            {% endif %}
+            <span class="lib-cover-name">{{ row.name }}</span>
+        </div>
+        <div class="lib-facts">
+            <div><span class="muted">{{ _("Knihovna") }}</span><span class="strong">{{ row.name }}</span></div>
+            <div><span class="muted">{{ _("Typ") }}</span><span>{{ _(row.type_label) }}</span></div>
+            <div><span class="muted">{{ _("Souborů") }}</span><span>{{ row.item_count | number }}</span></div>
+            <div><span class="muted">{{ _("Velikost") }}</span><span class="strong">{{ row.size_bytes | bytes }}</span></div>
+            <div><span class="muted">{{ _("Délka obsahu") }}</span><span>{{ row.hours | hours }}</span></div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p class="chart-empty">{{ _("Žádné knihovny. Spusť synchronizaci v Nastavení.") }}</p>
+</div>
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
+{# Souhrn za všechny knihovny dohromady                                #}
+{# ------------------------------------------------------------------ #}
+<h2 style="margin:30px 0 4px">{{ _("Celkem za všechny knihovny") }}</h2>
+<p class="subtitle" style="margin-bottom:16px">{{ _("Aktuální stav, nezávisle na období.") }}</p>
+
+<div class="kpi-row">
+    {{ tile(_("Položek celkem"), coverage.total | number) }}
+    {{ tile(_("Změřeno přes ffprobe"), coverage.from_ffprobe | number,
+            note=_("přesná data ze souborů")) }}
+    {{ tile(_("Převzato z Jellyfinu"), coverage.from_jellyfin | number,
+            note=_("rychlé, méně detailů")) }}
+    {{ tile(_("Bez technických dat"), coverage.missing | number,
+            note=_("spusť analýzu v Nastavení")) }}
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Kodeky") }}</h2>
+            <p class="card-note">{{ _("počet položek") }}</p>
+        </div>
+        {{ charts.hbar_chart(codecs, 'label', 'item_count', unit='') | safe }}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Rozlišení") }}</h2>
+            <p class="card-note">{{ _("podíl na velikosti knihovny") }}</p>
+        </div>
+        {% set res_segments = [] %}
+        {% for row in resolutions %}
+            {% set _x = res_segments.append({'label': row.label, 'value': row.size_bytes}) %}
+        {% endfor %}
+        {{ charts.stacked_bar(res_segments, unit='B') | safe }}
+        {{ charts.legend(res_segments) | safe }}
+
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Rozlišení") }}</th><th class="num">{{ _("Položek") }}</th>
+                    <th class="num">{{ _("Velikost") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for row in resolutions %}
+                <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="num">{{ row.item_count | number }}</td>
+                    <td class="num">{{ row.size_bytes | bytes }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if ranges %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Dynamický rozsah") }}</h2>
+        <p class="card-note">SDR / HDR / Dolby Vision</p>
+    </div>
+    {{ charts.hbar_chart(ranges, 'label', 'item_count', unit='') | safe }}
+</div>
+{% endif %}
+{% endblock %}

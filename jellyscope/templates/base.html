@@ -1,0 +1,627 @@
+{#
+  Základní kostra každé stránky.
+
+  Jinja2 funguje takhle: tenhle soubor definuje "díry" pomocí {% block %},
+  a jednotlivé stránky (dashboard.html, library_index.html, ...) pak řeknou
+  {% extends "base.html" %} a ty díry vyplní. Díky tomu se navigace,
+  hlavička a patička píšou jednou, ne desetkrát.
+
+  Texty procházejí funkcí `_()`. Když je nastavená angličtina, najde se
+  anglické znění; jinak se vrátí česká věta beze změny. Viz i18n.py.
+#}
+<!doctype html>
+<html lang="{{ ui_language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Jellyscope{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+    {# SVG ikona zůstane ostrá v každé velikosti - od 16px v panelu
+       prohlížeče po velké dlaždice na mobilu. #}
+    <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
+    <script>
+        // Nastavení tmavého/světlého režimu se čte co nejdřív, ještě před
+        // vykreslením stránky. Kdyby se to dělalo až později, stránka by
+        // na okamžik problikla ve špatných barvách.
+        (function () {
+            var saved = localStorage.getItem("jellyscope-theme");
+            if (saved === "dark" || saved === "light") {
+                document.documentElement.setAttribute("data-theme", saved);
+            }
+        })();
+    </script>
+</head>
+{# `wait_for` nastaví routa, po které se má počkat a stránku obnovit samo:
+   "restart" = čeká na nový proces, "task" = čeká, až doběhne zastavovaná
+   úloha. Obsluha je dole v tomhle souboru. #}
+<body{% if wait_for %} data-wait-for="{{ wait_for }}"{% endif %}{% if reload_on_task %} data-reload-on-task="1"{% endif %} data-tasks-version="{{ tasks_version }}">
+<div class="layout">
+
+    <aside class="sidebar">
+        <a class="brand" href="/">
+            <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
+            <span>Jellyscope</span>
+        </a>
+
+        <nav class="nav">
+            {% set path = request.url.path %}
+            <a href="/"          class="{{ 'active' if path == '/' }}">{{ _("Přehled") }}</a>
+            <a href="/insights"  class="{{ 'active' if path.startswith('/insights') }}">{{ _("Zjištění") }}</a>
+            <a href="/languages" class="{{ 'active' if path.startswith('/languages') }}">{{ _("Jazyky") }}</a>
+            <a href="/library"   class="{{ 'active' if path.startswith('/library') or path.startswith('/item') }}">{{ _("Knihovna") }}</a>
+            <a href="/users"     class="{{ 'active' if path.startswith('/users') }}">{{ _("Uživatelé") }}</a>
+            <a href="/history"   class="{{ 'active' if path.startswith('/history') }}">{{ _("Historie") }}</a>
+            <a href="/settings"  class="{{ 'active' if path.startswith('/settings') }}">{{ _("Nastavení") }}</a>
+        </nav>
+
+        <div class="sidebar-foot">
+            {# Stav sběrače. Barva sama o sobě nic neznamená - vedle ní je vždy text. #}
+            {% if collector_status == 'demo' %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("Ukázkový režim") }}</span>
+                <div style="margin-top:8px">{{ _("Data jsou vymyšlená.") }}</div>
+            {% elif collector_status == 'ok' %}
+                <span class="badge good"><span class="dot"></span>{{ _("Collector běží") }}</span>
+                {% if active_count %}
+                    <div style="margin-top:8px">{{ active_count }} {{ _("aktivních přehrávání") }}</div>
+                {% endif %}
+                {% if last_poll %}
+                    <div style="margin-top:6px">{{ _("Naposledy") }} {{ last_poll | relative }}</div>
+                {% endif %}
+            {% elif collector_status == 'error' %}
+                <span class="badge critical"><span class="dot"></span>{{ _("Collector hlásí chybu") }}</span>
+                <div style="margin-top:8px">{{ collector_error | truncate(90) }}</div>
+            {% else %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("Collector startuje") }}</span>
+            {% endif %}
+
+            <div class="btn-row" style="margin-top:14px">
+                <button class="btn" type="button" onclick="toggleTheme()">{{ _("Světlý / tmavý") }}</button>
+            </div>
+
+            {% if account %}
+                <div style="margin-top:12px">
+                    {{ _("Přihlášen") }}: <strong>{{ account.username }}</strong>
+                    {% if account.is_admin %}
+                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+                    {% endif %}
+                </div>
+                <form method="post" action="/logout" style="margin-top:8px">
+                    <button class="btn" type="submit">{{ _("Odhlásit") }}</button>
+                </form>
+            {% endif %}
+        </div>
+    </aside>
+
+    <main class="main">
+        {# Čekání na restart nebo na dokončení zastavované úlohy. Stránka
+           se obnoví sama; tenhle proužek říká, na co se čeká, ať člověk
+           nekouká na zdánlivě zamrzlou stránku. #}
+        {% if wait_for %}
+            <div class="flash info">
+                <span class="dot"></span>
+                <span id="wait-note">
+                    {% if wait_for == 'restart' %}
+                        {{ _("Čekám, až se aplikace zvedne – stránka se pak obnoví sama.") }}
+                    {% else %}
+                        {{ _("Čekám, až úloha doběhne – stránka se pak obnoví sama.") }}
+                    {% endif %}
+                </span>
+            </div>
+        {% endif %}
+
+        {# Hláška o výsledku se drží u horní hrany okna, ne v toku stránky.
+           Důvod: většina akcí se spouští tlačítkem dole (úklid historie,
+           import, zálohy) a po přesměrování se stránka vrací tam, kde
+           člověk byl - hláška nahoře by mu tím pádem utekla. Takhle ji
+           vidí, ať je kdekoliv, a po chvíli sama zmizí. #}
+        {% if flash %}
+            <div class="flash-toast" id="flash-toast">
+                <div class="flash {{ flash.level }}">
+                    <span class="dot"></span>
+                    <span>{{ flash.message }}</span>
+                    <button type="button" class="flash-close"
+                            aria-label="{{ _("Zavřít") }}"
+                            onclick="this.closest('.flash-toast').remove()">&times;</button>
+                </div>
+            </div>
+            <script>
+                // Sama zmizí, ale ne dřív, než se dá přečíst. Chyby
+                // zůstávají - u nich je nejdůležitější, aby si jich
+                // člověk všiml, a zavřít je může sám.
+                (function () {
+                    var box = document.getElementById("flash-toast");
+                    if (!box || box.querySelector(".flash.error")) { return; }
+                    setTimeout(function () { box.classList.add("odchazi"); }, 9000);
+                    setTimeout(function () { box.remove(); }, 9600);
+                })();
+            </script>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+</div>
+
+{# Jediná bublina pro celou stránku - vytváří se jednou, ne u každého prvku. #}
+<div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
+
+<script>
+    function toggleTheme() {
+        var root = document.documentElement;
+        var current = root.getAttribute("data-theme");
+        if (!current) {
+            // Zatím se režim řídí nastavením systému - zjistíme, jaký je,
+            // a přepneme na ten druhý.
+            current = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        var next = current === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        localStorage.setItem("jellyscope-theme", next);
+    }
+
+    // ------------------------------------------------------------------
+    // Bublina s hodnotou
+    //
+    // Místo aby každý sloupec měl vlastní posluchač, posloucháme na celém
+    // dokumentu a při události se zeptáme, nad čím myš je. Tomuhle se říká
+    // delegace událostí: jeden posluchač místo tisíce, takže stránka
+    // s velkou tabulkou nezpomalí.
+    // ------------------------------------------------------------------
+    (function () {
+        var tip = document.getElementById("tooltip");
+        var current = null;
+
+        function place(event) {
+            var offset = 14;
+            var x = event.clientX + offset;
+            var y = event.clientY + offset;
+
+            // Aby bublina nevylezla z okna ven.
+            var box = tip.getBoundingClientRect();
+            if (x + box.width > window.innerWidth - 8) {
+                x = event.clientX - box.width - offset;
+            }
+            if (y + box.height > window.innerHeight - 8) {
+                y = event.clientY - box.height - offset;
+            }
+            tip.style.left = x + "px";
+            tip.style.top = y + "px";
+        }
+
+        document.addEventListener("mousemove", function (event) {
+            var target = event.target.closest ? event.target.closest("[data-tip]") : null;
+
+            if (!target) {
+                if (current) {
+                    current = null;
+                    tip.classList.remove("visible");
+                }
+                return;
+            }
+
+            if (target !== current) {
+                current = target;
+                tip.textContent = target.getAttribute("data-tip");
+                tip.classList.add("visible");
+            }
+            place(event);
+        }, { passive: true });
+
+        // Když stránka odroluje nebo myš opustí okno, bublina musí zmizet -
+        // jinak by zůstala viset nad ničím.
+        document.addEventListener("scroll", function () {
+            current = null;
+            tip.classList.remove("visible");
+        }, { passive: true });
+
+        document.addEventListener("mouseleave", function () {
+            current = null;
+            tip.classList.remove("visible");
+        });
+    })();
+
+    // ------------------------------------------------------------------
+    // Nastavení databáze: ukaž jen tu část, která platí
+    //
+    // Výchozí stav vykreslí server (třída is-sqlite / is-postgres na
+    // formuláři), takže se při načtení nic neprobleskne a bez JavaScriptu
+    // je vidět ta správná polovina. Tenhle kód jen reaguje na přepnutí.
+    //
+    // Skrytá pole se pořád odesílají - to je záměr. Když si přepneš na
+    // SQLite a uložíš, nastavení PostgreSQL se nesmaže a je tam, až se
+    // budeš vracet.
+    // ------------------------------------------------------------------
+    (function () {
+        var form = document.querySelector("[data-db-form]");
+        if (!form) { return; }
+
+        form.addEventListener("change", function (event) {
+            if (!event.target.matches('input[name="kind"]')) { return; }
+            var postgres = event.target.value === "postgres";
+            form.classList.toggle("is-postgres", postgres);
+            form.classList.toggle("is-sqlite", !postgres);
+        });
+    })();
+
+
+    // ------------------------------------------------------------------
+    // Zachování pozice na stránce při změně období
+    //
+    // Filtr 7 / 30 / 90 dnů mění čísla v celé stránce, takže se načítá
+    // znovu - a prohlížeč při novém načtení vždycky skočí na začátek.
+    // Když filtr klikneš dole u grafu, musel by ses posouvat zpátky.
+    //
+    // Řešení je staré a jednoduché: před odchodem si zapamatuj, kde jsi,
+    // a po načtení se tam vrať. Klíč obsahuje adresu bez parametrů, aby
+    // se pozice z jedné stránky nepoužila na jiné.
+    //
+    // (Komentáře uvnitř <script> se posílají do prohlížeče spolu se
+    // stránkou - proto tu nejsou názvy sekcí, které jinde překládáme.)
+    //
+    // sessionStorage, ne localStorage: platí jen pro tenhle panel a po
+    // zavření zmizí. Pamatovat si polohu stránky navěky nemá smysl.
+    // ------------------------------------------------------------------
+    (function () {
+        if (!window.sessionStorage) { return; }
+        var klic = "scroll:" + window.location.pathname;
+
+        document.addEventListener("click", function (event) {
+            var odkaz = event.target.closest("[data-keep-scroll]");
+            if (odkaz) {
+                sessionStorage.setItem(klic, String(window.scrollY));
+            }
+        }, { passive: true });
+
+        var ulozeno = sessionStorage.getItem(klic);
+        if (ulozeno === null) { return; }
+        sessionStorage.removeItem(klic);
+
+        // Až po dokreslení, jinak stránka ještě nemá svou výšku a skok
+        // by skončil na konci obsahu místo na správném místě.
+        window.addEventListener("load", function () {
+            requestAnimationFrame(function () {
+                window.scrollTo(0, parseInt(ulozeno, 10) || 0);
+            });
+        });
+    })();
+
+    // ------------------------------------------------------------------
+    // Karta "Právě se hraje" se obnovuje sama
+    //
+    // Collector se ptá Jellyfinu každých pár vteřin, ale stránka o tom
+    // nevěděla - ukazovala stav z okamžiku načtení. Ve stejném rytmu si
+    // teď výřez vyzvedne sama. Rychleji by to nemělo smysl: novější data
+    // zatím nikde nejsou.
+    //
+    // Obnovuje se jen tenhle jeden kus, ne celá stránka. Kdyby se načítala
+    // celá, odrolovalo by to na začátek a zahodilo rozečtenou tabulku.
+    // ------------------------------------------------------------------
+    (function () {
+        var box = document.getElementById("now-playing");
+        if (!box || !window.fetch) { return; }
+
+        var sekund = parseInt(box.dataset.refresh, 10) || 10;
+        var bezi = false;
+
+        function obnov() {
+            // Na skryté kartě prohlížeče nemá smysl se ptát. Ušetří to
+            // server i baterku telefonu; po návratu se stav dotáhne hned.
+            if (bezi || document.hidden) { return; }
+            bezi = true;
+            fetch("/partials/now-playing", {
+                headers: { "X-Requested-With": "fetch" },
+                credentials: "same-origin"
+            })
+                // `redirected` hlídá vypršené přihlášení. Server v takovém
+                // případě odpoví přesměrováním na /login, fetch ho poslušně
+                // následuje - a bez téhle podmínky by se do karty vysypala
+                // přihlašovací stránka.
+                .then(function (r) { return (r.ok && !r.redirected) ? r.text() : null; })
+                .then(function (html) { if (html) { box.innerHTML = html; } })
+                .catch(function () { /* výpadek sítě - zkusí se za chvíli */ })
+                .finally(function () { bezi = false; });
+        }
+
+        // Dřív se výměna přeskakovala, když byla myš nad kartou. Znělo to
+        // ohleduplně, ale mělo to nepříjemný důsledek: kdo si kartu prohlížel
+        // s myší na ní, přestal dostávat nová data úplně. Živý pohled má
+        // ukazovat skutečnost - a v kartě není nic, co by se dalo rozkliknout
+        // omylem.
+
+        // setInterval sám nestačí. Prohlížeč ho na skryté kartě přiškrtí
+        // na jedno spuštění za minutu a po probuzení počítače nebo uspání
+        // se může rozejít úplně. Proto kontrolujeme čas: když od poslední
+        // úspěšné obnovy uplynul interval, doženeme to hned.
+        var posledni = Date.now();
+        var puvodniObnov = obnov;
+        obnov = function () { posledni = Date.now(); puvodniObnov(); };
+
+        setInterval(function () {
+            if (Date.now() - posledni >= sekund * 1000) { obnov(); }
+        }, 1000);
+
+        // Po návratu na kartu ukázat aktuální stav hned, ne až za interval.
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) { obnov(); }
+        });
+        // Totéž po probuzení stroje nebo obnovení sítě.
+        window.addEventListener("focus", obnov);
+        window.addEventListener("online", obnov);
+    })();
+
+    // ------------------------------------------------------------------
+    // Hlídač doběhnutých úloh
+    //
+    // Úloha na pozadí najde nový film a zapíše ho do databáze - a na už
+    // otevřené stránce se nic nestane, protože ta ukazuje stav z okamžiku
+    // načtení. Tenhle hlídač to řeší pro dvě místa naráz:
+    //
+    //   * Přehled - vymění pás "Nedávno přidané",
+    //   * Nastavení → Úlohy - načte stránku znovu, aby zmizel proužek
+    //     "úloha běží" a doplnil se výsledek.
+    //
+    // Rozhoduje **přechod** z "úloha běží" na "neběží". Původně se hlídal
+    // jen otisk knihovny, jenže ten se nezmění, když úloha nic nenajde -
+    // a proužek o běžící úloze pak zůstal na stránce viset navždy.
+    // Otisk zůstává jako druhý spouštěč: zachytí i změnu, kterou neudělala
+    // úloha v tomhle procesu (druhá instance, ruční zásah do databáze).
+    //
+    // Ptáme se na /health, což je pár set bajtů. Celý výřez se stahuje
+    // teprve tehdy, když je co ukázat.
+    // ------------------------------------------------------------------
+    (function () {
+        var pas = document.getElementById("recently-added");
+        var obnovitStranku = document.body.dataset.reloadOnTask === "1";
+        if ((!pas && !obnovitStranku) || !window.fetch) { return; }
+
+        var znamaVerze = pas ? (pas.dataset.version || "") : null;
+        // Kolik úloh doběhlo, když se stránka vykreslovala. Tohle je to
+        // podstatné číslo: podle jeho změny se doběhnutí pozná i tehdy,
+        // když se celá úloha vejde mezi dva dotazy - a u rychlé
+        // synchronizace nad malou knihovnou se vejde snadno.
+        var znameUlohy = document.body.dataset.tasksVersion || "";
+        var bezi = false;
+
+        function nactiPas() {
+            return fetch("/partials/recently-added", {
+                headers: { "X-Requested-With": "fetch" },
+                credentials: "same-origin"
+            }).then(function (r) {
+                // Vypršelé přihlášení: server přesměruje na /login a fetch
+                // ho následuje. Bez téhle podmínky by se do pásu plakátů
+                // vysypala přihlašovací stránka.
+                return (r.ok && !r.redirected) ? r.text() : null;
+            }).then(function (html) {
+                if (html && pas) { pas.innerHTML = html; }
+            });
+        }
+
+        function zkontroluj() {
+            if (bezi || document.hidden) { return; }
+            bezi = true;
+            // cache: no-store je tu nutnost, ne opatrnost. Bez něj může
+            // prohlížeč odpovídat ze své paměti a hlídač by se navěky díval
+            // na stav z prvního dotazu.
+            fetch("/health", { credentials: "same-origin", cache: "no-store" })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data) { return null; }
+
+                    // Během běhu se nic neobnovuje - výsledky se mění po
+                    // dávkách a stránka by poskakovala uprostřed scanu.
+                    if (data.task_running) { return null; }
+
+                    var dobehla = data.tasks_version !== undefined
+                               && String(data.tasks_version) !== znameUlohy;
+                    if (dobehla) { znameUlohy = String(data.tasks_version); }
+
+                    if (dobehla && obnovitStranku) {
+                        window.location.reload();
+                        return null;
+                    }
+
+                    var zmena = data.library_version
+                             && data.library_version !== znamaVerze;
+                    if (pas && (dobehla || zmena)) {
+                        znamaVerze = data.library_version;
+                        return nactiPas();
+                    }
+                    return null;
+                })
+                .catch(function () { /* výpadek sítě - zkusí se za chvíli */ })
+                .finally(function () { bezi = false; });
+        }
+
+        // Deset vteřin: dost často na to, aby doběhnutí úlohy neuniklo,
+        // a dost zřídka na to, aby se tím server nezaměstnával.
+        setInterval(zkontroluj, 10000);
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) { zkontroluj(); }
+        });
+        window.addEventListener("focus", zkontroluj);
+        // Hned po načtení, ať se pozná i úloha, která běžela už předtím.
+        zkontroluj();
+    })();
+
+    // ------------------------------------------------------------------
+    // Ukazatel průběhu běžící úlohy
+    //
+    // Server ví, kolik položek celkem bude (zeptá se Jellyfinu předem)
+    // i kolik jich má hotových. Stránka si to bere z /health - stejného
+    // místa, kterého se ptá i čekání níže.
+    //
+    // Když celkový počet neznáme, ukáže se aspoň "hotovo N" bez procent.
+    // Vymyslet si procenta by bylo horší než je nemít.
+    // ------------------------------------------------------------------
+    (function () {
+        var box = document.getElementById("task-progress");
+        if (!box || !window.fetch) { return; }
+
+        var pruh = document.getElementById("task-progress-fill");
+        var popis = document.getElementById("task-progress-text");
+
+        function obnov() {
+            fetch("/health", { credentials: "same-origin", cache: "no-store" })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    var p = data && data.progress;
+                    if (!p || !p.kind) { box.hidden = true; return; }
+
+                    box.hidden = false;
+                    if (p.percent === null || p.percent === undefined) {
+                        pruh.style.width = "100%";
+                        pruh.classList.add("neurcity");
+                        popis.textContent = "{{ _("hotovo") }} " + p.done;
+                    } else {
+                        pruh.classList.remove("neurcity");
+                        pruh.style.width = p.percent + "%";
+                        popis.textContent = p.done + " / " + p.total
+                            + "  (" + p.percent + " %)";
+                    }
+                })
+                .catch(function () { /* zkusí se za chvíli znovu */ });
+        }
+
+        obnov();
+        setInterval(obnov, 2000);
+    })();
+
+    // ------------------------------------------------------------------
+    // Čekání na restart aplikace a na dokončení zastavené úlohy
+    //
+    // Obojí dřív končilo tím, že si člověk musel stránku obnovit sám -
+    // a hlavně nevěděl, kdy už to jde. Tady se čeká za něj.
+    //
+    // Restart se pozná podle `started_at` z /health: po výměně procesu je
+    // to jiné číslo. Čekat na "přestane odpovídat a zase začne" nestačí -
+    // restart trvá chvilku a dotaz se do té mezery nemusí trefit.
+    // ------------------------------------------------------------------
+    (function () {
+        if (!window.fetch) { return; }
+
+        var duvod = document.body.dataset.waitFor;   // "restart" | "task"
+        if (!duvod) { return; }
+
+        var puvodniStart = null;
+        var videnoBezi = false;
+        var pokusu = 0;
+        var MAX_POKUSU = 900;                        // ~30 minut, pak to vzdáme
+
+        function ohlas(text) {
+            var box = document.getElementById("wait-note");
+            if (box) { box.textContent = text; }
+        }
+
+        function nactiZnovu() {
+            // `replace`, ne `reload`: zároveň se z adresy zahodí ?wait=...,
+            // jinak by se čekání spustilo znovu a stránka by se točila
+            // dokola. A zpětné tlačítko nevede na mezistav.
+            var url = new URL(window.location.href);
+            url.searchParams.delete("wait");
+            window.location.replace(url.toString());
+        }
+
+        function zkus() {
+            if (pokusu++ > MAX_POKUSU) {
+                ohlas("{{ _("Trvá to déle, než je zdrávo. Zkus stránku obnovit ručně.") }}");
+                return;
+            }
+            fetch("/health", { credentials: "same-origin", cache: "no-store" })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data) { throw new Error("nedostupne"); }
+
+                    if (duvod === "restart") {
+                        if (puvodniStart === null) { puvodniStart = data.started_at; }
+                        else if (data.started_at !== puvodniStart) { nactiZnovu(); return; }
+                    } else {
+                        // Úloha se spouští na pozadí, takže v první chvíli
+                        // po přesměrování ještě nemusí běžet. Kdybychom
+                        // rovnou usoudili "nic neběží, hotovo", stránka by
+                        // se načetla znovu dřív, než by úloha začala.
+                        //
+                        // Čekáme proto, až ji uvidíme běžet - a teprve pak
+                        // hlídáme, kdy skončí. Když se nerozběhne ani za
+                        // pár pokusů, stránku načteme tak jako tak (třeba
+                        // skončila chybou dřív, než jsme se zeptali).
+                        if (data.task_running) { videnoBezi = true; }
+                        else if (videnoBezi || pokusu > 5) { nactiZnovu(); return; }
+                    }
+                    setTimeout(zkus, 2000);
+                })
+                .catch(function () {
+                    // Aplikace je právě dole - to je při restartu očekávané.
+                    setTimeout(zkus, 2000);
+                });
+        }
+
+        zkus();
+    })();
+
+    // ------------------------------------------------------------------
+    // Přepínač filmy / seriály bez načtení stránky
+    //
+    // Odkazy zůstávají obyčejné odkazy - bez JavaScriptu fungují dál, jen
+    // se načte celá stránka. S JavaScriptem si vyžádáme ze serveru jen tu
+    // jednu kartu a vyměníme ji na místě, takže zůstaneš tam, kde jsi.
+    //
+    // Vykresluje pořád server, stejnou šablonou jako při běžném načtení.
+    // Kreslit graf podruhé v JavaScriptu by znamenalo dvě místa, kde se
+    // dá udělat chyba - a jedno z nich by se časem rozešlo s druhým.
+    // ------------------------------------------------------------------
+    (function () {
+        if (!window.fetch) { return; }
+
+        /* Jedna obsluha pro každou kartu, která má vlastní přepínač.
+           `id` je prvek karty, `cesta` výřez na serveru a `parametr` jméno
+           té části adresy, kterou přepínač mění. */
+        function prepinatelnaKarta(id, cesta, parametr) {
+            var card = document.getElementById(id);
+            if (!card) { return; }
+
+            var nacita = false;
+
+            card.addEventListener("click", function (event) {
+                var link = event.target.closest("[data-kind]");
+                if (!link || nacita) { return; }
+
+                event.preventDefault();
+                nacita = true;
+                card.classList.add("is-loading");
+
+                fetch(cesta + "?kind=" + encodeURIComponent(link.dataset.kind), {
+                    headers: { "X-Requested-With": "fetch" },
+                    credentials: "same-origin"
+                })
+                    .then(function (response) {
+                        if (!response.ok) { throw new Error(response.status); }
+                        return response.text();
+                    })
+                    .then(function (html) {
+                        card.innerHTML = html;
+                        // Adresa se přepíše, ať odpovídá tomu, co je vidět -
+                        // obnovení stránky pak ukáže totéž. replaceState místo
+                        // pushState: přepnutí filtru není krok v historii,
+                        // zpětné tlačítko má vést na předchozí stránku.
+                        var url = new URL(window.location.href);
+                        url.searchParams.set(parametr, link.dataset.kind);
+                        window.history.replaceState({}, "", url);
+                    })
+                    .catch(function () {
+                        // Když se to nepovede, uděláme to postaru - celou
+                        // stránkou. Uživatel nesmí zůstat s mrtvým tlačítkem.
+                        window.location.href = link.href;
+                    })
+                    .finally(function () {
+                        nacita = false;
+                        card.classList.remove("is-loading");
+                    });
+            });
+        }
+
+        prepinatelnaKarta("daily-card", "/partials/daily", "kind");
+        prepinatelnaKarta("top-items-card", "/partials/top-items", "top_kind");
+    })();
+</script>
+</body>
+</html>

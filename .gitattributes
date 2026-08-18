@@ -1,0 +1,24 @@
+# Konce řádků
+#
+# Shell skripty MUSÍ mít unixové konce řádků (LF). Kdyby se do nich
+# dostalo windowsové CRLF, bash by u prvního řádku zahlásil
+# "bad interpreter: /bin/bash^M" a nespustil by se.
+#
+# Tenhle soubor to řeší za nás: git převede skripty na LF při zápisu
+# do repozitáře i při stažení, bez ohledu na to, na čem se editují.
+
+*        text=auto
+*.sh      text eol=lf
+*.conf    text eol=lf
+*.service text eol=lf
+*.sql    text eol=lf
+*.py     text eol=lf
+*.html   text eol=lf
+*.css    text eol=lf
+*.md     text eol=lf
+
+# Binární soubory git nesmí měnit.
+*.png    binary
+*.jpg    binary
+*.ico    binary
+*.db     binary

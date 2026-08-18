@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tile, pager, method_badge %}
+{% block title %}{{ library.name }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="subtitle" style="margin-bottom:2px">
+            <a href="/library">&larr; {{ _("všechny knihovny") }}</a>
+        </p>
+        <h1>{{ library.name }}</h1>
+        <p class="subtitle">
+            {{ overview.item_count | number }} {{ _("souborů") }}
+            &middot; {{ overview.size_bytes | bytes }}
+            &middot; {{ overview.hours | hours }} {{ _("obsahu") }}
+        </p>
+    </div>
+</div>
+
+{# Záložky. Každá má vlastní adresu, takže funguje zpětné tlačítko
+   i posílání odkazu. #}
+<div class="tabs">
+    <a href="/library/{{ library.id }}?tab=overview"
+       class="{{ 'active' if tab == 'overview' }}">{{ _("Přehled") }}</a>
+    <a href="/library/{{ library.id }}?tab=media"
+       class="{{ 'active' if tab == 'media' }}">{{ _("Média") }}</a>
+    <a href="/library/{{ library.id }}?tab=activity"
+       class="{{ 'active' if tab == 'activity' }}">{{ _("Aktivita") }}</a>
+</div>
+
+{# ================================================================== #}
+{% if tab == 'overview' %}
+{# ================================================================== #}
+
+<div class="kpi-row">
+    {# "Souborů", ne "Titulů": u serialu je kazdy dil samostatny soubor,
+       kdezto v seznamu nize je serial jeden radek. Kdyby oboji rikalo
+       "titulu", cisla by si odporovala. #}
+    {{ tile(_("Souborů"), overview.item_count | number) }}
+    {{ tile(_("Velikost"), overview.size_bytes | bytes) }}
+    {{ tile(_("Ve 4K"), overview.uhd_count | number) }}
+    {{ tile(_("HDR / Dolby Vision"), overview.hdr_count | number) }}
+</div>
+
+{% if overview.without_tech %}
+<div class="flash warning">
+    <span class="dot"></span>
+    {# Tlačítko je tu jen pro správce a jen při ffprobe: z Jellyfinu se
+       technická data berou sama při synchronizaci, takže by nebylo co
+       dopočítávat. Ostatní uvidí původní větu s odkazem do Nastavení. #}
+    {% if account.is_admin and tech_source == 'ffprobe' %}
+    <span>{{ overview.without_tech | number }}
+        {{ _("souborů v této knihovně nemá technická data.") }}</span>
+    <form method="post" action="/settings/scan" style="margin-left:auto; margin-top:-3px">
+        <input type="hidden" name="mode" value="missing">
+        <input type="hidden" name="library_id" value="{{ library.id }}">
+        <button class="btn" type="submit">{{ _("Dopočítat chybějící") }}</button>
+    </form>
+    {% else %}
+    <span>{{ overview.without_tech | number }}
+        {{ _("souborů v této knihovně nemá technická data. Spusť analýzu v Nastavení.") }}</span>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Kodeky") }}</h2>
+            <p class="card-note">{{ _("počet souborů") }}</p>
+        </div>
+        {{ charts.hbar_chart(codecs, 'label', 'item_count', unit='') | safe }}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Rozlišení") }}</h2>
+            <p class="card-note">{{ _("počet souborů") }}</p>
+        </div>
+        {{ charts.hbar_chart(resolutions, 'label', 'item_count', unit='') | safe }}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jazyky v této knihovně") }}</h2>
+        <p class="card-note">{{ _("kolik titulů danou zvukovou stopu obsahuje") }}</p>
+    </div>
+    {{ charts.hbar_chart(languages_in_library, 'label', 'item_count', unit='') | safe }}
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Titul s českou i anglickou stopou se počítá do obou řádků, součet proto převyšuje počet titulů.") }}
+    </p>
+</div>
+
+{# ================================================================== #}
+{% elif tab == 'media' %}
+{# ================================================================== #}
+
+<div class="card">
+    <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
+        <input type="hidden" name="tab" value="media">
+        <input type="search" name="search" value="{{ search }}"
+               placeholder="{{ _('Hledat název...') }}" style="width:230px">
+        <select name="sort" style="width:auto">
+            <option value="size"       {{ 'selected' if sort == 'size' }}>{{ _("Podle velikosti") }}</option>
+            <option value="bitrate"    {{ 'selected' if sort == 'bitrate' }}>{{ _("Podle bitrate") }}</option>
+            <option value="resolution" {{ 'selected' if sort == 'resolution' }}>{{ _("Podle rozlišení") }}</option>
+            <option value="plays"      {{ 'selected' if sort == 'plays' }}>{{ _("Podle přehrání") }}</option>
+            <option value="name"       {{ 'selected' if sort == 'name' }}>{{ _("Podle názvu") }}</option>
+        </select>
+        {# Přepínač archivu je součástí formuláře, aby si volbu udrželo
+           i hledání a řazení. Skryté pole se posílá jen když je archiv
+           zapnutý - nezaškrtnuté políčko prohlížeč neposílá vůbec. #}
+        {% if archived %}<input type="hidden" name="archived" value="1">{% endif %}
+        <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
+        {% if search %}
+            <a class="btn" href="/library/{{ library.id }}?tab=media{{ '&archived=1' if archived }}">{{ _("Zrušit hledání") }}</a>
+        {% endif %}
+        <span class="card-note">{{ total | number }} {{ _("nalezeno") }}</span>
+    </form>
+
+    {# Živá knihovna / archiv. Archiv jsou tituly, které už v Jellyfinu
+       nejsou - Jellyscope je nemaže, protože na ně odkazuje historie. #}
+    <div class="filters" style="margin-top:12px">
+        <a class="chip {{ 'active' if not archived }}"
+           href="/library/{{ library.id }}?tab=media&sort={{ sort }}">{{ _("V knihovně") }}</a>
+        <a class="chip {{ 'active' if archived }}"
+           href="/library/{{ library.id }}?tab=media&sort={{ sort }}&archived=1">
+            {{ _("Archiv") }}{% if archived_count %} ({{ archived_count }}){% endif %}
+        </a>
+    </div>
+
+    {% if archived %}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Tyhle tituly už v Jellyfinu nejsou. Jellyscope je nemaže sám – historie přehrávání na ně odkazuje a bez nich by ve statistikách zůstaly bezejmenné záznamy. Když se soubor vrátí (i s jiným ItemId), Jellyscope ho podle tmdb ID zase spáruje a historie naváže.") }}
+    </p>
+    {% endif %}
+</div>
+
+{% if items %}
+<div class="media-grid">
+    {# Seriál je jeden dlaždice, ne sto. Rozpad na řady a díly je až
+       v jeho detailu - viz /series/<id>. #}
+    {% for row in items %}
+    <a class="media-card {{ 'is-archived' if row.is_missing }}"
+       href="{{ '/series/' ~ row.id if row.is_series else '/item/' ~ row.id }}">
+        <div class="media-poster">
+            <img src="/image/{{ row.id }}?kind=Primary&w=300" alt="" loading="lazy"
+                 onerror="this.style.display='none'">
+            {% if row.is_missing %}
+                {# Rozostřený plakát s přeškrtnutím: na první pohled je vidět,
+                   že tenhle titul už na disku není, aniž bys musel číst text. #}
+                <span class="media-archived">{{ _("Archivováno") }}</span>
+            {% endif %}
+            {% if row.is_series %}
+                <span class="media-badge">{{ row.episode_count }}&times;</span>
+            {% endif %}
+            {% if row.size_bytes %}
+                <span class="media-size">{{ row.size_bytes | bytes }}</span>
+            {% endif %}
+        </div>
+        <div class="media-name" title="{{ row.name }}">{{ row.name }}</div>
+        <div class="media-meta">
+            {% if row.is_series %}
+                {{ row.episode_count }} {{ _("dílů") }}
+                {% if row.season_count > 1 %}
+                    &middot; {{ row.season_count }} {{ _("řad") }}
+                {% endif %}
+            {% else %}
+                {{ row.height | resolution(row.width) }}
+                {% if row.video_codec %}&middot; {{ row.video_codec | upper }}{% endif %}
+            {% endif %}
+            {% if row.plays %}&middot; {{ row.plays }}&times;{% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+{% set extra %}&tab=media&sort={{ sort }}{% if search %}&search={{ search }}{% endif %}{% if archived %}&archived=1{% endif %}{% endset %}
+{{ pager(page, pages, total, '/library/' ~ library.id, extra) }}
+{% else %}
+<div class="card"><p class="chart-empty">{{ _("Nic nenalezeno.") }}</p></div>
+{% endif %}
+
+{# ================================================================== #}
+{% else %}
+{# ================================================================== #}
+
+<div class="kpi-row">
+    {{ tile(_("Odsledováno"), activity.totals.hours | hours, note=_("za posledních 90 dnů")) }}
+    {{ tile(_("Spuštění"), activity.totals.plays | number) }}
+    {{ tile(_("Diváků"), activity.totals.users | number) }}
+    {{ tile(_("Různých titulů"), activity.totals.item_count | number) }}
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejsledovanější") }}</h2>
+            <p class="card-note">{{ _("v hodinách") }}</p>
+        </div>
+        {{ charts.hbar_chart(activity.top_items, 'label', 'hours') | safe }}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Diváci") }}</h2>
+            <p class="card-note">{{ _("v hodinách") }}</p>
+        </div>
+        {{ charts.hbar_chart(activity.top_users, 'label', 'hours') | safe }}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head"><h2>{{ _("Poslední přehrávání") }}</h2></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Titul") }}</th>
+                <th>{{ _("Způsob") }}</th><th class="num">{{ _("Délka") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in activity.recent %}
+            <tr>
+                <td class="nowrap muted">{{ row.started_at | datetime }}</td>
+                <td><a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a></td>
+                <td class="truncate">
+                    <a href="/item/{{ row.item_id }}">
+                        {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
+                        {{ row.item_name }}
+                    </a>
+                </td>
+                <td>{{ method_badge(row.play_method) }}</td>
+                <td class="num">{{ row.watched_seconds | seconds }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not activity.recent %}
+        <p class="chart-empty">{{ _("Z této knihovny se zatím nic nepřehrávalo.") }}</p>
+    {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}

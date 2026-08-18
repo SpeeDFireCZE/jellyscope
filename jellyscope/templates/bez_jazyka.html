@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, tech_badge %}
+{% block title %}{{ _("Soubory bez jazyka") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Soubory bez určeného jazyka") }}</h1>
+        <p class="subtitle">
+            <a href="/languages">{{ _("Jazyky") }}</a> &middot;
+            {{ total | number }} {{ _("souborů") }}
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("U těchhle souborů není u zvukové stopy vyplněný jazyk – Jellyfin ho hlásí jako „und“ (undefined) nebo vůbec. Do jazykových statistik proto nevstupují a v grafech by se objevily jen jako „Neuvedeno“.") }}
+    </p>
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Spraví se to v souboru, ne v Jellyfinu: stopě chybí jazykový kód. U MKV ho doplníš třeba nástrojem mkvpropedit (mění jen hlavičku, nepřekódovává), pak stačí v Jellyfinu obnovit metadata titulu a v Jellyscope spustit synchronizaci.") }}
+    </p>
+
+    {# Cesta je tu to hlavní - bez ní by seznam řekl "něco je špatně"
+       a hledání nechal na tobě. Proto se dá hledat i podle ní. #}
+    <form method="get" action="/languages/bez-jazyka" class="btn-row">
+        <input type="search" name="search" value="{{ search }}"
+               placeholder="{{ _('Hledat název nebo cestu...') }}" style="width:320px">
+        <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
+        {% if search %}
+            <a class="btn" href="/languages/bez-jazyka">{{ _("Zrušit hledání") }}</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if files %}
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Titul") }}</th>
+                <th>{{ _("Knihovna") }}</th>
+                <th class="num">{{ _("Velikost") }}</th>
+                <th>{{ _("Kodek") }}</th>
+                <th>{{ _("Zdroj dat") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in files %}
+            <tr>
+                <td>
+                    <div class="strong">
+                        <a href="/item/{{ row.id }}">
+                            {% if row.series_name %}
+                                <span class="muted">{{ row.series_name }}
+                                {%- if row.parent_index_number and row.index_number %}
+                                    S{{ '%02d' | format(row.parent_index_number) }}E{{ '%02d' | format(row.index_number) }}
+                                {%- endif %} &ndash;</span>
+                            {% endif %}
+                            {{ row.name }}
+                        </a>
+                    </div>
+                    {# Cesta k souboru - kvůli ní tahle stránka je. #}
+                    {% if row.path %}
+                        <div class="card-note" style="word-break:break-all">{{ row.path }}</div>
+                    {% else %}
+                        <div class="card-note">{{ _("cesta není známá – spusť synchronizaci knihovny") }}</div>
+                    {% endif %}
+                </td>
+                <td class="muted">{{ row.library_name or '–' }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td>{{ row.video_codec | upper if row.video_codec else '–' }}</td>
+                <td>{{ tech_badge(row.tech_source) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% set extra %}{% if search %}&search={{ search }}{% endif %}{% endset %}
+{{ pager(page, pages, total, '/languages/bez-jazyka', extra) }}
+{% else %}
+<div class="card">
+    <p class="chart-empty">
+        {% if search %}
+            {{ _("Nic nenalezeno.") }}
+        {% else %}
+            {{ _("Všechny soubory mají jazyk vyplněný. To je vzácné – gratuluji.") }}
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,1371 @@
+"""Synchronizace knihovny a technicka analyza souboru.
+
+Dve ulohy, ktere se poustej rucne z Nastaveni nebo obcas samy:
+
+1. `sync_library()` - stahne z Jellyfinu seznam uzivatelu, knihoven a polozek.
+2. `run_tech_scan()` - doplni k polozkam technicke udaje (kodek, bitrate, ...).
+
+U druhe ulohy si uzivatel v nastaveni vybira zdroj:
+  * "jellyfin" - udaje, ktere uz zna Jellyfin. Rychle, funguje vzdy, mene presne.
+  * "ffprobe"  - cteni souboru na disku. Presne, ale potrebuje pristup k souborum.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Any
+
+from . import db, probe
+from .i18n import translate as _t
+from .config import load_config
+from .jellyfin import (JellyfinClient, JellyfinError, extract_streams,
+                       extract_tech_from_item)
+
+log = logging.getLogger("jellyscope.scanner")
+
+# Druhy polozek, ktere si Jellyscope vede v knihovne.
+#
+# Jsou to prave ty, ktere odpovidaji jednomu souboru na disku - film
+# a dil serialu. Serial ani rada zadny soubor nemaji, takze by u nich
+# nebylo co merit: velikost, kodek, bitrate, nic.
+#
+# Tenhle seznam **musi sedet s tim, na co se ptame Jellyfinu**
+# (IncludeItemTypes v jellyfin.py). Kdyz se do tabulky dostane polozka
+# jineho druhu, synchronizace ji uz nikdy neuvidi - a `_mark_missing()`
+# ji pri kazdem behu oznaci za zmizelou. V knihovne pak strasi
+# "archivovany" serial, ktery nikdo nesmazal a ktery v Jellyfinu je.
+SPRAVOVANE_TYPY = ("Movie", "Episode")
+
+# Zamek, ktery zajisti, ze nebezi dva scany naraz. Bez nej by dve soucasne
+# spustene analyzy zbytecne zatezovaly disk a prepisovaly si vysledky.
+_scan_lock = asyncio.Lock()
+
+
+def is_scan_running() -> bool:
+    return _scan_lock.locked()
+
+
+# ---------------------------------------------------------------------------
+# Zastaveni bezici ulohy
+# ---------------------------------------------------------------------------
+#
+# Uloha se **neprerusuje uprostred prace**. Nastavi se jen priznak a smycka
+# si ho vsimne, az dodela rozdelanou polozku - teprve pak skonci.
+#
+# Proc takhle a ne task.cancel(): tvrde preruseni by mohlo prijit uprostred
+# zapisu do databaze a nechat po sobe polovicni davku nebo neuzavrenou
+# transakci. Takhle se skonci vzdycky na miste, kde je databaze v poradku.
+# Uzivatel na to pocka nanejvys par sekund.
+#
+# Priznak je obycejna promenna modulu, stejne jako `_scan_lock` - obojí
+# plati pro jeden bezici proces aplikace. Jellyscope bezi v jednom procesu
+# (viz run.py), takze to staci; pri vice workerech by tohle prestalo platit
+# stejne jako zamek sam.
+_stop_requested = False
+
+
+def request_stop() -> bool:
+    """Poprosi bezici ulohu, aby skoncila. Vraci, jestli vubec neco bezi."""
+    global _stop_requested
+    if not is_scan_running():
+        return False
+    _stop_requested = True
+    log.info("uloha dostala pokyn k zastaveni")
+    return True
+
+
+def stop_requested() -> bool:
+    """Ceka bezici uloha na ukonceni?
+
+    Podminka `is_scan_running()` tam neni navic. Priznak patri **te uloze,
+    ktere byl nastaven** - kdyz skonci, uz nikomu nic nerika. Bez toho by
+    Nastaveni po kazdem zastaveni navzdy hlasilo "zastavuji" a v testech
+    by priznak pretekal z jedne ulohy do druhe.
+
+    Uklidit ho pri odchodu z ulohy by znamenalo obalit celé telo funkce
+    blokem try/finally kvuli jedne promenne. Takhle plati totez a je to
+    videt na jednom miste.
+    """
+    return _stop_requested and is_scan_running()
+
+
+# ---------------------------------------------------------------------------
+# Prubeh bezici ulohy
+# ---------------------------------------------------------------------------
+#
+# Synchronizace velke knihovny trva minuty a do ted o sobe nedavala vedet -
+# uzivatel koukal na "uloha bezi" a nemel jak poznat, jestli je na zacatku
+# nebo skoro hotova.
+#
+# Celkovy pocet zjistime predem: Jellyfin ho posila u kazde stranky jako
+# `TotalRecordCount`, takze staci poprosit o stranku o velikosti nula. Pak
+# uz jen pricitame, co je hotove.
+#
+# Drzime to v pameti, ne v databazi: je to udaj o **prave bezicim** procesu,
+# ktery po skonceni nikoho nezajima. Zapisovat ho po kazde davce do databaze
+# by znamenalo zapis navic bez uzitku.
+# O kolik minut se pri rychle synchronizaci vratime pred posledni znamy
+# titul. Pojistka proti tomu, aby na hranici nekdo nepropadl.
+RECENT_OVERLAP_MINUTES = 5
+
+_progress: dict[str, Any] = {"kind": None, "done": 0, "total": 0}
+
+
+def progress() -> dict[str, Any]:
+    """Kolik prace uz je hotovo. Prazdne, kdyz nic nebezi."""
+    if not is_scan_running() or not _progress["kind"]:
+        return {}
+    hotovo, celkem = _progress["done"], _progress["total"]
+    return {
+        "kind": _progress["kind"],
+        "done": hotovo,
+        "total": celkem,
+        # Procenta pocitame tady, at je sablona nemusi. A jen kdyz celkovy
+        # pocet vubec zname - jinak by "0 %" lhalo o tom, ze nic nebezi.
+        "percent": round(hotovo / celkem * 100) if celkem else None,
+    }
+
+
+def _start_progress(kind: str, total: int = 0) -> None:
+    _progress.update(kind=kind, done=0, total=max(0, int(total or 0)))
+
+
+def _add_progress(kolik: int) -> None:
+    _progress["done"] += kolik
+
+
+def _clear_progress() -> None:
+    _progress.update(kind=None, done=0, total=0)
+
+
+def _clear_stop() -> None:
+    """Zahodi priznak. Vola se na zacatku kazde ulohy.
+
+    Bez toho by pozdeji spustena uloha nasla priznak z te predchozi
+    a hned by se ukoncila.
+    """
+    global _stop_requested
+    _stop_requested = False
+
+
+# ---------------------------------------------------------------------------
+# Zaznam o prubehu scanu (aby bylo v UI videt, co se deje)
+# ---------------------------------------------------------------------------
+
+def start_task_log(kind: str) -> int:
+    with db.connect() as conn:
+        novy = conn.insert_returning_id(
+            "INSERT INTO scan_log (kind, started_at, status) VALUES (?, ?, 'running')",
+            (kind, db.utcnow()),
+        )
+        _proredit_zaznamy(conn, kind)
+        return novy
+
+
+def otisky() -> dict[str, str]:
+    """Oba otisky naraz - knihovna i dobehle ulohy.
+
+    Jeden dotaz, protoze se oba ptaji na tytez dve tabulky a chodi
+    spolecne: sahá po nich **kazde volani /health**, na ktere se prohlizec
+    pta kazdych deset vterin z kazde otevrene karty. Ve dvou dotazech to
+    znamenalo dve spojeni do databaze misto jednoho - a rezie spojeni je
+    tady vetsi nez prace samotna.
+
+    `SELECT (poddotaz), (poddotaz)` bez FROM rozumi SQLite i PostgreSQL.
+    """
+    row = db.query_one(
+        """
+        SELECT (SELECT MAX(finished_at) FROM scan_log
+                 WHERE kind IN ('library', 'recent'))      AS cas_knihovny,
+               (SELECT COUNT(*) FROM items)                AS polozek,
+               (SELECT MAX(id) FROM scan_log
+                 WHERE finished_at IS NOT NULL)            AS uloh
+        """
+    ) or {}
+    return {
+        "library": f"{row.get('cas_knihovny') or ''}:{row.get('polozek') or 0}",
+        "tasks": str(row.get("uloh") or 0),
+    }
+
+
+def library_version() -> str:
+    """Otisk toho, jak knihovna vypada ted.
+
+    Slouzi k jedine veci: prohlizec si ho zapamatuje pri nacteni stranky
+    a kdyz se pozdeji zmeni, vi, ze ma znovu nacist pas nedavno pridanych.
+    Bez toho by musel bud obnovovat naslepo porad dokola, nebo cekat, az
+    stranku obnovi clovek sam - a nove pridany film by mu na uz otevrene
+    strance nikdy nenaskocil.
+
+    Skladame ho z posledni dokoncene ulohy a poctu titulu. Samotny cas
+    nestaci: uloha, ktera nic nenasla, taky dobehne, a prekreslovat kvuli
+    ni nema smysl.
+    """
+    return otisky()["library"]
+
+
+def tasks_version() -> str:
+    """Otisk toho, kolik uloh uz dobehlo.
+
+    Stranka si ho zapamatuje pri nacteni a kdyz se zmeni, vi, ze nejaka
+    uloha mezitim skoncila - a muze se obnovit.
+
+    Proc ne "sleduj, jestli prave bezi uloha, a pockej az prestane":
+    protoze rychla synchronizace nad malou knihovnou trva par vterin.
+    Kdyz se stranka pta jednou za deset, cely beh se do mezery mezi dvema
+    dotazy pohodlne vejde - uloha probehne, stranka o tom nikdy nevi
+    a prouzek "uloha bezi" na ni zustane viset. Presne to se stalo.
+
+    `MAX(id)` staci: cislo radku roste s kazdou dalsi ulohou, takze se
+    nemusime spolehat na cas (dve ulohy muzou skoncit ve stejne vterine).
+    """
+    return otisky()["tasks"]
+
+
+def finish_task_log(
+    scan_id: int,
+    status: str,
+    total: int = 0,
+    ok: int = 0,
+    failed: int = 0,
+    message: str = "",
+) -> None:
+    with db.connect() as conn:
+        conn.execute(
+            """
+            UPDATE scan_log
+               SET finished_at = ?, status = ?, items_total = ?,
+                   items_ok = ?, items_failed = ?, message = ?
+             WHERE id = ?
+            """,
+            (db.utcnow(), status, total, ok, failed, message[:500], scan_id),
+        )
+
+
+# Kolik zaznamu o jednom druhu ulohy si necháváme.
+#
+# Rychla synchronizace bezi kazdych patnact minut, takze do tabulky
+# pribyva pres devadesat radku denne - a nikdy se nic nemazalo. Za rok
+# by jich bylo pres tricet tisic a kazdy dotaz na /health (prohlizec se
+# pta kazdych deset vterin z kazde otevrene karty) by je musel projit.
+#
+# Tri sta staci: v Nastaveni se ukazuje posledni beh kazdeho druhu,
+# zbytek je historie pro pripad, ze by se neco vysetrovalo.
+ZAZNAMU_NA_DRUH = 300
+
+
+def _proredit_zaznamy(conn: Any, kind: str) -> None:
+    """Necha jen poslednich `ZAZNAMU_NA_DRUH` zaznamu daneho druhu.
+
+    Hranici hledame dotazem, ne poctem: `DELETE ... LIMIT` umi SQLite,
+    ale PostgreSQL ne, a tenhle tvar rozumi obema.
+    """
+    row = conn.execute(
+        "SELECT id FROM scan_log WHERE kind = ? ORDER BY id DESC LIMIT 1 OFFSET ?",
+        (kind, ZAZNAMU_NA_DRUH - 1),
+    ).fetchone()
+    if row is None:
+        return
+    conn.execute("DELETE FROM scan_log WHERE kind = ? AND id < ?",
+                 (kind, row["id"]))
+
+
+def last_scan(kind: str) -> dict[str, Any] | None:
+    return db.query_one(
+        "SELECT * FROM scan_log WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,)
+    )
+
+
+# ---------------------------------------------------------------------------
+# 1. Synchronizace knihovny
+# ---------------------------------------------------------------------------
+
+def _posledni_pridano() -> str | None:
+    """Datum posledniho titulu, ktery uz v knihovne mame.
+
+    Odtud se rychla synchronizace odrazi: co je novejsi, jeste neznáme.
+    Vraci None, kdyz je knihovna prazdna - pak se vezmou proste nejnovejsi
+    polozky, kolik se jich vejde do stropu.
+
+    Odecitame par minut navic. Neni to pro parádu: kdyz Jellyfin prida vic
+    souboru behem jedne vteriny, hranice by mohla nekterý z nich preskocit.
+    Projit tentyz titul podruhe nic nestoji - zapisuje se pres ON CONFLICT.
+    """
+    nejnovejsi = db.query_value(
+        "SELECT MAX(date_created) FROM items WHERE date_created IS NOT NULL")
+    if not nejnovejsi:
+        return None
+
+    # Jellyfin posila cas s T a se zlomky sekund; my ho ukladame tak, jak
+    # prisel. Pro porovnavani ho srovname do naseho tvaru.
+    text = str(nejnovejsi).replace("T", " ")[:19]
+    try:
+        kdy = datetime.strptime(text, db.TIME_FORMAT)
+    except ValueError:
+        return None
+    return (kdy - timedelta(minutes=RECENT_OVERLAP_MINUTES)).strftime(db.TIME_FORMAT)
+
+
+async def refresh_item(item_id: str) -> dict[str, Any]:
+    """Stahne z Jellyfinu znovu jednu jedinou polozku.
+
+    K cemu to je: v Jellyfinu opravis metadata jednoho filmu (spatny rok,
+    prehozeny nazev, chybejici jazyk stopy) a chces to hned videt i tady,
+    aniz bys kvuli tomu poustel synchronizaci cele knihovny.
+
+    Delame presne to, co synchronizace - jen pro jedno id: znovu se
+    prectou udaje, prepisou se stopy a pri zdroji "ffprobe" se soubor
+    rovnou premeri. Jellyfin se pritom jen **cte** (GET /Items).
+
+    Zamek si nebereme: je to jeden dotaz a jeden zapis. Kdyz zrovna bezi
+    velka synchronizace, prekazet si nebudou - tahle polozka se nanejvys
+    zapise dvakrat po sobe stejne.
+    """
+    ulozena = db.query_one("SELECT * FROM items WHERE id = ?", (item_id,))
+    if ulozena is None:
+        return {"status": "error", "message": "Taková položka v databázi není."}
+
+    try:
+        async with JellyfinClient(*db.jellyfin_connection()) as client:
+            nalezene = await client.items_by_ids([item_id])
+    except JellyfinError as exc:
+        return {"status": "error", "message": str(exc)}
+
+    if not nalezene:
+        # Polozka v Jellyfinu uz neni. Nemazeme ji - historie prehravani
+        # na ni odkazuje -, jen to rekneme nahlas.
+        return {"status": "error",
+                "message": "Jellyfin tuhle položku už nezná. "
+                           "Zmizela z knihovny, nebo se změnilo její ItemId."}
+
+    item = nalezene[0]
+    use_jellyfin_tech = db.get_setting("tech_source") == "jellyfin"
+    tech = extract_tech_from_item(item) if use_jellyfin_tech else {}
+
+    # Knihovnu bereme z ulozeneho zaznamu: Jellyfin ji v odpovedi
+    # neposila a prepsat ji prazdnou by polozku vyradilo z prehledu.
+    radek = _radek_polozky(item, ulozena["library_id"], tech, db.utcnow())
+    await asyncio.to_thread(_write_items, [radek], not use_jellyfin_tech)
+
+    if use_jellyfin_tech:
+        stopy = extract_streams(item)
+        if stopy:
+            await asyncio.to_thread(save_streams, item_id, stopy)
+
+    vysledek = {"status": "ok", "name": item.get("Name") or ulozena["name"]}
+
+    if not use_jellyfin_tech:
+        # Pri zdroji ffprobe se technicka data z Jellyfinu neberou, takze
+        # by po obnoveni zustala stara. Zmerime rovnou - je to jeden soubor.
+        tech_vysledek = await run_tech_scan(only_missing=False, item_ids=[item_id])
+        vysledek["tech"] = tech_vysledek
+
+    return vysledek
+
+
+async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
+    """Rychla synchronizace: jen tituly, ktere v knihovne jeste nemame.
+
+    Proc vedle plne synchronizace jeste tahle:
+
+    Plna synchronizace projde **celou** knihovnu. U desitek tisic polozek
+    to znamena stovky volani do Jellyfinu a nekolik minut prace, takze se
+    poustí jednou za nekolik hodin - a nove pribyly film se v Jellyscope
+    objevi klidne az za pul dne. Tahle uloha se diva jen na to, co pribylo,
+    a da se poustet kazdych par minut.
+
+    **Hranici urcuje posledni titul, ktery uz mame** (viz
+    `_posledni_pridano()`), ne hodiny. Puvodne to bylo casove okno odvozene
+    od intervalu ulohy - jenze pak zalezelo na tom, jestli uloha bezela
+    podle planu. Kdyz aplikace stala pul dne, okno bylo kratsi nez vypadek
+    a tituly z te doby propadly az do plne synchronizace. Takhle se nic
+    nepreskoci, at uloha bezi jakkoli nepravidelne.
+
+    **Prochazi se po knihovnach.** Jellyfin v odpovedi neposila, do ktere
+    knihovny polozka patri, takze kdyz se ptame na vsechno najednou, nemame
+    ji kam zaradit. Volani navic je par - knihoven byva jednotky.
+
+    **_mark_missing() se tu NEVOLA.** Ta funkce oznaci za zmizele vsechno,
+    co beh nevidel - a tenhle beh vidi jen hrstku nejnovejsich polozek.
+    Zbytek knihovny by zmizel do archivu. Uklid smazanych titulu proto
+    zustava u plne synchronizace, ktera opravdu projde vsechno.
+    """
+    if _scan_lock.locked():
+        return {"status": "busy", "message": "Jiná úloha už běží."}
+
+    od = _posledni_pridano()
+
+    async with _scan_lock:
+        _clear_stop()
+        scan_id = start_task_log("recent")
+        videno = 0
+        nova_id: list[str] = []
+
+        try:
+            async with JellyfinClient(*db.jellyfin_connection()) as client:
+                knihovny = await _sync_libraries(client)
+                use_jellyfin_tech = db.get_setting("tech_source") == "jellyfin"
+                _start_progress("recent", 0)
+
+                for knihovna in knihovny:
+                    polozky = await client.recent_items(
+                        od, strop=max_items, parent_id=knihovna["id"])
+                    videno += len(polozky)
+                    nova_id.extend(await _uloz_nove_polozky(
+                        polozky, knihovna["id"], use_jellyfin_tech, client))
+
+        except JellyfinError as exc:
+            _clear_progress()
+            finish_task_log(scan_id, "error", message=str(exc))
+            return {"status": "error", "message": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            _clear_progress()
+            log.exception("rychla synchronizace selhala")
+            finish_task_log(scan_id, "error", message=str(exc))
+            return {"status": "error", "message": f"Neočekávaná chyba: {exc}"}
+
+        _clear_progress()
+        pridano = len(nova_id)
+        if not od:
+            zprava = _t("{n} nejnovějších titulů (knihovna byla prázdná)").format(n=pridano)
+        elif pridano:
+            zprava = _t("{n} nových titulů (zkontrolováno {celkem})").format(
+                n=pridano, celkem=videno)
+        else:
+            # Nula je uplne bezny vysledek - uloha bezi kazdych par minut.
+            # Musi se tak i tvarit, jinak clovek marne hleda, co pribylo.
+            zprava = _t("Nic nového (zkontrolováno {celkem})").format(celkem=videno)
+        finish_task_log(scan_id, "done", total=videno, ok=pridano, message=zprava)
+
+    # Az za zamkem: technicka analyza si ho bere sama.
+    #
+    # Pri zdroji dat "ffprobe" se z Jellyfinu technicke udaje schvalne
+    # neberou, takze novy titul zustal uplne prazdny - bez kontejneru,
+    # rozliseni i velikosti - a cekal az na denni ulohu. Ted se rovnou
+    # zmeri, a jen ten prave pridany: jde o par souboru, ne o celou
+    # knihovnu.
+    tech = {}
+    if nova_id and db.get_setting("tech_source") == "ffprobe":
+        tech = await run_tech_scan(only_missing=True, item_ids=nova_id)
+        if tech.get("ok"):
+            log.info("rychla synchronizace: zmereno %s novych souboru", tech["ok"])
+
+    return {"status": "ok", "items": len(nova_id), "checked": videno,
+            "since": od, "tech": tech}
+
+
+async def sync_library() -> dict[str, Any]:
+    """Stahne z Jellyfinu uzivatele, knihovny a vsechny polozky."""
+    if _scan_lock.locked():
+        return {"status": "busy", "message": "Jiná úloha už běží."}
+
+    async with _scan_lock:
+        _clear_stop()
+        scan_id = start_task_log("library")
+        config = load_config()
+        started_at = db.utcnow()
+        counts = {"users": 0, "libraries": 0, "items": 0}
+        zastaveno = False
+
+        try:
+            async with JellyfinClient(*db.jellyfin_connection()) as client:
+                counts["users"] = await _sync_users(client)
+                libraries = await _sync_libraries(client)
+                counts["libraries"] = len(libraries)
+
+                use_jellyfin_tech = db.get_setting("tech_source") == "jellyfin"
+
+                # Nejdriv se zeptame, kolik toho bude - jedno rychle volani
+                # na knihovnu. Bez toho by ukazatel prubehu nemel k cemu
+                # pocitat procenta.
+                #
+                # Kdyz se to nepovede, synchronizace bezi dal. Je to udaj
+                # navic pro ukazatel prubehu, ne podminka prace - shodit
+                # kvuli nemu cely scan by bylo neumerne.
+                celkem = 0
+                try:
+                    for library in libraries:
+                        celkem += await client.item_count(parent_id=library["id"])
+                except Exception as exc:      # noqa: BLE001
+                    log.warning("pocet polozek se nepodarilo zjistit: %s", exc)
+                    celkem = 0
+                _start_progress("library", celkem)
+
+                for library in libraries:
+                    counts["items"] += await _sync_items_of_library(
+                        client, library, use_jellyfin_tech
+                    )
+                    if stop_requested():
+                        zastaveno = True
+                        break
+
+                # Polozky, ktere jsme v tomhle behu nevideli, uz v Jellyfinu
+                # nejsou. Nemazeme je - historie prehravani na ne odkazuje -
+                # jen si je oznacime.
+                #
+                # Po zastaveni se tenhle krok MUSI vynechat. Zbytek knihovny
+                # jsme totiz jeste nestihli projit, takze bychom "nevidene"
+                # oznacili i tituly, ktere v Jellyfinu normalne jsou -
+                # zmizely by z knihovny a skoncily v archivu. Nedokoncena
+                # synchronizace radeji nezmeni nic, nez aby lhala.
+                if not zastaveno:
+                    _mark_missing(started_at)
+
+            # Ted uz zname uzivatele i polozky - srovname s nimi historii,
+            # ktera se naimportovala driv, nez bylo pripojeni k Jellyfinu.
+            # Takovy import ma v historii "?" misto jmen, nezna typ polozky
+            # a jeho ItemId nemusi odpovidat zadnemu titulu v knihovne.
+            #
+            # Volame cele link_imported_history(), ne jen doplneni udaju:
+            # ono se postara i o dohledani podle tmdb ID, ktere v dobe
+            # importu nebylo jak udelat (Jellyfin jeste nebyl pripojeny).
+            #
+            # Import az tady, ne nahore: importers uz importuje scanner
+            # a kruhovy import by aplikaci pri startu polozil.
+            from . import importers
+            try:
+                await importers.link_imported_history()
+            except Exception as exc:      # noqa: BLE001
+                # Knihovna uz je stazena a ulozena. Kdyz se srovnani
+                # historie nepovede, je to skoda - ne duvod hlasit celou
+                # synchronizaci jako neuspesnou. Zkusi se pri te dalsi.
+                log.warning("srovnani prevzate historie se nepovedlo: %s", exc)
+
+        except JellyfinError as exc:
+            _clear_progress()
+            finish_task_log(scan_id, "error", message=str(exc))
+            return {"status": "error", "message": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            log.exception("synchronizace knihovny selhala")
+            _clear_progress()
+            finish_task_log(scan_id, "error", message=str(exc))
+            return {"status": "error", "message": f"Neočekávaná chyba: {exc}"}
+
+        _clear_progress()
+        popis = f"{counts['libraries']} knihoven, {counts['users']} uživatelů"
+        if zastaveno:
+            finish_task_log(
+                scan_id, "stopped", total=counts["items"], ok=counts["items"],
+                message=(f"Zastaveno na tvůj pokyn. Stihlo se {counts['items']} položek "
+                         f"({popis}). Co se stáhlo, je uložené; zbytek zůstal beze změny."),
+            )
+            return {"status": "stopped", **counts}
+
+        finish_task_log(
+            scan_id, "done", total=counts["items"], ok=counts["items"], message=popis,
+        )
+        return {"status": "ok", **counts}
+
+
+async def _sync_users(client: JellyfinClient) -> int:
+    users = await client.users()
+    now = db.utcnow()
+    with db.connect() as conn:
+        for user in users:
+            policy = user.get("Policy") or {}
+            conn.execute(
+                """
+                INSERT INTO users (id, name, is_administrator, is_disabled, last_activity, synced_at)
+                VALUES (?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    is_administrator = excluded.is_administrator,
+                    is_disabled = excluded.is_disabled,
+                    last_activity = excluded.last_activity,
+                    synced_at = excluded.synced_at
+                """,
+                (
+                    user.get("Id"),
+                    user.get("Name") or "?",
+                    1 if policy.get("IsAdministrator") else 0,
+                    1 if policy.get("IsDisabled") else 0,
+                    user.get("LastActivityDate"),
+                    now,
+                ),
+            )
+    return len(users)
+
+
+async def _sync_libraries(client: JellyfinClient) -> list[dict[str, Any]]:
+    folders = await client.virtual_folders()
+    now = db.utcnow()
+    result = []
+
+    with db.connect() as conn:
+        for folder in folders:
+            collection_type = folder.get("CollectionType")
+            # Hudbu a fotky zatim vynechavame - statistiky jsou stavene
+            # na video obsah.
+            if collection_type not in (None, "movies", "tvshows", "homevideos", "mixed"):
+                continue
+
+            library = {
+                "id": folder.get("ItemId"),
+                "name": folder.get("Name") or "?",
+                "collection_type": collection_type,
+            }
+            if not library["id"]:
+                continue
+
+            conn.execute(
+                """
+                INSERT INTO libraries (id, name, collection_type, paths, synced_at)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    collection_type = excluded.collection_type,
+                    paths = excluded.paths,
+                    synced_at = excluded.synced_at
+                """,
+                (
+                    library["id"],
+                    library["name"],
+                    collection_type,
+                    json.dumps(folder.get("Locations") or []),
+                    now,
+                ),
+            )
+            result.append(library)
+
+    return result
+
+
+def tmdb_id_of(item: dict[str, Any]) -> str | None:
+    """Vytahne z polozky identifikator TMDB.
+
+    Jellyfin je posila ve slovniku ProviderIds, jenze klice pise ruzne
+    podle verze a typu polozky: "Tmdb", "TmdbId", u serialu obcas "tmdb".
+    Porovnavame proto malymi pismeny, at na tom nezalezi.
+
+    U epizod bereme id **serialu** (`SeriesProviderIds`), kdyz vlastni
+    nema - epizoda sama v TMDB casto zadne id nema a bez toho by se
+    slucovani u serialu nechytlo.
+
+    POZOR: u epizody tohle id NEIDENTIFIKUJE dil, ale cely serial - vsechny
+    dily Kancelare maji stejne. Kdo podle nej chce poznat jednu polozku,
+    musi pouzit `identita_polozky()`.
+    """
+    for source in (item.get("ProviderIds"), item.get("SeriesProviderIds")):
+        if not isinstance(source, dict):
+            continue
+        for key, value in source.items():
+            if str(key).lower() in ("tmdb", "tmdbid") and value:
+                return str(value)
+    return None
+
+
+def identita_polozky(item: dict[str, Any]) -> tuple[str, int, int] | None:
+    """Podle ceho poznat, ze dva ruzne soubory jsou tentyz poradek.
+
+    Slouzi ke slucovani: prekodujes soubor, Jellyfin zalozi novou polozku
+    s novym ItemId a stara zmizi. Historii prehravani chceme prenest.
+
+    U filmu na to staci tmdb_id. **U epizody ne** - a byla to skarada
+    chyba: `tmdb_id_of()` u epizody vraci id SERIALU, takze vsech dvacet
+    dilu Kancelare melo stejne. Slucovani pak povazovalo kazde dva dily
+    za tentyz soubor a pri kazdem skenu slilo historii vsech dilu na
+    jediny. Ve statistikach to vypadalo, ze divak videl jednu epizodu
+    dvacetkrat - a "sledovanych titulu" bylo dvacetkrat min, nez melo.
+
+    Dil proto identifikujeme trojici: serial + rada + cislo dilu.
+    Kdyz cislo dilu neznáme, vracime None a neslucujeme radsi vubec -
+    spatne slouceni se uz nijak nevrati zpatky.
+    """
+    tmdb = tmdb_id_of(item)
+    if not tmdb:
+        return None
+
+    if str(item.get("Type") or "") != "Episode":
+        # Film: cislo rady ani dilu nema, do porovnani dosadime -1.
+        return (tmdb, -1, -1)
+
+    rada = item.get("ParentIndexNumber")
+    dil = item.get("IndexNumber")
+    if rada is None or dil is None:
+        return None
+    try:
+        return (tmdb, int(rada), int(dil))
+    except (TypeError, ValueError):
+        return None
+
+
+def _radek_polozky(item: dict[str, Any], library_id: Any,
+                   tech: dict[str, Any], now: str) -> tuple[Any, ...]:
+    """Poskladá jeden řádek tabulky `items` z odpovědi Jellyfinu.
+
+    Vlastní funkce, protože ji potřebují dvě různé úlohy - plná
+    synchronizace i ta rychlá nad nově přidanými. Kdyby to byly dvě kopie,
+    přidání sloupce by se jednou zapomnělo a jedna z cest by tiše
+    ukládala míň.
+    """
+    return (
+        item.get("Id"),
+        item.get("Name") or "?",
+        item.get("Type") or "?",
+        library_id,
+        item.get("SeriesId"),
+        item.get("SeriesName"),
+        item.get("SeasonName"),
+        item.get("IndexNumber"),
+        item.get("ParentIndexNumber"),
+        item.get("ProductionYear"),
+        item.get("RunTimeTicks"),
+        item.get("DateCreated"),
+        item.get("Path"),
+        tmdb_id_of(item),
+        # Zanry spojime svislitkem - carka se v nazvech zanru objevuje.
+        "|".join(str(z).strip() for z in (item.get("Genres") or []) if str(z).strip())
+            or None,
+        tech.get("container"),
+        tech.get("video_codec"),
+        tech.get("audio_codec"),
+        tech.get("audio_channels"),
+        tech.get("width"),
+        tech.get("height"),
+        tech.get("bitrate"),
+        tech.get("size_bytes"),
+        tech.get("video_range"),
+        tech.get("audio_languages"),
+        tech.get("subtitle_languages"),
+        tech.get("default_audio_language"),
+        "jellyfin" if tech else None,
+        now if tech else None,
+        now,
+    )
+
+
+def _ktere_uz_zname(ids: list[str]) -> set[str]:
+    """Ktera z techto ID uz v tabulce items jsou.
+
+    Ptame se po davkach: SQL ma strop na pocet parametru v jednom dotazu
+    (u SQLite jich byva 999) a rychla synchronizace muze pri prvnim behu
+    prijit s tisici polozkami najednou.
+    """
+    znama: set[str] = set()
+    for start in range(0, len(ids), 400):
+        davka = ids[start:start + 400]
+        if not davka:
+            continue
+        otazniky = ",".join("?" for _ in davka)
+        for radek in db.query_all(
+                f"SELECT id FROM items WHERE id IN ({otazniky})", tuple(davka)):
+            znama.add(str(radek["id"]))
+    return znama
+
+
+async def _uloz_nove_polozky(polozky: list[dict[str, Any]], library_id: Any,
+                             use_jellyfin_tech: bool,
+                             client: "JellyfinClient | None" = None) -> list[str]:
+    """Uloží položky jedné knihovny. Používá rychlá synchronizace.
+
+    `library_id` se predava zvenci, protoze Jellyfin ho v odpovedi nenese.
+    Drive se bralo z uz ulozeneho zaznamu - jenze u NOVEHO titulu zadny
+    neexistuje, takze zustalo prazdne. A pri dalsim behu se prazdna
+    hodnota jen zkopirovala, takze se to nikdy nespravilo samo.
+
+    **Zapisuji se vsechny, ale vraci se jen id tech opravdu novych.**
+    Hranice pro stahovani se schvalne posouva o par minut zpatky (viz
+    `_posledni_pridano()`), takze se nejnovejsi uz znamy titul stahne
+    znovu - a driv se zapocital jako novy. Vysledek pak nikdy neukazal
+    nulu, i kdyz od minule nic nepribylo. Prepsat uz znamy titul ma pritom
+    smysl: prave tim se opravi zaznam, ktery Jellyfin pri prvnim pruchodu
+    jeste nemel zaradeny do knihovny.
+    """
+    if not polozky:
+        return []
+
+    now = db.utcnow()
+    znama = _ktere_uz_zname([str(i["Id"]) for i in polozky if i.get("Id")])
+    nova_id = [str(i["Id"]) for i in polozky
+               if i.get("Id") and str(i["Id"]) not in znama]
+
+    radky: list[tuple[Any, ...]] = []
+    stopy: list[tuple[str, list[dict[str, Any]]]] = []
+    tmdb_dvojice: list[tuple[tuple[str, int, int], str]] = []
+
+    for item in polozky:
+        tech = extract_tech_from_item(item) if use_jellyfin_tech else {}
+        if use_jellyfin_tech:
+            streams = extract_streams(item)
+            if streams:
+                stopy.append((item.get("Id"), streams))
+
+        identita = identita_polozky(item)
+        if identita and item.get("Id"):
+            tmdb_dvojice.append((identita, str(item["Id"])))
+
+        radky.append(_radek_polozky(item, library_id, tech, now))
+        _add_progress(1)
+
+    # Rychla synchronizace vidi jen novinky, takze podle `synced_at` nepozna,
+    # co v knihovne porad je - vsechno ostatni ma razitko z minuleho behu.
+    # Kdyz tedy slucovani na nejakou ulozenou polozku ukazuje, zeptame se
+    # Jellyfinu primo, jestli tam jeste je. Kdyz ano, jde o druhou kopii
+    # tehoz dilu a slucovat se nesmi.
+    chranena: set[str] = set()
+    if client is not None:
+        kandidati = await asyncio.to_thread(
+            _stare_ke_slouceni, tmdb_dvojice,
+            {str(i["Id"]) for i in polozky if i.get("Id")},
+        )
+        if kandidati:
+            zive = await client.items_by_ids(list(kandidati))
+            chranena = {str(i["Id"]) for i in zive if i.get("Id")}
+
+    await asyncio.to_thread(_write_batch, radky, stopy, tmdb_dvojice,
+                            not use_jellyfin_tech, None, chranena)
+    return nova_id
+
+
+async def _sync_items_of_library(
+    client: JellyfinClient,
+    library: dict[str, Any],
+    use_jellyfin_tech: bool,
+) -> int:
+    """Nacte a ulozi vsechny polozky jedne knihovny."""
+    now = db.utcnow()
+    count = 0
+    batch: list[tuple[Any, ...]] = []
+    stream_batch: list[tuple[str, list[dict[str, Any]]]] = []
+    # Dvojice (tmdb_id, nove ItemId) pro slucovani prekodovanych souboru.
+    seen_tmdb: list[tuple[tuple[str, int, int], str]] = []
+
+    async for item in client.iter_items(parent_id=library["id"]):
+        tech = extract_tech_from_item(item) if use_jellyfin_tech else {}
+        if use_jellyfin_tech:
+            streams = extract_streams(item)
+            if streams:
+                stream_batch.append((item.get("Id"), streams))
+
+        identita = identita_polozky(item)
+        if identita and item.get("Id"):
+            seen_tmdb.append((identita, str(item["Id"])))
+
+        batch.append(_radek_polozky(item, library["id"], tech, now))
+        count += 1
+
+        # Zapisujeme po davkach. Jeden INSERT na polozku by u velke knihovny
+        # znamenal desetitisice samostatnych transakci a scan by se vlekl.
+        if len(batch) >= 200:
+            # Zapis jde do vlakna. Bez toho by synchronizace velke knihovny
+            # drzela smycku udalosti a cely web by po dobu scanu neodpovidal.
+            await asyncio.to_thread(
+                _write_batch, list(batch), list(stream_batch),
+                list(seen_tmdb), not use_jellyfin_tech, now
+            )
+            _add_progress(len(batch))
+            batch.clear()
+            stream_batch.clear()
+            seen_tmdb.clear()
+
+        # Zastavujeme az tady - rozdelana polozka je hotova a zapsana.
+        # U velke knihovny je tohle jedine misto, kde se da skoncit vcas;
+        # kontrola mezi knihovnami by u jedne velke znamenala cekat
+        # klidne desitky minut.
+        if stop_requested():
+            break
+
+    if batch or stream_batch or seen_tmdb:
+        await asyncio.to_thread(
+            _write_batch, list(batch), list(stream_batch),
+            list(seen_tmdb), not use_jellyfin_tech, now
+        )
+        _add_progress(len(batch))
+
+    return count
+
+
+def _stare_ke_slouceni(
+    pairs: list[tuple[tuple[str, int, int], str]],
+    chranena: set[str],
+    videno_od: str | None = None,
+) -> dict[str, str]:
+    """Ktere ulozene polozky by slucovani zabralo. Vraci {stare id: nove id}.
+
+    Jen ctenim - slouzi k tomu, aby se dalo predem overit, jestli ta
+    "stara" polozka v Jellyfinu opravdu uz neni. Viz `_merge_by_tmdb`.
+    """
+    if not pairs:
+        return {}
+
+    nalezene: dict[str, str] = {}
+    with db.connect() as conn:
+        for (tmdb, rada, dil), new_id in pairs:
+            podminka = ""
+            parametry: list[Any] = [tmdb, rada, dil, new_id]
+            if videno_od:
+                # Polozku, kterou Jellyfin v tomhle behu poslal, slucovat
+                # nesmime - ta zjevne existuje dal.
+                podminka = " AND (i.synced_at IS NULL OR i.synced_at < ?)"
+                parametry.append(videno_od)
+
+            row = conn.execute(
+                f"""
+                SELECT i.id
+                  FROM items i
+             LEFT JOIN playback p ON p.item_id = i.id
+                 WHERE i.tmdb_id = ?
+                   AND COALESCE(i.parent_index_number, -1) = ?
+                   AND COALESCE(i.index_number, -1) = ?
+                   AND i.id != ?{podminka}
+              GROUP BY i.id
+              ORDER BY COALESCE(SUM(p.watched_seconds), 0) DESC
+                 LIMIT 1
+                """,
+                tuple(parametry),
+            ).fetchone()
+            if row is not None and str(row["id"]) not in chranena:
+                nalezene[str(row["id"])] = new_id
+    return nalezene
+
+
+def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
+                   chranena: set[str] | None = None,
+                   videno_od: str | None = None) -> int:
+    """Preveze historii ze stare polozky na novou, kdyz jde o tentyz poradek.
+
+    Situace, kterou to resi: prekodujes film do HEVC a nahradis puvodni
+    soubor. Jellyfin to nepozna jako zmenu - zalozi **novou polozku
+    s novym ItemId** a stara zmizi. Bez tehle funkce by se historie
+    prehravani rozpadla na dva tituly, z nichz jeden by skoncil v archivu.
+
+    **Slucuje se jen tehdy, kdyz ta stara polozka opravdu zmizela.**
+    Tim se lisi vymena souboru od druhe kopie tehoz dilu: kdyz mas
+    epizodu v knihovne dvakrat (jina kvalita, zbyla stara verze), jsou
+    v Jellyfinu obe - a slouceni by jednu z nich smazalo. Pri dalsim
+    scanu by se vratila a smazala tu druhou; polozky by se stridaly
+    a odkazy na ne prestavaly platit. Proto:
+      * `chranena` = id, o kterych vime, ze v Jellyfinu jsou (prave
+        zapisovana davka, u rychle synchronizace i overeni doptanim),
+      * `videno_od` = zacatek behu; polozka se `synced_at` z tohohle behu
+        prisla z Jellyfinu prave ted, takze se take nesluci.
+
+    Poznavacim znamenim je `identita_polozky()`: u filmu tmdb_id, u epizody
+    tmdb_id serialu spolu s cislem rady a dilu. Samotne tmdb_id na epizodu
+    nestaci - vsechny dily serialu ho maji stejne, takze by se slucovaly
+    navzajem. Viz komentar u `identita_polozky()`.
+
+    Postup je opatrny a v tomhle poradi:
+      1. stopy stare polozky smazeme - k novemu souboru stejne nepatri
+         a cizi klic by nam nedovolil zmenit id, dokud existuji,
+      2. historii prehravani prepiseme na nove id,
+      3. teprve pak zmenime id polozky - technicka data, datum pridani
+         a vsechno ostatni tim zustane zachovane.
+
+    Vraci pocet slouceni.
+    """
+    # Stara polozka = stejna identita, ale jine ItemId. Kdyz jich je vic
+    # (napr. film byl v knihovne dvakrat), bere se ta, ktera ma odsledovaneho
+    # nejvic - o tu prijit nechceme. Vyber resi `_stare_ke_slouceni()`.
+    dvojice = _stare_ke_slouceni(pairs, chranena or set(), videno_od)
+    if not dvojice:
+        return 0
+
+    merged = 0
+    with db.connect() as conn:
+        for old_id, new_id in dvojice.items():
+            # Kdyz uz nova polozka v databazi je, nesmime na ni stare id
+            # prepsat - vzniklo by duplicitni id. V tom pripade jen
+            # preneseme historii a starou polozku zahodime.
+            exists = conn.execute(
+                "SELECT 1 FROM items WHERE id = ?", (new_id,)
+            ).fetchone()
+
+            conn.execute("DELETE FROM item_streams WHERE item_id = ?", (old_id,))
+            conn.execute(
+                "UPDATE playback SET item_id = ? WHERE item_id = ?", (new_id, old_id)
+            )
+
+            if exists:
+                conn.execute("DELETE FROM items WHERE id = ?", (old_id,))
+            else:
+                conn.execute(
+                    "UPDATE items SET id = ?, is_missing = 0 WHERE id = ?",
+                    (new_id, old_id),
+                )
+
+            log.info("slouceno: %s -> %s", old_id, new_id)
+            merged += 1
+
+    return merged
+
+
+def _write_batch(
+    items: list[tuple[Any, ...]],
+    streams: list[tuple[str, list[dict[str, Any]]]],
+    tmdb_pairs: list[tuple[tuple[str, int, int], str]],
+    keep_existing_tech: bool,
+    videno_od: str | None = None,
+    chranena: set[str] | None = None,
+) -> None:
+    """Zapis jedne davky. Bezi ve vlakne, ne na smycce udalosti."""
+    # Slucovani musi byt PRED zapisem polozek. Kdyby se novy zaznam vlozil
+    # driv, mel by prazdnou historii a stara polozka by uz jen cekala na
+    # oznaceni "chybi" - presne to, cemu se chceme vyhnout.
+    #
+    # Polozky z teto davky jsou zjevne zive - Jellyfin je poslal pred
+    # chvili -, takze se do slucovani davaji jako chranene.
+    zive = set(chranena or set())
+    zive.update(str(radek[0]) for radek in items if radek[0])
+    _merge_by_tmdb(tmdb_pairs, chranena=zive, videno_od=videno_od)
+
+    if items:
+        _write_items(items, keep_existing_tech=keep_existing_tech)
+    # Stopy az po polozkach - odkazuji se na ne cizim klicem, takze
+    # polozka musi v databazi uz existovat.
+    for item_id, item_streams in streams:
+        save_streams(item_id, item_streams)
+
+
+def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
+    """Zapise davku polozek.
+
+    `keep_existing_tech` resi jemny, ale dulezity detail: kdyz je zdrojem
+    technickych dat ffprobe, nesmi nam bezna synchronizace knihovny prepsat
+    drive namerene hodnoty prazdnymi. COALESCE(?, sloupec) znamena
+    "vezmi novou hodnotu, a kdyz je NULL, nech puvodni".
+    """
+    if keep_existing_tech:
+        tech_update = """
+                    container       = COALESCE(excluded.container, items.container),
+                    video_codec     = COALESCE(excluded.video_codec, items.video_codec),
+                    audio_codec     = COALESCE(excluded.audio_codec, items.audio_codec),
+                    audio_channels  = COALESCE(excluded.audio_channels, items.audio_channels),
+                    width           = COALESCE(excluded.width, items.width),
+                    height          = COALESCE(excluded.height, items.height),
+                    bitrate         = COALESCE(excluded.bitrate, items.bitrate),
+                    size_bytes      = COALESCE(excluded.size_bytes, items.size_bytes),
+                    video_range     = COALESCE(excluded.video_range, items.video_range),
+                    audio_languages = COALESCE(excluded.audio_languages, items.audio_languages),
+                    subtitle_languages = COALESCE(excluded.subtitle_languages, items.subtitle_languages),
+                    default_audio_language = COALESCE(excluded.default_audio_language,
+                                                      items.default_audio_language),
+                    tech_source     = COALESCE(excluded.tech_source, items.tech_source),
+                    tech_updated_at = COALESCE(excluded.tech_updated_at, items.tech_updated_at),
+        """
+    else:
+        tech_update = """
+                    container       = excluded.container,
+                    video_codec     = excluded.video_codec,
+                    audio_codec     = excluded.audio_codec,
+                    audio_channels  = excluded.audio_channels,
+                    width           = excluded.width,
+                    height          = excluded.height,
+                    bitrate         = excluded.bitrate,
+                    size_bytes      = excluded.size_bytes,
+                    video_range     = excluded.video_range,
+                    audio_languages = excluded.audio_languages,
+                    subtitle_languages = excluded.subtitle_languages,
+                    default_audio_language = excluded.default_audio_language,
+                    tech_source     = excluded.tech_source,
+                    tech_updated_at = excluded.tech_updated_at,
+                    tech_error      = NULL,
+        """
+
+    sql = f"""
+        INSERT INTO items (
+            id, name, type, library_id, series_id, series_name, season_name,
+            index_number, parent_index_number, production_year, runtime_ticks,
+            date_created, path, tmdb_id, genres, container, video_codec, audio_codec,
+            audio_channels, width, height, bitrate, size_bytes, video_range,
+            audio_languages, subtitle_languages, default_audio_language,
+            tech_source, tech_updated_at, synced_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            type = excluded.type,
+            library_id = excluded.library_id,
+            series_id = excluded.series_id,
+            series_name = excluded.series_name,
+            genres = excluded.genres,
+            season_name = excluded.season_name,
+            index_number = excluded.index_number,
+            parent_index_number = excluded.parent_index_number,
+            production_year = excluded.production_year,
+            runtime_ticks = excluded.runtime_ticks,
+            date_created = excluded.date_created,
+            path = excluded.path,
+            -- COALESCE: kdyz Jellyfin tmdb_id zrovna neposle (nedohledane
+            -- metadata), nesmime uz ulozene prepsat na NULL - prisli bychom
+            -- o jedinou vec, podle ktere umime polozky slucovat.
+            tmdb_id = COALESCE(excluded.tmdb_id, items.tmdb_id),
+            {tech_update}
+            synced_at = excluded.synced_at,
+            is_missing = 0
+    """
+
+    with db.connect() as conn:
+        conn.executemany(sql, rows)
+
+
+def save_streams(item_id: str, streams: list[dict[str, Any]]) -> None:
+    """Prepise stopy jedne polozky.
+
+    Nejdriv smazat, pak vlozit. Kdybychom jen vkladali, zustaly by po
+    prekodovani souboru viset stopy, ktere uz v nem nejsou.
+    """
+    if not streams:
+        return
+
+    with db.connect() as conn:
+        conn.execute("DELETE FROM item_streams WHERE item_id = ?", (item_id,))
+        # ON CONFLICT ... DO UPDATE misto SQLite konstrukce INSERT OR REPLACE -
+        # rozumi mu SQLite i PostgreSQL. Navic je z nej videt, co presne se
+        # pri konfliktu stane, coz u "REPLACE" nikdy nebylo jasne.
+        conn.executemany(
+            """
+            INSERT INTO item_streams (
+                item_id, stream_index, type, codec, language, title,
+                channels, channel_layout, width, height, bitrate,
+                is_default, is_forced, is_external
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT (item_id, stream_index) DO UPDATE SET
+                type = excluded.type,
+                codec = excluded.codec,
+                language = excluded.language,
+                title = excluded.title,
+                channels = excluded.channels,
+                channel_layout = excluded.channel_layout,
+                width = excluded.width,
+                height = excluded.height,
+                bitrate = excluded.bitrate,
+                is_default = excluded.is_default,
+                is_forced = excluded.is_forced,
+                is_external = excluded.is_external
+            """,
+            [
+                (
+                    item_id, s.get("stream_index"), s.get("type"), s.get("codec"),
+                    s.get("language"), s.get("title"), s.get("channels"),
+                    s.get("channel_layout"), s.get("width"), s.get("height"),
+                    s.get("bitrate"), s.get("is_default", 0), s.get("is_forced", 0),
+                    s.get("is_external", 0),
+                )
+                for s in streams
+            ],
+        )
+
+
+def _mark_missing(started_at: str) -> None:
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE items SET is_missing = 1 WHERE synced_at < ?", (started_at,)
+        )
+
+
+def uklid_fantomu() -> int:
+    """Vyhodi z knihovny polozky druhu, ktery synchronizace nezna.
+
+    Naprava po chybe: `importers.zaloz_z_jellyfinu()` zakladala polozku
+    z ceho koliv, co Jellyfin vratil - vcetne celeho SERIALU, kdyz zaznam
+    historie visel na jeho id. Synchronizace se pta jen na filmy a dily,
+    takze takovou polozku nikdy neuvidela a `_mark_missing()` ji pri
+    kazdem behu poslala do archivu. V knihovne pak stal "archivovany"
+    serial, ktery v Jellyfinu je - a vedle nej ten spravny, poskladany
+    z dilu.
+
+    Smazat je spravne reseni, ne jen prepnout priznak: takova polozka
+    nikdy nemela vzniknout. Historie se tim neztraci - zaznamy zustavaji
+    a vrati se mezi osirele, coz je pravda o nich rikala uz predtim.
+
+    Vola se pri startu. Je to levny dotaz na indexovany sloupec a bezna
+    databaze nema co uklizet, takze se nic nezdrzi.
+    """
+    otazniky = ",".join("?" for _ in SPRAVOVANE_TYPY)
+    with db.connect() as conn:
+        fantomy = [str(r["id"]) for r in conn.execute(
+            f"SELECT id FROM items WHERE type NOT IN ({otazniky})",
+            tuple(SPRAVOVANE_TYPY)).fetchall()]
+        if not fantomy:
+            return 0
+        for zacatek in range(0, len(fantomy), 200):
+            davka = fantomy[zacatek:zacatek + 200]
+            znaky = ",".join("?" for _ in davka)
+            conn.execute(
+                f"DELETE FROM item_streams WHERE item_id IN ({znaky})", tuple(davka))
+            conn.execute(f"DELETE FROM items WHERE id IN ({znaky})", tuple(davka))
+
+    log.info("uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)",
+             len(fantomy))
+    return len(fantomy)
+
+
+# ---------------------------------------------------------------------------
+# 2. Technicka analyza pres ffprobe
+# ---------------------------------------------------------------------------
+
+async def run_tech_scan(only_missing: bool = True, limit: int = 0,
+                        item_ids: list[str] | None = None,
+                        library_id: str | None = None) -> dict[str, Any]:
+    """Projde polozky a doplni technicke udaje pomoci ffprobe.
+
+    `only_missing=True` znamena "jen ty, ktere jeste nemaji ffprobe data".
+    Diky tomu se dlouhy scan da poustet po castech a nezacina vzdy od nuly.
+
+    `item_ids` omezi beh na vyjmenovane polozky. Pouziva to rychla
+    synchronizace: nove pridany titul tak dostane technicka data hned,
+    misto aby na ne cekal az do dalsiho behu denni ulohy.
+
+    `library_id` omezi beh na jednu knihovnu - to pouziva tlacitko primo
+    u hlasky "nekolik souboru nema technicka data" na detailu knihovny.
+    """
+    if _scan_lock.locked():
+        return {"status": "busy", "message": "Jiná úloha už běží."}
+
+    async with _scan_lock:
+        _clear_stop()
+        settings = db.get_settings()
+        ffprobe_bin = probe.find_ffprobe(settings.get("ffprobe_path", ""))
+        if not ffprobe_bin:
+            return {
+                "status": "error",
+                "message": (
+                    "ffprobe se nepodařilo najít. Nainstaluj ffmpeg, nebo v Nastavení "
+                    "vyplň plnou cestu k ffprobe.exe."
+                ),
+            }
+
+        try:
+            mappings = json.loads(settings.get("path_mappings") or "[]")
+            if not isinstance(mappings, list):
+                mappings = []
+        except ValueError:
+            mappings = []
+
+        concurrency = db.get_int_setting("ffprobe_concurrency", 1, 16, 3)
+
+        where = "WHERE is_missing = 0 AND path IS NOT NULL AND path != ''"
+        if only_missing:
+            where += " AND (tech_source IS NULL OR tech_source != 'ffprobe')"
+
+        parametry: list[Any] = []
+        if library_id:
+            where += " AND library_id = ?"
+            parametry.append(library_id)
+
+        if item_ids is not None:
+            if not item_ids:
+                return {"status": "ok", "total": 0, "ok": 0, "failed": 0}
+            # Otazniky, ne slepeny seznam - id prichazi z odpovedi Jellyfinu
+            # a do SQL se hodnoty nikdy nevkladaji primo.
+            otazniky = ",".join("?" for _ in item_ids)
+            where += f" AND id IN ({otazniky})"
+            parametry.extend(item_ids)
+
+        sql = f"SELECT id, path FROM items {where} ORDER BY name"
+        if limit > 0:
+            sql += f" LIMIT {int(limit)}"
+
+        targets = db.query_all(sql, tuple(parametry))
+        scan_id = start_task_log("tech")
+
+        if not targets:
+            finish_task_log(scan_id, "done", message=_t("Není co analyzovat."))
+            return {"status": "ok", "total": 0, "ok": 0, "failed": 0}
+
+        # Semafor omezi, kolik ffprobe procesu bezi soucasne. Bez nej by se
+        # u velke knihovny spustily tisice procesu naraz a stroj by stal.
+        _start_progress("tech", len(targets))
+        semaphore = asyncio.Semaphore(concurrency)
+        results = {"ok": 0, "failed": 0, "skipped": 0}
+        results_lock = asyncio.Lock()
+
+        async def analyse(row: dict[str, Any]) -> None:
+            async with semaphore:
+                # Kontrola az tady, za semaforem: uloh je nachystano tolik,
+                # kolik je souboru, ale soucasne jich bezi jen par. Ty
+                # cekajici se po zastaveni jen tise preskoci, zatimco
+                # rozpracovane doprobihaji. Zadny soubor tak neskonci
+                # analyzovany napul.
+                if stop_requested():
+                    async with results_lock:
+                        results["skipped"] += 1
+                    return
+
+                # Jeden soubor = jeden krok. Drive se `_add_progress(1)`
+                # volalo na trech mistech uvnitr teto funkce (po prevzeti
+                # semaforu, po analyze a po zapisu), takze hotovy soubor
+                # posunul ukazatel o tri - a ten pak ukazoval treba 135 %.
+                # `finally` navic zajisti, ze se krok zapocita i u souboru,
+                # ktery skoncil chybou.
+                try:
+                    local_path = probe.apply_path_mappings(row["path"], mappings)
+                    try:
+                        tech = await probe.probe_file(local_path, ffprobe_bin)
+                    except probe.ProbeError as exc:
+                        await asyncio.to_thread(_save_tech_error, row["id"], str(exc))
+                        async with results_lock:
+                            results["failed"] += 1
+                        return
+
+                    # Take zapis do vlakna - u velke knihovny je tenhle blok
+                    # v jedne smycce tisickrat a kazdy zapis by jinak na chvili
+                    # zastavil obsluhu webu.
+                    await asyncio.to_thread(_save_probe_result, row["id"], tech)
+                    async with results_lock:
+                        results["ok"] += 1
+                finally:
+                    _add_progress(1)
+
+        await asyncio.gather(*(analyse(row) for row in targets))
+        _clear_progress()
+
+        if results["skipped"]:
+            finish_task_log(
+                scan_id, "stopped",
+                total=len(targets), ok=results["ok"], failed=results["failed"],
+                message=(f"Zastaveno na tvůj pokyn. Zbylo {results['skipped']} souborů - "
+                         f"příští analýza na ně naváže. ffprobe: {ffprobe_bin}"),
+            )
+            return {"status": "stopped", "total": len(targets), **results}
+
+        finish_task_log(
+            scan_id, "done",
+            total=len(targets), ok=results["ok"], failed=results["failed"],
+            message=f"ffprobe: {ffprobe_bin}",
+        )
+        return {"status": "ok", "total": len(targets), **results}
+
+
+def _save_probe_result(item_id: str, tech: dict[str, Any]) -> None:
+    """Uloží výsledek jedné analýzy. Běží ve vlákně."""
+    _save_tech(item_id, tech)
+    save_streams(item_id, tech.get("streams") or [])
+
+
+def _save_tech(item_id: str, tech: dict[str, Any]) -> None:
+    with db.connect() as conn:
+        conn.execute(
+            """
+            UPDATE items
+               SET container = ?, video_codec = ?, audio_codec = ?, audio_channels = ?,
+                   width = ?, height = ?, bitrate = ?, size_bytes = ?, video_range = ?,
+                   audio_languages = ?, subtitle_languages = ?, default_audio_language = ?,
+                   tech_source = 'ffprobe', tech_updated_at = ?, tech_error = NULL
+             WHERE id = ?
+            """,
+            (
+                tech.get("container"), tech.get("video_codec"), tech.get("audio_codec"),
+                tech.get("audio_channels"), tech.get("width"), tech.get("height"),
+                tech.get("bitrate"), tech.get("size_bytes"), tech.get("video_range"),
+                tech.get("audio_languages"), tech.get("subtitle_languages"),
+                tech.get("default_audio_language"),
+                db.utcnow(), item_id,
+            ),
+        )
+
+
+def _save_tech_error(item_id: str, message: str) -> None:
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE items SET tech_error = ?, tech_updated_at = ? WHERE id = ?",
+            (message[:300], db.utcnow(), item_id),
+        )
+
+
+# Planovani techto uloh uz neni tady, ale v tasks.py - spolecne pro vsechny
+# naplanovane cinnosti. Tenhle soubor umi ulohy udelat; kdy se maji delat,
+# rozhoduje nekdo jiny. Je to same rozdeleni jako "co" versus "kdy" u budiku.

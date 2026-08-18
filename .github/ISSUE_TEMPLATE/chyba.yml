@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# Bug report. The fields are the ones that otherwise cost a round trip:
+# which database, which Python, which Jellyfin - the same bug behaves
+# differently on SQLite and PostgreSQL, and half of the reports are really
+# about the connection to Jellyfin.
+# ---------------------------------------------------------------------------
+name: Bug report
+description: Something does not work the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. **Do not report security problems here** —
+        issues are public from the second you press the button. See
+        [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: co-se-deje
+    attributes:
+      label: What happens
+      description: And what you expected instead.
+      placeholder: |
+        The library page shows 22 more episodes than Jellyfin does.
+        I expected the two numbers to match.
+    validations:
+      required: true
+
+  - type: textarea
+    id: postup
+    attributes:
+      label: How to get there
+      description: The steps that lead to it. A screenshot helps.
+      placeholder: |
+        1. Settings -> Scheduled tasks -> run Library sync
+        2. Open Library
+        3. Compare with the count in Jellyfin
+    validations:
+      required: true
+
+  - type: input
+    id: verze
+    attributes:
+      label: Version
+      description: The commit you are on — `git rev-parse --short HEAD`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: databaze
+    attributes:
+      label: Database
+      options:
+        - SQLite (the default)
+        - PostgreSQL
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python and system
+      placeholder: "3.11 on Debian 12 / 3.13 on Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: jellyfin
+    attributes:
+      label: Jellyfin version
+      placeholder: "10.10.3"
+
+  - type: textarea
+    id: log
+    attributes:
+      label: From the log
+      description: >
+        Settings → Application log, or `data/logs/jellyscope.log`. Secrets
+        are masked there already, but do give it a glance before pasting.
+      render: text

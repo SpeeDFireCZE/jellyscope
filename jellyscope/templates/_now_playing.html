@@ -1,0 +1,112 @@
+{# Karta "Právě se hraje".
+
+   Vlastní soubor, protože se obnovuje sama - viz /partials/now-playing.
+   Vykresluje ji server, stejnou šablonou jako při běžném načtení Přehledu;
+   kreslit ji podruhé v JavaScriptu by znamenalo dvě místa, která se časem
+   rozejdou. #}
+{% from "_macros.html" import method_badge %}
+<div class="page-head" style="margin-bottom:14px">
+    <div>
+        <h1>{{ _("Právě se hraje") }}</h1>
+        <p class="subtitle">
+            {% if active %}
+                {{ active | length }} {{ _("aktivních přehrávání") }}
+            {% else %}
+                {{ _("Nikdo právě nic nesleduje.") }}
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+{% if active %}
+<div class="sessions">
+    {% for row in active %}
+    <div class="session">
+        <a class="session-poster" href="/item/{{ row.item_id }}">
+            <img src="/image/{{ row.poster_id }}?kind=Primary&w=200" alt=""
+                 loading="lazy" onerror="this.style.display='none'">
+        </a>
+
+        <div class="session-body">
+            <div class="session-title">
+                <a href="/item/{{ row.item_id }}">
+                    {% if row.series_name %}
+                        <span class="muted">{{ row.series_name }}</span><br>
+                    {% endif %}
+                    {% if row.parent_index_number and row.index_number %}
+                        <span class="muted">S{{ '%02d' | format(row.parent_index_number) }}E{{ '%02d' | format(row.index_number) }}</span>
+                    {% endif %}
+                    {{ row.item_name }}
+                </a>
+            </div>
+
+            {# Kdo, na čem, jak - tři údaje, kvůli kterým se sem člověk dívá. #}
+            <div class="session-facts">
+                <span><a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a></span>
+                <span class="muted">{{ row.device_name or '?' }}</span>
+                {% if row.client %}<span class="muted">{{ row.client }}</span>{% endif %}
+            </div>
+
+            <div class="session-tags">
+                {# Běží, nebo je pozastavené? První údaj na řádku, protože
+                   mění význam všech ostatních. #}
+                {% if row.is_paused %}
+                    <span class="badge warning"><span class="dot"></span>{{ _("pozastaveno") }}</span>
+                {% else %}
+                    <span class="badge good"><span class="dot"></span>{{ _("hraje") }}</span>
+                {% endif %}
+
+                {{ method_badge(row.play_method) }}
+
+                {# Záměrně `current_*`, ne `audio_language`. Ten druhý drží
+                   jazyk, se kterým se začalo (patří do statistik); tady
+                   ale chceme skutečnost - když si divák v půlce filmu
+                   přepne stopu nebo vypne titulky, musí to být vidět. #}
+                {% if row.current_audio_language %}
+                    <span class="badge neutral"><span class="dot"></span>{{ lang.display(row.current_audio_language) }}</span>
+                {% endif %}
+                {% if row.current_subtitle_language %}
+                    <span class="badge neutral"><span class="dot"></span>{{ _("titulky") }} {{ row.current_subtitle_language | upper }}</span>
+                {% endif %}
+                {% if row.height %}
+                    <span class="badge neutral"><span class="dot"></span>{{ row.height | resolution(row.width) }}</span>
+                {% endif %}
+                {% if row.video_codec %}
+                    <span class="badge neutral"><span class="dot"></span>{{ row.video_codec | upper }}</span>
+                {% endif %}
+                {% if row.bitrate %}
+                    <span class="badge neutral"><span class="dot"></span>{{ row.bitrate | bitrate }}</span>
+                {% endif %}
+            </div>
+
+            {# Důvod přepočtu hlásí Jellyfin - je to nejužitečnější údaj
+               na celé kartě, když chceš vědět, proč server topí. #}
+            {% if row.play_method == 'Transcode' and row.transcode_reasons %}
+                <p class="session-reason">{{ _("Důvod") }}: {{ row.transcode_reasons }}</p>
+            {% endif %}
+
+            {# Postup přehrávání. Čas je ve tvaru jako v přehrávači
+               (1:17:04), aby šel porovnat s tím, co má divák na obrazovce.
+               Překresluje se s celou kartou, tedy v rytmu collectoru. #}
+            {% if row.progress is not none %}
+            <div class="session-progress"
+                 data-tip="{{ _("Zbývá") }} {{ row.remaining_seconds | timecode }}">
+                <div class="session-bar"><i style="width: {{ row.progress }}%"></i></div>
+                <span class="session-time">
+                    {{ row.position_seconds | timecode }}
+                    <span class="muted">/ {{ row.runtime_seconds | timecode }}</span>
+                    <span class="muted">&middot; {{ _("zbývá") }} {{ row.remaining_seconds | timecode }}</span>
+                </span>
+            </div>
+            {% else %}
+            <div class="session-progress">
+                <span class="session-time muted">
+                    {{ _("Běží") }} {{ row.watched_seconds | seconds }}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

@@ -1,0 +1,1300 @@
+{% extends "base.html" %}
+{% from "_macros.html" import running_task %}
+{% block title %}{{ _("Nastavení") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Nastavení") }}</h1>
+    </div>
+    {% if account.is_admin %}
+    {# Záměrně "Restartovat Jellyscope", ne jen "Restartovat" - u aplikace,
+       která je celá o Jellyfinu, by kratší popisek svedl k obavě, že se
+       restartuje mediální server. Restartuje se jen tenhle proces. #}
+    <form method="post" action="/settings/restart"
+          onsubmit="return confirm('{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}')">
+        <button class="btn" type="submit"
+                title="{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}">
+            &#8635; {{ _("Restartovat Jellyscope") }}
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{# Rozcestník sekcí. Každá má vlastní adresu, takže funguje zpětné
+   tlačítko i posílání odkazu - a načítá se jen to, co je vidět. #}
+<div class="tabs">
+    {% if account.is_admin %}
+        <a href="/settings?section=jellyfin" class="{{ 'active' if section == 'jellyfin' }}">Jellyfin</a>
+        <a href="/settings?section=data"     class="{{ 'active' if section == 'data' }}">{{ _("Sběr dat") }}</a>
+        <a href="/settings?section=tasks"    class="{{ 'active' if section == 'tasks' }}">{{ _("Úlohy a zálohy") }}</a>
+        <a href="/settings?section=import"   class="{{ 'active' if section == 'import' }}">{{ _("Import historie") }}</a>
+        <a href="/settings?section=database" class="{{ 'active' if section == 'database' }}">{{ _("Databáze") }}</a>
+    {% endif %}
+    <a href="/settings?section=accounts" class="{{ 'active' if section == 'accounts' }}">{{ _("Účty") }}</a>
+    {% if account.is_admin %}
+        <a href="/settings?section=blocks"  class="{{ 'active' if section == 'blocks' }}">{{ _("Blokace") }}</a>
+        <a href="/settings?section=log"     class="{{ 'active' if section == 'log' }}">{{ _("Log") }}</a>
+        <a href="/settings?section=general" class="{{ 'active' if section == 'general' }}">{{ _("Obecné") }}</a>
+    {% endif %}
+</div>
+
+{% if not account.is_admin %}
+<div class="flash info">
+    <span class="dot"></span>
+    <span>{{ _("Tvůj účet vidí statistiky, ale nastavení měnit nemůže. Heslo si změníš níže.") }}</span>
+</div>
+{% endif %}
+
+
+{# ================================================================== #}
+{% if section == 'jellyfin' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Připojení k Jellyfinu") }}</h2>
+    </div>
+
+    <form method="post" action="/settings/connection">
+        <div class="field">
+            <label for="jellyfin_url">{{ _("Adresa serveru") }}</label>
+            <input type="text" id="jellyfin_url" name="jellyfin_url"
+                   value="{{ jellyfin_url }}" placeholder="http://localhost:8096">
+        </div>
+
+        <div class="field">
+            <label for="jellyfin_api_key">{{ _("API klíč") }}</label>
+            {# Klíč se do stránky nikdy nevypisuje - jen se pozná, jestli
+               nějaký je. Prázdné pole znamená "nech ten stávající". #}
+            <input type="password" id="jellyfin_api_key" name="jellyfin_api_key"
+                   autocomplete="off"
+                   placeholder="{{ '••••••••••••' if has_api_key else '' }}">
+            <p class="hint">
+                {{ _("Jellyfin → Ovládací panel → Rozšířené → Klíče API → \"+\"") }}<br>
+                {% if has_api_key %}{{ _("Nech prázdné, pokud klíč měnit nechceš.") }}{% endif %}
+            </p>
+        </div>
+
+        {# Obě tlačítka patří do TOHOTO formuláře, aby pracovala s tím,
+           co je vyplněné. Test byl dřív samostatný formulář vedle - nic
+           neposílal, takže testoval uložené nastavení místo vyplněného
+           a odesláním navíc zahodil, co jsi napsal. #}
+        <div class="btn-row">
+            <button class="btn primary" type="submit" name="action" value="save">
+                {{ _("Uložit připojení") }}
+            </button>
+            <button class="btn" type="submit" name="action" value="test">
+                {{ _("Otestovat spojení") }}
+            </button>
+        </div>
+    </form>
+
+    <div class="btn-row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+        {# Synchronizace pracuje s uloženým nastavením, ne s formulářem -
+           proto zůstává zvlášť. #}
+        <form method="post" action="/settings/sync">
+            <button class="btn" type="submit" {{ 'disabled' if scan_running }}>
+                {{ _("Synchronizovat knihovnu") }}
+            </button>
+        </form>
+    </div>
+
+    {% if jellyfin_draft %}
+    <div class="flash info" style="margin-top:14px">
+        <span class="dot"></span>
+        <span>{{ _("Vyplněné údaje ještě nejsou uložené. API klíč si pamatuju, takže stačí kliknout na Uložit připojení.") }}</span>
+    </div>
+    {% endif %}
+
+    {% if last_library_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Poslední synchronizace") }}: {{ last_library_scan.started_at | relative }}
+        &middot; {{ _("stav") }}: {{ last_library_scan.status }}
+        {% if last_library_scan.message %}<br>{{ last_library_scan.message }}{% endif %}
+    </p>
+    {% endif %}
+
+    {{ running_task(scan_running, stop_pending, 'jellyfin') }}
+</div>
+
+
+{# ================================================================== #}
+{% elif section == 'data' %}
+{# ================================================================== #}
+<form method="post" action="/settings">
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Zdroj technických dat") }}</h2>
+        <p class="card-note">{{ _("odkud brát kodeky, bitrate a velikosti") }}</p>
+    </div>
+
+    {# Tohle není přepínač "Jellyfin nebo ffprobe" pro celou aplikaci -
+       týká se jen technických údajů o souborech. Statistiky přehrávání
+       chodí z Jellyfinu vždycky, jinou možnost ani nemají. Dřív to z názvů
+       voleb nebylo vidět a vypadalo to, že přepnutím na ffprobe o statistiky
+       přijdeš. #}
+    <div class="flash info" style="margin-bottom:14px">
+        <span class="dot"></span>
+        <span>{{ _("Volba se týká jen údajů o souborech (kodek, rozlišení, velikost). Kdo se na co dívá, se čte z Jellyfinu vždycky – na tom tahle volba nic nemění.") }}</span>
+    </div>
+
+    <div class="radio-set">
+        <label class="radio-card">
+            <input type="radio" name="tech_source" value="jellyfin"
+                   {{ 'checked' if settings.tech_source == 'jellyfin' }}>
+            <span>
+                <span class="title">{{ _("Jen Jellyfin API") }}</span>
+                <span class="desc">
+                    {{ _("Údaje o souborech přebíráme od Jellyfinu. Funguje vždy a hned, nepotřebuje přístup k souborům ani ffmpeg. Některé údaje ale Jellyfin nehlásí vůbec, nebo jen odhadem.") }}
+                </span>
+            </span>
+        </label>
+
+        <label class="radio-card">
+            <input type="radio" name="tech_source" value="ffprobe"
+                   {{ 'checked' if settings.tech_source == 'ffprobe' }}>
+            <span>
+                <span class="title">{{ _("ffprobe + Jellyfin") }}</span>
+                <span class="desc">
+                    {{ _("Soubory čteme přímo z disku přes ffprobe – přesné údaje včetně skutečné velikosti, HDR a počtu zvukových kanálů. Seznam titulů, uživatelé a statistiky přehrávání jdou dál z Jellyfinu. Potřebuje nainstalovaný ffmpeg a přístup k souborům.") }}
+                    {% if ffprobe_found %}
+                        <br><span class="badge good"><span class="dot"></span>{{ _("ffprobe nalezen") }}</span>
+                        <code style="font-size:12px">{{ ffprobe_found }}</code>
+                    {% else %}
+                        <br><span class="badge critical"><span class="dot"></span>{{ _("ffprobe nenalezen") }}</span>
+                    {% endif %}
+                </span>
+            </span>
+        </label>
+    </div>
+
+    <div class="field" style="margin-top:18px">
+        <label for="ffprobe_path">{{ _("Cesta k ffprobe") }}</label>
+        <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ settings.ffprobe_path }}"
+               placeholder="/usr/bin/ffprobe">
+        <p class="hint">{{ _("Nech prázdné, pokud je ffprobe dostupný v systémové PATH.") }}</p>
+    </div>
+
+    <div class="field">
+        <label for="ffprobe_concurrency">{{ _("Kolik souborů analyzovat naráz") }}</label>
+        <input type="number" id="ffprobe_concurrency" name="ffprobe_concurrency"
+               value="{{ settings.ffprobe_concurrency }}" min="1" max="16">
+        <p class="hint">
+            {{ _("Vyšší číslo = rychlejší scan, ale větší zátěž disku. Při síťovém úložišti nech nízko (2–3).") }}
+        </p>
+    </div>
+
+    <div class="field">
+        <label for="path_mappings">{{ _("Přepis cest") }}</label>
+        <textarea id="path_mappings" name="path_mappings">{{ settings.path_mappings }}</textarea>
+        <p class="hint">
+            {{ _("Potřebné jen tehdy, když Jellyfin vidí soubory na jiné cestě než Jellyscope (typicky při běhu v Dockeru). Formát JSON, například:") }}<br>
+            <code>[{"from": "/media", "to": "/mnt/media"}]</code><br>
+            {{ _("Když obě aplikace běží na stejném stroji, nech") }} <code>[]</code>.
+        </p>
+    </div>
+
+    <div class="field">
+        <label for="poll_interval">{{ _("Jak často se ptát, co se hraje (sekundy)") }}</label>
+        <input type="number" id="poll_interval" name="poll_interval"
+               value="{{ settings.poll_interval }}" min="2" max="300">
+        <p class="hint">
+            {{ _("Nižší číslo = přesnější měření délky přehrávání, víc dotazů na server. Deset sekund je dobrý kompromis.") }}
+        </p>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit nastavení") }}</button>
+    </div>
+</div>
+</form>
+
+
+
+{# ================================================================== #}
+{% elif section == 'tasks' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Naplánované úlohy") }}</h2>
+        <p class="card-note">{{ _("běží samy, ale spustit je můžeš kdykoliv ručně") }}</p>
+    </div>
+
+    {# Zastavení patří nad tabulku: když úloha běží v nevhodnou chvíli,
+       je to první věc, kterou tu člověk hledá. #}
+    {{ running_task(scan_running, stop_pending, 'tasks') }}
+
+    {% if not scan_running and last_library_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {% if last_library_scan %}
+            {{ _("Knihovna") }}: {{ last_library_scan.started_at | relative }}
+            &middot; {{ last_library_scan.status }}
+            {% if last_library_scan.status == 'stopped' and last_library_scan.message %}
+                <br>{{ last_library_scan.message }}
+            {% endif %}
+        {% endif %}
+    </p>
+    {% endif %}
+
+    <form method="post" action="/settings/tasks">
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Úloha") }}</th><th>{{ _("Automaticky") }}</th>
+                <th class="num">{{ _("Kdy") }}</th>
+                <th>{{ _("Naposledy") }}</th><th>{{ _("Další běh") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in task_list %}
+            <tr>
+                <td>
+                    <div class="strong">{{ _(row.task.name) }}</div>
+                    <div class="card-note">{{ _(row.task.description) }}</div>
+                </td>
+                <td>
+                    {# Zaškrtávátko = zapnuto/vypnuto. Když je vypnuté,
+                       úloha se sama nikdy nespustí - jen ručně. #}
+                    <label style="display:flex; align-items:center; gap:7px; cursor:pointer">
+                        <input type="checkbox" name="enabled_{{ row.task.key }}" value="1"
+                               {{ 'checked' if row.enabled }}>
+                        <span>{{ _("zapnuto") if row.enabled else _("vypnuto") }}</span>
+                    </label>
+                </td>
+                {# Noční úlohy se zadávají časem, ne intervalem. Interval
+                   se počítá od posledního běhu, takže by každé ruční
+                   spuštění celý rozvrh posunulo - a úloha by se časem
+                   protočila do odpoledne.
+
+                   Dvě číselná pole, ne `<input type="time">` ani dva
+                   `<select>`. Obojí si totiž otevírá vlastní vyskakovací
+                   okno, které kreslí prohlížeč: CSS na něj nedosáhne
+                   a směr, kterým se rozbalí, si řídí sám podle místa na
+                   obrazovce - u spodního řádku tabulky vyjelo nahoru.
+                   Takhle se nic neotevírá a pole vypadá stejně jako
+                   sousední pole s minutami. #}
+                <td class="num">
+                    {% if row.daily %}
+                    <div class="time-picker">
+                        <input type="number" name="time_{{ row.task.key }}_h"
+                               value="{{ row.hodina }}" min="0" max="23"
+                               aria-label="{{ _('Hodina') }}">
+                        <span aria-hidden="true">:</span>
+                        <input type="number" name="time_{{ row.task.key }}_m"
+                               value="{{ row.minuta }}" min="0" max="59"
+                               aria-label="{{ _('Minuta') }}">
+                    </div>
+                    <div class="card-note">{{ _("každý den") }}</div>
+                    {% else %}
+                    {# Stejná šířka jako pole s časem, ať mají všechny
+                       řádky stejně široký sloupec a lícují u sebe. #}
+                    <input type="number" name="minutes_{{ row.task.key }}"
+                           value="{{ row.minutes }}" min="0" max="10080"
+                           style="width:110px" aria-label="{{ _('Interval') }}">
+                    <div class="card-note">{{ _("minut") }}</div>
+                    {% endif %}
+                </td>
+                <td class="nowrap">
+                    {% if row.last %}
+                        {{ row.last.started_at | relative }}
+                        {% if row.last.status == 'error' %}
+                            <span class="badge critical"><span class="dot"></span>{{ _("selhalo") }}</span>
+                        {% elif row.last.status == 'running' %}
+                            <span class="badge warning"><span class="dot"></span>{{ _("běží") }}</span>
+                        {% else %}
+                            <span class="badge good"><span class="dot"></span>{{ _("hotovo") }}</span>
+                        {% endif %}
+                        {% if row.last.message %}
+                            <div class="card-note truncate" title="{{ row.last.message }}">
+                                {{ _(row.last.message) }}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span class="muted">{{ _("nikdy") }}</span>
+                    {% endif %}
+                </td>
+                <td class="nowrap muted">
+                    {% if not row.enabled %}
+                        {{ _("vypnuto") }}
+                    {% elif row.due_in is none or row.due_in <= 0 %}
+                        {{ _("při další kontrole") }}
+                    {% elif row.daily %}
+                        {{ _("dnes") if row.next_is_today else _("zítra") }}
+                        {{ _("v") }} {{ row.time }}
+                    {% elif row.due_in < 60 %}
+                        {{ _("za") }} {{ row.due_in | round | int }} min
+                    {% else %}
+                        {{ _("za") }} {{ (row.due_in / 60) | round(1) }} h
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="field" style="margin-top:18px">
+        <label for="backup_path">{{ _("Složka pro zálohy databáze") }}</label>
+        <input type="text" id="backup_path" name="backup_path"
+               value="{{ settings.backup_path }}" placeholder="/var/backups/jellyscope">
+        <p class="hint">
+            {{ _("Nech prázdné, dokud zálohy nechceš. Složka se v případě potřeby vytvoří.") }}
+            {% if backup_free %}{{ _("Volné místo") }}: {{ backup_free | bytes }}.{% endif %}
+        </p>
+    </div>
+
+    <div class="field">
+        <label for="backup_keep">{{ _("Kolik záloh nechat") }}</label>
+        <input type="number" id="backup_keep" name="backup_keep"
+               value="{{ settings.backup_keep }}" min="1" max="365">
+        <p class="hint">{{ _("Starší se při každé záloze smažou, aby složka nerostla donekonečna.") }}</p>
+    </div>
+
+    {# Jen u PostgreSQL - SQLite se zálohuje vestavěnou funkcí a žádný
+       vnější nástroj nepotřebuje. #}
+    {% if pg_server %}
+    <div class="field">
+        <label for="pg_dump_path">{{ _("Cesta k pg_dump") }}</label>
+        <input type="text" id="pg_dump_path" name="pg_dump_path"
+               value="{{ settings.pg_dump_path }}"
+               placeholder="/usr/lib/postgresql/{{ pg_server }}/bin/pg_dump">
+        <p class="hint">
+            {{ _("Nech prázdné, pokud si nemá Jellyscope vybírat sám.") }}
+            {{ _("Server má verzi") }} <strong>{{ pg_server }}</strong>.
+            {% if pg_dumps %}
+                {{ _("Nalezené nástroje") }}:
+                {% for verze, cesta in pg_dumps %}
+                    <br><code>{{ cesta }}</code>
+                    &middot; {{ _("verze") }} {{ verze }}
+                    {%- if verze < pg_server %}
+                        &middot; <span class="badge critical"><span class="dot"></span>{{ _("na tenhle server nestačí") }}</span>
+                    {%- endif %}
+                {% endfor %}
+                {% if pg_dumps[0][0] < pg_server %}
+                <br>{{ _("Žádný z nich server nezvládne – pg_dump umí zálohovat jen server stejné nebo starší verze. Doinstaluj klienta:") }}
+                <br><code>sudo apt install -y postgresql-client-{{ pg_server }}</code>
+                {% endif %}
+            {% else %}
+                <br><span class="badge critical"><span class="dot"></span>{{ _("pg_dump se nenašel") }}</span>
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit úlohy") }}</button>
+    </div>
+    </form>
+
+    <div class="btn-row" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)">
+        <span class="card-note">{{ _("Spustit hned") }}:</span>
+        {% for row in task_list %}
+        <form method="post" action="/settings/tasks/run">
+            <input type="hidden" name="key" value="{{ row.task.key }}">
+            <button class="btn" type="submit">{{ _(row.task.name) }}</button>
+        </form>
+        {% endfor %}
+    </div>
+
+    {% if backups %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Existující zálohy") }}</th><th class="num">{{ _("Velikost") }}</th>
+                <th class="num">{{ _("Vytvořena") }}</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for row in backups %}
+            <tr>
+                <td><code style="font-size:12px">{{ row.name }}</code></td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td class="num muted">{{ row.created_at | relative }}</td>
+                <td class="num">
+                    <div class="btn-row" style="justify-content:flex-end">
+                        <a class="btn" href="/settings/backup/download?name={{ row.name | urlencode }}">
+                            {{ _("Stáhnout") }}
+                        </a>
+                        {# Obnova přepíše všechno, co je v databázi teď.
+                           Proto důrazné potvrzení - a proto si Jellyscope
+                           napřed uloží současný stav, viz restore_backup(). #}
+                        <form method="post" action="/settings/backup/restore"
+                              onsubmit="return confirm('{{ _("Obnovit databázi ze zálohy") }} {{ row.name }}?\n\n{{ _("Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje.") }}')">
+                            <input type="hidden" name="name" value="{{ row.name }}">
+                            <button class="btn" type="submit">{{ _("Obnovit") }}</button>
+                        </form>
+                        {# Potvrzení je tu schválně: smazaná záloha se nedá
+                           vrátit a řádky jsou si na pohled podobné. #}
+                        <form method="post" action="/settings/backup/delete"
+                              onsubmit="return confirm('{{ _("Opravdu smazat zálohu") }} {{ row.name }}?')">
+                            <input type="hidden" name="name" value="{{ row.name }}">
+                            <button class="btn" type="submit">{{ _("Smazat") }}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Analýza souborů") }}</h2>
+        <p class="card-note">
+            {{ coverage.from_ffprobe | number }} / {{ coverage.total | number }}
+            {{ _("položek změřeno") }}
+        </p>
+    </div>
+
+    {% if settings.tech_source != 'ffprobe' %}
+        <p class="card-note">
+            {{ _("Zdroj technických dat je nastavený na Jellyfin. Chceš-li měřit soubory přímo, přepni ve Sběru dat volbu na \"ffprobe + Jellyfin\" a ulož nastavení.") }}
+        </p>
+    {% else %}
+        {# Ať je jasné, že tlačítka níž jsou na výjimečné situace, ne na
+           běžný provoz - o ten se stará synchronizace sama. #}
+        <p class="card-note">
+            {{ _("Samo se to děje po každé synchronizaci knihovny a u nově přidaných titulů. Tlačítka níž jsou na to, když nechceš čekat – nebo když potřebuješ přeměřit i soubory, které už změřené jsou (třeba po výměně souboru na stejném místě).") }}
+        </p>
+    {% endif %}
+
+    <div class="btn-row" style="margin-top:12px">
+        <form method="post" action="/settings/scan">
+            <input type="hidden" name="mode" value="missing">
+            <button class="btn primary" type="submit"
+                    {{ 'disabled' if scan_running or settings.tech_source != 'ffprobe' }}>
+                {{ _("Analyzovat chybějící") }}
+            </button>
+        </form>
+        <form method="post" action="/settings/scan">
+            <input type="hidden" name="mode" value="all">
+            <button class="btn" type="submit"
+                    {{ 'disabled' if scan_running or settings.tech_source != 'ffprobe' }}>
+                {{ _("Analyzovat vše znovu") }}
+            </button>
+        </form>
+    </div>
+
+    {% if last_tech_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Poslední analýza") }}: {{ last_tech_scan.started_at | relative }}
+        &middot; {{ _("stav") }}: {{ last_tech_scan.status }}
+        &middot; {{ _("hotovo") }} {{ last_tech_scan.items_ok | number }},
+        {{ _("selhalo") }} {{ last_tech_scan.items_failed | number }}
+        {% if last_tech_scan.message %}<br>{{ last_tech_scan.message }}{% endif %}
+    </p>
+    {% endif %}
+
+</div>
+
+
+{# ================================================================== #}
+{% elif section == 'import' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Import historie") }}</h2>
+        <p class="card-note">{{ _("převzetí dat z jiného nástroje") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("Jellyscope zaznamenává přehrávání až od chvíle, kdy běží. Když už historii někde máš, dá se převzít. Import je možné spustit opakovaně – už naimportované záznamy se nezdvojí. Klidně použij oba zdroje i období, které už Jellyscope sám nasbíral: co v databázi je, se pozná podle uživatele, titulu a času a naimportuje se jen zbytek.") }}
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:20px">
+        <table>
+            <tbody>
+            <tr><td>{{ _("Vlastních záznamů") }}</td>
+                <td class="num strong">{{ import_stats.own | number }}</td></tr>
+            <tr><td>{{ _("Z Playback Reporting") }}</td>
+                <td class="num strong">{{ import_stats.playback_reporting | number }}</td></tr>
+            <tr><td>{{ _("Z Jellystatu") }}</td>
+                <td class="num strong">{{ import_stats.jellystat | number }}</td></tr>
+            <tr><td>{{ _("Nejstarší záznam") }}</td>
+                <td class="num muted">{{ import_stats.oldest | datetime }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>{{ _("Playback Reporting (plugin Jellyfinu)") }}</h3>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("Data se berou přímo přes Jellyfin, takže nemusíš nikam nahrávat žádný soubor. Plugin najdeš v Jellyfinu: Ovládací panel → Pluginy → Katalog.") }}
+    </p>
+    <form method="post" action="/settings/import/playback-reporting" class="btn-row">
+        <label class="card-note">{{ _("Ignorovat přehrávání kratší než") }}</label>
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <span class="card-note">{{ _("sekund") }}</span>
+        <button class="btn primary" type="submit">{{ _("Importovat") }}</button>
+    </form>
+    <form method="post" action="/settings/import/detect" style="margin-top:8px">
+        <button class="btn" type="submit">{{ _("Zjistit, jestli je plugin dostupný") }}</button>
+    </form>
+
+    {# Záloha pro případ, kdy plugin přes API nefunguje. Stává se to
+       u nesouladu verzí: plugin přeložený proti staršímu Jellyfinu spadne
+       dřív, než se dostane ke svým datům, a vrátí jen chybu 500. Data má
+       přitom v obyčejném souboru, který se dá zkopírovat. #}
+    {# Rozbalovátko je záměrně odlišené od okolních poznámek - je to
+       nabídka další cesty, ne vysvětlivka k té první. V šedi poznámek
+       splývalo a nikdo si ho nevšiml. #}
+    <details class="fallback" style="margin-top:14px">
+        <summary>
+            {{ _("Nefunguje import přes API? Nahraj zálohu z pluginu") }}
+        </summary>
+        <p class="card-note" style="margin:10px 0">
+            {{ _("Plugin si umí zálohu vyrobit sám a uloží ji jako soubor TSV. V Jellyfinu jdi na:") }}
+        </p>
+        <p class="card-note" style="margin-bottom:10px">
+            <code>{{ _("Ovládací panel → Playback Reporting → Backup → Save backup") }}</code>
+        </p>
+        <p class="card-note" style="margin-bottom:10px">
+            {{ _("Soubor pak nahraj sem – obejde to rozbité API a do Jellyfinu se přitom vůbec nesahá, čte se jen tvoje kopie.") }}
+        </p>
+        <form method="post" action="/settings/import/playback-reporting-file"
+              enctype="multipart/form-data" class="btn-row">
+            {# Vlastní tlačítko místo holého `type="file"`. Text uvnitř nativního
+                   pole ("Vybrat soubor", "Soubor nevybrán") si kreslí prohlížeč
+                   a řídí se jeho jazykem, ne naším - v anglickém rozhraní tak
+                   svítily dva české popisky. Pole zůstává, jen je schované;
+                   formulář se tím nemění. #}
+            <label class="file-picker">
+                <input type="file" name="backup" accept=".tsv,.txt,text/tab-separated-values" required
+                       onchange="this.parentNode.querySelector('.file-name').textContent =
+                                 this.files.length ? this.files[0].name : '{{ _("Soubor nevybrán") }}'">
+                <span class="btn">{{ _("Vybrat soubor") }}</span>
+                <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
+            </label>
+            <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+            <span class="card-note">{{ _("sekund min.") }}</span>
+            <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
+        </form>
+    </details>
+
+    <h3 style="margin-top:24px">{{ _("Jellystat (záloha JSON)") }}</h3>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("V Jellystatu si vyexportuj zálohu do JSON a nahraj ji sem.") }}
+    </p>
+    {# enctype je u nahrávání souboru povinné - bez něj dorazí jen název. #}
+    <form method="post" action="/settings/import/jellystat"
+          enctype="multipart/form-data" class="btn-row">
+        {# Vlastní tlačítko místo holého `type="file"`. Text uvnitř nativního
+                   pole ("Vybrat soubor", "Soubor nevybrán") si kreslí prohlížeč
+                   a řídí se jeho jazykem, ne naším - v anglickém rozhraní tak
+                   svítily dva české popisky. Pole zůstává, jen je schované;
+                   formulář se tím nemění. #}
+            <label class="file-picker">
+                <input type="file" name="backup" accept=".json,application/json" required
+                       onchange="this.parentNode.querySelector('.file-name').textContent =
+                                 this.files.length ? this.files[0].name : '{{ _("Soubor nevybrán") }}'">
+                <span class="btn">{{ _("Vybrat soubor") }}</span>
+                <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
+            </label>
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <span class="card-note">{{ _("sekund min.") }}</span>
+        <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
+    </form>
+
+    {% if last_import %}
+    <p class="card-note" style="margin-top:16px">
+        {{ _("Poslední import") }}: {{ last_import.started_at | relative }}
+        &middot; {{ last_import.status }}
+        {% if last_import.message %}<br>{{ last_import.message }}{% endif %}
+    </p>
+    {% endif %}
+
+    <div class="flash warning" style="margin-top:16px">
+        <span class="dot"></span>
+        <span>{{ _("Importovaná data neobsahují jazyk zvukové stopy ani důvod transcode – tyhle údaje žádný z obou nástrojů neukládá. Doplní se až u přehrávání, která zaznamená Jellyscope sám.") }}</span>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Úklid historie                                                      #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="uklid">
+    <div class="card-head">
+        <h2>{{ _("Úklid historie") }}</h2>
+        <p class="card-note">{{ _("napraví, co v databázi zůstalo po opravených chybách") }}</p>
+    </div>
+
+    <p class="card-note">
+        {{ _("Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz – typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.") }}
+    </p>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("Záznamy visící na špatném dílu jsou pozůstatek chyby ve slučování podle TMDB: u epizody se bralo id celého seriálu, takže se historie všech dílů slila na jediný. Opravuje se podle názvu dílu, který v záznamu zůstal.") }}
+    </p>
+
+    {# Pravidla patří na obrazovku, ne jen do kódu. U funkce, která maže
+       řádky historie, je potřeba vidět předem, čeho se dotkne. #}
+    <details class="fallback" style="margin-top:14px">
+        <summary>{{ _("Podle čeho se pozná duplicita") }}</summary>
+        <p class="card-note" style="margin:10px 0 6px">
+            {{ _("Za jeden a tentýž zážitek se považují dva záznamy, jen když platí všechno najednou:") }}
+        </p>
+        <ul class="card-note" style="margin:0 0 10px 18px">
+            <li>{{ _("stejný uživatel a stejný titul,") }}</li>
+            <li>{{ _("jejich časy se překrývají,") }}</li>
+            <li>{{ _("neodporují si zařízením,") }}</li>
+            <li>{{ _("ani jeden nepochází z importu.") }}</li>
+        </ul>
+        <p class="card-note" style="margin-bottom:6px">
+            <strong>{{ _("Co se tedy NEsloučí:") }}</strong>
+        </p>
+        <ul class="card-note" style="margin:0 0 10px 18px">
+            <li>{{ _("film začatý včera večer a dokoukaný dnes – dvě sledování, dva záznamy, časy se nepřekrývají;") }}</li>
+            <li>{{ _("film dokoukaný a hned puštěný znovu – navazující úseky překryv nejsou;") }}</li>
+            <li>{{ _("tentýž film na televizi a na telefonu zároveň – liší se zařízením;") }}</li>
+            <li>{{ _("dva různí uživatelé u téhož titulu ve stejnou chvíli.") }}</li>
+        </ul>
+        <p class="card-note">
+            {{ _("Překryv, a ne shoda času začátku: dva sběrače zapisují každý o vteřinu jinde, takže přesná shoda by většinu duplicit minula.") }}
+        </p>
+    </details>
+
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <tbody>
+            <tr>
+                <td>{{ _("Duplicitní záznamy") }}</td>
+                <td class="num strong">{{ duplicate_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>{{ _("Záznamy u špatného dílu") }}</td>
+                <td class="num strong">{{ misplaced_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Tatáž podívaná ze dvou zdrojů") }}
+                    <div class="card-note">
+                        {{ _("Jellystat a Playback Reporting si zapisují jiný okamžik, takže se týž film objeví dvakrát s posunem. Pozná se podle stejně dlouhého přehrávání téhož titulu na témže zařízení v rámci jednoho dne.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ import_duplicate_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Záznamy bez položky v knihovně") }}
+                    <div class="card-note">
+                        {{ _("Zkusí se navázat podle názvu. Díl se tím zařadí pod svůj seriál – jinak se v přehledech tváří jako samostatný film.") }}
+                    </div>
+                </td>
+                <td class="num strong">
+                    {{ orphan_rows | number }}
+                    <div class="card-note">{{ orphan_items | number }} {{ _("titulů") }}</div>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Záznamy s jiným názvem, než má titul v knihovně") }}
+                    <div class="card-note">
+                        {{ _("Název se u přehrávání ukládá spolu se záznamem, aby historie smazaného titulu nezůstala bezejmenná. Když se ale titul přejmenuje – typicky když v Jellyfinu spravíš špatně určená metadata –, starý záznam si nese původní jméno. Ve statistikách pak k jednomu titulu patří název druhého.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ stale_name_rows | number }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="btn-row" style="margin-top:14px">
+        <form method="post" action="/settings/history/cleanup">
+            {# Vždycky modré: je to hlavní akce téhle karty a mezi
+               ostatními tlačítky se bez barvy ztrácelo. #}
+            <button class="btn primary" type="submit">{{ _("Uklidit historii") }}</button>
+        </form>
+        {# Druhé tlačítko sahá na síť, proto zvlášť: úklid výš si vystačí
+           s databází a funguje i bez Jellyfinu. #}
+        <form method="post" action="/settings/history/lookup">
+            <button class="btn" type="submit" {{ 'disabled' if not orphan_rows }}>
+                {{ _("Dohledat osiřelé v Jellyfinu") }}
+            </button>
+        </form>
+        {# Seznam toho, co zustalo - i s duvodem. Nepocita se pri uklidu
+           a neuklada se: kdyby se ulozil, ukazoval by stav po poslednim
+           spusteni, tedy neco, co uz nemusi platit. #}
+        <a class="btn" href="/settings/history/orphans">
+            {{ _("Co se nepovedlo zařadit") }}
+            {% if orphan_items %}({{ orphan_items | number }}){% endif %}
+        </a>
+    </div>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Dohledání se ptá Jellyfinu na identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte.") }}
+    </p>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Pustit se to dá opakovaně – podruhé už nenajde nic. Záznamy se neslučují sečtením: dva zápisy o tomtéž přehrávání nejsou dvě zhlédnutí, takže ze skupiny zůstane ten úplnější.") }}
+    </p>
+</div>
+
+
+{# ================================================================== #}
+{% elif section == 'database' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Databáze") }}</h2>
+        <p class="card-note">{{ _("právě používaná") }}: {{ running_database.describe() }}</p>
+    </div>
+
+    {# Uložená a běžící konfigurace se do restartu liší. Bez tohohle
+       upozornění to vypadá, že se uložení nepovedlo - formulář ukazuje
+       PostgreSQL, ale nadpis pořád SQLite. #}
+    {% if draft_pending %}
+    <div class="flash info" style="margin-bottom:16px">
+        <span class="dot"></span>
+        <span>{{ _("Ve formuláři jsou rozepsané hodnoty, které ještě nejsou uložené. Heslo si pamatuju, takže ho znovu vyplňovat nemusíš – stačí kliknout na Uložit.") }}</span>
+    </div>
+    {% endif %}
+
+    {% if restart_pending %}
+    <div class="flash warning" style="margin-bottom:16px">
+        <span class="dot"></span>
+        <span>
+            {{ _("Uloženo je") }} <strong>{{ database.describe() }}</strong>,
+            {{ _("ale aplikace zatím běží na") }} <strong>{{ running_database.describe() }}</strong>.
+            {{ _("Přepne se až po restartu – tlačítko je nahoře vpravo.") }}
+        </span>
+    </div>
+    {% endif %}
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("SQLite je výchozí a nic se pro něj neinstaluje – celá databáze je jeden soubor. PostgreSQL má smysl, když ho už doma provozuješ. Změna se projeví až po restartu aplikace.") }}
+    </p>
+
+    {# Formulář zná svůj stav už ze serveru (třída is-sqlite / is-postgres),
+       takže se při načtení nic neprobleskne. JavaScript tu třídu jen
+       přepíná, když klikneš na jiný druh databáze - viz app.js. Bez
+       JavaScriptu zůstane vidět ta část, která opravdu platí. #}
+    <form method="post" action="/settings/database"
+          class="db-form {{ 'is-postgres' if database.kind == 'postgres' else 'is-sqlite' }}"
+          data-db-form>
+        <div class="radio-set">
+            <label class="radio-card">
+                <input type="radio" name="kind" value="sqlite"
+                       {{ 'checked' if database.kind == 'sqlite' }}>
+                <span>
+                    <span class="title">SQLite</span>
+                    <span class="desc">{{ _("Jeden soubor na disku. Nic se neinstaluje, nic neběží na pozadí. Pro jednu domácnost naprosto dostačuje.") }}</span>
+                </span>
+            </label>
+            <label class="radio-card">
+                <input type="radio" name="kind" value="postgres"
+                       {{ 'checked' if database.kind == 'postgres' }}>
+                <span>
+                    <span class="title">PostgreSQL</span>
+                    <span class="desc">
+                        {{ _("Samostatný databázový server. Má smysl, když ho už provozuješ – pro domácnost SQLite bohatě stačí.") }}
+                        {% if not psycopg_available %}
+                            {# Návod se ukazuje jen tehdy, když ovladač
+                               opravdu chybí. install.sh ho obvykle
+                               doinstaluje sám, takže tenhle odstavec
+                               většina lidí nikdy neuvidí. #}
+                            <br><span class="badge critical"><span class="dot"></span>{{ _("ovladač psycopg chybí") }}</span>
+                            <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code>
+                            <br>{{ _("Pak aplikaci restartuj.") }}
+                        {% endif %}
+                    </span>
+                </span>
+            </label>
+        </div>
+
+        {# --- jen pro SQLite -------------------------------------------- #}
+        <div class="db-part" data-for="sqlite">
+            <div class="field">
+                <label for="sqlite_path">{{ _("Soubor SQLite") }}</label>
+                <input type="text" id="sqlite_path" name="sqlite_path" value="{{ database.path }}">
+                <p class="hint">{{ _("Relativní cesta se počítá od složky projektu.") }}</p>
+            </div>
+        </div>
+
+        {# --- jen pro PostgreSQL ---------------------------------------- #}
+        <div class="db-part" data-for="postgres">
+            <div class="grid-2" style="gap:0 18px; margin-bottom:0">
+                <div class="field">
+                    <label for="pg_host">{{ _("Server") }}</label>
+                    <input type="text" id="pg_host" name="pg_host" value="{{ database.host }}">
+                </div>
+                <div class="field">
+                    <label for="pg_port">{{ _("Port") }}</label>
+                    <input type="number" id="pg_port" name="pg_port" value="{{ database.port }}"
+                           min="1" max="65535">
+                </div>
+                <div class="field">
+                    <label for="pg_database">{{ _("Název databáze") }}</label>
+                    <input type="text" id="pg_database" name="pg_database" value="{{ database.database }}">
+                </div>
+                <div class="field">
+                    <label for="pg_user">{{ _("Uživatel") }}</label>
+                    <input type="text" id="pg_user" name="pg_user" value="{{ database.user }}">
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="pg_password">{{ _("Heslo") }}</label>
+                <input type="password" id="pg_password" name="pg_password" autocomplete="off"
+                       placeholder="{{ '••••••••' if database.password else '' }}">
+                <p class="hint">{{ _("Nech prázdné, pokud heslo měnit nechceš.") }}</p>
+            </div>
+
+            {# Zásobník spojení jde vypnout. Není to jen výkonnostní přepínač:
+               potřebuje knihovnu navíc a ne všude ji jde doinstalovat. #}
+            <div class="radio-set">
+                <label class="radio-card">
+                    <input type="checkbox" name="pg_use_pool" value="1"
+                           {{ 'checked' if database.use_pool }}>
+                    <span>
+                        <span class="title">{{ _("Používat connection pool") }}</span>
+                        <span class="desc">
+                            {{ _("Drží pár spojení otevřených a půjčuje je, místo aby se ke každému dotazu navazovalo nové. Jedna stránka si o data řekne asi dvanáctkrát – po síti je ten rozdíl znát, na stejném stroji jen malý.") }}
+                            {% if not pool_available %}
+                                <br><span class="badge critical"><span class="dot"></span>{{ _("knihovna psycopg_pool chybí") }}</span>
+                                <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code><br>
+                            {% endif %}
+                            {{ _("Když ji doinstalovat nemůžeš, nech tohle vypnuté – aplikace pojede dál, jen si bude spojení navazovat po jednom.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            {# Tři tlačítka, jeden formulář: liší se hodnotou "action",
+               takže se nemusí opisovat všechna pole třikrát. #}
+            <button class="btn" type="submit" name="action" value="test">
+                {{ _("Otestovat spojení") }}
+            </button>
+            <button class="btn primary" type="submit" name="action" value="save">
+                {{ _("Uložit a použít po restartu") }}
+            </button>
+            <button class="btn" type="submit" name="action" value="migrate">
+                {{ _("Přenést data do vybrané databáze") }}
+            </button>
+        </div>
+
+        <div class="flash warning" style="margin-top:16px">
+            <span class="dot"></span>
+            <span>{{ _("Přenos dat cílovou databázi nejdřív vyprázdní a teprve pak do ní data zkopíruje. Ulož nastavení až potom, co přenos proběhl.") }}</span>
+        </div>
+    </form>
+
+    {% if database_counts %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead><tr><th>{{ _("Tabulka") }}</th><th class="num">{{ _("Řádků") }}</th></tr></thead>
+            <tbody>
+            {% for table, count in database_counts.items() %}
+                <tr><td><code style="font-size:12px">{{ table }}</code></td>
+                    <td class="num">{{ count | number }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+
+{# ================================================================== #}
+{% elif section == 'accounts' %}
+{# ================================================================== #}
+{% if account.is_admin %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Účty do Jellyscope") }}</h2>
+        <p class="card-note">{{ _("celkem") }} {{ all_accounts | length }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("Tohle nejsou uživatelé Jellyfinu – to jsou účty, kterými se někdo přihlašuje sem. Když někomu založíš účet tady, do Jellyfinu se tím nedostane.") }}
+    </p>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Jméno") }}</th><th>{{ _("Oprávnění") }}</th>
+                <th class="num">{{ _("Vytvořen") }}</th>
+                <th class="num">{{ _("Naposledy přihlášen") }}</th><th>{{ _("Akce") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in all_accounts %}
+            <tr>
+                <td class="strong">
+                    {{ row.username }}
+                    {% if row.id == account.id %}<span class="muted">({{ _("ty") }})</span>{% endif %}
+                </td>
+                <td>
+                    {% if row.is_admin %}
+                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+                    {% else %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("čtenář") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num muted">{{ row.created_at | datetime }}</td>
+                <td class="num muted">{{ row.last_login | relative }}</td>
+                <td>
+                    <div class="btn-row">
+                    {# Na vlastní účet se nesahá: role ani smazání. Kdyby si
+                       poslední správce odebral práva nebo se smazal, do
+                       Jellyscope by se už nikdo nedostal.
+
+                       Místo prázdné buňky ale řekneme proč - jinak to
+                       vypadá jako chybějící tlačítko. #}
+                    {% if row.id == account.id %}
+                        {% if admin_count <= 1 %}
+                            <span class="card-note">
+                                {{ _("poslední správce – nelze smazat ani si odebrat práva") }}
+                            </span>
+                        {% else %}
+                            <span class="card-note">{{ _("vlastní účet") }}</span>
+                        {% endif %}
+                    {% else %}
+                        <form method="post" action="/settings/accounts/role">
+                            <input type="hidden" name="account_id" value="{{ row.id }}">
+                            {% if not row.is_admin %}
+                                <input type="hidden" name="is_admin" value="1">
+                                <button class="btn" type="submit">{{ _("Udělat správcem") }}</button>
+                            {% else %}
+                                <button class="btn" type="submit">{{ _("Odebrat práva") }}</button>
+                            {% endif %}
+                        </form>
+                        {# Mazání je nevratné, proto červeně a s pořádnou
+                           otázkou - "jmeno?" nikomu neřekne, co se stane.
+                           Skutečnou pojistkou zůstává accounts.delete(). #}
+                        <form method="post" action="/settings/accounts/delete"
+                              onsubmit="return confirm('{{ _("Opravdu smazat účet") }} {{ row.username }}? {{ _("Tenhle krok nejde vzít zpět. Nasbíraná data zůstanou, mizí jen přihlášení do Jellyscope.") }}')">
+                            <input type="hidden" name="account_id" value="{{ row.id }}">
+                            <button class="btn danger" type="submit">{{ _("Smazat") }}</button>
+                        </form>
+                    {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# Změna vlastního hesla - tuhle kartu vidí každý, i čtenář. #}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Změnit své heslo") }}</h2></div>
+    <form method="post" action="/settings/accounts/password">
+        <input type="hidden" name="account_id" value="{{ account.id }}">
+        <div class="field">
+            <label for="own_password">{{ _("Nové heslo") }}</label>
+            <input type="password" id="own_password" name="password"
+                   autocomplete="new-password" required>
+            <p class="hint">{{ _("Alespoň 8 znaků.") }}</p>
+        </div>
+        <div class="field">
+            <label for="own_password_again">{{ _("Nové heslo znovu") }}</label>
+            <input type="password" id="own_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Změnit heslo") }}</button>
+        </div>
+    </form>
+</div>
+
+{% if account.is_admin %}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Přidat uživatele") }}</h2></div>
+    <form method="post" action="/settings/accounts/create">
+        <div class="field">
+            <label for="new_username">{{ _("Uživatelské jméno") }}</label>
+            <input type="text" id="new_username" name="username" required autocomplete="off">
+            <p class="hint">{{ _("3 až 32 znaků: písmena bez diakritiky, číslice, tečka, pomlčka, podtržítko.") }}</p>
+        </div>
+        <div class="field">
+            <label for="new_password">{{ _("Heslo") }}</label>
+            <input type="password" id="new_password" name="password"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label for="new_password_again">{{ _("Heslo znovu") }}</label>
+            <input type="password" id="new_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="is_admin" value="1">
+                <span>
+                    <span class="title">{{ _("Správce") }}</span>
+                    <span class="desc">
+                        {{ _("Smí měnit nastavení, spouštět analýzy a spravovat účty. Bez toho vidí jen statistiky – a to je pro většinu lidí správně.") }}
+                    </span>
+                </span>
+            </label>
+        </div>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Vytvořit účet") }}</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-head"><h2>{{ _("Změnit heslo jinému účtu") }}</h2></div>
+    <form method="post" action="/settings/accounts/password">
+        <div class="field">
+            <label for="target_account">{{ _("Účet") }}</label>
+            <select id="target_account" name="account_id">
+                {% for row in all_accounts %}
+                    <option value="{{ row.id }}">{{ row.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="other_password">{{ _("Nové heslo") }}</label>
+            <input type="password" id="other_password" name="password"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label for="other_password_again">{{ _("Nové heslo znovu") }}</label>
+            <input type="password" id="other_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button class="btn" type="submit">{{ _("Nastavit heslo") }}</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+
+{# ================================================================== #}
+{% elif section == 'blocks' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Blokované adresy") }}</h2>
+        <p class="card-note">{{ _("přihlašování, ne přístup k aplikaci") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Po") }} {{ block_attempts }}
+        {{ _("neúspěšných pokusech z jedné adresy se přihlašování z ní na chvíli zavře. Každá další blokace v řadě je delší:") }}
+        {% for sekund in block_levels %}{{ (sekund / 60) | round | int }} min{{ ", " if not loop.last }}{% endfor %},
+        {{ _("pak už trvale.") }}
+        {{ _("Když se adresa") }} {{ block_forget_hours }}
+        {{ _("hodin chová slušně, počítá se zase od začátku.") }}
+    </p>
+
+    {% if not blocks %}
+    <p class="chart-empty">{{ _("Zatím nikdo. To je dobře.") }}</p>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Adresa") }}</th>
+                <th>{{ _("Stav") }}</th>
+                <th class="num">{{ _("Blokací v řadě") }}</th>
+                <th class="num">{{ _("Pokusů") }}</th>
+                <th>{{ _("Naposledy") }}</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for radek in blocks %}
+            <tr>
+                <td class="strong nowrap">{{ radek.ip }}</td>
+                <td class="nowrap">
+                    {% if radek.permanent %}
+                        <span class="badge critical"><span class="dot"></span>{{ _("trvale") }}</span>
+                    {% elif radek.seconds_left > 0 %}
+                        <span class="badge warning"><span class="dot"></span>
+                            {{ _("ještě") }}
+                            {% if radek.seconds_left >= 60 %}
+                                {{ (radek.seconds_left / 60) | round | int }} min
+                            {% else %}
+                                {{ radek.seconds_left }} s
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("vypršelo") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ radek.level }}</td>
+                <td class="num">{{ radek.failures | number }}</td>
+                <td class="nowrap muted">{{ radek.last_failure | relative }}</td>
+                <td class="num nowrap">
+                    <div class="btn-row" style="justify-content:flex-end">
+                        {% if not radek.permanent %}
+                        <form method="post" action="/settings/blocks/permanent">
+                            <input type="hidden" name="ip" value="{{ radek.ip }}">
+                            <button class="btn danger" type="submit">{{ _("Zablokovat natrvalo") }}</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="/settings/blocks/unblock">
+                            <input type="hidden" name="ip" value="{{ radek.ip }}">
+                            <button class="btn" type="submit">{{ _("Odblokovat") }}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Adresa se bere z připojení. Běží-li před Jellyscope reverzní proxy, vyplň v .env FORWARDED_ALLOW_IPS – jinak tu bude pokaždé adresa té proxy a blokace by platila pro všechny naráz.") }}
+    </p>
+</div>
+
+
+{# ================================================================== #}
+{% elif section == 'log' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Log aplikace") }}</h2>
+        <p class="card-note">{{ log.path }}</p>
+    </div>
+
+    {% if not log.files %}
+        <p class="chart-empty">
+            {{ _("Ve složce s logy zatím nic není. Soubor vznikne při prvním startu aplikace – zkus ji restartovat.") }}
+        </p>
+    {% else %}
+
+    {# Volby jsou v adrese, ne v nastavení: je to pohled, ne volba serveru.
+       Dva správci se tak můžou dívat každý na něco jiného. #}
+    <form method="get" action="/settings" class="log-controls">
+        <input type="hidden" name="section" value="log">
+
+        <label>
+            {{ _("Soubor") }}
+            <select name="log_file" onchange="this.form.submit()">
+                {% for soubor in log.files %}
+                <option value="{{ soubor.name }}"
+                        {% if soubor.name == log.name %}selected{% endif %}>
+                    {{ soubor.name }}{% if soubor.label %} – {{ _(soubor.label) }}{% endif %}
+                    ({{ soubor.size_bytes | bytes }})
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Řádků") }}
+            <select name="log_lines" onchange="this.form.submit()">
+                {% for pocet in [100, 200, 500, 1000, 2000] %}
+                <option value="{{ pocet }}" {% if pocet == log_lines %}selected{% endif %}>
+                    {{ pocet }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Úroveň") }}
+            <select name="log_level" onchange="this.form.submit()">
+                <option value="">{{ _("vše") }}</option>
+                {% for uroven in log_levels %}
+                <option value="{{ uroven }}" {% if uroven == log_level %}selected{% endif %}>
+                    {{ uroven }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <button class="btn" type="submit">{{ _("Načíst znovu") }}</button>
+    </form>
+
+    {% if not log.lines %}
+        <p class="chart-empty" style="margin-top:14px">
+            {% if log_level %}
+                {{ _("Na téhle úrovni v posledních řádcích nic není.") }}
+            {% else %}
+                {{ _("Soubor je zatím prázdný.") }}
+            {% endif %}
+        </p>
+    {% else %}
+    {# Nejnovější řádek je dole, jako v každém logu. Okno se po načtení
+       odroluje na konec - viz skript níž. #}
+    <div class="log-view" id="log-view">
+        {% for radek in log.lines %}
+        <div class="log-line {{ radek.level | lower }}">{{ radek.text }}</div>
+        {% endfor %}
+    </div>
+    <script>
+        // Odrolovat na konec: nejnovější řádek je ten, kvůli kterému se sem
+        // člověk dívá. Bez tohohle by po otevření koukal na nejstarší.
+        (function () {
+            var box = document.getElementById("log-view");
+            if (box) { box.scrollTop = box.scrollHeight; }
+        })();
+    </script>
+    {% endif %}
+
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Zobrazuje se konec souboru. API klíč a hesla se ve výpisu nahrazují hvězdičkami, i kdyby je do logu zanesla hláška o chybě.") }}
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Kde jinde log hledat") }}</h2>
+    </div>
+    <p class="card-note">
+        {{ _("Když aplikaci spouští systemd, posílá její výstup do journalu a do složky výše nic nepíše. Celý výpis včetně startu serveru vypíše:") }}
+    </p>
+    <pre class="code-block">journalctl -u jellyscope -n 200 --no-pager</pre>
+    <p class="card-note">
+        {{ _("U supervisordu je totéž ve výše nabízených souborech out.log a err.log.") }}
+    </p>
+</div>
+
+{# ================================================================== #}
+{% elif section == 'general' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jazyk rozhraní") }}</h2>
+        <p class="card-note">{{ _("Volba platí pro celou aplikaci, ne jen pro tebe.") }}</p>
+    </div>
+    <form method="post" action="/settings/language">
+        <div class="field">
+            <label for="ui_language">{{ _("Rozhraní") }}</label>
+            <select id="ui_language" name="ui_language" style="width:auto">
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == ui_language }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Jazyk logu zvlášť: log čte často někdo jiný než ten, kdo se dívá
+           do rozhraní - a hlášky se pak snáz hledají na internetu. #}
+        <div class="field">
+            <label for="log_language">{{ _("Log aplikace") }}</label>
+            <select id="log_language" name="log_language" style="width:auto">
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == settings.log_language }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <p class="hint">
+                {{ _("Platí pro nově zapsané řádky; co už v souboru je, zůstává, jak bylo. Hlášku, která překlad nemá, log napíše česky.") }}
+            </p>
+        </div>
+
+        <button class="btn primary" type="submit">{{ _("Uložit jazyk") }}</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-head"><h2>{{ _("Co zůstává v .env") }}</h2></div>
+    <p class="card-note">
+        {{ _("V souboru .env už zůstává jen tajný klíč pro podepisování přihlašovacích cookies a nastavení sítě (adresa a port). Připojení k Jellyfinu, hesla i všechno ostatní je v databázi a mění se tady.") }}
+    </p>
+</div>
+{% endif %}
+{% endblock %}

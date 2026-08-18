@@ -1,0 +1,127 @@
+{# ====================================================================== #}
+{# Karta "Sledovanost po dnech".                                          #}
+{#                                                                        #}
+{# Vlastní soubor má důvod: stejný kus stránky vrací i /partials/daily,   #}
+{# odkud si ho JavaScript vezme při přepnutí filmy/seriály a vymění na    #}
+{# místě. Kdyby to byla kopie, jedna z nich by časem odešla jinam.        #}
+{# ====================================================================== #}
+{# ================================================================== #}
+{# Sledovanost po dnech - filmy a seriály přes sebe                    #}
+{#                                                                     #}
+{# Série se skládá podle zvoleného filtru, ale barevný slot je pevný:  #}
+{# filmy mají vždycky slot 1, seriály slot 2. Kdyby se barvilo podle   #}
+{# pořadí, přepnutí filtru by přebarvilo to, co zbylo - a graf by lhal.#}
+{# ================================================================== #}
+{# Třetí série "Ostatní" se přidá jen tehdy, když v ní opravdu něco je.
+   Spadne do ní všechno, co není film ani epizoda — typicky importovaná
+   historie, ke které ještě není položka v knihovně, takže typ neznáme.
+   Bez ní by takové hodiny z grafu zmizely, přestože v souhrnu jsou. #}
+{% set ns = namespace(other=0) %}
+{% for row in daily %}{% set ns.other = ns.other + row.other_hours %}{% endfor %}
+
+{# Z čeho se "Ostatní" skládá. Vypíše se pod grafem a stejný text
+   dostane i bublina u legendy - hodiny bez vysvětlení jsou k ničemu,
+   protože v historii se pak nedá dohledat, o co šlo. #}
+{% set tip_ostatni = (ostatni or []) | map(attribute='label') | join(', ') %}
+
+{% if kind == 'movies' %}
+    {% set series = [{'key': 'movie_hours', 'label': _("Filmy"), 'slot': 1}] %}
+    {% set hours_key = 'movie_hours' %}{% set plays_key = 'movie_plays' %}
+{% elif kind == 'series' %}
+    {% set series = [{'key': 'series_hours', 'label': _("Seriály"), 'slot': 2}] %}
+    {% set hours_key = 'series_hours' %}{% set plays_key = 'series_plays' %}
+{% elif kind == 'other' %}
+    {% set series = [{'key': 'other_hours', 'label': _("Ostatní"), 'slot': 3,
+                      'tip': tip_ostatni}] %}
+    {% set hours_key = 'other_hours' %}{% set plays_key = 'other_plays' %}
+{% else %}
+    {% set series = [{'key': 'movie_hours', 'label': _("Filmy"), 'slot': 1},
+                     {'key': 'series_hours', 'label': _("Seriály"), 'slot': 2}] %}
+    {% if ns.other > 0 %}
+        {% set series = series + [{'key': 'other_hours', 'label': _("Ostatní"),
+                                   'slot': 3, 'tip': tip_ostatni}] %}
+    {% endif %}
+    {% set hours_key = 'hours' %}{% set plays_key = 'plays' %}
+{% endif %}
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Sledovanost po dnech") }}</h2>
+        <div class="filters">
+            <a class="chip {{ 'active' if kind == 'both' }}" href="/?kind=both" data-kind="both">{{ _("Mix") }}</a>
+            <a class="chip {{ 'active' if kind == 'movies' }}" href="/?kind=movies" data-kind="movies">{{ _("Filmy") }}</a>
+            <a class="chip {{ 'active' if kind == 'series' }}" href="/?kind=series" data-kind="series">{{ _("Seriály") }}</a>
+            {# Čtvrtý filtr se nabízí, jen když do něj něco spadlo - jinak
+               by to bylo tlačítko vedoucí na prázdný graf. Když je zrovna
+               zvolený, zůstává i tehdy, kdyby v okně nic nebylo; jinak by
+               zmizelo to, na co se člověk právě dívá. #}
+            {% if ns.other > 0 or kind == 'other' %}
+            <a class="chip {{ 'active' if kind == 'other' }}" href="/?kind=other"
+               data-kind="other"
+               {% if tip_ostatni %}data-tip="{{ tip_ostatni }}"{% endif %}>{{ _("Ostatní") }}</a>
+            {% endif %}
+        </div>
+    </div>
+    <p class="card-note" style="margin:-6px 0 12px">{{ _("v hodinách") }}</p>
+
+    {{ charts.area_chart_multi(daily, 'day', series) | safe }}
+    {# Legenda je u dvou a více sérií povinná - barva sama identitu nenese.
+       U jedné série se kreslí jen tehdy, když má co dovysvětlit; to je
+       případ "Ostatního", kde samotný název nic neříká. #}
+    {% if series | length > 1 or kind == 'other' %}
+        {{ charts.legend(series) | safe }}
+    {% endif %}
+
+    {% if ostatni and (ns.other > 0 or kind == 'other') %}
+        <p class="card-note" style="margin-top:6px">
+            {{ _("V „Ostatní“ je") }}:
+            {% for radek in ostatni %}
+                <strong>{{ radek.label }}</strong>
+                ({{ radek.hours | hours }}, {{ radek.plays | number }}×){% if not loop.last %},{% endif %}
+            {% endfor %}
+        </p>
+    {% endif %}
+
+    {# Ke každému grafu patří i tabulka. Graf je rychlý přehled,
+       tabulka je přesné číslo - a funguje i pro čtečky obrazovky.
+       Tabulka ukazuje to samé, co je zrovna v grafu: při filtru "Filmy"
+       jen filmy, jinak by čísla neseděla s křivkou nad nimi. #}
+    <details style="margin-top:12px">
+        <summary class="card-note" style="cursor:pointer">{{ _("Zobrazit jako tabulku") }}</summary>
+        <p class="card-note" style="margin:10px 0 0">
+            {{ _("Klikni na den a uvidíš v historii, co se ten den hrálo.") }}
+        </p>
+        <div class="table-wrap" style="margin-top:10px">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Den") }}</th>
+                    {% if kind == 'both' %}
+                        <th class="num">{{ _("Filmy") }}</th>
+                        <th class="num">{{ _("Seriály") }}</th>
+                        {% if ns.other > 0 %}<th class="num">{{ _("Ostatní") }}</th>{% endif %}
+                    {% endif %}
+                    <th class="num">{{ _("Hodiny") }}</th>
+                    <th class="num">{{ _("Spuštění") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for row in daily | reverse %}
+                    <tr>
+                        <td>
+                            {# Proklik do historie na ten den. Filtr typu se
+                               nese s sebou, ať se seznam shoduje s tabulkou. #}
+                            <a href="/history?day={{ row.day }}{% if kind != 'both' %}&kind={{ kind }}{% endif %}">{{ row.day }}</a>
+                        </td>
+                        {% if kind == 'both' %}
+                            <td class="num">{{ row.movie_hours | hours }}</td>
+                            <td class="num">{{ row.series_hours | hours }}</td>
+                            {% if ns.other > 0 %}<td class="num">{{ row.other_hours | hours }}</td>{% endif %}
+                        {% endif %}
+                        <td class="num">{{ row[hours_key] | hours }}</td>
+                        <td class="num">{{ row[plays_key] | number }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>

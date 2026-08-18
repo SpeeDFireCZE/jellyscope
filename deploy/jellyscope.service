@@ -1,0 +1,99 @@
+# ---------------------------------------------------------------------------
+# Jellyscope under systemd
+#
+# Save as:  /etc/systemd/system/jellyscope.service
+# Load it:  sudo systemctl daemon-reload
+# Enable:   sudo systemctl enable --now jellyscope
+#
+# Assumes:
+#   * the code in /opt/jellyscope
+#   * a virtual environment in /opt/jellyscope/.venv
+#   * a user `jellyscope` who owns the folder
+#
+# deploy/install.sh fills the user and the paths in for you and writes
+# jellyscope.service.ready - that one only needs copying into place.
+#
+# The user variant (systemctl --user) must not have the User= and Group=
+# lines - install.sh strips them when generating it.
+#
+# The supervisord counterpart of this config is jellyscope.conf. You need
+# one of the two, not both - two process managers would fight over the
+# same port.
+# ---------------------------------------------------------------------------
+
+[Unit]
+Description=Jellyscope - statistics for Jellyfin
+Documentation=https://github.com/YOUR-NAME/jellyscope
+
+# Only after the network. Without this the app would try to reach
+# Jellyfin during boot, before the network is up.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Never run as root. The app reads other people's video files and talks
+# over the network - if somebody got around it, let them have as few
+# permissions as possible.
+User=jellyscope
+Group=jellyscope
+
+# The working directory has to be right: run.py is started relatively
+# and the app derives its data/ folder from it.
+WorkingDirectory=/opt/jellyscope
+
+# Full path to the python from the virtual environment. Not `python` or
+# `python3` - systemd starts no login shell, so it knows no PATH from
+# .bashrc.
+ExecStart=/opt/jellyscope/.venv/bin/python run.py
+
+# Time zone. The app groups "when do people watch" and daily totals by
+# it - without it the server would count in UTC and the chart would not
+# match the clock on the wall.
+Environment=TZ=Europe/Prague
+Environment=PYTHONUNBUFFERED=1
+
+Restart=always
+RestartSec=5
+
+# Shutdown: politely first (SIGTERM), so uvicorn can finish its requests
+# and the collector can close any playback in progress. Only after 30 s
+# the hard way.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Stop the processes the app started too (ffprobe, pg_dump). Without this
+# they could be left hanging after a stop.
+KillMode=control-group
+
+# Logs go to the journal: sudo journalctl -u jellyscope -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jellyscope
+
+# --- Restricting permissions -----------------------------------------------
+# systemd can do this on its own, unlike supervisord. It costs one line
+# each and limits the damage if somebody ever gets into the app.
+
+# The app needs to write nowhere but its own data/ folder.
+ProtectSystem=strict
+ReadWritePaths=/opt/jellyscope/data
+
+# No access to /home, /root or /run/user.
+ProtectHome=true
+
+# Its own /tmp, separate from the rest of the system.
+PrivateTmp=true
+
+# The process must not gain more privileges than it started with (via
+# setuid, for instance).
+NoNewPrivileges=true
+
+# NOTE: when you read video files from network storage or another path,
+# ProtectSystem=strict still lets you read them (it forbids writing, not
+# reading) - but if they live on a volume mounted later, add it here:
+#     ReadOnlyPaths=/media/films
+
+[Install]
+WantedBy=multi-user.target

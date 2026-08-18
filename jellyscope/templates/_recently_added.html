@@ -1,0 +1,72 @@
+{# Pás nedávno přidaných titulů.
+
+   Vlastní šablona, protože se kreslí ze dvou míst: při načtení Přehledu
+   a pak znovu, kdykoliv doběhne synchronizace a přibylo něco nového
+   (viz /partials/recently-added). Kdyby existovala dvakrát, jedna kopie
+   by se časem od druhé odchýlila. #}
+
+{% if recent %}
+<div class="section-head">
+    <h2>{{ _("Nedávno přidané") }}</h2>
+    <a class="card-note" href="/library">{{ _("celá knihovna") }} &rarr;</a>
+</div>
+
+{# Vodorovný pás plakátů. Posouvá se sám, když se nevejdou - u obsahu,
+   který je ze své podstaty dlouhý seznam, je to správný tvar. #}
+<div class="poster-strip">
+    {% for row in recent %}
+    {# Když přišel jeden díl, je karta prostý odkaz rovnou na něj. Když
+       jich přišlo víc, ukáže se po najetí jejich seznam - tam už není co
+       "otevřít jedním klikem", protože každý díl je jinam. #}
+    <div class="poster-card{% if row.episodes %} has-episodes{% endif %}">
+        {% if row.episodes %}
+        {# Rámeček tady NENÍ odkaz. Odkaz uvnitř odkazu je neplatné HTML -
+           prohlížeč vnější `<a>` uzavře, jakmile narazí na vnitřní, a seznam
+           dílů by vypadl mimo rámeček. Proklik na seriál obstará název pod
+           plakátem, jednotlivé díly ten seznam. #}
+        <div class="poster-frame">
+            <img src="/image/{{ row.poster_id }}?kind=Primary&w=300" alt=""
+                 loading="lazy" onerror="this.style.display='none'">
+            {# Místo "epizoda" rovnou počet - ať je na první pohled vidět,
+               že přišla celá dávka. Čeština chce jiný tvar pro 2-4 a jiný
+               od 5 výš; dávka je vždycky aspoň dvě, takže stačí dva. #}
+            <span class="poster-badge">
+                {{ row.episodes | length }}
+                {{ _("díly") if row.episodes | length < 5 else _("dílů") }}
+            </span>
+
+            {# Seznam leží uvnitř rámečku schválně: pás plakátů se posouvá
+               do stran (overflow), takže cokoliv, co by z něj vyčnívalo,
+               by se oříznulo. Takhle zůstane na svém. #}
+            <div class="poster-episodes">
+                <span class="poster-episodes-head">{{ _("Přidané díly") }}</span>
+                {% for dil in row.episodes %}
+                <a href="/item/{{ dil.id }}" title="{{ dil.name }}">
+                    {%- if dil.parent_index_number is not none and dil.index_number is not none -%}
+                        <strong>S{{ '%02d' | format(dil.parent_index_number) }}E{{ '%02d' | format(dil.index_number) }}</strong>
+                    {%- endif %}
+                    {{ dil.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <a class="poster-frame" href="/item/{{ row.id }}">
+            <img src="/image/{{ row.poster_id }}?kind=Primary&w=300" alt=""
+                 loading="lazy" onerror="this.style.display='none'">
+            {% if row.is_episode %}
+                <span class="poster-badge">{{ _("epizoda") }}</span>
+            {% endif %}
+        </a>
+        {% endif %}
+
+        <a class="poster-name" href="{{ row.series_url if row.episodes else '/item/' ~ row.id }}"
+           title="{{ row.title }}">{{ row.title }}</a>
+        <div class="poster-meta">
+            {% if row.production_year %}{{ row.production_year }}{% endif %}
+            {% if row.library_name %}<span class="muted">&middot; {{ row.library_name }}</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

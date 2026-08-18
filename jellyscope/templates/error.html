@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="{{ ui_language | default('cs') }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ code }} &middot; Jellyscope</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+    <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
+    <script>
+        (function () {
+            var saved = localStorage.getItem("jellyscope-theme");
+            if (saved === "dark" || saved === "light") {
+                document.documentElement.setAttribute("data-theme", saved);
+            }
+        })();
+    </script>
+</head>
+<body>
+<div class="login-page">
+    <div class="login-box" style="max-width:420px; text-align:center">
+        <div class="hero" style="font-size:44px">{{ code }}</div>
+        <p class="subtitle" style="margin:10px 0 20px">{{ message }}</p>
+        <a class="btn primary" href="/" style="width:100%; justify-content:center">
+            {{ _("Zpět na přehled") }}
+        </a>
+    </div>
+</div>
+</body>
+</html>

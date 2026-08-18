@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, method_badge %}
+{% block title %}{{ _("Historie") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Historie") }}</h1>
+        <p class="subtitle">{{ _("Každé zaznamenané přehrávání, od nejnovějšího.") }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <form method="get" action="/history" class="btn-row" style="margin-bottom:16px">
+        <select name="user_id" style="width:auto">
+            <option value="">{{ _("Všichni uživatelé") }}</option>
+            {% for row in users %}
+                <option value="{{ row.id }}" {{ 'selected' if row.id == user_id }}>{{ row.name }}</option>
+            {% endfor %}
+        </select>
+        <input type="search" name="search" value="{{ search }}" placeholder="{{ _('Hledat název...') }}" style="width:230px">
+        {# Filtr dne a typu se sem dostane proklikem z tabulky na Přehledu.
+           Nese se dál skrytým polem, aby ho hledání ani výběr uživatele
+           neshodily - jinak by druhé kliknutí filtr tiše zrušilo. #}
+        {% if day %}<input type="hidden" name="day" value="{{ day }}">{% endif %}
+        {% if kind and kind != 'both' %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
+        <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
+        {% if search or user_id or day or kind != 'both' %}
+            <a class="btn" href="/history">{{ _("Zrušit filtr") }}</a>
+        {% endif %}
+    </form>
+
+    {% if day or kind != 'both' %}
+    <div class="filters" style="margin-bottom:14px">
+        {% if day %}
+            <span class="chip active">{{ _("Den") }}: {{ day }}</span>
+        {% endif %}
+        {% if kind == 'movies' %}<span class="chip active">{{ _("Filmy") }}</span>{% endif %}
+        {% if kind == 'series' %}<span class="chip active">{{ _("Seriály") }}</span>{% endif %}
+        {% if kind == 'other' %}<span class="chip active">{{ _("Ostatní") }}</span>{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Titul") }}</th>
+                <th>{{ _("Jazyk") }}</th><th>{{ _("Zařízení") }}</th>
+                <th>{{ _("Druh") }}</th>
+                <th>{{ _("Způsob") }}</th><th class="num">{{ _("Délka") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="nowrap muted">{{ row.started_at | datetime }}</td>
+
+                {# Proklik na detail uživatele. Odkaz vede na tutéž stránku,
+                   kterou najdeš přes Uživatele - jen se k ní dá dostat
+                   rovnou odsud. #}
+                <td class="strong">
+                    {% if row.user_id %}
+                        <a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>
+                    {% else %}
+                        {{ row.user_name or '?' }}
+                    {% endif %}
+                </td>
+
+                <td class="truncate" title="{{ row.item_name }}">
+                    {% if row.item_id %}
+                        <a href="/item/{{ row.item_id }}">
+                            {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
+                            {{ row.item_name }}
+                        </a>
+                    {% else %}
+                        {{ row.item_name }}
+                    {% endif %}
+                    {% if row.height %}<span class="muted">&middot; {{ row.height | resolution(row.width) }}</span>{% endif %}
+                </td>
+
+                {# Jazyk zvukové stopy, kterou si divák skutečně pustil,
+                   a případně jazyk zapnutých titulků. #}
+                <td class="nowrap">
+                    {% if row.audio_language %}
+                        {{ lang.display(row.audio_language) }}
+                        {% if row.subtitle_language %}
+                            <div class="muted" style="font-size:12px">
+                                {{ _("titulky") }} {{ row.subtitle_language | upper }}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span class="muted">-</span>
+                    {% endif %}
+                </td>
+
+                <td class="muted">{{ row.device_name or '?' }}<br>{{ row.client or '' }}</td>
+                {# Druh záznamu. Bez něj se u „Ostatního“ z grafu nedalo
+                   dohledat, o co vlastně šlo - v seznamu byly jen názvy,
+                   které samy o sobě nic neříkají. #}
+                <td class="nowrap muted">{{ row.item_type | type_name }}</td>
+                <td>
+                    {{ method_badge(row.play_method) }}
+                    {% if row.play_method == 'Transcode' and row.transcode_reasons %}
+                        <div class="muted" style="font-size:12px">{{ row.transcode_reasons }}</div>
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.watched_seconds | seconds }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if not rows %}
+        <p class="chart-empty">
+            {{ _("Zatím žádná historie. Collector zaznamená každé přehrávání, které proběhne od chvíle, kdy Jellyscope běží. Starší data se dají naimportovat z Playback Reporting nebo Jellystatu – viz Nastavení.") }}
+        </p>
+    {% endif %}
+
+    {% set extra %}{% if user_id %}&user_id={{ user_id }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if day %}&day={{ day }}{% endif %}{% if kind != 'both' %}&kind={{ kind }}{% endif %}{% endset %}
+    {{ pager(page, pages, total, '/history', extra) }}
+</div>
+{% endblock %}

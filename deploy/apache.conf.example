@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# Jellyscope behind Apache
+#
+# Save as /etc/apache2/sites-available/jellyscope.conf and run:
+#     sudo a2enmod proxy proxy_http headers ssl
+#     sudo a2ensite jellyscope
+#     sudo apache2ctl configtest && sudo systemctl reload apache2
+#     sudo certbot --apache -d jellyscope.example.com
+# ---------------------------------------------------------------------------
+
+<VirtualHost *:80>
+    ServerName jellyscope.example.com
+
+    # Everything to HTTPS. The app sends a login cookie, which has no
+    # business travelling over an unencrypted connection.
+    Redirect permanent / https://jellyscope.example.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName jellyscope.example.com
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/jellyscope.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/jellyscope.example.com/privkey.pem
+
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:8097/
+    ProxyPassReverse / http://127.0.0.1:8097/
+
+    # Without this header the app would not know the connection came over
+    # HTTPS. Apache does not send it by itself, unlike X-Forwarded-For.
+    RequestHeader set X-Forwarded-Proto "https"
+
+    # Syncing a large library can take minutes. The default timeout would
+    # cut it off halfway.
+    ProxyTimeout 600
+
+    # Importing a Jellystat backup means uploading a file. The value is in
+    # bytes, 209715200 = 200 MB - keep it at least as high as
+    # MAX_UPLOAD_MB in the app.
+    LimitRequestBody 209715200
+
+    ErrorLog  ${APACHE_LOG_DIR}/jellyscope-error.log
+    CustomLog ${APACHE_LOG_DIR}/jellyscope-access.log combined
+</VirtualHost>
+
+# Once this works, add to /opt/jellyscope/.env:
+#
+#     SECURE_COOKIES=1
+#     FORWARDED_ALLOW_IPS=127.0.0.1
+#
+# and restart the service (systemctl restart jellyscope, or
+# supervisorctl restart jellyscope).
