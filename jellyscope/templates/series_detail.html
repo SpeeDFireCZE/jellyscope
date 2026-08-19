@@ -63,8 +63,28 @@
 
 {# Souhrn o seriálu - totéž, co u filmu ukazuje karta „Soubor". Seriál
    žádný jeden soubor nemá, takže se místo cesty k souboru ukazuje
-   složka, ve které jeho díly leží. #}
-<div class="card">
+   složka, ve které jeho díly leží.
+
+   Plakát vedle: bere se přes /image/<id serialu>, tedy stejnou cestou
+   jako u filmu. Položku pro samotný seriál si Jellyscope nevede (nemá
+   soubor), ale Jellyfin obrázek pod tím id zná - a proxy se ptá jeho.
+   Když ho nemá, `onerror` celý sloupec schová, takže po něm nezůstane
+   šedivé místo. #}
+<div class="item-layout" style="margin-bottom:18px">
+    {# Obal navíc není nadbytečný: když Jellyfin plakát nemá, `onerror`
+       schová .item-poster - a bez obalu by karta spadla do úzkého
+       sloupce pro plakát. Takhle sloupec zůstane a karta sedí vedle. #}
+    <div>
+        <div class="item-poster {{ 'is-archived' if series.missing }}">
+            <img src="/image/{{ series.id }}?kind=Primary&w=400" alt="" loading="lazy"
+                 onerror="this.parentElement.style.display='none'">
+            {% if series.missing %}
+                <span class="media-archived">{{ _("Archivováno") }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+<div class="card" style="margin-bottom:0">
     <div class="card-head">
         <h2>{{ _("O seriálu") }}</h2>
     </div>
@@ -114,6 +134,8 @@
             </tbody>
         </table>
     </div>
+</div>
+
 </div>
 
 {# Každá řada zvlášť a všechny zavřené. Dřív byla první rozbalená, jenže
