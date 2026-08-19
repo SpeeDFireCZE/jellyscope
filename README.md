@@ -157,6 +157,10 @@ a copy taken mid-write can be corrupt.
 Jellyscope only records playbacks while it runs. If you already have history
 elsewhere, it can be taken over in **Settings → History import**:
 
+The history list has a filter you can combine: user, kind, a date range,
+play method, player and language at once — all of it in the address, so
+a filtered view can be sent as a link.
+
 - **Playback Reporting** — a Jellyfin plugin. Data is read straight through
   Jellyfin, no file upload needed (a file upload is there for when the
   plugin's API misbehaves).
@@ -433,6 +437,21 @@ explanatory — written to say *why* a thing is done that way, usually
 naming the bug that would happen otherwise — and translating them would
 cost more than it would add. Pull requests with English comments are
 welcome all the same; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Versions and releases
+
+The running version is in the bottom left corner and in *Settings →
+General*. Releases are tagged `v1.2.3` on GitHub; the tag has to match
+`__version__` in `jellyscope/__init__.py`, and a workflow refuses to
+publish a release when it does not — a release nobody can identify is
+worse than none.
+
+Jellyscope can watch for a new one: once a day it asks GitHub whether a
+newer release is out and says so in the corner. It installs nothing, and
+it is **off by default** — it is the only connection anywhere other than
+Jellyfin, so that is your call. Updating stays with `deploy/update.sh`.
 
 ---
 

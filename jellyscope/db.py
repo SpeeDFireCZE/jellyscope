@@ -83,6 +83,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "task_backup_enabled": "0",
     # Zaloha je taky nocni uloha - stejny duvod jako u synchronizace.
     # Kousek za ni, at si nelezou do zamku.
+    # Hlidani nove verze je vychozi VYPNUTE: je to odchozi spojeni
+    # a o tom rozhoduje ten, kdo server provozuje. Viz updates.py.
+    "update_check_enabled": "0",
     "task_tidy_enabled": "1",
     # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje
     # s tim, co synchronizace prave stahla, a zaloha uz ma ulozit

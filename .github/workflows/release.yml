@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------------------
+# Release. Spouští se na tag "v1.2.3".
+#
+# Postup je schválně v tomhle pořadí: nejdřív se ověří, že verze v kódu
+# odpovídá tagu, pak projdou testy, a teprve potom vznikne vydání. Vydání,
+# které neprošlo testy, je horší než žádné - lidé si ho stáhnou.
+#
+# Jak vydat novou verzi:
+#
+#   1. změň __version__ v jellyscope/__init__.py
+#   2. commitni  ("Release 1.2.3")
+#   3. git tag v1.2.3 && git push --tags
+#
+# Poznámky k vydání si GitHub poskládá z commitů od minulého tagu.
+# ---------------------------------------------------------------------------
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # bez toho vydání nevznikne
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # kvůli poznámkám z historie commitů
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Version in the code must match the tag
+        run: |
+          # Tohle je ta nejčastější chyba u vydávání: tag říká 1.2.3,
+          # ale aplikace se pořád hlásí jako 1.2.2 - a hlídání verzí
+          # pak lidem tvrdí, že mají novější verzi, než jaká vyšla.
+          tag="${GITHUB_REF_NAME#v}"
+          kod=$(python -c "import re,pathlib; print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('jellyscope/__init__.py').read_text()).group(1))")
+          echo "tag: $tag, v kódu: $kod"
+          if [ "$tag" != "$kod" ]; then
+              echo "::error::tag $tag neodpovídá __version__ $kod"
+              exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run the test suite
+        run: |
+          selhalo=0
+          for soubor in tests/test_*.py; do
+              python "$soubor" > /dev/null || { echo "FAIL $soubor"; selhalo=$((selhalo + 1)); }
+          done
+          exit $selhalo
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes

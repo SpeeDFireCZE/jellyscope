@@ -89,6 +89,19 @@
                 <form method="post" action="/logout" style="margin-top:8px">
                     <button class="btn" type="submit">{{ _("Odhlásit") }}</button>
                 </form>
+
+                {# Verze patří na obrazovku, ne jen do commitu: při hlášení
+                   chyby je první otázka vždycky „a jakou máš verzi". #}
+                <div class="verze">
+                    {% if verze.je_novejsi %}
+                        <a href="{{ verze.adresa }}" target="_blank" rel="noopener"
+                           class="badge warning" title="{{ _("Je k dispozici novější verze") }}">
+                            <span class="dot"></span>{{ verze.verze }} → {{ verze.nalezena }}
+                        </a>
+                    {% else %}
+                        v{{ verze.verze }}
+                    {% endif %}
+                </div>
             {% endif %}
         </div>
     </aside>
@@ -754,6 +767,24 @@
                 pohled = vychozi.slice();
                 vykresli();
             });
+        })();
+
+        /* Filtr historie: pole pro přesná data se ukážou, jen když si
+           člověk vybere „vlastní období". Bez JavaScriptu jsou vidět
+           taky - `hidden` se sundá až tady, takže se nestane, že by
+           někdo o možnost zadat datum přišel. */
+        (function () {
+            var volba = document.querySelector("[data-obdobi]");
+            if (!volba) { return; }
+            var pole = document.querySelectorAll(".filtr-vlastni");
+
+            function srovnej() {
+                pole.forEach(function (prvek) {
+                    prvek.hidden = volba.value !== "vlastni";
+                });
+            }
+            volba.addEventListener("change", srovnej);
+            srovnej();
         })();
 
         prepinatelnaKarta("daily-card", "/partials/daily", "kind");

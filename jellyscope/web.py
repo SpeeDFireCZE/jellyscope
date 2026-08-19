@@ -22,6 +22,7 @@ import re
 import sys
 import time
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -33,6 +34,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting, geoip,
+               updates,
                i18n, importers, insights, langstats, languages, scanner, stats,
                tasks)
 # PROJECT_DIR je kořen projektu (tam, kde je run.py a složka data),
@@ -647,6 +649,9 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # která skončí mezi vykreslením stránky a prvním dotazem, by jinak
         # propadla a nic by se neobnovilo.
         "tasks_version": scanner.tasks_version(),
+        # Verze se ukazuje v patičce každé stránky - je to první údaj,
+        # na který se u hlášení chyby ptá kdokoliv.
+        "verze": updates.stav(),
     }
     base.update(extra)
     return base
@@ -1081,6 +1086,52 @@ def insights_page(request: Request, days: Optional[int] = None, account: dict[st
     ))
 
 
+# Období, která si člověk v historii vybírá. Klíč jde do adresy, takže
+# odkaz na "posledních 7 dní" platí i zítra - narozdíl od pevných datumů.
+OBDOBI = {
+    "vse": ("vše", None),
+    "dnes": ("dnes", 0),
+    "7": ("posledních 7 dní", 7),
+    "30": ("posledních 30 dní", 30),
+    "90": ("posledních 90 dní", 90),
+    "365": ("poslední rok", 365),
+    "vlastni": ("vlastní…", -1),
+}
+
+
+def _datum_z_textu(text: Optional[str]) -> Optional[str]:
+    """Datum psané po česku (1.8.2026) na tvar pro databázi.
+
+    Bereme i tvar RRRR-MM-DD - tak chodí proklik z tabulky na Přehledu
+    a tak si ho někdo může uložit do záložek.
+    """
+    text = (text or "").strip()
+    if not text:
+        return None
+    if _VALID_DAY.match(text):
+        return text
+    shoda = re.match(r"^(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{4})$", text)
+    if not shoda:
+        return None
+    den, mesic, rok = (int(c) for c in shoda.groups())
+    try:
+        return date(rok, mesic, den).isoformat()
+    except ValueError:
+        # Třicátý únor. Radši nic než datum, které tiše ukáže prázdno.
+        return None
+
+
+def _cesky_datum(iso: Optional[str]) -> str:
+    """Opak: 2026-08-01 -> 1.8.2026, pro vypsání zpátky do formuláře."""
+    if not iso:
+        return ""
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        return ""
+    return f"{d.day}.{d.month}.{d.year}"
+
+
 @app.get("/history", response_class=HTMLResponse)
 def history(
     request: Request,
@@ -1089,34 +1140,100 @@ def history(
     user_id: Optional[str] = None,
     day: Optional[str] = None,
     kind: Optional[str] = None,
+    obdobi: Optional[str] = None,
+    od: Optional[str] = None,
+    do: Optional[str] = None,
+    method: Optional[str] = None,
+    client: Optional[str] = None,
+    language: Optional[str] = None,
     account: dict[str, Any] = Depends(require_login),
 ):
+    """Historie přehrávání s filtrem, který se dá skládat.
+
+    Všechny volby jsou v adrese, ne v session: filtr v historii je
+    jednorázová otázka („kdo se díval na filmy minulý týden"), ne
+    nastavení, které má přežít přechod jinam. Díky tomu se dá výsledek
+    poslat odkazem.
+    """
     page = max(1, page)
     per_page = 50
 
-    # Den bereme z adresy, ale do SQL pustime jen tvar RRRR-MM-DD.
-    # Retezec jde do dotazu jako parametr, takze i tak by byl bezpecny -
-    # tohle je navic proti preklepum, ktere by tise vratily prazdny seznam.
-    if day and not _VALID_DAY.match(day):
-        day = None
+    # Den přijde proklikem z tabulky na Přehledu; do SQL ho pustíme jen
+    # ve tvaru RRRR-MM-DD. Jde tam jako parametr, takže i tak by byl
+    # bezpečný - tohle je navíc proti překlepům, které by tiše vrátily
+    # prázdný seznam.
+    den = day if day and _VALID_DAY.match(day) else None
 
-    # Typ se sem posila z prokliku v tabulce, ne ze session - filtr
-    # v historii je jednorazovy a nema prepisovat volbu na Prehledu.
+    obdobi = obdobi if obdobi in OBDOBI else ("vlastni" if (od or do) else "vse")
+    if obdobi == "vlastni":
+        od_iso, do_iso = _datum_z_textu(od), _datum_z_textu(do)
+    else:
+        dni = OBDOBI[obdobi][1]
+        od_iso = ((date.today() - timedelta(days=dni)).isoformat()
+                  if dni is not None and dni >= 0 else None)
+        do_iso = None
+
+    # Typ se sem posílá z prokliku v tabulce, ne ze session - filtr
+    # v historii nemá přepisovat volbu na Přehledu.
     kind = kind if kind in stats.ALLOWED_KINDS else stats.KIND_BOTH
 
-    total = stats.history_count(user_id, search, day, kind)
+    # Způsob přehrání porovnáváme proti pevnému seznamu; přehrávače
+    # a jazyky proti tomu, co v historii doopravdy je. Nabídka se staví
+    # z dat, takže v ní nikdy není volba, která by nic nenašla.
+    nabidka = stats.hodnoty_filtru()
+    method = method if method in stats.ZPUSOBY else None
+    client = client if client in nabidka["klienti"] else None
+    language = language if (language == "und"
+                            or language in nabidka["jazyky"]) else None
+
+    filtr = {
+        "user_id": user_id or None,
+        "search": (search or "").strip() or None,
+        "day": den,
+        "kind": kind,
+        "od": od_iso,
+        "do": do_iso,
+        "method": method,
+        "client": client,
+        "language": language,
+    }
+
+    total = stats.history_count(**filtr)
+    stranek = max(1, -(-total // per_page))
+    page = min(page, stranek)
 
     return templates.TemplateResponse(request, "history.html", _context(
         request, account,
-        rows=stats.history(per_page, (page - 1) * per_page, user_id, search, day, kind),
+        rows=stats.history(limit=per_page, offset=(page - 1) * per_page, **filtr),
+        users=db.query_all("SELECT id, name FROM users ORDER BY name"),
+        nabidka=nabidka,
         total=total,
         page=page,
-        pages=max(1, (total + per_page - 1) // per_page),
-        search=search or "",
-        user_id=user_id or "",
-        day=day or "",
-        kind=kind,
-        users=db.query_all("SELECT id, name FROM users ORDER BY name"),
+        pages=stranek,
+        obdobi=obdobi,
+        obdobi_volby=[(klic, i18n.translate(popis))
+                      for klic, (popis, _dni) in OBDOBI.items()],
+        # Do formuláře se datum vypisuje po česku, do adresy jde ISO.
+        od_text=_cesky_datum(od_iso),
+        do_text=_cesky_datum(do_iso),
+        **filtr,
+        filtr_aktivni=(any(hodnota for klic, hodnota in filtr.items()
+                           if klic != "kind")
+                       or kind != stats.KIND_BOTH or obdobi != "vse"),
+        # Do čipů nad tabulkou: kolik voleb je zapnutých a jak se jmenují.
+        # Číslo na tlačítku je poznat na první pohled, seznam id ne.
+        # Číslo na tlačítku musí sedět s počtem čipů pod ním. Datumy se
+        # proto nepočítají: jsou to jen jiná podoba volby "období", a
+        # kdyby se počítaly zvlášť, tlačítko by hlásilo o jedna víc,
+        # než je vidět.
+        pocet_filtru=(sum(1 for klic, hodnota in filtr.items()
+                          if hodnota and klic not in ("kind", "od", "do", "day"))
+                      + (1 if kind != stats.KIND_BOTH else 0)
+                      + (1 if den or obdobi != "vse" else 0)),
+        jmeno_uzivatele=(next((r["name"] for r in db.query_all(
+            "SELECT id, name FROM users WHERE id = ?", (user_id,))), user_id)
+            if user_id else ""),
+        obdobi_popis=i18n.translate(OBDOBI[obdobi][0]),
     ))
 
 
@@ -1589,6 +1706,34 @@ def settings_database(
         "success",
     )
     return RedirectResponse("/settings?section=database", status_code=303)
+
+
+@app.post("/settings/updates")
+async def settings_updates(request: Request, action: str = Form(""),
+                           update_check_enabled: str = Form(""),
+                           account: dict[str, Any] = Depends(require_admin)):
+    """Hlídání nové verze - zapnutí, vypnutí a ruční kontrola.
+
+    Tlačítko „Zkontrolovat teď" se ptá i tehdy, když je hlídání vypnuté:
+    je to jednorázová akce na kliknutí, tedy něco jiného než pravidelné
+    volání na pozadí.
+    """
+    db.set_setting(updates.ZAPNUTO, "1" if update_check_enabled else "0")
+
+    if action == "check":
+        vysledek = await updates.zkontroluj(vynuceno=True)
+        if vysledek.get("status") == "error":
+            _flash(request, "Kontrolu se nepovedlo provést: {duvod}", "error",
+                   duvod=vysledek.get("message", "?"))
+        elif vysledek.get("je_novejsi"):
+            _flash(request, "Je k dispozici verze {verze}.", "success",
+                   verze=vysledek.get("nalezena", "?"))
+        else:
+            _flash(request, "Máš nejnovější verzi.", "success")
+    else:
+        _flash(request, "Uloženo.", "success")
+
+    return RedirectResponse("/settings?section=general#verze", status_code=303)
 
 
 @app.post("/settings/language")

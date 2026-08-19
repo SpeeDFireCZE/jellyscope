@@ -934,6 +934,79 @@ def hourly_heatmap(days: int) -> list[list[float]]:
     return grid
 
 
+# Co vsechno jde v historii filtrovat. Hodnoty se vzdycky predavaji jako
+# parametr - z adresy se do SQL nikdy nedostane nic jineho nez otaznik.
+ZPUSOBY = ("DirectPlay", "DirectStream", "Transcode")
+
+
+def _filtr_historie(
+    user_id: str | None = None,
+    search: str | None = None,
+    day: str | None = None,
+    kind: str = KIND_BOTH,
+    od: str | None = None,
+    do: str | None = None,
+    method: str | None = None,
+    client: str | None = None,
+    language: str | None = None,
+) -> tuple[list[str], list[Any]]:
+    """Slozi podminky a hodnoty pro dotaz do historie.
+
+    Jedno misto pro seznam i pro pocitadlo. Kdyby si kazdy stavel
+    podminky sam, staci pridat filtr do jednoho z nich - a strankovani
+    zacne lhat, protoze celkovy pocet uz neodpovida vypisu.
+    """
+    where = ["p.watched_seconds > 0"]
+    params: list[Any] = []
+
+    if user_id:
+        where.append("p.user_id = ?")
+        params.append(user_id)
+
+    if search:
+        where.append("(p.item_name LIKE ? OR p.series_name LIKE ?)")
+        # Znaky % kolem hledaneho textu znamenaji "kdekoliv uvnitr".
+        # Text jde do dotazu jako parametr, nikdy se nelepi do SQL.
+        params.extend([f"%{search}%", f"%{search}%"])
+
+    # Jeden den je zvlastni pripad obdobi - prijde proklikem z tabulky
+    # na Prehledu. Kdyz je vyplneny, obdobi se ignoruje.
+    if day:
+        where.append("date(p.started_at, 'localtime') = ?")
+        params.append(day)
+    else:
+        if od:
+            where.append("date(p.started_at, 'localtime') >= ?")
+            params.append(od)
+        if do:
+            where.append("date(p.started_at, 'localtime') <= ?")
+            params.append(do)
+
+    podminka = _kind_condition(kind, "p.")
+    if podminka:
+        where.append(podminka.replace(" AND ", "", 1))
+
+    if method in ZPUSOBY:
+        where.append("p.play_method = ?")
+        params.append(method)
+
+    if client:
+        where.append("p.client = ?")
+        params.append(client)
+
+    if language:
+        # "und" znamena "nezjisteno" - a k tomu patri i prazdna hodnota,
+        # jinak by se filtr minul s vetsinou zaznamu.
+        if language == "und":
+            where.append("(p.audio_language IS NULL OR p.audio_language = ''"
+                         " OR p.audio_language = 'und')")
+        else:
+            where.append("p.audio_language = ?")
+            params.append(language)
+
+    return where, params
+
+
 def history(
     limit: int = 50,
     offset: int = 0,
@@ -941,56 +1014,29 @@ def history(
     search: str | None = None,
     day: str | None = None,
     kind: str = KIND_BOTH,
+    od: str | None = None,
+    do: str | None = None,
+    method: str | None = None,
+    client: str | None = None,
+    language: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Surova historie prehravani, strankovana.
+    """Surova historie prehravani, strankovana a filtrovana.
 
-    `day` je datum ve tvaru "2026-08-13" a omezi vypis na jeden den -
-    pouziva se pri prokliku z tabulky na Prehledu. Porovnava se stejnym
-    vyrazem, jakym se den pocita v grafu (mistni cas), aby proklik
-    ukazal presne to, co bylo v tabulce.
+    Filtry se skladaji: uzivatel + druh + obdobi + zpusob prehrani +
+    klient + jazyk naraz. Vsechny jsou v adrese, takze vysledek jde
+    poslat odkazem a po obnoveni stranky zustane, co si clovek nastavil.
     """
-    where = ["p.watched_seconds > 0"]
-    params: list[Any] = []
-
-    # Nazvy sloupcu maji prefix tabulky (p.), protoze dotaz spojuje playback
-    # a items - a obe tabulky maji sloupec series_name. Bez prefixu by
-    # SQLite nevedela, kterou z nich myslime, a dotaz by skoncil chybou.
-    if user_id:
-        where.append("p.user_id = ?")
-        params.append(user_id)
-    if search:
-        where.append("(p.item_name LIKE ? OR p.series_name LIKE ?)")
-        # Znaky % kolem hledaneho textu znamenaji "kdekoliv uvnitr".
-        # Text davame jako parametr (?), nikdy ho nelepime do SQL primo -
-        # tak vznika SQL injection.
-        params.extend([f"%{search}%", f"%{search}%"])
-    if day:
-        where.append("date(p.started_at, 'localtime') = ?")
-        params.append(day)
-    # Stejna podminka jako v grafu, jen s prefixem tabulky - aby seznam
-    # ukazoval presne to, co je nad nim v krivce.
-    podminka = _kind_condition(kind, "p.")
-    if podminka:
-        where.append(podminka.replace(" AND ", "", 1))
-
+    where, params = _filtr_historie(user_id, search, day, kind, od, do,
+                                    method, client, language)
     params.extend([limit, offset])
     return db.query_all(
         f"""
         SELECT p.*,
-               -- Přednost mají rozměry zaznamenané u přehrávání: relace ví,
-               -- co doopravdy teklo, kdežto `items` popisuje soubor tak, jak
-               -- ho známe z poslední synchronizace. Do `items` sáhneme jen
-               -- u starších záznamů, které rozměry ještě neukládaly.
-               --
-               -- A **oba** rozměry, ne jen výšku. Dřív se vybírala jen
-               -- `i.height` a šířka do šablony nedorazila vůbec; 4K film
-               -- v poměru scope (3840×1608) pak vyšel jako 1080p, protože
-               -- 1608 je pod hranicí pro výšku. Rozlišení se pozná podle
-               -- šířky - viz RESOLUTION_CASE.
+               -- Prednost maji rozmery zaznamenane u prehravani: relace vi,
+               -- co doopravdy teklo, kdezto `items` popisuje soubor tak, jak
+               -- ho zname z posledni synchronizace.
                COALESCE(p.video_height, i.height) AS height,
-               COALESCE(p.video_width,  i.width)  AS width,
-               i.video_codec AS source_video_codec,
-               i.size_bytes
+               COALESCE(p.video_width,  i.width)  AS width
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
         WHERE {' AND '.join(where)}
@@ -1001,23 +1047,53 @@ def history(
     )
 
 
-def history_count(user_id: str | None = None, search: str | None = None,
-                  day: str | None = None, kind: str = KIND_BOTH) -> int:
-    where = ["watched_seconds > 0"]
-    params: list[Any] = []
-    if day:
-        where.append("date(started_at, 'localtime') = ?")
-        params.append(day)
-    where.append("1 = 1" + _kind_condition(kind))
-    if user_id:
-        where.append("user_id = ?")
-        params.append(user_id)
-    if search:
-        where.append("(item_name LIKE ? OR series_name LIKE ?)")
-        params.extend([f"%{search}%", f"%{search}%"])
+def history_count(
+    user_id: str | None = None,
+    search: str | None = None,
+    day: str | None = None,
+    kind: str = KIND_BOTH,
+    od: str | None = None,
+    do: str | None = None,
+    method: str | None = None,
+    client: str | None = None,
+    language: str | None = None,
+) -> int:
+    """Kolik zaznamu filtru odpovida - podle toho se strankuje."""
+    where, params = _filtr_historie(user_id, search, day, kind, od, do,
+                                    method, client, language)
     return int(db.query_value(
-        f"SELECT COUNT(*) FROM playback WHERE {' AND '.join(where)}", tuple(params)
+        f"""
+        SELECT COUNT(*) FROM playback p
+        LEFT JOIN items i ON i.id = p.item_id
+        WHERE {' AND '.join(where)}
+        """,
+        tuple(params),
     ))
+
+
+def hodnoty_filtru() -> dict[str, list[Any]]:
+    """Cim vsim se da filtrovat - podle toho, co v historii doopravdy je.
+
+    Nabizet vsechny mozne klienty a jazyky by znamenalo dlouhy seznam
+    voleb, ktere u tebe stejne nic nenajdou.
+    """
+    klienti = [r["client"] for r in db.query_all(
+        "SELECT client, COUNT(*) AS n FROM playback"
+        " WHERE client IS NOT NULL AND client != ''"
+        " GROUP BY client ORDER BY n DESC LIMIT 25") if r["client"]]
+
+    jazyky = [r["audio_language"] for r in db.query_all(
+        "SELECT audio_language, COUNT(*) AS n FROM playback"
+        " WHERE audio_language IS NOT NULL AND audio_language != ''"
+        " GROUP BY audio_language ORDER BY n DESC LIMIT 25")
+        if r["audio_language"]]
+
+    zpusoby = [r["play_method"] for r in db.query_all(
+        "SELECT play_method, COUNT(*) AS n FROM playback"
+        " WHERE play_method IS NOT NULL AND play_method != ''"
+        " GROUP BY play_method ORDER BY n DESC") if r["play_method"]]
+
+    return {"klienti": klienti, "jazyky": jazyky, "zpusoby": zpusoby}
 
 
 # ---------------------------------------------------------------------------

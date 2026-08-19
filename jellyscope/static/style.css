@@ -1761,3 +1761,49 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 
 .mapa-bod { transition: opacity 120ms ease; }
 .mapa-bod:hover { opacity: 0.8; }
+
+
+/* Verze v patičce postranního panelu. Drobným písmem: je to údaj, který
+   je potřeba jednou za čas, ne něco, co má tahat pozornost. */
+.verze {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.verze a { text-decoration: none; }
+
+
+/* Filtr v historii. Mřížka, ne řádek: polí je osm a na užší obrazovce
+   se musí zalomit sama, jinak by z nich byl vodorovný posuvník. */
+.filtr {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 16px;
+}
+
+.filtr-pole { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.filtr-pole label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.filtr-pole select,
+.filtr-pole input { width: 100%; }
+
+/* Hledání názvu je to nejširší pole - ať má prostor na dvě kolonky. */
+.filtr-hledani { grid-column: span 2; }
+
+.filtr-tlacitka {
+    display: flex;
+    gap: 8px;
+    grid-column: 1 / -1;
+}
+
+
+/* Okno s filtrem je širší než ostatní: je v něm mřížka o osmi polích,
+   a při šířce běžného okna by z ní byl jeden dlouhý sloupec. */
+.okno-siroke { width: min(760px, calc(100vw - 32px)); }

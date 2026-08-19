@@ -1294,6 +1294,55 @@
 {# ================================================================== #}
 {% elif section == 'general' %}
 {# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# Verze a hlídání nové                                                #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="verze">
+    <div class="card-head">
+        <h2>{{ _("Verze") }}</h2>
+        <p class="card-note">{{ _("běží") }} <strong>v{{ verze.verze }}</strong></p>
+    </div>
+
+    {% if verze.je_novejsi %}
+    <div class="flash warning">
+        <span class="dot"></span>
+        <span>
+            {{ _("Je k dispozici verze") }} <strong>{{ verze.nalezena }}</strong>.
+            <a href="{{ verze.adresa }}" target="_blank" rel="noopener">{{ _("Co je v ní nového") }}</a>.
+            {{ _("Aktualizuje se na serveru příkazem") }}
+            <code>bash deploy/update.sh</code>.
+        </span>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/settings/updates">
+        <label class="radio-card" style="margin-top:6px">
+            <input type="checkbox" name="update_check_enabled" value="1"
+                   {{ 'checked' if verze.zapnuto }}>
+            <span>
+                <span class="title">{{ _("Hlídat novou verzi") }}</span>
+                <span class="desc">
+                    {{ _("Jednou denně se zeptá GitHubu, jestli nevyšlo novější vydání. Nic neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu vypnuté.") }}
+                </span>
+            </span>
+        </label>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+            <button class="btn" type="submit" name="action" value="check">
+                {{ _("Zkontrolovat teď") }}
+            </button>
+        </div>
+    </form>
+
+    {% if verze.kontrolovano %}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Naposledy kontrolováno") }} {{ verze.kontrolovano | relative }}{% if verze.nalezena %},
+        {{ _("nejnovější vydání") }}: {{ verze.nalezena }}{% endif %}.
+    </p>
+    {% endif %}
+</div>
+
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Jazyk rozhraní") }}</h2>

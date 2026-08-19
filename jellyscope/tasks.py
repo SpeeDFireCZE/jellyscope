@@ -1035,6 +1035,13 @@ async def run_scheduler() -> None:
                         _poznamenej_automaticky_beh(task)
                     result = await task.runner()
                     log.info("uloha %s skoncila: %s", task.key, result.get("status"))
+
+            # Kontrola nove verze. Neni to uloha v seznamu: nesaha na data,
+            # nema smysl ji poustet rucne a clovek by ji v rozvrhu jen
+            # marne hledal. Sama si hlida, ze na sit jde nejvys jednou
+            # denne - a kdyz je vypnuta, neudela nic.
+            from . import updates
+            await updates.zkontroluj()
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001

@@ -1083,6 +1083,46 @@ EN: dict[str, str] = {
     # --- mapa (GeoLite2) --------------------------------------------------
     "Mapa": "Map",
 
+    # --- verze a hlidani noveho vydani ------------------------------------
+    "Verze": "Version",
+
+    # --- filtr v historii -------------------------------------------------
+    "Filtr": "Filter",
+    "Filtr historie": "History filter",
+    "Období": "Period",
+    "posledních 7 dní": "last 7 days",
+    "posledních 30 dní": "last 30 days",
+    "posledních 90 dní": "last 90 days",
+    "poslední rok": "last year",
+    "vlastní…": "custom…",
+    "dnes": "today",
+    "Od": "From",
+    "Do": "To",
+    "Přehrávač": "Player",
+    "jakýkoliv": "any",
+    "všichni": "everyone",
+    "neuvedený": "not given",
+    "zrušit den": "clear the day",
+    "běží": "running",
+    "Hlídat novou verzi": "Watch for a new version",
+    "Jednou denně se zeptá GitHubu, jestli nevyšlo novější vydání. Nic "
+    "neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, "
+    "proto je ve výchozím stavu vypnuté.":
+        "Once a day it asks GitHub whether a newer release is out. It "
+        "installs nothing – it only tells you. This is the only connection "
+        "anywhere other than Jellyfin, which is why it is off by default.",
+    "Zkontrolovat teď": "Check now",
+    "Naposledy kontrolováno": "Last checked",
+    "nejnovější vydání": "latest release",
+    "Je k dispozici verze": "Version available",
+    "Je k dispozici novější verze": "A newer version is available",
+    "Co je v ní nového": "What is new in it",
+    "Aktualizuje se na serveru příkazem": "On the server it updates with",
+    "Je k dispozici verze {verze}.": "Version {verze} is available.",
+    "Máš nejnovější verzi.": "You have the latest version.",
+    "Kontrolu se nepovedlo provést: {duvod}": "The check failed: {duvod}",
+    "Uloženo.": "Saved.",
+
     # --- souhrn nahore na strance serialu --------------------------------
     "O seriálu": "About the series",
     "Průměrně na díl": "Average per episode",
@@ -1323,6 +1363,12 @@ LOG_EN: dict[str, str] = {
         'address %s could not be located: %s',
     'import: %s zaznamu preneseno ze serialu na konkretni dil':
         'import: %s records moved from the series to a specific episode',
+    'navazano na prerusene prehravani %s - pauza, ne nove spusteni':
+        'continued the interrupted playback %s - a pause, not a new start',
+    'je k dispozici nova verze %s (bezi %s)':
+        'a new version %s is available (running %s)',
+    'kontrolu verze se nepodarilo provest: %s':
+        'the version check could not be made: %s',
     'narovnani dat: %s uprav, osirelych zbyva %s':
         'data tidy-up: %s changes, %s orphans remain',
     'dohledani v Jellyfinu se nepovedlo: %s':

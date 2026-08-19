@@ -131,6 +131,82 @@ def _prevzit_cizi_relaci(conn: Any, key: str, session: dict[str, Any],
     return radek
 
 
+# Jak dlouho po prerusení se prehravani jeste povazuje za totez.
+#
+# Pulhodina je kompromis: pauza na kafe nebo na uspani televize se vejde,
+# ale film puštěný vecer a znovu pred spanim uz jsou dve ruzne podivane.
+NAVAZANI_MINUT = 30
+
+# Od jake pozice ma smysl rozlisovat "pokracuje" a "zacal znovu".
+# Pod peti minutami je to jedno - kdo si film pusti od zacatku po dvou
+# minutach, ten ho spis jen restartoval.
+ZNOVU_OD_ZACATKU_TIKY = 5 * 60 * 10_000_000
+
+
+def _navaz_na_prerusene(conn: Any, key: str, session: dict[str, Any],
+                        item: dict[str, Any], pozice: Any, now: str) -> Any:
+    """Nepokracuje tenhle divak v tom, co pred chvili prerusil?
+
+    Proc to tu je: nektere prehravace pri pauze z `/Sessions` zmizi
+    uplne. Sberac takovy zaznam uzavre - a kdyz se prehravani rozjede
+    dal, zalozi novy. Jedno sledovani je pak v historii dvakrat a ve
+    statistikach jako dve spusteni.
+
+    Za pokracovani se to povazuje, kdyz sedi vsechno tohle:
+
+      * tentyz divak a tentyz titul,
+      * od posledniho snimku uplynulo min nez NAVAZANI_MINUT,
+      * a **nezacalo se od zacatku** - kdyz je prehravac na nule, kdezto
+        predtim byl v pulce filmu, je to nove sledovani, ne pokracovani.
+
+    Odsledovany cas se tim nenafoukne: mezera mezi snimky je oriznuta na
+    nekolikanasobek intervalu dotazovani (viz max_gap_seconds), takze se
+    doba pauzy nikam nezapocita.
+    """
+    uzivatel = session.get("UserId")
+    polozka = item.get("Id")
+    if not uzivatel or not polozka:
+        return None
+
+    od = (_parse(now) - timedelta(minutes=NAVAZANI_MINUT)).strftime(db.TIME_FORMAT)
+    radek = conn.execute(
+        """SELECT id, last_seen_at, watched_seconds, position_ticks,
+                  audio_language, subtitle_language,
+                  current_audio_language, current_subtitle_language,
+                  language_since, language_confirmed
+             FROM playback
+            WHERE is_active = 0
+              AND user_id = ? AND item_id = ?
+              AND last_seen_at >= ?
+         ORDER BY last_seen_at DESC
+            LIMIT 1""",
+        (str(uzivatel), str(polozka), od),
+    ).fetchone()
+
+    if radek is None:
+        return None
+
+    try:
+        nova_pozice = int(pozice or 0)
+        stara_pozice = int(radek["position_ticks"] or 0)
+    except (TypeError, ValueError):
+        nova_pozice = stara_pozice = 0
+
+    # Zacal znovu od zacatku? Pak je to druhe sledovani teho z filmu.
+    if stara_pozice > ZNOVU_OD_ZACATKU_TIKY and nova_pozice < stara_pozice / 2:
+        return None
+
+    conn.execute(
+        """UPDATE playback
+              SET is_active = 1, ended_at = NULL, session_key = ?
+            WHERE id = ?""",
+        (key, radek["id"]),
+    )
+    log.info("navazano na prerusene prehravani %s - pauza, ne nove spusteni",
+             radek["id"])
+    return radek
+
+
 def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
     """Co konkretne tece k prehravaci - kodeky a bitrate.
 
@@ -238,6 +314,13 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
 
             if existing is None:
                 existing = _prevzit_cizi_relaci(conn, key, session, item, now)
+
+            # Az kdyz nic nebezi: nenavazujeme na neco, co divak pred
+            # chvili pauznul? Musi to byt az tady - bezici zaznam ma
+            # prednost pred uzavrenym.
+            if existing is None:
+                existing = _navaz_na_prerusene(
+                    conn, key, session, item, play_state.get("PositionTicks"), now)
 
             if existing is None:
                 library_row = conn.execute(

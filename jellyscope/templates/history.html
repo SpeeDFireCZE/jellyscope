@@ -11,33 +11,49 @@
 </div>
 
 <div class="card">
-    <form method="get" action="/history" class="btn-row" style="margin-bottom:16px">
-        <select name="user_id" style="width:auto">
-            <option value="">{{ _("Všichni uživatelé") }}</option>
-            {% for row in users %}
-                <option value="{{ row.id }}" {{ 'selected' if row.id == user_id }}>{{ row.name }}</option>
-            {% endfor %}
-        </select>
-        <input type="search" name="search" value="{{ search }}" placeholder="{{ _('Hledat název...') }}" style="width:230px">
-        {# Filtr dne a typu se sem dostane proklikem z tabulky na Přehledu.
-           Nese se dál skrytým polem, aby ho hledání ani výběr uživatele
-           neshodily - jinak by druhé kliknutí filtr tiše zrušilo. #}
-        {% if day %}<input type="hidden" name="day" value="{{ day }}">{% endif %}
-        {% if kind and kind != 'both' %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
-        <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
-        {% if search or user_id or day or kind != 'both' %}
+    {# Filtr je v okně, ne rozložený na stránce. Osm polí nad tabulkou
+       zabíralo půl obrazovky a člověk je potřebuje jednou za čas -
+       tabulka je to, kvůli čemu sem chodí.
+
+       Na stránce zůstává tlačítko a shrnutí toho, co je zapnuté; celé
+       nastavení je v <dialog>, který umí Esc i klik mimo. #}
+    <div class="btn-row" style="margin-bottom:14px">
+        <button class="btn {{ 'primary' if filtr_aktivni }}" type="button"
+                data-okno="okno-filtr">
+            {{ _("Filtr") }}{% if filtr_aktivni %} ({{ pocet_filtru }}){% endif %}
+        </button>
+        {% if filtr_aktivni %}
             <a class="btn" href="/history">{{ _("Zrušit filtr") }}</a>
         {% endif %}
-    </form>
+        <span class="card-note" style="align-self:center">
+            {{ total | number }} {{ _("záznamů") }}
+        </span>
+    </div>
 
-    {% if day or kind != 'both' %}
+    {% if filtr_aktivni %}
     <div class="filters" style="margin-bottom:14px">
-        {% if day %}
-            <span class="chip active">{{ _("Den") }}: {{ day }}</span>
+        {% if day %}<span class="chip active">{{ _("Den") }}: {{ day }}</span>{% endif %}
+        {% if obdobi != 'vse' and not day %}
+            <span class="chip active">
+                {% if obdobi == 'vlastni' %}
+                    {{ od_text or '…' }} – {{ do_text or '…' }}
+                {% else %}
+                    {{ obdobi_popis }}
+                {% endif %}
+            </span>
         {% endif %}
+        {% if user_id %}<span class="chip active">{{ jmeno_uzivatele }}</span>{% endif %}
         {% if kind == 'movies' %}<span class="chip active">{{ _("Filmy") }}</span>{% endif %}
         {% if kind == 'series' %}<span class="chip active">{{ _("Seriály") }}</span>{% endif %}
         {% if kind == 'other' %}<span class="chip active">{{ _("Ostatní") }}</span>{% endif %}
+        {% if method %}<span class="chip active">{{ _(method) }}</span>{% endif %}
+        {% if client %}<span class="chip active">{{ client }}</span>{% endif %}
+        {% if language %}
+            <span class="chip active">
+                {{ _("neuvedený") if language == 'und' else lang.display(language) }}
+            </span>
+        {% endif %}
+        {% if search %}<span class="chip active">„{{ search }}"</span>{% endif %}
     </div>
     {% endif %}
 
@@ -121,4 +137,107 @@
     {% set extra %}{% if user_id %}&user_id={{ user_id }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if day %}&day={{ day }}{% endif %}{% if kind != 'both' %}&kind={{ kind }}{% endif %}{% endset %}
     {{ pager(page, pages, total, '/history', extra) }}
 </div>
+
+<dialog class="okno okno-siroke" id="okno-filtr">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Filtr historie") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    <form method="get" action="/history" class="filtr">
+        <div class="filtr-pole">
+            <label for="f-user">{{ _("Uživatel") }}</label>
+            <select id="f-user" name="user_id">
+                <option value="">{{ _("všichni") }}</option>
+                {% for row in users %}
+                    <option value="{{ row.id }}" {{ 'selected' if row.id == user_id }}>{{ row.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filtr-pole">
+            <label for="f-kind">{{ _("Druh") }}</label>
+            <select id="f-kind" name="kind">
+                <option value="both">{{ _("vše") }}</option>
+                <option value="movies" {{ 'selected' if kind == 'movies' }}>{{ _("Filmy") }}</option>
+                <option value="series" {{ 'selected' if kind == 'series' }}>{{ _("Seriály") }}</option>
+                <option value="other" {{ 'selected' if kind == 'other' }}>{{ _("Ostatní") }}</option>
+            </select>
+        </div>
+
+        {# Období: seznam toho, co si člověk vybírá nejčastěji. Nativní
+           <input type="date"> tu byl dřív a vypadal v každém prohlížeči
+           jinak - stejná lekce jako u výběru času v úlohách. Přesné datum
+           se dá pořád zadat, jen se o něj neklopýtá. #}
+        <div class="filtr-pole">
+            <label for="f-obdobi">{{ _("Období") }}</label>
+            <select id="f-obdobi" name="obdobi" data-obdobi>
+                {% for hodnota, popis in obdobi_volby %}
+                    <option value="{{ hodnota }}" {{ 'selected' if hodnota == obdobi }}>{{ popis }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filtr-pole filtr-vlastni" {{ 'hidden' if obdobi != 'vlastni' }}>
+            <label for="f-od">{{ _("Od") }}</label>
+            <input type="text" id="f-od" name="od" value="{{ od_text or '' }}"
+                   placeholder="1.8.2026" inputmode="numeric" autocomplete="off">
+        </div>
+
+        <div class="filtr-pole filtr-vlastni" {{ 'hidden' if obdobi != 'vlastni' }}>
+            <label for="f-do">{{ _("Do") }}</label>
+            <input type="text" id="f-do" name="do" value="{{ do_text or '' }}"
+                   placeholder="31.8.2026" inputmode="numeric" autocomplete="off">
+        </div>
+
+        <div class="filtr-pole">
+            <label for="f-method">{{ _("Způsob") }}</label>
+            <select id="f-method" name="method">
+                <option value="">{{ _("jakýkoliv") }}</option>
+                {% for zpusob in nabidka.zpusoby %}
+                    <option value="{{ zpusob }}" {{ 'selected' if zpusob == method }}>{{ _(zpusob) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filtr-pole">
+            <label for="f-client">{{ _("Přehrávač") }}</label>
+            <select id="f-client" name="client">
+                <option value="">{{ _("jakýkoliv") }}</option>
+                {% for klient in nabidka.klienti %}
+                    <option value="{{ klient }}" {{ 'selected' if klient == client }}>{{ klient }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filtr-pole">
+            <label for="f-language">{{ _("Jazyk") }}</label>
+            <select id="f-language" name="language">
+                <option value="">{{ _("jakýkoliv") }}</option>
+                {% for kod in nabidka.jazyky %}
+                    <option value="{{ kod }}" {{ 'selected' if kod == language }}>{{ lang.display(kod) }}</option>
+                {% endfor %}
+                <option value="und" {{ 'selected' if language == 'und' }}>{{ _("neuvedený") }}</option>
+            </select>
+        </div>
+
+        <div class="filtr-pole filtr-hledani">
+            <label for="f-search">{{ _("Název") }}</label>
+            <input type="search" id="f-search" name="search" value="{{ search or '' }}"
+                   placeholder="{{ _('Hledat název...') }}">
+        </div>
+
+        {# Den přijde proklikem z tabulky na Přehledu. Nese se dál skrytým
+           polem, aby ho ostatní volby neshodily - jinak by druhé kliknutí
+           filtr tiše zrušilo. #}
+        {% if day %}<input type="hidden" name="day" value="{{ day }}">{% endif %}
+
+        <div class="filtr-tlacitka">
+            <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
+            <a class="btn" href="/history">{{ _("Zrušit filtr") }}</a>
+        </div>
+    </form>
+</dialog>
+
 {% endblock %}
