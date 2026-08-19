@@ -1754,10 +1754,10 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     border: 1px solid var(--border);
 }
 
-.mapa circle {
-    transition: fill-opacity 120ms ease;
-}
+/* Kurzor napoví, že se s mapou dá hýbat. */
+.mapa { cursor: grab; touch-action: none; }
+.mapa:active { cursor: grabbing; }
+.mapa.je-priblizena { cursor: grabbing; }
 
-.mapa circle:hover {
-    fill-opacity: 1;
-}
+.mapa-bod { transition: opacity 120ms ease; }
+.mapa-bod:hover { opacity: 0.8; }

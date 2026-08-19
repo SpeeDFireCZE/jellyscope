@@ -603,7 +603,7 @@ def mapa_sveta(body: Sequence[dict[str, Any]]) -> str:
     dvojnasobnou plochu, ne dvojnasobny polomer. Bez odmocniny by jedno
     aktivni misto prekrylo pul kontinentu.
     """
-    from .worldmap import PEVNINY, SIRKA, VYSKA, na_mapu
+    from .worldmap import HRANICE, PEVNINY, SIRKA, VYSKA, na_mapu
 
     if not body:
         return _empty(_t("Zatím žádná data"))
@@ -612,12 +612,32 @@ def mapa_sveta(body: Sequence[dict[str, Any]]) -> str:
 
     casti = [
         f'<svg class="mapa" viewBox="0 0 {SIRKA} {VYSKA}" '
+        f'data-vychozi="0 0 {SIRKA} {VYSKA}" '
         f'preserveAspectRatio="xMidYMid meet" role="img" '
         f'aria-label="{_e(_t("Odkud se dívají"))}">',
+        # Zare kolem bodu. Jeden pruhledny prechod pro vsechny tecky:
+        # gradient se pocita v souradnicich prvku, takze se sam prizpusobi
+        # jeho velikosti a nemusi se definovat pro kazdou zvlast.
+        '<defs><radialGradient id="zare-mapa">'
+        '<stop offset="0%" stop-color="var(--series-1)" stop-opacity="0.95" />'
+        '<stop offset="35%" stop-color="var(--series-1)" stop-opacity="0.35" />'
+        '<stop offset="100%" stop-color="var(--series-1)" stop-opacity="0" />'
+        '</radialGradient></defs>',
         f'<rect x="0" y="0" width="{SIRKA}" height="{VYSKA}" '
         f'fill="var(--surface-2)" />',
         f'<path d="{PEVNINY}" fill="var(--axis)" fill-opacity="0.35" '
         f'stroke="var(--axis)" stroke-width="0.2" />',
+        # Hranice statu se kresli az po priblizeni - pri pohledu na cely
+        # svet by z nich byla jen sit car pres kontinenty. Sirka cary se
+        # pri priblizeni zmensuje spolu s vyrezem, aby zustala vlasova.
+        # Hranice kreslime barvou textu, ne carou grafu: --axis ma skoro
+        # tentyz odstin jako vypln pevnin, takze v ni hranice splyvaly.
+        f'<path class="mapa-hranice" d="{HRANICE}" fill="none" '
+        f'stroke="var(--text-muted)" stroke-width="0.16" '
+        f'stroke-opacity="0" stroke-linejoin="round" />',
+        # Vsechno, co se posouva a priblizuje, je v jedne skupine - JS pak
+        # meni jen viewBox a nemusi sahat na jednotlive prvky.
+        '<g class="mapa-body">',
     ]
 
     for bod in body:
@@ -627,13 +647,22 @@ def mapa_sveta(body: Sequence[dict[str, Any]]) -> str:
         tip = _t("{misto}: {n}× · {lidi} lidí").format(
             misto=bod.get("popis") or "?", n=bod.get("plays") or 0,
             lidi=bod.get("lidi") or 0)
+        # Dve kruznice na bod: mekka zare a v ni ostre jadro. Samotna
+        # tecka pusobi jako spinavy bod na skle; zare vypada jako svetlo
+        # videne z vesmiru - a hlavne je videt i tam, kde je bodu vic
+        # blizko sebe.
         casti.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{polomer:.2f}" '
-            f'fill="var(--series-1)" fill-opacity="0.75" '
-            f'stroke="var(--surface-1)" stroke-width="0.3" '
-            f'data-tip="{_e(tip)}" />'
+            f'<g class="mapa-bod" data-tip="{_e(tip)}">'
+            f'<circle class="zare" cx="{x:.1f}" cy="{y:.1f}" '
+            f'r="{polomer * 2.2:.2f}" data-r="{polomer * 2.2:.2f}" '
+            f'fill="url(#zare-mapa)" />'
+            f'<circle class="jadro" cx="{x:.1f}" cy="{y:.1f}" '
+            f'r="{polomer * 0.4:.2f}" data-r="{polomer * 0.4:.2f}" '
+            f'fill="#fff" fill-opacity="0.85" />'
+            f'</g>'
         )
 
+    casti.append("</g>")
     casti.append("</svg>")
     return "".join(casti)
 

@@ -2186,7 +2186,7 @@ async def network_geoip(request: Request,
     if not geoip.knihovna_je():
         _flash(request, "Chybí knihovna maxminddb – bez ní se databáze nepřečte.",
                "error")
-        return RedirectResponse("/network", status_code=303)
+        return RedirectResponse("/network#mapa", status_code=303)
 
     vysledek = await geoip.stahni()
     if vysledek.get("status") == "ok":
@@ -2195,7 +2195,7 @@ async def network_geoip(request: Request,
     else:
         _flash(request, "Stažení se nepovedlo: {duvod}", "error",
                duvod=vysledek.get("message", "?"))
-    return RedirectResponse("/network", status_code=303)
+    return RedirectResponse("/network#mapa", status_code=303)
 
 
 @app.get("/languages", response_class=HTMLResponse)

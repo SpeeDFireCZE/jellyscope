@@ -1067,6 +1067,13 @@ EN: dict[str, str] = {
 
     # --- narovnani dat (jedno tlacitko + stejnojmenna uloha) -------------
     "Narovnání dat": "Data tidy-up",
+    "Nejdřív se Jellyfinu ukážou identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte. Teprve na tom stojí zbytek: navázání podle názvu, slučování duplicit a srovnání jmen.":
+        "First the identifiers from the imported history are shown to "
+        "Jellyfin – they are genuine, only nothing in the library leads to "
+        "them. Jellyfin names the series and the episode number, so a record "
+        "that carries just „7th episode“ can finally be placed. Jellyfin is "
+        "only ever read from. The rest builds on that: linking by name, "
+        "merging duplicates and aligning names.",
 
     # --- sit (stranka /network) ------------------------------------------
     "Síť": "Network",

@@ -38,6 +38,12 @@ for the chosen period.
 
 ![Overview](docs/screenshots/overview.png)
 
+**Network** — how much data left the server, when it peaked, and where
+people watch from. Addresses from outside the home network are placed on
+a map you can zoom into.
+
+![Network](docs/screenshots/network.png)
+
 | Library | Languages |
 |---|---|
 | ![Library](docs/screenshots/library.png) | ![Languages](docs/screenshots/languages.png) |

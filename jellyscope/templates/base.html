@@ -646,6 +646,116 @@
             }
         });
 
+        /* Mapa na stránce Síť: kolečkem se přibližuje, tažením posouvá.
+           Když je pár bodů blízko u sebe (jedno město, více adres),
+           bez přiblížení splynou v jednu skvrnu.
+
+           Mění se jen viewBox toho SVG - žádná knihovna, žádné dlaždice
+           z internetu. Souřadnice zůstávají zeměpisné, takže se nic
+           nemusí přepočítávat. */
+        (function () {
+            var mapa = document.querySelector(".mapa");
+            if (!mapa) { return; }
+
+            var vychozi = (mapa.dataset.vychozi || "0 0 360 180").split(" ").map(Number);
+            var pohled = vychozi.slice();
+            var tahne = null;
+
+            /* Tečky i čáry se musí při přiblížení ZMENŠIT v souřadnicích
+               mapy, jinak se s ní jen zvětší a dvě města vedle sebe
+               zůstanou slitá do jedné skvrny - přiblížení by pak nebylo
+               k ničemu. Poloměr proto přepočítáváme podle toho, jak moc
+               je výřez menší než celý svět. */
+            var zare = mapa.querySelectorAll(".mapa-bod circle");
+            var hranice = mapa.querySelector(".mapa-hranice");
+
+            function vykresli() {
+                mapa.setAttribute("viewBox", pohled.join(" "));
+                var pomer = pohled[2] / vychozi[2];
+                zare.forEach(function (kruh) {
+                    kruh.setAttribute("r", (kruh.dataset.r * pomer).toFixed(3));
+                });
+                if (hranice) {
+                    hranice.setAttribute("stroke-width", (0.16 * pomer).toFixed(4));
+                    /* Hranice se NEzapínají skokem: při pohledu na celý svět
+                       by z nich byla jen síť čar přes kontinenty, ale jakmile
+                       se člověk začne přibližovat, mají postupně přibývat -
+                       skok mezi „nic" a „všechno" působí jako blikání. */
+                    var sila = Math.min(1, Math.max(0, (1 - pomer) * 1.6));
+                    hranice.setAttribute("stroke-opacity", sila.toFixed(3));
+                }
+                mapa.classList.toggle("je-priblizena", pohled[2] < vychozi[2] - 0.5);
+            }
+
+            vykresli();
+
+            /* Aby přiblížení drželo bod pod kurzorem na místě, počítá se
+               poloha myši v souřadnicích mapy - ne v pixelech. */
+            function mistoPodMysi(event) {
+                var box = mapa.getBoundingClientRect();
+                return {
+                    x: pohled[0] + (event.clientX - box.left) / box.width * pohled[2],
+                    y: pohled[1] + (event.clientY - box.top) / box.height * pohled[3]
+                };
+            }
+
+            mapa.addEventListener("wheel", function (event) {
+                event.preventDefault();
+                var pod = mistoPodMysi(event);
+                var krok = event.deltaY < 0 ? 0.8 : 1.25;
+
+                var sirka = pohled[2] * krok;
+                /* Meze: dál než celý svět se oddálit nedá a přiblížit se
+                   dá zhruba dvacetkrát - pod tím už je vidět jen šum. */
+                sirka = Math.min(vychozi[2], Math.max(vychozi[2] / 20, sirka));
+                var pomer = sirka / pohled[2];
+
+                pohled[2] = sirka;
+                pohled[3] = pohled[3] * pomer;
+                pohled[0] = pod.x - (pod.x - pohled[0]) * pomer;
+                pohled[1] = pod.y - (pod.y - pohled[1]) * pomer;
+
+                /* Ať výřez nevyjede mimo mapu - jinak člověk skončí
+                   u prázdné plochy a neví, jak zpátky. */
+                pohled[0] = Math.min(Math.max(pohled[0], 0), vychozi[2] - pohled[2]);
+                pohled[1] = Math.min(Math.max(pohled[1], 0), vychozi[3] - pohled[3]);
+                vykresli();
+            }, { passive: false });
+
+            mapa.addEventListener("pointerdown", function (event) {
+                tahne = { x: event.clientX, y: event.clientY,
+                          vx: pohled[0], vy: pohled[1] };
+                mapa.setPointerCapture(event.pointerId);
+            });
+
+            mapa.addEventListener("pointermove", function (event) {
+                if (!tahne) { return; }
+                var box = mapa.getBoundingClientRect();
+                pohled[0] = tahne.vx - (event.clientX - tahne.x) / box.width * pohled[2];
+                pohled[1] = tahne.vy - (event.clientY - tahne.y) / box.height * pohled[3];
+                pohled[0] = Math.min(Math.max(pohled[0], 0), vychozi[2] - pohled[2]);
+                pohled[1] = Math.min(Math.max(pohled[1], 0), vychozi[3] - pohled[3]);
+                vykresli();
+            });
+
+            function pustit(event) {
+                if (!tahne) { return; }
+                tahne = null;
+                if (mapa.hasPointerCapture(event.pointerId)) {
+                    mapa.releasePointerCapture(event.pointerId);
+                }
+            }
+            mapa.addEventListener("pointerup", pustit);
+            mapa.addEventListener("pointercancel", pustit);
+
+            /* Dvojklik vrátí celý svět - jediná cesta zpátky, kterou
+               člověk uhodne, aniž by ji někdo vysvětloval. */
+            mapa.addEventListener("dblclick", function () {
+                pohled = vychozi.slice();
+                vykresli();
+            });
+        })();
+
         prepinatelnaKarta("daily-card", "/partials/daily", "kind");
         prepinatelnaKarta("top-items-card", "/partials/top-items", "top_kind");
     })();
