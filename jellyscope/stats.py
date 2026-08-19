@@ -1387,8 +1387,9 @@ def series_detail(series_id: str) -> dict[str, Any]:
     """
     vsechny = db.query_all(
         f"""
-        SELECT i.*, COALESCE(p.plays, 0) AS plays
+        SELECT i.*, l.name AS library_name, COALESCE(p.plays, 0) AS plays
         FROM items i
+        LEFT JOIN libraries l ON l.id = i.library_id
         {_PREHRANI}
         WHERE i.series_id = ?
         ORDER BY i.parent_index_number, i.index_number, i.name
@@ -1444,7 +1445,41 @@ def series_detail(series_id: str) -> dict[str, Any]:
         # z rozdílu proti Jellyfinu hned jasné, čím je způsobený.
         "archived": archivovane,
         "archived_count": len(archivovane),
+        # Souhrn, ktery se u serialu ukazuje nahore - totez, co u filmu.
+        "library_name": prvni["library_name"],
+        "path": _spolecna_slozka(d["path"] for d in dily),
+        "pridano": min((d["date_created"] for d in dily if d["date_created"]),
+                       default=None),
+        "posledni_dil": max((d["date_created"] for d in dily if d["date_created"]),
+                            default=None),
+        "zmereno": max((d["tech_updated_at"] for d in dily
+                        if "tech_updated_at" in d.keys() and d["tech_updated_at"]),
+                       default=None),
     }
+
+
+def _spolecna_slozka(cesty: Any) -> str:
+    """Slozka, ve ktere serial lezi - spolecny zacatek cest jeho dilu.
+
+    U filmu se ukazuje cesta k souboru. Serial zadny jeden soubor nema,
+    takze se ukazuje slozka: vezme se nejdelsi spolecny zacatek cest
+    vsech dilu a urizne se na posledni oddelovac. U bezne slozene
+    knihovny z toho vyjde slozka serialu.
+    """
+    seznam = [str(c) for c in cesty if c]
+    if not seznam:
+        return ""
+    spolecne = seznam[0]
+    for cesta in seznam[1:]:
+        # Znak po znaku, dokud si odpovidaji.
+        i = 0
+        while i < min(len(spolecne), len(cesta)) and spolecne[i] == cesta[i]:
+            i += 1
+        spolecne = spolecne[:i]
+        if not spolecne:
+            return ""
+    rez = max(spolecne.rfind("/"), spolecne.rfind("\\"))
+    return spolecne[:rez] if rez > 0 else spolecne
 
 
 def library_cards() -> list[dict[str, Any]]:
@@ -1672,3 +1707,300 @@ def delete_item(item_id: str) -> dict[str, Any]:
         "series_name": row["series_name"],
         "plays": plays,
     }
+
+# ---------------------------------------------------------------------------
+# Sit - kolik toho teklo k prehravacum
+#
+# Cislo, se kterym se tu pracuje, je `playback.bitrate`: tok toho streamu
+# v bitech za sekundu. Sberac ho bere z relace - kdyz server prekoduje,
+# je to vysledny (prepocitany) tok, jinak bitrate zdrojoveho souboru.
+#
+# Je to **odhad podle deklarovaneho bitrate, ne mereni dratu.** Preskakovani
+# v prehravaci, buffer i pauzy znamenaji, ze skutecne prenesene bajty se
+# lisi. Presne cislo umi jen reverzni proxy nebo pocitadla systemu - mimo
+# Jellyfin. Rika to i stranka, at si to nikdo neplete s merenim.
+# ---------------------------------------------------------------------------
+
+def _sitove_radky(days: int) -> list[dict[str, Any]]:
+    """Prehravani s known bitrate za obdobi. Zaklad pro vsechno ostatni."""
+    return db.query_all(
+        """
+        SELECT started_at, ended_at, last_seen_at, watched_seconds, bitrate,
+               user_name, client, device_name, remote_address, play_method
+          FROM playback
+         WHERE started_at >= datetime('now', ?)
+           AND watched_seconds > 0
+           AND bitrate IS NOT NULL AND bitrate > 0
+         ORDER BY started_at
+        """,
+        (_range(days),),
+    )
+
+
+def _sekundy(text: Any) -> float | None:
+    """Cas z databaze na sekundy. None, kdyz se neda precist."""
+    try:
+        return datetime.strptime(
+            str(text).replace("T", " ")[:19], db.TIME_FORMAT).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def bandwidth_prubeh(days: int, bodu: int = 120) -> list[dict[str, Any]]:
+    """Soubezny tok v case - kolik Mbit/s teklo ze serveru zaroven.
+
+    Pocita se **prochazenim udalosti**, ne vzorkovanim: kazde prehravani
+    prida svuj bitrate na zacatku a ubere ho na konci. Serazenim udalosti
+    podle casu vznikne presna krivka souběžneho toku, at uz prehravani
+    trvalo minutu nebo pet hodin.
+
+    Do grafu se z ni bere maximum v kazdem useku - prumer by spicky
+    zahladil, a prave spicka je to, co zajima: podle ni se dimenzuje
+    linka.
+    """
+    radky = _sitove_radky(days)
+    if not radky:
+        return []
+
+    udalosti: list[tuple[float, int]] = []
+    for radek in radky:
+        zacatek = _sekundy(radek["started_at"])
+        konec = _sekundy(radek["ended_at"] or radek["last_seen_at"])
+        if zacatek is None:
+            continue
+        if konec is None or konec <= zacatek:
+            konec = zacatek + float(radek["watched_seconds"] or 0)
+        udalosti.append((zacatek, int(radek["bitrate"])))
+        udalosti.append((konec, -int(radek["bitrate"])))
+
+    if not udalosti:
+        return []
+    udalosti.sort()
+
+    od, do = udalosti[0][0], udalosti[-1][0]
+    krok = max((do - od) / max(1, bodu), 1.0)
+
+    body: list[dict[str, Any]] = []
+    soucet = 0
+    hranice = od + krok
+    vrchol = 0
+    for cas, zmena in udalosti:
+        while cas > hranice:
+            body.append({"cas": hranice - krok / 2, "mbit": round(vrchol / 1e6, 2)})
+            hranice += krok
+            vrchol = soucet
+        soucet += zmena
+        vrchol = max(vrchol, soucet)
+    body.append({"cas": hranice - krok / 2, "mbit": round(vrchol / 1e6, 2)})
+
+    for bod in body:
+        bod["popisek"] = datetime.fromtimestamp(bod["cas"]).strftime("%d.%m. %H:%M")
+    return body
+
+
+def bandwidth_prehled(days: int) -> dict[str, Any]:
+    """Spicka, objem dat a podil transcode. Cisla nad grafem."""
+    radky = _sitove_radky(days)
+    prubeh = bandwidth_prubeh(days, bodu=600)
+
+    bajtu = 0.0
+    bajtu_transcode = 0.0
+    for radek in radky:
+        objem = float(radek["bitrate"]) * float(radek["watched_seconds"] or 0) / 8.0
+        bajtu += objem
+        if str(radek["play_method"] or "") == "Transcode":
+            bajtu_transcode += objem
+
+    spicka = max(prubeh, key=lambda b: b["mbit"], default=None)
+    return {
+        "spicka_mbit": spicka["mbit"] if spicka else 0.0,
+        "spicka_kdy": spicka["popisek"] if spicka else "",
+        "bajtu": int(bajtu),
+        "bajtu_transcode": int(bajtu_transcode),
+        "podil_transcode": round(bajtu_transcode / bajtu * 100, 1) if bajtu else 0.0,
+        "prehravani": len(radky),
+        "prumer_mbit": (round(sum(float(r["bitrate"]) for r in radky)
+                              / len(radky) / 1e6, 2) if radky else 0.0),
+    }
+
+
+def bandwidth_podle(days: int, sloupec: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Objem dat podle uzivatele, klienta nebo zarizeni - od nejvetsiho.
+
+    `sloupec` se porovnava proti pevnemu seznamu, takze se z adresy nikdy
+    nedostane nic do SQL.
+    """
+    povolene = {"user_name", "client", "device_name"}
+    if sloupec not in povolene:
+        sloupec = "user_name"
+
+    rows = db.query_all(
+        f"""
+        SELECT COALESCE({sloupec}, '?')                        AS label,
+               SUM(watched_seconds * bitrate) / 8.0            AS bajtu,
+               MAX(bitrate)                                    AS spicka,
+               COUNT(*)                                        AS plays
+          FROM playback
+         WHERE started_at >= datetime('now', ?)
+           AND watched_seconds > 0
+           AND bitrate IS NOT NULL AND bitrate > 0
+         GROUP BY COALESCE({sloupec}, '?')
+         ORDER BY SUM(watched_seconds * bitrate) DESC
+         LIMIT ?
+        """,
+        (_range(days), limit),
+    )
+    # Graf dostava gigabajty, ne bajty: sloupec popsany "98 739 089 379 B"
+    # se neda precist, a presnost na bajt tu k nicemu neni.
+    return [{"label": r["label"], "bajtu": int(r["bajtu"] or 0),
+             "gb": round(float(r["bajtu"] or 0) / 1e9, 1),
+             "spicka_mbit": round(float(r["spicka"] or 0) / 1e6, 2),
+             "plays": int(r["plays"] or 0)} for r in rows]
+
+
+# Adresy, ktere nevedou ven ze site. Nejde o bezpecnost, jen o rozliseni
+# "z gauce" a "odjinud" - proto staci prefixy a neresime masky.
+DOMACI_PREFIXY = ("10.", "192.168.", "127.", "172.16.", "172.17.", "172.18.",
+                  "172.19.", "172.20.", "172.21.", "172.22.", "172.23.",
+                  "172.24.", "172.25.", "172.26.", "172.27.", "172.28.",
+                  "172.29.", "172.30.", "172.31.", "169.254.", "::1", "fe80:",
+                  "fc", "fd")
+
+
+def je_domaci(adresa: Any) -> bool:
+    """Je ta adresa z domaci site?"""
+    text = str(adresa or "").strip().lower()
+    if not text:
+        return False
+    return text.startswith(DOMACI_PREFIXY)
+
+
+def odkud_se_divaji(days: int, limit: int = 20) -> dict[str, Any]:
+    """Rozpad podle toho, odkud se prehravalo.
+
+    Proc ne mapa: adresa v domaci siti (192.168.x.x) zadne misto na svete
+    neoznacuje - je stejna v Praze i v Sydney. Zemepisne umistit jde jen
+    verejnou adresu, a i to potrebuje offline databazi GeoIP. Rozdeleni
+    "doma / z internetu" je proto to jedine, co jde spocitat poctive
+    z toho, co mame.
+
+    Importovana historie adresu nenese vubec - Jellystat ani Playback
+    Reporting ji neposilaji. Takove zaznamy jsou "neznamo odkud".
+    """
+    rows = db.query_all(
+        """
+        SELECT remote_address                         AS adresa,
+               SUM(watched_seconds)                   AS sekund,
+               SUM(watched_seconds * COALESCE(bitrate, 0)) / 8.0 AS bajtu,
+               COUNT(*)                               AS plays,
+               COUNT(DISTINCT user_id)                AS lidi,
+               MAX(started_at)                        AS naposledy
+          FROM playback
+         WHERE started_at >= datetime('now', ?)
+           AND watched_seconds > 0
+         GROUP BY remote_address
+         ORDER BY SUM(watched_seconds) DESC
+        """,
+        (_range(days),),
+    )
+
+    skupiny = {"doma": {"plays": 0, "bajtu": 0.0, "sekund": 0},
+               "internet": {"plays": 0, "bajtu": 0.0, "sekund": 0},
+               "neznamo": {"plays": 0, "bajtu": 0.0, "sekund": 0}}
+    adresy = []
+    for r in rows:
+        if not (r["adresa"] or "").strip():
+            kam = "neznamo"
+        elif je_domaci(r["adresa"]):
+            kam = "doma"
+        else:
+            kam = "internet"
+        skupiny[kam]["plays"] += int(r["plays"] or 0)
+        skupiny[kam]["bajtu"] += float(r["bajtu"] or 0)
+        skupiny[kam]["sekund"] += int(r["sekund"] or 0)
+        if kam != "neznamo" and len(adresy) < limit:
+            adresy.append({
+                "adresa": r["adresa"], "domaci": kam == "doma",
+                "plays": int(r["plays"] or 0), "lidi": int(r["lidi"] or 0),
+                "sekund": int(r["sekund"] or 0), "bajtu": int(r["bajtu"] or 0),
+                "naposledy": r["naposledy"],
+            })
+
+    for hodnoty in skupiny.values():
+        hodnoty["bajtu"] = int(hodnoty["bajtu"])
+    return {"skupiny": skupiny, "adresy": adresy}
+
+def hotspoty(days: int, limit: int = 60) -> list[dict[str, Any]]:
+    """Odkud se divali - misto po miste, od nejaktivnejsiho.
+
+    Umistuji se **jen verejne adresy**: ta z domaci site zadne misto
+    neoznacuje. Kdyz databaze GeoLite2 chybi (nebo chybi knihovna, ktera
+    ji umi cist), vraci se prazdny seznam a stranka mapu vubec neukaze -
+    misto toho, aby ukazala prazdnou.
+
+    Body na temze miste se slucuji: deset lidi z jednoho mesta ma byt
+    jedna vetsi tecka, ne deset tecek pres sebe. Zaokrouhlujeme na
+    desetinu stupne, coz je zhruba deset kilometru.
+    """
+    from . import geoip
+
+    if not geoip.je_k_dispozici():
+        return []
+
+    rows = db.query_all(
+        """
+        SELECT remote_address                     AS adresa,
+               SUM(watched_seconds)               AS sekund,
+               SUM(watched_seconds * COALESCE(bitrate, 0)) / 8.0 AS bajtu,
+               COUNT(*)                           AS plays,
+               COUNT(DISTINCT user_id)            AS lidi
+          FROM playback
+         WHERE started_at >= datetime('now', ?)
+           AND watched_seconds > 0
+           AND remote_address IS NOT NULL AND remote_address != ''
+         GROUP BY remote_address
+        """,
+        (_range(days),),
+    )
+
+    mista: dict[tuple[float, float], dict[str, Any]] = {}
+    for r in rows:
+        adresa = str(r["adresa"])
+        if je_domaci(adresa):
+            continue
+        misto = geoip.najdi(adresa)
+        if not misto:
+            continue
+        klic = (round(misto["lat"], 1), round(misto["lon"], 1))
+        bod = mista.setdefault(klic, {
+            "lat": misto["lat"], "lon": misto["lon"],
+            "mesto": misto["mesto"], "zeme": misto["zeme"], "kod": misto["kod"],
+            "plays": 0, "lidi": 0, "sekund": 0, "bajtu": 0.0, "adres": 0,
+        })
+        bod["plays"] += int(r["plays"] or 0)
+        bod["lidi"] = max(bod["lidi"], int(r["lidi"] or 0))
+        bod["sekund"] += int(r["sekund"] or 0)
+        bod["bajtu"] += float(r["bajtu"] or 0)
+        bod["adres"] += 1
+
+    body = sorted(mista.values(), key=lambda b: b["sekund"], reverse=True)[:limit]
+    for bod in body:
+        bod["bajtu"] = int(bod["bajtu"])
+        bod["popis"] = ", ".join(x for x in (bod["mesto"], bod["zeme"]) if x) or "?"
+    return body
+
+
+def zeme_divaku(days: int) -> list[dict[str, Any]]:
+    """Totez jako hotspoty, jen secteno po zemich - pro tabulku vedle mapy."""
+    podle_zeme: dict[str, dict[str, Any]] = {}
+    for bod in hotspoty(days, limit=1000):
+        zaznam = podle_zeme.setdefault(bod["zeme"] or "?", {
+            "label": bod["zeme"] or "?", "kod": bod["kod"],
+            "plays": 0, "sekund": 0, "bajtu": 0, "mist": 0,
+        })
+        zaznam["plays"] += bod["plays"]
+        zaznam["sekund"] += bod["sekund"]
+        zaznam["bajtu"] += bod["bajtu"]
+        zaznam["mist"] += 1
+    return sorted(podle_zeme.values(), key=lambda z: z["sekund"], reverse=True)
+

@@ -492,6 +492,124 @@
 </div>
 
 
+{# ------------------------------------------------------------------ #}
+{# Narovnání dat                                                       #}
+{#                                                                     #}
+{# Dřív to byla dvě tlačítka a člověk musel vědět, které pustit dřív.  #}
+{# Pořadí přitom není na výběr: dohledání v Jellyfinu vyrábí vazby,    #}
+{# se kterými pracuje všechno ostatní. Proto jedna akce.               #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="uklid">
+    <div class="card-head">
+        <h2>{{ _("Narovnání dat") }}</h2>
+        <p class="card-note">{{ _("srovná historii do pořádku - navázání, duplicity, názvy") }}</p>
+    </div>
+
+    <p class="card-note">
+        {{ _("Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz – typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.") }}
+    </p>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("Záznamy visící na špatném dílu jsou pozůstatek chyby ve slučování podle TMDB: u epizody se bralo id celého seriálu, takže se historie všech dílů slila na jediný. Opravuje se podle názvu dílu, který v záznamu zůstal.") }}
+    </p>
+
+    {# Pravidla patří na obrazovku, ne jen do kódu. U funkce, která maže
+       řádky historie, je potřeba vidět předem, čeho se dotkne. #}
+    <details class="fallback" style="margin-top:14px">
+        <summary>{{ _("Podle čeho se pozná duplicita") }}</summary>
+        <p class="card-note" style="margin:10px 0 6px">
+            {{ _("Za jeden a tentýž zážitek se považují dva záznamy, jen když platí všechno najednou:") }}
+        </p>
+        <ul class="card-note" style="margin:0 0 10px 18px">
+            <li>{{ _("stejný uživatel a stejný titul,") }}</li>
+            <li>{{ _("jejich časy se překrývají,") }}</li>
+            <li>{{ _("neodporují si zařízením,") }}</li>
+            <li>{{ _("ani jeden nepochází z importu.") }}</li>
+        </ul>
+        <p class="card-note" style="margin-bottom:6px">
+            <strong>{{ _("Co se tedy NEsloučí:") }}</strong>
+        </p>
+        <ul class="card-note" style="margin:0 0 10px 18px">
+            <li>{{ _("film začatý včera večer a dokoukaný dnes – dvě sledování, dva záznamy, časy se nepřekrývají;") }}</li>
+            <li>{{ _("film dokoukaný a hned puštěný znovu – navazující úseky překryv nejsou;") }}</li>
+            <li>{{ _("tentýž film na televizi a na telefonu zároveň – liší se zařízením;") }}</li>
+            <li>{{ _("dva různí uživatelé u téhož titulu ve stejnou chvíli.") }}</li>
+        </ul>
+        <p class="card-note">
+            {{ _("Překryv, a ne shoda času začátku: dva sběrače zapisují každý o vteřinu jinde, takže přesná shoda by většinu duplicit minula.") }}
+        </p>
+    </details>
+
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <tbody>
+            <tr>
+                <td>{{ _("Duplicitní záznamy") }}</td>
+                <td class="num strong">{{ duplicate_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>{{ _("Záznamy u špatného dílu") }}</td>
+                <td class="num strong">{{ misplaced_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Tatáž podívaná ze dvou zdrojů") }}
+                    <div class="card-note">
+                        {{ _("Jellystat a Playback Reporting si zapisují jiný okamžik, takže se týž film objeví dvakrát s posunem. Pozná se podle stejně dlouhého přehrávání téhož titulu na témže zařízení v rámci jednoho dne.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ import_duplicate_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Záznamy bez položky v knihovně") }}
+                    <div class="card-note">
+                        {{ _("Zkusí se navázat podle názvu. Díl se tím zařadí pod svůj seriál – jinak se v přehledech tváří jako samostatný film.") }}
+                    </div>
+                </td>
+                <td class="num strong">
+                    {{ orphan_rows | number }}
+                    <div class="card-note">{{ orphan_items | number }} {{ _("titulů") }}</div>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Záznamy s jiným názvem, než má titul v knihovně") }}
+                    <div class="card-note">
+                        {{ _("Název se u přehrávání ukládá spolu se záznamem, aby historie smazaného titulu nezůstala bezejmenná. Když se ale titul přejmenuje – typicky když v Jellyfinu spravíš špatně určená metadata –, starý záznam si nese původní jméno. Ve statistikách pak k jednomu titulu patří název druhého.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ stale_name_rows | number }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="btn-row" style="margin-top:14px">
+        {# Jedno tlačítko, jedna akce. Dohledání v Jellyfinu je její první
+           krok - když Jellyfin neodpoví, zbytek proběhne bez něj. #}
+        <form method="post" action="/settings/history/tidy">
+            <button class="btn primary" type="submit">{{ _("Narovnat data") }}</button>
+        </form>
+        {# Seznam toho, co zustalo - i s duvodem. Nepocita se pri uklidu
+           a neuklada se: kdyby se ulozil, ukazoval by stav po poslednim
+           spusteni, tedy neco, co uz nemusi platit. #}
+        <a class="btn" href="/settings/history/orphans">
+            {{ _("Co se nepovedlo zařadit") }}
+            {% if orphan_items %}({{ orphan_items | number }}){% endif %}
+        </a>
+    </div>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Nejdřív se Jellyfinu ukážou identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte. Teprve na tom stojí zbytek: navázání podle názvu, slučování duplicit a srovnání jmen.") }}
+    </p>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Ručně to mačkat nemusíš – totéž dělá úloha „Narovnání dat“ výš, každý den ve zvolený čas.") }}
+    </p>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Pustit se to dá opakovaně – podruhé už nenajde nic. Záznamy se neslučují sečtením: dva zápisy o tomtéž přehrávání nejsou dvě zhlédnutí, takže ze skupiny zůstane ten úplnější.") }}
+    </p>
+</div>
+
+
 {# ================================================================== #}
 {% elif section == 'import' %}
 {# ================================================================== #}
@@ -608,127 +726,9 @@
 
     <div class="flash warning" style="margin-top:16px">
         <span class="dot"></span>
-        <span>{{ _("Importovaná data neobsahují jazyk zvukové stopy ani důvod transcode – tyhle údaje žádný z obou nástrojů neukládá. Doplní se až u přehrávání, která zaznamená Jellyscope sám.") }}</span>
+        <span>{{ _("Importovaná data nemusí obsahovat jazyk zvukové stopy ani důvod transcode. Playback Reporting jazyk občas pošle – takový záznam se do jazykových statistik počítá. Jellystat ho neposílá nikdy. Co v importu chybí, doplní se až u přehrávání, která zaznamená Jellyscope sám.") }}</span>
     </div>
 </div>
-
-{# ------------------------------------------------------------------ #}
-{# Úklid historie                                                      #}
-{# ------------------------------------------------------------------ #}
-<div class="card" id="uklid">
-    <div class="card-head">
-        <h2>{{ _("Úklid historie") }}</h2>
-        <p class="card-note">{{ _("napraví, co v databázi zůstalo po opravených chybách") }}</p>
-    </div>
-
-    <p class="card-note">
-        {{ _("Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz – typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.") }}
-    </p>
-    <p class="card-note" style="margin-top:8px">
-        {{ _("Záznamy visící na špatném dílu jsou pozůstatek chyby ve slučování podle TMDB: u epizody se bralo id celého seriálu, takže se historie všech dílů slila na jediný. Opravuje se podle názvu dílu, který v záznamu zůstal.") }}
-    </p>
-
-    {# Pravidla patří na obrazovku, ne jen do kódu. U funkce, která maže
-       řádky historie, je potřeba vidět předem, čeho se dotkne. #}
-    <details class="fallback" style="margin-top:14px">
-        <summary>{{ _("Podle čeho se pozná duplicita") }}</summary>
-        <p class="card-note" style="margin:10px 0 6px">
-            {{ _("Za jeden a tentýž zážitek se považují dva záznamy, jen když platí všechno najednou:") }}
-        </p>
-        <ul class="card-note" style="margin:0 0 10px 18px">
-            <li>{{ _("stejný uživatel a stejný titul,") }}</li>
-            <li>{{ _("jejich časy se překrývají,") }}</li>
-            <li>{{ _("neodporují si zařízením,") }}</li>
-            <li>{{ _("ani jeden nepochází z importu.") }}</li>
-        </ul>
-        <p class="card-note" style="margin-bottom:6px">
-            <strong>{{ _("Co se tedy NEsloučí:") }}</strong>
-        </p>
-        <ul class="card-note" style="margin:0 0 10px 18px">
-            <li>{{ _("film začatý včera večer a dokoukaný dnes – dvě sledování, dva záznamy, časy se nepřekrývají;") }}</li>
-            <li>{{ _("film dokoukaný a hned puštěný znovu – navazující úseky překryv nejsou;") }}</li>
-            <li>{{ _("tentýž film na televizi a na telefonu zároveň – liší se zařízením;") }}</li>
-            <li>{{ _("dva různí uživatelé u téhož titulu ve stejnou chvíli.") }}</li>
-        </ul>
-        <p class="card-note">
-            {{ _("Překryv, a ne shoda času začátku: dva sběrače zapisují každý o vteřinu jinde, takže přesná shoda by většinu duplicit minula.") }}
-        </p>
-    </details>
-
-    <div class="table-wrap" style="margin-top:14px">
-        <table>
-            <tbody>
-            <tr>
-                <td>{{ _("Duplicitní záznamy") }}</td>
-                <td class="num strong">{{ duplicate_rows | number }}</td>
-            </tr>
-            <tr>
-                <td>{{ _("Záznamy u špatného dílu") }}</td>
-                <td class="num strong">{{ misplaced_rows | number }}</td>
-            </tr>
-            <tr>
-                <td>
-                    {{ _("Tatáž podívaná ze dvou zdrojů") }}
-                    <div class="card-note">
-                        {{ _("Jellystat a Playback Reporting si zapisují jiný okamžik, takže se týž film objeví dvakrát s posunem. Pozná se podle stejně dlouhého přehrávání téhož titulu na témže zařízení v rámci jednoho dne.") }}
-                    </div>
-                </td>
-                <td class="num strong">{{ import_duplicate_rows | number }}</td>
-            </tr>
-            <tr>
-                <td>
-                    {{ _("Záznamy bez položky v knihovně") }}
-                    <div class="card-note">
-                        {{ _("Zkusí se navázat podle názvu. Díl se tím zařadí pod svůj seriál – jinak se v přehledech tváří jako samostatný film.") }}
-                    </div>
-                </td>
-                <td class="num strong">
-                    {{ orphan_rows | number }}
-                    <div class="card-note">{{ orphan_items | number }} {{ _("titulů") }}</div>
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    {{ _("Záznamy s jiným názvem, než má titul v knihovně") }}
-                    <div class="card-note">
-                        {{ _("Název se u přehrávání ukládá spolu se záznamem, aby historie smazaného titulu nezůstala bezejmenná. Když se ale titul přejmenuje – typicky když v Jellyfinu spravíš špatně určená metadata –, starý záznam si nese původní jméno. Ve statistikách pak k jednomu titulu patří název druhého.") }}
-                    </div>
-                </td>
-                <td class="num strong">{{ stale_name_rows | number }}</td>
-            </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="btn-row" style="margin-top:14px">
-        <form method="post" action="/settings/history/cleanup">
-            {# Vždycky modré: je to hlavní akce téhle karty a mezi
-               ostatními tlačítky se bez barvy ztrácelo. #}
-            <button class="btn primary" type="submit">{{ _("Uklidit historii") }}</button>
-        </form>
-        {# Druhé tlačítko sahá na síť, proto zvlášť: úklid výš si vystačí
-           s databází a funguje i bez Jellyfinu. #}
-        <form method="post" action="/settings/history/lookup">
-            <button class="btn" type="submit" {{ 'disabled' if not orphan_rows }}>
-                {{ _("Dohledat osiřelé v Jellyfinu") }}
-            </button>
-        </form>
-        {# Seznam toho, co zustalo - i s duvodem. Nepocita se pri uklidu
-           a neuklada se: kdyby se ulozil, ukazoval by stav po poslednim
-           spusteni, tedy neco, co uz nemusi platit. #}
-        <a class="btn" href="/settings/history/orphans">
-            {{ _("Co se nepovedlo zařadit") }}
-            {% if orphan_items %}({{ orphan_items | number }}){% endif %}
-        </a>
-    </div>
-    <p class="card-note" style="margin-top:10px">
-        {{ _("Dohledání se ptá Jellyfinu na identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte.") }}
-    </p>
-    <p class="card-note" style="margin-top:10px">
-        {{ _("Pustit se to dá opakovaně – podruhé už nenajde nic. Záznamy se neslučují sečtením: dva zápisy o tomtéž přehrávání nejsou dvě zhlédnutí, takže ze skupiny zůstane ten úplnější.") }}
-    </p>
-</div>
-
 
 {# ================================================================== #}
 {% elif section == 'database' %}
@@ -878,6 +878,13 @@
             <span class="dot"></span>
             <span>{{ _("Přenos dat cílovou databázi nejdřív vyprázdní a teprve pak do ní data zkopíruje. Ulož nastavení až potom, co přenos proběhl.") }}</span>
         </div>
+
+        {# Nejčastější nedorozumění: člověk se chce jen připojit k databázi,
+           kterou už má, a stiskne Přenést data - čímž si ji vymaže. #}
+        <div class="flash info" style="margin-top:10px">
+            <span class="dot"></span>
+            <span>{{ _("Připojuješ se k databázi, ve které data už jsou (třeba po přeinstalování aplikace)? Pak přenos NEspouštěj – stačí Uložit nastavení a restartovat. Aplikace se na ni připojí a data v ní zůstanou.") }}</span>
+        </div>
     </form>
 
     {% if database_counts %}
@@ -899,6 +906,23 @@
 {# ================================================================== #}
 {% elif section == 'accounts' %}
 {# ================================================================== #}
+{# Akce nad účty. Formuláře byly dřív pořád otevřené pod sebou a stránka
+   kvůli nim byla nekonečná - přitom se každý z nich použije jednou za
+   půl roku. Teď jsou v oknech (<dialog>), která umí Esc i klik mimo. #}
+<div class="btn-row" style="margin-bottom:16px">
+    <button class="btn primary" type="button" data-okno="okno-vlastni-heslo">
+        {{ _("Změnit své heslo") }}
+    </button>
+    {% if account.is_admin %}
+    <button class="btn" type="button" data-okno="okno-pridat">
+        {{ _("Přidat uživatele") }}
+    </button>
+    <button class="btn" type="button" data-okno="okno-cizi-heslo">
+        {{ _("Změnit heslo jinému účtu") }}
+    </button>
+    {% endif %}
+</div>
+
 {% if account.is_admin %}
 <div class="card">
     <div class="card-head">
@@ -980,9 +1004,12 @@
 </div>
 {% endif %}
 
-{# Změna vlastního hesla - tuhle kartu vidí každý, i čtenář. #}
-<div class="card">
-    <div class="card-head"><h2>{{ _("Změnit své heslo") }}</h2></div>
+<dialog class="okno" id="okno-vlastni-heslo">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Změnit své heslo") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
     <form method="post" action="/settings/accounts/password">
         <input type="hidden" name="account_id" value="{{ account.id }}">
         <div class="field">
@@ -1000,11 +1027,15 @@
             <button class="btn primary" type="submit">{{ _("Změnit heslo") }}</button>
         </div>
     </form>
-</div>
+</dialog>
 
 {% if account.is_admin %}
-<div class="card">
-    <div class="card-head"><h2>{{ _("Přidat uživatele") }}</h2></div>
+<dialog class="okno" id="okno-pridat">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Přidat uživatele") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
     <form method="post" action="/settings/accounts/create">
         <div class="field">
             <label for="new_username">{{ _("Uživatelské jméno") }}</label>
@@ -1036,10 +1067,14 @@
             <button class="btn primary" type="submit">{{ _("Vytvořit účet") }}</button>
         </div>
     </form>
-</div>
+</dialog>
 
-<div class="card">
-    <div class="card-head"><h2>{{ _("Změnit heslo jinému účtu") }}</h2></div>
+<dialog class="okno" id="okno-cizi-heslo">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Změnit heslo jinému účtu") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
     <form method="post" action="/settings/accounts/password">
         <div class="field">
             <label for="target_account">{{ _("Účet") }}</label>
@@ -1063,7 +1098,9 @@
             <button class="btn" type="submit">{{ _("Nastavit heslo") }}</button>
         </div>
     </form>
-</div>
+</dialog>
+
+
 {% endif %}
 
 

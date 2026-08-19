@@ -691,8 +691,6 @@ EN: dict[str, str] = {
     "sekund min.": "seconds min.",
     "Nahrát a importovat": "Upload and import",
     "Poslední import": "Last import",
-    "Importovaná data neobsahují jazyk zvukové stopy ani důvod transcode – tyhle údaje žádný z obou nástrojů neukládá. Doplní se až u přehrávání, která zaznamená Jellyscope sám.":
-        "Imported data contains neither the audio language nor the transcode reason - neither tool stores them. Those appear only for playbacks Jellyscope records itself.",
     "Účty do Jellyscope": "Jellyscope accounts",
     "Tohle nejsou uživatelé Jellyfinu – to jsou účty, kterými se někdo přihlašuje sem. Když někomu založíš účet tady, do Jellyfinu se tím nedostane.":
         "These are not Jellyfin users - these are accounts for signing in here. Creating an account here gives nobody access to Jellyfin.",
@@ -1066,6 +1064,150 @@ EN: dict[str, str] = {
 
     # uklid historie a dohledavani osirelych zaznamu
     "Úklid historie: {co}": "History cleanup: {co}",
+
+    # --- narovnani dat (jedno tlacitko + stejnojmenna uloha) -------------
+    "Narovnání dat": "Data tidy-up",
+
+    # --- sit (stranka /network) ------------------------------------------
+    "Síť": "Network",
+
+    # --- mapa (GeoLite2) --------------------------------------------------
+    "Mapa": "Map",
+
+    # --- souhrn nahore na strance serialu --------------------------------
+    "O seriálu": "About the series",
+    "Průměrně na díl": "Average per episode",
+    "Poslední přibyl díl": "Latest episode added",
+    "Umístění": "Location",
+    "velikost tečky odpovídá odsledovanému času":
+        "the size of a dot follows the time watched",
+    "Země": "Country",
+    "Míst": "Places",
+    "stažena": "downloaded",
+    "Aktualizovat": "Update",
+    "Stáhnout databázi GeoLite2": "Download the GeoLite2 database",
+    "{misto}: {n}× · {lidi} lidí": "{misto}: {n}× · {lidi} people",
+    "Umisťují se jen veřejné adresy – ta z domácí sítě žádné místo "
+    "neoznačuje. Přesnost je podle GeoLite2: u pevných linek sedí město, "
+    "u mobilních sítí ukáže klidně střed země. Na otázku „dívá se někdo "
+    "z ciziny?“ to stačí, na hledání lidí ne.":
+        "Only public addresses are placed – one from the home network marks "
+        "no place at all. The accuracy is GeoLite2's: on fixed lines the city "
+        "is right, on mobile networks it may point at the middle of the "
+        "country. Enough for „is anyone watching from abroad?“, not for "
+        "finding people.",
+    "Mapa potřebuje knihovnu maxminddb, která není povinnou součástí "
+    "aplikace. Doinstaluj ji do téhož prostředí, ve kterém Jellyscope běží:":
+        "The map needs the maxminddb library, which is not a required part of "
+        "the app. Install it into the same environment Jellyscope runs in:",
+    "Mapa potřebuje databázi GeoLite2 – jeden soubor, který leží v data/ "
+    "a odpovídá bez internetu. Stáhne se na kliknutí (asi 65 MB); je to "
+    "jediná chvíle, kdy aplikace sáhne jinam než na Jellyfin.":
+        "The map needs the GeoLite2 database – a single file that sits in "
+        "data/ and answers without the internet. One click downloads it "
+        "(about 65 MB); it is the only moment the app reaches anywhere other "
+        "than Jellyfin.",
+    "Data © MaxMind, GeoLite2 (CC BY-SA 4.0). Stahuje se ze zrcadla na "
+    "GitHubu, protože u MaxMinda samotného je k tomu potřeba účet a klíč.":
+        "Data © MaxMind, GeoLite2 (CC BY-SA 4.0). It comes from a GitHub "
+        "mirror, because MaxMind itself asks for an account and a key.",
+    "Databáze je připravená, ale žádné přehrávání z veřejné adresy zatím "
+    "není – všechno šlo z domácí sítě.":
+        "The database is ready, but there is no playback from a public "
+        "address yet – everything came from the home network.",
+    "Databáze GeoLite2 stažena ({velikost}).":
+        "The GeoLite2 database has been downloaded ({velikost}).",
+    "Stažení se nepovedlo: {duvod}": "The download failed: {duvod}",
+    "Chybí knihovna maxminddb – bez ní se databáze nepřečte.":
+        "The maxminddb library is missing – the database cannot be read "
+        "without it.",
+    "Kolik dat teklo ze serveru k přehrávačům – a kdy to bylo nejvíc.":
+        "How much data left the server for the players – and when it peaked.",
+    "Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání – při "
+    "překódování z výsledného toku, jinak ze zdrojového souboru. Je to tedy "
+    "poctivý odhad, ne měření drátu: přeskakování, buffer a pauzy skutečná "
+    "čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla "
+    "systému.":
+        "Computed from the bitrate Jellyfin reports for each playback – the "
+        "resulting stream when it transcodes, the source file otherwise. So "
+        "it is an honest estimate, not a measurement of the wire: seeking, "
+        "buffering and pauses move the real numbers. Only a reverse proxy or "
+        "the system counters can measure that exactly.",
+    "Špička": "Peak",
+    "Přeneseno celkem": "Transferred in total",
+    "Z toho překódovaných": "Of that transcoded",
+    "Průměrný tok jednoho streamu": "Average bitrate of one stream",
+    "Souběžný tok v čase": "Concurrent throughput over time",
+    "nejvyšší hodnota v každém úseku": "the highest value in each slice",
+    "Kdo nejvíc streamoval": "Who streamed the most",
+    "Podle přehrávače": "By player",
+    "Odkud se dívají": "Where they watch from",
+    "podle adresy, kterou hlásí Jellyfin": "by the address Jellyfin reports",
+    "Z domácí sítě": "From the home network",
+    "Z internetu": "From the internet",
+    "Neznámo odkud": "Origin unknown",
+    "z importu – adresu nenesou": "from imports – they carry no address",
+    "Odkud": "Origin",
+    "Lidí": "People",
+    "Přeneseno": "Transferred",
+    "domácí síť": "home network",
+    "internet": "internet",
+    "přehrávání": "playbacks",
+    "Mbit/s": "Mbit/s",
+    "Mapa tu není schválně: adresa z domácí sítě (192.168.x.x) žádné místo "
+    "na světě neoznačuje – je stejná v Praze i v Sydney. Zeměpisně jde "
+    "umístit jen veřejná adresa, a i to potřebuje offline databázi GeoIP. "
+    "Dokud se všichni dívají z domova, řekne rozdělení výš víc než mapa "
+    "s jedním bodem.":
+        "There is no map on purpose: an address from the home network "
+        "(192.168.x.x) marks no place in the world – it is the same in "
+        "Prague and in Sydney. Only a public address can be placed on a map, "
+        "and even that needs an offline GeoIP database. As long as everyone "
+        "watches from home, the split above says more than a map with one dot.",
+    "Importovaná data nemusí obsahovat jazyk zvukové stopy ani důvod "
+    "transcode. Playback Reporting jazyk občas pošle – takový záznam se do "
+    "jazykových statistik počítá. Jellystat ho neposílá nikdy. Co v importu "
+    "chybí, doplní se až u přehrávání, která zaznamená Jellyscope sám.":
+        "Imported data need not contain the audio language or the transcode "
+        "reason. Playback Reporting does send the language sometimes – such "
+        "a record does count towards the language statistics. Jellystat never "
+        "sends it. Whatever the import lacks is filled in by playbacks "
+        "Jellyscope records itself.",
+    "Připojuješ se k databázi, ve které data už jsou (třeba po "
+    "přeinstalování aplikace)? Pak přenos NEspouštěj – stačí Uložit "
+    "nastavení a restartovat. Aplikace se na ni připojí a data v ní zůstanou.":
+        "Connecting to a database that already holds data (after "
+        "reinstalling the app, say)? Then do NOT run the transfer – just "
+        "Save the settings and restart. The app connects to it and the data "
+        "stays where it is.",
+    "Narovnat data": "Tidy the data",
+    "srovná historii do pořádku - navázání, duplicity, názvy":
+        "puts the history straight - linking, duplicates, names",
+    "Narovnání dat: {co}": "Data tidy-up: {co}",
+    "Nebylo co narovnávat, historie je v pořádku.":
+        "There was nothing to tidy, the history is in order.",
+    "Zbývá {n} nezařazených záznamů.": "{n} records remain unassigned.",
+    "Jellyfin neodpověděl ({duvod}), zbytek proběhl.":
+        "Jellyfin did not answer ({duvod}), the rest went through.",
+    "z Jellyfinu zařazeno: {n} titulů": "assigned from Jellyfin: {n} titles",
+    "navázáno podle názvu: {n} záznamů": "linked by name: {n} records",
+    "navázáno podle čísla dílu: {n} záznamů":
+        "linked by episode number: {n} records",
+    "vráceno ke správným dílům: {n}": "moved back to the right episodes: {n}",
+    "sloučeno duplicit: {n}": "duplicates merged: {n}",
+    "sloučeno napříč zdroji importu: {n}": "merged across import sources: {n}",
+    "srovnáno názvů podle knihovny: {n}": "names aligned with the library: {n}",
+    "Ručně to mačkat nemusíš – totéž dělá úloha „Narovnání dat“ výš, "
+    "každý den ve zvolený čas.":
+        "You do not have to press this – the „Data tidy-up“ task above does "
+        "the same thing every day at the time you pick.",
+    "Srovná historii do pořádku: dohledá v Jellyfinu záznamy, ke kterým "
+    "v knihovně nic nevede, naváže je podle názvu a čísla dílu, sloučí "
+    "duplicity a srovná názvy podle knihovny. Nic nemaže - jen opravuje vazby.":
+        "Puts the history straight: asks Jellyfin about records that lead "
+        "nowhere in the library, links them by name and episode number, "
+        "merges duplicates and aligns names with the library. It deletes "
+        "nothing - it only repairs the links.",
     "nic k opravě, historie je v pořádku.":
         "nothing to fix, the history is in order.",
     "Není co dohledávat - osiřelé záznamy tu nejsou.":
@@ -1164,6 +1306,18 @@ LOG_EN: dict[str, str] = {
     'dohledano v Jellyfinu: %s z %s dotazanych, navazano %s, zalozeno %s, doplnen serial u %s':
         'looked up in Jellyfin: %s of %s asked, linked %s, created %s,'
         ' series filled in for %s',
+    'databaze GeoLite2 stazena (%s MB)':
+        'the GeoLite2 database has been downloaded (%s MB)',
+    'databazi GeoLite2 se nepodarilo stahnout: %s':
+        'the GeoLite2 database could not be downloaded: %s',
+    'adresu %s se nepodařilo umístit: %s':
+        'address %s could not be located: %s',
+    'narovnani dat: %s uprav, osirelych zbyva %s':
+        'data tidy-up: %s changes, %s orphans remain',
+    'dohledani v Jellyfinu se nepovedlo: %s':
+        'the Jellyfin lookup failed: %s',
+    'serial %s: navazano %s dilu, u %s zbylo jen jmeno serialu':
+        'series %s: %s episodes linked, %s left with just the series name',
     'hlasku %r se nepodarilo doplnit hodnotami %r':
         'could not fill message %r with values %r',
     'uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)':

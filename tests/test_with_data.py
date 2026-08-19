@@ -165,11 +165,13 @@ with TestClient(app) as client:
     # Uklid, import i zalohy se spousti tlacitkem dole na strance. Po
     # presmerovani se prohlizec vraci na zacatek, takze hlaska v toku
     # stranky by cloveku utekla nahoru a nikdy by ji neprecetl.
-    response = client.post("/settings/history/cleanup", follow_redirects=False)
+    response = client.post("/settings/history/tidy", follow_redirects=False)
     check(response.headers["location"].endswith("#uklid"),
           f"vraci se ke karte uklidu, ne na zacatek ({response.headers['location']})")
 
-    stranka = client.get("/settings?section=import").text
+    # Karta se prestehovala z Importu do Uloh - proklik i kotva musi
+    # ukazovat tam, kde ta karta doopravdy je.
+    stranka = client.get("/settings?section=tasks").text
     check('class="flash-toast"' in stranka, "hlaska je v plovoucim ramecku")
     check('id="uklid"' in stranka, "a karta uklidu ma kotvu, na kterou se skace")
 

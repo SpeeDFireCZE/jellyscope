@@ -22,6 +22,7 @@ barvy ve svetlem i tmavem rezimu, aniz by o tom tenhle soubor musel vedet.
 from __future__ import annotations
 
 import html
+import re
 import math
 from typing import Any, Sequence
 
@@ -458,7 +459,12 @@ def area_chart_multi(
 
     step = max(1, len(points) // 6)
     for index in range(0, len(points), step):
-        label = str(points[index].get(x_key, ""))[5:]
+        # Datum z databaze zacina rokem ("2026-08-14"). Rok na ose nikoho
+        # nezajima a bere misto, tak ho ukrojime - ale jen kdyz tam opravdu
+        # je. Drive se rezalo vzdycky, takze popisek "02.08. 22:11" se
+        # zmenil na ". 22:11".
+        surovy = str(points[index].get(x_key, ""))
+        label = surovy[5:] if re.match(r"^\d{4}-", surovy) else surovy
         parts.append(
             f'<text x="{px(index):.1f}" y="{height - 10}" text-anchor="middle" '
             f'class="axis-label">{_e(label)}</text>'
@@ -579,3 +585,55 @@ def sparkline(
 
     parts.append("</svg>")
     return "".join(parts)
+
+# ---------------------------------------------------------------------------
+# Mapa sveta - odkud se divaji
+# ---------------------------------------------------------------------------
+
+def mapa_sveta(body: Sequence[dict[str, Any]]) -> str:
+    """Obrys pevnin a na nem tecky podle toho, odkud se prehravalo.
+
+    Kresli se stejnou rukou jako zbytek grafu: jedno SVG, zadna knihovna,
+    zadna dlazdicova mapa z internetu. Obrys je v `worldmap.PEVNINY`
+    (Natural Earth, public domain) a lezi ve stejne soustave souradnic
+    jako tecky, takze staci jedno `viewBox`.
+
+    Velikost tecky roste s **odmocninou** odsledovaneho casu, ne s casem
+    samotnym: oko porovnava plochy, takze dvojnasobny cas ma mit
+    dvojnasobnou plochu, ne dvojnasobny polomer. Bez odmocniny by jedno
+    aktivni misto prekrylo pul kontinentu.
+    """
+    from .worldmap import PEVNINY, SIRKA, VYSKA, na_mapu
+
+    if not body:
+        return _empty(_t("Zatím žádná data"))
+
+    nejvic = max(float(b.get("sekund") or 0) for b in body) or 1.0
+
+    casti = [
+        f'<svg class="mapa" viewBox="0 0 {SIRKA} {VYSKA}" '
+        f'preserveAspectRatio="xMidYMid meet" role="img" '
+        f'aria-label="{_e(_t("Odkud se dívají"))}">',
+        f'<rect x="0" y="0" width="{SIRKA}" height="{VYSKA}" '
+        f'fill="var(--surface-2)" />',
+        f'<path d="{PEVNINY}" fill="var(--axis)" fill-opacity="0.35" '
+        f'stroke="var(--axis)" stroke-width="0.2" />',
+    ]
+
+    for bod in body:
+        x, y = na_mapu(float(bod["lat"]), float(bod["lon"]))
+        podil = (float(bod.get("sekund") or 0) / nejvic) ** 0.5
+        polomer = 1.2 + podil * 4.0
+        tip = _t("{misto}: {n}× · {lidi} lidí").format(
+            misto=bod.get("popis") or "?", n=bod.get("plays") or 0,
+            lidi=bod.get("lidi") or 0)
+        casti.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{polomer:.2f}" '
+            f'fill="var(--series-1)" fill-opacity="0.75" '
+            f'stroke="var(--surface-1)" stroke-width="0.3" '
+            f'data-tip="{_e(tip)}" />'
+        )
+
+    casti.append("</svg>")
+    return "".join(casti)
+

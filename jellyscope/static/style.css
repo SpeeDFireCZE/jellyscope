@@ -1693,3 +1693,71 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     .flash-toast { animation: none; }
     .flash-toast.odchazi { transition: none; }
 }
+
+
+/* ---------------------------------------------------------------------------
+   Okna (<dialog>)
+
+   Nativní okno prohlížeče: umí Esc, zaostření i ztmavené pozadí samo od
+   sebe. Stylujeme jen to, co má vypadat jako zbytek aplikace - vzhled si
+   bere od karty, protože je to tentýž obsah, jen vytažený dopředu.
+   --------------------------------------------------------------------------- */
+.okno {
+    width: min(520px, calc(100vw - 32px));
+    padding: 22px 24px 24px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-1);
+    color: var(--text);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 45%);
+}
+
+/* Bez tohohle je pozadí za oknem jen lehce šedé a stránka pod ním pořád
+   přetahuje pozornost. */
+.okno::backdrop {
+    background: rgb(0 0 0 / 55%);
+}
+
+.okno-hlava {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.okno-hlava h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+/* Křížek. Je to <button> ve formuláři s method="dialog", takže okno
+   zavře i bez JavaScriptu. */
+.okno-zavrit {
+    padding: 2px 10px;
+    font-size: 20px;
+    line-height: 1.2;
+}
+
+.okno .field:last-of-type {
+    margin-bottom: 18px;
+}
+
+
+/* Mapa světa na stránce Síť. Poměr stran drží viewBox (360:180), takže
+   se sama přizpůsobí šířce karty a nikdy se nedeformuje. */
+.mapa {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+
+.mapa circle {
+    transition: fill-opacity 120ms ease;
+}
+
+.mapa circle:hover {
+    fill-opacity: 1;
+}

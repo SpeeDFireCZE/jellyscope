@@ -61,3 +61,15 @@ python-multipart==0.0.32   # reads HTML form data (POST)
 #
 # The "pool" extra enables connection pooling; without it the app still
 # connects, it just opens a new connection per query.
+
+# --- optional, second one ------------------------------------------------
+# Reads the GeoLite2 database for the map on the Network page - where
+# people watch from. Not listed above for the same reason as psycopg:
+# whoever does not want the map has no reason to install anything, and
+# without it the page simply explains what is missing.
+#
+#   .venv/bin/python -m pip install maxminddb
+#
+# The database itself is a file the app downloads on a button press into
+# data/ (about 65 MB). Nothing is asked of the network at runtime - the
+# lookup happens against that local file.

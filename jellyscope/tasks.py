@@ -77,6 +77,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from . import db, dialect, scanner
+from .i18n import translate as _t
 from .config import BASE_DIR
 
 log = logging.getLogger("jellyscope.tasks")
@@ -151,6 +152,29 @@ async def _run_backup() -> dict[str, Any]:
     return await backup_database()
 
 
+async def _run_tidy() -> dict[str, Any]:
+    """Narovnani dat na pozadi.
+
+    Cela prace je v importers.narovnej_data() - tady se jen prelozi
+    vysledek do vety, kterou uvidis u ulohy. Stejnou funkci pousti
+    i tlacitko v Nastaveni, takze se rucni a automaticky beh nemuzou
+    rozejit.
+    """
+    from . import importers  # az tady - importers si tahne scanner i tasks
+
+    vysledek = await importers.narovnej_data()
+    if not vysledek["casti"]:
+        return {"status": "ok",
+                "message": _t("Nebylo co narovnávat, historie je v pořádku.")}
+
+    vety = [_t(sablona).format(**hodnoty) for sablona, hodnoty in vysledek["casti"]]
+    zprava = ", ".join(vety)
+    if vysledek["zbyva"]:
+        zprava += ". " + _t("Zbývá {n} nezařazených záznamů.").format(
+            n=vysledek["zbyva"])
+    return {"status": "ok", "message": zprava}
+
+
 TASKS: dict[str, Task] = {
     task.key: task
     for task in [
@@ -181,6 +205,20 @@ TASKS: dict[str, Task] = {
             default_minutes=15,
             runner=_run_recent,
             log_kind="recent",
+        ),
+        Task(
+            key="tidy",
+            name="Narovnání dat",
+            description=(
+                "Srovná historii do pořádku: dohledá v Jellyfinu záznamy, "
+                "ke kterým v knihovně nic nevede, naváže je podle názvu "
+                "a čísla dílu, sloučí duplicity a srovná názvy podle "
+                "knihovny. Nic nemaže - jen opravuje vazby."
+            ),
+            time_setting="task_tidy_time",
+            default_time="04:00",
+            runner=_run_tidy,
+            log_kind="tidy",
         ),
         Task(
             key="backup",

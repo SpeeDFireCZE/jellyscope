@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting,
+from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting, geoip,
                i18n, importers, insights, langstats, languages, scanner, stats,
                tasks)
 # PROJECT_DIR je kořen projektu (tam, kde je run.py a složka data),
@@ -1171,6 +1171,14 @@ def settings_page(
         )
     elif section == "tasks":
         context.update(
+            # Karta "Narovnání dat" se sem přestěhovala z Importu, takže
+            # sem patří i čísla, která vypisuje.
+            duplicate_rows=importers.duplicate_playback_count(),
+            misplaced_rows=len(importers.misplaced_episode_rows()),
+            orphan_rows=importers.orphan_playback_count(),
+            orphan_items=importers.orphan_items_count(),
+            stale_name_rows=importers.stale_name_rows(),
+            import_duplicate_rows=importers.import_duplicate_count(),
             # Když úloha doběhne, zatímco je člověk na téhle sekci, načte
             # se stránka sama - jinak by tu proužek "úloha běží" zůstal
             # viset a výsledek by se neobjevil. Viz hlídač v base.html.
@@ -1852,46 +1860,40 @@ async def import_playback_reporting_file(
     return RedirectResponse("/settings?section=import", status_code=303)
 
 
-@app.post("/settings/history/cleanup")
-def history_cleanup(request: Request,
-                    account: dict[str, Any] = Depends(require_admin)):
-    """Úklid historie: duplicity a záznamy visící na špatném dílu.
+@app.post("/settings/history/tidy")
+async def history_tidy(request: Request,
+                       account: dict[str, Any] = Depends(require_admin)):
+    """Narovnání dat - jedno tlačítko pro celý úklid historie.
 
-    Obojí jsou následky chyb, které už jsou opravené - tohle napraví, co
-    po nich v databázi zůstalo. Pouštět se to dá opakovaně: podruhé
-    nenajde nic.
+    Dřív to byly dvě akce a člověk musel vědět, kterou pustit dřív.
+    Pořadí přitom není na výběr: dohledání v Jellyfinu vyrábí vazby, se
+    kterými pracuje všechno ostatní. Proto jedna routa - a stejnou funkci
+    pouští i naplánovaná úloha, takže se ruční a automatický běh nemůžou
+    rozejít.
+
+    Pouštět se to dá opakovaně; podruhé už nenajde nic.
     """
-    # Napřed navázat osiřelé záznamy: teprve když vědí, ke které položce
-    # patří, dá se u nich poznat správný díl i případná duplicita.
-    navazano = importers.relink_orphans()
-    vraceno = importers.repair_episode_links()
-    slouceno = importers.merge_duplicate_playback()
-    # Až nakonec: slučování napříč zdroji porovnává tituly podle názvu
-    # z knihovny, takže mu prospěje, když jsou záznamy už navázané.
-    z_importu = importers.merge_import_duplicates()
-    # Až úplně nakonec: názvy. Když se titul v Jellyfinu přejmenoval (nebo
-    # se u něj spravila špatně určená metadata), nese starý záznam historie
-    # pořád ten původní název - a ve statistikách pak k jednomu titulu
-    # patří jméno druhého.
-    nazvy = importers.sjednot_nazvy()
+    vysledek = await importers.narovnej_data()
 
-    casti = []
-    if navazano["items"]:
-        casti.append(f"navázáno na knihovnu: {navazano['rows']} záznamů")
-    if vraceno["moved"]:
-        casti.append(f"vráceno ke správným dílům: {vraceno['moved']}")
-    if slouceno["removed"]:
-        casti.append(f"sloučeno duplicit: {slouceno['removed']}")
-    if z_importu["removed"]:
-        casti.append(f"sloučeno napříč zdroji importu: {z_importu['removed']}")
-    if nazvy["rows"]:
-        casti.append(f"srovnáno názvů podle knihovny: {nazvy['rows']} "
-                     f"({nazvy['items']} titulů)")
+    jf = vysledek.get("jellyfin") or {}
+    if jf.get("status") == "error":
+        # Jellyfin je jen první krok. Zbytek proběhl, takže to není chyba
+        # celé akce - ale musí to být vidět, jinak by člověk marně čekal,
+        # že se osiřelé záznamy dohledají.
+        _flash(request, "Jellyfin neodpověděl ({duvod}), zbytek proběhl.",
+               "warning", duvod=jf.get("message", "?"))
+    elif not vysledek["casti"]:
+        _flash(request, "Nebylo co narovnávat, historie je v pořádku.", "success")
+    else:
+        vety = [_t(sablona).format(**hodnoty)
+                for sablona, hodnoty in vysledek["casti"]]
+        zprava = ", ".join(vety)
+        if vysledek["zbyva"]:
+            zprava += ". " + _t("Zbývá {n} nezařazených záznamů.").format(
+                n=vysledek["zbyva"])
+        _flash(request, "Narovnání dat: {co}", "success", co=zprava)
 
-    _flash(request, "Úklid historie: {co}", "success",
-           co=", ".join(casti) if casti
-           else _t("nic k opravě, historie je v pořádku."))
-    return RedirectResponse("/settings?section=import#uklid", status_code=303)
+    return RedirectResponse("/settings?section=tasks#uklid", status_code=303)
 
 
 @app.get("/settings/history/orphans", response_class=HTMLResponse)
@@ -1930,48 +1932,6 @@ def history_assign(request: Request, item_id: str = Form(""),
         _flash(request, "Přiřazeno k „{nazev}“ – {n} záznamů.", "success",
                nazev=vysledek["name"], n=vysledek["rows"])
     return RedirectResponse("/settings/history/orphans", status_code=303)
-
-
-@app.post("/settings/history/lookup")
-async def history_lookup(request: Request,
-                         account: dict[str, Any] = Depends(require_admin)):
-    """Osiřelé záznamy zkusí dohledat přímo v Jellyfinu.
-
-    Identifikátor v převzaté historii je pravý Jellyfin ItemId - jen
-    k němu u nás nic nevede, protože Jellystat nese jen název dílu
-    („7. epizoda"). Jellyfin to id zná a řekne seriál i číslo dílu.
-    Čte se, nezapisuje.
-    """
-    vysledek = await importers.dohledej_osirele_v_jellyfinu()
-    if vysledek.get("status") != "ok":
-        _flash(request, vysledek.get("message", "Nepovedlo se."), "error")
-        return RedirectResponse("/settings?section=import#uklid", status_code=303)
-
-    if not vysledek["dotazano"]:
-        zprava = _t("Není co dohledávat - osiřelé záznamy tu nejsou.")
-    elif not vysledek["nalezeno"]:
-        zprava = _t("Jellyfin nezná ani jeden z {n} titulů. Jsou to tituly, "
-                    "které v knihovně už nejsou.").format(n=vysledek["dotazano"])
-    else:
-        casti = [_t("Jellyfin zná {n} z {celkem}").format(
-            n=vysledek["nalezeno"], celkem=vysledek["dotazano"])]
-        if vysledek["navazano"]:
-            casti.append(_t("navázáno na knihovnu: {n} titulů").format(
-                n=vysledek["navazano"]))
-        if vysledek["zalozeno"]:
-            casti.append(_t("doplněno do knihovny: {n} titulů").format(
-                n=vysledek["zalozeno"]))
-        # Záznam visel na id seriálu, ne dílu. Položku z toho udělat
-        # nejde (seriál není soubor), ale jméno seriálu ano - a tím se
-        # záznam v přehledech zařadí pod svůj seriál.
-        if vysledek.get("doplneno"):
-            casti.append(_t("doplněn seriál u {n} titulů").format(
-                n=vysledek["doplneno"]))
-        if vysledek["radku"]:
-            casti.append(_t("celkem {n} záznamů").format(n=vysledek["radku"]))
-        zprava = ", ".join(casti) + "."
-    _flash(request, zprava, "success")
-    return RedirectResponse("/settings?section=import#uklid", status_code=303)
 
 
 @app.post("/settings/import/jellystat")
@@ -2181,6 +2141,61 @@ def languages_preferred(
 
     cil = "/languages" + (f"?days={int(days)}" if days else "")
     return RedirectResponse(cil, status_code=303)
+
+
+@app.get("/network", response_class=HTMLResponse)
+def network_page(request: Request, days: Optional[int] = None,
+                 account: dict[str, Any] = Depends(require_login)):
+    """Sit - kolik dat teklo ze serveru k prehravacum.
+
+    Vsechno se pocita z `playback.bitrate`, ktery sberac uklada u kazdeho
+    prehravani. Zadny novy sber to nepotrebuje - jen jina otazka nad
+    daty, ktera uz mame.
+    """
+    days = _days(request, days)
+    return templates.TemplateResponse(request, "network.html", _context(
+        request, account,
+        days=days,
+        prehled=stats.bandwidth_prehled(days),
+        prubeh=stats.bandwidth_prubeh(days),
+        podle_uzivatele=stats.bandwidth_podle(days, "user_name"),
+        podle_klienta=stats.bandwidth_podle(days, "client"),
+        odkud=stats.odkud_se_divaji(days),
+        hotspoty=stats.hotspoty(days),
+        zeme=stats.zeme_divaku(days),
+        geo={
+            "knihovna": geoip.knihovna_je(),
+            "databaze": geoip.je_k_dispozici(),
+            "bajtu": geoip.velikost_databaze(),
+            "stari": geoip.stari_databaze(),
+            # Cesta k pythonu, kterym aplikace bezi - at jde prikaz
+            # zkopirovat a nekonci u obecneho "pip install".
+            "python": sys.executable,
+        },
+    ))
+
+
+@app.post("/network/geoip")
+async def network_geoip(request: Request,
+                        account: dict[str, Any] = Depends(require_admin)):
+    """Stahne (nebo obnovi) databazi GeoLite2 pro mapu.
+
+    Jedina akce v aplikaci, ktera sahne jinam nez na Jellyfin - a jen na
+    kliknuti. Proto ji smi spustit spravce, ne kazdy prihlaseny.
+    """
+    if not geoip.knihovna_je():
+        _flash(request, "Chybí knihovna maxminddb – bez ní se databáze nepřečte.",
+               "error")
+        return RedirectResponse("/network", status_code=303)
+
+    vysledek = await geoip.stahni()
+    if vysledek.get("status") == "ok":
+        _flash(request, "Databáze GeoLite2 stažena ({velikost}).", "success",
+               velikost=formatting.bytes_human(vysledek["bajtu"]))
+    else:
+        _flash(request, "Stažení se nepovedlo: {duvod}", "error",
+               duvod=vysledek.get("message", "?"))
+    return RedirectResponse("/network", status_code=303)
 
 
 @app.get("/languages", response_class=HTMLResponse)

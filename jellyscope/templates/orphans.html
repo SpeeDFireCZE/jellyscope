@@ -15,9 +15,11 @@
             {{ _("historie, ke které se nepodařilo najít titul v knihovně") }}
         </p>
     </div>
-    <form method="post" action="/settings/history/lookup">
+    {# Totéž tlačítko jako v Nastavení - kdo se dostal až sem, chce to
+       zkusit znovu, aniž by se vracel o stránku zpátky. #}
+    <form method="post" action="/settings/history/tidy">
         <button class="btn" type="submit" {{ 'disabled' if not orphans }}>
-            {{ _("Dohledat osiřelé v Jellyfinu") }}
+            {{ _("Narovnat data") }}
         </button>
     </form>
 </div>

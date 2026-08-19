@@ -1860,18 +1860,10 @@ def zaloz_z_jellyfinu(nalezene: list[dict[str, Any]]) -> dict[str, int]:
         # Serial nebo rada: nemaji soubor, synchronizace je nezna a jako
         # polozka knihovny by skoncily v archivu. Viz docstring.
         if str(item.get("Type") or "") not in scanner.SPRAVOVANE_TYPY:
-            jmeno = str(item.get("Name") or "").strip()
-            if jmeno:
-                with db.connect() as conn:
-                    cursor = conn.execute(
-                        """UPDATE playback SET series_name = ?
-                            WHERE item_id = ?
-                              AND (series_name IS NULL OR series_name = '')""",
-                        (jmeno, item_id),
-                    )
-                if cursor.rowcount:
-                    doplneno += 1
-                    radku += cursor.rowcount
+            vysledek = _dily_pod_serialem(item_id, item)
+            navazano += vysledek["navazano"]
+            doplneno += vysledek["doplneno"]
+            radku += vysledek["radku"]
             continue
 
         cil = _dil_v_knihovne(item)
@@ -1902,6 +1894,90 @@ def zaloz_z_jellyfinu(nalezene: list[dict[str, Any]]) -> dict[str, int]:
 
     return {"navazano": navazano, "zalozeno": zalozeno,
             "doplneno": doplneno, "radku": radku}
+
+
+def _dily_pod_serialem(series_id: str, item: dict[str, Any]) -> dict[str, int]:
+    """Zaznamy visici na id SERIALU zkusi zaradit ke konkretnim dilum.
+
+    Tohle je ta cast, kvuli ktere ma dohledani smysl i u serialu. Zaznam
+    z prevzate historie casto nese id serialu (ne dilu) a k tomu nazev
+    typu "Kancelar - S02E05 - Nakup" nebo "5. dil". Samotny nazev je
+    k nicemu - "5. dil" ma kazdy serial - ale **ted uz vime, o ktery
+    serial jde**, takze se hleda jen mezi jeho dily. A tam uz to obvykle
+    vyjde jednoznacne.
+
+    Postupuje se po JEDNOTLIVYCH radcich, ne hromadne pres item_id: pod
+    jednim id serialu visi ruzne dily, kazdy s jinym nazvem.
+
+    Kdyz dil urcit nejde, zbyde aspon jmeno serialu - i to je zlepseni,
+    protoze zaznam se tim v prehledech prestane tvarit jako samostatny
+    film a slouci se pod svuj serial.
+    """
+    jmeno_serialu = str(item.get("Name") or "").strip()
+
+    # Dily toho serialu, jak je znama knihovna. Bereme i archivovane -
+    # historie na ne odkazovat smi, jen uz nejdou prehrat.
+    epizody = db.query_all(
+        """
+        SELECT id, name, parent_index_number AS rada, index_number AS dil
+          FROM items
+         WHERE type = 'Episode' AND series_id = ?
+        """,
+        (series_id,),
+    )
+    podle_cisla: dict[tuple[int, int], dict[str, Any]] = {}
+    podle_nazvu: dict[str, list[dict[str, Any]]] = {}
+    for radek in epizody:
+        if radek["rada"] is not None and radek["dil"] is not None:
+            podle_cisla.setdefault((int(radek["rada"]), int(radek["dil"])), radek)
+        klic = str(radek["name"] or "").strip().lower()
+        if klic:
+            podle_nazvu.setdefault(klic, []).append(radek)
+
+    zaznamy = db.query_all(
+        "SELECT id, item_name FROM playback WHERE item_id = ?", (series_id,))
+
+    navazano = doplneno = radku = 0
+    with db.connect() as conn:
+        for zaznam in zaznamy:
+            nazev = str(zaznam["item_name"] or "").strip()
+            cil = None
+
+            rozbor = rozbor_nazvu(nazev)
+            if rozbor:
+                cil = podle_cisla.get((rozbor["rada"], rozbor["dil"]))
+            if cil is None:
+                shody = podle_nazvu.get(nazev.lower(), [])
+                # Vic dilu stejneho jmena v jednom serialu se stava
+                # (dvoudilne epizody). Hadat nesmime - spatne prirazena
+                # historie je horsi nez neprirazena.
+                cil = shody[0] if len(shody) == 1 else None
+
+            if cil is not None:
+                conn.execute(
+                    """UPDATE playback SET item_id = ?, item_name = ?,
+                                           series_name = ?, item_type = 'Episode'
+                        WHERE id = ?""",
+                    (cil["id"], cil["name"], jmeno_serialu or None, zaznam["id"]),
+                )
+                navazano += 1
+                radku += 1
+            elif jmeno_serialu:
+                # Dil neurcime, ale serial ano.
+                cursor = conn.execute(
+                    """UPDATE playback SET series_name = ?
+                        WHERE id = ? AND (series_name IS NULL OR series_name = ''
+                                          OR series_name != ?)""",
+                    (jmeno_serialu, zaznam["id"], jmeno_serialu),
+                )
+                if cursor.rowcount:
+                    doplneno += 1
+                    radku += cursor.rowcount
+
+    if navazano or doplneno:
+        log.info("serial %s: navazano %s dilu, u %s zbylo jen jmeno serialu",
+                 jmeno_serialu or series_id, navazano, doplneno)
+    return {"navazano": navazano, "doplneno": doplneno, "radku": radku}
 
 
 def _knihovny_podle_cest() -> list[tuple[str, str]]:
@@ -2207,6 +2283,80 @@ def repair_episode_links() -> dict[str, Any]:
 
     log.info("vraceno %d zaznamu ke spravnym dilum", len(opravy))
     return {"status": "ok", "moved": len(opravy)}
+
+
+async def narovnej_data() -> dict[str, Any]:
+    """Srovna historii do poradku. Jedna akce, at nikdo nevybira poradi.
+
+    Kroky jdou za sebou zamerne - kazdy stavi na tom predchozim:
+
+      1. **Dohledani v Jellyfinu.** Identifikator v prevzate historii je
+         pravy Jellyfin ItemId. Kdyz ho Jellyfin jeste zna, rekne serial
+         i cislo dilu - a tim se zaznam da zaradit. Musi byt prvni: dava
+         vazby, se kterymi pracuji vsechny dalsi kroky.
+      2. **Navazani podle nazvu a cisla dilu** u toho, co Jellyfin uz
+         nezna.
+      3. **Vraceni na spravne dily** - naprava po chybe, kdy se cela
+         historie serialu slila na jeden dil.
+      4. **Slouceni duplicit** v ramci jednoho zdroje i napric zdroji.
+      5. **Srovnani nazvu** podle knihovny: prejmenovany titul ma v celem
+         prehledu jedno jmeno, ne dve.
+
+    Pouziva to tlacitko v Nastaveni i naplanovana uloha - proto je to
+    jedna funkce a ne dva skoro stejne kusy kodu.
+
+    Vraci slovnik s pocty za kazdy krok; klic "casti" je uz hotovy seznam
+    vet do hlasky.
+    """
+    vysledek: dict[str, Any] = {}
+
+    # Dohledani potrebuje Jellyfin. Kdyz nebezi, neni to duvod zastavit
+    # zbytek - ten se obejde bez site.
+    try:
+        vysledek["jellyfin"] = await dohledej_osirele_v_jellyfinu()
+    except JellyfinError as exc:
+        log.warning("dohledani v Jellyfinu se nepovedlo: %s", exc)
+        vysledek["jellyfin"] = {"status": "error", "message": str(exc)}
+
+    vysledek["navazano"] = relink_orphans()
+    vysledek["cislo_dilu"] = _link_by_episode_number()
+    vysledek["vraceno"] = repair_episode_links()
+    vysledek["duplicity"] = merge_duplicate_playback()
+    vysledek["z_importu"] = merge_import_duplicates()
+    vysledek["nazvy"] = sjednot_nazvy()
+
+    jf = vysledek["jellyfin"]
+    casti: list[tuple[str, dict[str, Any]]] = []
+    if jf.get("navazano"):
+        casti.append(("z Jellyfinu zařazeno: {n} titulů", {"n": jf["navazano"]}))
+    if jf.get("zalozeno"):
+        casti.append(("doplněno do knihovny: {n} titulů", {"n": jf["zalozeno"]}))
+    if jf.get("doplneno"):
+        casti.append(("doplněn seriál u {n} titulů", {"n": jf["doplneno"]}))
+    if vysledek["navazano"]["items"]:
+        casti.append(("navázáno podle názvu: {n} záznamů",
+                      {"n": vysledek["navazano"]["rows"]}))
+    if vysledek["cislo_dilu"][1]:
+        casti.append(("navázáno podle čísla dílu: {n} záznamů",
+                      {"n": vysledek["cislo_dilu"][1]}))
+    if vysledek["vraceno"]["moved"]:
+        casti.append(("vráceno ke správným dílům: {n}",
+                      {"n": vysledek["vraceno"]["moved"]}))
+    if vysledek["duplicity"]["removed"]:
+        casti.append(("sloučeno duplicit: {n}",
+                      {"n": vysledek["duplicity"]["removed"]}))
+    if vysledek["z_importu"]["removed"]:
+        casti.append(("sloučeno napříč zdroji importu: {n}",
+                      {"n": vysledek["z_importu"]["removed"]}))
+    if vysledek["nazvy"]["rows"]:
+        casti.append(("srovnáno názvů podle knihovny: {n}",
+                      {"n": vysledek["nazvy"]["rows"]}))
+
+    vysledek["casti"] = casti
+    vysledek["zbyva"] = orphan_playback_count()
+    log.info("narovnani dat: %s uprav, osirelych zbyva %s",
+             len(casti), vysledek["zbyva"])
+    return vysledek
 
 
 def import_summary() -> dict[str, Any]:

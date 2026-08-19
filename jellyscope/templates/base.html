@@ -48,6 +48,7 @@
             <a href="/"          class="{{ 'active' if path == '/' }}">{{ _("Přehled") }}</a>
             <a href="/insights"  class="{{ 'active' if path.startswith('/insights') }}">{{ _("Zjištění") }}</a>
             <a href="/languages" class="{{ 'active' if path.startswith('/languages') }}">{{ _("Jazyky") }}</a>
+            <a href="/network" class="{{ 'active' if path.startswith('/network') }}">{{ _("Síť") }}</a>
             <a href="/library"   class="{{ 'active' if path.startswith('/library') or path.startswith('/item') }}">{{ _("Knihovna") }}</a>
             <a href="/users"     class="{{ 'active' if path.startswith('/users') }}">{{ _("Uživatelé") }}</a>
             <a href="/history"   class="{{ 'active' if path.startswith('/history') }}">{{ _("Historie") }}</a>
@@ -618,6 +619,32 @@
                     });
             });
         }
+
+        /* Okna (<dialog>) v Nastavení. Tlačítko nese data-okno s id toho
+           okna - jeden posluchač tak stačí na všechna, i na ta, která
+           teprve přibudou.
+
+           showModal() (a ne show()) schválně: zatemní pozadí, chytí Esc
+           a nedovolí proklikat se na stránku pod oknem. */
+        document.addEventListener("click", function (event) {
+            var tlacitko = event.target.closest ?
+                event.target.closest("[data-okno]") : null;
+            if (!tlacitko) { return; }
+            var okno = document.getElementById(tlacitko.dataset.okno);
+            if (okno && typeof okno.showModal === "function") {
+                event.preventDefault();
+                okno.showModal();
+            }
+        });
+
+        /* Klik na ztmavené pozadí zavírá. Prohlížeč hlásí kliknutí na
+           samotný <dialog> i tehdy, když se trefíš vedle jeho obsahu -
+           proto se porovnává cíl kliknutí. */
+        document.addEventListener("click", function (event) {
+            if (event.target.tagName === "DIALOG") {
+                event.target.close();
+            }
+        });
 
         prepinatelnaKarta("daily-card", "/partials/daily", "kind");
         prepinatelnaKarta("top-items-card", "/partials/top-items", "top_kind");

@@ -101,17 +101,41 @@ Which language people actually pick, per user and per title — including
 Titles whose audio track has no language code at all get their own page, so
 you can fix the files rather than guess.
 
+### Network
+
+How much data left the server for the players, and when it peaked. The
+throughput curve is not sampled: every playback adds its bitrate at its
+start and takes it away at its end, so the curve is exact. Alongside it:
+the volume transferred, the transcoded share, who and which player
+streamed the most, and a split of home network vs internet.
+
+It is an honest estimate, not a measurement of the wire — seeking,
+buffering and pauses move the real numbers. The page says so.
+
+**The map** places public addresses with a GeoLite2 database: one file
+in `data/`, downloaded on a button press and queried offline. No address
+of your viewers is ever sent anywhere. It needs the optional
+`maxminddb` library (see `requirements.txt`); without it the page
+explains what to install instead of showing an empty map. Addresses from
+the home network are never placed — `192.168.1.5` marks no spot on
+Earth. Data © MaxMind, GeoLite2 (CC BY-SA 4.0).
+
 ### Scheduled tasks and backups
 
-**Settings → Scheduled tasks** has three tasks:
+**Settings → Scheduled tasks** has four tasks:
 
 | Task | When | What it does |
 |---|---|---|
 | Library sync | daily at a set time | Downloads users, libraries and titles. With ffprobe selected, an analysis of files without technical data follows. |
 | Recently added titles | every N minutes | Only fetches what is not in the library yet. Barely touches Jellyfin, so it can run often. |
+| Data tidy-up | daily at a set time | Asks Jellyfin about records that lead nowhere in the library, links them by name and episode number, merges duplicates and aligns names with the library. It deletes nothing. |
 | Database backup | daily at a set time | Saves a copy into the chosen folder and deletes surplus older ones. |
 
-The two nightly tasks are scheduled by **time of day**, not by interval:
+Their default times are in that order — the tidy-up works on what the
+sync has just fetched, and the backup then stores data that is already
+straight.
+
+The nightly tasks are scheduled by **time of day**, not by interval:
 an interval counts from the last run, so every manual run would push the
 schedule and a 3:30 AM task would drift into the afternoon. A missed run
 (the machine was off) is caught up after start; a manual run never changes
@@ -139,13 +163,19 @@ stores them. Some Playback Reporting versions do record the language, and
 those rows are counted.
 
 Imported history often refers to titles by name only ("Episode 7"), which
-matches nothing in particular. Two tools help:
+matches nothing in particular. **Data tidy-up** (in *Settings → Scheduled
+tasks*) sorts that out in one action, and the daily task does it without
+being asked:
 
-- **Clean up history** merges duplicates, repairs episode links and aligns
-  names with the library.
-- **Look the orphans up in Jellyfin** asks Jellyfin about the identifiers in
-  the imported history — they are genuine, so Jellyfin can name the series
-  and episode number the record is missing.
+1. Jellyfin is asked about the identifiers in the imported history — they
+   are genuine, so it can name the series and the episode number the
+   record is missing. A record hanging on a *series* id is narrowed down
+   to one episode within that series.
+2. What Jellyfin no longer knows is linked by name and episode number.
+3. Duplicates are merged and names aligned with the library.
+
+The order is not a choice, which is why it is one button: the lookup
+produces the links the rest works from.
 
 What is still left over is listed on **What could not be placed**, grouped
 by reason, and can be assigned to a library title by hand.

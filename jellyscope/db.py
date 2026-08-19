@@ -83,6 +83,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "task_backup_enabled": "0",
     # Zaloha je taky nocni uloha - stejny duvod jako u synchronizace.
     # Kousek za ni, at si nelezou do zamku.
+    "task_tidy_enabled": "1",
+    # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje
+    # s tim, co synchronizace prave stahla, a zaloha uz ma ulozit
+    # srovnana data.
+    "task_tidy_time": "04:00",
     "task_backup_time": "04:30",
     "backup_path": "",
     "backup_keep": "7",

@@ -61,10 +61,66 @@
     {{ tile(_("Spuštění"), series.plays | number) }}
 </div>
 
-{# Každá řada zvlášť. Rozbalená je jen ta první - u seriálu o deseti
-   řadách by jinak stránka začínala stovkou řádků. #}
+{# Souhrn o seriálu - totéž, co u filmu ukazuje karta „Soubor". Seriál
+   žádný jeden soubor nemá, takže se místo cesty k souboru ukazuje
+   složka, ve které jeho díly leží. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("O seriálu") }}</h2>
+    </div>
+    <div class="table-wrap">
+        <table class="facts">
+            <tbody>
+            <tr>
+                <th>{{ _("Knihovna") }}</th>
+                <td>
+                    {% if library %}
+                        <a href="/library/{{ library.id }}?tab=media">{{ library.name }}</a>
+                    {% else %}
+                        {{ series.library_name or '-' }}
+                    {% endif %}
+                </td>
+            </tr>
+            <tr><th>{{ _("Dílů") }}</th><td>{{ series.episode_count | number }}</td></tr>
+            <tr><th>{{ _("Řad") }}</th><td>{{ series.season_count | number }}</td></tr>
+            <tr><th>{{ _("Velikost") }}</th><td>{{ series.size_bytes | bytes }}</td></tr>
+            <tr>
+                <th>{{ _("Průměrně na díl") }}</th>
+                <td>
+                    {% if series.episode_count %}
+                        {{ (series.size_bytes // series.episode_count) | bytes }}
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+            <tr><th>{{ _("Spuštění") }}</th><td>{{ series.plays | number }}</td></tr>
+            <tr>
+                <th>{{ _("Přidáno") }}</th>
+                <td>{{ series.pridano | datetime if series.pridano else '-' }}</td>
+            </tr>
+            <tr>
+                <th>{{ _("Poslední přibyl díl") }}</th>
+                <td>{{ series.posledni_dil | datetime if series.posledni_dil else '-' }}</td>
+            </tr>
+            <tr>
+                <th>{{ _("Data změřena") }}</th>
+                <td>{{ series.zmereno | relative if series.zmereno else '-' }}</td>
+            </tr>
+            {% if series.path %}
+            <tr>
+                <th>{{ _("Umístění") }}</th>
+                <td><code style="font-size:12px; word-break:break-all">{{ series.path }}</code></td>
+            </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Každá řada zvlášť a všechny zavřené. Dřív byla první rozbalená, jenže
+   pak byl první, co člověk po otevření seriálu viděl, seznam dílů -
+   a souhrn o seriálu mu utekl nahoru. #}
 {% for season in series.seasons %}
-<details class="card" style="margin-bottom:14px" {{ 'open' if loop.first }}>
+<details class="card" style="margin-bottom:14px">
     <summary style="cursor:pointer; display:flex; justify-content:space-between; gap:12px; align-items:baseline">
         <strong>{{ season.name }}</strong>
         <span class="card-note">
