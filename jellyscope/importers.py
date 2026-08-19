@@ -644,6 +644,7 @@ def _build_row(
     items: dict[str, dict[str, Any]],
     user_name: str | None = None,
     audio_language: str | None = None,
+    series_name: str | None = None,
 ) -> tuple[Any, ...]:
     """Poskladá jeden radek historie ve tvaru nasi tabulky.
 
@@ -665,7 +666,10 @@ def _build_row(
         item_id,
         item_row.get("name") or item_name or "?",
         item_row.get("type") or item_type,
-        item_row.get("series_name"),
+        # Jmeno serialu: nase knihovna je merodajna, ale kdyz o te polozce
+        # jeste nic nevime (typicky import drive, nez probehla prvni
+        # synchronizace), vezme se to, co poslal zdroj.
+        item_row.get("series_name") or series_name,
         item_row.get("library_id"),
         client,
         device,
@@ -1085,6 +1089,14 @@ async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, 
     users = _known_users()
     items = _known_items()
     existing = _existing_keys("import:jst:")
+    # Ke kazdemu zdrojovemu radku (prvni dve casti klice) si zapamatujeme,
+    # pod jakym klicem uz v databazi je. Podle toho se pozna oprava.
+    podle_zdroje: dict[str, str] = {}
+    for klic in existing:
+        casti = klic.split(":")
+        if len(casti) >= 4:
+            podle_zdroje[":".join(casti[:3])] = klic
+    opraveno = 0
     index_casu = _index_prehravani()
 
     rows: list[tuple[Any, ...]] = []
@@ -1112,14 +1124,64 @@ async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, 
             skipped_short += 1
             continue
 
-        item_id = _pick(record, "NowPlayingItemId", "nowplayingitemid", "ItemId", "EpisodeId")
+        # U epizody posila Jellystat DVE ruzna id a zalezi, ktere se vezme:
+        #
+        #   NowPlayingItemId  = id SERIALU   ("Tym SEAL")
+        #   EpisodeId         = id DILU      (to, co chceme)
+        #
+        # Drive se bralo to prvni, takze cela historie serialu skoncila
+        # na jednom id, ke kteremu v knihovne nic nevede - a protoze se
+        # zaznam jmenoval jmenem serialu, nedal se dil dopocitat vubec.
+        # Zadne dohledavani to uz nespravi; jedina cesta je vzit spravne
+        # id rovnou pri importu.
+        dil_id = _pick(record, "EpisodeId", "episodeid", "episode_id")
+        item_id = dil_id or _pick(record, "NowPlayingItemId", "nowplayingitemid",
+                                  "ItemId")
         user_id = _pick(record, "UserId", "userid", "user_id")
 
-        key = f"import:jst:{_pick(record, 'Id', 'id') or index}:{item_id}"
+        # Stejny pribeh u nazvu: NowPlayingItemName je u epizody jmeno
+        # serialu. Jmeno dilu je v EpisodeName - a jmeno serialu si
+        # necháme zvlast, at se prehravani zaradi pod svuj serial.
+        jmeno_serialu = _pick(record, "SeriesName", "seriesname",
+                              "NowPlayingItemName", "ItemName", "item_name")
+        jmeno_dilu = _pick(record, "EpisodeName", "episodename", "episode_name")
+        nazev = (jmeno_dilu if dil_id else None) or _pick(
+            record, "NowPlayingItemName", "ItemName", "item_name")
+
+        # Klic ma tvar "import:jst:<id radku v zaloze>:<id polozky>".
+        # Prvni dve casti identifikuji ZDROJOVY RADEK, treti to, na co
+        # ukazuje - a prave ta se opravou meni.
+        zaklad = f"import:jst:{_pick(record, 'Id', 'id') or index}"
+        key = f"{zaklad}:{item_id}"
         if key in existing:
             skipped_duplicate += 1
             continue
+
+        # Tentyz radek zalohy uz v databazi je, jen ukazuje jinam - to je
+        # presne stav po importu, ktery bral id serialu misto dilu.
+        # Opravime ho na miste; kdybychom vlozili novy, mel by clovek
+        # kazde prehravani dvakrat.
+        stary_klic = podle_zdroje.get(zaklad)
+        if stary_klic:
+            with db.connect() as conn:
+                conn.execute(
+                    """UPDATE playback
+                          SET session_key = ?, item_id = ?, item_name = ?,
+                              series_name = COALESCE(?, series_name),
+                              item_type = ?
+                        WHERE session_key = ?""",
+                    (key, item_id, nazev or "?",
+                     jmeno_serialu if dil_id else None,
+                     _jellystat_item_type(record), stary_klic),
+                )
+            podle_zdroje[zaklad] = key
+            existing.discard(stary_klic)
+            existing.add(key)
+            opraveno += 1
+            continue
+
         existing.add(key)
+        podle_zdroje[zaklad] = key
 
         # Tentyz zaznam uz muze byt v databazi z Playback Reportingu nebo
         # ze sberace.
@@ -1135,7 +1197,8 @@ async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, 
             started_at=started_at,
             duration=duration,
             item_type=_jellystat_item_type(record),
-            item_name=_pick(record, "NowPlayingItemName", "ItemName", "item_name"),
+            item_name=nazev,
+            series_name=jmeno_serialu if dil_id else None,
             client=_pick(record, "Client", "client"),
             device=_pick(record, "DeviceName", "device_name"),
             method=_pick(record, "PlayMethod", "play_method", "PlaybackMethod"),
@@ -1151,15 +1214,20 @@ async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, 
 
     scanner.finish_task_log(
         scan_id, "done", total=len(records), ok=imported, failed=0,
-        message=(f"Jellystat: {imported} nových, {skipped_duplicate} již existovalo, "
+        message=(f"Jellystat: {imported} nových, {opraveno} opravených, "
+                 f"{skipped_duplicate} již existovalo, "
                  f"{skipped_known} známých z jiného zdroje, "
                  f"{skipped_short} příliš krátkých"),
     )
+    if opraveno:
+        log.info("import: %s zaznamu preneseno ze serialu na konkretni dil",
+                 opraveno)
     return {
         "status": "ok",
         "source": "Jellystat",
         "found": len(records),
         "imported": imported,
+        "repaired": opraveno,
         "duplicate": skipped_duplicate,
         "known_elsewhere": skipped_known,
         "too_short": skipped_short,

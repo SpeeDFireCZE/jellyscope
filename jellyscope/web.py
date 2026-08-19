@@ -553,6 +553,22 @@ def _linked_note(result: dict[str, Any]) -> str:
         co=", ".join(casti), n=linked["rows"])
 
 
+def _opraveno_note(result: dict[str, Any]) -> str:
+    """Věta o záznamech, které opakovaný import narovnal.
+
+    Starší importy z Jellystatu braly u epizody id seriálu (viz
+    importers.import_jellystat_json), takže celá historie seriálu visela
+    na jednom identifikátoru. Když se tatáž záloha nahraje znovu, opraví
+    se na místě - a tohle je jediné místo, kde se to člověk dozví.
+    """
+    pocet = result.get("repaired") or 0
+    if not pocet:
+        return ""
+    return " " + i18n.translate(
+        "{n} starších záznamů se přeneslo ze seriálu na konkrétní díl."
+    ).format(n=pocet)
+
+
 def _known_note(result: dict[str, Any]) -> str:
     """Věta o záznamech, které už byly v databázi z jiného zdroje.
 
@@ -1962,6 +1978,7 @@ async def import_jellystat(
                "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
                    n=result["imported"], nalezeno=result["found"],
                    duplicit=result["duplicate"])
+            + _opraveno_note(result)
             + _known_note(result) + _linked_note(result),
             "success",
         )

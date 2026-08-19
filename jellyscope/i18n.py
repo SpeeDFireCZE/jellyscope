@@ -1067,6 +1067,8 @@ EN: dict[str, str] = {
 
     # --- narovnani dat (jedno tlacitko + stejnojmenna uloha) -------------
     "Narovnání dat": "Data tidy-up",
+    "{n} starších záznamů se přeneslo ze seriálu na konkrétní díl.":
+        "{n} older records were moved from the series to a specific episode.",
     "Nejdřív se Jellyfinu ukážou identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte. Teprve na tom stojí zbytek: navázání podle názvu, slučování duplicit a srovnání jmen.":
         "First the identifiers from the imported history are shown to "
         "Jellyfin – they are genuine, only nothing in the library leads to "
@@ -1319,6 +1321,8 @@ LOG_EN: dict[str, str] = {
         'the GeoLite2 database could not be downloaded: %s',
     'adresu %s se nepodařilo umístit: %s':
         'address %s could not be located: %s',
+    'import: %s zaznamu preneseno ze serialu na konkretni dil':
+        'import: %s records moved from the series to a specific episode',
     'narovnani dat: %s uprav, osirelych zbyva %s':
         'data tidy-up: %s changes, %s orphans remain',
     'dohledani v Jellyfinu se nepovedlo: %s':
