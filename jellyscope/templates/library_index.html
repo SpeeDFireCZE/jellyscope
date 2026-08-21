@@ -47,6 +47,8 @@
 
 <div class="kpi-row">
     {{ tile(_("Položek celkem"), coverage.total | number) }}
+    {{ tile(_("Velikost celkem"), coverage.size_bytes | bytes,
+            note=_("všechny knihovny dohromady")) }}
     {{ tile(_("Změřeno přes ffprobe"), coverage.from_ffprobe | number,
             note=_("přesná data ze souborů")) }}
     {{ tile(_("Převzato z Jellyfinu"), coverage.from_jellyfin | number,

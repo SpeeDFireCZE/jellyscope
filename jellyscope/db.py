@@ -85,6 +85,16 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # Kousek za ni, at si nelezou do zamku.
     # Hlidani nove verze je vychozi VYPNUTE: je to odchozi spojeni
     # a o tom rozhoduje ten, kdo server provozuje. Viz updates.py.
+    # Kolik polozek karta vypise rovnou, nez zbytek schova do okna.
+    # Vyssi cislo = vic videt bez klikani, ale karta roste a odsouva
+    # vsechno pod sebou. Viz web._context() a sablony _now_playing.html
+    # a languages.html.
+    "ui_max_streams": "10",
+    "ui_max_viewers": "10",
+    # Jak se priblizuje mapa na strance Sit. "click" schvalne jako
+    # vychozi: kolecko nad mapou by jinak zastavilo rolovani stranky
+    # a clovek by u mapy uvizl. Viz web._stropy() a base.html.
+    "ui_map_zoom": "click",
     "update_check_enabled": "0",
     "task_tidy_enabled": "1",
     # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje
@@ -531,6 +541,10 @@ def test_connection(config: dialect.DatabaseConfig) -> tuple[bool, str]:
 # knihovny; pro nás stačí tenhle slovník.
 MIGRATIONS: dict[str, dict[str, str]] = {
     "items": {
+        # Otisk obrazku z Jellyfinu (ImageTags.Primary). Jiny obrazek =
+        # jiny otisk, takze podle nej pozname, ze uz je v mezipameti
+        # neplatny. Viz web.item_image() a scanner._zapomen_obrazky().
+        "image_tag": "TEXT",
         "audio_languages": "TEXT",
         "subtitle_languages": "TEXT",
         "default_audio_language": "TEXT",
@@ -568,6 +582,12 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # do statistik. Viz collector.MIN_LANGUAGE_SECONDS.
         "language_since": "TEXT",
         "language_confirmed": "INTEGER NOT NULL DEFAULT 0",
+        # Co presne se pri prepoctu deje - viz collector._describe_stream().
+        # Samotne "transcode" nerika, jestli server prepocitava obraz
+        # (drahe), jen zvuk (levne), nebo vypaluje titulky.
+        "transcode_video_direct": "INTEGER",
+        "transcode_audio_direct": "INTEGER",
+        "transcode_hw": "TEXT",
     },
 }
 

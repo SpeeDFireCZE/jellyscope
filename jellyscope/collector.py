@@ -207,6 +207,18 @@ def _navaz_na_prerusene(conn: Any, key: str, session: dict[str, Any],
     return radek
 
 
+def _bit(hodnota: Any) -> int | None:
+    """Ano/ne od Jellyfinu na 1/0 - a nevim necha nevimem.
+
+    Zamerne nepouzivame bool(): kdyz udaj v odpovedi chybi, je to jina
+    situace nez "neni primy". Nula by tvrdila, ze se obraz prepocitava,
+    i kdyz o tom ve skutecnosti nic nevime.
+    """
+    if hodnota is None:
+        return None
+    return 1 if hodnota else 0
+
+
 def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
     """Co konkretne tece k prehravaci - kodeky a bitrate.
 
@@ -226,11 +238,19 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
         reasons = transcoding.get("TranscodeReasons") or []
         if isinstance(reasons, str):
             reasons = [reasons]
+        # Co presne se prepocitava. Samotne "transcode" totiz nerika skoro
+        # nic: prepocet obrazu vytizi server nasobne vic nez prepocet
+        # zvuku a clovek, ktery se pta "proc server topi", potrebuje
+        # videt prave tenhle rozdil. Jellyfin to rekne sam, hadat se to
+        # z kodeku nemusi.
         return {
             "video_codec": transcoding.get("VideoCodec"),
             "audio_codec": transcoding.get("AudioCodec"),
             "bitrate": transcoding.get("Bitrate"),
             "transcode_reasons": ", ".join(reasons) or None,
+            "video_direct": _bit(transcoding.get("IsVideoDirect")),
+            "audio_direct": _bit(transcoding.get("IsAudioDirect")),
+            "hw": transcoding.get("HardwareAccelerationType") or None,
             "video_width": sirka,
             "video_height": vyska,
             "runtime_ticks": delka,
@@ -244,6 +264,10 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
         "audio_codec": audio.get("Codec"),
         "bitrate": jellyfin_bitrate(item),
         "transcode_reasons": None,
+        # Nic se neprepocitava, takze neni co popisovat.
+        "video_direct": None,
+        "audio_direct": None,
+        "hw": None,
         "video_width": sirka,
         "video_height": vyska,
         "runtime_ticks": delka,
@@ -334,13 +358,14 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                         item_id, item_name, item_type, series_name, library_id,
                         client, device_name, device_id, remote_address,
                         play_method, transcode_reasons, video_codec, audio_codec, bitrate,
+                        transcode_video_direct, transcode_audio_direct, transcode_hw,
                         audio_language, subtitle_language,
                         current_audio_language, current_subtitle_language,
                         language_since, language_confirmed,
                         media_runtime_ticks, video_width, video_height,
                         started_at, last_seen_at, watched_seconds, paused_seconds,
                         position_ticks, is_paused, is_active
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,1)
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,1)
                     """,
                     (
                         key,
@@ -360,6 +385,9 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                         stream["video_codec"],
                         stream["audio_codec"],
                         stream["bitrate"],
+                        stream["video_direct"],
+                        stream["audio_direct"],
+                        stream["hw"],
                         # Do statistik zatim nic - jazyk se zapocita az po
                         # MIN_LANGUAGE_SECONDS, viz vyse. Prvni vteriny
                         # casto hraje stopa, kterou si divak hned prepne.
@@ -452,6 +480,12 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                        play_method       = COALESCE(?, play_method),
                        transcode_reasons = COALESCE(?, transcode_reasons),
                        bitrate           = COALESCE(?, bitrate),
+                       -- Bez COALESCE: popisuji stav ted. Kdyz divak
+                       -- prepne na stopu, ktera uz prepocet nepotrebuje,
+                       -- ma znacka prestat tvrdit, ze se obraz prepocitava.
+                       transcode_video_direct = ?,
+                       transcode_audio_direct = ?,
+                       transcode_hw           = ?,
                        -- Dve dvojice sloupcu, protoze jsou to dve ruzne
                        -- otazky a jedna hodnota by na obe odpovedet nemohla:
                        --
@@ -494,6 +528,9 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                     play_state.get("PlayMethod"),
                     stream["transcode_reasons"],
                     stream["bitrate"],
+                    stream["video_direct"],
+                    stream["audio_direct"],
+                    stream["hw"],
                     zapsany_zvuk,
                     zapsane_titulky,
                     jazyk_od,

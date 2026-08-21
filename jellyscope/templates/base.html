@@ -202,6 +202,47 @@
             tip.style.top = y + "px";
         }
 
+        /* Obsah bubliny.
+
+           Grafy posílají hodnoty v `data-tip-json`: nadpis (den) a řádky,
+           z nichž každý má barvu své série. Skládá se to z uzlů a textu
+           přes textContent - do bubliny se tak nikdy nedostane značka
+           z názvu filmu, i kdyby v něm byla.
+
+           Všechno ostatní (sloupce, teplotní mapa, značka transcode) má
+           jen `data-tip`. Když je v něm víc údajů oddělených " · ",
+           rozpadnou se na řádky - je to čitelnější než jedna dlouhá věta
+           přes celou obrazovku. */
+        function naplnBublinu(target) {
+            tip.textContent = "";
+
+            var data = null;
+            try {
+                data = JSON.parse(target.getAttribute("data-tip-json") || "null");
+            } catch (e) {
+                data = null;   /* poškozený JSON není důvod nic neukázat */
+            }
+
+            var nadpis = data ? data.nadpis : null;
+            var radky = data ? data.radky : (target.getAttribute("data-tip") || "")
+                .split(" · ").map(function (text) { return { text: text }; });
+
+            if (nadpis) {
+                var h = document.createElement("div");
+                h.className = "tooltip-nadpis";
+                h.textContent = nadpis;
+                tip.appendChild(h);
+            }
+            radky.forEach(function (radek) {
+                if (!radek || !radek.text) { return; }
+                var r = document.createElement("div");
+                r.className = "tooltip-radek";
+                if (radek.barva) { r.style.color = radek.barva; }
+                r.textContent = radek.text;
+                tip.appendChild(r);
+            });
+        }
+
         document.addEventListener("mousemove", function (event) {
             var target = event.target.closest ? event.target.closest("[data-tip]") : null;
 
@@ -215,9 +256,17 @@
 
             if (target !== current) {
                 current = target;
-                tip.textContent = target.getAttribute("data-tip");
+                naplnBublinu(target);
                 tip.classList.add("visible");
             }
+
+            /* Okno (<dialog>) se vykresluje v tzv. horní vrstvě, která je
+               nad vším ostatním - bublina připnutá k <body> se pod ním
+               schová a v okně tak nešlo poznat, co je co. Přestěhujeme ji
+               proto do toho okna a při odchodu zpátky. */
+            var okno = target.closest("dialog[open]");
+            var kam = okno || document.body;
+            if (tip.parentElement !== kam) { kam.appendChild(tip); }
             place(event);
         }, { passive: true });
 
@@ -331,7 +380,22 @@
                 // následuje - a bez téhle podmínky by se do karty vysypala
                 // přihlašovací stránka.
                 .then(function (r) { return (r.ok && !r.redirected) ? r.text() : null; })
-                .then(function (html) { if (html) { box.innerHTML = html; } })
+                .then(function (html) {
+                    if (!html) { return; }
+                    /* Kdyby se obsah vyměnil s otevřeným oknem, okno by
+                       zmizelo uprostřed čtení - a jednou za deset vteřin
+                       by to udělalo znovu. Zapamatujeme si tedy, že bylo
+                       otevřené, a po výměně ho otevřeme zpátky. */
+                    var stare = box.querySelector("dialog[open]");
+                    var bylOtevreny = stare ? stare.id : null;
+                    box.innerHTML = html;
+                    if (bylOtevreny) {
+                        var nove = document.getElementById(bylOtevreny);
+                        if (nove && typeof nove.showModal === "function") {
+                            nove.showModal();
+                        }
+                    }
+                })
                 .catch(function () { /* výpadek sítě - zkusí se za chvíli */ })
                 .finally(function () { bezi = false; });
         }
@@ -659,9 +723,15 @@
             }
         });
 
-        /* Mapa na stránce Síť: kolečkem se přibližuje, tažením posouvá.
-           Když je pár bodů blízko u sebe (jedno město, více adres),
-           bez přiblížení splynou v jednu skvrnu.
+        /* Mapa na stránce Síť: přibližuje se klikáním nebo kolečkem,
+           tažením se posouvá. Když je pár bodů blízko u sebe (jedno
+           město, více adres), bez přiblížení splynou v jednu skvrnu.
+
+           Čím se přibližuje, si vybírá člověk v Nastavení → Rozhraní
+           a server to pošle v data-zoom. Kolečko je pohodlnější, jenže
+           nad mapou přestane rolovat stránka - kdo kolem mapy jen
+           projíždí, uvízne u ní. Proto je výchozí klikání: kolečko pak
+           mapa vůbec neodchytává a stránka roluje jako všude jinde.
 
            Mění se jen viewBox toho SVG - žádná knihovna, žádné dlaždice
            z internetu. Souřadnice zůstávají zeměpisné, takže se nic
@@ -712,38 +782,57 @@
                 };
             }
 
-            mapa.addEventListener("wheel", function (event) {
-                event.preventDefault();
-                var pod = mistoPodMysi(event);
-                var krok = event.deltaY < 0 ? 0.8 : 1.25;
+            /* Jedno přiblížení, ať přijde odkudkoli.
+               `krok` menší než 1 přibližuje, větší oddaluje; `stred` je
+               bod v souřadnicích mapy, který má zůstat na místě. */
+            function priblizit(krok, stred) {
+                stred = stred || { x: pohled[0] + pohled[2] / 2,
+                                   y: pohled[1] + pohled[3] / 2 };
 
-                var sirka = pohled[2] * krok;
                 /* Meze: dál než celý svět se oddálit nedá a přiblížit se
                    dá zhruba dvacetkrát - pod tím už je vidět jen šum. */
-                sirka = Math.min(vychozi[2], Math.max(vychozi[2] / 20, sirka));
+                var sirka = Math.min(vychozi[2],
+                                     Math.max(vychozi[2] / 20, pohled[2] * krok));
                 var pomer = sirka / pohled[2];
 
                 pohled[2] = sirka;
                 pohled[3] = pohled[3] * pomer;
-                pohled[0] = pod.x - (pod.x - pohled[0]) * pomer;
-                pohled[1] = pod.y - (pod.y - pohled[1]) * pomer;
+                pohled[0] = stred.x - (stred.x - pohled[0]) * pomer;
+                pohled[1] = stred.y - (stred.y - pohled[1]) * pomer;
 
                 /* Ať výřez nevyjede mimo mapu - jinak člověk skončí
                    u prázdné plochy a neví, jak zpátky. */
                 pohled[0] = Math.min(Math.max(pohled[0], 0), vychozi[2] - pohled[2]);
                 pohled[1] = Math.min(Math.max(pohled[1], 0), vychozi[3] - pohled[3]);
                 vykresli();
-            }, { passive: false });
+            }
+
+            /* Kolečko se odchytává JEN v režimu "wheel". Jinak se na ně
+               vůbec neposlouchá, takže stránka nad mapou roluje dál -
+               to je celý smysl té volby. */
+            if (mapa.dataset.zoom === "wheel") {
+                mapa.addEventListener("wheel", function (event) {
+                    event.preventDefault();
+                    priblizit(event.deltaY < 0 ? 0.8 : 1.25, mistoPodMysi(event));
+                }, { passive: false });
+            }
 
             mapa.addEventListener("pointerdown", function (event) {
                 tahne = { x: event.clientX, y: event.clientY,
-                          vx: pohled[0], vy: pohled[1] };
+                          vx: pohled[0], vy: pohled[1], posunuto: false };
                 mapa.setPointerCapture(event.pointerId);
             });
 
             mapa.addEventListener("pointermove", function (event) {
                 if (!tahne) { return; }
                 var box = mapa.getBoundingClientRect();
+                /* Posun o pár pixelů ještě není tažení - myš ani prst
+                   nedrží při kliknutí úplně klidně. Bez téhle tolerance
+                   by se v režimu klikání skoro nikdy nepřiblížilo. */
+                if (Math.abs(event.clientX - tahne.x) > 4 ||
+                    Math.abs(event.clientY - tahne.y) > 4) {
+                    tahne.posunuto = true;
+                }
                 pohled[0] = tahne.vx - (event.clientX - tahne.x) / box.width * pohled[2];
                 pohled[1] = tahne.vy - (event.clientY - tahne.y) / box.height * pohled[3];
                 pohled[0] = Math.min(Math.max(pohled[0], 0), vychozi[2] - pohled[2]);
@@ -753,6 +842,14 @@
 
             function pustit(event) {
                 if (!tahne) { return; }
+                /* Klik = stisk a puštění bez tažení. Přibližuje se na to
+                   místo, kam člověk klikl - stejně jako kolečkem.
+                   S Altem (nebo pravým tlačítkem) se oddaluje, ať je
+                   cesta zpátky i bez tlačítek. */
+                if (!tahne.posunuto && mapa.dataset.zoom !== "wheel") {
+                    priblizit(event.altKey || event.button === 2 ? 1.4 : 0.7,
+                              mistoPodMysi(event));
+                }
                 tahne = null;
                 if (mapa.hasPointerCapture(event.pointerId)) {
                     mapa.releasePointerCapture(event.pointerId);
@@ -767,6 +864,22 @@
                 pohled = vychozi.slice();
                 vykresli();
             });
+
+            /* Tlačítka nad mapou. Jsou tam v obou režimech: kdo nechce
+               klikat do mapy (a trefovat se), má plus a mínus. */
+            var obal = mapa.closest(".mapa-obal");
+            if (obal) {
+                obal.addEventListener("click", function (event) {
+                    var tlacitko = event.target.closest("[data-mapa]");
+                    if (!tlacitko) { return; }
+                    if (tlacitko.dataset.mapa === "zpet") {
+                        pohled = vychozi.slice();
+                        vykresli();
+                    } else {
+                        priblizit(tlacitko.dataset.mapa === "blize" ? 0.65 : 1.55);
+                    }
+                });
+            }
         })();
 
         /* Filtr historie: pole pro přesná data se ukážou, jen když si
@@ -786,6 +899,23 @@
             volba.addEventListener("change", srovnej);
             srovnej();
         })();
+
+        /* Filtr uvnitř okna. Obsah okna je už na stránce, takže se nic
+           nenačítá - jen se schovají řádky, které nesedí. Přesně proto
+           je ten filtr "jen v okně": zavřením zmizí a nikam se neukládá. */
+        document.addEventListener("change", function (event) {
+            var volba = event.target.closest ?
+                event.target.closest("[data-filtr-okna]") : null;
+            if (!volba) { return; }
+
+            var okno = document.getElementById(volba.dataset.filtrOkna);
+            if (!okno) { return; }
+
+            okno.querySelectorAll(".okno-obsah [data-uzivatel]").forEach(function (radek) {
+                radek.hidden = volba.value !== "" &&
+                               radek.dataset.uzivatel !== volba.value;
+            });
+        });
 
         prepinatelnaKarta("daily-card", "/partials/daily", "kind");
         prepinatelnaKarta("top-items-card", "/partials/top-items", "top_kind");

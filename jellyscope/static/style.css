@@ -395,9 +395,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .hbar-link:hover { color: var(--text-primary); text-decoration: underline; }
 
 .hbar-track {
-    background: var(--grid);
+    /* Drážka je jen naznačená - je to pozadí, ne data. Plná --grid dělala
+       z každého řádku dva pruhy vedle sebe a oko pak četlo i ten prázdný. */
+    background: color-mix(in oklab, var(--grid) 55%, transparent);
     border-radius: 4px;
-    height: 18px;
+    height: 15px;
     overflow: hidden;
 }
 
@@ -484,11 +486,10 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
        Mrizka 24x7 je ze sve podstaty siroka a obdelnikove bunky jsou u
        teplotni mapy den x hodina obvykly tvar. */
     height: 26px;
-    border-radius: 2px;
+    border-radius: 3px;
 }
 
 .axis-label    { fill: var(--text-muted); font-size: 11px; font-family: var(--font); font-variant-numeric: tabular-nums; }
-.value-label   { fill: var(--text-primary); font-size: 12.5px; font-family: var(--font); font-weight: 600; }
 
 /* --- bublina s hodnotou pri najeti mysi ------------------------------ */
 
@@ -500,20 +501,40 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     position: fixed;
     z-index: 50;
     pointer-events: none;
-    background: var(--text-primary);
-    color: var(--page);
+    /* Kartička v barvách stránky, ne obrácené barvy.
+       Dřív měla bublina pozadí --text-primary, tedy skoro bílou
+       v tmavém režimu - vedle tmavého grafu svítila jako lampa
+       a přebíjela to, kvůli čemu si ji člověk otevřel. */
+    background: var(--surface-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     font-size: 12.5px;
-    font-weight: 550;
-    padding: 6px 10px;
-    border-radius: 7px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-    max-width: 320px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+    max-width: 340px;
     opacity: 0;
     transition: opacity 0.08s ease;
+}
+
+/* Datum (nebo název) nad hodnotami - první, co oko potřebuje. */
+.tooltip-nadpis {
+    font-size: 13px;
+    font-weight: 650;
+    margin-bottom: 5px;
+    white-space: nowrap;
+}
+
+/* Jedna hodnota = jeden řádek. Barvu nese text řádku, protože ta odpovídá
+   sérii v grafu; u bubliny bez sérií zůstane běžná barva písma. */
+.tooltip-radek {
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.tooltip-radek + .tooltip-radek { margin-top: 2px; }
 
 .tooltip.visible { opacity: 1; }
 
@@ -722,7 +743,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    (`overflow-x: auto`), takže cokoliv, co z něj vyleze, se ořízne - a
    hrana zvětšené karty mizela za okrajem. Takhle se změní její místo
    v řádku, ostatní novinky se odsunou a ořezávat není co.
-   
+
    Výška zůstává (`--poster-h`), aby se neposunul zbytek stránky pod pásem. */
 .poster-card.has-episodes:hover,
 .poster-card.has-episodes:focus-within {
@@ -1744,6 +1765,37 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 
 
+/* Mapa a její ovládání.
+
+   Tlačítka leží NAD mapou (position: absolute), ne pod ní: kdo se
+   přiblížil a chce zpátky, nemá koukat, kam mu tlačítko odskočilo. */
+.mapa-obal { position: relative; }
+
+.mapa-ovladani {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mapa-tlacitko {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    line-height: 1;
+    /* Poloprůhledné pozadí: tlačítko musí být čitelné nad pevninou
+       i nad oceánem, a přitom pod ním má být vidět, co zakrývá. */
+    background: color-mix(in oklab, var(--surface-1) 82%, transparent);
+    backdrop-filter: blur(3px);
+}
+
+.mapa-napoveda { margin: 8px 0 0; }
+
 /* Mapa světa na stránce Síť. Poměr stran drží viewBox (360:180), takže
    se sama přizpůsobí šířce karty a nikdy se nedeformuje. */
 .mapa {
@@ -1807,3 +1859,47 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 /* Okno s filtrem je širší než ostatní: je v něm mřížka o osmi polích,
    a při šířce běžného okna by z ní byl jeden dlouhý sloupec. */
 .okno-siroke { width: min(760px, calc(100vw - 32px)); }
+
+
+/* Obsah okna, který může být dlouhý (streamy, lidé). Roluje se uvnitř
+   okna, ne celou stránkou - jinak by okno vyrostlo přes obrazovku a jeho
+   hlavička s křížkem by utekla nahoru. */
+.okno-obsah {
+    max-height: 70vh;
+    overflow-y: auto;
+    /* Místo na posuvník, ať text neposkakuje při filtrování. */
+    padding-right: 4px;
+}
+
+.okno-obsah .session { break-inside: avoid; }
+
+
+/* Atribut `hidden` znamená "tohle není vidět" - jenže prohlížeč ho řeší
+   pravidlem [hidden] { display: none }, které přebije každé konkrétnější
+   `display`. A .session má display:flex, takže filtr v okně řádky sice
+   označil za skryté, a ony zůstaly na obrazovce.
+
+   Tohle je přesně ten případ, kdy je !important na místě: `hidden` není
+   styl, ale stav. */
+[hidden] { display: none !important; }
+
+
+/* Tlačítko "zobrazit všechna" stojí na místě, kde by jinak byl první
+   stream - proto je vysoké jako dlaždice streamu, ne jako běžné
+   tlačítko. Karta si tím drží svou výšku bez ohledu na to, kolik se
+   zrovna hraje. */
+.session-vice {
+    width: 100%;
+    justify-content: center;
+    padding: 22px 16px;
+    font-size: 15px;
+}
+
+
+/* Druhý řádek v tlačítku "skryto kvůli počtu": je to doplněk k důvodu,
+   ne samostatná informace, takže drobněji a méně výrazně. */
+.session-vice-note {
+    font-size: 13px;
+    opacity: 0.85;
+    font-weight: 400;
+}

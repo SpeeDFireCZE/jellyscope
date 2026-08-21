@@ -109,6 +109,54 @@ def active_session_count() -> int:
         "SELECT COUNT(*) FROM playback WHERE is_active = 1", default=0) or 0)
 
 
+def popis_prepoctu(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Co presne server u tohohle prehravani prepocitava.
+
+    Znacka "transcode" sama o sobe nerika skoro nic. Prepocet obrazu
+    vytizi procesor nasobne vic nez prepocet zvuku - a kdyz clovek hleda,
+    proc server topi, je to prvni vec, kterou potrebuje videt. Rozdil
+    hlasi Jellyfin sam v `TranscodingInfo` (viz collector).
+
+    Vraci seznam faktu, ne hotovou vetu: prekladat se ma v sablone, kde
+    je jazyk prihlaseneho cloveka. Kazdy fakt je slovnik:
+
+        {"co": "Obraz", "primo": False, "z": "hevc", "na": "h264"}
+        {"co": "Titulky", "vypaluji": True}
+        {"co": "Hardware", "text": "qsv"}
+
+    U starsich zaznamu (a u importovane historie) priznak chybi. Tehdy
+    se odvodi z kodeku: stejny kodek na obou stranach znamena, ze se
+    stopa jen prebaluje. Presne to totiz "primy" znamena - a oba kodeky
+    jsou vedle sebe videt, takze si to clovek muze overit.
+    """
+    if (row.get("play_method") or "") != "Transcode":
+        return []
+
+    fakta: list[dict[str, Any]] = []
+    for co, primo, zdroj, cil in (
+        ("Obraz", row.get("transcode_video_direct"),
+         row.get("source_codec"), row.get("video_codec")),
+        ("Zvuk", row.get("transcode_audio_direct"),
+         row.get("source_audio_codec"), row.get("audio_codec")),
+    ):
+        if primo is None:
+            if not zdroj or not cil:
+                continue   # nemame co rict, radeji mlcime
+            primo = str(zdroj).lower() == str(cil).lower()
+        fakta.append({"co": co, "primo": bool(primo), "z": zdroj, "na": cil})
+
+    # Titulky se do obrazu vypaluji - tedy prepocet obrazu, i kdyz je
+    # kodek podporovany. Jellyfin to rekne jedine timhle duvodem.
+    duvody = (row.get("transcode_reasons") or "").lower()
+    if "subtitle" in duvody:
+        fakta.append({"co": "Titulky", "vypaluji": True})
+
+    if row.get("transcode_hw"):
+        fakta.append({"co": "Hardware", "text": str(row["transcode_hw"])})
+
+    return fakta
+
+
 def active_sessions() -> list[dict[str, Any]]:
     """Co se prave ted hraje - vcetne toho, kde v poradi je.
 
@@ -159,6 +207,8 @@ def active_sessions() -> list[dict[str, Any]]:
         )
         # U epizody chceme plakat serialu, ne snimek z dilu.
         row["poster_id"] = row.get("series_id") or row.get("item_id")
+        # Co presne se prepocitava - do bubliny u znacky "transcode".
+        row["prepocet"] = popis_prepoctu(row)
 
     return rows
 
@@ -1029,14 +1079,19 @@ def history(
     where, params = _filtr_historie(user_id, search, day, kind, od, do,
                                     method, client, language)
     params.extend([limit, offset])
-    return db.query_all(
+    rows = db.query_all(
         f"""
         SELECT p.*,
                -- Prednost maji rozmery zaznamenane u prehravani: relace vi,
                -- co doopravdy teklo, kdezto `items` popisuje soubor tak, jak
                -- ho zname z posledni synchronizace.
                COALESCE(p.video_height, i.height) AS height,
-               COALESCE(p.video_width,  i.width)  AS width
+               COALESCE(p.video_width,  i.width)  AS width,
+               -- Kodeky souboru. Vedle nich stoji p.video_codec, tedy to,
+               -- co skutecne teklo k prehravaci - a prave rozdil mezi
+               -- nimi rika, co se prepocitavalo.
+               i.video_codec AS source_codec,
+               i.audio_codec AS source_audio_codec
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
         WHERE {' AND '.join(where)}
@@ -1045,6 +1100,11 @@ def history(
         """,
         tuple(params),
     )
+    for row in rows:
+        # Stejna bublina jako u "prave se hraje" - jednou napsany rozbor
+        # slouzi obema mistum.
+        row["prepocet"] = popis_prepoctu(row)
+    return rows
 
 
 def history_count(
@@ -1270,6 +1330,10 @@ def tech_coverage() -> dict[str, Any]:
     return db.query_one(
         """
         SELECT COUNT(*) AS total,
+               -- Velikost vsech knihoven dohromady. COALESCE proto, ze
+               -- u polozky bez technickych dat je NULL - a NULL by celym
+               -- souctem propadl az na prazdno.
+               SUM(COALESCE(size_bytes, 0)) AS size_bytes,
                SUM(CASE WHEN tech_source = 'ffprobe'  THEN 1 ELSE 0 END) AS from_ffprobe,
                SUM(CASE WHEN tech_source = 'jellyfin' THEN 1 ELSE 0 END) AS from_jellyfin,
                SUM(CASE WHEN tech_source IS NULL      THEN 1 ELSE 0 END) AS missing,
@@ -1951,19 +2015,14 @@ def je_domaci(adresa: Any) -> bool:
     return text.startswith(DOMACI_PREFIXY)
 
 
-def odkud_se_divaji(days: int, limit: int = 20) -> dict[str, Any]:
-    """Rozpad podle toho, odkud se prehravalo.
+def _provoz_podle_adresy(days: int) -> list[dict[str, Any]]:
+    """Kolik toho teklo z jednotlive adresy - podklad pro tabulku i mapu.
 
-    Proc ne mapa: adresa v domaci siti (192.168.x.x) zadne misto na svete
-    neoznacuje - je stejna v Praze i v Sydney. Zemepisne umistit jde jen
-    verejnou adresu, a i to potrebuje offline databazi GeoIP. Rozdeleni
-    "doma / z internetu" je proto to jedine, co jde spocitat poctive
-    z toho, co mame.
-
-    Importovana historie adresu nenese vubec - Jellystat ani Playback
-    Reporting ji neposilaji. Takove zaznamy jsou "neznamo odkud".
+    Obe stranky potrebuji totez secteni; drive to byly dva skoro stejne
+    dotazy a lisily se jen tim, ze mapa uz v SQL vynechavala prazdnou
+    adresu. Vynechat ji v Pythonu je totez a dotaz zbyva jeden.
     """
-    rows = db.query_all(
+    return db.query_all(
         """
         SELECT remote_address                         AS adresa,
                SUM(watched_seconds)                   AS sekund,
@@ -1979,6 +2038,21 @@ def odkud_se_divaji(days: int, limit: int = 20) -> dict[str, Any]:
         """,
         (_range(days),),
     )
+
+
+def odkud_se_divaji(days: int, limit: int = 20) -> dict[str, Any]:
+    """Rozpad podle toho, odkud se prehravalo.
+
+    Proc ne mapa: adresa v domaci siti (192.168.x.x) zadne misto na svete
+    neoznacuje - je stejna v Praze i v Sydney. Zemepisne umistit jde jen
+    verejnou adresu, a i to potrebuje offline databazi GeoIP. Rozdeleni
+    "doma / z internetu" je proto to jedine, co jde spocitat poctive
+    z toho, co mame.
+
+    Importovana historie adresu nenese vubec - Jellystat ani Playback
+    Reporting ji neposilaji. Takove zaznamy jsou "neznamo odkud".
+    """
+    rows = _provoz_podle_adresy(days)
 
     skupiny = {"doma": {"plays": 0, "bajtu": 0.0, "sekund": 0},
                "internet": {"plays": 0, "bajtu": 0.0, "sekund": 0},
@@ -2006,6 +2080,7 @@ def odkud_se_divaji(days: int, limit: int = 20) -> dict[str, Any]:
         hodnoty["bajtu"] = int(hodnoty["bajtu"])
     return {"skupiny": skupiny, "adresy": adresy}
 
+
 def hotspoty(days: int, limit: int = 60) -> list[dict[str, Any]]:
     """Odkud se divali - misto po miste, od nejaktivnejsiho.
 
@@ -2023,26 +2098,11 @@ def hotspoty(days: int, limit: int = 60) -> list[dict[str, Any]]:
     if not geoip.je_k_dispozici():
         return []
 
-    rows = db.query_all(
-        """
-        SELECT remote_address                     AS adresa,
-               SUM(watched_seconds)               AS sekund,
-               SUM(watched_seconds * COALESCE(bitrate, 0)) / 8.0 AS bajtu,
-               COUNT(*)                           AS plays,
-               COUNT(DISTINCT user_id)            AS lidi
-          FROM playback
-         WHERE started_at >= datetime('now', ?)
-           AND watched_seconds > 0
-           AND remote_address IS NOT NULL AND remote_address != ''
-         GROUP BY remote_address
-        """,
-        (_range(days),),
-    )
-
     mista: dict[tuple[float, float], dict[str, Any]] = {}
-    for r in rows:
-        adresa = str(r["adresa"])
-        if je_domaci(adresa):
+    for r in _provoz_podle_adresy(days):
+        adresa = str(r["adresa"] or "")
+        # Prazdna adresa je import (ten ji nenese), domaci nic neoznacuje.
+        if not adresa or je_domaci(adresa):
             continue
         misto = geoip.najdi(adresa)
         if not misto:

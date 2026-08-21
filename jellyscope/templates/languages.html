@@ -161,8 +161,10 @@
         <p class="card-note">{{ _("každý pruh je jeden člověk, šířka = podíl jazyka") }}</p>
     </div>
 
-    {% for person in by_user %}
-    <div style="margin-bottom:18px">
+    {# Jeden pruh se vypisuje dvakrat - v karte i v okne -, takze je z nej
+       makro. Dve kopie by se casem rozesly. #}
+    {% macro pruh(person) %}
+    <div style="margin-bottom:18px" data-uzivatel="{{ person.user_id or '' }}">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px">
             <strong>
                 <a href="/users/{{ person.user_id }}">{{ person.name }}</a>
@@ -177,10 +179,57 @@
         </div>
         {{ charts.stacked_bar(person.segments) | safe }}
     </div>
-    {% endfor %}
+    {% endmacro %}
+
+    {# Do `strop_lidi` se pruhy vypisuji rovnou. Nad nim se schovaji do
+       okna: pri padesati divacich by karta nekoncila a vsechno pod ni
+       by bylo mimo obrazovku. #}
+    {% set schovat_lidi = by_user | length > strop_lidi %}
+
+    {% if schovat_lidi %}
+        <div class="btn-row" style="margin-bottom:12px">
+            <button class="btn primary session-vice" type="button" data-okno="okno-jazyky">
+                <span>
+                    <strong>{{ _("Diváci jsou skrytí – je jich hodně") }}</strong><br>
+                    <span class="session-vice-note">
+                        {{ _("zobrazit všech") }} {{ by_user | length }}
+                    </span>
+                </span>
+            </button>
+        </div>
+    {% else %}
+        {% for person in by_user %}{{ pruh(person) }}{% endfor %}
+    {% endif %}
 
     {# Legenda je společná pro všechny pruhy - barvy jsou u všech stejné. #}
     {{ charts.legend(watched.rows) | safe }}
+
+    {% if schovat_lidi %}
+    <dialog class="okno okno-siroke" id="okno-jazyky">
+        <form method="dialog" class="okno-hlava">
+            <h2>{{ _("Kdo v jakém jazyce sleduje") }} ({{ by_user | length }})</h2>
+            <button class="btn okno-zavrit" type="submit"
+                    aria-label="{{ _("Zavřít") }}">&times;</button>
+        </form>
+
+        {# Filtr platí jen tady v okně - je to způsob, jak se v dlouhém
+           seznamu dobrat jednoho člověka, ne uložené nastavení. #}
+        <div class="filtr-pole" style="margin-bottom:14px">
+            <label for="filtr-jazyku">{{ _("Uživatel") }}</label>
+            <select id="filtr-jazyku" data-filtr-okna="okno-jazyky">
+                <option value="">{{ _("všichni") }}</option>
+                {% for person in by_user %}
+                    <option value="{{ person.user_id }}">{{ person.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="okno-obsah">
+            {% for person in by_user %}{{ pruh(person) }}{% endfor %}
+            {{ charts.legend(watched.rows) | safe }}
+        </div>
+    </dialog>
+    {% endif %}
 
     <details style="margin-top:14px">
         <summary class="card-note" style="cursor:pointer">{{ _("Zobrazit jako tabulku") }}</summary>

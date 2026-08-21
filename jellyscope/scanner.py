@@ -366,6 +366,74 @@ async def refresh_item(item_id: str) -> dict[str, Any]:
     return vysledek
 
 
+async def refresh_series(series_id: str) -> dict[str, Any]:
+    """Stahne z Jellyfinu znovu vsechny dily jednoho serialu.
+
+    K cemu to je: kdyz se v Jellyfinu opravi spatne urceny serial, zmeni
+    se rovnou u vsech dilu - nazvy, cisla i plakaty. Obnovovat je po
+    jednom by znamenalo klikat padesatkrat.
+
+    Obrazky: u kazdeho dilu se porovna otisk (`ImageTags`) a kdyz se
+    lisi, smaze se jeho obrazek z mezipameti - jinak by Jellyscope dal
+    ukazoval ten spatny. Plakat samotneho serialu se zapomene vzdycky:
+    polozku pro nej si nevedeme, takze neni s cim porovnavat, a je to
+    presne ten obrazek, kvuli kteremu se sem clovek prisel podivat.
+
+    Do Jellyfinu se jen cte (GET /Items).
+    """
+    dily = db.query_all(
+        "SELECT id, library_id FROM items WHERE series_id = ?", (series_id,))
+    if not dily:
+        return {"status": "error", "message": "Takový seriál v databázi není."}
+
+    knihovna = next((d["library_id"] for d in dily if d["library_id"]), None)
+    ids = [str(d["id"]) for d in dily]
+    use_jellyfin_tech = db.get_setting("tech_source") == "jellyfin"
+
+    try:
+        async with JellyfinClient(*db.jellyfin_connection()) as client:
+            nalezene = await client.items_by_ids(ids)
+    except JellyfinError as exc:
+        return {"status": "error", "message": str(exc)}
+
+    if not nalezene:
+        return {"status": "error",
+                "message": "Jellyfin žádný z dílů tohohle seriálu už nezná."}
+
+    radky = []
+    stopy: list[tuple[str, list[dict[str, Any]]]] = []
+    now = db.utcnow()
+    for item in nalezene:
+        tech = extract_tech_from_item(item) if use_jellyfin_tech else {}
+        radky.append(_radek_polozky(item, knihovna, tech, now))
+        if use_jellyfin_tech:
+            nalezene_stopy = extract_streams(item)
+            if nalezene_stopy:
+                stopy.append((str(item.get("Id")), nalezene_stopy))
+
+    # _write_items si samo porovna otisky obrazku a ty zmenene zapomene.
+    await asyncio.to_thread(_write_items, radky, not use_jellyfin_tech)
+    for item_id, nalezene_stopy in stopy:
+        await asyncio.to_thread(save_streams, item_id, nalezene_stopy)
+
+    # Plakat serialu: polozku pro nej nemame, takze otisk neni s cim
+    # porovnat - zapomeneme ho natvrdo. Priste se stahne znovu.
+    _zapomen_obrazky([series_id])
+
+    vysledek: dict[str, Any] = {
+        "status": "ok",
+        "dilu": len(nalezene),
+        "name": next((i.get("SeriesName") for i in nalezene if i.get("SeriesName")),
+                     ""),
+    }
+    if not use_jellyfin_tech:
+        # Pri zdroji ffprobe by technicka data z Jellyfinu zustala stara.
+        vysledek["tech"] = await run_tech_scan(
+            only_missing=False, item_ids=[str(i.get("Id")) for i in nalezene])
+    log.info("obnoven serial %s: %s dilu", series_id, len(nalezene))
+    return vysledek
+
+
 async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
     """Rychla synchronizace: jen tituly, ktere v knihovne jeste nemame.
 
@@ -733,6 +801,9 @@ def _radek_polozky(item: dict[str, Any], library_id: Any,
         tech.get("default_audio_language"),
         "jellyfin" if tech else None,
         now if tech else None,
+        # Otisk plakatu. Kdyz ho Jellyfin nehlasi, zustane prazdny -
+        # obrazek se pak chova jako driv, jen bez rozpoznani zmeny.
+        (item.get("ImageTags") or {}).get("Primary"),
         now,
     )
 
@@ -1072,8 +1143,8 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
             date_created, path, tmdb_id, genres, container, video_codec, audio_codec,
             audio_channels, width, height, bitrate, size_bytes, video_range,
             audio_languages, subtitle_languages, default_audio_language,
-            tech_source, tech_updated_at, synced_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            tech_source, tech_updated_at, image_tag, synced_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             type = excluded.type,
@@ -1093,12 +1164,83 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
             -- o jedinou vec, podle ktere umime polozky slucovat.
             tmdb_id = COALESCE(excluded.tmdb_id, items.tmdb_id),
             {tech_update}
+            image_tag = excluded.image_tag,
             synced_at = excluded.synced_at,
             is_missing = 0
     """
 
+    # Ktere polozky menily obrazek? Musime se zeptat PRED zapisem - potom
+    # uz je v databazi novy otisk a rozdil by nebyl poznat.
+    zmenene = _polozky_s_jinym_obrazkem(rows)
+
     with db.connect() as conn:
         conn.executemany(sql, rows)
+
+    # Az po zapisu: kdyby zapis selhal, nemazali bychom obrazky k nicemu.
+    if zmenene:
+        _zapomen_obrazky(zmenene)
+
+
+# V radku polozky (viz _radek_polozky) je otisk predposledni a id prvni.
+_SLOUPEC_ID = 0
+_SLOUPEC_OTISK = -2
+
+
+def _polozky_s_jinym_obrazkem(rows: list[tuple[Any, ...]]) -> list[str]:
+    """Ktere z techto polozek maji jiny obrazek nez posledne.
+
+    Otisk (`ImageTags.Primary`) hlasi Jellyfin u kazde polozky. Kdyz se
+    zmeni, znamena to, ze plakat je jiny - typicky proto, ze nekdo
+    v Jellyfinu opravil spatne urcenou polozku.
+    """
+    podle_id = {str(radek[_SLOUPEC_ID]): radek[_SLOUPEC_OTISK]
+                for radek in rows if radek[_SLOUPEC_ID]}
+    if not podle_id:
+        return []
+
+    zmenene: list[str] = []
+    ids = list(podle_id)
+    with db.connect() as conn:
+        for zacatek in range(0, len(ids), 300):
+            davka = ids[zacatek:zacatek + 300]
+            otazniky = ",".join("?" for _ in davka)
+            for radek in conn.execute(
+                    f"SELECT id, image_tag FROM items WHERE id IN ({otazniky})",
+                    tuple(davka)).fetchall():
+                stary_otisk = radek["image_tag"]
+                novy_otisk = podle_id.get(str(radek["id"]))
+                if stary_otisk and novy_otisk and stary_otisk != novy_otisk:
+                    zmenene.append(str(radek["id"]))
+    return zmenene
+
+
+def _zapomen_obrazky(ids: list[str]) -> int:
+    """Smaze obrazky techto polozek z mezipameti.
+
+    Mezipamet je slozka `data/imagecache` a jmeno souboru zacina id
+    polozky. Mazeme vsechny druhy i velikosti - kdyz se zmenil plakat,
+    nema smysl verit ani nahledu na pozadi.
+
+    Neni to jen uklid: dokud tam soubor lezi, servirujeme stary obrazek
+    a uzivatel nema jak se dobrat noveho.
+    """
+    from . import config
+
+    slozka = config.load_config().database_path.parent / "imagecache"
+    if not slozka.is_dir():
+        return 0
+
+    smazano = 0
+    for item_id in ids:
+        for soubor in slozka.glob(f"{item_id}-*"):
+            try:
+                soubor.unlink()
+                smazano += 1
+            except OSError:  # noqa: PERF203 - jeden zamceny soubor nesmi zastavit zbytek
+                continue
+    if smazano:
+        log.info("zapomenuto %s obrazku, ktere uz v Jellyfinu neplati", smazano)
+    return smazano
 
 
 def save_streams(item_id: str, streams: list[dict[str, Any]]) -> None:
@@ -1154,6 +1296,92 @@ def _mark_missing(started_at: str) -> None:
         conn.execute(
             "UPDATE items SET is_missing = 1 WHERE synced_at < ?", (started_at,)
         )
+
+
+def slouc_archiv_do_zivych() -> int:
+    """Dil z archivu, ktery v knihovne existuje znovu, pripoji k tomu zivemu.
+
+    Co se stalo: soubor dilu se v Jellyfinu nahradil (jina kvalita, novy
+    rip, presun mezi slozkami). Jellyfin nezalozil zmenu, ale **novou
+    polozku s novym ItemId** - a ta stara pri dalsi synchronizaci spadla
+    do archivu. V detailu serialu pak stalo "v archivu je navic 3 dilu",
+    prestoze ty dily v knihovne normalne jsou.
+
+    Proc to nezachytilo slucovani pri synchronizaci (`_merge_by_tmdb`):
+    to porovnava ulozene `tmdb_id`, a starsi zaznamy (typicky z importu
+    historie nebo z doby pred timhle sloupcem) zadne nemaji. Bez nej
+    dvojici nema podle ceho najit.
+
+    Tady se identita bere odjinud - **serial plus cislo rady a dilu**.
+    Ta trojice je v databazi u obou polozek a nic dalsiho nepotrebuje.
+    Slucuje se jen archivovana polozka do zive, nikdy naopak: archivovana
+    v Jellyfinu prokazatelne neni, takze o nic neprijdeme. Kdyz je zivych
+    kopii vic (4K i 1080p vedle sebe), historie pripadne te odsledovanejsi.
+
+    Historie prehravani se prepise na novou polozku - presne to je duvod,
+    proc se to dela: aby "kolikrat jsem to videl" neskoncilo na zaznamu,
+    ktery uz nikdo neuvidi.
+
+    Vraci pocet slouceni.
+    """
+    # Dva dotazy a parovani v Pythonu, ne jeden vnoreny dotaz: v SQL by
+    # to byl poddotaz s vlastnim GROUP BY uvnitr, a takovy se cte hur,
+    # nez kolik usetri.
+    zive: dict[tuple[str, int, int], tuple[str, float]] = {}
+    for radek in db.query_all(
+        """
+        SELECT i.id, i.series_id, i.parent_index_number, i.index_number,
+               COALESCE(SUM(p.watched_seconds), 0) AS videno
+          FROM items i
+     LEFT JOIN playback p ON p.item_id = i.id
+         WHERE i.is_missing = 0
+           AND i.series_id IS NOT NULL
+           AND i.parent_index_number IS NOT NULL
+           AND i.index_number IS NOT NULL
+      GROUP BY i.id, i.series_id, i.parent_index_number, i.index_number
+        """
+    ):
+        klic = (str(radek["series_id"]), int(radek["parent_index_number"]),
+                int(radek["index_number"]))
+        videno = float(radek["videno"] or 0)
+        # Kdyz je zivych kopii vic (4K i 1080p vedle sebe), bere se ta
+        # odsledovanejsi - o tu prijit nechceme.
+        if klic not in zive or videno > zive[klic][1]:
+            zive[klic] = (str(radek["id"]), videno)
+
+    pary: list[tuple[str, str]] = []
+    for radek in db.query_all(
+        """
+        SELECT id, series_id, parent_index_number, index_number
+          FROM items
+         WHERE is_missing = 1
+           AND series_id IS NOT NULL
+           AND parent_index_number IS NOT NULL
+           AND index_number IS NOT NULL
+        """
+    ):
+        klic = (str(radek["series_id"]), int(radek["parent_index_number"]),
+                int(radek["index_number"]))
+        nalezeny = zive.get(klic)
+        if nalezeny:
+            pary.append((str(radek["id"]), nalezeny[0]))
+
+    if not pary:
+        return 0
+
+    with db.connect() as conn:
+        for stare, nove in pary:
+            # Poradi je dane cizim klicem: stopy odkazuji na polozku,
+            # takze musi pryc driv, nez se polozka smaze.
+            conn.execute("DELETE FROM item_streams WHERE item_id = ?", (stare,))
+            conn.execute("UPDATE playback SET item_id = ? WHERE item_id = ?",
+                         (nove, stare))
+            conn.execute("DELETE FROM items WHERE id = ?", (stare,))
+            log.info("z archivu slouceno: %s -> %s", stare, nove)
+
+    log.info("archiv: slouceno %s dilu, ktere v knihovne existuji znovu",
+             len(pary))
+    return len(pary)
 
 
 def uklid_fantomu() -> int:

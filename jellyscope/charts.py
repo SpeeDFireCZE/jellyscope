@@ -22,6 +22,8 @@ barvy ve svetlem i tmavem rezimu, aniz by o tom tenhle soubor musel vedet.
 from __future__ import annotations
 
 import html
+import itertools
+import json
 import re
 import math
 from typing import Any, Sequence
@@ -32,6 +34,85 @@ from .i18n import translate as _t
 # sousedni dvojice rozeznal i clovek s poruchou barvocitu. Nikdy ho nemen
 # a nikdy nepridavej devatou barvu; radeji zbytek sluc do "Ostatni".
 SERIES_SLOTS = 8
+
+
+# Pocitadlo pro jmena prechodu (gradientu). Dva grafy na jedne strance
+# nesmi sahat po stejnem "id": prohlizec by druhemu podstrcil vypln toho
+# prvniho. Staci rostouci cislo - v ramci jedne stranky je jedinecne.
+_PORADI_PRECHODU = itertools.count(1)
+
+
+def _prechod(slot: int, jmeno: str, sila: float = 0.34) -> str:
+    """Svisly prechod z barvy serie do prazdna.
+
+    Plna poloprusvitna vypln ma dve vady. U prekryvu dvou serii vznikne
+    treti, kalna barva, ve ktere se obe ztrati. A u zeme je nejvic
+    inkoustu prave tam, kde zadna informace neni - dulezity je horni
+    okraj plochy, tedy sama cara.
+
+    Prechod obojiho zbavi: nahore drzi barvu serie, dole mizi.
+    """
+    return (
+        f'<linearGradient id="{jmeno}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0%" stop-color="var(--series-{slot})" '
+        f'stop-opacity="{sila:.2f}" />'
+        f'<stop offset="100%" stop-color="var(--series-{slot})" '
+        f'stop-opacity="0.015" />'
+        f"</linearGradient>"
+    )
+
+
+def _cesta(body: Sequence[tuple[float, float]]) -> str:
+    """Plynula cara pres zadane body - jako `d` pro <path>.
+
+    Prokladame **monotonni kubikou** (Fritsch-Carlson), ne volnym
+    splinem. Rozdil je podstatny a je to duvod, proc tu ta matematika je:
+
+    * Volny spline si mezi body "rozmachne" - vyleti nad nejvyssi
+      namerenou hodnotu a pod nejnizsi. Graf pak ukazuje spicku, ktera
+      nikdy nenastala, a nula uprostred tydne vypada jako zaporne cislo.
+    * Monotonni kubika ma zaruceno, ze mezi dvema body zustane mezi
+      jejich hodnotami. Kdyz jde rada nahoru, krivka jde nahoru; kdyz je
+      bod maximum, krivka nad nej nevystoupa.
+
+    Zbyva jedna vyhrada, kterou zadna interpolace neodstrani: mezi
+    ctvrtkem a patkem zadne meziden neexistuje, takze oblouk mezi nimi
+    je dokresleny. Presna cisla proto vzdycky nese bublina a tabulka
+    pod grafem - krivka je tvar, ne zdroj hodnot.
+    """
+    n = len(body)
+    if n == 0:
+        return ""
+    if n == 1:
+        return f"M{body[0][0]:.1f},{body[0][1]:.1f}"
+
+    dx = [body[i + 1][0] - body[i][0] for i in range(n - 1)]
+    dy = [body[i + 1][1] - body[i][1] for i in range(n - 1)]
+    # Smernice mezi sousedy. Nulova vzdalenost by delila nulou - takovy
+    # bod jen preskocime (dva body na stejnem x nemaji smysl).
+    smernice = [(dy[i] / dx[i]) if dx[i] else 0.0 for i in range(n - 1)]
+
+    tecny = [smernice[0]]
+    for i in range(1, n - 1):
+        if smernice[i - 1] * smernice[i] <= 0:
+            # Zmena smeru = vrchol nebo dul. Vodorovna tecna je presne to,
+            # co drzi krivku pod (resp. nad) namerenym bodem.
+            tecny.append(0.0)
+        else:
+            w1 = 2 * dx[i] + dx[i - 1]
+            w2 = dx[i] + 2 * dx[i - 1]
+            tecny.append((w1 + w2) / (w1 / smernice[i - 1] + w2 / smernice[i]))
+    tecny.append(smernice[-1])
+
+    casti = [f"M{body[0][0]:.1f},{body[0][1]:.1f}"]
+    for i in range(n - 1):
+        h = dx[i] / 3
+        casti.append(
+            f"C{body[i][0] + h:.1f},{body[i][1] + tecny[i] * h:.1f} "
+            f"{body[i + 1][0] - h:.1f},{body[i + 1][1] - tecny[i + 1] * h:.1f} "
+            f"{body[i + 1][0]:.1f},{body[i + 1][1]:.1f}"
+        )
+    return " ".join(casti)
 
 
 def _e(value: Any) -> str:
@@ -69,6 +150,22 @@ def _fmt(value: float) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+def _bublina(nadpis: str, radky: Sequence[dict[str, Any]]) -> str:
+    """Atributy bubliny: nadpis a radky, kazdy ve sve barve.
+
+    Posila se jako JSON, ne jako hotove HTML: bublinu sklada prohlizec
+    pres textContent (viz base.html), takze se do stranky nemuze dostat
+    znacka z nazvu filmu. `data-tip` zustava jako prosty text - kdyby
+    JSON z jakehokoli duvodu nedosel, bublina porad neco ukaze.
+    """
+    # V prostem textu je i nadpis - je to zaloha pro pripad, ze by JSON
+    # nedosel, a bez data by "2 h" nikomu nic nereklo.
+    text = " · ".join([nadpis] + [str(radek["text"]) for radek in radky]).strip(" ·")
+    data = json.dumps({"nadpis": nadpis, "radky": list(radky)},
+                      ensure_ascii=False, separators=(",", ":"))
+    return f'data-tip="{_e(text)}" data-tip-json="{_e(data)}"'
+
+
 def _empty(message: str) -> str:
     return f'<p class="chart-empty">{_e(message)}</p>'
 
@@ -82,7 +179,6 @@ def hbar_chart(
     label_key: str,
     value_key: str,
     unit: str = "h",
-    label_width: int | None = None,   # ponechano kvuli starsim volanim
     limit: int = 12,
     link_prefix: str | None = None,
     link_key: str = "id",
@@ -128,12 +224,18 @@ def hbar_chart(
             popisek = (f'<a class="hbar-link" href="{_e(link_prefix)}{_e(cil)}">'
                        f'{popisek}</a>')
 
+        # Prechod po delce sloupce: u zakladny je barva o neco tlumenejsi,
+        # na konci plna. Cislo stoji prave tam, takze oko jde po sloupci
+        # k nemu. Delku to nemeni - hodnotu porad nese jen ona.
+        vypln = (f"linear-gradient(90deg, "
+                 f"color-mix(in oklab, var(--series-{slot}) 62%, var(--surface-1)), "
+                 f"var(--series-{slot}))")
         parts.append(
             f'<div class="hbar-row" data-tip="{_e(title)}">'
             f'<div class="hbar-label">{popisek}</div>'
             f'<div class="hbar-track">'
             f'<div class="hbar-fill" style="width: {percent:.2f}%; '
-            f'background: var(--series-{slot})"></div>'
+            f'background: {vypln}"></div>'
             f"</div>"
             f'<div class="hbar-value">{_fmt(value)}{(" " + _e(unit)) if unit else ""}</div>'
             f"</div>"
@@ -222,10 +324,15 @@ def donut_chart(
         dil = hodnota / celkem
         popisek = str(row.get(label_key, ""))
         procenta = dil * 100
+        # Mezi dily necháváme 2px mezeru v barvě podkladu - stejně jako
+        # u děleného pruhu. U jednoho jediného dílu se vynechá: kroužek
+        # by měl zbytečnou dírku.
+        mezera = 2.0 if len(rows) > 1 else 0.0
+        delka = max(1.0, dil * obvod - mezera)
         parts.append(
             f'<circle class="donut-seg" cx="{stred}" cy="{stred}" r="{polomer:.2f}" '
             f'stroke="var(--series-{_slot_of(row, index)})" '
-            f'stroke-dasharray="{dil * obvod:.3f} {obvod:.3f}" '
+            f'stroke-dasharray="{delka:.3f} {obvod:.3f}" '
             f'stroke-dashoffset="{-posun:.3f}" '
             f'data-tip="{_e(popisek)}: {_fmt(hodnota)} {_e(unit)} '
             f'({procenta:.0f} %)"></circle>'
@@ -422,38 +529,56 @@ def area_chart_multi(
     def py(value: float) -> float:
         return margin_top + plot_height * (1 - value / scale_max)
 
+    # Kazda serie ma vlastni prechod a jeho jmeno musi byt na strance
+    # jedinecne - viz _prechod().
+    cislo = next(_PORADI_PRECHODU)
+    prechody = {
+        entry.get("slot", 1): f"prechod-{cislo}-{index}"
+        for index, entry in enumerate(series)
+    }
+
     parts: list[str] = [
         f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" '
-        f'aria-label="Vyvoj v case, {len(series)} serii">'
+        f'aria-label="Vyvoj v case, {len(series)} serii">',
+        "<defs>",
+        *(_prechod(slot, jmeno) for slot, jmeno in prechody.items()),
+        "</defs>",
     ]
 
+    baseline = margin_top + plot_height
     for tick in ticks:
         y = py(tick)
+        # Nulova cara je osa, od ktere se vsechno meri - ta zustava plna.
+        # Ostatni jsou jen voditka, aby sla vyska odhadnout; tecky staci
+        # a neberou grafu pozornost.
+        je_zaklad = abs(y - baseline) < 0.5
         parts.append(
             f'<line x1="{margin_left}" y1="{y:.1f}" x2="{margin_left + plot_width}" '
-            f'y2="{y:.1f}" stroke="var(--grid)" stroke-width="1" />'
+            f'y2="{y:.1f}" stroke="var({"--axis" if je_zaklad else "--grid"})" '
+            f'stroke-width="1"'
+            + ("" if je_zaklad else ' stroke-dasharray="1 5" stroke-linecap="round"')
+            + " />"
         )
         parts.append(
             f'<text x="{margin_left - 8}" y="{y + 4:.1f}" text-anchor="end" '
             f'class="axis-label">{_fmt(tick)}</text>'
         )
 
-    baseline = margin_top + plot_height
     for entry in series:
         values = [float(point.get(entry["key"]) or 0) for point in points]
         coordinates = [(px(i), py(v)) for i, v in enumerate(values)]
-        line = " ".join(f"{x:.1f},{y:.1f}" for x, y in coordinates)
+        # Cara i plocha jdou po tomtez tvaru - jinak by vypln vykukovala
+        # zpod cary. Viz _cesta().
+        line = _cesta(coordinates)
         area = (
-            f"M{coordinates[0][0]:.1f},{baseline:.1f} "
-            + " ".join(f"L{x:.1f},{y:.1f}" for x, y in coordinates)
+            f"M{coordinates[0][0]:.1f},{baseline:.1f} L"
+            + line[1:]
             + f" L{coordinates[-1][0]:.1f},{baseline:.1f} Z"
         )
         slot = entry.get("slot", 1)
+        parts.append(f'<path d="{area}" fill="url(#{prechody[slot]})" />')
         parts.append(
-            f'<path d="{area}" fill="var(--series-{slot})" fill-opacity="0.22" />'
-        )
-        parts.append(
-            f'<polyline points="{line}" fill="none" stroke="var(--series-{slot})" '
+            f'<path d="{line}" fill="none" stroke="var(--series-{slot})" '
             f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
         )
 
@@ -475,11 +600,15 @@ def area_chart_multi(
     hit_width = plot_width / max(1, len(points) - 1) if len(points) > 1 else plot_width
     for index, point in enumerate(points):
         x = px(index)
-        radky = [str(point.get(x_key, ""))]
-        for entry in series:
-            hodnota = float(point.get(entry["key"]) or 0)
-            radky.append(f'{entry["label"]}: {_fmt(hodnota)} {unit}'.strip())
-        tip = " · ".join(radky)
+        # Nadpis je den, pod nim kazda serie na svem radku a ve sve barve -
+        # v prekryvu dvou car je to jediny zpusob, jak poznat, ktere cislo
+        # patri ktere.
+        tip = _bublina(str(point.get(x_key, "")), [
+            {"text": f'{entry["label"]}: {_fmt(float(point.get(entry["key"]) or 0))} '
+                     f'{unit}'.strip(),
+             "barva": f'var(--series-{entry.get("slot", 1)})'}
+            for entry in series
+        ])
 
         body = "".join(
             f'<circle cx="{x:.1f}" '
@@ -489,7 +618,7 @@ def area_chart_multi(
             for entry in series
         )
         parts.append(
-            f'<g class="chart-hit" data-tip="{_e(tip)}">'
+            f'<g class="chart-hit" {tip}>'
             f'<rect x="{max(0.0, x - hit_width / 2):.1f}" y="{margin_top}" '
             f'width="{hit_width:.1f}" height="{plot_height}" fill="transparent" />'
             f'<line x1="{x:.1f}" y1="{margin_top}" x2="{x:.1f}" '
@@ -539,10 +668,10 @@ def sparkline(
          height - padding - (value / maximum) * (height - padding * 2))
         for index, value in enumerate(values)
     ]
-    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in coordinates)
+    line = _cesta(coordinates)
     area = (
-        f"M{coordinates[0][0]:.1f},{height} "
-        + " ".join(f"L{x:.1f},{y:.1f}" for x, y in coordinates)
+        f"M{coordinates[0][0]:.1f},{height} L"
+        + line[1:]
         + f" L{coordinates[-1][0]:.1f},{height} Z"
     )
     # Plosky pro najeti mysi se orezavaji na sirku obrazku - krajni by jinak
@@ -551,11 +680,13 @@ def sparkline(
         left = max(0.0, x - half)
         return left, min(float(width), x + half) - left
 
+    jmeno = f"prechod-mini-{next(_PORADI_PRECHODU)}"
     parts = [
         f'<svg class="sparkline" viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Vyvoj v case, {len(points)} dnu">',
-        f'<path d="{area}" fill="var(--series-1)" fill-opacity="0.10" />',
-        f'<polyline points="{line}" fill="none" stroke="var(--series-1)" '
+        f"<defs>{_prechod(1, jmeno, sila=0.28)}</defs>",
+        f'<path d="{area}" fill="url(#{jmeno})" />',
+        f'<path d="{line}" fill="none" stroke="var(--series-1)" '
         f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />',
     ]
 
@@ -570,10 +701,13 @@ def sparkline(
     # dost siroke, aby se do nich dalo trefit; samotny bod je maly cil.
     hit_width = step if len(coordinates) > 1 else width
     for index, (x, y) in enumerate(coordinates):
-        tip = f'{points[index].get(x_key, "")}: {_fmt(values[index])} {unit}'.strip()
+        tip = _bublina(
+            str(points[index].get(x_key, "")),
+            [{"text": f"{_fmt(values[index])} {unit}".strip(),
+              "barva": "var(--series-1)"}])
         hit_x, hit_w = _hit(x, hit_width / 2)
         parts.append(
-            f'<g class="chart-hit" data-tip="{_e(tip)}">'
+            f'<g class="chart-hit" {tip}>'
             f'<rect x="{hit_x:.1f}" y="0" '
             f'width="{hit_w:.1f}" height="{height}" fill="transparent" />'
             f'<line x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="{height}" '
@@ -590,13 +724,18 @@ def sparkline(
 # Mapa sveta - odkud se divaji
 # ---------------------------------------------------------------------------
 
-def mapa_sveta(body: Sequence[dict[str, Any]]) -> str:
+def mapa_sveta(body: Sequence[dict[str, Any]], rezim: str = "click") -> str:
     """Obrys pevnin a na nem tecky podle toho, odkud se prehravalo.
 
     Kresli se stejnou rukou jako zbytek grafu: jedno SVG, zadna knihovna,
     zadna dlazdicova mapa z internetu. Obrys je v `worldmap.PEVNINY`
     (Natural Earth, public domain) a lezi ve stejne soustave souradnic
     jako tecky, takze staci jedno `viewBox`.
+
+    `rezim` rika, cim se mapa priblizuje - "wheel" koleckem, "click"
+    klikanim a tlacitky. Rozhoduje o tom uzivatel v Nastaveni; sem to
+    jde jen jako atribut, obsluha je v base.html. Kolecko nad mapou
+    totiz zastavi rolovani stranky, coz nekomu vadi a nekomu vyhovuje.
 
     Velikost tecky roste s **odmocninou** odsledovaneho casu, ne s casem
     samotnym: oko porovnava plochy, takze dvojnasobny cas ma mit
@@ -613,6 +752,7 @@ def mapa_sveta(body: Sequence[dict[str, Any]]) -> str:
     casti = [
         f'<svg class="mapa" viewBox="0 0 {SIRKA} {VYSKA}" '
         f'data-vychozi="0 0 {SIRKA} {VYSKA}" '
+        f'data-zoom="{_e(rezim if rezim in ("click", "wheel") else "click")}" '
         f'preserveAspectRatio="xMidYMid meet" role="img" '
         f'aria-label="{_e(_t("Odkud se dívají"))}">',
         # Zare kolem bodu. Jeden pruhledny prechod pro vsechny tecky:

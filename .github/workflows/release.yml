@@ -8,10 +8,13 @@
 # Jak vydat novou verzi:
 #
 #   1. změň __version__ v jellyscope/__init__.py
-#   2. commitni  ("Release 1.2.3")
-#   3. git tag v1.2.3 && git push --tags
+#   2. přidej oddíl "## 1.2.3" do CHANGELOG.md
+#   3. commitni  ("Release 1.2.3")
+#   4. git tag v1.2.3 && git push --tags
 #
-# Poznámky k vydání si GitHub poskládá z commitů od minulého tagu.
+# Poznámky k vydání se berou z CHANGELOG.md - z oddílu, který patří tomu
+# tagu. Když tam žádný není, poskládá je GitHub z commitů: vydání s hrubými
+# poznámkami je pořád lepší než vydání bez nich.
 # ---------------------------------------------------------------------------
 name: release
 
@@ -66,6 +69,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
-              --generate-notes
+          # Oddíl z CHANGELOG.md, který patří tomuhle tagu: od nadpisu
+          # "## 1.2.3" po další nadpis "## ".
+          verze="${GITHUB_REF_NAME#v}"
+          awk -v hledany="## $verze" '
+              $0 == hledany { ctu = 1; next }
+              /^## / && ctu  { exit }
+              ctu            { print }
+          ' CHANGELOG.md > poznamky.md
+
+          if [ -s poznamky.md ]; then
+              echo "poznámky z CHANGELOG.md, $(wc -l < poznamky.md) řádků"
+              gh release create "$GITHUB_REF_NAME" \
+                  --title "$GITHUB_REF_NAME" \
+                  --notes-file poznamky.md
+          else
+              echo "::warning::CHANGELOG.md nemá oddíl pro $verze, beru commity"
+              gh release create "$GITHUB_REF_NAME" \
+                  --title "$GITHUB_REF_NAME" \
+                  --generate-notes
+          fi

@@ -145,7 +145,7 @@
     <a class="media-card {{ 'is-archived' if row.is_missing }}"
        href="{{ '/series/' ~ row.id if row.is_series else '/item/' ~ row.id }}">
         <div class="media-poster">
-            <img src="/image/{{ row.id }}?kind=Primary&w=300" alt="" loading="lazy"
+            <img src="/image/{{ row.id }}?kind=Primary&w=300{{ '&tag=' ~ row.image_tag if row.image_tag }}" alt="" loading="lazy"
                  onerror="this.style.display='none'">
             {% if row.is_missing %}
                 {# Rozostřený plakát s přeškrtnutím: na první pohled je vidět,

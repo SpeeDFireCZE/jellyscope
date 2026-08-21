@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import running_task %}
+{% from "_macros.html" import running_task, file_picker %}
 {% block title %}{{ _("Nastavení") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -35,6 +35,7 @@
     {% if account.is_admin %}
         <a href="/settings?section=blocks"  class="{{ 'active' if section == 'blocks' }}">{{ _("Blokace") }}</a>
         <a href="/settings?section=log"     class="{{ 'active' if section == 'log' }}">{{ _("Log") }}</a>
+        <a href="/settings?section=interface" class="{{ 'active' if section == 'interface' }}">{{ _("Rozhraní") }}</a>
         <a href="/settings?section=general" class="{{ 'active' if section == 'general' }}">{{ _("Obecné") }}</a>
     {% endif %}
 </div>
@@ -674,18 +675,7 @@
         </p>
         <form method="post" action="/settings/import/playback-reporting-file"
               enctype="multipart/form-data" class="btn-row">
-            {# Vlastní tlačítko místo holého `type="file"`. Text uvnitř nativního
-                   pole ("Vybrat soubor", "Soubor nevybrán") si kreslí prohlížeč
-                   a řídí se jeho jazykem, ne naším - v anglickém rozhraní tak
-                   svítily dva české popisky. Pole zůstává, jen je schované;
-                   formulář se tím nemění. #}
-            <label class="file-picker">
-                <input type="file" name="backup" accept=".tsv,.txt,text/tab-separated-values" required
-                       onchange="this.parentNode.querySelector('.file-name').textContent =
-                                 this.files.length ? this.files[0].name : '{{ _("Soubor nevybrán") }}'">
-                <span class="btn">{{ _("Vybrat soubor") }}</span>
-                <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
-            </label>
+            {{ file_picker("backup", ".tsv,.txt,text/tab-separated-values") }}
             <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
             <span class="card-note">{{ _("sekund min.") }}</span>
             <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
@@ -699,18 +689,7 @@
     {# enctype je u nahrávání souboru povinné - bez něj dorazí jen název. #}
     <form method="post" action="/settings/import/jellystat"
           enctype="multipart/form-data" class="btn-row">
-        {# Vlastní tlačítko místo holého `type="file"`. Text uvnitř nativního
-                   pole ("Vybrat soubor", "Soubor nevybrán") si kreslí prohlížeč
-                   a řídí se jeho jazykem, ne naším - v anglickém rozhraní tak
-                   svítily dva české popisky. Pole zůstává, jen je schované;
-                   formulář se tím nemění. #}
-            <label class="file-picker">
-                <input type="file" name="backup" accept=".json,application/json" required
-                       onchange="this.parentNode.querySelector('.file-name').textContent =
-                                 this.files.length ? this.files[0].name : '{{ _("Soubor nevybrán") }}'">
-                <span class="btn">{{ _("Vybrat soubor") }}</span>
-                <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
-            </label>
+        {{ file_picker("backup", ".json,application/json") }}
         <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
         <span class="card-note">{{ _("sekund min.") }}</span>
         <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
@@ -1291,6 +1270,75 @@
     </p>
 </div>
 
+{# ================================================================== #}
+{% elif section == 'interface' %}
+{# ================================================================== #}
+{# Co si člověk nastavuje na vzhledu stránek. Vlastní sekce schválně:
+   takových voleb bude přibývat a v Obecném by se ztratily mezi věcmi,
+   které se vzhledem nemají společného nic. #}
+
+{# ------------------------------------------------------------------ #}
+{# Rozhraní - kolik toho karty ukážou rovnou                           #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="rozhrani">
+    <div class="card-head">
+        <h2>{{ _("Dlouhé seznamy a mapa") }}</h2>
+        <p class="card-note">{{ _("co karta ukáže rovnou a jak se ovládá mapa") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Každý další stream (nebo další divák) posouvá zbytek stránky dolů. Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, a ne natvrdo v kódu.") }}
+    </p>
+
+    <form method="post" action="/settings/interface">
+        <div class="field">
+            <label for="ui_max_streams">{{ _("Přehrávání na Přehledu") }}</label>
+            <input type="number" id="ui_max_streams" name="ui_max_streams"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_streamu }}" style="width:120px">
+            <p class="hint">{{ _("Nad tento počet se „Právě se hraje“ schová do okna.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_viewers">{{ _("Diváků v jazykových statistikách") }}</label>
+            <input type="number" id="ui_max_viewers" name="ui_max_viewers"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_lidi }}" style="width:120px">
+            <p class="hint">{{ _("Nad tento počet se pruhy „Kdo v jakém jazyce sleduje“ schovají do okna.") }}</p>
+        </div>
+
+        <div class="field">
+            <label>{{ _("Přibližování mapy") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_zoom" value="click"
+                           {{ 'checked' if mapa_zoom != 'wheel' }}>
+                    <span>
+                        <span class="title">{{ _("Klikáním") }}</span>
+                        <span class="desc">
+                            {{ _("Kliknutím do mapy se přiblíží na to místo, s Altem oddálí; nad mapou jsou i tlačítka + a −. Kolečko mapa vůbec nechytá, takže stránka roluje jako všude jinde.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_zoom" value="wheel"
+                           {{ 'checked' if mapa_zoom == 'wheel' }}>
+                    <span>
+                        <span class="title">{{ _("Kolečkem") }}</span>
+                        <span class="desc">
+                            {{ _("Pohodlnější, ale dokud je kurzor nad mapou, stránka se kolečkem neposune – rolování si mapa vezme pro sebe.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+    </form>
+</div>
 {# ================================================================== #}
 {% elif section == 'general' %}
 {# ================================================================== #}

@@ -443,7 +443,11 @@ welcome all the same; see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Versions and releases
 
 The running version is in the bottom left corner and in *Settings →
-General*. Releases are tagged `v1.2.3` on GitHub; the tag has to match
+General*. What changed in each of them is in
+**[CHANGELOG.md](CHANGELOG.md)**, and the release notes on GitHub are
+taken from there.
+
+Releases are tagged `v1.2.3` on GitHub; the tag has to match
 `__version__` in `jellyscope/__init__.py`, and a workflow refuses to
 publish a release when it does not — a release nobody can identify is
 worse than none.

@@ -16,6 +16,16 @@
             {% endif %}
         </p>
     </div>
+    {# Obnova metadat celého seriálu. U jednotlivého dílu je totéž
+       tlačítko - jenže když se v Jellyfinu opraví špatně určený seriál,
+       změní se všechny díly naráz a klikat je po jednom nemá smysl.
+       Zahodí se přitom i jejich obrázky, takže se opravený plakát
+       objeví hned. #}
+    {% if account.is_admin %}
+    <form method="post" action="/series/{{ series.id }}/refresh">
+        <button class="btn" type="submit">{{ _("Načíst metadata znovu") }}</button>
+    </form>
+    {% endif %}
 </div>
 
 {% if series.missing %}
@@ -76,7 +86,7 @@
        sloupce pro plakát. Takhle sloupec zůstane a karta sedí vedle. #}
     <div>
         <div class="item-poster {{ 'is-archived' if series.missing }}">
-            <img src="/image/{{ series.id }}?kind=Primary&w=400" alt="" loading="lazy"
+            <img src="/image/{{ series.id }}?kind=Primary&w=400{{ '&tag=' ~ series.image_tag if series.image_tag }}" alt="" loading="lazy"
                  onerror="this.parentElement.style.display='none'">
             {% if series.missing %}
                 <span class="media-archived">{{ _("Archivováno") }}</span>

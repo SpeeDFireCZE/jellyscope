@@ -54,8 +54,6 @@ MIN_PLAY_SECONDS = 300
 # sleduje"). Prehled toho, co je v knihovne k dispozici, cte tabulku
 # `items` a s importem nema nic spolecneho.
 BEZ_IMPORTU = "AND session_key NOT LIKE 'import:%'"
-# Tyz filtr pro dotazy, ktere spojuji vic tabulek a potrebuji prefix.
-BEZ_IMPORTU_P = "AND p.session_key NOT LIKE 'import:%'"
 
 # ...ale kdyz prevzaty zaznam jazyk PRESTO ma, zahazovat ho by byla skoda.
 #
@@ -519,13 +517,7 @@ def undefined_language_files(limit: int, offset: int,
     Cesta je tu to hlavni; bez ni by seznam rekl "neco je spatne" a nechal
     hledani na uzivateli.
     """
-    where = ["is_missing = 0",
-             "(audio_languages IS NULL OR audio_languages = '' OR audio_languages = 'und')"]
-    params: list[Any] = []
-    if search:
-        where.append("(name LIKE ? OR series_name LIKE ? OR path LIKE ?)")
-        params.extend([f"%{search}%"] * 3)
-
+    where, params = _filtr_bez_jazyka(search)
     params.extend([limit, offset])
     return db.query_all(
         f"""
@@ -545,14 +537,25 @@ def undefined_language_files(limit: int, offset: int,
 
 
 def undefined_language_count(search: str | None = None) -> int:
+    where, params = _filtr_bez_jazyka(search)
+    return int(db.query_value(
+        f"SELECT COUNT(*) FROM items WHERE {' AND '.join(where)}", tuple(params)))
+
+
+def _filtr_bez_jazyka(search: str | None) -> tuple[list[str], list[Any]]:
+    """Podminka "titul nema urceny jazyk" - pro seznam i pro jeho pocet.
+
+    Obe funkce se musi ptat na tutez mnozinu; kdyz se filtr opisoval
+    dvakrat, stacilo upravit jeden a strankovani zacalo lhat.
+    """
     where = ["is_missing = 0",
-             "(audio_languages IS NULL OR audio_languages = '' OR audio_languages = 'und')"]
+             "(audio_languages IS NULL OR audio_languages = '' "
+             "OR audio_languages = 'und')"]
     params: list[Any] = []
     if search:
         where.append("(name LIKE ? OR series_name LIKE ? OR path LIKE ?)")
         params.extend([f"%{search}%"] * 3)
-    return int(db.query_value(
-        f"SELECT COUNT(*) FROM items WHERE {' AND '.join(where)}", tuple(params)))
+    return where, params
 
 
 def undefined_language_items() -> int:

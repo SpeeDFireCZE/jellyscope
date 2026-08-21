@@ -481,14 +481,15 @@ def _link_by_tmdb(client_items: list[dict[str, Any]]) -> tuple[int, int]:
     return polozek, radku
 
 
-def _link_by_name() -> tuple[int, int]:
-    """Zaloha, kdyz Jellyfin stare ItemId uz nezna - shoda nazvu.
+def _osirele_zaznamy() -> list[dict[str, Any]]:
+    """Historie, ke ktere v knihovne nic nevede - jeden radek na titul.
 
-    Paruje jen jednoznacne shody. Kdyz mas v knihovne dva tituly stejneho
-    jmena (rezisersky sestrih vedle kinoverze), zaznam radeji nechame
-    nesparovany - spatne prirazena historie je horsi nez zadna.
+    Vychozi bod obou zaloznich zpusobu navazani (podle nazvu i podle
+    cisla dilu). Nazev bereme pres MAX(): zaznamu je vic a nazev se
+    v nich muze lisit (titul se casem prejmenoval), ale pro hledani
+    shody staci jeden.
     """
-    kandidati = db.query_all(
+    return db.query_all(
         """
         SELECT p.item_id,
                MAX(p.item_name)   AS item_name,
@@ -500,6 +501,16 @@ def _link_by_name() -> tuple[int, int]:
       GROUP BY p.item_id
         """
     )
+
+
+def _link_by_name() -> tuple[int, int]:
+    """Zaloha, kdyz Jellyfin stare ItemId uz nezna - shoda nazvu.
+
+    Paruje jen jednoznacne shody. Kdyz mas v knihovne dva tituly stejneho
+    jmena (rezisersky sestrih vedle kinoverze), zaznam radeji nechame
+    nesparovany - spatne prirazena historie je horsi nez zadna.
+    """
+    kandidati = _osirele_zaznamy()
 
     polozek = radku = 0
     for row in kandidati:
@@ -1651,16 +1662,7 @@ def _link_by_episode_number() -> tuple[int, int]:
     Když takových dílů vyjde víc (dvě kopie téhož), radši nesahat -
     špatně přiřazená historie je horší než ta, o které víme, že je stranou.
     """
-    kandidati = db.query_all(
-        """
-        SELECT p.item_id, MAX(p.item_name) AS item_name
-          FROM playback p
-     LEFT JOIN items i ON i.id = p.item_id
-         WHERE p.item_id IS NOT NULL AND p.item_id != '' AND i.id IS NULL
-           AND p.item_name IS NOT NULL AND p.item_name != ''
-      GROUP BY p.item_id
-        """
-    )
+    kandidati = _osirele_zaznamy()
 
     polozek = radku = 0
     for kandidat in kandidati:
@@ -2386,6 +2388,9 @@ async def narovnej_data() -> dict[str, Any]:
         log.warning("dohledani v Jellyfinu se nepovedlo: %s", exc)
         vysledek["jellyfin"] = {"status": "error", "message": str(exc)}
 
+    # Nejdriv archiv: kdyz se dil vrati k zivemu zaznamu, maji dalsi kroky
+    # o jednu polozku min, na kterou by mohly historii navazat.
+    vysledek["archiv"] = scanner.slouc_archiv_do_zivych()
     vysledek["navazano"] = relink_orphans()
     vysledek["cislo_dilu"] = _link_by_episode_number()
     vysledek["vraceno"] = repair_episode_links()
@@ -2395,6 +2400,9 @@ async def narovnej_data() -> dict[str, Any]:
 
     jf = vysledek["jellyfin"]
     casti: list[tuple[str, dict[str, Any]]] = []
+    if vysledek["archiv"]:
+        casti.append(("vráceno z archivu k živým dílům: {n}",
+                      {"n": vysledek["archiv"]}))
     if jf.get("navazano"):
         casti.append(("z Jellyfinu zařazeno: {n} titulů", {"n": jf["navazano"]}))
     if jf.get("zalozeno"):

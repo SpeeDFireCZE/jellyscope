@@ -19,10 +19,6 @@ from . import languages
 
 log = logging.getLogger("jellyscope.jellyfin")
 
-# Jellyfin meri cas v "ticich". Jeden tick je 100 nanosekund,
-# takze v jedne sekunde jich je 10 milionu.
-TICKS_PER_SECOND = 10_000_000
-
 # Pole, ktera chceme u polozek knihovny navic. Bez nich Jellyfin vraci
 # jen holy nazev a id.
 ITEM_FIELDS = ",".join([

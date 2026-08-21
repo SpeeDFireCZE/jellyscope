@@ -54,6 +54,49 @@ CLIENTS = [
     ("Jellyfin Web", "Firefox v praci"),
 ]
 
+# Odkud se ukazkova domacnost diva. Bez tohohle by byla mapa na strance
+# Sit prazdna: kdyz vsechno tece po domaci siti, neni co umistit.
+#
+# Adresy jsou skutecne verejne rozsahy - schvalne, protoze jen takove
+# umi databaze GeoLite2 najit. Vymyslene cislo (nebo 203.0.113.x
+# z dokumentacniho rozsahu) by v mape skoncilo jako "neznamo odkud".
+# Nikam se pritom nepripojujeme, jen se cte mistni soubor .mmdb.
+DOMACI_SIT = "192.168.1.20"
+
+VENKU = [
+    ("109.81.0.1", "mobil v Praze"),
+    ("81.19.0.1", "u rodicu v Brne"),
+    ("5.9.0.1", "sluzebka v Nemecku"),
+    ("80.58.61.250", "dovolena ve Spanelsku"),
+    ("213.129.65.1", "Londyn"),
+    ("24.48.0.1", "navsteva v Kanade"),
+    ("200.160.2.3", "Brazilie"),
+    ("118.127.0.1", "Australie"),
+]
+
+# Jak casto se z ktereho zarizeni kouka mimo domaci sit. Televize v obyvaku
+# se z podstaty veci nikam nestehuje, telefon ano - a prave tenhle rozdil
+# dela mapu uveritelnou.
+VENKU_SANCE = {
+    "Shield TV v obyvaku": 0.0,
+    "Apple TV": 0.0,
+    "Chrome na notebooku": 0.25,
+    "Firefox v praci": 1.0,
+    "Pixel 8": 0.55,
+}
+
+
+def _adresa(device: str) -> str:
+    """Z jake adresy se tohle prehravani povede.
+
+    Bliz domovu je vic prehravani nez daleko - proto vazene losovani:
+    prvni polozky VENKU (Praha, Brno) padnou casteji nez Australie.
+    """
+    if random.random() >= VENKU_SANCE.get(device, 0.2):
+        return DOMACI_SIT
+    vahy = [len(VENKU) - index for index in range(len(VENKU))]
+    return random.choices(VENKU, weights=vahy, k=1)[0][0]
+
 
 def _ts(moment: datetime) -> str:
     return moment.strftime(db.TIME_FORMAT)
@@ -306,13 +349,31 @@ def seed() -> dict[str, int]:
                 )
 
             reasons = None
+            # Co presne se prepocitava. Odvozujeme to z duvodu, at bublina
+            # u znacky "transcode" rika totez, co duvod pod ni - ve
+            # skutecnem provozu to hlasi Jellyfin v TranscodingInfo.
+            video_direct = audio_direct = None
+            hw = None
             if method == "Transcode":
                 reasons = random.choice([
                     "VideoCodecNotSupported",
                     "AudioCodecNotSupported",
                     "VideoCodecNotSupported,AudioCodecNotSupported",
                     "ContainerBitrateExceedsLimit",
+                    "SubtitleCodecNotSupported",
                 ])
+                video_direct = 0 if ("Video" in reasons or "Bitrate" in reasons
+                                     or "Subtitle" in reasons) else 1
+                audio_direct = 0 if "Audio" in reasons else 1
+                if not video_direct and random.random() < 0.5:
+                    hw = random.choice(["qsv", "nvenc", "vaapi"])
+
+            # Kodek, ktery skutecne tekl k prehravaci. Pri prepoctu je to
+            # cil prepoctu (prohlizece umeji H264 a AAC skoro vsechny),
+            # jinak kodek puvodniho souboru. Bez tohohle rozdilu by
+            # bublina hlasila "HEVC -> HEVC" a nedavala smysl.
+            video_codec = item[14] if video_direct != 0 else "h264"
+            audio_codec = item[15] if audio_direct != 0 else "aac"
 
             # Jazyk vybirame jen z toho, co titul opravdu ma - stejne jako
             # skutecny divak. Kdyz je na vyber cestina i original, kazdy
@@ -347,9 +408,9 @@ def seed() -> dict[str, int]:
                 f"demo-sess-{session}::{item[0]}",
                 user[0], user[1],
                 item[0], item[1], item[2], item[5], item[3],
-                client, device, f"demo-dev-{user[0]}", "192.168.1.20",
-                method, reasons,
-                item[14], item[15], item[19],
+                client, device, f"demo-dev-{user[0]}", _adresa(device),
+                method, reasons, video_direct, audio_direct, hw,
+                video_codec, audio_codec, item[19],
                 audio_language, subtitle_language,
                 _ts(started), _ts(started + timedelta(seconds=watched)),
                 _ts(started + timedelta(seconds=watched)),
@@ -360,11 +421,13 @@ def seed() -> dict[str, int]:
         conn.executemany(
             """INSERT INTO playback (session_key, user_id, user_name, item_id, item_name,
                 item_type, series_name, library_id, client, device_name, device_id,
-                remote_address, play_method, transcode_reasons, video_codec, audio_codec,
+                remote_address, play_method, transcode_reasons,
+                transcode_video_direct, transcode_audio_direct, transcode_hw,
+                video_codec, audio_codec,
                 bitrate, audio_language, subtitle_language,
                 started_at, last_seen_at, ended_at, watched_seconds,
                 paused_seconds, position_ticks, is_active)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             plays,
         )
 
@@ -372,12 +435,13 @@ def seed() -> dict[str, int]:
         conn.execute(
             """INSERT INTO playback (session_key, user_id, user_name, item_id, item_name,
                 item_type, series_name, library_id, client, device_name, play_method,
-                transcode_reasons, video_codec, audio_codec,
+                transcode_reasons, transcode_video_direct, transcode_audio_direct,
+                transcode_hw, video_codec, audio_codec,
                 audio_language, subtitle_language, started_at, last_seen_at,
                 watched_seconds, paused_seconds, position_ticks, is_active)
                VALUES ('demo-live','demo-u2','Jana','demo-movie-0','Duna','Movie',NULL,
                        'demo-movies','Jellyfin Web','Chrome na notebooku','Transcode',
-                       'VideoCodecNotSupported','hevc','eac3',
+                       'VideoCodecNotSupported',0,1,'qsv','h264','eac3',
                        'cs','cs',
                        ?,?,2640,0,26400000000,1)""",
             (_ts(now - timedelta(minutes=44)), _ts(now)),

@@ -4,24 +4,13 @@
    Vykresluje ji server, stejnou šablonou jako při běžném načtení Přehledu;
    kreslit ji podruhé v JavaScriptu by znamenalo dvě místa, která se časem
    rozejdou. #}
-{% from "_macros.html" import method_badge %}
-<div class="page-head" style="margin-bottom:14px">
-    <div>
-        <h1>{{ _("Právě se hraje") }}</h1>
-        <p class="subtitle">
-            {% if active %}
-                {{ active | length }} {{ _("aktivních přehrávání") }}
-            {% else %}
-                {{ _("Nikdo právě nic nesleduje.") }}
-            {% endif %}
-        </p>
-    </div>
-</div>
+{% from "_macros.html" import method_badge, transcode_popis %}
 
-{% if active %}
-<div class="sessions">
-    {% for row in active %}
-    <div class="session">
+{# Jeden stream se vypisuje na několika místech (rovnou v kartě i v okně),
+   takže je z něj makro - jinak by z toho byly dvě kopie, které se časem
+   rozejdou. #}
+{% macro stream(row) %}
+    <div class="session" data-uzivatel="{{ row.user_id or '' }}">
         <a class="session-poster" href="/item/{{ row.item_id }}">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=200" alt=""
                  loading="lazy" onerror="this.style.display='none'">
@@ -56,7 +45,7 @@
                     <span class="badge good"><span class="dot"></span>{{ _("hraje") }}</span>
                 {% endif %}
 
-                {{ method_badge(row.play_method) }}
+                {{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}
 
                 {# Záměrně `current_*`, ne `audio_language`. Ten druhý drží
                    jazyk, se kterým se začalo (patří do statistik); tady
@@ -107,6 +96,68 @@
             {% endif %}
         </div>
     </div>
-    {% endfor %}
+{% endmacro %}
+
+{# Do `strop_streamu` se přehrávání vypisují rovnou - kvůli nim ta karta
+   je. Nad ním se schovají do okna: každý další stream jinak posouvá
+   statistiky níž a při dvaceti přehráváních by stránka nekončila. #}
+{% set schovat = active | length > strop_streamu %}
+
+<div class="page-head" style="margin-bottom:14px">
+    <div>
+        <h1>{{ _("Právě se hraje") }}</h1>
+        <p class="subtitle">
+            {% if active %}
+                {{ active | length }} {{ _("aktivních přehrávání") }}
+            {% else %}
+                {{ _("Nikdo právě nic nesleduje.") }}
+            {% endif %}
+        </p>
+    </div>
 </div>
+
+{% if active and not schovat %}
+<div class="sessions">
+    {% for row in active %}{{ stream(row) }}{% endfor %}
+</div>
+{% endif %}
+
+{% if schovat %}
+{# Tlačítko stojí tam, kde by byl první stream - karta si tak drží své
+   místo a nic pod ní neposkakuje podle toho, kolik se zrovna hraje. #}
+<div class="sessions" style="margin-bottom:4px">
+    <button class="btn primary session-vice" type="button" data-okno="okno-streamy">
+        <span>
+            <strong>{{ _("Přehrávání jsou skrytá – je jich hodně") }}</strong><br>
+            <span class="session-vice-note">
+                {{ _("zobrazit všech") }} {{ active | length }}
+            </span>
+        </span>
+    </button>
+</div>
+
+<dialog class="okno okno-siroke" id="okno-streamy">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Právě se hraje") }} ({{ active | length }})</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    {# Filtr platí jen tady v okně: je to způsob, jak se v dlouhém seznamu
+       dobrat jednoho člověka, ne nastavení, které má něco přežít. Proto
+       se filtruje v prohlížeči - obsah už je na stránce. #}
+    <div class="filtr-pole" style="margin-bottom:14px">
+        <label for="filtr-streamu">{{ _("Uživatel") }}</label>
+        <select id="filtr-streamu" data-filtr-okna="okno-streamy">
+            <option value="">{{ _("všichni") }}</option>
+            {% for row in active | unique(attribute='user_id') %}
+                <option value="{{ row.user_id }}">{{ row.user_name or '?' }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="okno-obsah sessions">
+        {% for row in active %}{{ stream(row) }}{% endfor %}
+    </div>
+</dialog>
 {% endif %}

@@ -246,6 +246,22 @@ graf = charts.hbar_chart([{"label": utok, "value": 5}], "label", "value")
 check(utok not in graf and "&lt;img" in graf,
       "název s HTML značkou se v grafu vypíše jako text")
 
+# Totéž pro bublinu s hodnotami. Ta chodí do stránky jako JSON v atributu
+# a prohlížeč z něj skládá uzly přes textContent - takže ani název filmu
+# s <img onerror=...> se nemá jak stát značkou.
+bublina = charts.area_chart_multi(
+    [{"d": "2026-08-11", "v": 1}], "d", [{"key": "v", "label": utok, "slot": 1}])
+check(utok not in bublina and "&lt;img" in bublina,
+      "název s HTML značkou je escapovaný i v bublině")
+
+zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+obsluha = zaklad[zaklad.index("function naplnBublinu"):]
+obsluha = obsluha[:obsluha.index("document.addEventListener")]
+check("innerHTML" not in obsluha,
+      "bublina se skládá z uzlů, ne vkládáním HTML")
+check("JSON.parse" in obsluha and "textContent" in obsluha,
+      "hodnoty se čtou jako data a zapisují jako text")
+
 
 print()
 print("--- hlavičky odpovědi ---")

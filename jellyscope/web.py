@@ -495,6 +495,39 @@ def _draft_clear(account: dict[str, Any], name: str) -> None:
     _DB_DRAFT.pop((int(account["id"]), name), None)
 
 
+# Meze pro stropy dlouhých seznamů. Nula by znamenala "schovat i jediný
+# stream", což je zbytečné; nad padesát už karta zabere obrazovku tak jako
+# tak. Hodnota samotná je v nastavení - viz _stropy().
+STROP_MIN = 1
+STROP_MAX = 50
+
+# Jak se ovlada priblizovani mapy. Kolecko je pohodlnejsi, ale nad mapou
+# prestane rolovat stranka - u nekoho je to past, u nekoho zvyk. Proto
+# volba, ne rozhodnuti za uzivatele.
+ZOOM_REZIMY = ("click", "wheel")
+
+
+def _stropy() -> dict[str, int]:
+    """Kolik položek karta vypíše rovnou, než zbytek schová do okna.
+
+    Čte se z nastavení, ne z konstanty: kolik streamů se vejde na
+    obrazovku, ví ten, kdo se na ni dívá - u někoho je to dvojka, u
+    někoho deset. Mění se v Nastavení → Rozhraní.
+    """
+    return {
+        "strop_streamu": db.get_int_setting(
+            "ui_max_streams", minimum=STROP_MIN, maximum=STROP_MAX, fallback=10),
+        "strop_lidi": db.get_int_setting(
+            "ui_max_viewers", minimum=STROP_MIN, maximum=STROP_MAX, fallback=10),
+    }
+
+
+def _zoom_rezim() -> str:
+    """Cim se priblizuje mapa - koleckem, nebo klikanim."""
+    rezim = (db.get_setting("ui_map_zoom", "click") or "").strip()
+    return rezim if rezim in ZOOM_REZIMY else "click"
+
+
 KIND_SESSION_KEY = "kind"
 # Vlastni pamet pro filtr u nejsledovanejsich titulu - viz _kind().
 TOP_KIND_SESSION_KEY = "top_kind"
@@ -553,6 +586,63 @@ def _linked_note(result: dict[str, Any]) -> str:
         casti.append(i18n.translate("{n} podle názvu").format(n=linked["by_name"]))
     return " " + i18n.translate("Dohledáno {co} ({n} záznamů).").format(
         co=", ".join(casti), n=linked["rows"])
+
+
+def _pocty_uklidu() -> dict[str, Any]:
+    """Kolik je v historii záznamů, se kterými má co dělat „Narovnání dat".
+
+    Ukazuje se na dvou místech (Úlohy a Import historie) a pokaždé
+    stejně - proto jedna funkce. Jinak by se nový počet dopisoval na dvě
+    místa a na jedno by se dřív nebo později zapomnělo.
+    """
+    return {
+        "duplicate_rows": importers.duplicate_playback_count(),
+        "misplaced_rows": len(importers.misplaced_episode_rows()),
+        "orphan_rows": importers.orphan_playback_count(),
+        "orphan_items": importers.orphan_items_count(),
+        "stale_name_rows": importers.stale_name_rows(),
+        "import_duplicate_rows": importers.import_duplicate_count(),
+    }
+
+
+async def _nacti_zalohu(request: Request, soubor: UploadFile) -> bytes | None:
+    """Obsah nahraného souboru, nebo None a hláška, proč to nejde.
+
+    Obě místa, kam se nahrává záloha (Playback Reporting i Jellystat),
+    kontrolovala totéž a stejně: prázdný soubor a strop velikosti. Strop
+    tu není kvůli disku, ale kvůli paměti - obsah se načítá celý najednou,
+    takže bez něj by šlo serveru poslat gigabajtový soubor.
+    """
+    raw = await soubor.read()
+    if not raw:
+        _flash(request, "Soubor je prázdný.", "error")
+        return None
+    if len(raw) > MAX_UPLOAD_MB * 1024 * 1024:
+        _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
+        return None
+    return raw
+
+
+def _hlaska_importu(request: Request, result: dict[str, Any],
+                    sablona: str) -> None:
+    """Výsledek importu do hlášky. Pro všechny tři zdroje stejně.
+
+    Liší se jen první věta (`sablona`); co následuje - dohledané položky,
+    záznamy známé odjinud, opravené díly - platí pro všechny stejně.
+    Byly to tři skoro totožné kusy kódu a dvakrát se stalo, že se nová
+    věta doplnila jen do jednoho.
+    """
+    if result.get("status") != "ok":
+        _flash(request, result.get("message", "Import selhal."), "error")
+        return
+
+    _flash(
+        request,
+        _t(sablona).format(n=result["imported"], nalezeno=result["found"],
+                           duplicit=result["duplicate"])
+        + _opraveno_note(result) + _known_note(result) + _linked_note(result),
+        "success",
+    )
 
 
 def _opraveno_note(result: dict[str, Any]) -> str:
@@ -652,6 +742,12 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # Verze se ukazuje v patičce každé stránky - je to první údaj,
         # na který se u hlášení chyby ptá kdokoliv.
         "verze": updates.stav(),
+        # Stropy pro dlouhé seznamy - viz _stropy().
+        **_stropy(),
+        "strop_min": STROP_MIN,
+        "strop_max": STROP_MAX,
+        # Čím se přibližuje mapa na stránce Síť - viz _zoom_rezim().
+        "mapa_zoom": _zoom_rezim(),
     }
     base.update(extra)
     return base
@@ -924,6 +1020,27 @@ def item_detail(
     ))
 
 
+@app.post("/series/{series_id}/refresh")
+async def series_refresh(request: Request, series_id: str,
+                         account: dict[str, Any] = Depends(require_admin)):
+    """Znovu načte metadata všech dílů seriálu - i s obrázky.
+
+    Stejná akce jako u jednoho dílu, jen pro celý seriál: po opravě
+    špatně určeného seriálu v Jellyfinu se mění všechny díly najednou.
+    """
+    vysledek = await scanner.refresh_series(series_id)
+    if vysledek.get("status") != "ok":
+        _flash(request, vysledek.get("message", "Nepovedlo se."), "error")
+        return RedirectResponse(f"/series/{series_id}", status_code=303)
+
+    zprava = _t("Metadata načtena znovu: {n} dílů").format(n=vysledek["dilu"])
+    tech = vysledek.get("tech") or {}
+    if tech.get("ok"):
+        zprava += " " + _t("(včetně změření souborů)")
+    _flash(request, zprava, "success")
+    return RedirectResponse(f"/series/{series_id}", status_code=303)
+
+
 @app.post("/item/{item_id}/refresh")
 async def item_refresh(
     request: Request,
@@ -987,6 +1104,7 @@ async def item_image(
     item_id: str,
     kind: str = "Primary",
     w: int = 400,
+    tag: str = "",
     account: dict[str, Any] = Depends(require_login),
 ):
     """Obrazek polozky - stazeny z Jellyfinu a ulozeny na disk.
@@ -1014,9 +1132,16 @@ async def item_image(
     if not safe_id or safe_id != item_id:
         raise HTTPException(status_code=404, detail="Neplatne id.")
 
+    # Otisk obrazku (ImageTags z Jellyfinu) je soucasti jmena souboru.
+    # Diky tomu neni potreba mezipamet nijak "invalidovat": jiny obrazek
+    # ma jiny otisk, tedy jinou adresu i jiny soubor. Bez toho drzel
+    # Jellyscope navzdy ten prvni obrazek - i kdyz ho clovek v Jellyfinu
+    # opravil, protoze spatne urcena polozka mela spatny plakat.
+    safe_tag = "".join(c for c in tag if c.isalnum())[:32]
+
     cache_dir = config.database_path.parent / "imagecache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cached = cache_dir / f"{safe_id}-{kind}-{w}.img"
+    cached = cache_dir / f"{safe_id}-{kind}-{w}{'-' + safe_tag if safe_tag else ''}.img"
 
     if cached.exists():
         return Response(
@@ -1255,6 +1380,7 @@ SETTINGS_SECTIONS = [
     ("accounts", "Účty", False),      # False = vidí i čtenář
     ("blocks", "Blokace", True),
     ("log", "Log", True),
+    ("interface", "Rozhraní", True),   # vzhled stránek
     ("general", "Obecné", True),
 ]
 
@@ -1306,12 +1432,7 @@ def settings_page(
         context.update(
             # Karta "Narovnání dat" se sem přestěhovala z Importu, takže
             # sem patří i čísla, která vypisuje.
-            duplicate_rows=importers.duplicate_playback_count(),
-            misplaced_rows=len(importers.misplaced_episode_rows()),
-            orphan_rows=importers.orphan_playback_count(),
-            orphan_items=importers.orphan_items_count(),
-            stale_name_rows=importers.stale_name_rows(),
-            import_duplicate_rows=importers.import_duplicate_count(),
+            **_pocty_uklidu(),
             # Když úloha doběhne, zatímco je člověk na téhle sekci, načte
             # se stránka sama - jinak by tu proužek "úloha běží" zůstal
             # viset a výsledek by se neobjevil. Viz hlídač v base.html.
@@ -1345,12 +1466,7 @@ def settings_page(
             last_import=scanner.last_scan("import"),
             # Kolik je v historii duplicitních a špatně přiřazených záznamů.
             # Ukazuje se předem, ať je vidět, jestli má úklid vůbec smysl.
-            duplicate_rows=importers.duplicate_playback_count(),
-            misplaced_rows=len(importers.misplaced_episode_rows()),
-            orphan_rows=importers.orphan_playback_count(),
-            orphan_items=importers.orphan_items_count(),
-            stale_name_rows=importers.stale_name_rows(),
-            import_duplicate_rows=importers.import_duplicate_count(),
+            **_pocty_uklidu(),
         )
     elif section == "database":
         # Dvě různé konfigurace, a plete se to snadno:
@@ -1708,6 +1824,31 @@ def settings_database(
     return RedirectResponse("/settings?section=database", status_code=303)
 
 
+@app.post("/settings/interface")
+def settings_interface(request: Request,
+                       ui_max_streams: str = Form(""),
+                       ui_max_viewers: str = Form(""),
+                       ui_map_zoom: str = Form("click"),
+                       account: dict[str, Any] = Depends(require_admin)):
+    """Stropy dlouhých seznamů - kolik se vypíše, než se zbytek schová.
+
+    Hodnoty se ukládají tak, jak přišly; ořezání do mezí dělá až čtení
+    (`_stropy`). Kdyby se ořezávalo při ukládání, člověk by napsal 100,
+    uvidel 50 a nevěděl proč - takhle se aspoň chová stránka a nastavení
+    stejně.
+    """
+    db.set_setting("ui_max_streams", str(_clamp(ui_max_streams, STROP_MIN,
+                                                STROP_MAX, 10)))
+    db.set_setting("ui_max_viewers", str(_clamp(ui_max_viewers, STROP_MIN,
+                                                STROP_MAX, 10)))
+    # Cokoli mimo znamé režimy je překlep nebo podvržený formulář -
+    # v obou případech je správná odpověď výchozí hodnota, ne uložit to.
+    db.set_setting("ui_map_zoom",
+                   ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
+    _flash(request, "Uloženo.", "success")
+    return RedirectResponse("/settings?section=interface", status_code=303)
+
+
 @app.post("/settings/updates")
 async def settings_updates(request: Request, action: str = Form(""),
                            update_check_enabled: str = Form(""),
@@ -1965,18 +2106,10 @@ async def import_playback_reporting(
     result = await importers.import_playback_reporting(
         min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
     )
-    if result.get("status") == "ok":
-        _flash(
-            request,
-            _t("Playback Reporting: naimportováno {n} záznamů "
-               "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
-                   n=result["imported"], nalezeno=result["found"],
-                   duplicit=result["duplicate"])
-            + _known_note(result) + _linked_note(result),
-            "success",
-        )
-    else:
-        _flash(request, result.get("message", "Import selhal."), "error")
+    _hlaska_importu(
+        request, result,
+        "Playback Reporting: naimportováno {n} záznamů "
+        "(z {nalezeno} nalezených, {duplicit} už existovalo).")
 
     return RedirectResponse("/settings?section=import", status_code=303)
 
@@ -1993,30 +2126,17 @@ async def import_playback_reporting_file(
     Zaloha pro pripad, kdy plugin pres API nefunguje - viz
     importers.import_playback_reporting_tsv().
     """
-    raw = await backup.read()
-    if not raw:
-        _flash(request, "Soubor je prázdný.", "error")
-        return RedirectResponse("/settings?section=import", status_code=303)
-
-    if len(raw) > MAX_UPLOAD_MB * 1024 * 1024:
-        _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
+    raw = await _nacti_zalohu(request, backup)
+    if raw is None:
         return RedirectResponse("/settings?section=import", status_code=303)
 
     result = await importers.import_playback_reporting_tsv(
         raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
     )
-    if result.get("status") == "ok":
-        _flash(
-            request,
-            _t("Playback Reporting (záloha): naimportováno {n} záznamů "
-               "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
-                   n=result["imported"], nalezeno=result["found"],
-                   duplicit=result["duplicate"])
-            + _known_note(result) + _linked_note(result),
-            "success",
-        )
-    else:
-        _flash(request, result.get("message", "Import selhal."), "error")
+    _hlaska_importu(
+        request, result,
+        "Playback Reporting (záloha): naimportováno {n} záznamů "
+        "(z {nalezeno} nalezených, {duplicit} už existovalo).")
 
     return RedirectResponse("/settings?section=import", status_code=303)
 
@@ -2103,32 +2223,17 @@ async def import_jellystat(
     account: dict[str, Any] = Depends(require_admin),
 ):
     """Import z nahraneho JSON souboru se zalohou Jellystatu."""
-    raw = await backup.read()
-    if not raw:
-        _flash(request, "Soubor je prázdný.", "error")
-        return RedirectResponse("/settings?section=import", status_code=303)
-
-    # Rozumny strop - bez nej by slo pametí serveru poslat gigabajtovy soubor.
-    if len(raw) > MAX_UPLOAD_MB * 1024 * 1024:
-        _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
+    raw = await _nacti_zalohu(request, backup)
+    if raw is None:
         return RedirectResponse("/settings?section=import", status_code=303)
 
     result = await importers.import_jellystat_json(
         raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
     )
-    if result.get("status") == "ok":
-        _flash(
-            request,
-            _t("Jellystat: naimportováno {n} záznamů "
-               "(z {nalezeno} nalezených, {duplicit} už existovalo).").format(
-                   n=result["imported"], nalezeno=result["found"],
-                   duplicit=result["duplicate"])
-            + _opraveno_note(result)
-            + _known_note(result) + _linked_note(result),
-            "success",
-        )
-    else:
-        _flash(request, result.get("message", "Import selhal."), "error")
+    _hlaska_importu(
+        request, result,
+        "Jellystat: naimportováno {n} záznamů "
+        "(z {nalezeno} nalezených, {duplicit} už existovalo).")
 
     return RedirectResponse("/settings?section=import", status_code=303)
 

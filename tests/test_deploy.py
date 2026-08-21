@@ -480,12 +480,20 @@ print("--- verzování statických souborů ---")
 # styl a změna vzhledu by byla dny neviditelná. Přesně na tohle jsem
 # jednou naletěl při ladění přihlašovací stránky.
 templates_dir = PROJECT / "jellyscope" / "templates"
-for name in ("base.html", "login.html", "setup.html", "error.html"):
+# Přihlášení, první spuštění a chybová stránka mají hlavičku ze společného
+# makra `hlava()` - stačí, když verzi nese ono. base.html si <head> drží
+# vlastní, protože potřebuje {% block title %}.
+for name in ("base.html", "_macros.html"):
     text = (templates_dir / name).read_text(encoding="utf-8")
     check("style.css?v={{ asset_version }}" in text,
           f"{name}: styl má v adrese verzi")
+
+for name in ("base.html", "login.html", "setup.html", "error.html", "_macros.html"):
+    text = (templates_dir / name).read_text(encoding="utf-8")
     check("/static/logo.svg\"" not in text,
           f"{name}: žádný odkaz na logo bez verze")
+    check("style.css" not in text or "style.css?v={{ asset_version }}" in text,
+          f"{name}: žádný odkaz na styl bez verze")
 
 web = (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8")
 check('globals["asset_version"]' in web, "web.py verzi počítá a předává šablonám")

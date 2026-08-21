@@ -76,7 +76,7 @@
 <div class="item-layout">
     <div>
         <div class="item-poster {{ 'is-archived' if item.is_missing }}">
-            <img src="/image/{{ item.id }}?kind=Primary&w=400" alt="" loading="lazy"
+            <img src="/image/{{ item.id }}?kind=Primary&w=400{{ '&tag=' ~ item.image_tag if item.image_tag }}" alt="" loading="lazy"
                  onerror="this.parentElement.style.display='none'">
             {% if item.is_missing %}
                 <span class="media-archived">{{ _("Archivováno") }}</span>

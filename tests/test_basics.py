@@ -307,7 +307,12 @@ check("<script>" not in svg and "&lt;script&gt;" in svg, "nebezpecny nazev je es
 spark = charts.sparkline(
     [{"day": "2026-08-11", "hours": 2}, {"day": "2026-08-12", "hours": 5}]
 )
-check('data-tip="2026-08-12: 5 h"' in spark, f"minigraf ma hodnoty k najeti mysi")
+# Hodnoty chodi dvakrat: v `data-tip-json` (z nej se sklada bublina -
+# nadpis a radky ve barvach serii) a v prostem `data-tip` jako zaloha,
+# kdyby se JSON nepodarilo precist.
+check('data-tip="2026-08-12 · 5 h"' in spark, "minigraf ma hodnoty k najeti mysi")
+check('"nadpis":"2026-08-12"' in spark.replace("&quot;", '"'),
+      "a bublina zna i datum jako nadpis")
 check('aria-hidden' not in spark, "minigraf uz neni oznaceny jako ozdoba")
 
 # Zadny trvaly bod. Vsechny se ukazuji az po najeti mysi - koncovy bod

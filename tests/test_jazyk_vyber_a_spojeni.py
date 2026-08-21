@@ -117,7 +117,12 @@ with TestClient(app) as client:
     # ale je to past: kdyby se klíč jmenoval "items", Jinja by v šabloně
     # sáhla na metodu `dict.items` místo na hodnotu a místo čísla by se
     # vypsala pomlčka. Chyba, kterou test odhalí a oko na první pohled ne.
-    volby_v_html = re.findall(r"<option[^>]*>\s*(.*?)\s*</option>", page, re.S)
+    # Jen výběr preferovaného jazyka. Na stránce je i filtr uživatelů
+    # v okně a v tom se počty titulů pochopitelně nevypisují - kdyby se
+    # bral každý <option> na stránce, test by padal na cizí věci.
+    vyber = re.search(r'<select id="preferred".*?</select>', page, re.S)
+    volby_v_html = re.findall(r"<option[^>]*>\s*(.*?)\s*</option>",
+                              vyber.group(0) if vyber else "", re.S)
     check(all(re.search(r"\(\s*\d", v) for v in volby_v_html),
           f"u každé volby je vidět počet titulů ({volby_v_html})")
 

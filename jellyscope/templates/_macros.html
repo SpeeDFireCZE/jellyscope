@@ -104,6 +104,51 @@
 {% endmacro %}
 
 
+{# Obsah <head>, který má každá stránka stejný.
+
+   Přihlášení, první spuštění a chybová stránka nestojí na base.html -
+   nemají postranní panel a mají vypadat jako samostatná obrazovka.
+   Hlavičku ale potřebují tutéž, a než se to vyčistilo, byla opsaná
+   čtyřikrát: kdo přidal meta značku, musel si vzpomenout na všechny. #}
+{% macro hlava(titulek) -%}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ titulek }} &middot; Jellyscope</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+    {# SVG ikona zůstane ostrá v každé velikosti - od 16px v panelu
+       prohlížeče po velké dlaždice na mobilu. #}
+    <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
+    <script>
+        // Nastavení tmavého/světlého režimu se čte co nejdřív, ještě před
+        // vykreslením stránky. Kdyby se to dělalo až později, stránka by
+        // na okamžik problikla ve špatných barvách.
+        (function () {
+            var saved = localStorage.getItem("jellyscope-theme");
+            if (saved === "dark" || saved === "light") {
+                document.documentElement.setAttribute("data-theme", saved);
+            }
+        })();
+    </script>
+{% endmacro %}
+
+
+{# Výběr souboru.
+
+   Vlastní tlačítko místo holého `type="file"`: text uvnitř nativního pole
+   ("Vybrat soubor", "Soubor nevybrán") si kreslí prohlížeč a řídí se jeho
+   jazykem, ne naším - v anglickém rozhraní tak svítily dva české popisky.
+   Pole zůstává, jen je schované; formulář se tím nemění. #}
+{% macro file_picker(name, accept) %}
+<label class="file-picker">
+    <input type="file" name="{{ name }}" accept="{{ accept }}" required
+           onchange="this.parentNode.querySelector('.file-name').textContent =
+                     this.files.length ? this.files[0].name : '{{ _("Soubor nevybrán") }}'">
+    <span class="btn">{{ _("Vybrat soubor") }}</span>
+    <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
+</label>
+{% endmacro %}
+
+
 {# Značka zdroje technických dat. Uživatel má vidět, jak spolehlivý údaj je. #}
 {% macro tech_badge(source) %}
 {% if source == 'ffprobe' %}
@@ -116,10 +161,43 @@
 {% endmacro %}
 
 
-{# Značka způsobu doručení. Barva nikdy nestojí sama - vedle je vždy text. #}
-{% macro method_badge(method) %}
+{# Věta "co přesně se přepočítává" do bubliny u značky transcode.
+
+   Fakta připravuje stats.popis_prepoctu(); tady se z nich skládá text,
+   protože jazyk přihlášeného člověka zná jedině šablona. Samotné
+   "transcode" totiž neřekne, jestli server přepočítává obraz (drahé),
+   jen zvuk (levné), nebo vypaluje titulky. #}
+{% macro transcode_popis(fakta) %}
+{%- set casti = [] -%}
+{%- for fakt in fakta or [] -%}
+    {%- if fakt.co in ('Obraz', 'Zvuk') -%}
+        {%- if fakt.primo -%}
+            {%- set _ = casti.append(
+                _(fakt.co) ~ ": " ~ (fakt.z or fakt.na or "?") | upper
+                ~ " – " ~ _("beze změny, jen se přebaluje")) -%}
+        {%- else -%}
+            {%- set _ = casti.append(
+                _(fakt.co) ~ ": " ~ (fakt.z | upper ~ " → " if fakt.z else "")
+                ~ (fakt.na or "?") | upper ~ " – " ~ _("přepočítává se")) -%}
+        {%- endif -%}
+    {%- elif fakt.vypaluji -%}
+        {%- set _ = casti.append(_("Titulky se vypalují do obrazu")) -%}
+    {%- elif fakt.text -%}
+        {%- set _ = casti.append(_("Hardwarově") ~ ": " ~ fakt.text | upper) -%}
+    {%- endif -%}
+{%- endfor -%}
+{{- casti | join(" · ") -}}
+{% endmacro %}
+
+
+{# Značka způsobu doručení. Barva nikdy nestojí sama - vedle je vždy text.
+
+   `tip` je nepovinný popis toho, co se přepočítává. Když je prázdný,
+   bublina se nepřidá vůbec - prázdná bublina po najetí myší mate víc,
+   než kdyby tam nebyla. #}
+{% macro method_badge(method, tip='') %}
 {% if method == 'Transcode' %}
-    <span class="badge serious"><span class="dot"></span>{{ _("transcode") }}</span>
+    <span class="badge serious"{% if tip %} data-tip="{{ tip }}"{% endif %}><span class="dot"></span>{{ _("transcode") }}</span>
 {% elif method == 'DirectStream' %}
     <span class="badge neutral"><span class="dot"></span>{{ _("přebalení") }}</span>
 {% else %}

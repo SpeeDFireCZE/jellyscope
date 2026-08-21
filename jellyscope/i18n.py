@@ -1084,6 +1084,60 @@ EN: dict[str, str] = {
     "Mapa": "Map",
 
     # --- verze a hlidani noveho vydani ------------------------------------
+    "Velikost celkem": "Total size",
+    "všechny knihovny dohromady": "all libraries together",
+    "Přehrávání jsou skrytá – je jich hodně": "Playbacks are hidden – there are many",
+    "Diváci jsou skrytí – je jich hodně": "Viewers are hidden – there are many",
+    "zobrazit všech": "show all",
+    "Zobrazit všechny": "Show all",
+    "Zobrazit všechna": "Show all",
+    "Načíst metadata znovu": "Reload the metadata",
+    "Metadata načtena znovu: {n} dílů": "Metadata reloaded: {n} episodes",
+    "(včetně změření souborů)": "(including measuring the files)",
+    "Obraz": "Video",
+    "Zvuk": "Audio",
+    "beze změny, jen se přebaluje": "unchanged, only repackaged",
+    "přepočítává se": "being re-encoded",
+    "Titulky se vypalují do obrazu": "Subtitles are burned into the picture",
+    "Hardwarově": "Hardware accelerated",
+    "Dlouhé seznamy a mapa": "Long lists and the map",
+    "co karta ukáže rovnou a jak se ovládá mapa":
+        "what a card shows straight away, and how the map is controlled",
+    "Přibližování mapy": "Zooming the map",
+    "Klikáním": "By clicking",
+    "Kolečkem": "With the wheel",
+    "Kliknutím do mapy se přiblíží na to místo, s Altem oddálí; nad mapou jsou i tlačítka + a −. Kolečko mapa vůbec nechytá, takže stránka roluje jako všude jinde.":
+        "Clicking the map zooms in on that spot, Alt-click zooms out, and "
+        "there are + and - buttons above the map. The map ignores the wheel "
+        "entirely, so the page scrolls the same as everywhere else.",
+    "Pohodlnější, ale dokud je kurzor nad mapou, stránka se kolečkem neposune – rolování si mapa vezme pro sebe.":
+        "More comfortable, but while the cursor is over the map the page will "
+        "not scroll - the map takes the wheel for itself.",
+    "Přiblížit": "Zoom in",
+    "Oddálit": "Zoom out",
+    "Celý svět": "The whole world",
+    "Kolečkem přiblížíš, tažením posuneš, dvojklik vrátí celý svět.":
+        "Scroll to zoom, drag to pan, double-click for the whole world.",
+    "Klikáním přiblížíš, tažením posuneš, dvojklik vrátí celý svět.":
+        "Click to zoom, drag to pan, double-click for the whole world.",
+    "Dlouhé seznamy": "Long lists",
+    "kolik položek karta vypíše, než zbytek schová do okna":
+        "how many items a card lists before it folds the rest into a dialog",
+    "Každý další stream (nebo další divák) posouvá zbytek stránky dolů. "
+    "Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. "
+    "Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, "
+    "a ne natvrdo v kódu.":
+        "Every extra stream (or viewer) pushes the rest of the page down. "
+        "Above this count the list hides behind a button and opens in a "
+        "dialog. How much fits on your screen is something you know better "
+        "than the app - which is why this is here and not baked into the code.",
+    "Přehrávání na Přehledu": "Playbacks on the Overview",
+    "Diváků v jazykových statistikách": "Viewers in the language statistics",
+    "Nad tento počet se „Právě se hraje“ schová do okna.":
+        "Above this count „Now playing“ folds into a dialog.",
+    "Nad tento počet se pruhy „Kdo v jakém jazyce sleduje“ schovají do okna.":
+        "Above this count the „Who watches in which language“ bars fold into "
+        "a dialog.",
     "Verze": "Version",
 
     # --- filtr v historii -------------------------------------------------
@@ -1244,6 +1298,8 @@ EN: dict[str, str] = {
         "linked by episode number: {n} records",
     "vráceno ke správným dílům: {n}": "moved back to the right episodes: {n}",
     "sloučeno duplicit: {n}": "duplicates merged: {n}",
+    "vráceno z archivu k živým dílům: {n}":
+        "returned from the archive to live episodes: {n}",
     "sloučeno napříč zdroji importu: {n}": "merged across import sources: {n}",
     "srovnáno názvů podle knihovny: {n}": "names aligned with the library: {n}",
     "Ručně to mačkat nemusíš – totéž dělá úloha „Narovnání dat“ výš, "
@@ -1369,6 +1425,13 @@ LOG_EN: dict[str, str] = {
         'a new version %s is available (running %s)',
     'kontrolu verze se nepodarilo provest: %s':
         'the version check could not be made: %s',
+    'obnoven serial %s: %s dilu':
+        'series %s refreshed: %s episodes',
+    'zapomenuto %s obrazku, ktere uz v Jellyfinu neplati':
+        'forgot %s images that no longer match Jellyfin',
+    'z archivu slouceno: %s -> %s': 'merged from the archive: %s -> %s',
+    'archiv: slouceno %s dilu, ktere v knihovne existuji znovu':
+        'archive: merged %s episodes that exist in the library again',
     'narovnani dat: %s uprav, osirelych zbyva %s':
         'data tidy-up: %s changes, %s orphans remain',
     'dohledani v Jellyfinu se nepovedlo: %s':

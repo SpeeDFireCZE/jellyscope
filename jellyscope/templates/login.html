@@ -1,19 +1,8 @@
+{%- from "_macros.html" import hlava -%}
 <!doctype html>
 <html lang="{{ ui_language | default('cs') }}">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ _("Přihlásit") }} &middot; Jellyscope</title>
-    <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
-    <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
-    <script>
-        (function () {
-            var saved = localStorage.getItem("jellyscope-theme");
-            if (saved === "dark" || saved === "light") {
-                document.documentElement.setAttribute("data-theme", saved);
-            }
-        })();
-    </script>
+    {{ hlava(_("Přihlásit")) }}
 </head>
 <body>
 <div class="login-page">

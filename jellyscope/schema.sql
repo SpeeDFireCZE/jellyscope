@@ -153,6 +153,13 @@ CREATE TABLE IF NOT EXISTS playback (
     language_since            TEXT,
     language_confirmed        INTEGER NOT NULL DEFAULT 0,
 
+    -- Co presne se pri prepoctu deje. Samotne "transcode" totiz nerika
+    -- skoro nic: server muze prepocitavat obraz (drahe), jen zvuk (levne),
+    -- nebo do obrazu vypalovat titulky. Jellyfin to hlasi v TranscodingInfo
+    -- a bez techto sloupcu bychom to museli hadat z kodeku.
+    transcode_video_direct INTEGER,   -- 1 = obraz jde beze zmeny
+    transcode_audio_direct INTEGER,   -- 1 = zvuk jde beze zmeny
+    transcode_hw           TEXT,      -- qsv, nvenc, ... nebo prazdne = procesor
     video_width      INTEGER,
     video_height     INTEGER,
     is_active        INTEGER NOT NULL DEFAULT 1

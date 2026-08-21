@@ -36,8 +36,10 @@
     </div>
     {# Maximum, ne průměr: průměr by špičky zahladil, a právě podle špičky
        se dimenzuje linka. #}
+    {# unit='' schválně: jednotku už nese název série, jinak by v bublině
+       stálo „Mbit/s: 12,4 h“ - hodiny u datového toku nedávají smysl. #}
     {{ charts.area_chart_multi(prubeh, 'popisek',
-           [{'key': 'mbit', 'label': _('Mbit/s'), 'slot': 1}]) | safe }}
+           [{'key': 'mbit', 'label': _('Mbit/s'), 'slot': 1}], unit='') | safe }}
 </div>
 
 <div class="grid-2">
@@ -116,7 +118,28 @@
     </div>
 
     {% if hotspoty %}
-        {{ charts.mapa_sveta(hotspoty) | safe }}
+        {# Ovládání je v HTML nad mapou, ne uvnitř SVG: tlačítko se
+           dá stylovat jako každé jiné a nezvětšuje se s přiblížením.
+           Klikáním i kolečkem se ovládá totéž - který způsob je zapnutý,
+           se vybírá v Nastavení → Rozhraní. #}
+        <div class="mapa-obal">
+            {{ charts.mapa_sveta(hotspoty, mapa_zoom) | safe }}
+            <div class="mapa-ovladani">
+                <button class="btn mapa-tlacitko" type="button" data-mapa="blize"
+                        data-tip="{{ _("Přiblížit") }}" aria-label="{{ _("Přiblížit") }}">+</button>
+                <button class="btn mapa-tlacitko" type="button" data-mapa="dale"
+                        data-tip="{{ _("Oddálit") }}" aria-label="{{ _("Oddálit") }}">&minus;</button>
+                <button class="btn mapa-tlacitko" type="button" data-mapa="zpet"
+                        data-tip="{{ _("Celý svět") }}" aria-label="{{ _("Celý svět") }}">&#8634;</button>
+            </div>
+            <p class="card-note mapa-napoveda">
+                {% if mapa_zoom == 'wheel' %}
+                    {{ _("Kolečkem přiblížíš, tažením posuneš, dvojklik vrátí celý svět.") }}
+                {% else %}
+                    {{ _("Klikáním přiblížíš, tažením posuneš, dvojklik vrátí celý svět.") }}
+                {% endif %}
+            </p>
+        </div>
 
         <div class="table-wrap" style="margin-top:14px">
             <table>
