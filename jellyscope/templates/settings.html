@@ -503,10 +503,16 @@
 <div class="card" id="uklid">
     <div class="card-head">
         <h2>{{ _("Narovnání dat") }}</h2>
-        <p class="card-note">{{ _("srovná historii do pořádku - navázání, duplicity, názvy") }}</p>
+        <p class="card-note">{{ _("srovná historii i archiv knihovny") }}</p>
     </div>
 
+    {# Kdo si mysli, ze je to jen o historii, hleda pak marne, cim srovnat
+       archiv. Rekneme to hned prvni vetou - vrat dilu z archivu je prave
+       ta cast, kvuli ktere se sem clovek casto vraci. #}
     <p class="card-note">
+        {{ _("Kromě historie srovná i knihovnu: díl, jehož soubor se v Jellyfinu vyměnil, se vrátí z archivu k tomu živému i s odsledovaným časem. Samotná synchronizace knihovny tohle nedělá.") }}
+    </p>
+    <p class="card-note" style="margin-top:8px">
         {{ _("Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz – typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.") }}
     </p>
     <p class="card-note" style="margin-top:8px">

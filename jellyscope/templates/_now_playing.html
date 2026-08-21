@@ -12,7 +12,7 @@
 {% macro stream(row) %}
     <div class="session" data-uzivatel="{{ row.user_id or '' }}">
         <a class="session-poster" href="/item/{{ row.item_id }}">
-            <img src="/image/{{ row.poster_id }}?kind=Primary&w=200" alt=""
+            <img src="/image/{{ row.poster_id }}?kind=Primary&w=200{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
                  loading="lazy" onerror="this.style.display='none'">
         </a>
 

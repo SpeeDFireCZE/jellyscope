@@ -801,6 +801,8 @@ def _radek_polozky(item: dict[str, Any], library_id: Any,
         tech.get("default_audio_language"),
         "jellyfin" if tech else None,
         now if tech else None,
+        # Otisk plakatu serialu, ke kteremu dil patri. U filmu prazdny.
+        item.get("SeriesPrimaryImageTag"),
         # Otisk plakatu. Kdyz ho Jellyfin nehlasi, zustane prazdny -
         # obrazek se pak chova jako driv, jen bez rozpoznani zmeny.
         (item.get("ImageTags") or {}).get("Primary"),
@@ -1143,8 +1145,8 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
             date_created, path, tmdb_id, genres, container, video_codec, audio_codec,
             audio_channels, width, height, bitrate, size_bytes, video_range,
             audio_languages, subtitle_languages, default_audio_language,
-            tech_source, tech_updated_at, image_tag, synced_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            tech_source, tech_updated_at, series_image_tag, image_tag, synced_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             type = excluded.type,
@@ -1165,6 +1167,7 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
             tmdb_id = COALESCE(excluded.tmdb_id, items.tmdb_id),
             {tech_update}
             image_tag = excluded.image_tag,
+            series_image_tag = excluded.series_image_tag,
             synced_at = excluded.synced_at,
             is_missing = 0
     """
@@ -1183,18 +1186,27 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
 
 # V radku polozky (viz _radek_polozky) je otisk predposledni a id prvni.
 _SLOUPEC_ID = 0
+_SLOUPEC_SERIAL = 4
+_SLOUPEC_OTISK_SERIALU = -3
 _SLOUPEC_OTISK = -2
 
 
 def _polozky_s_jinym_obrazkem(rows: list[tuple[Any, ...]]) -> list[str]:
-    """Ktere z techto polozek maji jiny obrazek nez posledne.
+    """Ktere obrazky uz neplati - id polozek i id serialu.
 
     Otisk (`ImageTags.Primary`) hlasi Jellyfin u kazde polozky. Kdyz se
     zmeni, znamena to, ze plakat je jiny - typicky proto, ze nekdo
     v Jellyfinu opravil spatne urcenou polozku.
+
+    U serialu je to o krok slozitejsi: polozku pro nej nemame, plakat se
+    ale stahuje pod jeho id. Jellyfin proto u kazde epizody hlasi jeste
+    `SeriesPrimaryImageTag` - otisk plakatu jejiho serialu. Kdyz se
+    zmeni, vracime **id serialu**, at se zahodi i jeho obrazek.
     """
     podle_id = {str(radek[_SLOUPEC_ID]): radek[_SLOUPEC_OTISK]
                 for radek in rows if radek[_SLOUPEC_ID]}
+    serialy = {str(radek[_SLOUPEC_SERIAL]): radek[_SLOUPEC_OTISK_SERIALU]
+               for radek in rows if radek[_SLOUPEC_SERIAL]}
     if not podle_id:
         return []
 
@@ -1211,6 +1223,25 @@ def _polozky_s_jinym_obrazkem(rows: list[tuple[Any, ...]]) -> list[str]:
                 novy_otisk = podle_id.get(str(radek["id"]))
                 if stary_otisk and novy_otisk and stary_otisk != novy_otisk:
                     zmenene.append(str(radek["id"]))
+
+        # Serialy: staci se zeptat jedne epizody z kazdeho - otisk plakatu
+        # serialu maji vsechny stejny.
+        for serial, novy_otisk in serialy.items():
+            if not novy_otisk:
+                continue
+            radek = conn.execute(
+                "SELECT series_image_tag FROM items "
+                " WHERE series_id = ? AND series_image_tag IS NOT NULL LIMIT 1",
+                (serial,)).fetchone()
+            stary_otisk = radek["series_image_tag"] if radek else None
+            # Zadny ulozeny otisk znamena bud serial, ktery jsme jeste
+            # nevideli (a v mezipameti tedy nic nemuze byt), nebo
+            # databazi z doby pred timhle sloupcem - a tam lezi plakat,
+            # o kterem nevime, jestli jeste plati. Presne kvuli nemu
+            # sloupec vznikl, takze ho jednou zahodime; priste uz je
+            # co porovnavat.
+            if stary_otisk != novy_otisk:
+                zmenene.append(serial)
     return zmenene
 
 
@@ -1313,7 +1344,9 @@ def slouc_archiv_do_zivych() -> int:
     dvojici nema podle ceho najit.
 
     Tady se identita bere odjinud - **serial plus cislo rady a dilu**.
-    Ta trojice je v databazi u obou polozek a nic dalsiho nepotrebuje.
+    Serial se pozna podle id, a kdyz to nesedi, podle jmena: kdyz nekdo
+    v Jellyfinu smaze a znovu prida cely adresar serialu, dostanou dily
+    nova series_id a podle nich by se stara polozka nenasla nikdy.
     Slucuje se jen archivovana polozka do zive, nikdy naopak: archivovana
     v Jellyfinu prokazatelne neni, takze o nic neprijdeme. Kdyz je zivych
     kopii vic (4K i 1080p vedle sebe), historie pripadne te odsledovanejsi.
@@ -1327,10 +1360,18 @@ def slouc_archiv_do_zivych() -> int:
     # Dva dotazy a parovani v Pythonu, ne jeden vnoreny dotaz: v SQL by
     # to byl poddotaz s vlastnim GROUP BY uvnitr, a takovy se cte hur,
     # nez kolik usetri.
-    zive: dict[tuple[str, int, int], tuple[str, float]] = {}
+    #
+    # Zive dily si vedeme pod dvema klici zaroven:
+    #   podle id serialu   - normalni pripad, vymenil se soubor jednoho dilu,
+    #   podle nazvu serialu - kdyz Jellyfin zalozil cely serial znovu
+    #                         (smazany a znovu pridany adresar), takze dily
+    #                         maji jine series_id a podle nej by se nenasly.
+    zive: dict[tuple[str, int, int], tuple[str, float, Any]] = {}
+    podle_nazvu: dict[tuple[str, int, int], tuple[str, float, Any]] = {}
     for radek in db.query_all(
         """
-        SELECT i.id, i.series_id, i.parent_index_number, i.index_number,
+        SELECT i.id, i.series_id, i.series_name, i.tmdb_id,
+               i.parent_index_number, i.index_number,
                COALESCE(SUM(p.watched_seconds), 0) AS videno
           FROM items i
      LEFT JOIN playback p ON p.item_id = i.id
@@ -1338,32 +1379,63 @@ def slouc_archiv_do_zivych() -> int:
            AND i.series_id IS NOT NULL
            AND i.parent_index_number IS NOT NULL
            AND i.index_number IS NOT NULL
-      GROUP BY i.id, i.series_id, i.parent_index_number, i.index_number
+      GROUP BY i.id, i.series_id, i.series_name, i.tmdb_id,
+               i.parent_index_number, i.index_number
         """
     ):
-        klic = (str(radek["series_id"]), int(radek["parent_index_number"]),
-                int(radek["index_number"]))
+        rada, dil = int(radek["parent_index_number"]), int(radek["index_number"])
         videno = float(radek["videno"] or 0)
         # Kdyz je zivych kopii vic (4K i 1080p vedle sebe), bere se ta
         # odsledovanejsi - o tu prijit nechceme.
-        if klic not in zive or videno > zive[klic][1]:
-            zive[klic] = (str(radek["id"]), videno)
+        for kam, klic in (
+            (zive, (str(radek["series_id"]), rada, dil)),
+            (podle_nazvu, (str(radek["series_name"] or "").strip().lower(), rada, dil)),
+        ):
+            if not klic[0]:
+                continue
+            if klic not in kam or videno > kam[klic][1]:
+                kam[klic] = (str(radek["id"]), videno, radek["tmdb_id"])
+
+    # Serialy, ktere pod svym id porad zijou. Jejich archivovane dily
+    # se podle jmena parovat NESMI: kdyz serial v Jellyfinu je a jeden
+    # jeho dil chybi, pak ten dil opravdu chybi - a shoda jmena by
+    # historii poslala k nekomu jinemu (dva serialy se muzou jmenovat
+    # stejne).
+    zive_serialy = {
+        str(radek["series_id"]) for radek in db.query_all(
+            "SELECT DISTINCT series_id FROM items "
+            " WHERE is_missing = 0 AND series_id IS NOT NULL")
+    }
 
     pary: list[tuple[str, str]] = []
     for radek in db.query_all(
         """
-        SELECT id, series_id, parent_index_number, index_number
+        SELECT id, series_id, series_name, tmdb_id,
+               parent_index_number, index_number
           FROM items
          WHERE is_missing = 1
-           AND series_id IS NOT NULL
            AND parent_index_number IS NOT NULL
            AND index_number IS NOT NULL
         """
     ):
-        klic = (str(radek["series_id"]), int(radek["parent_index_number"]),
-                int(radek["index_number"]))
-        nalezeny = zive.get(klic)
-        if nalezeny:
+        rada, dil = int(radek["parent_index_number"]), int(radek["index_number"])
+        serial = str(radek["series_id"] or "")
+        # Nejdriv podle id serialu; teprve kdyz serial pod tim id uz vubec
+        # neexistuje, zkusime jmeno. Poradi je dulezite: id je jistota,
+        # jmeno je jenom shoda.
+        nalezeny = zive.get((serial, rada, dil))
+        if not nalezeny and serial not in zive_serialy:
+            kandidat = podle_nazvu.get(
+                (str(radek["series_name"] or "").strip().lower(), rada, dil))
+            # Kdyz obe strany znaji tmdb_id a lisi se, je to prokazatelne
+            # jiny serial - tim se odlisi "Kancelar (US)" od "Kancelar (UK)".
+            # Kdyz ho jedna z nich nema, rozhoduje jmeno a cislo dilu;
+            # nic lepsiho o tech zaznamech nevime.
+            stare_tmdb, nove_tmdb = radek["tmdb_id"], (kandidat or (None,) * 3)[2]
+            if kandidat and not (stare_tmdb and nove_tmdb
+                                 and str(stare_tmdb) != str(nove_tmdb)):
+                nalezeny = kandidat
+        if nalezeny and nalezeny[0] != str(radek["id"]):
             pary.append((str(radek["id"]), nalezeny[0]))
 
     if not pary:

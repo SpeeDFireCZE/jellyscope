@@ -33,7 +33,7 @@ os.environ["JELLYSCOPE_HOME"] = _tmp
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "obrazky.db")
 os.environ["SECRET_KEY"] = "testovaci-klic"
 
-from jellyscope import accounts, config, db, scanner  # noqa: E402
+from jellyscope import accounts, config, db, scanner, stats  # noqa: E402
 
 failures = 0
 
@@ -100,6 +100,53 @@ check((MEZIPAMET / "film-1-Primary-400.img").is_file(),
 # Jinak by každá synchronizace zahodila celou mezipaměť a Jellyfin by
 # musel poslat všechny plakáty znovu.
 
+
+print()
+print("--- plakát seriálu má vlastní otisk ---")
+# Položku pro seriál si nevedeme (v `items` jsou díly), takže u jeho
+# plakátu nebylo co porovnávat - jednou stažený obrázek tam zůstal
+# navždy. Jellyfin hlásí u každé epizody `SeriesPrimaryImageTag`, tedy
+# otisk plakátu jejího seriálu.
+def dil(item_id: str, otisk_serialu: str | None) -> dict:
+    zaznam = {"Id": item_id, "Name": "1. dil", "Type": "Episode",
+              "SeriesId": "serial-1", "SeriesName": "Kancelar",
+              "ParentIndexNumber": 1, "IndexNumber": 1,
+              "Path": "/media/kancelar/s01e01.mkv"}
+    if otisk_serialu:
+        zaznam["SeriesPrimaryImageTag"] = otisk_serialu
+    return zaznam
+
+
+def zapis_dil(item_id: str, otisk_serialu: str | None) -> None:
+    scanner._write_items(
+        [scanner._radek_polozky(dil(item_id, otisk_serialu), "lib", {}, db.utcnow())],
+        keep_existing_tech=True)
+
+
+# Plakát, který v mezipaměti leží z doby, kdy se otisk seriálu ještě
+# neukládal. Nevíme o něm, jestli platí - a právě kvůli němu ten sloupec
+# vznikl, takže při prvním naplnění musí zmizet.
+(MEZIPAMET / "serial-1-Primary-400.img").write_bytes(b"plakat z doby pred otiskem")
+zapis_dil("dil-1", "serialA")
+check(db.query_value(
+    "SELECT series_image_tag FROM items WHERE id = 'dil-1'") == "serialA",
+    "otisk plakátu seriálu se ukládá k dílu")
+check(not (MEZIPAMET / "serial-1-Primary-400.img").exists(),
+      "a starý plakát bez otisku se při prvním naplnění zahodí")
+
+(MEZIPAMET / "serial-1-Primary-400.img").write_bytes(b"stary plakat serialu")
+zapis_dil("dil-1", "serialB")   # v Jellyfinu někdo plakát seriálu opravil
+check(not (MEZIPAMET / "serial-1-Primary-400.img").exists(),
+      "po změně otisku se plakát seriálu zapomene")
+
+(MEZIPAMET / "serial-1-Primary-400.img").write_bytes(b"novy plakat")
+zapis_dil("dil-1", "serialB")
+check((MEZIPAMET / "serial-1-Primary-400.img").is_file(),
+      "beze změny se nechává být")
+
+serial = stats.series_detail("serial-1")
+check(serial.get("image_tag") == "serialB",
+      f"a jde do adresy obrázku ({serial.get('image_tag')})")
 
 print()
 print("--- otisk je součástí adresy obrázku ---")

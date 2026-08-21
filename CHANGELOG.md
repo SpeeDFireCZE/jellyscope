@@ -6,6 +6,36 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.1.1
+
+### Fixed
+
+- **A series poster could not be refreshed.** The image cache decides what
+  is stale from Jellyfin's `ImageTags` fingerprint, which is stored with the
+  item — but a series has no item of its own; only its episodes do, while the
+  poster is fetched under the series id. Nothing ever fingerprinted it, so a
+  poster corrected in Jellyfin never reached the screen and a library scan
+  changed nothing. Jellyfin reports `SeriesPrimaryImageTag` on every episode,
+  and that is now stored with it: a changed fingerprint drops the cached
+  files, and it travels in the image URL as well, so the browser cannot serve
+  its own copy from before either. The first sync after this upgrade drops the
+  cached series posters once — which is what repairs the ones that are stale
+  today.
+- **The archive did not merge when a whole series was added to Jellyfin
+  again.** Archived episodes are matched to their live twin by series id plus
+  season and episode number. Delete and re-add the series' folder and every
+  episode gets a new series id, so the old rows never find their twin and stay
+  in the archive for good. The series name now serves as a fallback — but only
+  when nothing live is left under the old series id, and never when both sides
+  know a `tmdb_id` and the two differ. Two series can share a name.
+
+### Changed
+
+- **"Straighten the data" says what it actually does.** Its description
+  promised only the history, so nobody expected it to be the thing that brings
+  episodes back from the archive — and a library sync, which is what people
+  reach for instead, does not do it.
+
 ## 1.1.0
 
 ### Added

@@ -176,6 +176,8 @@ def active_sessions() -> list[dict[str, Any]]:
                COALESCE(p.video_width,  i.width)  AS width,
                i.video_codec  AS source_codec,
                i.audio_codec  AS source_audio_codec,
+               i.image_tag,
+               i.series_image_tag,
                i.series_id,
                i.season_name,
                i.index_number,
@@ -205,8 +207,11 @@ def active_sessions() -> list[dict[str, Any]]:
             round(min(100.0, position / runtime * 100), 1)
             if runtime and position else None
         )
-        # U epizody chceme plakat serialu, ne snimek z dilu.
+        # U epizody chceme plakat serialu, ne snimek z dilu - a k nemu
+        # otisk toho spravneho plakatu, at se pri zmene neservíruje stary.
         row["poster_id"] = row.get("series_id") or row.get("item_id")
+        row["poster_tag"] = (row.get("series_image_tag")
+                             if row.get("series_id") else row.get("image_tag"))
         # Co presne se prepocitava - do bubliny u znacky "transcode".
         row["prepocet"] = popis_prepoctu(row)
 
@@ -226,6 +231,7 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
         SELECT i.id, i.name, i.type, i.series_id, i.series_name,
                i.production_year, i.date_created, i.height, i.size_bytes,
                i.library_id, i.parent_index_number, i.index_number,
+               i.image_tag, i.series_image_tag,
                l.name AS library_name
         FROM items i
         LEFT JOIN libraries l ON l.id = i.library_id
@@ -271,6 +277,11 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
             # Odkaz vede na konkretni polozku - u serialu na tu nejnovejsi
             # epizodu, coz je presne to, co uzivatele zajima.
             "poster_id": nejnovejsi["series_id"] or nejnovejsi["id"],
+            # Otisk toho plakatu. Bez nej drzi prohlizec starou verzi
+            # obrazku i po tom, co ji smazeme z mezipameti - adresa je
+            # totiz porad tatáž.
+            "poster_tag": (nejnovejsi["series_image_tag"] if nejnovejsi["series_id"]
+                           else nejnovejsi["image_tag"]),
             "is_episode": is_episode,
             # Ostatni dily te davky. Kdyz prisel jen jeden, seznam je
             # prazdny a karta se chova jako driv - proklik rovnou na nej.
@@ -1573,6 +1584,10 @@ def series_detail(series_id: str) -> dict[str, Any]:
     return {
         "id": series_id,
         "name": prvni["series_name"] or prvni["name"],
+        # Otisk plakatu serialu. Jde do adresy obrazku, takze po zmene
+        # plakatu v Jellyfinu se nacte nova adresa - a prohlizec nemuze
+        # podstrcit tu svou uschovanou kopii.
+        "image_tag": prvni["series_image_tag"],
         "library_id": prvni["library_id"],
         "seasons": rady,
         "episode_count": len(dily),

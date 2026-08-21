@@ -210,10 +210,11 @@ TASKS: dict[str, Task] = {
             key="tidy",
             name="Narovnání dat",
             description=(
-                "Srovná historii do pořádku: dohledá v Jellyfinu záznamy, "
-                "ke kterým v knihovně nic nevede, naváže je podle názvu "
-                "a čísla dílu, sloučí duplicity a srovná názvy podle "
-                "knihovny. Nic nemaže - jen opravuje vazby."
+                "Srovná historii i knihovnu: dohledá v Jellyfinu záznamy, "
+                "ke kterým nic nevede, naváže je podle názvu a čísla dílu, "
+                "sloučí duplicity, srovná názvy - a vrátí z archivu díly, "
+                "které v knihovně zase jsou (typicky po výměně souboru). "
+                "Nic nemaže - jen opravuje vazby."
             ),
             time_setting="task_tidy_time",
             default_time="04:00",

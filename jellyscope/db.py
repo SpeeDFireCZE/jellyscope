@@ -545,6 +545,11 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # jiny otisk, takze podle nej pozname, ze uz je v mezipameti
         # neplatny. Viz web.item_image() a scanner._zapomen_obrazky().
         "image_tag": "TEXT",
+        # Otisk plakatu SERIALU (Jellyfin ho hlasi u kazde epizody jako
+        # SeriesPrimaryImageTag). Polozku pro serial nemame, takze bez
+        # nej nebylo u jeho plakatu co porovnat - a jednou stazeny
+        # obrazek tam zustal navzdy.
+        "series_image_tag": "TEXT",
         "audio_languages": "TEXT",
         "subtitle_languages": "TEXT",
         "default_audio_language": "TEXT",

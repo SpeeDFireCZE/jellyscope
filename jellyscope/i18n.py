@@ -1284,8 +1284,10 @@ EN: dict[str, str] = {
         "Save the settings and restart. The app connects to it and the data "
         "stays where it is.",
     "Narovnat data": "Tidy the data",
-    "srovná historii do pořádku - navázání, duplicity, názvy":
-        "puts the history straight - linking, duplicates, names",
+    "srovná historii i archiv knihovny":
+        "puts the history and the library archive straight",
+    "Kromě historie srovná i knihovnu: díl, jehož soubor se v Jellyfinu vyměnil, se vrátí z archivu k tomu živému i s odsledovaným časem. Samotná synchronizace knihovny tohle nedělá.":
+        "It straightens the library as well as the history: an episode whose file was replaced in Jellyfin comes back from the archive to the live one, watched time and all. A library sync on its own does not do this.",
     "Narovnání dat: {co}": "Data tidy-up: {co}",
     "Nebylo co narovnávat, historie je v pořádku.":
         "There was nothing to tidy, the history is in order.",
@@ -1306,13 +1308,16 @@ EN: dict[str, str] = {
     "každý den ve zvolený čas.":
         "You do not have to press this – the „Data tidy-up“ task above does "
         "the same thing every day at the time you pick.",
-    "Srovná historii do pořádku: dohledá v Jellyfinu záznamy, ke kterým "
-    "v knihovně nic nevede, naváže je podle názvu a čísla dílu, sloučí "
-    "duplicity a srovná názvy podle knihovny. Nic nemaže - jen opravuje vazby.":
-        "Puts the history straight: asks Jellyfin about records that lead "
-        "nowhere in the library, links them by name and episode number, "
-        "merges duplicates and aligns names with the library. It deletes "
-        "nothing - it only repairs the links.",
+    "Srovná historii i knihovnu: dohledá v Jellyfinu záznamy, ke kterým "
+    "nic nevede, naváže je podle názvu a čísla dílu, sloučí duplicity, "
+    "srovná názvy - a vrátí z archivu díly, které v knihovně zase jsou "
+    "(typicky po výměně souboru). Nic nemaže - jen opravuje vazby.":
+        "Puts both the history and the library straight: asks Jellyfin "
+        "about records that lead nowhere, links them by name and episode "
+        "number, merges duplicates, aligns names - and brings back from "
+        "the archive the episodes that are in the library again (typically "
+        "after a file was replaced). It deletes nothing - it only repairs "
+        "the links.",
     "nic k opravě, historie je v pořádku.":
         "nothing to fix, the history is in order.",
     "Není co dohledávat - osiřelé záznamy tu nejsou.":

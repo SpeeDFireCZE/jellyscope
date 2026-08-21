@@ -53,13 +53,14 @@ def zapis(sql: str, params: tuple = ()) -> None:
 
 
 def polozka(item_id: str, rada, dil, chybi: int, jmeno: str,
-            tmdb: str | None = None, serial: str | None = "serial-1") -> None:
+            tmdb: str | None = None, serial: str | None = "serial-1",
+            nazev_serialu: str = "Kancelar") -> None:
     zapis(
         """INSERT INTO items (id, name, type, series_id, series_name,
                               parent_index_number, index_number, library_id,
                               is_missing, tmdb_id)
-           VALUES (?,?,'Episode',?,'Kancelar',?,?,'lib-tv',?,?)""",
-        (item_id, jmeno, serial, rada, dil, chybi, tmdb),
+           VALUES (?,?,'Episode',?,?,?,?,'lib-tv',?,?)""",
+        (item_id, jmeno, serial, nazev_serialu, rada, dil, chybi, tmdb),
     )
 
 
@@ -84,7 +85,8 @@ polozka("stary-s4e4-b", 4, 4, 1, "Karamboly s karambity")
 # Díl, který v Jellyfinu opravdu už není - ten v archivu zůstat MÁ.
 polozka("stary-s4e9", 4, 9, 1, "Posledni dil")
 # A díl z jiného seriálu se stejnými čísly. Nesmí se do toho připlést.
-polozka("cizi-s4e4", 4, 4, 1, "Uplne jiny serial", serial="serial-2")
+polozka("cizi-s4e4", 4, 4, 1, "Uplne jiny serial", serial="serial-2",
+        nazev_serialu="Uplne jiny serial")
 
 prehrani("stary-s4e4-a", 1200, "sess-a")
 prehrani("stary-s4e4-b", 300, "sess-b")
@@ -115,6 +117,44 @@ check(sekundy == 1500, f"obě přehrávání sedí na novém dílu ({sekundy})")
 check(db.query_value(
     "SELECT COUNT(*) FROM playback WHERE item_id IN ('stary-s4e4-a','stary-s4e4-b')") == 0,
     "a na starých položkách už nic nevisí")
+
+print()
+print("--- seriál, který dostal v Jellyfinu nové id ---")
+# Někdo v Jellyfinu smazal a znovu přidal celý adresář seriálu. Díly mají
+# nová series_id, takže podle nich se stará položka nenajde nikdy -
+# páruje se proto i podle jména seriálu.
+polozka("stary-jiny-id", 1, 1, 1, "Prvni dil", serial="serial-9",
+        nazev_serialu="Pratele")
+polozka("novy-jiny-id", 1, 1, 0, "Prvni dil", serial="serial-10",
+        nazev_serialu="Pratele")
+prehrani("stary-jiny-id", 600, "sess-c")
+
+check(scanner.slouc_archiv_do_zivych() == 1, "spojí se i přes jiné id seriálu")
+check(db.query_value(
+    "SELECT SUM(watched_seconds) FROM playback WHERE item_id = 'novy-jiny-id'") == 600,
+    "a historie jde s ním")
+
+print()
+print("--- ale ne, když ten seriál pořád existuje ---")
+# Živý seriál, kterému chybí jeden díl. Ten díl opravdu chybí - a shoda
+# jména by jeho historii poslala k cizímu seriálu téhož jména.
+polozka("zivy-jinde", 2, 2, 0, "Dvojka", serial="serial-11",
+        nazev_serialu="Duna")
+polozka("zivy-jinde-b", 2, 3, 0, "Trojka", serial="serial-11",
+        nazev_serialu="Duna")
+polozka("chybi-dil", 2, 2, 1, "Dvojka", serial="serial-11",
+        nazev_serialu="Duna")
+check(scanner.slouc_archiv_do_zivych() == 1,
+      "díl, který má živého dvojníka pod týmž seriálem, se spojí")
+
+# Dva seriály téhož jména (Kancelář US vs. UK). Jméno i čísla sedí,
+# ale tmdb_id se liší - to je důkaz, že jde o jiný pořad.
+polozka("cizi-stejny-nazev", 5, 5, 1, "Pátý", tmdb="111", serial="serial-12",
+        nazev_serialu="Duna")
+polozka("duna-5-5", 5, 5, 0, "Pátý", tmdb="222", serial="serial-11",
+        nazev_serialu="Duna")
+check(scanner.slouc_archiv_do_zivych() == 0,
+      "ale seriál s jiným tmdb_id se nespojí, i když se jmenuje stejně")
 
 print()
 print("--- druhé spuštění nemá co dělat ---")

@@ -25,7 +25,7 @@
            dílů by vypadl mimo rámeček. Proklik na seriál obstará název pod
            plakátem, jednotlivé díly ten seznam. #}
         <div class="poster-frame">
-            <img src="/image/{{ row.poster_id }}?kind=Primary&w=300" alt=""
+            <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
                  loading="lazy" onerror="this.style.display='none'">
             {# Místo "epizoda" rovnou počet - ať je na první pohled vidět,
                že přišla celá dávka. Čeština chce jiný tvar pro 2-4 a jiný
@@ -52,7 +52,7 @@
         </div>
         {% else %}
         <a class="poster-frame" href="/item/{{ row.id }}">
-            <img src="/image/{{ row.poster_id }}?kind=Primary&w=300" alt=""
+            <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
                  loading="lazy" onerror="this.style.display='none'">
             {% if row.is_episode %}
                 <span class="poster-badge">{{ _("epizoda") }}</span>
