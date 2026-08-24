@@ -2069,10 +2069,77 @@ async def settings_update(request: Request,
         _flash(request, vysledek.get("message", "Aktualizace se nepovedla."), "error")
         return RedirectResponse("/settings?section=general", status_code=303)
 
-    _flash(request, "Nová verze stažená. Aplikace se restartuje a stránka "
-                    "se sama obnoví.", "success")
     _naplanuj_restart()
-    return RedirectResponse("/?wait=restart", status_code=303)
+    # Zamerne NE presmerovani na stranku aplikace.
+    #
+    # Sablony se ctou ze souboru pri kazdem pozadavku, kod aplikace bydli
+    # v pameti procesu. Mezi stazenim a restartem tedy bezi STARY KOD nad
+    # NOVYMI SABLONAMI - a jakmile nova sablona chce promennou, o ktere
+    # stary kod nevi, skonci to chybou. Presne tohle delalo po aktualizaci
+    # z prohlizece "Internal Server Error".
+    #
+    # Tahle stranka je slozena tady v Pythonu: zadna sablona, zadny
+    # kontext, nic, co by se mohlo rozejit. Pocka na novy proces a teprve
+    # pak pusti cloveka dal.
+    return HTMLResponse(_stranka_aktualizace())
+
+
+def _stranka_aktualizace() -> str:
+    """Čekárna na restart po aktualizaci - bez šablony, schválně.
+
+    Je to jediná stránka, kterou musí vykreslit **stará** verze aplikace
+    v okamžiku, kdy na disku už leží nová. Proto nesmí sáhnout na nic,
+    co se s verzí mění: ani na šablonu, ani na styl, ani na kontext.
+    """
+    nadpis = i18n.translate("Aktualizuji…")
+    popis = i18n.translate("Nová verze je stažená. Aplikace se teď "
+                           "restartuje - jakmile bude nahoře, pustím tě dál.")
+    return f"""<!doctype html>
+<html lang="{i18n.current_language()}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{nadpis} &middot; Jellyscope</title>
+<style>
+  body {{ margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #131312; color: #eceae4; font-size: 15px;
+         font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }}
+  .box {{ max-width: 420px; padding: 28px 30px; border-radius: 14px;
+          border: 1px solid rgba(255,255,255,.10); background: #1b1b1a;
+          box-shadow: 0 24px 60px rgb(0 0 0 / 45%); text-align: center; }}
+  h1 {{ font-size: 19px; margin: 0 0 10px; }}
+  p  {{ color: #b6b4ac; line-height: 1.5; margin: 0; }}
+  .tecka {{ display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+            background: #3987e5; margin-bottom: 14px;
+            animation: tep 1.4s ease-in-out infinite; }}
+  @keyframes tep {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: .25; }} }}
+  @media (prefers-reduced-motion: reduce) {{ .tecka {{ animation: none; }} }}
+</style>
+</head>
+<body>
+<div class="box">
+  <span class="tecka"></span>
+  <h1>{nadpis}</h1>
+  <p>{popis}</p>
+</div>
+<script>
+  // Ptáme se na /health, dokud neodpoví nový proces - pozná se podle
+  // `started_at`, které se výměnou procesu změní. Teprve pak stránku
+  // pustíme dál; do té doby by ji kreslila stará verze nad novými
+  // šablonami, což je právě to, čemu se tady vyhýbáme.
+  var puvodni = null;
+  setInterval(function () {{
+    fetch("/health", {{ cache: "no-store", credentials: "same-origin" }})
+      .then(function (r) {{ return r.json(); }})
+      .then(function (data) {{
+        if (puvodni === null) {{ puvodni = data.started_at; return; }}
+        if (data.started_at !== puvodni) {{ location.href = "/"; }}
+      }})
+      .catch(function () {{ /* zrovna se restartuje, zkusíme to znovu */ }});
+  }}, 2000);
+</script>
+</body>
+</html>"""
 
 
 @app.post("/settings/restart")

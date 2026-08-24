@@ -140,20 +140,44 @@ def stav() -> dict[str, Any]:
         "kontrolovano": db.get_setting(POSLEDNI_KONTROLA, ""),
         "je_novejsi": bool(nalezena) and je_novejsi(nalezena, __version__),
         "poznamky": poznamky_html(db.get_setting(NALEZENE_POZNAMKY, "")),
-        # Aktualizovat z prohlizece jde jen tam, kde je z ceho: slozka
-        # musi byt git repozitar. Kdo si aplikaci rozbalil ze zipu, uvidi
-        # jen odkaz na vydani.
+        # Aktualizovat z prohlizece jde jen tam, kde je z ceho a kde to
+        # dava smysl. Kdyz ne, misto tlacitka se rekne proc - viz
+        # duvod_bez_aktualizace().
         "lze_aktualizovat": lze_aktualizovat(),
+        "duvod_bez_aktualizace": duvod_bez_aktualizace(),
     }
 
 
 def lze_aktualizovat() -> bool:
     """Da se aktualizovat rovnou z aplikace?"""
+    return duvod_bez_aktualizace() == ""
+
+
+def duvod_bez_aktualizace() -> str:
+    """Proc aktualizace z prohlizece nejde. Prazdne = jde.
+
+    Vraci hotovou vetu, protoze "nejde to" bez duvodu posle cloveka
+    hledat chybu u sebe. Kazdy z techto pripadu ma jinou spravnou
+    odpoved, a ta se ma rict rovnou.
+    """
     from .config import load_config
 
-    if load_config().demo_mode:
-        return False
-    return (KOREN / ".git").is_dir()
+    config = load_config()
+    if config.demo_mode:
+        return "Tohle je ukázka – aktualizovat se v ní nedá."
+
+    # V kontejneru by `git pull` sice mohl projit (kdyz si nekdo postavil
+    # obraz i s .git), jenze zmena by zila jen do dalsiho prestaveni
+    # obrazu - a pak by se tise vratila stara verze. To je horsi nez
+    # tlacitko, ktere nefunguje: vypada to, ze je hotovo.
+    if config.in_docker:
+        return ("V kontejneru se aktualizuje přestavěním obrazu: "
+                "git pull && docker compose up -d --build")
+
+    if not (KOREN / ".git").is_dir():
+        return ("Aktualizovat z prohlížeče jde jen tam, kde je aplikace "
+                "stažená z gitu. Jinak platí deploy/update.sh.")
+    return ""
 
 
 def poznamky_html(text: str) -> str:
@@ -219,10 +243,9 @@ async def aktualizuj() -> dict[str, Any]:
     Kdyz jsou ve slozce vlastni upravy, aktualizace se NEDELA - `git pull`
     by je bud prepsal, nebo skoncil konfliktem uprostred. Radeji to rekneme.
     """
-    if not lze_aktualizovat():
-        return {"status": "error",
-                "message": "Aktualizovat z prohlížeče jde jen tam, kde je "
-                           "aplikace stažená z gitu."}
+    duvod = duvod_bez_aktualizace()
+    if duvod:
+        return {"status": "error", "message": duvod}
 
     zmeny = await _git("diff", "--quiet")
     if zmeny["kod"] != 0:

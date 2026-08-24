@@ -109,6 +109,56 @@ with TestClient(app) as client:
           "nic se přitom nespustilo")
 
 print()
+print("--- kde aktualizovat nejde a proč ---")
+# "Nejde to" bez důvodu pošle člověka hledat chybu u sebe. Každý z těch
+# případů má jinou správnou odpověď, tak ji řekneme rovnou.
+from jellyscope import config  # noqa: E402
+
+os.environ["JELLYSCOPE_DOCKER"] = "1"
+config.load_config(reload=True)
+check(updates.lze_aktualizovat() is False, "v kontejneru se z prohlížeče neaktualizuje")
+duvod = updates.duvod_bez_aktualizace()
+check("docker compose" in duvod, f"a řekne se, čím místo toho ({duvod})")
+
+import asyncio  # noqa: E402
+
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "error" and "docker compose" in vysledek["message"],
+      "pokus o update skončí hláškou, ne chybou")
+check(updates.stav()["duvod_bez_aktualizace"] == duvod,
+      "a šablona ten důvod dostane")
+os.environ.pop("JELLYSCOPE_DOCKER")
+config.load_config(reload=True)
+check(updates.duvod_bez_aktualizace() == "", "mimo kontejner nic nebrání")
+
+print()
+print("--- čekárna po aktualizaci ---")
+# Šablony se čtou ze souboru při každém požadavku, kód aplikace bydlí
+# v paměti procesu. Mezi `git pull` a restartem tedy běží STARÝ KÓD nad
+# NOVÝMI ŠABLONAMI - a nová šablona, která chce proměnnou, o které starý
+# kód neví, spadne na Internal Server Error. Přesně to dělalo
+# přesměrování na /?wait=restart.
+#
+# Odpověď na aktualizaci je proto stránka složená v Pythonu: žádná
+# šablona, žádný kontext, nic, co by se s verzí mohlo rozejít.
+from jellyscope import web  # noqa: E402
+
+cekarna = web._stranka_aktualizace()
+check("<!doctype html>" in cekarna.lower(), "je to celá stránka")
+check("{{" not in cekarna and "{%" not in cekarna,
+      "žádná šablona - nic, co by starý kód nedokázal vykreslit")
+check("/health" in cekarna and "started_at" in cekarna,
+      "čeká na nový proces podle /health")
+check("location.href" in cekarna, "a pak pustí člověka dál")
+
+zdroj = (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8")
+routa = zdroj[zdroj.index("async def settings_update"):]
+routa = routa[:routa.index("def _stranka_aktualizace")]
+check("wait=restart" not in routa,
+      "routa už nepřesměrovává na stránku aplikace")
+check("_naplanuj_restart()" in routa, "ale restart pořád naplánuje")
+
+print()
 print("--- v ukázkovém režimu se neaktualizuje ---")
 # Ukázka běží z git složky, ale aktualizovat cizí instalaci by bylo
 # překvapení - v demu se nesahá na nic.

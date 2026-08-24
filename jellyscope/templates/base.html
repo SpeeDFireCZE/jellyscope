@@ -199,8 +199,10 @@
             </span>
         </form>
         {% else %}
+        {# Ne "tlačítko tu není", ale proč: každý z těch případů má jinou
+           správnou odpověď a ta se má říct rovnou. #}
         <p class="card-note" style="margin-top:16px">
-            {{ _("Aktualizovat z prohlížeče jde jen tam, kde je aplikace stažená z gitu. Jinak platí deploy/update.sh.") }}
+            {{ _(verze.duvod_bez_aktualizace) }}
         </p>
         {% endif %}
     {% endif %}
@@ -419,6 +421,13 @@
             vykresli();
         }
 
+        // Odchytáváme v zachycovací fázi (`true`), ne při probublávání.
+        //
+        // Šipky měsíců překreslují obsah panelu, takže než by kliknutí
+        // probublalo sem, tlačítko, na které se kliklo, už v dokumentu
+        // není - a `closest(".kalendar")` na odpojeném uzlu vrátí null.
+        // Kalendář to vyhodnotil jako kliknutí mimo sebe a zavřel se:
+        // měsíce tím nešly přepínat vůbec.
         document.addEventListener("click", function (event) {
             var vstup = event.target.closest("input[data-kalendar]");
             if (vstup) {
@@ -426,7 +435,7 @@
                 return;
             }
             if (panel && !event.target.closest(".kalendar")) { zavri(); }
-        });
+        }, true);
 
         document.addEventListener("keydown", function (event) {
             if (event.key === "Escape" && panel) { zavri(); }

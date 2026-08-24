@@ -1159,6 +1159,13 @@ EN: dict[str, str] = {
     "přihlas se jako": "sign in as",
     "Data jsou vymyšlená a nic se v nich nemění.":
         "The data is made up and nothing in it changes.",
+    "Tohle je ukázka – aktualizovat se v ní nedá.":
+        "This is a demo - it cannot be updated.",
+    "V kontejneru se aktualizuje přestavěním obrazu: git pull && docker compose up -d --build":
+        "In a container the update is a rebuild: git pull && docker compose up -d --build",
+    "Aktualizuji…": "Updating…",
+    "Nová verze je stažená. Aplikace se teď restartuje - jakmile bude nahoře, pustím tě dál.":
+        "The new version is downloaded. The app is restarting now - the moment it is up, you will be let through.",
     "Nová verze": "New version",
     "máš": "you have",
     "co je nového": "what is new",

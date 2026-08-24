@@ -6,6 +6,36 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.3
+
+### Fixed
+
+- **Updating from the browser ended on Internal Server Error.** Templates are
+  read from disk on every request while the code lives in the process's
+  memory, so between the pull and the restart there is a moment of *old code
+  over new templates* — and the redirect to `/?wait=restart` had to be rendered
+  in exactly that moment. It is the trap `deploy/update.sh` has warned about in
+  prose for months. The update now answers with a page assembled in Python: no
+  template, no context, nothing that can drift with a version. It waits for the
+  new process (`started_at` from `/health`) and only then lets you through.
+- **The month arrows in the calendar closed it instead of moving.** Redrawing
+  the panel removes the button that was just clicked, so by the time the click
+  bubbled up to the "clicked outside" handler, `closest()` ran on a detached
+  node and returned null — the calendar decided the click was somewhere else
+  and shut. It is watched in the capture phase now, where the button is still
+  in the document.
+
+### Changed
+
+- **In a container, the update button says what to do instead.** It never threw
+  — the button is not rendered, since `.git` is not in the image — but the note
+  beside it read "only where the app came from git", which is true and useless.
+  The refusal now carries a reason, and in a container the reason is the answer:
+  `git pull && docker compose up -d --build`. A container is refused even when
+  `.git` did make it into the image: the pull would succeed, live until the next
+  rebuild and then quietly revert, and a button that works and then undoes
+  itself is worse than one that does not work.
+
 ## 1.2.2
 
 ### Added

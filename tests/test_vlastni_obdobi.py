@@ -140,6 +140,17 @@ with TestClient(app) as client:
     check('id="okno-obdobi"' in stranka, "okno pro vlastní období je na stránce")
     check(stranka.count("data-kalendar") >= 2,
           "obě pole mají našeptávač s kalendářem")
+    # Šipky měsíců překreslují obsah panelu, takže než by kliknutí
+    # probublalo k obsluze "kliknuto mimo", tlačítko už v dokumentu není
+    # a `closest` na odpojeném uzlu vrátí null. Kalendář se tím zavíral
+    # a měsíce nešly přepínat vůbec - proto zachycovací fáze.
+    zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+    obsluha = zaklad[zaklad.index("input[data-kalendar]"):]
+    obsluha = obsluha[:obsluha.index("});") + 3]
+    check(obsluha.rstrip().endswith("}, true);")
+          or "}, true);" in zaklad[zaklad.index("var vstup = event.target.closest"):
+                                   zaklad.index("var vstup = event.target.closest") + 600],
+          "kliknutí mimo kalendář se hlídá v zachycovací fázi")
     check(stranka.count("data-obdobi-od=") == 3,
           "a jsou tam tři rychlé volby (tento měsíc, minulý, letos)")
     # Datum se píše po česku - nativní <input type="date"> vypadá
