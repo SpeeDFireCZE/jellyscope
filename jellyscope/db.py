@@ -774,25 +774,28 @@ TAJNA_NASTAVENI = ("jellyfin_api_key",)
 
 
 def predvyplnene_zalohy() -> str:
-    """V kontejneru nastavi slozku na zalohy, pokud zadna nastavena neni.
+    """V NASEM obrazu nastavi slozku na zalohy, pokud zadna nastavena neni.
 
     Bez toho uloha zalohovani skoncila na "Neni nastavena cesta pro
     zalohy" - a kdo cestu vyplnil, snadno trefil misto mimo pripojenou
     slozku. Takova zaloha se ulozi dovnitr kontejneru a pri dalsim buildu
     zmizi; uloha pritom mesice hlasi, ze probehla.
 
-    Vedle databaze je proto `backups/`, tedy uvnitr /app/data. Ta se
-    z kontejneru ven pripojuje vzdycky, takze se k zalohe da dostat
-    i z hostitele.
+    Vedle databaze je proto `backups/`, tedy uvnitr /app/data - slozky,
+    kterou nas compose ven pripojuje vzdycky, takze se k zaloze da
+    dostat i z hostitele.
 
-    Mimo kontejner se nenastavuje nic. Na vlastnim stroji je smysluplne
-    misto pro zalohy jina disk nebo sit, ne slozka vedle databaze -
-    a hadat za uzivatele, kam ma zalohovat, by bylo horsi nez se zeptat.
+    **Jen u naseho obrazu.** Drive stacilo "jsem v jakemkoliv kontejneru"
+    a to bylo hadani: v cizim kontejneru (LXC, cizi image) o zadnem
+    pripojenem svazku nic nevime, takze `data/backups` neni chytry
+    vychozi stav, ale nevyzadana zmena nastaveni. A na vlastnim stroji uz
+    vubec: tam je smysluplne misto pro zalohy jiny disk nebo sit, ne
+    slozka vedle databaze.
     """
     from .config import load_config
 
     config = load_config()
-    if not config.in_docker or get_setting("backup_path", "").strip():
+    if not config.nas_obraz or get_setting("backup_path", "").strip():
         return ""
 
     cesta = config.database_path.parent / "backups"

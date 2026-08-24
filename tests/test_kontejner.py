@@ -58,6 +58,7 @@ print("--- v kontejneru si cestu nastaví ---")
 os.environ["JELLYSCOPE_DOCKER"] = "1"
 config.load_config(reload=True)
 check(config.load_config().in_docker is True, "pozná se podle proměnné z Dockerfilu")
+check(config.load_config().nas_obraz is True, "a je to náš obraz")
 
 cesta = db.predvyplnene_zalohy()
 ocekavane = str(Path(_tmp) / "data" / "backups")
@@ -96,8 +97,11 @@ check(config.load_config().in_docker is True, "cizí kontejner se pozná taky")
 check(config.load_config().nas_obraz is False, "ale náš obraz to není")
 check(updates.duvod_bez_aktualizace() == "",
       f"a aktualizace z gitu se nezakazuje ({updates.duvod_bez_aktualizace()})")
-check(db.predvyplnene_zalohy() != "" or db.get_setting("backup_path", "") != "",
-      "zálohy si ale cestu pohlídají i tam")
+# Ani zálohy si v cizím kontejneru nic nevymýšlejí: o žádném připojeném
+# svazku tam nevíme, takže `data/backups` není chytrý výchozí stav, ale
+# nevyžádaná změna nastavení.
+db.set_setting("backup_path", "")
+check(db.predvyplnene_zalohy() == "", "v cizím kontejneru se cesta nevyplňuje")
 config._v_kontejneru = puvodni
 config.load_config(reload=True)
 

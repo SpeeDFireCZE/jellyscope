@@ -6,6 +6,41 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.6
+
+### Added
+
+- **`.env.example` now names every variable the app reads.** Three were
+  missing: `JELLYSCOPE_DOCKER`, `JELLYSCOPE_DEMO` and `JELLYSCOPE_HOME`.
+  They are written as prose rather than commented-out lines, because
+  uncommenting them is not what you want — `JELLYSCOPE_DOCKER` in
+  particular belongs to the image, and setting it by hand on an ordinary
+  machine only turns off updating from the browser. A test compares the
+  file against the source from now on, so the next new variable cannot
+  arrive undocumented.
+
+### Fixed
+
+- **The backup folder was filled in on machines that run no container at
+  all.** The same mistake as in 1.2.5, one layer down. Guessing the backup
+  path asked "am I in any container?", and that question is answered partly
+  by looking for `/.dockerenv` — a file a plain machine can end up carrying
+  for reasons of its own. Where it did, the app quietly wrote a backup path
+  nobody had asked for.
+
+  It also had no business guessing inside somebody else's container: we know
+  nothing about what is mounted there, so `data/backups` next to the database
+  is not a sensible default, just an unrequested setting.
+
+  Now only our own image fills the field in, where the compose file
+  guarantees `/app/data` is a mount. Everywhere else the field stays empty
+  and the app asks. If **Settings → Jobs and backups** shows a path you never
+  typed, this is where it came from — clear it or point it where you want it.
+
+  Which leaves the broad container check with a single job: the line in the
+  startup log saying what the app believes about its surroundings. Nothing
+  depends on it any more.
+
 ## 1.2.5
 
 ### Fixed
