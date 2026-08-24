@@ -911,8 +911,17 @@ def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] 
     current = stats.overview(days)
     previous = stats.previous_overview(days)
 
+    # Srovnavat se da jen s obdobim, ze ktereho mame data. Kdyz sahá
+    # dal, nez kam nase historie, neni to srovnani dvou obdobi, ale
+    # obdobi s prazdnem - a procenta z toho vyjdou libovolne velka.
+    # (Skutecny pripad: filtr "letos" ukazal 1 619 572 %, protoze
+    # predchozi okno padlo do doby, kdy Jellyscope jeste nebezel.)
+    srovnatelne = stats.lze_srovnat(days)
+
     def change(now: Any, before: Any) -> Optional[float]:
         """Zmena v procentech oproti minulemu obdobi."""
+        if not srovnatelne:
+            return None
         try:
             now_value, before_value = float(now or 0), float(before or 0)
         except (TypeError, ValueError):
@@ -921,6 +930,15 @@ def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] 
             return None
         return (now_value - before_value) / before_value * 100
 
+    # Kdyz srovnat nejde, rekneme proc - misto tise chybejici sipky.
+    poznamka_srovnani = ""
+    if not srovnatelne:
+        odkdy = stats.prvni_zaznam()
+        poznamka_srovnani = (
+            _t("nemáme data za předchozí období – historie začíná {datum}")
+            .format(datum=_cesky_datum(odkdy[:10])) if odkdy
+            else _t("zatím není co srovnávat"))
+
     daily = stats.daily_activity_split(days)
 
     return templates.TemplateResponse(request, "dashboard.html", _context(
@@ -928,6 +946,7 @@ def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] 
         days=days,
         kind=kind,
         overview=current,
+        poznamka_srovnani=poznamka_srovnani,
         deltas={
             "watched": change(current.get("watched_seconds"), previous.get("watched_seconds")),
             "plays": change(current.get("plays"), previous.get("plays")),

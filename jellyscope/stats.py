@@ -122,8 +122,30 @@ def predchozi(zadani: Any) -> Obdobi:
     except ValueError:
         return obdobi
     zacatek = konec - timedelta(days=obdobi.dny)
-    return Obdobi(od=zacatek.strftime(db.TIME_FORMAT),
-                  do=obdobi.od, dny=obdobi.dny)
+    # `relativni=False`: predchozi okno ma pevny konec (zacatek toho
+    # zvoleneho), takze to uz neni "poslednich N dni".
+    return Obdobi(od=zacatek.strftime(db.TIME_FORMAT), do=obdobi.od,
+                  dny=obdobi.dny, relativni=False)
+
+
+def prvni_zaznam() -> str:
+    """Odkdy vubec mame historii. Prazdne, kdyz jeste nic nemame.
+
+    Slouzi ke srovnani s predchozim obdobim: kdyz predchozi okno zacina
+    driv, nez sahaji nase data, neni to srovnani dvou obdobi, ale obdobi
+    s prazdnem. Procenta z toho vyjdou libovolne velka a nic nerikaji.
+    """
+    return str(db.query_value(
+        "SELECT MIN(started_at) FROM playback WHERE watched_seconds > 0",
+        default="") or "")
+
+
+def lze_srovnat(zadani: Any) -> bool:
+    """Ma predchozi obdobi vubec data, se kterymi jde srovnavat?"""
+    zacatek = prvni_zaznam()
+    if not zacatek:
+        return False
+    return predchozi(zadani).od >= zacatek
 
 
 # ---------------------------------------------------------------------------

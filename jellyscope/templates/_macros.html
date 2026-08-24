@@ -153,15 +153,38 @@
 
 {# Dlaždice s jedním číslem. Když je hodnota jedno číslo, dlaždice je
    správný tvar - sloupcový graf o jednom sloupci by byl chyba. #}
+{# Změna oproti minulému období, ve tvaru, který se dá přečíst.
+
+   Procenta přestanou informovat, jakmile je základ maličký:
+   „+1 619 572 %" neříká nic o dnešku, jen to, že minule skoro nic
+   nebylo. Proto tři pásma:
+
+     do 1000 %    procenta, jak je člověk čeká,
+     do 100×      násobek - kratší a čitelnější než pětimístné procento,
+     nad 100×     rovnou slovy, protože číslo už je jen ozdoba.
+
+   Dolů to takhle utéct nemůže: pod -100 % se spadnout nedá. #}
+{% macro zmena(delta) %}
+{%- set kladna = delta if delta > 0 else -delta -%}
+{%- if kladna >= 10000 -%}
+    {{ _("minule skoro nic") }}
+{%- elif kladna >= 1000 -%}
+    {{ _("×") }}{{ ((kladna / 100) + 1) | round(0) | int | number }}
+{%- else -%}
+    {{ kladna | percent }}
+{%- endif -%}
+{% endmacro %}
+
+
 {% macro tile(label, value, delta=None, note=None) %}
 <div class="tile">
     <p class="tile-label">{{ label }}</p>
     <div class="tile-value">{{ value }}</div>
     {% if delta is not none %}
         {% if delta > 1 %}
-            <div class="delta up">&#9650; {{ delta | percent }} {{ _("oproti minulému období") }}</div>
+            <div class="delta up">&#9650; {{ zmena(delta) }} {{ _("oproti minulému období") }}</div>
         {% elif delta < -1 %}
-            <div class="delta down">&#9660; {{ (delta * -1) | percent }} {{ _("oproti minulému období") }}</div>
+            <div class="delta down">&#9660; {{ zmena(delta) }} {{ _("oproti minulému období") }}</div>
         {% else %}
             <div class="delta flat">{{ _("beze změny") }}</div>
         {% endif %}

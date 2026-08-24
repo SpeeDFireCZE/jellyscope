@@ -1147,6 +1147,11 @@ EN: dict[str, str] = {
     "tento měsíc": "this month",
     "minulý měsíc": "last month",
     "letos": "this year",
+    "nemáme data za předchozí období – historie začíná {datum}":
+        "no data for the previous period - the history starts {datum}",
+    "zatím není co srovnávat": "nothing to compare with yet",
+    "minule skoro nic": "almost nothing last time",
+    "×": "×",
     "Vlastní": "Custom",
     "Vlastní období": "Custom period",
     "Statistiky se spočítají za zvolené rozmezí včetně obou dnů.":

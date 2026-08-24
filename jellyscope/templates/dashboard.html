@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile, method_badge with context %}
+{% from "_macros.html" import period_filter, tile, method_badge, zmena with context %}
 {% block title %}{{ _("Přehled") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -40,16 +40,25 @@
 </div>
 
 <div class="card">
-    <p class="tile-label">{{ _("Celkem odsledováno za") }} {{ _(day_labels[days]) }}</p>
+    {# U vlastního období nemá `day_labels` co říct - vypíšeme rozmezí. #}
+    <p class="tile-label">
+        {{ _("Celkem odsledováno za") }}
+        {% if obdobi.vlastni %}{{ obdobi.od_text }} – {{ obdobi.do_text }}
+        {% else %}{{ _(day_labels[obdobi.days]) }}{% endif %}
+    </p>
     <div class="hero">{{ (overview.watched_seconds / 3600) | hours }}</div>
     {% if deltas.watched is not none %}
         {% if deltas.watched > 1 %}
-            <div class="delta up">&#9650; {{ deltas.watched | percent }} {{ _("oproti předchozímu období") }}</div>
+            <div class="delta up">&#9650; {{ zmena(deltas.watched) }} {{ _("oproti předchozímu období") }}</div>
         {% elif deltas.watched < -1 %}
-            <div class="delta down">&#9660; {{ (deltas.watched * -1) | percent }} {{ _("oproti předchozímu období") }}</div>
+            <div class="delta down">&#9660; {{ zmena(deltas.watched) }} {{ _("oproti předchozímu období") }}</div>
         {% else %}
             <div class="delta flat">{{ _("beze změny") }}</div>
         {% endif %}
+    {% elif poznamka_srovnani %}
+        {# Když srovnat nejde, řekneme proč. Tiše chybějící šipka vypadá
+           jako chyba a člověk ji hledá u sebe. #}
+        <div class="delta flat">{{ poznamka_srovnani }}</div>
     {% endif %}
     {# Stejná data jako velký graf níže, jen bez os - a po najetí myší
        ukáže hodnotu daného dne, stejně jako on. #}

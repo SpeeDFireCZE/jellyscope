@@ -6,6 +6,26 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.4
+
+### Fixed
+
+- **"1 619 572 % vs the previous period."** Filtering *this year* reported
+  exactly that. The arithmetic was right — the previous window of the same
+  length fell into a time when Jellyscope was not running yet, so today was
+  being compared with a few seconds of history. A percentage like that says
+  nothing about today, only that there was almost nothing before.
+
+  When the previous window starts earlier than the history reaches, the
+  comparison is no longer shown; the tile says why, with the date the history
+  begins. A silently missing arrow looks like a bug and sends people looking
+  for a mistake they did not make. And where the data is there, the number
+  changes shape as it grows: percent up to 1000 %, a multiplier up to 100×,
+  words above that.
+- **The hero number forgot to name a custom period.** It read "Total watched
+  over" and then nothing, because the label table has no entry for a date
+  range. It prints the range now.
+
 ## 1.2.3
 
 ### Fixed
