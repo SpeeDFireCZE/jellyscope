@@ -241,6 +241,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 13px;
+    /* Chip je někdy odkaz a někdy tlačítko (vlastní období, rychlé volby).
+       Odkaz dostane ruku od prohlížeče, <button> ne - a chip, který
+       vypadá stejně jako ten vedle, se musí stejně i chovat. Font taky:
+       tlačítko si jinak vezme systémový. */
+    font-family: inherit;
+    line-height: inherit;
+    cursor: pointer;
 }
 
 /* Výběr preferovaného jazyka na stránce Jazyky.
@@ -1725,6 +1732,10 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    --------------------------------------------------------------------------- */
 .okno {
     width: min(520px, calc(100vw - 32px));
+    /* Prohlížeč dává <dialog> ve výchozím stylu `overflow: auto`, takže
+       cokoliv, co přeteče (našeptávač kalendáře), ořízne. Dlouhý obsah
+       si posuv řeší sám uvnitř `.okno-obsah`, tady ho nepotřebujeme. */
+    overflow: visible;
     padding: 22px 24px 24px;
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -1814,6 +1825,95 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .mapa-bod { transition: opacity 120ms ease; }
 .mapa-bod:hover { opacity: 0.8; }
 
+
+/* Našeptávač k psanému datu.
+
+   Kreslí se do rodiče pole, ne do <body>: okno (<dialog>) je v horní
+   vrstvě a cokoliv připnutého k body by se pod ním schovalo. */
+.kalendar {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 6px);
+    left: 0;
+    width: 268px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
+    padding: 10px;
+}
+
+.kalendar-hlava {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.kalendar-mesic {
+    font-size: 13.5px;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.kalendar-sipka {
+    font: inherit;
+    font-size: 17px;
+    line-height: 1;
+    color: var(--text-secondary);
+    background: none;
+    border: 0;
+    border-radius: 7px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+}
+.kalendar-sipka:hover { background: var(--surface-2); color: var(--text-primary); }
+
+.kalendar-mrizka {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.kalendar-den-tydne {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-align: center;
+    padding-bottom: 4px;
+    text-transform: lowercase;
+}
+
+.kalendar-den {
+    font: inherit;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    background: none;
+    border: 0;
+    border-radius: 7px;
+    height: 30px;
+    cursor: pointer;
+}
+.kalendar-den:hover:not(:disabled) { background: var(--surface-2); }
+.kalendar-den:disabled { color: var(--text-muted); opacity: 0.45; cursor: default; }
+/* Dnešek je orámovaný, vybraný den vyplněný - dvě různé informace,
+   které se můžou potkat na jednom dni. */
+.kalendar-den.dnes { box-shadow: inset 0 0 0 1px var(--axis); }
+.kalendar-den.vybrany {
+    background: var(--series-1);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Okno s vlastním obdobím. Dvě pole vedle sebe, pod nimi rychlé volby. */
+.obdobi-pole {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.obdobi-pole input { width: 100%; }
+.obdobi-rychle { margin-top: 12px; flex-wrap: wrap; }
 
 /* Hláška ukázky. Vyjede zdola uprostřed, počká pár vteřin a zmizí -
    stránka se přitom nikam nehne, což je celý smysl: člověk zůstane tam,

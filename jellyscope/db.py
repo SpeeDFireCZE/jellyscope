@@ -773,6 +773,34 @@ def get_setting(key: str, default: str | None = None) -> str:
 TAJNA_NASTAVENI = ("jellyfin_api_key",)
 
 
+def predvyplnene_zalohy() -> str:
+    """V kontejneru nastavi slozku na zalohy, pokud zadna nastavena neni.
+
+    Bez toho uloha zalohovani skoncila na "Neni nastavena cesta pro
+    zalohy" - a kdo cestu vyplnil, snadno trefil misto mimo pripojenou
+    slozku. Takova zaloha se ulozi dovnitr kontejneru a pri dalsim buildu
+    zmizi; uloha pritom mesice hlasi, ze probehla.
+
+    Vedle databaze je proto `backups/`, tedy uvnitr /app/data. Ta se
+    z kontejneru ven pripojuje vzdycky, takze se k zalohe da dostat
+    i z hostitele.
+
+    Mimo kontejner se nenastavuje nic. Na vlastnim stroji je smysluplne
+    misto pro zalohy jina disk nebo sit, ne slozka vedle databaze -
+    a hadat za uzivatele, kam ma zalohovat, by bylo horsi nez se zeptat.
+    """
+    from .config import load_config
+
+    config = load_config()
+    if not config.in_docker or get_setting("backup_path", "").strip():
+        return ""
+
+    cesta = config.database_path.parent / "backups"
+    set_setting("backup_path", str(cesta))
+    log.info("zalohy se budou ukladat do %s", cesta)
+    return str(cesta)
+
+
 def get_settings() -> dict[str, str]:
     """Všechna nastavení najednou - výchozí hodnoty přebité tím, co je v DB."""
     values = dict(DEFAULT_SETTINGS)

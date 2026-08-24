@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile %}
+{% from "_macros.html" import period_filter, tile with context %}
 {% block title %}{{ _("Jazyky") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
             {{ _("V jakém jazyce se u vás doopravdy dívá – a co k tomu knihovna nabízí.") }}
         </p>
     </div>
-    {{ period_filter(days, '/languages') }}
+    {{ period_filter(obdobi, '/languages') }}
 </div>
 
 {# Co se do čísel nedostalo, musí čtenář vědět. Statistika, která něco

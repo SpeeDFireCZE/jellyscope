@@ -97,9 +97,9 @@ def imported_plays(days: int | None = None) -> int:
         ))
     return int(db.query_value(
         f"SELECT COUNT(*) FROM playback"
-        f" WHERE started_at >= datetime('now', ?) AND watched_seconds >= ?"
+        f" WHERE started_at >= ? AND started_at < ? AND watched_seconds >= ?"
         f"   {bez_jazyka}",
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     ))
 
 
@@ -114,17 +114,21 @@ def short_plays(days: int) -> int:
     return int(db.query_value(
         f"""
         SELECT COUNT(*) FROM playback
-         WHERE started_at >= datetime('now', ?)
+         WHERE started_at >= ? AND started_at < ?
            AND watched_seconds > 0
            AND watched_seconds < ?
            {BEZ_IMPORTU}
         """,
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     ))
 
 
-def _range(days: int) -> str:
-    return f"-{max(1, int(days))} days"
+def _meze(zadani: Any) -> tuple[str, str]:
+    """Meze zvoleneho obdobi - (od, do). Pocita je stats, at je to na
+    jednom miste; jazykove statistiky se ptaji na tytez dny jako zbytek."""
+    from .stats import _meze as spolecne
+
+    return spolecne(zadani)
 
 
 # ---------------------------------------------------------------------------
@@ -209,13 +213,13 @@ def watched_languages(days: int, colours: dict[str, int]) -> dict[str, Any]:
                COUNT(DISTINCT user_id)           AS users,
                COUNT(DISTINCT item_id)           AS item_count
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
           {SE_ZNAMYM_JAZYKEM}
         GROUP BY code
         ORDER BY hours DESC
         """,
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     )
     total = sum(float(row["hours"] or 0) for row in rows)
     _decorate(rows, colours, total)
@@ -256,13 +260,13 @@ def languages_by_user(days: int, colours: dict[str, int]) -> list[dict[str, Any]
                COALESCE(audio_language, 'und') AS code,
                SUM(watched_seconds) / 3600.0   AS hours
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
           AND user_name IS NOT NULL
           {SE_ZNAMYM_JAZYKEM}
         GROUP BY user_id, user_name, code
         """,
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     )
 
     people: dict[str, dict[str, Any]] = {}
@@ -304,11 +308,11 @@ def subtitle_usage(days: int) -> dict[str, Any]:
                SUM(CASE WHEN subtitle_language IS NULL
                         THEN watched_seconds ELSE 0 END) / 3600.0 AS without_subtitles
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
           {BEZ_IMPORTU}
         """,
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     ) or {}
 
     with_subs = float(summary.get("with_subtitles") or 0)
@@ -321,14 +325,14 @@ def subtitle_usage(days: int) -> dict[str, Any]:
                SUM(watched_seconds) / 3600.0  AS hours,
                COUNT(*)                       AS plays
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
           AND subtitle_language IS NOT NULL
           {BEZ_IMPORTU}
         GROUP BY code
         ORDER BY hours DESC
         """,
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     )
     for row in rows:
         row["label"] = languages.display(row["code"])
@@ -356,14 +360,14 @@ def dubbed_vs_original(days: int, code: str | None = None) -> list[dict[str, Any
                SUM(p.watched_seconds) / 3600.0 AS hours
         FROM playback p
         JOIN items i ON i.id = p.item_id
-        WHERE p.started_at >= datetime('now', ?)
+        WHERE p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
           AND p.audio_language IS NOT NULL
           AND i.audio_languages IS NOT NULL AND i.audio_languages != ''
           {SE_ZNAMYM_JAZYKEM_P}
         GROUP BY chosen, available
         """,
-        (_range(days), MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     )
 
     buckets = {
@@ -763,7 +767,7 @@ def missing_preferred(days: int, code: str, limit: int = 15) -> dict[str, Any]:
                COUNT(*)                        AS plays
         FROM playback p
         JOIN items i ON i.id = p.item_id
-        WHERE p.started_at >= datetime('now', ?)
+        WHERE p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
           AND i.is_missing = 0
           AND i.audio_languages IS NOT NULL AND i.audio_languages != ''
@@ -772,7 +776,7 @@ def missing_preferred(days: int, code: str, limit: int = 15) -> dict[str, Any]:
                  i.parent_index_number, i.index_number,
                  i.audio_languages, i.subtitle_languages
         """,
-        (_range(days), MIN_PLAY_SECONDS, vzor),
+        (*_meze(days), MIN_PLAY_SECONDS, vzor),
     )
 
     cele_serialy = _serialy_bez_stopy(vzor)

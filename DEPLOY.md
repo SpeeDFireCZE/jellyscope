@@ -152,6 +152,26 @@ container:
       - /srv/media:/media:ro     # :ro on purpose - Jellyscope never writes there
 ```
 
+**Backups.** The app notices it is in a container and sets the folder
+itself, to `/app/data/backups` — on the host that is `./data/backups`, so
+a backup is a file you can pick up without going into the container. It
+only fills it in when nothing is set; a path you chose yourself is never
+overwritten.
+
+Why it bothers: anything outside a mounted folder is written *into* the
+container and disappears with the next build, while the task keeps
+reporting success for months. That is worse than no backup at all,
+because you think you have one. To keep them somewhere else entirely,
+mount that somewhere as a second volume and point the setting at it.
+
+The backup task itself is still off by default — turn it on in *Settings
+→ Tasks and backups*.
+
+PostgreSQL is dumped with `pg_dump`, which the image carries
+(`PGDUMP=0` leaves it out and the app falls back to its own export —
+it works, `pg_dump` is just better at it). SQLite backs itself up and
+needs nothing.
+
 **Updates.** `git pull && docker compose up -d --build`. Missing database
 columns are added at startup, the same as anywhere else. The **Update and
 restart** button in the app is for installations from git — in a container

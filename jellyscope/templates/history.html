@@ -181,13 +181,13 @@
 
         <div class="filtr-pole filtr-vlastni" {{ 'hidden' if obdobi != 'vlastni' }}>
             <label for="f-od">{{ _("Od") }}</label>
-            <input type="text" id="f-od" name="od" value="{{ od_text or '' }}"
+            <input type="text" id="f-od" name="od" data-kalendar value="{{ od_text or '' }}"
                    placeholder="1.8.2026" inputmode="numeric" autocomplete="off">
         </div>
 
         <div class="filtr-pole filtr-vlastni" {{ 'hidden' if obdobi != 'vlastni' }}>
             <label for="f-do">{{ _("Do") }}</label>
-            <input type="text" id="f-do" name="do" value="{{ do_text or '' }}"
+            <input type="text" id="f-do" name="do" data-kalendar value="{{ do_text or '' }}"
                    placeholder="31.8.2026" inputmode="numeric" autocomplete="off">
         </div>
 

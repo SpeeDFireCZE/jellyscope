@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter %}
+{% from "_macros.html" import period_filter with context %}
 {% block title %}{{ _("Uživatelé") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
             {{ _("Kdo kolik sleduje za posledních") }} {{ _(day_labels[days]) }}.
         </p>
     </div>
-    {{ period_filter(days, '/users') }}
+    {{ period_filter(obdobi, '/users') }}
 </div>
 
 <div class="card">

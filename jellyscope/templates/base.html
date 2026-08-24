@@ -252,8 +252,17 @@
         document.addEventListener("submit", function (event) {
             var form = event.target;
             var kam = (form.getAttribute("action") || "").split("?")[0];
-            // `method="dialog"` zavírá okno, ne formulář na server.
-            if (form.method === "dialog" || POVOLENO.indexOf(kam) !== -1) { return; }
+            // Zastavuje se jen to, co zapisuje.
+            //
+            //   method="dialog"  zavírá okno, nikam se neposílá,
+            //   method="get"     je filtr - mění adresu, ne data
+            //                    (období statistik, filtr historie),
+            //   POVOLENO         přihlášení a odhlášení.
+            //
+            // Server to hlídá stejně: middleware `ukazkovy_rezim` propouští
+            // GET i HEAD bez ptaní.
+            if (form.method === "dialog" || form.method === "get"
+                    || POVOLENO.indexOf(kam) !== -1) { return; }
 
             event.preventDefault();
             hlaska.textContent = form.dataset.demoNote
@@ -265,6 +274,181 @@
     })();
 
     {% endif %}
+    // ------------------------------------------------------------------
+    // Kalendář k psanému datu
+    //
+    // Vlastní, ne <input type="date">: ten vypadá v každém prohlížeči
+    // jinak a uprostřed sladěného okna trčí. Psát datum jde pořád - tohle
+    // je jen našeptávač, který se otevře po kliknutí do pole.
+    //
+    // Názvy měsíců a dnů si bere prohlížeč podle jazyka stránky (Intl),
+    // takže se nemusí překládat a jsou správně skloněné.
+    // ------------------------------------------------------------------
+    (function () {
+        var pole = null;      // input, ke kterému kalendář právě patří
+        var panel = null;
+        var mesic = null;     // první den zobrazeného měsíce
+
+        function jazyk() {
+            return document.documentElement.getAttribute("lang") || "cs";
+        }
+
+        function nazevMesice(datum) {
+            return new Intl.DateTimeFormat(jazyk(), {
+                month: "long", year: "numeric"
+            }).format(datum);
+        }
+
+        function zkratkyDnu() {
+            // 2024-01-01 bylo pondělí - od něj sedm dní dopředu.
+            var format = new Intl.DateTimeFormat(jazyk(), { weekday: "short" });
+            var dny = [];
+            for (var i = 0; i < 7; i++) {
+                dny.push(format.format(new Date(2024, 0, 1 + i)));
+            }
+            return dny;
+        }
+
+        function ctiDatum(text) {
+            var shoda = /^\s*(\d{1,2})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{4})\s*$/.exec(text || "");
+            if (shoda) {
+                return new Date(+shoda[3], +shoda[2] - 1, +shoda[1]);
+            }
+            shoda = /^\s*(\d{4})-(\d{2})-(\d{2})\s*$/.exec(text || "");
+            return shoda ? new Date(+shoda[1], +shoda[2] - 1, +shoda[3]) : null;
+        }
+
+        function napisDatum(datum) {
+            return datum.getDate() + "." + (datum.getMonth() + 1) + "."
+                 + datum.getFullYear();
+        }
+
+        function stejnyDen(a, b) {
+            return a && b && a.getFullYear() === b.getFullYear()
+                && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+        }
+
+        function zavri() {
+            if (panel) { panel.remove(); panel = null; }
+            pole = null;
+        }
+
+        function vykresli() {
+            panel.innerHTML = "";
+
+            var hlava = document.createElement("div");
+            hlava.className = "kalendar-hlava";
+            var zpet = document.createElement("button");
+            zpet.type = "button";
+            zpet.className = "kalendar-sipka";
+            zpet.textContent = "\u2039";
+            zpet.addEventListener("click", function () {
+                mesic = new Date(mesic.getFullYear(), mesic.getMonth() - 1, 1);
+                vykresli();
+            });
+            var nazev = document.createElement("span");
+            nazev.className = "kalendar-mesic";
+            nazev.textContent = nazevMesice(mesic);
+            var vpred = document.createElement("button");
+            vpred.type = "button";
+            vpred.className = "kalendar-sipka";
+            vpred.textContent = "\u203a";
+            vpred.addEventListener("click", function () {
+                mesic = new Date(mesic.getFullYear(), mesic.getMonth() + 1, 1);
+                vykresli();
+            });
+            hlava.append(zpet, nazev, vpred);
+            panel.appendChild(hlava);
+
+            var mrizka = document.createElement("div");
+            mrizka.className = "kalendar-mrizka";
+            zkratkyDnu().forEach(function (zkratka) {
+                var bunka = document.createElement("span");
+                bunka.className = "kalendar-den-tydne";
+                bunka.textContent = zkratka;
+                mrizka.appendChild(bunka);
+            });
+
+            // Týden začíná pondělkem; getDay() má neděli jako nulu.
+            var prvni = new Date(mesic.getFullYear(), mesic.getMonth(), 1);
+            var posun = (prvni.getDay() + 6) % 7;
+            var dnes = new Date();
+            var vybrane = ctiDatum(pole.value);
+
+            for (var i = 0; i < posun; i++) {
+                mrizka.appendChild(document.createElement("span"));
+            }
+
+            var pocet = new Date(mesic.getFullYear(), mesic.getMonth() + 1, 0).getDate();
+            for (var den = 1; den <= pocet; den++) {
+                (function (den) {
+                    var datum = new Date(mesic.getFullYear(), mesic.getMonth(), den);
+                    var tlacitko = document.createElement("button");
+                    tlacitko.type = "button";
+                    tlacitko.className = "kalendar-den";
+                    tlacitko.textContent = den;
+                    if (stejnyDen(datum, dnes)) { tlacitko.classList.add("dnes"); }
+                    if (stejnyDen(datum, vybrane)) { tlacitko.classList.add("vybrany"); }
+                    // Statistika z budoucnosti je prázdná, tak tam nepouštíme.
+                    if (datum > dnes) { tlacitko.disabled = true; }
+                    tlacitko.addEventListener("click", function () {
+                        pole.value = napisDatum(datum);
+                        pole.dispatchEvent(new Event("change", { bubbles: true }));
+                        zavri();
+                    });
+                    mrizka.appendChild(tlacitko);
+                })(den);
+            }
+            panel.appendChild(mrizka);
+        }
+
+        function otevri(vstup) {
+            zavri();
+            pole = vstup;
+            var vybrane = ctiDatum(pole.value) || new Date();
+            mesic = new Date(vybrane.getFullYear(), vybrane.getMonth(), 1);
+
+            panel = document.createElement("div");
+            panel.className = "kalendar";
+            // Do rodiče pole, ne do <body>: okno (<dialog>) se kreslí
+            // v horní vrstvě a cokoliv připnutého k body by se pod ním
+            // schovalo - stejná past jako u bubliny s hodnotou.
+            var obal = pole.closest(".field") || pole.parentElement;
+            obal.style.position = obal.style.position || "relative";
+            obal.appendChild(panel);
+            vykresli();
+        }
+
+        document.addEventListener("click", function (event) {
+            var vstup = event.target.closest("input[data-kalendar]");
+            if (vstup) {
+                if (vstup !== pole) { otevri(vstup); }
+                return;
+            }
+            if (panel && !event.target.closest(".kalendar")) { zavri(); }
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && panel) { zavri(); }
+        });
+    })();
+
+    // ------------------------------------------------------------------
+    // Rychlé volby ve vlastním období
+    //
+    // Vyplní pole, ale formulář neodešlou - ať je vidět, co se vybralo,
+    // než se na to klikne. Bez JavaScriptu zůstanou pole na ručně psané
+    // datum, takže se nic neztratí.
+    // ------------------------------------------------------------------
+    document.addEventListener("click", function (event) {
+        var tlacitko = event.target.closest("[data-obdobi-od]");
+        if (!tlacitko) { return; }
+        var form = tlacitko.closest("form");
+        if (!form) { return; }
+        form.querySelector('input[name="od"]').value = tlacitko.dataset.obdobiOd;
+        form.querySelector('input[name="do"]').value = tlacitko.dataset.obdobiDo;
+    });
+
     // ------------------------------------------------------------------
     // Bublina s hodnotou
     //

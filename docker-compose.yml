@@ -22,6 +22,9 @@ services:
         # 0 = bez ffmpeg (~250 MB menší obraz). Technické údaje pak umí
         # jen to, co hlásí Jellyfin - čtení souborů přes ffprobe nebude.
         FFPROBE: "${FFPROBE:-1}"
+        # 0 = bez pg_dump (~30 MB). Týká se jen záloh PostgreSQL; bez něj
+        # se zálohuje vlastním exportem. U SQLite je to jedno.
+        PGDUMP: "${PGDUMP:-1}"
     image: jellyscope
     container_name: jellyscope
     restart: unless-stopped
@@ -62,6 +65,10 @@ services:
       # Jediné, o co jde v kontejneru přijít: databáze, log, mezipaměť
       # obrázků a zálohy. Složka na hostiteli, ne pojmenovaný svazek -
       # zálohu si tak odneseš prostým zkopírováním.
+      #
+      # Cesta pro zálohy se nastavuje v aplikaci a musí ležet UVNITŘ téhle
+      # složky (třeba /app/data/backups), jinak se uloží do kontejneru
+      # a s dalším buildem zmizí. Chceš je jinam? Připoj tam další svazek.
       - "${DATA_DIR:-./data}:/app/data"
 
       # Knihovna. Potřebná jen když technické údaje čteš přes ffprobe.

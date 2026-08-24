@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile %}
+{% from "_macros.html" import period_filter, tile with context %}
 {% block title %}{{ _("Zjištění") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@
             <em>{{ _("co se sleduje") }}</em> {{ _("i") }} <em>{{ _("co ty soubory jsou") }}</em>.
         </p>
     </div>
-    {{ period_filter(days, '/insights') }}
+    {{ period_filter(obdobi, '/insights') }}
 </div>
 
 {# ------------------------------------------------------------------ #}

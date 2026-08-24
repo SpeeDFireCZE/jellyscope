@@ -12,6 +12,9 @@
 #   * Když sbíráš technické údaje přes ffprobe, musí kontejner na soubory
 #     vidět: knihovnu připoj jen pro čtení a v Nastavení nastav mapování
 #     cest z pohledu Jellyfinu na cestu v kontejneru.
+#   * Zálohy si ukládej do /app/data (třeba /app/data/backups). Cokoliv
+#     mimo připojené složky se uloží dovnitř kontejneru a při dalším
+#     buildu je to pryč.
 #   * Do Jellyfinu se jen čte. Kontejner nepotřebuje žádné právo navíc.
 # ---------------------------------------------------------------------------
 
@@ -28,9 +31,21 @@ ENV PYTHONUNBUFFERED=1 \
 #
 # ušetří ~250 MB obrazu a nechá zdroj dat na Jellyfinu.
 ARG FFPROBE=1
-RUN if [ "$FFPROBE" = "1" ]; then \
+
+# pg_dump (postgresql-client) je potřeba jen při zálohování PostgreSQL.
+# Bez něj se aplikace zazálohuje vlastním exportem - funguje to, ale
+# pg_dump umí konzistentní snímek, pořadí závislostí i indexy, takže
+# ~30 MB v obrazu za to stojí. U SQLite se nepoužije vůbec.
+ARG PGDUMP=1
+
+RUN if [ "$FFPROBE" = "1" ] || [ "$PGDUMP" = "1" ]; then \
         apt-get update \
-        && apt-get install --no-install-recommends -y ffmpeg \
+        && if [ "$FFPROBE" = "1" ]; then \
+               apt-get install --no-install-recommends -y ffmpeg; \
+           fi \
+        && if [ "$PGDUMP" = "1" ]; then \
+               apt-get install --no-install-recommends -y postgresql-client; \
+           fi \
         && rm -rf /var/lib/apt/lists/*; \
     fi
 
@@ -51,9 +66,13 @@ RUN useradd --create-home --uid 10001 jellyscope \
 USER jellyscope
 
 # Na 127.0.0.1 uvnitř kontejneru se zvenku nikdo nedovolá.
+# JELLYSCOPE_DOCKER rekne aplikaci, ze bezi v kontejneru. Podle toho
+# si sama nastavi slozku na zalohy do /app/data/backups - tedy do
+# pripojene slozky, ke ktere se da dostat i z hostitele.
 ENV HOST=0.0.0.0 \
     PORT=8097 \
-    DATABASE_PATH=data/jellyscope.db
+    DATABASE_PATH=data/jellyscope.db \
+    JELLYSCOPE_DOCKER=1
 
 EXPOSE 8097
 

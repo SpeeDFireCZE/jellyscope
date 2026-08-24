@@ -1144,6 +1144,17 @@ EN: dict[str, str] = {
         "This is a demo - nothing here changes. On your own install the button works.",
     "V ukázce je nastavení jen na koukání – tlačítka fungují, ale nic neuloží. Data jsou vymyšlená a stejná pro všechny návštěvníky.":
         "In the demo the settings are for looking at - the buttons work, they just save nothing. The data is made up and the same for every visitor.",
+    "tento měsíc": "this month",
+    "minulý měsíc": "last month",
+    "letos": "this year",
+    "Vlastní": "Custom",
+    "Vlastní období": "Custom period",
+    "Statistiky se spočítají za zvolené rozmezí včetně obou dnů.":
+        "The statistics are counted for the chosen range, both days included.",
+    "Od": "From",
+    "Do": "To",
+    "Použít": "Apply",
+    "Zpět na 30 dnů": "Back to 30 days",
     "Ukázka": "Demo",
     "přihlas se jako": "sign in as",
     "Data jsou vymyšlená a nic se v nich nemění.":
@@ -1468,6 +1479,9 @@ LOG_EN: dict[str, str] = {
     'archiv: slouceno %s dilu, ktere v knihovne existuji znovu':
         'archive: merged %s episodes that exist in the library again',
     'aktualizace stazena: %s': 'update downloaded: %s',
+    'zalohy se budou ukladat do %s': 'backups will be written to %s',
+    'v kontejneru: slozka na zalohy nastavena na %s':
+        'in a container: backup folder set to %s',
     'zkraceno %s prevzatych zaznamu, ktere bezely dele nez porad':
         'shortened %s imported records that ran longer than the title',
     'narovnani dat: %s uprav, osirelych zbyva %s':

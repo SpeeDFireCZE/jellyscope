@@ -11,13 +11,81 @@
    vždycky skočí na začátek, což je u filtru dole na stránce otravné.
    `data-keep-scroll` řekne skriptu v base.html, ať si pozici zapamatuje
    a po načtení ji vrátí. #}
-{% macro period_filter(current_days, base_url) %}
+{# Přepínač období nad statistikami.
+
+   `obdobi` připravuje web._obdobi_do_sablony(): buď zvolený počet dnů,
+   nebo vlastní rozmezí. Poslední volba otevře okno se dvěma daty - do
+   pevné nabídky se „loňský prosinec" vejít nemůže, a přitom je to přesně
+   ta otázka, kvůli které se člověk dívá na statistiky nejčastěji. #}
+{% macro period_filter(obdobi, base_url) %}
 <div class="filters">
     {% for days in allowed_days %}
-        <a class="chip {{ 'active' if days == current_days }}" data-keep-scroll
-           href="{{ base_url }}?days={{ days }}">{{ _(day_labels[days]) }}</a>
+        <a class="chip {{ 'active' if not obdobi.vlastni and days == obdobi.days }}"
+           data-keep-scroll href="{{ base_url }}?days={{ days }}">{{ _(day_labels[days]) }}</a>
     {% endfor %}
+    <button class="chip {{ 'active' if obdobi.vlastni }}" type="button"
+            data-okno="okno-obdobi">
+        {% if obdobi.vlastni %}
+            {# Po česku, stejně jako v polích - ať to je jedno datum,
+               ne dva různé zápisy téhož. #}
+            {{ obdobi.od_text }} – {{ obdobi.do_text }}
+        {% else %}
+            {{ _("Vlastní") }}
+        {% endif %}
+    </button>
 </div>
+
+<dialog class="okno" id="okno-obdobi">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Vlastní období") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    <p class="card-note">
+        {{ _("Statistiky se spočítají za zvolené rozmezí včetně obou dnů.") }}
+    </p>
+
+    {# Formulář jde na tutéž stránku, takže se vlastní období drží i při
+       přechodu na jinou záložku - stejně jako počet dnů.
+
+       Datum je obyčejné textové pole, ne <input type="date">. Ten totiž
+       vypadá v každém prohlížeči jinak (na Windows je z něj „dd.mm.rrrr"
+       ve vlastním rámečku) a uprostřed jinak sladěného okna trčí -
+       stejná lekce jako u filtru v historii. #}
+    <form method="get" action="{{ base_url }}" class="obdobi-form">
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="obdobi-od">{{ _("Od") }}</label>
+                <input type="text" id="obdobi-od" name="od" required data-kalendar
+                       value="{{ obdobi.od_text }}" placeholder="1.8.2026"
+                       inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="obdobi-do">{{ _("Do") }}</label>
+                <input type="text" id="obdobi-do" name="do" required data-kalendar
+                       value="{{ obdobi.do_text }}" placeholder="{{ dnes_text }}"
+                       inputmode="numeric" autocomplete="off">
+            </div>
+        </div>
+
+        {# Tři nejčastější odpovědi na „jaké období". Vyplní pole, neodešlou
+           formulář - ať je vidět, co se vybralo, než se na to klikne. #}
+        <div class="btn-row obdobi-rychle">
+            {% for popis, od_h, do_h in rychla_obdobi %}
+                <button class="chip" type="button"
+                        data-obdobi-od="{{ od_h }}" data-obdobi-do="{{ do_h }}">{{ _(popis) }}</button>
+            {% endfor %}
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn primary" type="submit">{{ _("Použít") }}</button>
+            {% if obdobi.vlastni %}
+                <a class="btn" href="{{ base_url }}?days=30">{{ _("Zpět na 30 dnů") }}</a>
+            {% endif %}
+        </div>
+    </form>
+</dialog>
 {% endmacro %}
 
 

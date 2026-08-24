@@ -15,7 +15,8 @@ na hodinach na zdi, ne v Greenwichi.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import db
@@ -42,9 +43,87 @@ RESOLUTION_CASE = """
 RESOLUTION_ORDER = ["4K", "1080p", "720p", "576p", "SD", "nezname"]
 
 
-def _range(days: int) -> str:
-    """Prevede pocet dnu na modifikator pro SQLite ('-30 days')."""
-    return f"-{max(1, int(days))} days"
+@dataclass(frozen=True)
+class Obdobi:
+    """Okno, za ktere se statistiky pocitaji.
+
+    Drive se predaval jen pocet dnu a kazdy dotaz si dosadil
+    `datetime('now', '-30 days')`. Okno tim vzdycky koncilo ted, takze
+    "cely loňsky prosinec" nesel vyjadrit vubec. Proto dvojice mezi.
+
+    `od` je vcetne, `do` vylucne - dotaz je pak `>= od AND < do`
+    a pulnoc nepatri do obou dnu zaroven.
+    """
+
+    od: str
+    do: str
+    dny: int
+    # "Poslednich N dni" (relativni), nebo pevne rozmezi od-do?
+    # Rozhoduje to o dvou vecech: jak se obdobi pojmenuje v prepinaci
+    # a od ktereho dne zacina kalendar v grafu po dnech.
+    relativni: bool = True
+
+    @property
+    def vlastni(self) -> bool:
+        """Vybral si obdobi clovek sam?"""
+        return not self.relativni
+
+
+# Horni mez "posledních N dní". Schvalne daleka budoucnost, ne "ted":
+# cas se uklada zaokrouhleny na vteriny, takze prehravani zapsane v teze
+# vterine, ve ktere se ptame, by se do okna uz nevesio - a prave to je
+# ten zaznam, ktery clovek prave ted hleda. Vlastni obdobi si horni mez
+# urcuje samo.
+KONEC_CASU = "9999-12-31 23:59:59"
+
+
+def obdobi_dnu(days: int) -> Obdobi:
+    """Poslednich N dni. Konec je otevreny - viz KONEC_CASU."""
+    dny = max(1, int(days))
+    zacatek = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=dny)
+    return Obdobi(od=zacatek.strftime(db.TIME_FORMAT), do=KONEC_CASU, dny=dny)
+
+
+def obdobi_od_do(od: Any, do: Any) -> Obdobi | None:
+    """Obdobi ze dvou datumu ve tvaru YYYY-MM-DD. None, kdyz nedavaji smysl.
+
+    `do` je v adrese posledni den, ktery clovek chce videt - do dotazu
+    proto jde pulnoc dne nasledujiciho, jinak by z posledniho dne
+    vypadlo vsechno po 00:00.
+    """
+    try:
+        zacatek = datetime.strptime(str(od)[:10], "%Y-%m-%d")
+        konec = datetime.strptime(str(do)[:10], "%Y-%m-%d") + timedelta(days=1)
+    except (TypeError, ValueError):
+        return None
+    if konec <= zacatek:
+        return None
+    return Obdobi(od=zacatek.strftime(db.TIME_FORMAT),
+                  do=konec.strftime(db.TIME_FORMAT),
+                  dny=max(1, (konec - zacatek).days), relativni=False)
+
+
+def _obdobi(zadani: Any) -> Obdobi:
+    """Prijme cislo i hotove Obdobi. Diky tomu se nemusely menit signatury."""
+    return zadani if isinstance(zadani, Obdobi) else obdobi_dnu(int(zadani or 30))
+
+
+def _meze(zadani: Any) -> tuple[str, str]:
+    """Dvojice pro dotaz: (od, do). Do parametru se rozbaluje hvezdickou."""
+    obdobi = _obdobi(zadani)
+    return obdobi.od, obdobi.do
+
+
+def predchozi(zadani: Any) -> Obdobi:
+    """Stejne dlouhe okno tesne pred zvolenym - kvuli srovnani."""
+    obdobi = _obdobi(zadani)
+    try:
+        konec = datetime.strptime(obdobi.od, db.TIME_FORMAT)
+    except ValueError:
+        return obdobi
+    zacatek = konec - timedelta(days=obdobi.dny)
+    return Obdobi(od=zacatek.strftime(db.TIME_FORMAT),
+                  do=obdobi.od, dny=obdobi.dny)
 
 
 # ---------------------------------------------------------------------------
@@ -63,10 +142,10 @@ def overview(days: int) -> dict[str, Any]:
             COALESCE(SUM(CASE WHEN play_method = 'Transcode'
                               THEN watched_seconds ELSE 0 END), 0) AS transcoded_seconds
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         """,
-        (_range(days),),
+        (*_meze(days),),
     ) or {}
 
     watched = row.get("watched_seconds") or 0
@@ -88,11 +167,10 @@ def previous_overview(days: int) -> dict[str, Any]:
             COALESCE(SUM(watched_seconds), 0) AS watched_seconds,
             COUNT(DISTINCT user_id)           AS users
         FROM playback
-        WHERE started_at >= datetime('now', ?)
-          AND started_at <  datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         """,
-        (_range(days * 2), _range(days)),
+        _meze(predchozi(days)),
     ) or {}
 
 
@@ -496,13 +574,13 @@ def rozpad_ostatnich(days: int) -> list[dict[str, Any]]:
                SUM(watched_seconds) / 3600.0 AS hours,
                COUNT(*)                      AS plays
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
           {_kind_condition(KIND_OTHER)}
         GROUP BY item_type
         ORDER BY SUM(watched_seconds) DESC
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
     # Slucujeme podle popisku, ne podle syrove hodnoty: prazdny retezec
     # a NULL jsou pro SQL dve ruzne skupiny, ale pro cloveka jedna a tataz
@@ -540,12 +618,12 @@ def daily_activity_split(days: int) -> list[dict[str, Any]]:
                SUM(watched_seconds) / 3600.0 AS hours,
                COUNT(*)                      AS plays
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         GROUP BY day, item_type
         ORDER BY day
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
 
     # "other" je treti pytlik na vsechno, co neni film ani epizoda:
@@ -568,8 +646,21 @@ def daily_activity_split(days: int) -> list[dict[str, Any]]:
         entry[f"{prefix}_hours"] += float(row["hours"] or 0)
         entry[f"{prefix}_plays"] += int(row["plays"] or 0)
 
-    today = datetime.now().date()
-    calendar = [today - timedelta(days=offset) for offset in range(max(1, days) - 1, -1, -1)]
+    # Kalendar kreslime cely, at je v grafu videt i den, kdy se nekoukalo.
+    #
+    # U "poslednich N dni" je poslednim dnem dnesek a prvnim ten N-ty
+    # zpatky - tedy N radku, ne N+1. U vlastniho obdobi zacina a konci
+    # tam, kde rekl clovek.
+    okno = _obdobi(days)
+    dnes = datetime.now().date()
+    if okno.relativni:
+        prvni, posledni = dnes - timedelta(days=okno.dny - 1), dnes
+    else:
+        prvni = datetime.strptime(okno.od, db.TIME_FORMAT).date()
+        posledni = min(dnes, (datetime.strptime(okno.do, db.TIME_FORMAT)
+                              - timedelta(seconds=1)).date())
+    calendar = [prvni + timedelta(days=offset)
+                for offset in range(max(1, (posledni - prvni).days + 1))]
 
     result = []
     for day in calendar:
@@ -604,14 +695,14 @@ def top_users(days: int, limit: int = 8) -> list[dict[str, Any]]:
                SUM(watched_seconds) / 3600.0 AS hours,
                COUNT(*)                      AS plays
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
           AND user_name IS NOT NULL
         GROUP BY user_id, user_name
         ORDER BY hours DESC
         LIMIT ?
         """,
-        (_range(days), limit),
+        (*_meze(days), limit),
     )
 
 
@@ -953,11 +1044,11 @@ def top_items(days: int, limit: int = 10,
                COUNT(*)               AS plays
         FROM playback p
    LEFT JOIN items i ON i.id = p.item_id
-       WHERE p.started_at >= datetime('now', ?)
+       WHERE p.started_at >= ? AND p.started_at < ?
          AND p.watched_seconds > 0
     GROUP BY {SKUPINA_TITULU_KLIC}
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
 
     tituly = _slouc_tituly(radky, kind, limit,
@@ -976,12 +1067,12 @@ def play_method_breakdown(days: int) -> list[dict[str, Any]]:
         SELECT COALESCE(play_method, 'nezname') AS method,
                SUM(watched_seconds) / 3600.0    AS hours
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         GROUP BY method
         ORDER BY hours DESC
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
     # Popisky prochazeji `_t()`, protoze se vypisuji uzivateli - jak
     # v legende, tak primo v pruhu grafu.
@@ -1006,13 +1097,13 @@ def client_breakdown(days: int, limit: int = 8) -> list[dict[str, Any]]:
                SUM(watched_seconds) / 3600.0 AS hours,
                COUNT(*) AS plays
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         GROUP BY label
         ORDER BY hours DESC
         LIMIT ?
         """,
-        (_range(days), limit),
+        (*_meze(days), limit),
     )
 
 
@@ -1027,11 +1118,11 @@ def hourly_heatmap(days: int) -> list[list[float]]:
                CAST(strftime('%H', started_at, 'localtime') AS INTEGER) AS hour,
                SUM(watched_seconds) / 3600.0 AS hours
         FROM playback
-        WHERE started_at >= datetime('now', ?)
+        WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         GROUP BY weekday, hour
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
 
     grid = [[0.0 for _ in range(24)] for _ in range(7)]
@@ -1234,12 +1325,12 @@ def user_table(days: int) -> list[dict[str, Any]]:
         FROM users u
         LEFT JOIN playback p
                ON p.user_id = u.id
-              AND p.started_at >= datetime('now', ?)
+              AND p.started_at >= ? AND p.started_at < ?
               AND p.watched_seconds > 0
         GROUP BY u.id, u.name, u.is_administrator
         ORDER BY hours DESC, u.name
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
 
 
@@ -1274,12 +1365,12 @@ def user_genres(user_id: str, days: int, limit: int = 8) -> list[dict[str, Any]]
         SELECT i.genres, SUM(p.watched_seconds) / 3600.0 AS hours
           FROM playback p
           JOIN items i ON i.id = p.item_id
-         WHERE p.user_id = ? AND p.started_at >= datetime('now', ?)
+         WHERE p.user_id = ? AND p.started_at >= ? AND p.started_at < ?
            AND p.watched_seconds > 0
            AND i.genres IS NOT NULL AND i.genres != ''
          GROUP BY i.genres
         """,
-        (user_id, _range(days)),
+        (user_id, *_meze(days)),
     )
 
     soucty: dict[str, float] = {}
@@ -1327,9 +1418,9 @@ def user_detail(user_id: str, days: int) -> dict[str, Any]:
                    COALESCE(SUM(watched_seconds), 0) / 3600.0 AS hours,
                    COUNT(DISTINCT item_id) AS item_count
             FROM playback
-            WHERE user_id = ? AND started_at >= datetime('now', ?) AND watched_seconds > 0
+            WHERE user_id = ? AND started_at >= ? AND started_at < ? AND watched_seconds > 0
             """,
-            (user_id, _range(days)),
+            (user_id, *_meze(days)),
         ) or {},
         # `item_id` je tu kvuli prokliku do knihovny. U serialu se radky
         # slucuji podle nazvu, takze zadne jedno spravne id neexistuje -
@@ -1341,25 +1432,25 @@ def user_detail(user_id: str, days: int) -> dict[str, Any]:
                        SUM(watched_seconds) / 3600.0 AS hours,
                        COUNT(*) AS plays
                 FROM playback
-                WHERE user_id = ? AND started_at >= datetime('now', ?)
+                WHERE user_id = ? AND started_at >= ? AND started_at < ?
                   AND watched_seconds > 0
                 GROUP BY label
                 ORDER BY hours DESC
                 LIMIT 10
                 """,
-                (user_id, _range(days)),
+                (user_id, *_meze(days)),
             ),
             db.query_all(
                 """
                 SELECT COALESCE(series_name, item_name) AS label, item_id,
                        SUM(watched_seconds) AS total
                 FROM playback
-                WHERE user_id = ? AND started_at >= datetime('now', ?)
+                WHERE user_id = ? AND started_at >= ? AND started_at < ?
                   AND watched_seconds > 0 AND item_id IS NOT NULL
                 GROUP BY label, item_id
                 ORDER BY total DESC
                 """,
-                (user_id, _range(days)),
+                (user_id, *_meze(days)),
             ),
         ),
         "genres": user_genres(user_id, days),
@@ -1369,12 +1460,12 @@ def user_detail(user_id: str, days: int) -> dict[str, Any]:
                    COALESCE(client, '') AS client,
                    SUM(watched_seconds) / 3600.0 AS hours
             FROM playback
-            WHERE user_id = ? AND started_at >= datetime('now', ?) AND watched_seconds > 0
+            WHERE user_id = ? AND started_at >= ? AND started_at < ? AND watched_seconds > 0
             GROUP BY label, client
             ORDER BY hours DESC
             LIMIT 10
             """,
-            (user_id, _range(days)),
+            (user_id, *_meze(days)),
         ),
     }
 
@@ -1756,10 +1847,10 @@ def library_activity(library_id: str, days: int = 90) -> dict[str, Any]:
                    COUNT(DISTINCT user_id) AS users,
                    COUNT(DISTINCT item_id) AS item_count
             FROM playback
-            WHERE library_id = ? AND started_at >= datetime('now', ?)
+            WHERE library_id = ? AND started_at >= ? AND started_at < ?
               AND watched_seconds > 0
             """,
-            (library_id, _range(days)),
+            (library_id, *_meze(days)),
         ) or {},
         "top_items": db.query_all(
             """
@@ -1767,21 +1858,21 @@ def library_activity(library_id: str, days: int = 90) -> dict[str, Any]:
                    SUM(watched_seconds) / 3600.0 AS hours,
                    COUNT(*) AS plays
             FROM playback
-            WHERE library_id = ? AND started_at >= datetime('now', ?)
+            WHERE library_id = ? AND started_at >= ? AND started_at < ?
               AND watched_seconds > 0
             GROUP BY label ORDER BY hours DESC LIMIT 10
             """,
-            (library_id, _range(days)),
+            (library_id, *_meze(days)),
         ),
         "top_users": db.query_all(
             """
             SELECT user_name AS label, SUM(watched_seconds) / 3600.0 AS hours
             FROM playback
-            WHERE library_id = ? AND started_at >= datetime('now', ?)
+            WHERE library_id = ? AND started_at >= ? AND started_at < ?
               AND watched_seconds > 0 AND user_name IS NOT NULL
             GROUP BY label ORDER BY hours DESC LIMIT 10
             """,
-            (library_id, _range(days)),
+            (library_id, *_meze(days)),
         ),
         "recent": db.query_all(
             """
@@ -1930,12 +2021,12 @@ def _sitove_radky(days: int) -> list[dict[str, Any]]:
         SELECT started_at, ended_at, last_seen_at, watched_seconds, bitrate,
                user_name, client, device_name, remote_address, play_method
           FROM playback
-         WHERE started_at >= datetime('now', ?)
+         WHERE started_at >= ? AND started_at < ?
            AND watched_seconds > 0
            AND bitrate IS NOT NULL AND bitrate > 0
          ORDER BY started_at
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
 
 
@@ -2043,14 +2134,14 @@ def bandwidth_podle(days: int, sloupec: str, limit: int = 12) -> list[dict[str, 
                MAX(bitrate)                                    AS spicka,
                COUNT(*)                                        AS plays
           FROM playback
-         WHERE started_at >= datetime('now', ?)
+         WHERE started_at >= ? AND started_at < ?
            AND watched_seconds > 0
            AND bitrate IS NOT NULL AND bitrate > 0
          GROUP BY COALESCE({sloupec}, '?')
          ORDER BY SUM(watched_seconds * bitrate) DESC
          LIMIT ?
         """,
-        (_range(days), limit),
+        (*_meze(days), limit),
     )
     # Graf dostava gigabajty, ne bajty: sloupec popsany "98 739 089 379 B"
     # se neda precist, a presnost na bajt tu k nicemu neni.
@@ -2093,12 +2184,12 @@ def _provoz_podle_adresy(days: int) -> list[dict[str, Any]]:
                COUNT(DISTINCT user_id)                AS lidi,
                MAX(started_at)                        AS naposledy
           FROM playback
-         WHERE started_at >= datetime('now', ?)
+         WHERE started_at >= ? AND started_at < ?
            AND watched_seconds > 0
          GROUP BY remote_address
          ORDER BY SUM(watched_seconds) DESC
         """,
-        (_range(days),),
+        (*_meze(days),),
     )
 
 

@@ -6,6 +6,47 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.2
+
+### Added
+
+- **A period you choose yourself.** The switcher above the statistics has a
+  fifth option: it opens a dialog with two dates, three shortcuts for the
+  questions people actually ask (this month, last month, this year) and a
+  calendar that drops down when a field is clicked. The calendar is our own —
+  `<input type="date">` looks different in every browser and sticks out in the
+  middle of an otherwise matching dialog — and it is a suggestion, not the only
+  way in: the date can be typed, in the Czech way or as `2026-08-01`. The same
+  calendar is wired into the history filter, which had the same kind of field.
+
+  Underneath it is not cosmetic. Every query asked only *since when*
+  (`datetime('now', '-30 days')`), so the window always ended now and "last
+  December" could not be expressed at all. All of them take both bounds now.
+  For "last N days" the upper bound stays deliberately open: time is stored
+  rounded to seconds, so a playback written in the same second we ask would
+  fall outside a strict upper bound — and that is exactly the record somebody
+  is looking at.
+
+### Fixed
+
+- **Backups from a container had two ways to disappoint.** `pg_dump` was not in
+  the image, so a PostgreSQL backup fell back to the app's own export — it
+  worked, but `pg_dump` handles a consistent snapshot, dependency order and
+  indexes. And the backup folder had to be set by hand, where it was easy to
+  pick a path outside the mounted folder: such a backup is written into the
+  container and disappears with the next build, while the task keeps reporting
+  success for months. The app now recognises it runs in a container and fills
+  in `/app/data/backups` — on the host that is `./data/backups`. A path you
+  chose yourself is never overwritten.
+- **The demo swallowed the filters.** Its guard stopped every form, including
+  the ones that only filter — the period above the statistics and the filter in
+  the history. It now stops only what writes; a GET form changes the address,
+  not the data, which is how the server middleware saw it all along.
+- **A chip that is a button now behaves like one.** The period switcher gained
+  a chip that is a `<button>` rather than an `<a>`, and a button gets no
+  pointer from the browser — the same-looking chip beside it had a hand, this
+  one did not.
+
 ## 1.2.1
 
 ### Added

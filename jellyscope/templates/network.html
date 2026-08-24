@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile %}
+{% from "_macros.html" import period_filter, tile with context %}
 {% block title %}{{ _("Síť") }} · Jellyscope{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
             {{ _("Kolik dat teklo ze serveru k přehrávačům – a kdy to bylo nejvíc.") }}
         </p>
     </div>
-    {{ period_filter(days, '/network') }}
+    {{ period_filter(obdobi, '/network') }}
 </div>
 
 {# Poctivost napřed. Číslo vypadá jako měření, ale měřením není - a kdo

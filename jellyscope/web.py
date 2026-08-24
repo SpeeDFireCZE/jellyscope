@@ -22,7 +22,7 @@ import re
 import sys
 import time
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -82,6 +82,11 @@ async def lifespan(app: FastAPI):
 
     db.init_db()
     log.info("databaze pripravena")
+
+    # V kontejneru si slozku na zalohy nastavime sami - viz db.predvyplnene_zalohy().
+    zalohy = db.predvyplnene_zalohy()
+    if zalohy:
+        log.info("v kontejneru: slozka na zalohy nastavena na %s", zalohy)
 
     # Polozky, ktere do knihovny nikdy nemely prijit (serial misto dilu).
     # Bez toho by se pri kazde synchronizaci znovu tvarily jako zmizele.
@@ -498,25 +503,90 @@ def _adresa_klienta(request: Request) -> str:
 
 
 
-def _days(request: Request, value: Optional[int]) -> int:
+def _days(request: Request, value: Optional[int],
+          od: Optional[str] = None, do: Optional[str] = None) -> Any:
     """Zvolene obdobi - spolecne pro vsechny stranky.
+
+    Vraci bud pocet dnu (7, 30, 90, 365), nebo `stats.Obdobi` s vlastnimi
+    mezemi. Statistiky prijmou obojí - viz stats._meze().
 
     Kdyz je v adrese platna hodnota, pouzijeme ji a zapamatujeme si ji.
     Kdyz v adrese nic neni, vezmeme naposledy zvolene. Diky tomu prepnuti
     na "rok" na Prehledu plati i po prechodu na Jazyky - okno je synchronni.
+    Vlastni obdobi se pamatuje stejne, jen jako dvojice datumu.
 
-    Hodnota se porovnava proti pevnemu seznamu, takze se do SQL nikdy
-    nedostane cislo primo z adresy.
+    Cislo se porovnava proti pevnemu seznamu a datumy projdou pres
+    `strptime`, takze se do SQL nikdy nedostane text primo z adresy.
     """
+    if od or do:
+        # Datum se pise po cesku (1.8.2026), bere se i RRRR-MM-DD - stejny
+        # parser jako ve filtru historie, at se to nikde nechova jinak.
+        obdobi = stats.obdobi_od_do(_datum_z_textu(od), _datum_z_textu(do))
+        if obdobi is not None:
+            request.session[DAYS_SESSION_KEY] = {"od": obdobi.od[:10],
+                                                 "do": _posledni_den(obdobi.do)}
+            return obdobi
+
     if value in ALLOWED_DAYS:
         request.session[DAYS_SESSION_KEY] = int(value)
         return int(value)
 
     remembered = request.session.get(DAYS_SESSION_KEY)
+    if isinstance(remembered, dict):
+        obdobi = stats.obdobi_od_do(remembered.get("od"), remembered.get("do"))
+        if obdobi is not None:
+            return obdobi
     if remembered in ALLOWED_DAYS:
         return int(remembered)
 
     return DEFAULT_DAYS
+
+
+def _rychla_obdobi() -> list[tuple[str, str, str]]:
+    """Nabidka do okna s vlastnim obdobim - (popis, od, do) po cesku.
+
+    Nejsou to dalsi tlacitka v prepinaci, ale predvyplneni poli: mesic
+    a rok jsou otazky, na ktere se clovek pta casto, a pocitat si datum
+    prvniho dne minuleho mesice v hlave je otrava.
+    """
+    dnes = date.today()
+    prvni_tohoto = dnes.replace(day=1)
+    posledni_minuleho = prvni_tohoto - timedelta(days=1)
+    prvni_minuleho = posledni_minuleho.replace(day=1)
+    return [
+        ("tento měsíc", _cesky_datum(prvni_tohoto.isoformat()),
+         _cesky_datum(dnes.isoformat())),
+        ("minulý měsíc", _cesky_datum(prvni_minuleho.isoformat()),
+         _cesky_datum(posledni_minuleho.isoformat())),
+        ("letos", _cesky_datum(dnes.replace(month=1, day=1).isoformat()),
+         _cesky_datum(dnes.isoformat())),
+    ]
+
+
+def _obdobi_do_sablony(zadani: Any) -> dict[str, Any]:
+    """Co o obdobi potrebuje prepinac nahore na strance.
+
+    Sablona pak nemusi resit, jestli dostala cislo nebo dvojici datumu -
+    dostane obojí pripravene.
+    """
+    if isinstance(zadani, stats.Obdobi):
+        od, do = zadani.od[:10], _posledni_den(zadani.do)
+        return {"days": None, "od": od, "do": do,
+                # Do formulare patri datum tak, jak ho clovek pise.
+                "od_text": _cesky_datum(od), "do_text": _cesky_datum(do),
+                "dny": zadani.dny, "vlastni": True}
+    return {"days": int(zadani), "od": "", "do": "",
+            "od_text": "", "do_text": "",
+            "dny": int(zadani), "vlastni": False}
+
+
+def _posledni_den(do: str) -> str:
+    """Horni mez je pulnoc dne PO poslednim dni - do formulare patri ten den."""
+    try:
+        return (datetime.strptime(do, db.TIME_FORMAT)
+                - timedelta(days=1)).strftime("%Y-%m-%d")
+    except ValueError:
+        return do[:10]
 
 
 # Rozepsané nastavení databáze.
@@ -777,6 +847,12 @@ def _flash(request: Request, message: str, level: str = "info",
 def _context(request: Request, account: Optional[dict[str, Any]] = None,
              **extra: Any) -> dict[str, Any]:
     """Spolecna data pro kazdou stranku (stav sberace, hlasky, kdo je prihlaseny)."""
+    # Stranka se statistikami posila `days` - bud cislo, nebo vlastni
+    # obdobi. Prepinac nahore potrebuje obojí ve stejnem tvaru, tak mu ho
+    # pripravime tady a ne v kazde route zvlast.
+    if "days" in extra:
+        extra.setdefault("obdobi", _obdobi_do_sablony(extra["days"]))
+
     base = {
         "collector_status": db.get_setting(collector.STATUS_KEY, "unknown"),
         "collector_error": db.get_setting(collector.ERROR_KEY, ""),
@@ -785,6 +861,13 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         "active_count": stats.active_session_count(),
         "account": account,
         "ui_language": i18n.current_language(),
+        # Dnesek pro pole s datem - dal do budoucnosti nema smysl
+        # chodit, statistika by byla prazdna.
+        "dnes": date.today().isoformat(),
+        "dnes_text": _cesky_datum(date.today().isoformat()),
+        # Tri nejcastejsi odpovedi na "jake obdobi". Klik jimi vyplni
+        # pole, neodesle formular - at je videt, co se vybralo.
+        "rychla_obdobi": _rychla_obdobi(),
         # `?wait=restart` / `?wait=task` v adrese říká stránce, ať si počká
         # a obnoví se sama, až bude na co. Nastavuje to routa přesměrováním
         # (viz /settings/restart a /settings/stop); pevný seznam hodnot,
@@ -819,9 +902,10 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] = None,
+              od: Optional[str] = None, do: Optional[str] = None,
               top_kind: Optional[str] = None,
               account: dict[str, Any] = Depends(require_login)):
-    days = _days(request, days)
+    days = _days(request, days, od, do)
     kind = _kind(request, kind)
     top_kind = _kind(request, top_kind, TOP_KIND_SESSION_KEY)
     current = stats.overview(days)
@@ -887,7 +971,7 @@ def top_items_partial(
     return templates.TemplateResponse(request, "_top_items.html", _context(
         request, account,
         top_kind=_kind(request, kind, TOP_KIND_SESSION_KEY),
-        top_items=stats.top_items(_days(request, days),
+        top_items=stats.top_items(_days(request, days, od, do),
                                   kind=_kind(request, kind, TOP_KIND_SESSION_KEY)),
     ))
 
@@ -935,6 +1019,8 @@ def daily_partial(
     request: Request,
     kind: Optional[str] = None,
     days: Optional[int] = None,
+    od: Optional[str] = None,
+    do: Optional[str] = None,
     account: dict[str, Any] = Depends(require_login),
 ):
     """Jen karta "Sledovanost po dnech" - bez zbytku stranky.
@@ -947,7 +1033,7 @@ def daily_partial(
     ne jeji kopii. Kdyby to byly dva soubory, jeden z nich by casem
     odesel jinam a nikdo by si toho nevsiml.
     """
-    days = _days(request, days)
+    days = _days(request, days, od, do)
     kind = _kind(request, kind)
     return templates.TemplateResponse(request, "_daily_card.html", _context(
         request, account,
@@ -1231,8 +1317,10 @@ async def item_image(
 
 
 @app.get("/users", response_class=HTMLResponse)
-def users(request: Request, days: Optional[int] = None, account: dict[str, Any] = Depends(require_login)):
-    days = _days(request, days)
+def users(request: Request, days: Optional[int] = None,
+          od: Optional[str] = None, do: Optional[str] = None,
+          account: dict[str, Any] = Depends(require_login)):
+    days = _days(request, days, od, do)
     return templates.TemplateResponse(request, "users.html", _context(
         request, account,
         days=days,
@@ -1242,9 +1330,11 @@ def users(request: Request, days: Optional[int] = None, account: dict[str, Any] 
 
 @app.get("/users/{user_id}", response_class=HTMLResponse)
 def user_detail(
-    request: Request, user_id: str, days: Optional[int] = None, account: dict[str, Any] = Depends(require_login)
+    request: Request, user_id: str, days: Optional[int] = None,
+    od: Optional[str] = None, do: Optional[str] = None,
+    account: dict[str, Any] = Depends(require_login)
 ):
-    days = _days(request, days)
+    days = _days(request, days, od, do)
     detail = stats.user_detail(user_id, days)
     if not detail:
         raise HTTPException(status_code=404, detail="Uzivatel nenalezen")
@@ -1255,8 +1345,10 @@ def user_detail(
 
 
 @app.get("/insights", response_class=HTMLResponse)
-def insights_page(request: Request, days: Optional[int] = None, account: dict[str, Any] = Depends(require_login)):
-    days = _days(request, days)
+def insights_page(request: Request, days: Optional[int] = None,
+                  od: Optional[str] = None, do: Optional[str] = None,
+                  account: dict[str, Any] = Depends(require_login)):
+    days = _days(request, days, od, do)
     return templates.TemplateResponse(request, "insights.html", _context(
         request, account,
         days=days,
@@ -2497,6 +2589,7 @@ def languages_preferred(
 
 @app.get("/network", response_class=HTMLResponse)
 def network_page(request: Request, days: Optional[int] = None,
+                 od: Optional[str] = None, do: Optional[str] = None,
                  account: dict[str, Any] = Depends(require_login)):
     """Sit - kolik dat teklo ze serveru k prehravacum.
 
@@ -2504,7 +2597,7 @@ def network_page(request: Request, days: Optional[int] = None,
     prehravani. Zadny novy sber to nepotrebuje - jen jina otazka nad
     daty, ktera uz mame.
     """
-    days = _days(request, days)
+    days = _days(request, days, od, do)
     return templates.TemplateResponse(request, "network.html", _context(
         request, account,
         days=days,
@@ -2552,9 +2645,11 @@ async def network_geoip(request: Request,
 
 @app.get("/languages", response_class=HTMLResponse)
 def languages_page(
-    request: Request, days: Optional[int] = None, account: dict[str, Any] = Depends(require_login)
+    request: Request, days: Optional[int] = None,
+    od: Optional[str] = None, do: Optional[str] = None,
+    account: dict[str, Any] = Depends(require_login)
 ):
-    days = _days(request, days)
+    days = _days(request, days, od, do)
 
     # Barvy prirazujeme jednou a pouzijeme je ve vsech grafech na strance.
     # Zamerne bez ohledu na obdobi - jinak by zmena filtru prebarvila grafy.

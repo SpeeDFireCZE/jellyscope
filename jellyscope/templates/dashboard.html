@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile, method_badge %}
+{% from "_macros.html" import period_filter, tile, method_badge with context %}
 {% block title %}{{ _("Přehled") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -36,7 +36,7 @@
             {{ _("Co se na serveru dělo za posledních") }} {{ _(day_labels[days]) }}.
         </p>
     </div>
-    {{ period_filter(days, '/') }}
+    {{ period_filter(obdobi, '/') }}
 </div>
 
 <div class="card">

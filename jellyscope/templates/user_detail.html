@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile %}
+{% from "_macros.html" import period_filter, tile with context %}
 {% block title %}{{ user.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@
             &middot; {{ _("posledních") }} {{ _(day_labels[days]) }}
         </p>
     </div>
-    {{ period_filter(days, '/users/' ~ user.id) }}
+    {{ period_filter(obdobi, '/users/' ~ user.id) }}
 </div>
 
 <div class="kpi-row">

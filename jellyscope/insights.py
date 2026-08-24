@@ -19,6 +19,15 @@ from typing import Any
 
 from . import db, dialect, stats
 
+
+def _meze(zadani: Any) -> tuple[str, str]:
+    """Meze zvoleneho obdobi - (od, do).
+
+    Pocita je `stats`, at je vypocet na jednom miste: Zjisteni se ptaji
+    na tytez dny jako zbytek aplikace, vcetne vlastniho obdobi.
+    """
+    return stats._meze(zadani)
+
 # Kolik sekund musi prehravani trvat, aby se pocitalo. Pod tuhle hranici
 # to byva "omylem kliknul a zavrel" - a takove zaznamy by cisla zkreslovaly.
 MIN_PLAY_SECONDS = 120
@@ -42,7 +51,7 @@ def dead_storage(limit: int = 25, days: int = 365) -> dict[str, Any]:
               SELECT 1 FROM playback p
                WHERE p.item_id = i.id
                  AND p.watched_seconds >= {MIN_PLAY_SECONDS}
-                 AND p.started_at >= datetime('now', ?)
+                 AND p.started_at >= ? AND p.started_at < ?
           )
     """
 
@@ -52,7 +61,7 @@ def dead_storage(limit: int = 25, days: int = 365) -> dict[str, Any]:
         FROM items i
         {common_where}
         """,
-        (f"-{days} days",),
+        (*_meze(days),),
     ) or {}
 
     rows = db.query_all(
@@ -66,7 +75,7 @@ def dead_storage(limit: int = 25, days: int = 365) -> dict[str, Any]:
         ORDER BY i.size_bytes DESC
         LIMIT ?
         """,
-        (f"-{days} days", limit),
+        (*_meze(days), limit),
     )
 
     library_total = db.query_value(
@@ -116,11 +125,11 @@ def transcode_offenders(days: int, limit: int = 15) -> list[dict[str, Any]]:
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
         WHERE p.play_method = 'Transcode'
-          AND p.started_at >= datetime('now', ?)
+          AND p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
     GROUP BY {stats.SKUPINA_TITULU_KLIC}
         """,
-        (f"-{max(1, days)} days", MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     )
 
     # Technické údaje a důvody se opisují od nejčastěji překódovaného dílu
@@ -148,10 +157,10 @@ def transcode_reasons(days: int) -> list[dict[str, Any]]:
         FROM playback
         WHERE play_method = 'Transcode'
           AND transcode_reasons IS NOT NULL AND transcode_reasons != ''
-          AND started_at >= datetime('now', ?)
+          AND started_at >= ? AND started_at < ?
         GROUP BY transcode_reasons
         """,
-        (f"-{max(1, days)} days",),
+        (*_meze(days),),
     )
 
     # Jellyfin muze poslat vic duvodu naraz ("VideoCodecNotSupported,
@@ -201,7 +210,7 @@ def upgrade_candidates(days: int, limit: int = 15) -> list[dict[str, Any]]:
                MAX(i.size_bytes)        AS size_bytes
         FROM playback p
         JOIN items i ON i.id = p.item_id
-        WHERE p.started_at >= datetime('now', ?)
+        WHERE p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
           AND i.is_missing = 0
           AND (
@@ -214,7 +223,7 @@ def upgrade_candidates(days: int, limit: int = 15) -> list[dict[str, Any]]:
           )
      GROUP BY {stats.SKUPINA_TITULU_KLIC}
         """,
-        (f"-{max(1, days)} days", MIN_PLAY_SECONDS),
+        (*_meze(days), MIN_PLAY_SECONDS),
     )
 
     tituly = stats._slouc_tituly(
@@ -260,7 +269,7 @@ def oversized_rarely_watched(days: int, limit: int = 15) -> list[dict[str, Any]]
         LEFT JOIN playback p
                ON p.item_id = i.id
               AND p.watched_seconds >= ?
-              AND p.started_at >= datetime('now', ?)
+              AND p.started_at >= ? AND p.started_at < ?
         WHERE i.is_missing = 0
           AND i.size_bytes IS NOT NULL
           AND i.size_bytes > 2147483648      -- vetsi nez 2 GB
@@ -270,7 +279,7 @@ def oversized_rarely_watched(days: int, limit: int = 15) -> list[dict[str, Any]]
         ORDER BY gb_per_hour DESC
         LIMIT ?
         """,
-        (MIN_PLAY_SECONDS, f"-{max(1, days)} days", limit),
+        (MIN_PLAY_SECONDS, *_meze(days), limit),
     )
 
 
@@ -297,7 +306,7 @@ def storage_efficiency(days: int) -> list[dict[str, Any]]:
                   FROM playback p
              LEFT JOIN items pi ON pi.id = p.item_id
                  WHERE COALESCE(pi.library_id, p.library_id) = l.id
-                   AND p.started_at >= datetime('now', ?)) AS hours,
+                   AND p.started_at >= ? AND p.started_at < ?) AS hours,
                -- Jen položky, které v knihovně **opravdu jsou**. Celkový
                -- počet výš je taky jen z živých (is_missing = 0), takže
                -- bez téhle podmínky by se počítalo jablko ku hrušce:
@@ -310,13 +319,13 @@ def storage_efficiency(days: int) -> list[dict[str, Any]]:
                  WHERE pi.library_id = l.id
                    AND pi.is_missing = 0
                    AND p.watched_seconds >= ?
-                   AND p.started_at >= datetime('now', ?)) AS watched_items
+                   AND p.started_at >= ? AND p.started_at < ?) AS watched_items
         FROM libraries l
         LEFT JOIN items i ON i.library_id = l.id AND i.is_missing = 0
         GROUP BY l.id, l.name
         ORDER BY size_bytes DESC
         """,
-        (f"-{max(1, days)} days", MIN_PLAY_SECONDS, f"-{max(1, days)} days"),
+        (*_meze(days), MIN_PLAY_SECONDS, *_meze(days)),
     )
 
 
@@ -375,7 +384,7 @@ def never_finished(days: int, limit: int = 15) -> list[dict[str, Any]]:
                i.runtime_ticks / 600000000.0 AS runtime_minutes
         FROM playback p
         JOIN items i ON i.id = p.item_id
-        WHERE p.started_at >= datetime('now', ?)
+        WHERE p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
           AND i.runtime_ticks > 0
           AND p.position_ticks IS NOT NULL
@@ -384,5 +393,5 @@ def never_finished(days: int, limit: int = 15) -> list[dict[str, Any]]:
         ORDER BY attempts DESC, best_percent ASC
         LIMIT ?
         """,
-        (f"-{max(1, days)} days", MIN_PLAY_SECONDS, limit),
+        (*_meze(days), MIN_PLAY_SECONDS, limit),
     )
