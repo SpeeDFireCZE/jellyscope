@@ -284,6 +284,8 @@ EN: dict[str, str] = {
         "Waiting for the app to come back up - the page will reload itself.",
     "Čekám, až úloha dodělá rozpracovanou položku – stránka se pak obnoví sama.":
         "Waiting for the task to finish the item in progress - the page will reload itself.",
+    "Trvá to déle, než je zdrávo.": "This is taking longer than it should.",
+    "Zkusit to znovu": "Try again",
     "Trvá to déle, než je zdrávo. Zkus stránku obnovit ručně.":
         "This is taking longer than it should. Try reloading the page manually.",
     "Zastavuji – úloha dokončí rozpracovanou položku a skončí.":

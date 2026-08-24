@@ -6,6 +6,31 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.7
+
+### Fixed
+
+- **The page after an update from the browser never let you through.** It
+  said "restarting — I'll let you through once it is up", and then sat
+  there while the app had long been up on the new version.
+
+  It waited for the process start time to change, but took its baseline
+  from the *first* answer it got. The restart happens within a second and
+  the first question is asked after two — so that answer already came from
+  the new process. The page wrote it down as "what I am waiting away from"
+  and waited for a change that had already happened.
+
+  The starting point is now written into the page by the server that
+  rendered it, and the page asks immediately rather than after a two-second
+  pause. It also watches the **version**, which is the actual question
+  ("is the new version running?") rather than a proxy for it — `/health`
+  reports it to a signed-in browser. And if nothing comes up at all, after
+  five minutes the page says so and offers a link, instead of spinning
+  forever.
+
+  The same baseline mistake was in the wait after the manual restart button
+  in Settings; it is fixed there too.
+
 ## 1.2.6
 
 ### Added

@@ -37,6 +37,11 @@ from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, form
                updates,
                i18n, importers, insights, langstats, languages, scanner, stats,
                tasks)
+# Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
+# leží na disku nová, ale tenhle proces pořád běží starý kód - a čekárna
+# po aktualizaci potřebuje vědět přesně to, co běží tady, ne co je na
+# disku. Až se proces vymění, načte se soubor znovu i s novým číslem.
+from . import __version__
 # PROJECT_DIR je kořen projektu (tam, kde je run.py a složka data),
 # PACKAGE_DIR je tenhle balíček. Nejsou totéž a plete se to snadno -
 # proto mají různá jména místo jednoho BASE_DIR.
@@ -889,6 +894,14 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # která skončí mezi vykreslením stránky a prvním dotazem, by jinak
         # propadla a nic by se neobnovilo.
         "tasks_version": scanner.tasks_version(),
+        # Kdy nastartoval proces, ktery tuhle stranku vykreslil. Ze
+        # stejneho duvodu jako `tasks_version` o radek vys: cekarna po
+        # restartu potrebuje vedet, OD CEHO ceka, a nesmi si to zjistovat
+        # az prvnim dotazem na /health. Restart prijde do vteriny, takze
+        # ta prvni odpoved uz muze patrit novemu procesu - cekarna by si
+        # ho zapsala jako vychozi stav a cekala na zmenu, ktera uz nikdy
+        # neprijde.
+        "beh_od": int(STARTED_AT),
         # Verze se ukazuje v patičce každé stránky - je to první údaj,
         # na který se u hlášení chyby ptá kdokoliv.
         "verze": updates.stav(),
@@ -2120,6 +2133,10 @@ def _stranka_aktualizace() -> str:
     nadpis = i18n.translate("Aktualizuji…")
     popis = i18n.translate("Nová verze je stažená. Aplikace se teď "
                            "restartuje - jakmile bude nahoře, pustím tě dál.")
+    dlouho = i18n.translate("Trvá to déle, než je zdrávo.")
+    pokracovat = i18n.translate("Zkusit to znovu")
+    beh_od = int(STARTED_AT)
+    verze_ted = __version__
     return f"""<!doctype html>
 <html lang="{i18n.current_language()}">
 <head>
@@ -2135,6 +2152,8 @@ def _stranka_aktualizace() -> str:
           box-shadow: 0 24px 60px rgb(0 0 0 / 45%); text-align: center; }}
   h1 {{ font-size: 19px; margin: 0 0 10px; }}
   p  {{ color: #b6b4ac; line-height: 1.5; margin: 0; }}
+  .pozn:not(:empty) {{ margin-top: 14px; font-size: 14px; }}
+  .pozn a {{ color: #6aa9ee; }}
   .tecka {{ display: inline-block; width: 9px; height: 9px; border-radius: 50%;
             background: #3987e5; margin-bottom: 14px;
             animation: tep 1.4s ease-in-out infinite; }}
@@ -2147,22 +2166,50 @@ def _stranka_aktualizace() -> str:
   <span class="tecka"></span>
   <h1>{nadpis}</h1>
   <p>{popis}</p>
+  <p class="pozn" id="pozn"></p>
 </div>
 <script>
   // Ptáme se na /health, dokud neodpoví nový proces - pozná se podle
   // `started_at`, které se výměnou procesu změní. Teprve pak stránku
   // pustíme dál; do té doby by ji kreslila stará verze nad novými
   // šablonami, což je právě to, čemu se tady vyhýbáme.
-  var puvodni = null;
-  setInterval(function () {{
+  //
+  // Od čeho čekáme, je zapsané tady ze serveru - je to start procesu,
+  // který tuhle stránku vykreslil. Zjišťovat si to až první odpovědí
+  // nešlo: restart přijde do vteřiny, takže první odpověď už patřila
+  // novému procesu, čekárna si ho zapsala jako výchozí stav a čekala na
+  // změnu, která nikdy nepřišla. Aplikace byla přitom dávno nahoře.
+  var puvodni = {beh_od};        // start procesu, ktery tuhle stranku vykreslil
+  var verze = "{verze_ted}";     // a verze, kterou mel
+  var pokusu = 0;
+  var VZDAT_TO = 150;              // ~5 minut
+
+  function zkus() {{
+    if (pokusu++ > VZDAT_TO) {{
+      document.getElementById("pozn").innerHTML =
+        '{dlouho} <a href="/">{pokracovat}</a>';
+      return;
+    }}
     fetch("/health", {{ cache: "no-store", credentials: "same-origin" }})
       .then(function (r) {{ return r.json(); }})
       .then(function (data) {{
-        if (puvodni === null) {{ puvodni = data.started_at; return; }}
+        // Dva signály, protože každý sám o sobě někde selže:
+        //   * `version` je přesně ta otázka, na kterou čekáme - ale hlásí
+        //     se jen přihlášenému,
+        //   * `started_at` odpoví komukoliv, jen říká míň ("něco se
+        //     restartovalo").
+        // Stačí, když se změní jeden.
         if (data.started_at !== puvodni) {{ location.href = "/"; }}
+        else if (data.version && data.version !== verze) {{ location.href = "/"; }}
+        else {{ setTimeout(zkus, 2000); }}
       }})
-      .catch(function () {{ /* zrovna se restartuje, zkusíme to znovu */ }});
-  }}, 2000);
+      .catch(function () {{
+        // Aplikace je právě dole - přesně to čekáme.
+        setTimeout(zkus, 2000);
+      }});
+  }}
+
+  zkus();
 </script>
 </body>
 </html>"""
@@ -2805,6 +2852,11 @@ def health(request: Request):
     otisk = scanner.otisky()
     return {
         **zaklad,
+        # Verze beziciho procesu. Cekarna po aktualizaci na ni ceka: je to
+        # primo ta otazka, na kterou se pta ("bezi uz nova verze?"), kdezto
+        # `started_at` odpovida jen "neco se restartovalo". Neprihlasenemu
+        # ji nerikame - monitoringu staci, ze aplikace zije.
+        "version": __version__,
         "collector": db.get_setting(collector.STATUS_KEY, "unknown"),
         "last_poll": db.get_setting(collector.LAST_POLL_KEY, ""),
         "active_sessions": stats.active_session_count(),

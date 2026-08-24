@@ -34,7 +34,7 @@
 {# `wait_for` nastaví routa, po které se má počkat a stránku obnovit samo:
    "restart" = čeká na nový proces, "task" = čeká, až doběhne zastavovaná
    úloha. Obsluha je dole v tomhle souboru. #}
-<body{% if wait_for %} data-wait-for="{{ wait_for }}"{% endif %}{% if reload_on_task %} data-reload-on-task="1"{% endif %} data-tasks-version="{{ tasks_version }}">
+<body{% if wait_for %} data-wait-for="{{ wait_for }}" data-beh-od="{{ beh_od }}"{% endif %}{% if reload_on_task %} data-reload-on-task="1"{% endif %} data-tasks-version="{{ tasks_version }}">
 <div class="layout">
 
     <aside class="sidebar">
@@ -865,7 +865,11 @@
         var duvod = document.body.dataset.waitFor;   // "restart" | "task"
         if (!duvod) { return; }
 
-        var puvodniStart = null;
+        // Start procesu, který stránku vykreslil - viz `beh_od` ve web.py.
+        // Brát ho z první odpovědi /health je past: restart přijde dřív,
+        // než se stihne první dotaz, a čekárna pak čeká na změnu čísla,
+        // které se už změnilo.
+        var puvodniStart = Number(document.body.dataset.behOd) || null;
         var videnoBezi = false;
         var pokusu = 0;
         var MAX_POKUSU = 900;                        // ~30 minut, pak to vzdáme
@@ -897,6 +901,7 @@
                     if (duvod === "restart") {
                         if (puvodniStart === null) { puvodniStart = data.started_at; }
                         else if (data.started_at !== puvodniStart) { nactiZnovu(); return; }
+                        // Jinak se čeká dál - proces je pořád ten původní.
                     } else {
                         // Úloha se spouští na pozadí, takže v první chvíli
                         // po přesměrování ještě nemusí běžet. Kdybychom
