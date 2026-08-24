@@ -1,0 +1,24 @@
+# Co do obrazu nepatří.
+#
+# Hlavně `data/` a `.env`. Databáze i tajný klíč patří do svazku a do
+# prostředí, ne do obrazu - obraz se posílá dál, data ne.
+data/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+.git/
+.github/
+.gitignore
+.gitattributes
+
+.env
+*.db
+*.db-wal
+*.db-shm
+
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

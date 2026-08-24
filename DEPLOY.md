@@ -7,6 +7,9 @@ Needs Python 3.10+, ~200 MB of disk and a reachable Jellyfin. No database
 server — SQLite is the default. `ffmpeg` is only used by the ffprobe data
 source, and the installer takes care of it.
 
+Prefer containers? Jump to [Docker](#docker) — one `.env`, one
+`docker compose up -d`.
+
 ---
 
 ## Install
@@ -98,6 +101,62 @@ Pulls the new version, reinstalls the dependencies from
 `requirements.txt` and restarts the service — it installs no system
 packages. `.env` and `data/` are untouched. Back the database up first — see
 [Backups](#backups).
+
+---
+
+## Docker
+
+Everything is configured in one place — the same `.env` the app uses
+without Docker. `docker compose` reads that file itself, so changing the
+port is changing one line and starting again.
+
+```bash
+git clone https://github.com/SpeeDFireCZE/jellyscope.git
+cd jellyscope
+cp .env.example .env
+
+# SECRET_KEY is the only value the container refuses to start without
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+docker compose up -d
+```
+
+Then open <http://localhost:8097> and create the first account.
+
+**Where to change what** — all of it in `.env`:
+
+| | |
+|---|---|
+| `PORT` | the port, inside the container and out. One value, both places. |
+| `BIND` | which address on the host publishes it. `127.0.0.1` behind a reverse proxy (the default), `0.0.0.0` without one. |
+| `DATA_DIR` | where the data folder lives on the host. Default `./data`. |
+| `SECRET_KEY` | signs the login cookie. **Required** — an empty one is a hole, not a default, so the container will not start without it. |
+| `TZ` | the container's time zone. Without it it runs in UTC and the evening peak in the charts moves by a couple of hours. |
+| `FFPROBE` | `0` builds an image without ffmpeg — about 250 MB smaller, and the technical data is limited to what Jellyfin reports. |
+| `SECURE_COOKIES`, `FORWARDED_ALLOW_IPS` | behind HTTPS, same meaning as anywhere else — see [Reverse proxy](#reverse-proxy). |
+
+**Data.** Everything worth keeping — the database, the log, the image
+cache, backups — is in the folder mounted at `/app/data`. `docker compose
+down` does not touch it; a backup is a copy of that folder. The container
+runs as UID 10001, so if the folder ends up owned by somebody else:
+`sudo chown -R 10001:10001 ./data`.
+
+**Reading files with ffprobe.** The container has to see the media. Mount
+the library **read-only** and map the paths in *Settings → Data
+collection* — the path Jellyfin reports is not the path inside the
+container:
+
+```yaml
+    volumes:
+      - ./data:/app/data
+      - /srv/media:/media:ro     # :ro on purpose - Jellyscope never writes there
+```
+
+**Updates.** `git pull && docker compose up -d --build`. Missing database
+columns are added at startup, the same as anywhere else. The **Update and
+restart** button in the app is for installations from git — in a container
+it would update the code inside a layer that disappears with the next
+build, so it stays off.
 
 ---
 

@@ -16,6 +16,20 @@
             <div class="flash error"><span class="dot"></span><span>{{ error }}</span></div>
         {% endif %}
 
+        {# V ukázce nemá smysl schovávat heslo - je to jediná cesta dovnitř
+           a nic za ním není. Na vlastní instalaci se tenhle blok nikdy
+           neukáže. #}
+        {% if demo_mode %}
+            <div class="flash info" style="margin-bottom:14px">
+                <span class="dot"></span>
+                <span>
+                    <strong>{{ _("Ukázka") }}</strong> &ndash;
+                    {{ _("přihlas se jako") }} <code>demo</code> / <code>demodemo</code>.<br>
+                    {{ _("Data jsou vymyšlená a nic se v nich nemění.") }}
+                </span>
+            </div>
+        {% endif %}
+
         <div class="field" style="margin-bottom:14px">
             <label for="username">{{ _("Uživatelské jméno") }}</label>
             {# autocomplete pomáhá správcům hesel správně vyplnit přihlášení #}

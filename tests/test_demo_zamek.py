@@ -87,16 +87,38 @@ check(db.get_setting("jellyfin_url", "") != "http://cizi:8096",
 check(accounts.get_by_name("utocnik") is None, "a žádný účet nepřibyl")
 
 print()
-print("--- co v ukázce fungovat MÁ ---")
-# Jinak by si nikdo nemohl ani přepnout jazyk nebo se odhlásit.
-odpoved = client.post("/settings/language", data={"ui_language": "en"},
-                      follow_redirects=False)
-check(odpoved.status_code == 303 and db.get_setting("ui_language") == "en",
-      "jazyk rozhraní jde přepnout")
-odpoved = client.post("/settings/interface",
-                      data={"ui_max_streams": "5", "ui_max_viewers": "5",
-                            "ui_map_zoom": "wheel"}, follow_redirects=False)
-check(db.get_setting("ui_max_streams") == "5", "a nastavení rozhraní taky")
+print("--- zamčené je i to neškodné ---")
+# Cokoliv uloženého platí pro všechny další návštěvníky: kdo si přepne
+# na češtinu, přepne ji i tomu po sobě. Proto se neuloží ani jazyk.
+db.set_setting("ui_language", "en")
+client.post("/settings/language", data={"ui_language": "cs"},
+            follow_redirects=False)
+check(db.get_setting("ui_language") == "en", "jazyk rozhraní zůstal, jak byl")
+
+db.set_setting("ui_max_streams", "10")
+client.post("/settings/interface",
+            data={"ui_max_streams": "5", "ui_max_viewers": "5",
+                  "ui_map_zoom": "wheel"}, follow_redirects=False)
+check(db.get_setting("ui_max_streams") == "10", "a nastavení rozhraní taky")
+
+print()
+print("--- co v ukázce fungovat MUSÍ ---")
+# Bez přihlášení a odhlášení by nebylo co ukazovat.
+check("/login" in web.DEMO_POVOLENO and "/logout" in web.DEMO_POVOLENO,
+      "přihlášení a odhlášení jsou jediné výjimky")
+check(len(web.DEMO_POVOLENO) == 2, f"a opravdu jediné ({sorted(web.DEMO_POVOLENO)})")
+
+print()
+print("--- hláška se ukáže na místě, stránka se nikam nehne ---")
+# Přesměrování je až záloha pro případ, že by JavaScript nebyl. Prohlížeč
+# formulář vůbec neodešle - viz obsluha v base.html.
+zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+check("hlaska-ukazky" in zaklad, "v šabloně je místo pro hlášku")
+check("event.preventDefault()" in zaklad and "POVOLENO" in zaklad,
+      "a obsluha, která odeslání zastaví")
+stranka = client.get("/settings?section=data").text
+check("hlaska-ukazky" in stranka, "na stránce nastavení hláška je")
+check("demo" in stranka.lower(), "a cedule, že se nic neuloží")
 
 print()
 print("--- prohlížení funguje celé ---")

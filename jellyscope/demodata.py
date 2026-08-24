@@ -22,18 +22,32 @@ DEMO_PASSWORD = "demodemo"
 # Jak casto ktery clen domacnosti sahne po originale, kdyz ma na vyber
 # i cesky dabing. Petr kouka radeji v originale, Eva skoro vzdy cesky -
 # diky tomu ma stranka Jazyky co ukazat.
-PREFERS_ORIGINAL = {"demo-u1": 0.62, "demo-u2": 0.18, "demo-u3": 0.35, "demo-u4": 0.08}
+PREFERS_ORIGINAL = {
+    "demo-u1": 0.62, "demo-u2": 0.18, "demo-u3": 0.35, "demo-u4": 0.08,
+    "demo-u5": 0.90, "demo-u6": 0.05, "demo-u7": 0.48, "demo-u8": 0.72,
+    "demo-u9": 0.25, "demo-u10": 0.55, "demo-u11": 0.12,
+}
 
 LIBRARIES = [
     ("demo-movies", "Filmy", "movies"),
     ("demo-tv", "Serialy", "tvshows"),
 ]
 
+# Jedenact lidi schvalne. Karta "Kdo v jakem jazyce sleduje" ukazuje
+# rovnou prvnich deset (viz nastaveni Rozhrani) a zbytek schova do okna -
+# pri ctyrech divacich by tohle nebylo videt nikdy.
 USERS = [
     ("demo-u1", "Petr", 1),
     ("demo-u2", "Jana", 0),
     ("demo-u3", "Tomas", 0),
     ("demo-u4", "Eva", 0),
+    ("demo-u5", "Marek", 0),
+    ("demo-u6", "Lucie", 0),
+    ("demo-u7", "David", 0),
+    ("demo-u8", "Klara", 0),
+    ("demo-u9", "Ondrej", 0),
+    ("demo-u10", "Tereza", 0),
+    ("demo-u11", "Filip", 0),
 ]
 
 MOVIES = [
@@ -107,9 +121,18 @@ def already_seeded() -> bool:
 
 
 def ensure_demo_account() -> None:
-    """Zalozi ucet demo/demodemo, aby se do ukazky dalo prihlasit."""
+    """Zalozi ucet demo/demodemo, aby se do ukazky dalo prihlasit.
+
+    A postavi ukazku do anglictiny. Chodi na ni lidi odkudkoliv a cesky
+    popisek u grafu jim nerekne nic; prepnout si ji zpatky nejde, protoze
+    v ukazce se neuklada nic - a co by jeden prepnul, meli by tak
+    i vsichni po nem.
+    """
     if accounts.get_by_name(DEMO_USERNAME) is None:
         accounts.create(DEMO_USERNAME, DEMO_PASSWORD, is_admin=True)
+
+    db.set_setting("ui_language", "en")
+    db.set_setting("log_language", "en")
 
 
 def _audio_tracks(random_source) -> tuple[str, str, str]:

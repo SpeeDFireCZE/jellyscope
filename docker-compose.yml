@@ -1,0 +1,75 @@
+# Jellyscope.
+#
+#     docker compose up -d          spustí na pozadí
+#     docker compose logs -f        ukáže, co dělá
+#     docker compose down           zastaví (data zůstanou v ./data)
+#
+# Nic se nenastavuje tady. Všechno se bere ze souboru `.env` vedle tohohle
+# souboru - ten samý, který používá aplikace i bez Dockeru. Vzor je
+# v `.env.example`:
+#
+#     cp .env.example .env
+#     python3 -c "import secrets; print(secrets.token_hex(32))"   # SECRET_KEY
+#
+# Compose ten soubor čte sám a dosadí hodnoty níž. Chceš jiný port? Změň
+# PORT v `.env` a `docker compose up -d`. Nic jiného.
+
+services:
+  jellyscope:
+    build:
+      context: .
+      args:
+        # 0 = bez ffmpeg (~250 MB menší obraz). Technické údaje pak umí
+        # jen to, co hlásí Jellyfin - čtení souborů přes ffprobe nebude.
+        FFPROBE: "${FFPROBE:-1}"
+    image: jellyscope
+    container_name: jellyscope
+    restart: unless-stopped
+
+    ports:
+      # BIND=127.0.0.1 (výchozí) znamená "jen přes reverzní proxy".
+      # Bez proxy dej do `.env` BIND=0.0.0.0, ať se dá na aplikaci dostat
+      # ze sítě.
+      - "${BIND:-127.0.0.1}:${PORT:-8097}:${PORT:-8097}"
+
+    environment:
+      # Uvnitř kontejneru se musí poslouchat na všech adresách, jinak se
+      # k aplikaci Docker nedostane. Ven ji pouští teprve `ports` výš.
+      HOST: "0.0.0.0"
+      PORT: "${PORT:-8097}"
+
+      # POVINNÉ - podepisují se tím přihlašovací cookies. Po změně se
+      # všichni odhlásí. Bez něj se kontejner ani nespustí, což je
+      # schválně: prázdný klíč je díra, ne výchozí hodnota.
+      SECRET_KEY: "${SECRET_KEY:?vyplň SECRET_KEY v souboru .env}"
+
+      # Připojení k Jellyfinu se vyplňuje v aplikaci a bydlí v databázi;
+      # tohle je jen první nastřelení při úplně prvním startu.
+      JELLYFIN_URL: "${JELLYFIN_URL:-http://jellyfin:8096}"
+      JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
+
+      # Za HTTPS proxy patří do `.env` obojí: SECURE_COOKIES=1 (cookie jen
+      # po HTTPS) a FORWARDED_ALLOW_IPS s adresou proxy - bez toho druhého
+      # uvidíš u všech přehrávání adresu proxy místo adresy diváka.
+      SECURE_COOKIES: "${SECURE_COOKIES:-0}"
+      FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-}"
+
+      # Kvůli časům v grafech a v historii. Bez toho běží kontejner v UTC
+      # a večerní špička se rozjede o dvě hodiny.
+      TZ: "${TZ:-Europe/Prague}"
+
+    volumes:
+      # Jediné, o co jde v kontejneru přijít: databáze, log, mezipaměť
+      # obrázků a zálohy. Složka na hostiteli, ne pojmenovaný svazek -
+      # zálohu si tak odneseš prostým zkopírováním.
+      - "${DATA_DIR:-./data}:/app/data"
+
+      # Knihovna. Potřebná jen když technické údaje čteš přes ffprobe.
+      # Připoj ji JEN PRO ČTENÍ (:ro) - Jellyscope do souborů nikdy
+      # nezapisuje a tohle je nejlevnější způsob, jak si tím být jistý.
+      # V Nastavení → Sběr dat pak nastav mapování cest, aby cesta, kterou
+      # hlásí Jellyfin, seděla na cestu v kontejneru.
+      # - /srv/media:/media:ro
+
+    security_opt:
+      - no-new-privileges:true

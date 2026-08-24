@@ -27,8 +27,15 @@ os.environ["SECRET_KEY"] = "ukazkovy-rezim"
 # Ukazkovy rezim: sberac se nespousti (nema se koho ptat)
 # a vymyslene "prave se hraje" tak na Prehledu zustane videt.
 os.environ["JELLYSCOPE_DEMO"] = "1"
-os.environ["HOST"] = "127.0.0.1"
-os.environ["PORT"] = "8098"
+# Adresa a port jdou prepsat z prostredi. Vychozi 127.0.0.1 je zamer:
+# ukazka na svem stroji nema poslouchat do site. V kontejneru je to ale
+# naopak nutnost - na 127.0.0.1 uvnitr kontejneru se zvenku nikdo
+# nedovola, proto se tam nastavuje HOST=0.0.0.0.
+os.environ.setdefault("HOST", "127.0.0.1")
+os.environ.setdefault("PORT", "8098")
+
+_ADRESA = os.environ["HOST"]
+_PORT = int(os.environ["PORT"])
 
 import uvicorn  # noqa: E402
 
@@ -52,7 +59,7 @@ def main() -> None:
     print("=" * 58)
     print("  UKAZKOVY REZIM - data jsou vymyslena")
     print()
-    print("  Otevri v prohlizeci:  http://127.0.0.1:8098")
+    print(f"  Otevri v prohlizeci:  http://{_ADRESA}:{_PORT}")
     print()
     print(f"  Prihlaseni:  {demodata.DEMO_USERNAME} / {demodata.DEMO_PASSWORD}")
     print()
@@ -67,7 +74,8 @@ def main() -> None:
     db.set_setting("task_sync_enabled", "0")
     db.set_setting("task_recent_enabled", "0")
 
-    uvicorn.run("jellyscope.web:app", host="127.0.0.1", port=8098, log_level="warning")
+    uvicorn.run("jellyscope.web:app", host=_ADRESA, port=_PORT,
+                log_level="warning")
 
 
 if __name__ == "__main__":

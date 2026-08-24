@@ -207,6 +207,20 @@
 </dialog>
 {% endif %}
 
+{% if demo_mode %}
+{# Ukázka: formuláře se neodesílají vůbec.
+
+   Server je stejně odmítne (middleware `ukazkovy_rezim`), jenže odpověď
+   je přesměrování - a to znamená, že se stránka načte znovu. Kdo zkoumal
+   Nastavení, přišel o rozepsané pole a někdy i o místo, kde byl. Tady se
+   klik zastaví ještě v prohlížeči: nic se nikam neposílá a hláška se
+   objeví na místě.
+
+   Server tím nepřestává být tou skutečnou pojistkou - JavaScript se dá
+   vypnout, middleware ne. #}
+<div class="hlaska-na-miste" id="hlaska-ukazky" role="status" aria-live="polite"></div>
+{% endif %}
+
 <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
 
 <script>
@@ -223,6 +237,34 @@
         localStorage.setItem("jellyscope-theme", next);
     }
 
+    {% if demo_mode %}
+    // ------------------------------------------------------------------
+    // Ukázka: místo odeslání formuláře hláška na místě
+    //
+    // Výjimkou je přihlášení a odhlášení - bez nich by se do ukázky
+    // nedalo dostat ani z ní ven.
+    // ------------------------------------------------------------------
+    (function () {
+        var POVOLENO = ["/login", "/logout"];
+        var hlaska = document.getElementById("hlaska-ukazky");
+        var casovac = null;
+
+        document.addEventListener("submit", function (event) {
+            var form = event.target;
+            var kam = (form.getAttribute("action") || "").split("?")[0];
+            // `method="dialog"` zavírá okno, ne formulář na server.
+            if (form.method === "dialog" || POVOLENO.indexOf(kam) !== -1) { return; }
+
+            event.preventDefault();
+            hlaska.textContent = form.dataset.demoNote
+                || {{ _("Tohle je ukázka – data se v ní nemění. Na vlastní instalaci tlačítko funguje.") | tojson }};
+            hlaska.classList.add("vidi");
+            clearTimeout(casovac);
+            casovac = setTimeout(function () { hlaska.classList.remove("vidi"); }, 4500);
+        });
+    })();
+
+    {% endif %}
     // ------------------------------------------------------------------
     // Bublina s hodnotou
     //

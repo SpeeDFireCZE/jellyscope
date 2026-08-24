@@ -1815,6 +1815,39 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .mapa-bod:hover { opacity: 0.8; }
 
 
+/* Hláška ukázky. Vyjede zdola uprostřed, počká pár vteřin a zmizí -
+   stránka se přitom nikam nehne, což je celý smysl: člověk zůstane tam,
+   kde byl, i s tím, co měl rozepsané. */
+.hlaska-na-miste {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translate(-50%, 12px);
+    z-index: 60;
+    max-width: min(520px, calc(100vw - 32px));
+    background: var(--surface-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--series-1);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.32);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.hlaska-na-miste.vidi {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hlaska-na-miste { transition: opacity 0.16s ease; transform: translate(-50%, 0); }
+}
+
 /* Nová verze. Dřív to byl drobný odznáček vedle čísla verze a splýval
    s ním - přitom je to jediná věc v patičce, kvůli které tam má člověk
    kouknout. Teď je to tlačítko přes celou šířku panelu, které otevře

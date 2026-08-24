@@ -6,6 +6,46 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.1
+
+### Added
+
+- **Docker.** `Dockerfile`, `docker-compose.yml` and a section in
+  [DEPLOY.md](DEPLOY.md). Everything is configured in the same `.env` the app
+  already uses — compose reads that file itself, so changing the port is
+  changing one line and starting again. Data lives in a folder on the host
+  rather than a named volume, so a backup is a copy of a folder; the container
+  runs as UID 10001 and not as root. `ffmpeg` is a build argument: leave it out
+  and the image is about 250 MB smaller, with the technical data limited to
+  what Jellyfin reports.
+- **`maxminddb` comes with the installation.** It used to be optional, which
+  was defensible — whoever does not want the map has no reason to install
+  anything — but the effect was that the map stayed empty for everyone who did
+  not read the note about it. It is small, it opens a local file and never asks
+  the network. The GeoLite2 file itself is still a download on a button press;
+  only the reader is part of the install now.
+
+### Changed
+
+- **The demo is locked all the way.** Even the language and the interface
+  settings are refused now: whatever one visitor saves applies to the next one,
+  so "harmless" was the wrong measure — shared is the right one. It also runs
+  in English, because visitors come from anywhere and a Czech axis label tells
+  them nothing.
+- **A blocked action no longer moves the page.** It used to be answered with a
+  redirect, which reloads the page and throws away whatever was typed; now the
+  browser does not submit at all and a note slides in at the bottom. The
+  middleware stays as the real guard — JavaScript can be turned off, it cannot.
+- **The demo says how to get in.** Its login page shows the credentials: the
+  password is the only way into a demo and there is nothing behind it, so
+  hiding it only makes the visitor guess. Demo mode only.
+- **The demo has eleven viewers** instead of four, so *Who watches in which
+  language* passes the threshold and folds the rest into a dialog — with four
+  it never did, and that fold is one of the things worth showing.
+- `demo.py` takes `HOST` and `PORT` from the environment. The default stays
+  `127.0.0.1`; in a container it is the opposite, since nobody reaches
+  `127.0.0.1` inside it.
+
 ## 1.2.0
 
 ### Added

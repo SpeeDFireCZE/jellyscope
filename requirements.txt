@@ -19,6 +19,12 @@ jinja2==3.1.6              # templating - turns HTML templates into pages
                            #  run templates in a sandbox, so it was a formality)
 itsdangerous==2.2.0        # signs the login cookie
 python-multipart==0.0.32   # reads HTML form data (POST)
+maxminddb==3.1.1           # reads the GeoLite2 file for the map on the
+                           # Network page. Small and offline - it opens a
+                           # local file, it never asks the network. Used to
+                           # be optional, which meant the map stayed empty
+                           # for everyone who did not read the note about
+                           # it, so now it comes with the installation.
 
 # Why these versions and not the older ones that worked fine:
 #
@@ -62,14 +68,11 @@ python-multipart==0.0.32   # reads HTML form data (POST)
 # The "pool" extra enables connection pooling; without it the app still
 # connects, it just opens a new connection per query.
 
-# --- optional, second one ------------------------------------------------
-# Reads the GeoLite2 database for the map on the Network page - where
-# people watch from. Not listed above for the same reason as psycopg:
-# whoever does not want the map has no reason to install anything, and
-# without it the page simply explains what is missing.
+# --- about the map -------------------------------------------------------
+# maxminddb (above) only knows how to READ the GeoLite2 file; the file
+# itself is not part of the installation. It is about 65 MB and the app
+# downloads it into data/ on a button press in Settings. Until then the
+# Network page simply explains what is missing.
 #
-#   .venv/bin/python -m pip install maxminddb
-#
-# The database itself is a file the app downloads on a button press into
-# data/ (about 65 MB). Nothing is asked of the network at runtime - the
-# lookup happens against that local file.
+# Nothing is asked of the network at runtime - the lookup happens against
+# that local file.

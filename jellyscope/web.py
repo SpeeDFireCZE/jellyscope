@@ -146,11 +146,17 @@ async def ukazkovy_rezim(request: Request, call_next):
     if _demo_blokuje(request):
         _flash(request, "Tohle je ukázka – data se v ní nemění. "
                         "Na vlastní instalaci tlačítko funguje.", "info")
-        # Zpátky tam, odkud člověk přišel. Formuláře se odesílají ze
-        # stránky, na které stojí, takže se vrátí na tutéž - jen s hláškou.
+        # Zpátky přesně tam, odkud člověk přišel - ne na Přehled. Kdo
+        # zkoumá Nastavení, má po kliknutí zůstat v Nastavení; vyhodit ho
+        # na úvodní stránku je trest za zvědavost.
+        #
+        # `referer` posílá prohlížeč u formuláře odeslaného ze stránky
+        # vždycky. Když by přišel odjinud (nebo vůbec), je domů jediné
+        # bezpečné místo - přesměrovat na cizí adresu z hlavičky by z toho
+        # udělalo otevřený přesměrovávač.
         kam = request.headers.get("referer") or "/"
         if not kam.startswith(str(request.base_url).rstrip("/")):
-            kam = "/"   # cizí adresa v referer = radši domů
+            kam = "/"
         return RedirectResponse(kam, status_code=303)
     return await call_next(request)
 
@@ -172,23 +178,18 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Tri hlavicky, ktere prohlizeci rikaji, co s odpovedi nesmi delat.
 # Stoji jeden middleware a zavirají cele skupiny utoku dopredu.
-# Co smi ukazkovy rezim zmenit.
+# Co smi ukazkovy rezim zmenit: prihlaseni a odhlaseni, nic vic.
 #
 # Ukazka bezi na verejne adrese a prihlasit se do ni muze kdokoliv -
-# udaje jsou v prihlasovacim okne. Kdyby sla nastavit adresa Jellyfinu
-# nebo pustit import, prvni navstevnik by ukazku rozbil pro vsechny
-# ostatni. Zakazane je proto vsechno, co zapisuje, krome techto cest:
-#
-#   prihlaseni a odhlaseni     - bez nich by se nedalo dovnitr,
-#   jazyk a rozhrani           - to si kazdy muze prepnout, nic to nerozbije.
+# udaje jsou v prihlasovacim okne. Cokoliv ulozeneho plati pro vsechny
+# dalsi navstevniky, takze i neskodne veci jako jazyk rozhrani jsou
+# zamcene: kdo si prepne na cestinu, prepne ji i tomu po sobe.
 #
 # Tlacitka zustavaji videt schvalne: ukazka ma ukazat, co aplikace umi.
 # Misto akce se objevi hlaska.
 DEMO_POVOLENO = frozenset({
     "/login",
     "/logout",
-    "/settings/language",
-    "/settings/interface",
 })
 
 
@@ -257,6 +258,10 @@ def _asset_version() -> str:
 
 
 templates.env.globals["asset_version"] = _asset_version()
+# Ukazkovy rezim pozna i sablona: prihlasovaci stranka v nem rovnou rekne,
+# jakymi udaji se dovnitr. Je to globalni promenna, protoze prihlasovaci
+# stranka zadny vlastni kontext nema.
+templates.env.globals["demo_mode"] = config.demo_mode
 
 
 # ---------------------------------------------------------------------------

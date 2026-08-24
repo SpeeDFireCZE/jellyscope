@@ -49,6 +49,16 @@
 
 
 {# ================================================================== #}
+{% if demo_mode %}
+{# Ať je to jasné dřív, než člověk začne vyplňovat. #}
+<div class="flash info" style="margin-bottom:18px">
+    <span class="dot"></span>
+    <span>
+        {{ _("V ukázce je nastavení jen na koukání – tlačítka fungují, ale nic neuloží. Data jsou vymyšlená a stejná pro všechny návštěvníky.") }}
+    </span>
+</div>
+{% endif %}
+
 {% if section == 'jellyfin' %}
 {# ================================================================== #}
 <div class="card">

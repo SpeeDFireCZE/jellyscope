@@ -1142,6 +1142,12 @@ EN: dict[str, str] = {
         "a dialog.",
     "Tohle je ukázka – data se v ní nemění. Na vlastní instalaci tlačítko funguje.":
         "This is a demo - nothing here changes. On your own install the button works.",
+    "V ukázce je nastavení jen na koukání – tlačítka fungují, ale nic neuloží. Data jsou vymyšlená a stejná pro všechny návštěvníky.":
+        "In the demo the settings are for looking at - the buttons work, they just save nothing. The data is made up and the same for every visitor.",
+    "Ukázka": "Demo",
+    "přihlas se jako": "sign in as",
+    "Data jsou vymyšlená a nic se v nich nemění.":
+        "The data is made up and nothing in it changes.",
     "Nová verze": "New version",
     "máš": "you have",
     "co je nového": "what is new",
