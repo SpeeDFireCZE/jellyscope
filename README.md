@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/SpeeDFireCZE/jellyscope/actions/workflows/tests.yml/badge.svg)](https://github.com/SpeeDFireCZE/jellyscope/actions/workflows/tests.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![demo: jellyscope.cz](https://img.shields.io/badge/demo-jellyscope.cz-3987e5.svg)](https://jellyscope.cz)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 Jellyfin statistics that **connect what people watch with the technical
@@ -207,8 +208,13 @@ never in readable form.
 
 ## Try it without Jellyfin
 
-No server, no API key, nothing to configure — the demo fills the database
-with made-up data so you can click through the whole app first:
+**[jellyscope.cz](https://jellyscope.cz)** is the whole app running on
+made-up data — sign in as `demo` / `demodemo` and click through
+everything. Nothing there changes: every button that would write is
+answered with a note instead, so the demo survives the next visitor.
+
+To run the same thing locally — no server, no API key, nothing to
+configure:
 
 ```bash
 python3 -m venv .venv

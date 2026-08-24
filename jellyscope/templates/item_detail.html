@@ -86,6 +86,7 @@
 
     <div>
         <div class="kpi-row" style="margin-bottom:16px">
+            {{ tile(_("Délka"), item.runtime_ticks | ticks | seconds) }}
             {{ tile(_("Velikost"), item.size_bytes | bytes) }}
             {{ tile(_("Rozlišení"), item.height | resolution(item.width)) }}
             {{ tile("Bitrate", item.bitrate | bitrate) }}
@@ -102,6 +103,10 @@
                 <table class="facts">
                     <tbody>
                     <tr><th>{{ _("Kontejner") }}</th><td>{{ (item.container or '-') | upper }}</td></tr>
+                    {# Délku hlásí Jellyfin i ffprobe; je to první údaj,
+                       podle kterého se pozná, že se soubor spároval
+                       se špatným titulem. #}
+                    <tr><th>{{ _("Délka") }}</th><td>{{ item.runtime_ticks | ticks | timecode }}</td></tr>
                     <tr><th>{{ _("Velikost") }}</th><td>{{ item.size_bytes | bytes }}</td></tr>
                     <tr><th>{{ _("Celkový bitrate") }}</th><td>{{ item.bitrate | bitrate }}</td></tr>
                     <tr><th>{{ _("Dynamický rozsah") }}</th><td>{{ item.video_range or '-' }}</td></tr>

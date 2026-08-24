@@ -339,6 +339,8 @@ EN: dict[str, str] = {
     "titulů": "titles",
     "z celkové velikosti knihovny": "of total library size",
     "Titul": "Title",
+    "Délka": "Length",
+    "Délka celkem": "Total length",
     "Velikost": "Size",
     "Rozlišení": "Resolution",
     "Kodek": "Codec",
@@ -1138,6 +1140,26 @@ EN: dict[str, str] = {
     "Nad tento počet se pruhy „Kdo v jakém jazyce sleduje“ schovají do okna.":
         "Above this count the „Who watches in which language“ bars fold into "
         "a dialog.",
+    "Tohle je ukázka – data se v ní nemění. Na vlastní instalaci tlačítko funguje.":
+        "This is a demo - nothing here changes. On your own install the button works.",
+    "Nová verze": "New version",
+    "máš": "you have",
+    "co je nového": "what is new",
+    "stránka vydání": "release page",
+    "Aktualizovat a restartovat": "Update and restart",
+    "stáhne novou verzi, doinstaluje závislosti a restartuje aplikaci":
+        "pulls the new version, installs any new dependencies and restarts the app",
+    "Popis změn se nepodařilo stáhnout - najdeš ho na stránce vydání.":
+        "The list of changes could not be downloaded - it is on the release page.",
+    "Aktualizovat z prohlížeče jde jen tam, kde je aplikace stažená z gitu. Jinak platí deploy/update.sh.":
+        "Updating from the browser only works where the app came from git. Otherwise deploy/update.sh is the way.",
+    "Nová verze stažená. Aplikace se restartuje a stránka se sama obnoví.":
+        "The new version is downloaded. The app is restarting and the page will reload itself.",
+    "Aktualizace se nepovedla.": "The update did not go through.",
+    "Aktualizovat z prohlížeče jde jen tam, kde je aplikace stažená z gitu.":
+        "Updating from the browser only works where the app came from git.",
+    "Ve složce aplikace jsou vlastní úpravy. Aktualizace by o ně přišla, tak jsem ji nespustil.":
+        "There are local changes in the app folder. The update would lose them, so I did not run it.",
     "Verze": "Version",
 
     # --- filtr v historii -------------------------------------------------
@@ -1300,6 +1322,8 @@ EN: dict[str, str] = {
         "linked by episode number: {n} records",
     "vráceno ke správným dílům: {n}": "moved back to the right episodes: {n}",
     "sloučeno duplicit: {n}": "duplicates merged: {n}",
+    "zkráceno přehrávání delších než pořad: {n}":
+        "playbacks longer than the title itself, shortened: {n}",
     "vráceno z archivu k živým dílům: {n}":
         "returned from the archive to live episodes: {n}",
     "sloučeno napříč zdroji importu: {n}": "merged across import sources: {n}",
@@ -1437,6 +1461,9 @@ LOG_EN: dict[str, str] = {
     'z archivu slouceno: %s -> %s': 'merged from the archive: %s -> %s',
     'archiv: slouceno %s dilu, ktere v knihovne existuji znovu':
         'archive: merged %s episodes that exist in the library again',
+    'aktualizace stazena: %s': 'update downloaded: %s',
+    'zkraceno %s prevzatych zaznamu, ktere bezely dele nez porad':
+        'shortened %s imported records that ran longer than the title',
     'narovnani dat: %s uprav, osirelych zbyva %s':
         'data tidy-up: %s changes, %s orphans remain',
     'dohledani v Jellyfinu se nepovedlo: %s':

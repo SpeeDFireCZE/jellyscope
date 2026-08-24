@@ -19,6 +19,18 @@ from .i18n import translate as _t
 _UNITS = ["B", "KB", "MB", "GB", "TB", "PB"]
 
 
+def ticks_seconds(value: Any) -> float:
+    """Jellyfinovy "tik" na sekundy. Jeden tik je 100 nanosekund.
+
+    Prazdna hodnota je nula, ne chyba: delka chybi u polozek, ktere se
+    jeste nesynchronizovaly, a sablona kvuli tomu nema spadnout.
+    """
+    try:
+        return float(value or 0) / 10_000_000
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def bytes_human(value: Any) -> str:
     """Velikost souboru v jednotkach, ktere clovek precte."""
     try:
@@ -219,6 +231,7 @@ def register(env: Any) -> None:
     """Prida vsechny filtry do prostredi Jinja2."""
     env.filters.update({
         "bytes": bytes_human,
+        "ticks": ticks_seconds,
         "hours": hours_human,
         "seconds": seconds_human,
         "timecode": timecode,

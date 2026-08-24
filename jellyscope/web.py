@@ -127,6 +127,34 @@ async def lifespan(app: FastAPI):
 config = load_config()
 
 app = FastAPI(title="Jellyscope", lifespan=lifespan, docs_url=None, redoc_url=None)
+@app.middleware("http")
+async def ukazkovy_rezim(request: Request, call_next):
+    """V ukázce se nic nemění - místo akce se objeví hláška.
+
+    Ukázka běží na veřejné adrese a přihlašovací údaje jsou rovnou
+    v přihlašovacím okně, takže dovnitř se dostane kdokoliv. Bez téhle
+    pojistky by první návštěvník přepsal adresu Jellyfinu, spustil import
+    nebo restart - a pro všechny ostatní by ukázka skončila.
+
+    Hlídá se to tady, na jednom místě, a ne v každé routě zvlášť: routa,
+    na kterou by se zapomnělo, je přesně ta, kterou někdo najde. Seznam
+    výjimek je v DEMO_POVOLENO.
+
+    Tlačítka zůstávají vidět schválně - ukázka má ukázat, co aplikace
+    umí. Jen místo práce odpoví hláškou.
+    """
+    if _demo_blokuje(request):
+        _flash(request, "Tohle je ukázka – data se v ní nemění. "
+                        "Na vlastní instalaci tlačítko funguje.", "info")
+        # Zpátky tam, odkud člověk přišel. Formuláře se odesílají ze
+        # stránky, na které stojí, takže se vrátí na tutéž - jen s hláškou.
+        kam = request.headers.get("referer") or "/"
+        if not kam.startswith(str(request.base_url).rstrip("/")):
+            kam = "/"   # cizí adresa v referer = radši domů
+        return RedirectResponse(kam, status_code=303)
+    return await call_next(request)
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.secret_key,
@@ -144,6 +172,33 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Tri hlavicky, ktere prohlizeci rikaji, co s odpovedi nesmi delat.
 # Stoji jeden middleware a zavirají cele skupiny utoku dopredu.
+# Co smi ukazkovy rezim zmenit.
+#
+# Ukazka bezi na verejne adrese a prihlasit se do ni muze kdokoliv -
+# udaje jsou v prihlasovacim okne. Kdyby sla nastavit adresa Jellyfinu
+# nebo pustit import, prvni navstevnik by ukazku rozbil pro vsechny
+# ostatni. Zakazane je proto vsechno, co zapisuje, krome techto cest:
+#
+#   prihlaseni a odhlaseni     - bez nich by se nedalo dovnitr,
+#   jazyk a rozhrani           - to si kazdy muze prepnout, nic to nerozbije.
+#
+# Tlacitka zustavaji videt schvalne: ukazka ma ukazat, co aplikace umi.
+# Misto akce se objevi hlaska.
+DEMO_POVOLENO = frozenset({
+    "/login",
+    "/logout",
+    "/settings/language",
+    "/settings/interface",
+})
+
+
+def _demo_blokuje(request: Request) -> bool:
+    """Ma se tenhle pozadavek v ukazce zastavit?"""
+    if not config.demo_mode or request.method in ("GET", "HEAD", "OPTIONS"):
+        return False
+    return request.url.path not in DEMO_POVOLENO
+
+
 @app.middleware("http")
 async def bezpecnostni_hlavicky(request: Request, call_next):
     response = await call_next(request)
@@ -1896,6 +1951,31 @@ def settings_language(
     applog.nastav_jazyk(log_language)
     _flash(request, i18n.translate("Uložit jazyk", ui_language) + " ✓", "success")
     return RedirectResponse("/settings?section=general", status_code=303)
+
+
+@app.post("/settings/update")
+async def settings_update(request: Request,
+                          account: dict[str, Any] = Depends(require_admin)):
+    """Stáhne novou verzi a restartuje aplikaci.
+
+    Dělá totéž co `deploy/update.sh`, jen bez toho posledního kroku:
+    `git pull`, doinstalování závislostí a pak **restart vlastního
+    procesu** (`os.execv`), tedy stejný restart jako tlačítko v Nastavení.
+    Správce služby k tomu není potřeba.
+
+    Chybějící sloupce v databázi si aplikace doplní sama při startu, takže
+    po restartu je hotovo. Když se aktualizace nepovede, nic se
+    nerestartuje a běží dál stará verze - to je bezpečnější pořadí.
+    """
+    vysledek = await updates.aktualizuj()
+    if vysledek.get("status") != "ok":
+        _flash(request, vysledek.get("message", "Aktualizace se nepovedla."), "error")
+        return RedirectResponse("/settings?section=general", status_code=303)
+
+    _flash(request, "Nová verze stažená. Aplikace se restartuje a stránka "
+                    "se sama obnoví.", "success")
+    _naplanuj_restart()
+    return RedirectResponse("/?wait=restart", status_code=303)
 
 
 @app.post("/settings/restart")

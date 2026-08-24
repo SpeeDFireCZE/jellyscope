@@ -94,10 +94,16 @@
                    chyby je první otázka vždycky „a jakou máš verzi". #}
                 <div class="verze">
                     {% if verze.je_novejsi %}
-                        <a href="{{ verze.adresa }}" target="_blank" rel="noopener"
-                           class="badge warning" title="{{ _("Je k dispozici novější verze") }}">
-                            <span class="dot"></span>{{ verze.verze }} → {{ verze.nalezena }}
-                        </a>
+                        {# Nová verze není poznámka pod čarou - je to jediná
+                           věc v patičce, kvůli které tam má člověk kouknout.
+                           Proto tlačítko přes celou šířku, ne odznáček. #}
+                        <button class="verze-nova" type="button" data-okno="okno-aktualizace">
+                            <span class="dot"></span>
+                            <span>
+                                <strong>{{ _("Nová verze") }} {{ verze.nalezena }}</strong><br>
+                                <span class="verze-nova-note">{{ _("máš") }} v{{ verze.verze }} &middot; {{ _("co je nového") }}</span>
+                            </span>
+                        </button>
                     {% else %}
                         v{{ verze.verze }}
                     {% endif %}
@@ -157,6 +163,50 @@
 </div>
 
 {# Jediná bublina pro celou stránku - vytváří se jednou, ne u každého prvku. #}
+{% if verze.je_novejsi %}
+{# Okno s popisem změn. Otevírá ho ukazatel verze v patičce panelu.
+   Poznámky přišly z GitHubu a prošly escapováním v updates.py, takže se
+   do stránky nemůže dostat cizí značka. #}
+<dialog class="okno" id="okno-aktualizace">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Nová verze") }} {{ verze.nalezena }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    <p class="card-note">
+        {{ _("Běží") }} v{{ verze.verze }} &middot;
+        <a href="{{ verze.adresa }}" target="_blank" rel="noopener">{{ _("stránka vydání") }}</a>
+    </p>
+
+    <div class="okno-obsah poznamky">
+        {% if verze.poznamky %}
+            {{ verze.poznamky | safe }}
+        {% else %}
+            <p class="card-note">{{ _("Popis změn se nepodařilo stáhnout - najdeš ho na stránce vydání.") }}</p>
+        {% endif %}
+    </div>
+
+    {% if account and account.is_admin %}
+        {% if verze.lze_aktualizovat %}
+        {# Aktualizace je stažení a restart v jednom. Restartuje se ten
+           samý proces jako tlačítkem v Nastavení - správce služby k tomu
+           potřeba není. #}
+        <form method="post" action="/settings/update" class="btn-row" style="margin-top:16px">
+            <button class="btn primary" type="submit">{{ _("Aktualizovat a restartovat") }}</button>
+            <span class="card-note" style="align-self:center">
+                {{ _("stáhne novou verzi, doinstaluje závislosti a restartuje aplikaci") }}
+            </span>
+        </form>
+        {% else %}
+        <p class="card-note" style="margin-top:16px">
+            {{ _("Aktualizovat z prohlížeče jde jen tam, kde je aplikace stažená z gitu. Jinak platí deploy/update.sh.") }}
+        </p>
+        {% endif %}
+    {% endif %}
+</dialog>
+{% endif %}
+
 <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
 
 <script>

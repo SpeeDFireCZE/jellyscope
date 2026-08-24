@@ -1815,6 +1815,70 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .mapa-bod:hover { opacity: 0.8; }
 
 
+/* Nová verze. Dřív to byl drobný odznáček vedle čísla verze a splýval
+   s ním - přitom je to jediná věc v patičce, kvůli které tam má člověk
+   kouknout. Teď je to tlačítko přes celou šířku panelu, které otevře
+   okno s popisem změn. */
+.verze-nova {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--text-primary);
+    background: color-mix(in oklab, var(--warning) 16%, var(--surface-1));
+    border: 1px solid color-mix(in oklab, var(--warning) 45%, transparent);
+    border-radius: 9px;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.verze-nova:hover {
+    background: color-mix(in oklab, var(--warning) 26%, var(--surface-1));
+}
+
+.verze-nova .dot {
+    background: var(--warning);
+    flex: none;
+    /* Tepe, aby si toho oko všimlo i koutkem. Kdo má animace vypnuté
+       v systému, dostane klidnou tečku - viz media dotaz níž. */
+    animation: tep 2.2s ease-in-out infinite;
+}
+
+.verze-nova-note { color: var(--text-secondary); }
+
+@keyframes tep {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .verze-nova .dot { animation: none; }
+}
+
+/* Popis změn v okně. Skládá ho updates.poznamky_html() z markdownu,
+   takže tady stačí dát rozumné rozestupy pár značkám. */
+.poznamky h4 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin: 16px 0 6px;
+}
+.poznamky h4:first-child { margin-top: 0; }
+.poznamky ul { margin: 0 0 10px 18px; padding: 0; }
+.poznamky li { margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }
+.poznamky p  { font-size: 13.5px; line-height: 1.5; margin: 0 0 10px; }
+.poznamky code {
+    font-size: 12.5px;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 5px;
+}
+
 /* Verze v patičce postranního panelu. Drobným písmem: je to údaj, který
    je potřeba jednou za čas, ne něco, co má tahat pozornost. */
 .verze {

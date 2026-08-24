@@ -221,13 +221,45 @@ def active_sessions() -> list[dict[str, Any]]:
 def recently_added(limit: int = 18) -> list[dict[str, Any]]:
     """Naposledy pridane tituly.
 
-    Serial se ma objevit jednou, ne desetkrat za kazdou epizodu. Slucujeme
-    proto podle serialu - a delame to v Pythonu, protoze "vezmi nejnovejsi
-    radek z kazde skupiny" se v SQL pise ve dvou databazich jinak
-    a citelne to neni ani v jedne.
+    Serial se ma objevit jednou, ne desetkrat za kazdou epizodu.
+
+    Vybira se ve dvou krocich a ma to dobry duvod. Drive se vzal pevny
+    pocet nejnovejsich RADKU (limit * 6) a teprve ty se seskupily. Jenze
+    kdyz se v Jellyfinu znovu zalozi serial o dvou stech dilech, dostanou
+    vsechny dily dnesni datum - a tech sto osm radku je rovnou cely
+    zaplni. Ve vypisu pak zbyl jediny serial a vsechno ostatni zmizelo,
+    aniz by se kdy vratilo.
+
+    Proto se nejdriv vyberou nejnovejsi SKUPINY (serial nebo film) a az
+    potom se k nim dotahnou radky. Kolik dilu ma ktery serial, tim
+    prestane hrat roli.
     """
-    rows = db.query_all(
+    skupiny_radky = db.query_all(
         """
+        SELECT COALESCE(i.series_id, i.id) AS klic,
+               MAX(i.date_created)         AS pridano
+          FROM items i
+         WHERE i.is_missing = 0
+           AND i.date_created IS NOT NULL
+      GROUP BY COALESCE(i.series_id, i.id)
+      ORDER BY MAX(i.date_created) DESC
+         LIMIT ?
+        """,
+        (limit,),
+    )
+    if not skupiny_radky:
+        return []
+
+    klice = [str(radek["klic"]) for radek in skupiny_radky]
+    # Starsi nez tohle uz nemuze patrit do zadne z davek, ktere budeme
+    # vypisovat - viz _ve_stejne_davce(). Bez toho omezeni by serial
+    # o peti stovkach dilu dotahl vsechny.
+    nejstarsi = min(str(radek["pridano"]) for radek in skupiny_radky)
+    hranice = _o_hodin_zpet(nejstarsi, DAVKA_HODIN)
+
+    otazniky = ",".join("?" for _ in klice)
+    rows = db.query_all(
+        f"""
         SELECT i.id, i.name, i.type, i.series_id, i.series_name,
                i.production_year, i.date_created, i.height, i.size_bytes,
                i.library_id, i.parent_index_number, i.index_number,
@@ -237,10 +269,11 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
         LEFT JOIN libraries l ON l.id = i.library_id
         WHERE i.is_missing = 0
           AND i.date_created IS NOT NULL
+          AND i.date_created >= ?
+          AND COALESCE(i.series_id, i.id) IN ({otazniky})
         ORDER BY i.date_created DESC
-        LIMIT ?
         """,
-        (limit * 6,),
+        tuple([hranice] + klice),
     )
 
     poradi: list[str] = []
@@ -334,6 +367,20 @@ def _prednost_dilu(d: dict[str, Any]) -> tuple[int, str]:
 
 # Jak daleko od sebe smi byt dily, aby se povazovaly za jednu davku.
 DAVKA_HODIN = 24
+
+
+def _o_hodin_zpet(cas: Any, hodin: int) -> str:
+    """Cas posunuty o zadany pocet hodin zpet, ve tvaru z databaze.
+
+    Pouziva se jako spodni hranice dotazu. Kdyz se cas neda precist,
+    vraci se prazdny retezec - ten je v porovnani mensi nez cokoliv,
+    takze se radeji nevyfiltruje nic.
+    """
+    try:
+        moment = datetime.strptime(str(cas).replace("T", " ")[:19], db.TIME_FORMAT)
+    except (TypeError, ValueError):
+        return ""
+    return (moment - timedelta(hours=hodin)).strftime(db.TIME_FORMAT)
 
 
 def _ve_stejne_davce(nejnovejsi: Any, zkoumany: Any) -> bool:

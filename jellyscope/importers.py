@@ -1259,6 +1259,76 @@ async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, 
 # to plati az od ted. Zaznamy, ktere uz v databazi lezi, je potreba uklidit
 # jednorazove, a to dela tahle funkce.
 
+# Kolikanasobek delky poradu jeste bereme jako sledovani.
+#
+# Prehravac spusteny na dvojnasobek delky dilu je porad predstavitelny
+# (clovek se vrati a pusti si scenu znovu), tricetinasobek uz ne - to je
+# televize, kterou nikdo nevypnul. Polovina navic je kompromis: nechava
+# prostor na previjeni a pritom zachyti prave ty pres noc.
+STROP_NASOBEK = 1.5
+
+
+def zkrat_nesmyslne_delky() -> dict[str, int]:
+    """Prevzatou historii, kde "sledovani" trva nasobky delky poradu.
+
+    Playback Reporting i Jellystat meri cas **na hodinach**: od spusteni
+    po konec relace. Kdyz clovek usne u dilu a prehravac zustane otevreny
+    do rana, hlasi zdroj patnact hodin - a Jellyscope to prebral tak, jak
+    to prislo. Ve statistikach pak jeden dil prebil cely mesic.
+
+    Poznat to jde jedine podle delky poradu: kdyz je odsledovany cas
+    nasobkem toho, co ma titul minutaze, nesledovalo se - jen bezel
+    prehravac.
+
+    **Nic se nezahazuje.** Prebytek se preleje do `paused_seconds`, takze
+    soucet obou porad odpovida rozmezi od zacatku do konce relace; meni
+    se jen to, co se pocita jako sledovani. Casy zacatku a konce zustavaji
+    presne takove, jake byly - kdyz bude potreba se k tomu vratit, je
+    z ceho.
+
+    Tyka se to **jen prevzate historie** (session_key zacina "import:").
+    Co nasbiral collector, ma prirustek omezeny uz pri mereni - viz
+    collector.poll_once() a jeho max_gap_seconds.
+    """
+    adepti = db.query_all(
+        """
+        SELECT p.id, p.watched_seconds, p.paused_seconds, i.runtime_ticks
+          FROM playback p
+          JOIN items i ON i.id = p.item_id
+         WHERE p.session_key LIKE 'import:%'
+           AND i.runtime_ticks IS NOT NULL
+           AND i.runtime_ticks > 0
+           AND p.watched_seconds > 0
+        """
+    )
+
+    zmenene: list[tuple[int, int, int]] = []
+    for radek in adepti:
+        delka = float(radek["runtime_ticks"]) / 10_000_000
+        strop = int(delka * STROP_NASOBEK)
+        odsledovano = int(radek["watched_seconds"] or 0)
+        if strop <= 0 or odsledovano <= strop:
+            continue
+        prebytek = odsledovano - strop
+        zmenene.append((strop, int(radek["paused_seconds"] or 0) + prebytek,
+                        int(radek["id"])))
+
+    if not zmenene:
+        return {"rows": 0, "seconds": 0}
+
+    with db.connect() as conn:
+        for strop, pauza, radek_id in zmenene:
+            conn.execute(
+                "UPDATE playback SET watched_seconds = ?, paused_seconds = ? "
+                " WHERE id = ?",
+                (strop, pauza, radek_id))
+
+    presunuto = sum(pauza for _, pauza, _ in zmenene)
+    log.info("zkraceno %s prevzatych zaznamu, ktere bezely dele nez porad",
+             len(zmenene))
+    return {"rows": len(zmenene), "seconds": presunuto}
+
+
 def duplicate_playback_groups() -> list[list[dict[str, Any]]]:
     """Najde skupiny zaznamu, ktere popisuji tentyz sledovaci zazitek.
 
@@ -2369,7 +2439,9 @@ async def narovnej_data() -> dict[str, Any]:
       3. **Vraceni na spravne dily** - naprava po chybe, kdy se cela
          historie serialu slila na jeden dil.
       4. **Slouceni duplicit** v ramci jednoho zdroje i napric zdroji.
-      5. **Srovnani nazvu** podle knihovny: prejmenovany titul ma v celem
+      5. **Zkraceni nesmyslnych delek** v prevzate historii: co beželo
+         nasobky delky poradu, byl otevreny prehravac, ne sledovani.
+      6. **Srovnani nazvu** podle knihovny: prejmenovany titul ma v celem
          prehledu jedno jmeno, ne dve.
 
     Pouziva to tlacitko v Nastaveni i naplanovana uloha - proto je to
@@ -2396,6 +2468,7 @@ async def narovnej_data() -> dict[str, Any]:
     vysledek["vraceno"] = repair_episode_links()
     vysledek["duplicity"] = merge_duplicate_playback()
     vysledek["z_importu"] = merge_import_duplicates()
+    vysledek["delky"] = zkrat_nesmyslne_delky()
     vysledek["nazvy"] = sjednot_nazvy()
 
     jf = vysledek["jellyfin"]
@@ -2424,6 +2497,9 @@ async def narovnej_data() -> dict[str, Any]:
     if vysledek["z_importu"]["removed"]:
         casti.append(("sloučeno napříč zdroji importu: {n}",
                       {"n": vysledek["z_importu"]["removed"]}))
+    if vysledek["delky"]["rows"]:
+        casti.append(("zkráceno přehrávání delších než pořad: {n}",
+                      {"n": vysledek["delky"]["rows"]}))
     if vysledek["nazvy"]["rows"]:
         casti.append(("srovnáno názvů podle knihovny: {n}",
                       {"n": vysledek["nazvy"]["rows"]}))

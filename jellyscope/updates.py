@@ -19,12 +19,19 @@ vejde i kdyby aplikací běželo víc.
 """
 from __future__ import annotations
 
+import asyncio
+import html
 import logging
+import pathlib
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import db
+
+# Slozka aplikace - odsud se aktualizuje a tady lezi requirements.txt.
+KOREN = pathlib.Path(__file__).resolve().parent.parent
 
 log = logging.getLogger("jellyscope.updates")
 
@@ -37,6 +44,14 @@ ZAPNUTO = "update_check_enabled"
 POSLEDNI_KONTROLA = "update_last_check"
 NALEZENA_VERZE = "update_latest_version"
 NALEZENA_ADRESA = "update_latest_url"
+# Popis zmen z GitHubu (markdown). Ukazuje se v okne, ktere se otevre
+# kliknutim na ukazatel nove verze - clovek ma videt, co si instaluje,
+# driv nez na to klikne.
+NALEZENE_POZNAMKY = "update_latest_notes"
+
+# Delsi popis uz stejne nikdo necte a do nastaveni patri hodnota, ne
+# clanek. Orizneme.
+MAX_POZNAMEK = 20000
 
 INTERVAL_HODIN = 24
 
@@ -105,6 +120,7 @@ async def zkontroluj(vynuceno: bool = False) -> dict[str, Any]:
     db.set_setting(POSLEDNI_KONTROLA, _ted().strftime(db.TIME_FORMAT))
     db.set_setting(NALEZENA_VERZE, verze)
     db.set_setting(NALEZENA_ADRESA, str(data.get("html_url") or STRANKA))
+    db.set_setting(NALEZENE_POZNAMKY, str(data.get("body") or "")[:MAX_POZNAMEK])
 
     if je_novejsi(verze, __version__):
         log.info("je k dispozici nova verze %s (bezi %s)", verze, __version__)
@@ -123,4 +139,122 @@ def stav() -> dict[str, Any]:
         "adresa": db.get_setting(NALEZENA_ADRESA, "") or STRANKA,
         "kontrolovano": db.get_setting(POSLEDNI_KONTROLA, ""),
         "je_novejsi": bool(nalezena) and je_novejsi(nalezena, __version__),
+        "poznamky": poznamky_html(db.get_setting(NALEZENE_POZNAMKY, "")),
+        # Aktualizovat z prohlizece jde jen tam, kde je z ceho: slozka
+        # musi byt git repozitar. Kdo si aplikaci rozbalil ze zipu, uvidi
+        # jen odkaz na vydani.
+        "lze_aktualizovat": lze_aktualizovat(),
     }
+
+
+def lze_aktualizovat() -> bool:
+    """Da se aktualizovat rovnou z aplikace?"""
+    from .config import load_config
+
+    if load_config().demo_mode:
+        return False
+    return (KOREN / ".git").is_dir()
+
+
+def poznamky_html(text: str) -> str:
+    """Popis vydani z markdownu do HTML - jen to, co GitHub opravdu posila.
+
+    Zamerne bez knihovny na markdown: poznamky k vydani pisu sam a vejdou
+    se do peti znacek. Vsechno projde escapovanim JAKO PRVNI, takze i
+    kdyby v poznamkach byla znacka, do stranky se dostane jako text.
+
+    Umi: nadpisy (###), odrazky (-), **tucne**, `kod` a odstavce.
+    """
+    if not text:
+        return ""
+
+    hotovo: list[str] = []
+    v_seznamu = False
+
+    def inline(radek: str) -> str:
+        radek = html.escape(radek)
+        radek = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", radek)
+        radek = re.sub(r"`([^`]+)`", r"<code>\1</code>", radek)
+        return radek
+
+    for radek in text.replace("\r\n", "\n").split("\n"):
+        holy = radek.strip()
+        if holy.startswith("#"):
+            if v_seznamu:
+                hotovo.append("</ul>")
+                v_seznamu = False
+            hotovo.append(f"<h4>{inline(holy.lstrip('#').strip())}</h4>")
+        elif holy.startswith(("- ", "* ")):
+            if not v_seznamu:
+                hotovo.append("<ul>")
+                v_seznamu = True
+            hotovo.append(f"<li>{inline(holy[2:])}</li>")
+        elif not holy:
+            if v_seznamu:
+                hotovo.append("</ul>")
+                v_seznamu = False
+        elif v_seznamu:
+            # Pokracovani odrazky na dalsim radku - patri do te posledni.
+            hotovo[-1] = hotovo[-1][:-len("</li>")] + " " + inline(holy) + "</li>"
+        else:
+            hotovo.append(f"<p>{inline(holy)}</p>")
+
+    if v_seznamu:
+        hotovo.append("</ul>")
+    return "".join(hotovo)
+
+
+async def aktualizuj() -> dict[str, Any]:
+    """Stahne novou verzi a doinstaluje zavislosti. Nerestartuje.
+
+    Deleji se presne dva kroky z `deploy/update.sh` - `git pull` a
+    `pip install`. Restart si rika volajici sam (viz web._naplanuj_restart),
+    protoze aplikace umi nahradit svuj proces a nepotrebuje k tomu
+    spravce sluzby.
+
+    Zalohu si nedelame tady: bezi bud denni uloha, nebo si ji clovek
+    spusti tlacitkem. Delat ji potichu pri kazde aktualizaci by znamenalo
+    kopii databaze, o kterou nikdo nezadal.
+
+    Kdyz jsou ve slozce vlastni upravy, aktualizace se NEDELA - `git pull`
+    by je bud prepsal, nebo skoncil konfliktem uprostred. Radeji to rekneme.
+    """
+    if not lze_aktualizovat():
+        return {"status": "error",
+                "message": "Aktualizovat z prohlížeče jde jen tam, kde je "
+                           "aplikace stažená z gitu."}
+
+    zmeny = await _git("diff", "--quiet")
+    if zmeny["kod"] != 0:
+        return {"status": "error",
+                "message": "Ve složce aplikace jsou vlastní úpravy. "
+                           "Aktualizace by o ně přišla, tak jsem ji nespustil."}
+
+    pull = await _git("pull", "--ff-only")
+    if pull["kod"] != 0:
+        return {"status": "error", "message": pull["vystup"][-400:]}
+
+    pip = await _spust(sys.executable, "-m", "pip", "install", "--quiet",
+                       "-r", str(KOREN / "requirements.txt"))
+    if pip["kod"] != 0:
+        return {"status": "error", "message": pip["vystup"][-400:]}
+
+    log.info("aktualizace stazena: %s", pull["vystup"].strip().splitlines()[-1:])
+    return {"status": "ok", "vystup": pull["vystup"]}
+
+
+async def _git(*argumenty: str) -> dict[str, Any]:
+    return await _spust("git", "-C", str(KOREN), *argumenty)
+
+
+async def _spust(*prikaz: str) -> dict[str, Any]:
+    """Spusti prikaz a vrati navratovy kod i vystup dohromady."""
+    proces = await asyncio.create_subprocess_exec(
+        *prikaz,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=str(KOREN),
+    )
+    vystup, _ = await proces.communicate()
+    return {"kod": proces.returncode,
+            "vystup": vystup.decode("utf-8", "replace")}

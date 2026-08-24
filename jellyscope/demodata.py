@@ -213,11 +213,24 @@ def seed() -> dict[str, int]:
             ))
 
         # ---- epizody -----------------------------------------------
+        #
+        # Prvni serial ze seznamu prijde CELY NAJEDNOU a jako posledni
+        # pribytek vubec. Je to nejcastejsi zpusob, jak serialy do
+        # knihovny chodi (stahne se cela rada), a na Prehledu diky tomu
+        # je videt, jak se dily slucuji pod jednu kartu misto toho, aby
+        # kazdy zabral vlastni dlazdici.
         for series_index, series_name in enumerate(SERIES):
+            cela_rada = series_index == 0
+            prisla_rada = now - timedelta(days=1, hours=3)
             for episode in range(1, random.randint(8, 16)):
                 height = random.choice([1080, 1080, 720])
                 size = int(random.uniform(0.9, 3.5) * 1024 ** 3)
-                created = now - timedelta(days=random.randint(30, 900))
+                if cela_rada:
+                    # Dily jedne davky nedorazi v tutez vterinu, ale
+                    # behem chvile - presne tak, jak je stahovani prida.
+                    created = prisla_rada + timedelta(minutes=episode * 4)
+                else:
+                    created = now - timedelta(days=random.randint(30, 900))
                 items.append((
                     f"demo-ep-{series_index}-{episode}",
                     f"{episode}. dil", "Episode", "demo-tv",

@@ -67,6 +67,9 @@
 <div class="kpi-row">
     {{ tile(_("Dílů"), series.episode_count | number) }}
     {{ tile(_("Řad"), series.season_count | number) }}
+    {# Kolik hodin je to celé dohromady - typická otázka před tím, než se
+       do seriálu člověk pustí. Sčítají se jen živé díly, archiv ne. #}
+    {{ tile(_("Délka celkem"), series.runtime_ticks | ticks | seconds) }}
     {{ tile(_("Velikost"), series.size_bytes | bytes) }}
     {{ tile(_("Spuštění"), series.plays | number) }}
 </div>
@@ -114,6 +117,7 @@
             <tr><th>{{ _("Dílů") }}</th><td>{{ series.episode_count | number }}</td></tr>
             <tr><th>{{ _("Řad") }}</th><td>{{ series.season_count | number }}</td></tr>
             <tr><th>{{ _("Velikost") }}</th><td>{{ series.size_bytes | bytes }}</td></tr>
+            <tr><th>{{ _("Délka celkem") }}</th><td>{{ series.runtime_ticks | ticks | seconds }}</td></tr>
             <tr>
                 <th>{{ _("Průměrně na díl") }}</th>
                 <td>
@@ -170,6 +174,7 @@
                 <th>{{ _("Název") }}</th>
                 <th class="num">{{ _("Rozlišení") }}</th>
                 <th>{{ _("Kodek") }}</th>
+                <th class="num">{{ _("Délka") }}</th>
                 <th class="num">{{ _("Velikost") }}</th>
                 <th class="num">{{ _("Spuštění") }}</th>
                 <th>{{ _("Zdroj dat") }}</th>
@@ -189,6 +194,7 @@
                 </td>
                 <td class="num">{{ episode.height | resolution(episode.width) }}</td>
                 <td>{{ episode.video_codec | upper if episode.video_codec else '–' }}</td>
+                <td class="num">{{ episode.runtime_ticks | ticks | timecode }}</td>
                 <td class="num">{{ episode.size_bytes | bytes }}</td>
                 <td class="num">{{ episode.plays | number }}</td>
                 <td>{{ tech_badge(episode.tech_source) }}</td>

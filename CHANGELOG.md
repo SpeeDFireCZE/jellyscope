@@ -6,6 +6,50 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.0
+
+### Added
+
+- **Updating from the browser.** The version indicator in the sidebar used
+  to be a small badge linking to GitHub — the one thing down there worth
+  looking at, dressed as a footnote. It is now a button that opens a dialog
+  with the release notes and, for an admin, an **Update and restart**
+  button. The update does what `deploy/update.sh` does minus its last step:
+  `git pull`, install any new dependencies, then replace its own process the
+  same way the restart button in Settings does — no service manager
+  involved. Nothing restarts if the update fails, so a broken pull leaves
+  the old version running, and it refuses outright when the folder has local
+  changes, when the app did not come from git, or in demo mode.
+- **Runtimes.** A film and an episode say how long they are, the episode
+  list of a series has a length column, and the series adds its episodes up
+  into a total.
+- **A demo that cannot be broken.** In demo mode every request that would
+  write is answered with a note instead of doing the work — the buttons stay
+  visible, because a demo is there to show what the app can do. Only signing
+  in, the interface settings and the language switch still work. It is one
+  check in one place rather than a rule repeated in forty routes, since the
+  route somebody forgets is exactly the one a visitor finds.
+
+### Fixed
+
+- **One series could empty the Overview.** After a wrongly identified series
+  was fixed in Jellyfin, every episode was written again and got today's
+  date — and *Recently added* kept nothing but that one series. It took a
+  fixed number of the newest **rows** and grouped them afterwards, so two
+  hundred episodes filled the window on their own. It now picks the newest
+  **groups** first and fetches their rows after, which makes the size of a
+  series irrelevant.
+- **Fifteen hours of a twenty-eight minute episode.** Playback Reporting and
+  Jellystat both measure on the clock — from the start of playback to the
+  end of the session — so falling asleep with the player open is reported as
+  fifteen hours, and the import took that at face value. *Straighten the
+  data* now shortens imported records that ran past 1.5× the title's own
+  runtime: enough slack for seeking back, not enough for a television nobody
+  turned off. Nothing is discarded — the excess moves into the paused time,
+  so watched plus paused still adds up to the span between start and end.
+  Records the collector gathered are left alone; their increment is already
+  capped while measuring.
+
 ## 1.1.1
 
 ### Fixed
