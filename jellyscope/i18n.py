@@ -1492,6 +1492,8 @@ LOG_EN: dict[str, str] = {
         'archive: merged %s episodes that exist in the library again',
     'aktualizace stazena: %s': 'update downloaded: %s',
     'zalohy se budou ukladat do %s': 'backups will be written to %s',
+    'prostredi: kontejner=%s, nas obraz=%s':
+        'environment: container=%s, our image=%s',
     'v kontejneru: slozka na zalohy nastavena na %s':
         'in a container: backup folder set to %s',
     'zkraceno %s prevzatych zaznamu, ktere bezely dele nez porad':

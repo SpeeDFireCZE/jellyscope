@@ -80,9 +80,13 @@ class Config:
     # Ukazkovy rezim (demo.py). Sberac se nespousti - nema se koho ptat
     # a jen by uzavrel vymyslene prehravani, ktere ma byt videt.
     demo_mode: bool
-    # Bezi aplikace v kontejneru? Meni to jedinou vec: kam se poprve
-    # nastavi slozka na zalohy. Viz _v_kontejneru().
+    # Bezi aplikace v jakemkoliv kontejneru? Rozhoduje o tom, kam se
+    # poprve nastavi slozka na zalohy - viz _v_kontejneru().
     in_docker: bool
+    # A bezi z NASEHO obrazu (Dockerfile v tomhle repozitari)? Jen tam
+    # ma smysl rikat "aktualizuj prestavenim obrazu"; v cizim kontejneru
+    # muze byt aplikace nainstalovana z gitu a `git pull` ji funguje.
+    nas_obraz: bool
 
 
 _cached: Config | None = None
@@ -112,19 +116,20 @@ def load_config(reload: bool = False) -> Config:
         forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "").strip(),
         demo_mode=_flag("JELLYSCOPE_DEMO"),
         in_docker=_v_kontejneru(),
+        nas_obraz=_flag("JELLYSCOPE_DOCKER"),
     )
     return _cached
 
 
 def _v_kontejneru() -> bool:
-    """Bezi aplikace v kontejneru?
+    """Bezi aplikace v kontejneru? V jakemkoliv, ne nutne v tom nasem.
 
-    Ptame se dvema zpusoby, protoze kazdy sam o sobe nekde selze:
+    Ptame se trema zpusoby, protoze kazdy sam o sobe nekde selze:
 
-    * `JELLYSCOPE_DOCKER=1` nastavuje nas Dockerfile. U naseho obrazu je
-      to jistota - nic to nehada.
-    * `/.dockerenv` zaklada Docker sam. Chyti i obraz, ktery si nekdo
-      postavil po svem a tu promennou nema.
+    * `JELLYSCOPE_DOCKER=1` nastavuje nas Dockerfile - u naseho obrazu
+      je to jistota, nic se nehada,
+    * `/.dockerenv` zaklada Docker sam, takze chyti i cizi obraz,
+    * `/run/.containerenv` je totez u Podmanu.
 
     Podle cgroup se to nepozna spolehlive: na cgroup v2 je v souboru
     obvykle jen "0::/" a zadne "docker" tam neni.
@@ -132,7 +137,7 @@ def _v_kontejneru() -> bool:
     if _flag("JELLYSCOPE_DOCKER"):
         return True
     try:
-        return Path("/.dockerenv").exists()
+        return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
     except OSError:
         return False
 

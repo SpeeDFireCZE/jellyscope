@@ -83,6 +83,13 @@ async def lifespan(app: FastAPI):
     db.init_db()
     log.info("databaze pripravena")
 
+    # Do logu, at se pri dotazu "proc mi to rika, ze jsem v kontejneru"
+    # nemusi hadat. Rozlisujeme dve veci: jakykoliv kontejner (rozhoduje
+    # o zalohach) a nas obraz (rozhoduje o aktualizaci).
+    if config.in_docker or config.nas_obraz:
+        log.info("prostredi: kontejner=%s, nas obraz=%s",
+                 config.in_docker, config.nas_obraz)
+
     # V kontejneru si slozku na zalohy nastavime sami - viz db.predvyplnene_zalohy().
     zalohy = db.predvyplnene_zalohy()
     if zalohy:

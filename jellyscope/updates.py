@@ -166,11 +166,18 @@ def duvod_bez_aktualizace() -> str:
     if config.demo_mode:
         return "Tohle je ukázka – aktualizovat se v ní nedá."
 
-    # V kontejneru by `git pull` sice mohl projit (kdyz si nekdo postavil
-    # obraz i s .git), jenze zmena by zila jen do dalsiho prestaveni
-    # obrazu - a pak by se tise vratila stara verze. To je horsi nez
-    # tlacitko, ktere nefunguje: vypada to, ze je hotovo.
-    if config.in_docker:
+    # Odmitame jen NAS obraz, ne kazdy kontejner.
+    #
+    # V nasem obrazu je aplikace soucasti vrstvy: `git pull` by sice mohl
+    # projit (kdyz si nekdo postavil obraz i s .git), jenze zmena by zila
+    # do dalsiho prestaveni a pak by se tise vratila stara verze. To je
+    # horsi nez tlacitko, ktere nefunguje.
+    #
+    # V cizim kontejneru (LXC, cizi image, Podman) muze byt aplikace
+    # nainstalovana uplne bezne z gitu - a tam `git pull` funguje jako
+    # kdekoliv jinde. Drive tam sedela hlaska "prestav obraz", ktera
+    # nedavala smysl: zadny takovy obraz ten clovek nema.
+    if config.nas_obraz:
         return ("V kontejneru se aktualizuje přestavěním obrazu: "
                 "git pull && docker compose up -d --build")
 

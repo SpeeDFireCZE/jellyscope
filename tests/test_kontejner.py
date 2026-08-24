@@ -71,6 +71,37 @@ check(db.predvyplnene_zalohy() == "", "vyplněnou cestu nechá být")
 check(db.get_setting("backup_path", "") == "/mnt/nas/jellyscope", "beze změny")
 
 print()
+print("--- kontejner a NÁŠ obraz jsou dvě různé otázky ---")
+# Kam se smí zálohovat, rozhoduje "jsem v nějakém kontejneru" - cokoliv
+# mimo připojenou složku zmizí při přestavení, ať už obraz stavěl kdokoliv.
+#
+# Jestli má smysl aktualizovat z gitu, rozhoduje "jsem z NAŠEHO obrazu".
+# V cizím kontejneru (LXC, cizí image) může být aplikace nainstalovaná
+# úplně běžně z gitu a `git pull` jí funguje - hláška "přestav obraz" by
+# tam posílala člověka přestavovat něco, co nemá.
+from jellyscope import updates  # noqa: E402
+
+os.environ["JELLYSCOPE_DOCKER"] = "1"
+config.load_config(reload=True)
+check(config.load_config().nas_obraz is True, "náš obraz se pozná podle proměnné")
+check("docker compose" in updates.duvod_bez_aktualizace(),
+      "a aktualizace se odmítne s návodem na přestavění")
+os.environ.pop("JELLYSCOPE_DOCKER")
+
+# Cizí kontejner: `/.dockerenv` existuje, naše proměnná ne.
+puvodni = config._v_kontejneru
+config._v_kontejneru = lambda: True
+config.load_config(reload=True)
+check(config.load_config().in_docker is True, "cizí kontejner se pozná taky")
+check(config.load_config().nas_obraz is False, "ale náš obraz to není")
+check(updates.duvod_bez_aktualizace() == "",
+      f"a aktualizace z gitu se nezakazuje ({updates.duvod_bez_aktualizace()})")
+check(db.predvyplnene_zalohy() != "" or db.get_setting("backup_path", "") != "",
+      "zálohy si ale cestu pohlídají i tam")
+config._v_kontejneru = puvodni
+config.load_config(reload=True)
+
+print()
 print("--- Dockerfile tu proměnnou opravdu nastavuje ---")
 # Kdyby vypadla, aplikace by v kontejneru o sobě nevěděla a záloha by
 # skončila tam, kde ji nikdo nenajde.

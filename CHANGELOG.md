@@ -6,6 +6,28 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.5
+
+### Fixed
+
+- **"In a container" and "from our image" were treated as one question.** They
+  are not. Where the backups may go depends on being in a container at all —
+  anything outside a mounted folder disappears on the next rebuild, no matter
+  who built the image. Whether updating from git makes sense depends on being
+  *our* image, where the app is part of a layer and a pull would live until the
+  next rebuild and then quietly revert.
+
+  Merging them meant an installation from git inside somebody else's container
+  was told to rebuild an image it does not have. The refusal now looks only for
+  `JELLYSCOPE_DOCKER=1`, which only our own Dockerfile sets.
+
+### Changed
+
+- The container check also recognises Podman (`/run/.containerenv`), and what
+  it decided is written to the log at startup — so the next time somebody
+  wonders why the app thinks it is in a container, the answer is in the log
+  rather than in a guess.
+
 ## 1.2.4
 
 ### Fixed
