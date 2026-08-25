@@ -567,6 +567,11 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # uzivatele - "co ten clovek vlastne sleduje".
         "genres": "TEXT",
     },
+    "item_streams": {
+        # Odkud jazyk stopy je. Prazdne = ze zdroje technickych dat,
+        # "jellyfin" = soubor ho neuvadel a doplnil se z knihovny.
+        "language_source": "TEXT",
+    },
     "playback": {
         "audio_language": "TEXT",
         "subtitle_language": "TEXT",

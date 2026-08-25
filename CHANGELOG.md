@@ -6,6 +6,35 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.9
+
+### Added
+
+- **When the file says nothing about a track's language, Jellyfin is asked.**
+  ffprobe reads only what is written in the file, and in plenty of files no
+  language is written at all — so a title showed three audio tracks as
+  "Not stated" while Jellyfin listed the same file as Czech and twice
+  Slovak. Both tools were right; they were just looking in different
+  places.
+
+  Only gaps are filled. What ffprobe read stays as it is, the language from
+  Jellyfin goes in where "not stated" was, and the track is marked so the
+  detail page can say the value did not come from the file. If the number
+  of tracks does not match on the two sides, nothing is filled — a wrong
+  language is worse than a missing one, because "not stated" at least shows
+  that nobody knows.
+
+  It also applies to what was measured earlier, not just to newly analysed
+  files, so an already-scanned library gets its languages on the next run
+  of the file analysis. A track nobody could name is marked as asked, so
+  the same question is not sent again on every scan; a fresh measurement of
+  the file clears that mark, which is what makes corrected metadata in
+  Jellyfin take effect.
+
+### Changed
+
+- **uvicorn 0.52.3 → 0.52.4**, the bump Dependabot proposed and CI accepted.
+
 ## 1.2.8
 
 ### Security

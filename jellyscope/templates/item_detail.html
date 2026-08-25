@@ -176,6 +176,11 @@
                         <td class="strong">
                             {{ lang.display(s.language) }}
                             <span class="muted">{{ s.language | upper }}</span>
+                            {# Soubor jazyk neuvádí a doplnil se z knihovny -
+                               ať je poznat, že to není údaj ze souboru. #}
+                            {% if s.language_source == 'jellyfin' %}
+                                <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
+                            {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
                         <td class="num">
@@ -218,6 +223,11 @@
                         <td class="strong">
                             {{ lang.display(s.language) }}
                             <span class="muted">{{ s.language | upper }}</span>
+                            {# Soubor jazyk neuvádí a doplnil se z knihovny -
+                               ať je poznat, že to není údaj ze souboru. #}
+                            {% if s.language_source == 'jellyfin' %}
+                                <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
+                            {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
                         <td class="muted truncate">{{ s.title or '' }}</td>

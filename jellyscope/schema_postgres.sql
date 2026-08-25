@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS item_streams (
     type          TEXT NOT NULL,
     codec         TEXT,
     language      TEXT,
+    language_source TEXT,
     title         TEXT,
     channels      INTEGER,
     channel_layout TEXT,

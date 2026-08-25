@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from . import db, probe
+from . import db, languages, probe
 from .i18n import translate as _t
 from .config import load_config
 from .jellyfin import (JellyfinClient, JellyfinError, extract_streams,
@@ -1291,14 +1291,15 @@ def save_streams(item_id: str, streams: list[dict[str, Any]]) -> None:
         conn.executemany(
             """
             INSERT INTO item_streams (
-                item_id, stream_index, type, codec, language, title,
-                channels, channel_layout, width, height, bitrate,
+                item_id, stream_index, type, codec, language, language_source,
+                title, channels, channel_layout, width, height, bitrate,
                 is_default, is_forced, is_external
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT (item_id, stream_index) DO UPDATE SET
                 type = excluded.type,
                 codec = excluded.codec,
                 language = excluded.language,
+                language_source = excluded.language_source,
                 title = excluded.title,
                 channels = excluded.channels,
                 channel_layout = excluded.channel_layout,
@@ -1312,10 +1313,10 @@ def save_streams(item_id: str, streams: list[dict[str, Any]]) -> None:
             [
                 (
                     item_id, s.get("stream_index"), s.get("type"), s.get("codec"),
-                    s.get("language"), s.get("title"), s.get("channels"),
-                    s.get("channel_layout"), s.get("width"), s.get("height"),
-                    s.get("bitrate"), s.get("is_default", 0), s.get("is_forced", 0),
-                    s.get("is_external", 0),
+                    s.get("language"), s.get("language_source"), s.get("title"),
+                    s.get("channels"), s.get("channel_layout"), s.get("width"),
+                    s.get("height"), s.get("bitrate"), s.get("is_default", 0),
+                    s.get("is_forced", 0), s.get("is_external", 0),
                 )
                 for s in streams
             ],
@@ -1572,6 +1573,9 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
         semaphore = asyncio.Semaphore(concurrency)
         results = {"ok": 0, "failed": 0, "skipped": 0}
         results_lock = asyncio.Lock()
+        # Položky, u kterých soubor aspoň u jedné stopy jazyk neuvádí.
+        # Na ty se pak doptáme Jellyfinu - viz doplnit_jazyky_z_jellyfinu().
+        bez_jazyka: set[str] = set()
 
         async def analyse(row: dict[str, Any]) -> None:
             async with semaphore:
@@ -1607,27 +1611,204 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
                     await asyncio.to_thread(_save_probe_result, row["id"], tech)
                     async with results_lock:
                         results["ok"] += 1
+                        if _chybi_jazyk(tech.get("streams") or []):
+                            bez_jazyka.add(row["id"])
                 finally:
                     _add_progress(1)
 
         await asyncio.gather(*(analyse(row) for row in targets))
         _clear_progress()
 
+        # Až po analýze, ne během ní: doptat se dá na padesát položek
+        # jedním dotazem, kdežto uprostřed smyčky by to byl jeden dotaz
+        # na soubor. A když Jellyfin zrovna neodpovídá, je to jen chybějící
+        # doplněk - změřená data už jsou uložená, takže se to nesmí počítat
+        # jako neúspěch celé analýzy.
+        # Zpětně i na to, co je změřené z dřívějška. Bez tohohle by doplnění
+        # platilo jen pro nově analyzované soubory - tedy skoro pro nic,
+        # protože knihovna je obvykle změřená celá už dávno. Ptáme se jen
+        # na stopy bez značky o původu, takže na tytéž se podruhé
+        # nedoptáváme (viz _doplnit_jazyky_polozky).
+        podminka = ("language = ? AND language_source IS NULL "
+                    "AND type IN ('Audio', 'Subtitle')")
+        parametry_zpetne: list[Any] = [languages.UNKNOWN]
+        # Stejný rozsah jako u analýzy: obnova jedné položky nesmí spustit
+        # doptávání na celou knihovnu.
+        if library_id:
+            podminka += (" AND item_id IN (SELECT id FROM items WHERE library_id = ?)")
+            parametry_zpetne.append(library_id)
+        if item_ids:
+            otazniky = ",".join("?" for _ in item_ids)
+            podminka += f" AND item_id IN ({otazniky})"
+            parametry_zpetne.extend(item_ids)
+
+        for radek in db.query_all(
+                f"SELECT DISTINCT item_id FROM item_streams WHERE {podminka}",
+                tuple(parametry_zpetne)):
+            bez_jazyka.add(radek["item_id"])
+
+        doplneno = 0
+        if bez_jazyka and not stop_requested():
+            try:
+                doplneno = await doplnit_jazyky_z_jellyfinu(sorted(bez_jazyka))
+            except JellyfinError as exc:
+                log.warning("jazyky se z Jellyfinu doplnit nepodarilo: %s", exc)
+
+        doplnek = (_t(", jazyk doplněn z Jellyfinu u {n} stop").format(n=doplneno)
+                   if doplneno else "")
+
         if results["skipped"]:
             finish_task_log(
                 scan_id, "stopped",
                 total=len(targets), ok=results["ok"], failed=results["failed"],
                 message=(f"Zastaveno na tvůj pokyn. Zbylo {results['skipped']} souborů - "
-                         f"příští analýza na ně naváže. ffprobe: {ffprobe_bin}"),
+                         f"příští analýza na ně naváže. ffprobe: {ffprobe_bin}"
+                         f"{doplnek}"),
             )
             return {"status": "stopped", "total": len(targets), **results}
 
         finish_task_log(
             scan_id, "done",
             total=len(targets), ok=results["ok"], failed=results["failed"],
-            message=f"ffprobe: {ffprobe_bin}",
+            message=f"ffprobe: {ffprobe_bin}{doplnek}",
         )
-        return {"status": "ok", "total": len(targets), **results}
+        return {"status": "ok", "total": len(targets), "doplneno": doplneno, **results}
+
+
+def _chybi_jazyk(streams: list[dict[str, Any]]) -> bool:
+    """Má aspoň jedna zvuková stopa nebo titulky "neuvedeno"?
+
+    Video se neřeší: u obrazu jazyk nikdo nečeká a "neuvedeno" tam není
+    chybějící údaj, ale správná odpověď.
+    """
+    return any(s.get("type") in ("Audio", "Subtitle")
+               and s.get("language") == languages.UNKNOWN
+               for s in streams)
+
+
+async def doplnit_jazyky_z_jellyfinu(item_ids: list[str]) -> int:
+    """U stop, kde soubor jazyk neuvádí, se zeptáme Jellyfinu.
+
+    ffprobe čte jen to, co je v souboru - a v mnoha souborech u stopy
+    prostě žádný jazyk zapsaný není. Jellyfin ho přitom často zná: dopočítá
+    si ho z názvu souboru, ze složky nebo z metadat, která si vede sám.
+    Výsledek pak vypadá jako chyba Jellyscope ("Neuvedeno" u stopy, kterou
+    Jellyfin hlásí jako češtinu), přestože oba nástroje mají pravdu - jen
+    se každý dívá jinam.
+
+    Doplňujeme proto **jen mezery**. Co ffprobe přečetl, zůstává; jazyk
+    z Jellyfinu se dosadí tam, kde je "neuvedeno", a zapíše se k němu, že
+    není ze souboru (`language_source`).
+
+    Vrací počet stop, kterým se jazyk doplnil.
+    """
+    if not item_ids:
+        return 0
+
+    async with JellyfinClient(*db.jellyfin_connection()) as client:
+        polozky = await client.items_by_ids(list(item_ids))
+
+    doplneno = 0
+    for item in polozky:
+        doplneno += await asyncio.to_thread(_doplnit_jazyky_polozky, item)
+    if doplneno:
+        log.info("jazyk doplnen z Jellyfinu u %s stop", doplneno)
+    return doplneno
+
+
+def _doplnit_jazyky_polozky(item: dict[str, Any]) -> int:
+    """Jedna položka: spáruje uložené stopy s těmi z Jellyfinu."""
+    item_id = item.get("Id")
+    if not item_id:
+        return 0
+
+    jejich = extract_streams(item)
+    if not jejich:
+        return 0
+
+    nase = db.query_all(
+        "SELECT stream_index, type, language FROM item_streams "
+        "WHERE item_id = ? ORDER BY stream_index",
+        (item_id,))
+    if not nase:
+        return 0
+
+    zmeny = []
+    for radek, jejich_stopa in _sparuj_stopy(nase, jejich):
+        if radek["language"] != languages.UNKNOWN:
+            continue          # soubor jazyk uvádí - do toho nesaháme
+        jazyk = languages.normalize(jejich_stopa.get("language"))
+        if jazyk == languages.UNKNOWN:
+            continue          # Jellyfin ho taky nezná, není co doplnit
+        zmeny.append((jazyk, item_id, radek["stream_index"]))
+
+    with db.connect() as conn:
+        if zmeny:
+            conn.executemany(
+                "UPDATE item_streams SET language = ?, language_source = 'jellyfin' "
+                "WHERE item_id = ? AND stream_index = ?",
+                zmeny)
+        # Co zůstalo neuvedené, dostane značku "ptali jsme se, neví se".
+        #
+        # Bez ní by se aplikace ptala na tytéž stopy při každé analýze
+        # znovu - a odpověď by byla pokaždé stejná. Značka zmizí sama,
+        # jakmile se soubor změří znovu (stopy se přepisují), takže po
+        # opravě metadat v Jellyfinu se doptáme zase.
+        conn.execute(
+            "UPDATE item_streams SET language_source = 'neznamy' "
+            " WHERE item_id = ? AND language = ? AND language_source IS NULL "
+            "   AND type IN ('Audio', 'Subtitle')",
+            (item_id, languages.UNKNOWN))
+
+    if zmeny:
+        _prepocitej_jazyky_polozky(item_id)
+    return len(zmeny)
+
+
+def _sparuj_stopy(nase: list[dict[str, Any]],
+                  jejich: list[dict[str, Any]]) -> list[tuple[dict, dict]]:
+    """Které naše stopě odpovídá která z Jellyfinu.
+
+    Párujeme podle **pořadí v rámci druhu** (první zvuková k první
+    zvukové), ne podle čísla stopy: Jellyfin čísluje i externí titulky,
+    které v souboru nejsou, takže se čísla rozejdou.
+
+    Když počty nesedí, nepárujeme nic. Špatně doplněný jazyk je horší než
+    žádný - u "neuvedeno" je aspoň vidět, že se neví.
+    """
+    pary = []
+    for druh in ("Audio", "Subtitle"):
+        moje = [s for s in nase if s["type"] == druh]
+        cizi = [s for s in jejich
+                if s.get("type") == druh and not s.get("is_external")]
+        if not moje or len(moje) != len(cizi):
+            continue
+        pary.extend(zip(moje, cizi))
+    return pary
+
+
+def _prepocitej_jazyky_polozky(item_id: str) -> None:
+    """Souhrn jazyků u položky podle toho, co je teď ve stopách.
+
+    Sloupce `audio_languages` a spol. jsou přepis stop do jednoho řetězce
+    kvůli filtrům a statistice. Když se jazyk stopy změní a souhrn ne,
+    detail položky ukazuje češtinu, ale filtr "české" ji nenajde.
+    """
+    stopy = db.query_all(
+        "SELECT type, language FROM item_streams WHERE item_id = ? "
+        "ORDER BY stream_index", (item_id,))
+    zvuk = [s["language"] for s in stopy if s["type"] == "Audio"]
+    titulky = [s["language"] for s in stopy if s["type"] == "Subtitle"]
+
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE items SET audio_languages = ?, subtitle_languages = ?, "
+            "default_audio_language = ? WHERE id = ?",
+            (languages.pack(zvuk), languages.pack(titulky),
+             # Stejná úvaha jako v probe._summarise: bere se první zvuková
+             # stopa, ne ta označená jako výchozí.
+             languages.normalize(zvuk[0]) if zvuk else None,
+             item_id))
 
 
 def _save_probe_result(item_id: str, tech: dict[str, Any]) -> None:

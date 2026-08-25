@@ -190,6 +190,10 @@ CREATE TABLE IF NOT EXISTS item_streams (
     type          TEXT NOT NULL,      -- Video / Audio / Subtitle
     codec         TEXT,
     language      TEXT,               -- uz sjednoceny dvoupismenny kod
+    -- Odkud jazyk je. Prazdne = ze zdroje technickych dat (soubor nebo
+    -- Jellyfin). 'jellyfin' = soubor jazyk neuvadel a doplnili jsme ho
+    -- z knihovny - at je pozdeji poznat, ze to neni udaj ze souboru.
+    language_source TEXT,
     title         TEXT,               -- popisek stopy z Jellyfinu
     channels      INTEGER,
     channel_layout TEXT,

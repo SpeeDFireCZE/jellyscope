@@ -235,6 +235,9 @@ EN: dict[str, str] = {
     "dílů": "episodes",
     "řad": "seasons",
     "řadách": "seasons",
+    "z Jellyfinu": "from Jellyfin",
+    "Soubor jazyk neuvádí, doplněno z Jellyfinu.":
+        "The file does not state a language; filled in from Jellyfin.",
     # Celá věta jedním klíčem. Sesypané ze tří ("v" + číslo +
     # "řadách") to znamenalo, že předložka "v" musí anglicky
     # sedět i na "zítra v 03:30" - a to nejde: jednou je to
@@ -292,6 +295,8 @@ EN: dict[str, str] = {
     "Nepřeruší se uprostřed práce: dokončí položku, kterou má rozdělanou, a teprve pak skončí. Co se stihlo, zůstane uložené.":
         "It is not interrupted mid-work: it finishes the item it has in progress and only then ends. Whatever was done stays saved.",
     "Analýza souborů": "File analysis",
+    ", jazyk doplněn z Jellyfinu u {n} stop":
+        ", language filled in from Jellyfin for {n} tracks",
     "Obecné": "General",
     "Co se na serveru dělo za posledních": "Server activity over the last",
     "Uživatel": "User",
@@ -1366,6 +1371,10 @@ EN: dict[str, str] = {
 # Díky tomu zůstávají volání `log.info(...)` čitelná a nikdo si při psaní
 # nové hlášky nemusí pamatovat na překlad.
 LOG_EN: dict[str, str] = {
+    "jazyk doplnen z Jellyfinu u %s stop":
+        "language filled in from Jellyfin for %s tracks",
+    "jazyky se z Jellyfinu doplnit nepodarilo: %s":
+        "languages could not be filled in from Jellyfin: %s",
     'Jellyfin neodpovedel vcas na %s, zkousim znovu (%d/%d)':
         'Jellyfin did not answer %s in time, retrying (%d/%d)',
     'Podpisový klíč nejde uložit (%s). Použil jsem dočasný - po restartu bude potřeba se přihlásit znovu.':
