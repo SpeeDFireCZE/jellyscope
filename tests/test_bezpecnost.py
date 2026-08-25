@@ -34,6 +34,9 @@ _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "bezpecnost.db")
 os.environ["SECRET_KEY"] = "testovaci-podpisovy-klic-dostatecne-dlouhy"
+# Jako by před aplikací stála proxy. Právě v tomhle nastavení se dřív
+# hlavičce X-Forwarded-For věřilo bez ohledu na to, kdo ji poslal.
+os.environ["FORWARDED_ALLOW_IPS"] = "127.0.0.1"
 
 from jellyscope import accounts, config, db  # noqa: E402
 
@@ -171,6 +174,27 @@ check(prihlaseni.status_code == 303,
 check(not accounts.seznam_blokaci(),
       "úspěšné přihlášení smaže i stupeň blokace")
 
+# Podvržená hlavička nesmí brzdu obejít.
+#
+# Za proxy se skutečná adresa doplňuje z X-Forwarded-For - jenže tu
+# hlavičku si umí poslat i útočník. Když jí aplikace věřila sama za sebe,
+# stačilo do ní psát pokaždé jiné číslo a každý pokus o heslo se počítal
+# zvlášť: brzda formálně existovala a nikdy nesepnula. Teď se adresa bere
+# z request.client, kam ji z hlavičky přepíše až uvicorn - a jen tehdy,
+# když ji poslal někdo ze seznamu důvěryhodných proxy.
+stavy = []
+for pokus in range(accounts.POKUSU_DO_BLOKACE + 3):
+    stavy.append(brzdic.post(
+        "/login", data={"username": "spravce", "password": f"spatne{pokus}"},
+        headers={"X-Forwarded-For": f"203.0.113.{pokus}"},
+        follow_redirects=False).status_code)
+check(429 in stavy, f"pokaždé jiná adresa v hlavičce brzdu neobejde ({stavy})")
+check(len(accounts.seznam_blokaci()) == 1,
+      f"a je z toho jedna blokace, ne {accounts.POKUSU_DO_BLOKACE} různých "
+      f"({[r['ip'] for r in accounts.seznam_blokaci()]})")
+for adresa in [r["ip"] for r in accounts.seznam_blokaci()]:
+    accounts.odblokuj(adresa)
+
 
 # Blokace se stupňuje: každá další v řadě trvá déle, čtvrtá už je trvalá.
 accounts.odblokuj("10.0.0.9")
@@ -271,6 +295,64 @@ for jmeno, hodnota in [("X-Content-Type-Options", "nosniff"),
                        ("Referrer-Policy", "same-origin")]:
     check(hlavicky.get(jmeno) == hodnota,
           f"{jmeno}: {hlavicky.get(jmeno)!r}")
+
+print()
+print("--- odkud smí stránka načítat a kam smí posílat ---")
+# Jellyscope nemá jediný cizí zdroj: žádné CDN, žádné písmo z internetu,
+# obrázky vodíme přes vlastní server. Pravidlo proto může znít "jenom
+# odsud" - a hlavně: kdyby se do stránky přes chybu dostal cizí skript,
+# tohle mu bere to podstatné. Data nemá kam odeslat (connect-src),
+# formulář nemá kam přesměrovat (form-action) a další kód si nemá odkud
+# stáhnout (script-src bez cizího zdroje).
+csp = hlavicky.get("Content-Security-Policy", "")
+for pravidlo in ("default-src 'self'", "img-src 'self'", "connect-src 'self'",
+                 "form-action 'self'", "frame-ancestors 'self'",
+                 "base-uri 'self'", "object-src 'none'"):
+    check(pravidlo in csp, pravidlo)
+# 'unsafe-eval' není nikde potřeba - a kdyby se objevilo, CSP by přestala
+# být obranou proti vloženému kódu.
+check("unsafe-eval" not in csp, "nikde se nepovoluje eval")
+check(hlavicky.get("Content-Security-Policy") ==
+      spravce_klient.get("/settings").headers.get("Content-Security-Policy"),
+      "stejná hlavička na každé stránce")
+
+print()
+print("--- strop na nahraný soubor platí během čtení ---")
+# Strop je tu kvůli paměti. Když se soubor nejdřív načte celý a teprve
+# pak změří, je to obrana, která přijde po škodě: gigabajtový soubor
+# server položí dřív, než stačí říct, že je moc velký.
+import asyncio  # noqa: E402
+
+from jellyscope import web as _web  # noqa: E402
+
+
+class NekonecnySoubor:
+    """Tváří se jako nahraný soubor, který nikdy neskončí."""
+
+    def __init__(self) -> None:
+        self.precteno = 0
+
+    async def read(self, velikost: int = -1) -> bytes:
+        # Bez stropu by tohle běželo, dokud nedojde paměť.
+        kolik = velikost if velikost > 0 else 4 * 1024 * 1024
+        self.precteno += kolik
+        return b"x" * kolik
+
+
+class FalesnyRequest:
+    """Jen tolik z Requestu, kolik potřebuje hláška."""
+
+    def __init__(self) -> None:
+        self.session: dict = {}
+
+
+soubor = NekonecnySoubor()
+vysledek = asyncio.run(_web._nacti_zalohu(FalesnyRequest(), soubor))
+strop = _web.MAX_UPLOAD_MB * 1024 * 1024
+check(vysledek is None, "moc velký soubor se odmítne")
+check(soubor.precteno <= strop + 2 * 1024 * 1024,
+      f"a čtení skončilo hned za stropem ({soubor.precteno // 1024 // 1024} MB "
+      f"při stropu {_web.MAX_UPLOAD_MB} MB)")
 
 
 print()

@@ -254,7 +254,7 @@
             <tr>
                 <th>{{ _("Úloha") }}</th><th>{{ _("Automaticky") }}</th>
                 <th class="num">{{ _("Kdy") }}</th>
-                <th>{{ _("Naposledy") }}</th><th>{{ _("Další běh") }}</th>
+                <th>{{ _("Naposledy běželo") }}</th><th>{{ _("Další běh") }}</th>
             </tr>
             </thead>
             <tbody>
@@ -885,7 +885,7 @@
     {% if database_counts %}
     <div class="table-wrap" style="margin-top:18px">
         <table>
-            <thead><tr><th>{{ _("Tabulka") }}</th><th class="num">{{ _("Řádků") }}</th></tr></thead>
+            <thead><tr><th>{{ _("Tabulka") }}</th><th class="num">{{ _("Záznamů") }}</th></tr></thead>
             <tbody>
             {% for table, count in database_counts.items() %}
                 <tr><td><code style="font-size:12px">{{ table }}</code></td>

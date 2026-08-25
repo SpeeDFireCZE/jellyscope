@@ -17,6 +17,7 @@ zpět).
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import re
@@ -472,6 +473,20 @@ def connect(config: dialect.DatabaseConfig | None = None) -> Iterator[Connection
         connection.close()
 
 
+def _lze_importovat(jmeno: str) -> bool:
+    """Je knihovna nainstalovaná?
+
+    Ptáme se pokusem o import, ne hledáním souboru: rozbitá instalace
+    (chybí systémová knihovna, na kterou psycopg staví) na disku je,
+    ale importovat se nedá - a pro nás je to totéž jako by nebyla.
+    """
+    try:
+        importlib.import_module(jmeno)
+    except ImportError:
+        return False
+    return True
+
+
 def psycopg_available() -> bool:
     """Je ovladač PostgreSQL k dispozici?
 
@@ -479,20 +494,12 @@ def psycopg_available() -> bool:
     obvykle je), nemá smysl uživateli ukazovat návod, jak ho doinstalovat.
     Rada, kterou nepotřebuješ, jen zabírá místo a mate.
     """
-    try:
-        import psycopg  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    return _lze_importovat("psycopg")
 
 
 def pool_available() -> bool:
     """Je knihovna pro zásobník spojení k dispozici?"""
-    try:
-        import psycopg_pool  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    return _lze_importovat("psycopg_pool")
 
 
 def test_connection(config: dialect.DatabaseConfig) -> tuple[bool, str]:

@@ -12,7 +12,7 @@
             {% endif %}
             {{ series.episode_count }} {{ _("dílů") }}
             {% if series.season_count > 1 %}
-                {{ _("v") }} {{ series.season_count }} {{ _("řadách") }}
+                {{ _("v {n} řadách").format(n=series.season_count) }}
             {% endif %}
         </p>
     </div>

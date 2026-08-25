@@ -217,6 +217,22 @@ def _demo_blokuje(request: Request) -> bool:
     return request.url.path not in DEMO_POVOLENO
 
 
+# Jedno misto, at se pravidla nerozejdou s tim, co stranky opravdu delaji.
+CSP = "; ".join((
+    "default-src 'self'",
+    # Ani data: - obrazky chodi vsechny pres /image, takze neni co povolovat.
+    "img-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline'",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    # Zadne <object>, <embed> ani applety - aplikace je nepouziva.
+    "object-src 'none'",
+))
+
+
 @app.middleware("http")
 async def bezpecnostni_hlavicky(request: Request, call_next):
     response = await call_next(request)
@@ -231,7 +247,22 @@ async def bezpecnostni_hlavicky(request: Request, call_next):
     # "Pri odchodu na cizi web neposilej, odkud clovek prisel."
     # Adresy Jellyscope obsahuji id polozek i uzivatelu.
     response.headers.setdefault("Referrer-Policy", "same-origin")
+    # Odkud smi stranka cokoliv nacist a kam smi cokoliv poslat.
+    #
+    # Jellyscope nema jediny cizi zdroj - zadne CDN, zadne pismo z internetu,
+    # obrazky vodime pres vlastni server. Muzeme si proto dovolit rict
+    # "jenom odsud" a nic tim nerozbit.
+    #
+    # `unsafe-inline` u skriptu je ustupek: stranky maji vlastni <script>
+    # bloky a par onclick= primo ve znacce. CSP tedy nezastavi vlozeny
+    # skript - zastavi ale to, co s nim utocnik chce delat: stahnout si
+    # kod odjinud (script-src), odeslat data na cizi server (connect-src),
+    # poslat formular jinam (form-action) nebo stranku zaramovat
+    # (frame-ancestors). Kdyby se onclick= jednou prepsaly na
+    # addEventListener, da se `unsafe-inline` vymenit za nonce.
+    response.headers.setdefault("Content-Security-Policy", CSP)
     return response
+
 
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -500,17 +531,20 @@ def _blokace_hlaska(zbyva: int) -> str:
 def _adresa_klienta(request: Request) -> str:
     """Odkud požadavek přišel. Slouží jen jako klíč brzdy u přihlašování.
 
-    Za reverzní proxy vidí aplikace vždycky adresu té proxy, takže by
-    brzda platila pro všechny dohromady. Proto se kouká i na hlavičku
-    `X-Forwarded-For` - ale **jen když je proxy nastavená** (viz
-    FORWARDED_ALLOW_IPS v .env). Bez toho by si tu hlavičku poslal
-    útočník sám a brzdě by pokaždé ukázal jinou adresu.
+    Adresu bereme z `request.client` a nikam jinam se nedíváme - ačkoliv
+    to tady dřív bylo naopak.
+
+    Za reverzní proxy totiž skutečnou adresu doplní **uvicorn sám**: v
+    run.py se spouští s `proxy_headers` a se seznamem důvěryhodných proxy
+    (FORWARDED_ALLOW_IPS). Hlavičku `X-Forwarded-For` přečte jen tehdy,
+    když ji poslal někdo z toho seznamu.
+
+    Původně tu byla druhá, vlastní verze téhož - jenže ta se ptala jen
+    "je proxy vůbec nastavená?" a hlavičce pak věřila komukoliv. Kdo se
+    dostal na aplikaci přímo (HOST=0.0.0.0 bez proxy před sebou), poslal
+    si `X-Forwarded-For` sám a při každém pokusu o heslo vypadal jako
+    někdo jiný - brzda proti hádání hesel tím přestala platit.
     """
-    if config.forwarded_allow_ips:
-        hlavicka = request.headers.get("x-forwarded-for", "")
-        prvni = hlavicka.split(",")[0].strip()
-        if prvni:
-            return prvni[:64]
     return request.client.host if request.client else "?"
 
 
@@ -747,22 +781,57 @@ def _pocty_uklidu() -> dict[str, Any]:
     }
 
 
+# Kam se člověk vrací po importu. Sem míří všechny čtyři routy
+# v sekci Import, tak ať je adresa na jednom místě.
+ZPET_NA_IMPORT = "/settings?section=import"
+
+
 async def _nacti_zalohu(request: Request, soubor: UploadFile) -> bytes | None:
     """Obsah nahraného souboru, nebo None a hláška, proč to nejde.
 
     Obě místa, kam se nahrává záloha (Playback Reporting i Jellystat),
-    kontrolovala totéž a stejně: prázdný soubor a strop velikosti. Strop
-    tu není kvůli disku, ale kvůli paměti - obsah se načítá celý najednou,
-    takže bez něj by šlo serveru poslat gigabajtový soubor.
+    kontrolovala totéž a stejně: prázdný soubor a strop velikosti.
+
+    Čte se po kouscích a **strop platí během čtení**, ne až po něm. Dřív
+    se soubor načetl celý a teprve pak se změřil - jenže strop tu je právě
+    kvůli paměti, takže se ptal až ve chvíli, kdy už byla utracená.
+    Gigabajtový soubor tak aplikaci položil dřív, než stačila říct, že je
+    moc velký.
     """
-    raw = await soubor.read()
+    strop = MAX_UPLOAD_MB * 1024 * 1024
+    raw = bytearray()
+    while True:
+        kus = await soubor.read(1024 * 1024)
+        if not kus:
+            break
+        raw.extend(kus)
+        if len(raw) > strop:
+            _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
+            return None
     if not raw:
         _flash(request, "Soubor je prázdný.", "error")
         return None
-    if len(raw) > MAX_UPLOAD_MB * 1024 * 1024:
-        _flash(request, "Soubor je větší než {n} MB.", "error", n=MAX_UPLOAD_MB)
-        return None
-    return raw
+    return bytes(raw)
+
+
+async def _import_ze_souboru(request: Request, soubor: UploadFile,
+                             min_seconds: str, importuj: Any,
+                             sablona: str) -> RedirectResponse:
+    """Import z nahrané zálohy - společný postup pro oba zdroje.
+
+    Playback Reporting i Jellystat se liší jen v tom, která funkce data
+    přečte a co se pak napíše do hlášky. Zbytek - načtení souboru, strop
+    velikosti, omezení minimální délky, návrat zpátky do Importu - je
+    stejný, a když byl opsaný dvakrát, měnil se pokaždé jen na jednom
+    místě.
+    """
+    raw = await _nacti_zalohu(request, soubor)
+    if raw is None:
+        return RedirectResponse(ZPET_NA_IMPORT, status_code=303)
+
+    result = await importuj(raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60)))
+    _hlaska_importu(request, result, sablona)
+    return RedirectResponse(ZPET_NA_IMPORT, status_code=303)
 
 
 def _hlaska_importu(request: Request, result: dict[str, Any],
@@ -787,6 +856,18 @@ def _hlaska_importu(request: Request, result: dict[str, Any],
     )
 
 
+def _veta(result: dict[str, Any], klic: str, sablona: str) -> str:
+    """Věta k jednomu číslu z výsledku importu - nebo nic, když je nula.
+
+    Nula se nevypisuje schválně: "0 záznamů se přeneslo" je věta, kterou
+    nikdo nepotřebuje číst, a hláška po importu jich má i tak dost.
+    """
+    pocet = result.get(klic) or 0
+    if not pocet:
+        return ""
+    return " " + i18n.translate(sablona).format(n=pocet)
+
+
 def _opraveno_note(result: dict[str, Any]) -> str:
     """Věta o záznamech, které opakovaný import narovnal.
 
@@ -795,12 +876,8 @@ def _opraveno_note(result: dict[str, Any]) -> str:
     na jednom identifikátoru. Když se tatáž záloha nahraje znovu, opraví
     se na místě - a tohle je jediné místo, kde se to člověk dozví.
     """
-    pocet = result.get("repaired") or 0
-    if not pocet:
-        return ""
-    return " " + i18n.translate(
-        "{n} starších záznamů se přeneslo ze seriálu na konkrétní díl."
-    ).format(n=pocet)
+    return _veta(result, "repaired",
+                 "{n} starších záznamů se přeneslo ze seriálu na konkrétní díl.")
 
 
 def _known_note(result: dict[str, Any]) -> str:
@@ -810,12 +887,9 @@ def _known_note(result: dict[str, Any]) -> str:
     Přitom nenašel nic **nového** - a to je dobře, právě proto se nic
     nezdvojilo.
     """
-    pocet = result.get("known_elsewhere") or 0
-    if not pocet:
-        return ""
-    return " " + i18n.translate(
-        "{n} záznamů už v databázi bylo z jiného zdroje (z collectoru nebo "
-        "z druhého importu), takže se nezdvojily.").format(n=pocet)
+    return _veta(result, "known_elsewhere",
+                 "{n} záznamů už v databázi bylo z jiného zdroje (z collectoru "
+                 "nebo z druhého importu), takže se nezdvojily.")
 
 
 def _flash(request: Request, message: str, level: str = "info",
@@ -2411,7 +2485,7 @@ async def import_detect(request: Request, account: dict[str, Any] = Depends(requ
     """Zjisti, jestli je v Jellyfinu plugin Playback Reporting."""
     available, message = await importers.playback_reporting_available()
     _flash(request, message, "success" if available else "warning")
-    return RedirectResponse("/settings?section=import", status_code=303)
+    return RedirectResponse(ZPET_NA_IMPORT, status_code=303)
 
 
 @app.post("/settings/import/playback-reporting")
@@ -2428,7 +2502,7 @@ async def import_playback_reporting(
         "Playback Reporting: naimportováno {n} záznamů "
         "(z {nalezeno} nalezených, {duplicit} už existovalo).")
 
-    return RedirectResponse("/settings?section=import", status_code=303)
+    return RedirectResponse(ZPET_NA_IMPORT, status_code=303)
 
 
 @app.post("/settings/import/playback-reporting-file")
@@ -2443,19 +2517,10 @@ async def import_playback_reporting_file(
     Zaloha pro pripad, kdy plugin pres API nefunguje - viz
     importers.import_playback_reporting_tsv().
     """
-    raw = await _nacti_zalohu(request, backup)
-    if raw is None:
-        return RedirectResponse("/settings?section=import", status_code=303)
-
-    result = await importers.import_playback_reporting_tsv(
-        raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
-    )
-    _hlaska_importu(
-        request, result,
+    return await _import_ze_souboru(
+        request, backup, min_seconds, importers.import_playback_reporting_tsv,
         "Playback Reporting (záloha): naimportováno {n} záznamů "
         "(z {nalezeno} nalezených, {duplicit} už existovalo).")
-
-    return RedirectResponse("/settings?section=import", status_code=303)
 
 
 @app.post("/settings/history/tidy")
@@ -2540,19 +2605,10 @@ async def import_jellystat(
     account: dict[str, Any] = Depends(require_admin),
 ):
     """Import z nahraneho JSON souboru se zalohou Jellystatu."""
-    raw = await _nacti_zalohu(request, backup)
-    if raw is None:
-        return RedirectResponse("/settings?section=import", status_code=303)
-
-    result = await importers.import_jellystat_json(
-        raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
-    )
-    _hlaska_importu(
-        request, result,
+    return await _import_ze_souboru(
+        request, backup, min_seconds, importers.import_jellystat_json,
         "Jellystat: naimportováno {n} záznamů "
         "(z {nalezeno} nalezených, {duplicit} už existovalo).")
-
-    return RedirectResponse("/settings?section=import", status_code=303)
 
 
 # ---------------------------------------------------------------------------

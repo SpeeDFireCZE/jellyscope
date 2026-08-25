@@ -83,7 +83,7 @@
                     &middot;
                 {% endif %}
                 {{ _("celkem") }} {{ watched.total_hours | hours }}
-                {{ _("za") }} {{ _(day_labels[days]) }}
+                {{ _("za {obdobi}").format(obdobi=_(day_labels[days])) }}
             </div>
         </div>
 

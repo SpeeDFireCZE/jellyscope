@@ -66,36 +66,40 @@ def cmd_add(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_password(args: argparse.Namespace) -> int:
-    account = accounts.get_by_name(args.username)
+def _s_uctem(username: str, akce, hotovo: str) -> int:
+    """Najdi ucet, proved s nim akci, ohlas vysledek.
+
+    Prikazy "heslo" a "smaz" se lisi jednim radkem uprostred; okolo je
+    stejne hledani uctu a stejne hlaseni chyby. Dokud to bylo opsane
+    dvakrat, znamenala kazda zmena hlaseni dve upravy - a jednou se na
+    druhou zapomnelo.
+    """
+    account = accounts.get_by_name(username)
     if account is None:
-        print(f"Ucet '{args.username}' neexistuje.", file=sys.stderr)
+        print(f"Ucet '{username}' neexistuje.", file=sys.stderr)
         return 1
 
     try:
-        accounts.set_password(account["id"], _ask_password("Nove heslo: "))
+        akce(account)
     except accounts.AccountError as exc:
         print(f"Chyba: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Heslo uctu '{args.username}' zmeneno.")
+    print(hotovo)
     return 0
+
+
+def cmd_password(args: argparse.Namespace) -> int:
+    return _s_uctem(
+        args.username,
+        lambda ucet: accounts.set_password(ucet["id"], _ask_password("Nove heslo: ")),
+        f"Heslo uctu '{args.username}' zmeneno.")
 
 
 def cmd_delete(args: argparse.Namespace) -> int:
-    account = accounts.get_by_name(args.username)
-    if account is None:
-        print(f"Ucet '{args.username}' neexistuje.", file=sys.stderr)
-        return 1
-
-    try:
-        accounts.delete(account["id"])
-    except accounts.AccountError as exc:
-        print(f"Chyba: {exc}", file=sys.stderr)
-        return 1
-
-    print(f"Ucet '{args.username}' smazan.")
-    return 0
+    return _s_uctem(args.username,
+                    lambda ucet: accounts.delete(ucet["id"]),
+                    f"Ucet '{args.username}' smazan.")
 
 
 def main() -> int:

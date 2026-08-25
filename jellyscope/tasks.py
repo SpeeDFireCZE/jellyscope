@@ -277,6 +277,14 @@ async def backup_database() -> dict[str, Any]:
         scanner.finish_task_log(scan_id, "error", message=str(exc))
         return {"status": "error", "message": f"Záloha selhala: {exc}"}
 
+    # Zaloha je cela databaze - vcetne hesel uctu (byt jako otisky) a
+    # toho, kdo co kdy hral. Ze stejneho duvodu jako database.json tedy
+    # jen pro vlastnika. Na Windows `chmod` neni, tam plati prava slozky.
+    try:
+        destination.chmod(0o600)
+    except OSError:
+        pass
+
     removed = _prune_backups(target_dir)
 
     scanner.finish_task_log(

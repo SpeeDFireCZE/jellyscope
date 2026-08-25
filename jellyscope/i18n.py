@@ -47,6 +47,11 @@ EN: dict[str, str] = {
     "Collector startuje": "Collector starting",
     "aktivních přehrávání": "active playbacks",
     "Naposledy": "Last seen",
+    # Úlohy a sběr dat mají vlastní klíč: česky by "Naposledy" stačilo
+    # na obojí, ale anglicky je rozdíl mezi "naposledy jsme ho viděli"
+    # a "naposledy to běželo". Dokud to byl jeden klíč, přebil ho ten
+    # pozdější a na Síti stálo "Last run" u zařízení.
+    "Naposledy běželo": "Last run",
     "Světlý / tmavý": "Light / dark",
     "Přihlášen": "Signed in",
     "správce": "administrator",
@@ -154,9 +159,6 @@ EN: dict[str, str] = {
     'Zůstal jen název a ten se v knihovně nikde neopakuje. Titul už v knihovně není.':
         'Only a name is left and it appears nowhere in the library. The title is gone.',
     "titulů": "titles",
-    "Dohledat osiřelé v Jellyfinu": "Look the orphans up in Jellyfin",
-    "Dohledání se ptá Jellyfinu na identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte.":
-        "The lookup asks Jellyfin about the identifiers in the imported history - they are genuine, there is just nothing in the library behind them. Jellyfin tells us the series and episode number, so a record that carries only \"Episode 7\" can finally be placed. Jellyfin is only read from.",
     "spuštěno.": "started.",
     "Záznamy s jiným názvem, než má titul v knihovně":
         "Records whose name differs from the title in the library",
@@ -233,22 +235,21 @@ EN: dict[str, str] = {
     "dílů": "episodes",
     "řad": "seasons",
     "řadách": "seasons",
+    # Celá věta jedním klíčem. Sesypané ze tří ("v" + číslo +
+    # "řadách") to znamenalo, že předložka "v" musí anglicky
+    # sedět i na "zítra v 03:30" - a to nejde: jednou je to
+    # "in", podruhé "at".
+    "v {n} řadách": "in {n} seasons",
     "Řad": "Seasons",
     "Dílů": "Episodes",
     "Řada": "Season",
-    "v": "in",
     "přehráno": "played",
     "Zdroj dat": "Data source",
     "Tenhle seriál už v Jellyfinu není. Jellyscope ho nemaže – historie přehrávání na něj odkazuje.": "This series is no longer in Jellyfin. Jellyscope does not delete it - playback history points to it.",
 
     "hledá": "looks",
-    "min zpět": "min back",
     "Čekám, až úloha doběhne – stránka se pak obnoví sama.":
         "Waiting for the task to finish - the page will reload itself.",
-    "Nefunguje import přes API? Nahraj soubor pluginu":
-        "API import not working? Upload the plugin's file",
-    "Plugin si data ukládá do obyčejné databáze. Zkopíruj ji ze serveru s Jellyfinem a nahraj sem – obejde to rozbité API a do Jellyfinu se přitom vůbec nesahá.":
-        "The plugin stores its data in a plain database file. Copy it from the Jellyfin server and upload it here - this bypasses the broken API and never touches Jellyfin itself.",
     "Nově přidané tituly":
         "Recently added titles",
 
@@ -282,8 +283,6 @@ EN: dict[str, str] = {
     "Zastavit úlohu": "Stop task",
     "Čekám, až se aplikace zvedne – stránka se pak obnoví sama.":
         "Waiting for the app to come back up - the page will reload itself.",
-    "Čekám, až úloha dodělá rozpracovanou položku – stránka se pak obnoví sama.":
-        "Waiting for the task to finish the item in progress - the page will reload itself.",
     "Trvá to déle, než je zdrávo.": "This is taking longer than it should.",
     "Zkusit to znovu": "Try again",
     "Trvá to déle, než je zdrávo. Zkus stránku obnovit ručně.":
@@ -295,9 +294,7 @@ EN: dict[str, str] = {
     "Analýza souborů": "File analysis",
     "Obecné": "General",
     "Co se na serveru dělo za posledních": "Server activity over the last",
-    "Právě teď": "Right now",
     "Uživatel": "User",
-    "Co hraje": "Now playing",
     "Zařízení": "Device",
     "Způsob": "Method",
     "Běží": "Elapsed",
@@ -320,7 +317,6 @@ EN: dict[str, str] = {
     "Jak server obsah doručuje": "How the server delivers content",
     "Přímé přehrávání": "Direct play",
     "Přebalení (direct stream)": "Remux (direct stream)",
-    "Transcode": "Transcode",
     "Neznámé": "Unknown",
     "Přímé přehrávání nestojí server nic. Transcode znamená, že video musí za běhu překódovat – a to už procesor nebo grafická karta cítí.":
         "Direct play costs the server nothing. Transcoding means re-encoding the video on the fly - and the CPU or GPU feels that.",
@@ -338,10 +334,8 @@ EN: dict[str, str] = {
     "Místo, které nikdo nevyužívá": "Storage nobody uses",
     "nic nepřehráno za": "nothing played in",
     "nově přidané tituly se nepočítají": "recently added titles excluded",
-    "titulů": "titles",
     "z celkové velikosti knihovny": "of total library size",
     "Titul": "Title",
-    "Délka": "Length",
     "Délka celkem": "Total length",
     "Velikost": "Size",
     "Rozlišení": "Resolution",
@@ -381,8 +375,6 @@ EN: dict[str, str] = {
     "Kopií": "Copies",
     "Dohromady": "Combined",
     "cesty": "paths",
-    "Pozor: shoda názvu není důkaz. Může jít o režisérský sestřih vedle kinoverze – proto \"možné\".":
-        "Careful: a matching title is not proof. It may be a director's cut next to the theatrical version - hence \"possible\".",
     "Žádné duplicity nenalezeny.": "No duplicates found.",
     "Začaté a odložené": "Started and abandoned",
     "nikdo se nedostal dál než do 15 % délky": "nobody got past 15 % of the runtime",
@@ -397,7 +389,13 @@ EN: dict[str, str] = {
     "na odsledovaném čase": "in watched time",
     "Preferovaný jazyk": "Preferred language",
     "Uložit": "Save",
-    "za": "over",
+    # Odpočet do dalšího běhu úlohy: "za 5 min" = "in 5 min".
+    "za": "in",
+    # Ve statistice je stejné "za" jiné slovo: "za 30 dnů" není "in 30
+    # days" (za třicet dnů se něco stane), ale "over 30 days" (za těch
+    # třicet dnů dohromady). Proto celá fráze jedním klíčem - jedno
+    # slovo dvě věci neunese.
+    "za {obdobi}": "over {obdobi}",
     "Poměr jazyků": "Language ratio",
     "podle odsledovaného času": "by watched time",
     "Jazyk": "Language",
@@ -489,7 +487,6 @@ EN: dict[str, str] = {
     "Žádné knihovny. Spusť synchronizaci v Nastavení.":
         "No libraries. Run a synchronisation in Settings.",
     "všechny knihovny": "all libraries",
-    "titulů": "titles",
     "obsahu": "of content",
     "Média": "Media",
     "Aktivita": "Activity",
@@ -514,8 +511,6 @@ EN: dict[str, str] = {
     "Kdy": "When",
     "Délka": "Duration",
     "Z této knihovny se zatím nic nepřehrávalo.": "Nothing has been played from this library yet.",
-    "titulů v této knihovně nemá technická data. Spusť analýzu v Nastavení.":
-        "titles in this library have no technical data. Run the analysis in Settings.",
 
     # --- detail položky ------------------------------------------------
     "Načíst metadata znovu": "Reload metadata",
@@ -524,7 +519,6 @@ EN: dict[str, str] = {
     "Soubor": "File",
     "Kontejner": "Container",
     "Celkový bitrate": "Total bitrate",
-    "Dynamický rozsah": "Dynamic range",
     "Data změřena": "Data measured",
     "Cesta": "Path",
     "Obraz": "Video",
@@ -561,7 +555,6 @@ EN: dict[str, str] = {
 
     # --- historie ------------------------------------------------------
     "Každé zaznamenané přehrávání, od nejnovějšího.": "Every recorded playback, newest first.",
-    "Všichni uživatelé": "All users",
     "titulky": "subtitles",
     "Zatím žádná historie. Collector zaznamená každé přehrávání, které proběhne od chvíle, kdy Jellyscope běží. Starší data se dají naimportovat z Playback Reporting nebo Jellystatu – viz Nastavení.":
         "No history yet. The collector records every playback from the moment Jellyscope runs. Older data can be imported from Playback Reporting or Jellystat - see Settings.",
@@ -573,8 +566,6 @@ EN: dict[str, str] = {
     "Připojení k Jellyfinu": "Jellyfin connection",
     "Adresa serveru": "Server address",
     "API klíč": "API key",
-    "Jellyfin → Ovládací panel → Rozšířené → Klíče API → \"+\"":
-        "Jellyfin -> Dashboard -> Advanced -> API keys -> \"+\"",
     "Nech prázdné, pokud klíč měnit nechceš.": "Leave empty to keep the current key.",
     "Vyplněné údaje ještě nejsou uložené. API klíč si pamatuju, takže stačí kliknout na Uložit připojení.":
         "The values you entered are not saved yet. The API key is remembered, so "
@@ -612,27 +603,19 @@ EN: dict[str, str] = {
     "Jak často se ptát, co se hraje (sekundy)": "How often to ask what is playing (seconds)",
     "Nižší číslo = přesnější měření délky přehrávání, víc dotazů na server. Deset sekund je dobrý kompromis.":
         "Lower = more accurate playback length, more requests to the server. Ten seconds is a good compromise.",
-    "Interval automatické synchronizace knihovny se nastavuje níže v sekci":
-        "The library synchronisation interval is set below under",
-    "společně s ostatními úlohami.": "together with the other tasks.",
     "Uložit nastavení": "Save settings",
-    "Analýza souborů": "File analysis",
     "položek změřeno": "items measured",
-    "Zdroj technických dat je nastavený na Jellyfin. Chceš-li měřit soubory přímo, přepni ve Sběru dat volbu na \"ffprobe + Jellyfin\" a ulož nastavení.":
-        "The technical data source is set to Jellyfin. To measure files directly, switch the option in Data collection to \"ffprobe + Jellyfin\" and save.",
     "Analyzovat chybějící": "Analyse missing",
     "Analyzovat vše znovu": "Re-analyse everything",
     "Poslední analýza": "Last analysis",
     "hotovo": "done",
     "selhalo": "failed",
-    "Úloha právě běží. Obnov stránku za chvíli.": "A task is running. Refresh in a moment.",
     "Naplánované úlohy": "Scheduled tasks",
     "běží samy, ale spustit je můžeš kdykoliv ručně":
         "they run on their own, but you can start them manually any time",
     "Úloha": "Task",
     "Automaticky": "Automatic",
     "Interval": "Interval",
-    "Kdy": "When",
     "Samo se to děje po každé synchronizaci knihovny a u nově přidaných titulů. Tlačítka níž jsou na to, když nechceš čekat – nebo když potřebuješ přeměřit i soubory, které už změřené jsou (třeba po výměně souboru na stejném místě).":
         "It happens on its own after every library sync and for newly added titles. The buttons below are for when you don't want to wait - or when you need to re-measure files that already have data (after replacing a file in place, for instance).",
     "Čas": "Time",
@@ -645,7 +628,6 @@ EN: dict[str, str] = {
     # Předložka zvlášť: v obou jazycích stojí mezi dnem a časem
     # ("zítra v 03:30" / "tomorrow at 03:30").
     "v": "at",
-    "Naposledy": "Last run",
     "Další běh": "Next run",
     "zapnuto": "on",
     "vypnuto": "off",
@@ -662,7 +644,6 @@ EN: dict[str, str] = {
     "minut": "minutes",
     "nikdy": "never",
     "při další kontrole": "at next check",
-    "za": "in",
     "Složka pro zálohy databáze": "Database backup folder",
     "Nech prázdné, dokud zálohy nechceš. Složka se v případě potřeby vytvoří.":
         "Leave empty until you want backups. The folder is created if needed.",
@@ -734,24 +715,18 @@ EN: dict[str, str] = {
         "SQLite is the default and needs no installation - the whole database is one file. PostgreSQL makes sense if you already run one. The change takes effect after restarting the application.",
     "Jeden soubor na disku. Nic se neinstaluje, nic neběží na pozadí. Pro jednu domácnost naprosto dostačuje.":
         "One file on disk. Nothing to install, nothing running in the background. Plenty for a single household.",
-    "Samostatný databázový server. Potřebuje knihovnu psycopg – nainstaluj ji příkazem":
-        "A separate database server. Requires the psycopg library - install it with",
     "Soubor SQLite": "SQLite file",
     "Relativní cesta se počítá od složky projektu.": "A relative path is resolved from the project folder.",
     "Server": "Host",
     "Port": "Port",
     "Název databáze": "Database name",
-    "Uživatel": "User",
     "Nech prázdné, pokud heslo měnit nechceš.": "Leave empty to keep the current password.",
     "Uložit a použít po restartu": "Save and use after restart",
     "Přenést data do vybrané databáze": "Copy data into the selected database",
     "Přenos dat cílovou databázi nejdřív vyprázdní a teprve pak do ní data zkopíruje. Ulož nastavení až potom, co přenos proběhl.":
         "The copy empties the target database first and only then writes the data. Save the settings only after the copy has finished.",
     "Tabulka": "Table",
-    "Řádků": "Rows",
     "Log": "Log",
-    "Log aplikace": "Application log",
-    "Soubor": "File",
     "Řádků": "Lines",
     "Úroveň": "Level",
     "vše": "all",
@@ -771,9 +746,6 @@ EN: dict[str, str] = {
         "When systemd runs the application, it sends the output to the journal and writes nothing to the folder above. The full output, including server startup:",
     "U supervisordu je totéž ve výše nabízených souborech out.log a err.log.":
         "With supervisord the same lives in the out.log and err.log files offered above.",
-    "Úklid historie": "History cleanup",
-    "napraví, co v databázi zůstalo po opravených chybách":
-        "repairs what past bugs left behind in the database",
     "Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz – typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.":
         "Duplicate records appeared when two collectors ran against one database by mistake - typically an old version of the app next to a new one. The collector now prevents that on its own.",
     "Záznamy visící na špatném dílu jsou pozůstatek chyby ve slučování podle TMDB: u epizody se bralo id celého seriálu, takže se historie všech dílů slila na jediný. Opravuje se podle názvu dílu, který v záznamu zůstal.":
@@ -849,8 +821,6 @@ EN: dict[str, str] = {
     "Co zůstává v .env": "What stays in .env",
     "V souboru .env už zůstává jen tajný klíč pro podepisování přihlašovacích cookies a nastavení sítě (adresa a port). Připojení k Jellyfinu, hesla i všechno ostatní je v databázi a mění se tady.":
         "The .env file now only holds the secret key for signing session cookies and the network settings (host and port). The Jellyfin connection, passwords and everything else live in the database and are changed here.",
-    "Aplikace se restartuje. Počkej pár vteřin a obnov stránku.":
-        "The application is restarting. Wait a few seconds and refresh.",
 
     # --- přihlášení ----------------------------------------------------
     "Přihlásit": "Sign in",
@@ -898,12 +868,6 @@ EN: dict[str, str] = {
         "Click a day to see in the history what played that day.",
 
     # --- zásobník spojení --------------------------------------------------
-    "Samostatný databázový server. Potřebuje knihovnu psycopg – nainstaluj ji do prostředí, ve kterém aplikace běží:":
-        "A standalone database server. It needs the psycopg library - install it "
-        "into the environment the application runs in:",
-    "Pak aplikaci restartuj. Doplněk pro connection pool je zvlášť, viz níže.":
-        "Then restart the application. The connection pool extra is separate, see below.",
-    "což je doplněk navíc k psycopg:": "which is an extra on top of psycopg:",
     "Samostatný databázový server. Má smysl, když ho už provozuješ – pro domácnost SQLite bohatě stačí.":
         "A standalone database server. Worth it if you already run one - for a "
         "household SQLite is plenty.",
@@ -922,7 +886,6 @@ EN: dict[str, str] = {
         "Keeps a few connections open and lends them out instead of opening a new "
         "one for every query. A single page asks for data about a dozen times - over "
         "a network the difference shows, on the same machine it is small.",
-    "Potřebuje knihovnu": "Needs the library",
     "Když ji doinstalovat nemůžeš, nech tohle vypnuté – aplikace pojede dál, jen si bude spojení navazovat po jednom.":
         "If you cannot install it, leave this off - the application keeps working, "
         "it just opens connections one at a time.",
@@ -968,13 +931,8 @@ EN: dict[str, str] = {
     "Perština": "Persian",
     "Neuvedeno": "Not specified",
     "ostatní": "other",
-    "Ostatní": "Other",
 
     # --- popisky knihoven a dnů -----------------------------------------
-    "Filmy": "Movies",
-    "Seriály": "TV shows",
-    "Domácí videa": "Home videos",
-    "Smíšený obsah": "Mixed content",
     "Po": "Mon",
     "Út": "Tue",
     "St": "Wed",
@@ -990,24 +948,15 @@ EN: dict[str, str] = {
     "Nastavení úloh uloženo.": "Task settings saved.",
     "Nastavení databáze uloženo. Změna se projeví po restartu aplikace.":
         "Database settings saved. The change takes effect after a restart.",
-    "Připojení uloženo. Otestuj ho tlačítkem vedle.":
-        "Connection saved. Test it with the button next to it.",
-    "Aplikace se restartuje. Počkej pár vteřin a obnov stránku.":
-        "The application is restarting. Wait a few seconds and refresh the page.",
     "Přepis cest není platný JSON - nechal jsem původní hodnotu.":
         "The path mapping is not valid JSON - I kept the original value.",
     "Jiná úloha už běží, počkej na její dokončení.":
         "Another task is already running, wait for it to finish.",
-    "Synchronizace knihovny spuštěna - občas obnov stránku.":
-        "Library sync started - refresh the page now and then.",
-    "Analýza souborů spuštěna - občas obnov stránku.":
-        "File analysis started - refresh the page now and then.",
     "Zdroj technických dat je nastavený na Jellyfin. ":
         "The technical data source is set to Jellyfin. ",
     "Přepni ho na ffprobe a ulož nastavení.": "Switch it to ffprobe and save the settings.",
     "Neznámá úloha.": "Unknown task.",
     "Soubor je prázdný.": "The file is empty.",
-    "Soubor je větší než 200 MB.": "The file is larger than 200 MB.",
     "Import selhal.": "Import failed.",
     "Přenos selhal.": "Transfer failed.",
     "Heslo změněno.": "Password changed.",
@@ -1024,7 +973,6 @@ EN: dict[str, str] = {
     "Nemůžeš odebrat práva poslednímu správci.":
         "You cannot remove privileges from the last administrator.",
     "Posledního správce smazat nelze.": "The last administrator cannot be deleted.",
-    "Původní heslo nesouhlasí.": "The current password is not correct.",
 
     # --- hlasky po dokoncene akci (viz web._flash) ------------------------
     # Cislo nebo jmeno se do vety dosazuje az PO prekladu, proto {znacky}.
@@ -1066,9 +1014,6 @@ EN: dict[str, str] = {
         "collector or a second import), so nothing was duplicated.",
     "Soubor je větší než {n} MB.": "The file is larger than {n} MB.",
 
-    # uklid historie a dohledavani osirelych zaznamu
-    "Úklid historie: {co}": "History cleanup: {co}",
-
     # --- narovnani dat (jedno tlacitko + stejnojmenna uloha) -------------
     "Narovnání dat": "Data tidy-up",
     "{n} starších záznamů se přeneslo ze seriálu na konkrétní díl.":
@@ -1093,12 +1038,8 @@ EN: dict[str, str] = {
     "Přehrávání jsou skrytá – je jich hodně": "Playbacks are hidden – there are many",
     "Diváci jsou skrytí – je jich hodně": "Viewers are hidden – there are many",
     "zobrazit všech": "show all",
-    "Zobrazit všechny": "Show all",
-    "Zobrazit všechna": "Show all",
-    "Načíst metadata znovu": "Reload the metadata",
     "Metadata načtena znovu: {n} dílů": "Metadata reloaded: {n} episodes",
     "(včetně změření souborů)": "(including measuring the files)",
-    "Obraz": "Video",
     "Zvuk": "Audio",
     "beze změny, jen se přebaluje": "unchanged, only repackaged",
     "přepočítává se": "being re-encoded",
@@ -1125,8 +1066,6 @@ EN: dict[str, str] = {
     "Klikáním přiblížíš, tažením posuneš, dvojklik vrátí celý svět.":
         "Click to zoom, drag to pan, double-click for the whole world.",
     "Dlouhé seznamy": "Long lists",
-    "kolik položek karta vypíše, než zbytek schová do okna":
-        "how many items a card lists before it folds the rest into a dialog",
     "Každý další stream (nebo další divák) posouvá zbytek stránky dolů. "
     "Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. "
     "Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, "
@@ -1184,8 +1123,6 @@ EN: dict[str, str] = {
         "The list of changes could not be downloaded - it is on the release page.",
     "Aktualizovat z prohlížeče jde jen tam, kde je aplikace stažená z gitu. Jinak platí deploy/update.sh.":
         "Updating from the browser only works where the app came from git. Otherwise deploy/update.sh is the way.",
-    "Nová verze stažená. Aplikace se restartuje a stránka se sama obnoví.":
-        "The new version is downloaded. The app is restarting and the page will reload itself.",
     "Aktualizace se nepovedla.": "The update did not go through.",
     "Aktualizovat z prohlížeče jde jen tam, kde je aplikace stažená z gitu.":
         "Updating from the browser only works where the app came from git.",
@@ -1202,15 +1139,10 @@ EN: dict[str, str] = {
     "posledních 90 dní": "last 90 days",
     "poslední rok": "last year",
     "vlastní…": "custom…",
-    "dnes": "today",
-    "Od": "From",
-    "Do": "To",
     "Přehrávač": "Player",
     "jakýkoliv": "any",
     "všichni": "everyone",
     "neuvedený": "not given",
-    "zrušit den": "clear the day",
-    "běží": "running",
     "Hlídat novou verzi": "Watch for a new version",
     "Jednou denně se zeptá GitHubu, jestli nevyšlo novější vydání. Nic "
     "neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, "
@@ -1222,7 +1154,6 @@ EN: dict[str, str] = {
     "Naposledy kontrolováno": "Last checked",
     "nejnovější vydání": "latest release",
     "Je k dispozici verze": "Version available",
-    "Je k dispozici novější verze": "A newer version is available",
     "Co je v ní nového": "What is new in it",
     "Aktualizuje se na serveru příkazem": "On the server it updates with",
     "Je k dispozici verze {verze}.": "Version {verze} is available.",
@@ -1310,16 +1241,6 @@ EN: dict[str, str] = {
     "internet": "internet",
     "přehrávání": "playbacks",
     "Mbit/s": "Mbit/s",
-    "Mapa tu není schválně: adresa z domácí sítě (192.168.x.x) žádné místo "
-    "na světě neoznačuje – je stejná v Praze i v Sydney. Zeměpisně jde "
-    "umístit jen veřejná adresa, a i to potřebuje offline databázi GeoIP. "
-    "Dokud se všichni dívají z domova, řekne rozdělení výš víc než mapa "
-    "s jedním bodem.":
-        "There is no map on purpose: an address from the home network "
-        "(192.168.x.x) marks no place in the world – it is the same in "
-        "Prague and in Sydney. Only a public address can be placed on a map, "
-        "and even that needs an offline GeoIP database. As long as everyone "
-        "watches from home, the split above says more than a map with one dot.",
     "Importovaná data nemusí obsahovat jazyk zvukové stopy ani důvod "
     "transcode. Playback Reporting jazyk občas pošle – takový záznam se do "
     "jazykových statistik počítá. Jellystat ho neposílá nikdy. Co v importu "
@@ -1373,19 +1294,8 @@ EN: dict[str, str] = {
         "the archive the episodes that are in the library again (typically "
         "after a file was replaced). It deletes nothing - it only repairs "
         "the links.",
-    "nic k opravě, historie je v pořádku.":
-        "nothing to fix, the history is in order.",
-    "Není co dohledávat - osiřelé záznamy tu nejsou.":
-        "Nothing to look up - there are no orphaned records.",
-    "Jellyfin nezná ani jeden z {n} titulů. Jsou to tituly, které v knihovně "
-    "už nejsou.":
-        "Jellyfin knows none of the {n} titles. They are titles that are no "
-        "longer in the library.",
-    "Jellyfin zná {n} z {celkem}": "Jellyfin knows {n} out of {celkem}",
-    "navázáno na knihovnu: {n} titulů": "linked to the library: {n} titles",
     "doplněno do knihovny: {n} titulů": "added to the library: {n} titles",
     "doplněn seriál u {n} titulů": "series filled in for {n} titles",
-    "celkem {n} záznamů": "{n} records in total",
     "Přiřazeno k „{nazev}“ – {n} záznamů.": "Assigned to „{nazev}“ – {n} records.",
 
     # polozka, zalohy, databaze

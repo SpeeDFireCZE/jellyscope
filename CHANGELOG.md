@@ -6,6 +6,74 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.8
+
+### Security
+
+- **The brake on password guessing could be walked around from outside.**
+  Behind a reverse proxy the real client address arrives in the
+  `X-Forwarded-For` header — and the app read that header itself, checking
+  only whether a proxy was configured at all, never who had actually sent
+  it. Anyone who could reach the app directly could therefore write a
+  different address into that header on every attempt, and each try was
+  counted separately. The brake existed and never engaged.
+
+  The address now comes from `request.client` only. Behind a proxy uvicorn
+  fills that in from the same header, but only when the request came from
+  an address in `FORWARDED_ALLOW_IPS` — the check the app's own copy was
+  missing. Measured on the old code: eleven wrong passwords, zero blocks.
+  On the new one the block arrives on the eighth.
+
+- **A Content-Security-Policy is now sent with every page.** Jellyscope
+  loads nothing from anywhere else — no CDN, no web font, images come
+  through our own server — so the policy can say "from here only" without
+  breaking anything. Inline scripts still have to be allowed (the pages
+  carry their own `<script>` blocks), so this does not stop injected code
+  outright; it takes away what such code is for: no fetching more code, no
+  sending data to another host, no redirecting a form elsewhere, no
+  framing the page.
+
+- **The size limit on uploaded backups now applies while reading.** The
+  file was read into memory in full and measured afterwards — a limit that
+  arrives after the damage. A large enough file could exhaust memory
+  before the app got to say it was too big.
+
+- **Two files that hold secrets were readable by anyone on the machine.**
+  `data/secret_key` has been owner-only from the start; `data/database.json`
+  and the backups were not. The first holds the **PostgreSQL password**, in
+  clear text, because the app has to log in with it. The second is the whole
+  database — including account password hashes and everybody's viewing
+  history.
+
+  Both now get mode 600 when written, the same as the key. On Windows
+  `chmod` does nothing and the folder is what protects them, so a failing
+  `chmod` is ignored rather than fatal — losing the ability to save your
+  database settings would be the worse trade.
+
+  Found by CodeQL (`py/clear-text-storage-sensitive-data`), and it was
+  right: the care existed in one place and was missing two files over.
+
+### Changed
+
+- **Twenty-six translation keys existed twice.** A repeated key silently
+  overrides the earlier one, so eight of them showed the wrong English: a
+  device on the Network page had a "Last run" instead of "Last seen", a
+  series read "at 3 seasons" instead of "in 3 seasons", database tables
+  counted "Lines" instead of "Rows". Where one Czech word genuinely means
+  two things, both meanings now have their own key.
+
+- **Forty-three translations belonged to text that no longer exists** —
+  leftovers of rewritten messages and removed buttons. They are gone, and
+  a test now watches for duplicates, dead entries, keys used in templates
+  but missing from the dictionary, and placeholders that differ between
+  the two languages.
+
+- **Duplicated code merged where merging helps:** one availability check
+  for optional libraries instead of two, one path through a file import
+  instead of two nearly identical routes, one sentence-builder for the
+  numbers in an import summary, and one wrapper for the account commands
+  in `manage.py`.
+
 ## 1.2.7
 
 ### Fixed

@@ -129,11 +129,23 @@ def load_config(base_dir: Path, fallback_sqlite_path: str) -> DatabaseConfig:
 
 
 def save_config(base_dir: Path, config: DatabaseConfig) -> None:
+    """Uloží výběr databáze do `data/database.json`.
+
+    Soubor dostane práva 600, protože u PostgreSQL je v něm **heslo
+    k databázi**, a to čitelně - jinak by se s ním aplikace nepřihlásila.
+    Stejná úvaha jako u `data/secret_key` v config.py: co je citlivé, ať
+    si přečte jen vlastník. Na Windows to `chmod` neumí, tam soubor chrání
+    přístup ke složce.
+    """
     path = config_path(base_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
