@@ -2031,9 +2031,13 @@ def delete_item(item_id: str) -> dict[str, Any]:
 # je to vysledny (prepocitany) tok, jinak bitrate zdrojoveho souboru.
 #
 # Je to **odhad podle deklarovaneho bitrate, ne mereni dratu.** Preskakovani
-# v prehravaci, buffer i pauzy znamenaji, ze skutecne prenesene bajty se
-# lisi. Presne cislo umi jen reverzni proxy nebo pocitadla systemu - mimo
+# v prehravaci a buffer znamenaji, ze skutecne prenesene bajty se lisi.
+# Presne cislo umi jen reverzni proxy nebo pocitadla systemu - mimo
 # Jellyfin. Rika to i stranka, at si to nikdo neplete s merenim.
+#
+# Pauzy se ale odecitaji: pocita se `watched_seconds`, tedy cas, kdy se
+# doopravdy sledovalo. Pozastavene prehravani zadna data netahne, takze
+# by ho graf jinak ukazoval jako beziciho - viz bandwidth_prubeh().
 # ---------------------------------------------------------------------------
 
 def _sitove_radky(days: int) -> list[dict[str, Any]]:
@@ -2085,6 +2089,21 @@ def bandwidth_prubeh(days: int, bodu: int = 120) -> list[dict[str, Any]]:
             continue
         if konec is None or konec <= zacatek:
             konec = zacatek + float(radek["watched_seconds"] or 0)
+        # Pauza neteče. Bez tohohle omezení se bitrate rozprostřel přes
+        # celý čas od začátku do konce - takže film pozastavený přes noc
+        # držel v grafu plný tok do rána a stejně tak přehrávání, které
+        # je pozastavené PRÁVĚ TEĎ (u něj `last_seen_at` běží dál).
+        #
+        # Kdy přesně se pauzovalo, databáze neví - ukládá se jen součet
+        # `watched_seconds`. Bereme proto délku toku podle něj: tok trvá
+        # tak dlouho, jak dlouho se doopravdy sledovalo. U pauzy uprostřed
+        # je tím pádem posunutý dopředu, ale jeho **množství i výška**
+        # sedí - a součet pod křivkou tak konečně odpovídá objemu dat,
+        # který stránka ukazuje vedle.
+        odsledovano = float(radek["watched_seconds"] or 0)
+        if odsledovano > 0:
+            konec = min(konec, zacatek + odsledovano)
+
         udalosti.append((zacatek, int(radek["bitrate"])))
         udalosti.append((konec, -int(radek["bitrate"])))
 

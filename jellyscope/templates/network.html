@@ -17,7 +17,7 @@
    podle něj bude dimenzovat linku, má vědět, jak vzniklo. #}
 <div class="flash info" style="margin-bottom:18px">
     <span class="dot"></span>
-    <span>{{ _("Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání – při překódování z výsledného toku, jinak ze zdrojového souboru. Je to tedy poctivý odhad, ne měření drátu: přeskakování, buffer a pauzy skutečná čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla systému.") }}</span>
+    <span>{{ _("Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání – při překódování z výsledného toku, jinak ze zdrojového souboru. Pozastavené přehrávání se nepočítá, protože při pauze nic neteče. Je to tedy poctivý odhad, ne měření drátu: přeskakování a buffer skutečná čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla systému.") }}</span>
 </div>
 
 <div class="kpi-row">

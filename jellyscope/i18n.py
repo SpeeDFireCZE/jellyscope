@@ -236,6 +236,9 @@ EN: dict[str, str] = {
     "řad": "seasons",
     "řadách": "seasons",
     "z Jellyfinu": "from Jellyfin",
+    "odhad z názvu": "guessed from the name",
+    "Jazyk nezná soubor ani Jellyfin – tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.":
+        "Neither the file nor Jellyfin knows the language - this is a guess from the file name. The name tells which languages are in the file, not which track is which.",
     "Soubor jazyk neuvádí, doplněno z Jellyfinu.":
         "The file does not state a language; filled in from Jellyfin.",
     # Celá věta jedním klíčem. Sesypané ze tří ("v" + číslo +
@@ -295,6 +298,7 @@ EN: dict[str, str] = {
     "Nepřeruší se uprostřed práce: dokončí položku, kterou má rozdělanou, a teprve pak skončí. Co se stihlo, zůstane uložené.":
         "It is not interrupted mid-work: it finishes the item it has in progress and only then ends. Whatever was done stays saved.",
     "Analýza souborů": "File analysis",
+    ", odhadnut z názvu u {n} stop": ", guessed from the name for {n} tracks",
     ", jazyk doplněn z Jellyfinu u {n} stop":
         ", language filled in from Jellyfin for {n} tracks",
     "Obecné": "General",
@@ -1215,16 +1219,8 @@ EN: dict[str, str] = {
         "without it.",
     "Kolik dat teklo ze serveru k přehrávačům – a kdy to bylo nejvíc.":
         "How much data left the server for the players – and when it peaked.",
-    "Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání – při "
-    "překódování z výsledného toku, jinak ze zdrojového souboru. Je to tedy "
-    "poctivý odhad, ne měření drátu: přeskakování, buffer a pauzy skutečná "
-    "čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla "
-    "systému.":
-        "Computed from the bitrate Jellyfin reports for each playback – the "
-        "resulting stream when it transcodes, the source file otherwise. So "
-        "it is an honest estimate, not a measurement of the wire: seeking, "
-        "buffering and pauses move the real numbers. Only a reverse proxy or "
-        "the system counters can measure that exactly.",
+    "Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání – při překódování z výsledného toku, jinak ze zdrojového souboru. Pozastavené přehrávání se nepočítá, protože při pauze nic neteče. Je to tedy poctivý odhad, ne měření drátu: přeskakování a buffer skutečná čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla systému.":
+        "Calculated from the bitrate Jellyfin reports for each playback - the resulting stream when transcoding, the source file otherwise. Paused playback is left out, because nothing flows during a pause. It is an honest estimate, not a measurement of the wire: seeking and buffering move the real numbers. Only a reverse proxy or the system's own counters can measure it exactly.",
     "Špička": "Peak",
     "Přeneseno celkem": "Transferred in total",
     "Z toho překódovaných": "Of that transcoded",
@@ -1371,6 +1367,8 @@ EN: dict[str, str] = {
 # Díky tomu zůstávají volání `log.info(...)` čitelná a nikdo si při psaní
 # nové hlášky nemusí pamatovat na překlad.
 LOG_EN: dict[str, str] = {
+    "jazyk odhadnut z nazvu souboru u %s stop":
+        "language guessed from the file name for %s tracks",
     "jazyk doplnen z Jellyfinu u %s stop":
         "language filled in from Jellyfin for %s tracks",
     "jazyky se z Jellyfinu doplnit nepodarilo: %s":

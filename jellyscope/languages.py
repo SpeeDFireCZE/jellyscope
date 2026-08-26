@@ -12,6 +12,8 @@ a potkas ji vsude - u telefonnich cisel, e-mailu, nazvu mest.
 
 from __future__ import annotations
 
+import re
+
 # Kanonicky tvar je dvoupismenny kod (ISO 639-1). Vlevo jsou vsechny
 # podoby, ktere muze poslat Jellyfin nebo ffprobe.
 _ALIASES: dict[str, str] = {}
@@ -154,6 +156,148 @@ def display(code: str | None) -> str:
     if canonical == UNKNOWN:
         return translate("Neuvedeno")
     return translate(_NAMES.get(canonical, canonical.upper()))
+
+
+# ---------------------------------------------------------------------------
+# Jazyk podle názvu souboru
+#
+# Poslední záchrana, když jazyk nezná ani soubor, ani Jellyfin: hodně
+# knihoven ho má v názvu ("Duna.2021.CZ.SK.EN.1080p.mkv").
+#
+# Celé to stojí na jednom pravidle: hledá se **celý úsek mezi oddělovači**,
+# ne výskyt písmen. "Czechacek" ani "enigma" proto nikdy neprojdou - jako
+# úsek to jsou slova, která v seznamu nejsou. Kdyby se hledal podřetězec,
+# byla by to loterie.
+#
+# Druhá pojistka je u dvoupísmenných značek: berou se **jen velkými**.
+# Malé "de", "es" nebo "ja" jsou běžná slova v názvech filmů (Casa de
+# Papel, Já, Olga Hepnarová), zatímco značka jazyka se píše velkými.
+#
+# Třetí pojistka je seznam sám: schválně v něm nejsou zkratky, které jsou
+# zároveň slovy nebo jmény - "no" (Norwegian, ale i No Time To Die),
+# "it" (Italian, ale i film IT), "el" (Greek, ale i El Camino), "dan",
+# "fin", "nor", "por". Radši jazyk nenajít než ho určit špatně.
+# ---------------------------------------------------------------------------
+
+# Dvoupísmenné jen VELKÝMI. To, co v ISO neexistuje (JP, KR, CN), se
+# v názvech běžně píše, tak to přeložíme.
+_ZNACKY_VELKE: dict[str, str] = {
+    "CZ": "cs", "SK": "sk", "EN": "en", "DE": "de", "FR": "fr", "ES": "es",
+    "PL": "pl", "HU": "hu", "RU": "ru", "UA": "uk", "PT": "pt", "NL": "nl",
+    "JP": "ja", "KR": "ko", "CN": "zh",
+}
+
+# Delší značky projdou i malými písmeny - záměna se slovem je nepravděpodobná.
+_ZNACKY_DELSI: dict[str, str] = {
+    "cze": "cs", "ces": "cs", "czech": "cs", "cesky": "cs", "cestina": "cs",
+    "slk": "sk", "svk": "sk", "slovak": "sk", "slovensky": "sk",
+    "eng": "en", "english": "en", "anglicky": "en",
+    "ger": "de", "deu": "de", "german": "de", "nemecky": "de",
+    "fra": "fr", "fre": "fr", "french": "fr",
+    "spa": "es", "spanish": "es",
+    "ita": "it", "italian": "it",
+    "pol": "pl", "polish": "pl",
+    "rus": "ru", "russian": "ru",
+    "ukr": "uk", "ukrainian": "uk",
+    "hun": "hu", "hungarian": "hu",
+    "jpn": "ja", "japanese": "ja",
+    "kor": "ko", "korean": "ko",
+    "chinese": "zh",
+    "portuguese": "pt", "dutch": "nl",
+    "swe": "sv", "swedish": "sv",
+    "tur": "tr", "turkish": "tr",
+}
+
+# Slova, po kterých jazyk patří titulkům, ne zvuku. "CZ tit" jsou české
+# titulky u anglického filmu - vzít to jako zvuk by statistiku otočilo.
+_TITULKY = {"tit", "titulky", "tits", "sub", "subs", "subbed", "subtitle",
+            "subtitles", "sk-tit", "cz-tit", "forced"}
+
+# "CZdab", "SKdabing" - jedno slovo, ve kterém je značka slepená s dabingem.
+_DABING = re.compile(r"^(cz|sk|en|de|hu|pl|ru)[-_.]?dab(ing|ovan[eyá])?$",
+                     re.IGNORECASE)
+
+
+# Podle čeho se pozná, že název filmu skončil a začaly značky.
+_HRANICE = re.compile(r"^(?:(?:19|20)\d{2}|[Ss]\d{1,2}[Ee]\d{1,3}"
+                      r"|\d{3,4}[pi]|2160p|4[Kk]|[Bb]lu[Rr]ay|WEB|WEBRip|WEB-DL"
+                      r"|BRRip|DVDRip|HDTV|REMUX|x26[45]|h26[45]|HEVC)$",
+                      re.IGNORECASE)
+
+
+def _konec_nazvu(useky: list[str]) -> int:
+    """Index prvního úseku, který už není součástí názvu filmu.
+
+    Bereme **první** takový, ne poslední: značky jazyka stojí za rokem,
+    ale klidně před rozlišením ("Serial.S01E03.CZdab.720p").
+    """
+    for i, usek in enumerate(useky):
+        if _HRANICE.match(usek):
+            return i
+    return -1         # rok ani rozlišení tam nejsou
+
+
+def z_nazvu(cesta: str | None) -> dict[str, list[str]]:
+    """Jazyky, které slibuje název souboru. Zvlášť zvuk, zvlášť titulky.
+
+        z_nazvu("Duna.2021.CZ.SK.EN.1080p.mkv")
+            -> {"zvuk": ["cs", "sk", "en"], "titulky": []}
+        z_nazvu("Enigma.2001.1080p.mkv")      -> prázdné
+        z_nazvu("Czechacek.2020.mkv")         -> prázdné
+
+    Vrací pořadí, v jakém se značky v názvu objevily. Neříká to ale, která
+    značka patří které stopě - o tom rozhoduje ten, kdo výsledek použije.
+    """
+    if not cesta:
+        return {"zvuk": [], "titulky": []}
+
+    nazev = str(cesta).replace("\\", "/").rsplit("/", 1)[-1]
+    nazev = nazev.rsplit(".", 1)[0] if "." in nazev else nazev
+
+    # Oddělovačem je cokoliv, co není písmeno ani číslice. Tím se z názvu
+    # stanou úseky, které porovnáváme celé - o to tu jde.
+    useky = [u for u in re.split(r"[^0-9A-Za-zÀ-ž]+", nazev) if u]
+
+    # Kde končí název filmu a začínají značky. Skoro každý název má někde
+    # rok, číslo dílu nebo rozlišení - a co je před ním, je titul.
+    #
+    # Je to potřeba kvůli názvům jako "The Italian Job" nebo "Polish
+    # Wedding": anglické jméno jazyka je běžné slovo v názvu filmu. Za
+    # rokem už tam nikdo film nepojmenovává.
+    hranice = _konec_nazvu(useky)
+
+    zvuk: list[str] = []
+    titulky: list[str] = []
+
+    for i, usek in enumerate(useky):
+        kod = None
+        if usek in _ZNACKY_VELKE:                 # jen velkými
+            kod = _ZNACKY_VELKE[usek]
+        elif usek.lower() in _ZNACKY_DELSI:
+            # Celá slova ("italian", "cesky") bereme jen za hranicí názvu.
+            # Zkratky (CZ, ENG) můžou být kdekoliv - ty se jako slovo
+            # v názvu filmu neobjeví.
+            #
+            # Když v názvu žádná hranice není ("The Italian Job.mkv"),
+            # celá slova neuznáváme vůbec: nemáme podle čeho poznat, že
+            # nejsou součástí názvu.
+            if len(usek) > 3 and (hranice < 0 or i < hranice):
+                continue
+            kod = _ZNACKY_DELSI[usek.lower()]
+        elif _DABING.match(usek):
+            kod = _ZNACKY_VELKE.get(usek[:2].upper())
+
+        if kod is None:
+            continue
+
+        # Sousední slovo rozhoduje, jestli jde o zvuk, nebo o titulky.
+        okoli = {useky[i - 1].lower() if i else "",
+                 useky[i + 1].lower() if i + 1 < len(useky) else ""}
+        kam = titulky if okoli & _TITULKY else zvuk
+        if kod not in kam:
+            kam.append(kod)
+
+    return {"zvuk": zvuk, "titulky": titulky}
 
 
 def pack(codes) -> str:

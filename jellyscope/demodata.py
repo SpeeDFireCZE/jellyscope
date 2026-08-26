@@ -220,6 +220,21 @@ def seed() -> dict[str, int]:
                 _ts(now), _ts(now),
             ))
 
+        # Titul, u ktereho jazyk nezna soubor ani knihovna - zna ho jen
+        # nazev souboru. Presne tenhle pripad je v knihovnach bezny
+        # a je to jediny zpusob, jak v ukazce videt "odhad z nazvu".
+        items.append((
+            "demo-movie-nazev", "Sedmikrasky", "Movie", "demo-movies",
+            None, None, None, None, None, 1966,
+            74 * 60 * 10_000_000, "2022-06-11T09:20:00.0000000Z",
+            "D:/media/filmy/Sedmikrasky.1966.CZ.SK.EN.1080p.mkv",
+            "matroska", "h264", "ac3", 2,
+            1920, 1080, 8_200_000, int(4.1 * 1024 ** 3), "SDR",
+            # V souhrnu zatim nic - dopocita se z nazvu az nakonec.
+            languages.UNKNOWN, "", languages.UNKNOWN,
+            "ffprobe", _ts(now), _ts(now),
+        ))
+
         # jeden film zamerne dvakrat - kvuli detekci duplicit
         for suffix, height, size, codec in (("1080p", 1080, 9, "h264"), ("2160p", 2160, 54, "hevc")):
             items.append((
@@ -281,6 +296,12 @@ def seed() -> dict[str, int]:
             item_id = entry[0]
             index = 0
 
+            # Titul s jazykem jen v nazvu ma stopy skladane rucne o kus
+            # niz - obecna smycka je odvozuje ze souhrnu, a ten u nej
+            # zadny jazyk nema.
+            if item_id == "demo-movie-nazev":
+                continue
+
             stream_rows.append((
                 item_id, index, "Video", entry[14], languages.UNKNOWN, None,
                 None, None, entry[17], entry[18], entry[19], 1, 0, 0,
@@ -325,6 +346,19 @@ def seed() -> dict[str, int]:
 
         # Stopy az tady: odkazuji se na polozky cizim klicem, takze polozky
         # uz musi v databazi byt. Opacne poradi by skoncilo chybou.
+        # Tri zvukove stopy bez jazyka - ze souhrnu by se poskladat
+        # nedaly, protoze ten jazyky nesmi mit dvakrat. Proto rucne.
+        stream_rows.append((
+            "demo-movie-nazev", 0, "Video", "h264", languages.UNKNOWN, None,
+            None, None, 1920, 1080, 8_200_000, 1, 0, 0,
+        ))
+        for poradi, kanaly in enumerate((2, 6, 6), start=1):
+            stream_rows.append((
+                "demo-movie-nazev", poradi, "Audio", "ac3", languages.UNKNOWN, None,
+                kanaly, {2: "stereo", 6: "5.1"}[kanaly], None, None, None,
+                1 if poradi == 1 else 0, 0, 0,
+            ))
+
         conn.executemany(
             """INSERT INTO item_streams (
                 item_id, stream_index, type, codec, language, title,
@@ -482,5 +516,13 @@ def seed() -> dict[str, int]:
                        ?,?,2640,0,26400000000,1)""",
             (_ts(now - timedelta(minutes=44)), _ts(now)),
         )
+
+    # Az uplne nakonec, mimo blok se spojenim: detekce si otevira
+    # vlastni. Delame to tak, jak by to v ostrem provozu udelala uloha
+    # "Analyza souboru" - nedosazujeme vysledek rucne, at ukazka ukazuje
+    # opravdovou funkci, ne jeji napodobeninu.
+    from . import scanner
+
+    scanner.doplnit_jazyky_z_nazvu(["demo-movie-nazev"])
 
     return {"items": len(items), "plays": len(plays) + 1, "users": len(USERS)}

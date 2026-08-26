@@ -6,6 +6,55 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.10
+
+### Added
+
+- **The file name as the last resort for a track's language.** When neither
+  the file nor Jellyfin knows what language a track is in, many libraries
+  still say it in the name — `Duna.2021.CZ.SK.EN.1080p.mkv`. Those tags are
+  now read, and the whole thing rests on one rule: a **whole section between
+  separators** has to match, never a run of letters. "Czechacek" and
+  "enigma" therefore never pass, though one contains "cze" and the other
+  "en".
+
+  Two more guards sit behind it. Two-letter tags count only in capitals —
+  lowercase "de", "es" and "ja" are ordinary words in film titles (Casa de
+  Papel, Já, Olga Hepnarová). And full language names count only after the
+  year or episode number, because before it they are usually the title: The
+  Italian Job, Polish Wedding, Russian Doll.
+
+  The name says *which* languages are in the file, not which track is which,
+  so the tags are handed out in order and marked as a guess — the set of
+  languages, and with it the statistics, is right; the order is an estimate.
+  If the counts do not match, or a track whose language is already known
+  contradicts the name, nothing is filled in at all.
+
+### Fixed
+
+- **A paused playback counted as if it were still streaming.** Nothing
+  flows during a pause — the server sends nothing and the player asks for
+  nothing — but the concurrent-bandwidth graph took the stream's bitrate
+  and spread it across the whole span from start to end. A film paused
+  overnight held a full 20 Mbit/s until morning, and so did a playback
+  paused *right now*, because the last-seen timestamp keeps advancing
+  while it sits there.
+
+  Two numbers on the same page therefore disagreed: the area under the
+  curve came out many times larger than the data volume beside it, which
+  has always been counted from watched seconds.
+
+  When the pause happened is not something the database knows — it keeps
+  totals, not intervals. So the flow now lasts as long as the playback was
+  actually watched. With a pause in the middle it sits earlier in the day
+  than it really did, but its height and its amount are right, and the
+  peak — the number a line is dimensioned by — stops being invented.
+
+  The data volume, the per-user and per-device totals and the traffic by
+  address were already counted from watched seconds and are unchanged. So
+  are the language statistics: the collector only ever adds to the watched
+  time while something is really playing.
+
 ## 1.2.9
 
 ### Added

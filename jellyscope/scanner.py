@@ -1654,8 +1654,20 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
             except JellyfinError as exc:
                 log.warning("jazyky se z Jellyfinu doplnit nepodarilo: %s", exc)
 
+        # Co nezná ani Jellyfin, zkusíme uhodnout z názvu souboru. Až
+        # teď a jen na tom, co zbylo: název je odhad, kdežto soubor
+        # a knihovna jsou údaj.
+        zbyle = {radek["item_id"] for radek in db.query_all(
+            f"SELECT DISTINCT item_id FROM item_streams WHERE {podminka}",
+            tuple(parametry_zpetne))}
+        z_nazvu = 0
+        if zbyle and not stop_requested():
+            z_nazvu = await asyncio.to_thread(doplnit_jazyky_z_nazvu, sorted(zbyle))
+
         doplnek = (_t(", jazyk doplněn z Jellyfinu u {n} stop").format(n=doplneno)
                    if doplneno else "")
+        if z_nazvu:
+            doplnek += _t(", odhadnut z názvu u {n} stop").format(n=z_nazvu)
 
         if results["skipped"]:
             finish_task_log(
@@ -1672,7 +1684,8 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
             total=len(targets), ok=results["ok"], failed=results["failed"],
             message=f"ffprobe: {ffprobe_bin}{doplnek}",
         )
-        return {"status": "ok", "total": len(targets), "doplneno": doplneno, **results}
+        return {"status": "ok", "total": len(targets), "doplneno": doplneno,
+                "z_nazvu": z_nazvu, **results}
 
 
 def _chybi_jazyk(streams: list[dict[str, Any]]) -> bool:
@@ -1763,6 +1776,83 @@ def _doplnit_jazyky_polozky(item: dict[str, Any]) -> int:
     if zmeny:
         _prepocitej_jazyky_polozky(item_id)
     return len(zmeny)
+
+
+def doplnit_jazyky_z_nazvu(item_ids: list[str]) -> int:
+    """Poslední záchrana: jazyk podle názvu souboru.
+
+    Když ho nezná soubor ani Jellyfin, zbývá to, co si do názvu napsal
+    člověk - "Duna.2021.CZ.SK.EN.1080p.mkv". Hledá se celý úsek mezi
+    oddělovači, takže "Czechacek" ani "enigma" neprojdou; podrobnosti
+    v languages.z_nazvu().
+
+    Název ale říká jen to, KTERÉ jazyky v souboru jsou, ne která stopa
+    je která. Rozdělujeme je proto po řadě a označíme jako odhad z názvu -
+    množina jazyků (a tím i statistiky) sedí, pořadí je odhad.
+
+    Vrací počet stop, kterým se jazyk doplnil.
+    """
+    doplneno = 0
+    for item_id in item_ids:
+        radek = db.query_one("SELECT id, path FROM items WHERE id = ?", (item_id,))
+        if radek is None or not radek["path"]:
+            continue
+        doplneno += _doplnit_z_nazvu_polozky(radek["id"], radek["path"])
+    if doplneno:
+        log.info("jazyk odhadnut z nazvu souboru u %s stop", doplneno)
+    return doplneno
+
+
+def _doplnit_z_nazvu_polozky(item_id: str, cesta: str) -> int:
+    nalezene = languages.z_nazvu(cesta)
+    if not nalezene["zvuk"] and not nalezene["titulky"]:
+        return 0
+
+    stopy = db.query_all(
+        "SELECT stream_index, type, language FROM item_streams "
+        "WHERE item_id = ? ORDER BY stream_index", (item_id,))
+
+    zmeny: list[tuple[str, str, int]] = []
+    for druh, klic in (("Audio", "zvuk"), ("Subtitle", "titulky")):
+        zmeny.extend(_rozdelit_podle_nazvu(
+            item_id, [s for s in stopy if s["type"] == druh], nalezene[klic]))
+
+    if not zmeny:
+        return 0
+
+    with db.connect() as conn:
+        conn.executemany(
+            "UPDATE item_streams SET language = ?, language_source = 'nazev' "
+            "WHERE item_id = ? AND stream_index = ?",
+            zmeny)
+    _prepocitej_jazyky_polozky(item_id)
+    return len(zmeny)
+
+
+def _rozdelit_podle_nazvu(item_id: str, stopy: list[dict[str, Any]],
+                          z_nazvu: list[str]) -> list[tuple[str, str, int]]:
+    """Které stopě přiřadit který jazyk z názvu - nebo raději žádné.
+
+    Podmínky jsou schválně přísné, protože je to odhad:
+
+    * **Počty musí sedět.** Tři značky v názvu a čtyři stopy znamená, že
+      jedna značka nepatří zvuku (bývá to jazyk titulků) - a hádat, která,
+      by bylo losování.
+    * **Co už víme, musí souhlasit.** Když je jedna stopa známá jako
+      angličtina, ale název na jejím místě slibuje češtinu, je pořadí
+      v názvu jiné než v souboru. Pak nedoplňujeme nic: kdyby se to
+      dosadilo, sedělo by to jen náhodou.
+    """
+    if not z_nazvu or len(stopy) != len(z_nazvu):
+        return []
+
+    zmeny = []
+    for stopa, jazyk in zip(stopy, z_nazvu):
+        if stopa["language"] == languages.UNKNOWN:
+            zmeny.append((jazyk, item_id, stopa["stream_index"]))
+        elif stopa["language"] != jazyk:
+            return []          # pořadí nesedí, radši nic
+    return zmeny
 
 
 def _sparuj_stopy(nase: list[dict[str, Any]],

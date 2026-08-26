@@ -180,6 +180,8 @@
                                ať je poznat, že to není údaj ze souboru. #}
                             {% if s.language_source == 'jellyfin' %}
                                 <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
+                            {% elif s.language_source == 'nazev' %}
+                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin – tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
                             {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
@@ -227,6 +229,8 @@
                                ať je poznat, že to není údaj ze souboru. #}
                             {% if s.language_source == 'jellyfin' %}
                                 <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
+                            {% elif s.language_source == 'nazev' %}
+                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin – tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
                             {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
