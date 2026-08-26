@@ -53,6 +53,11 @@ a map you can zoom into.
 <sub>Screenshots are from the demo mode, so the data is made up and the
 posters are empty — a real installation loads them from Jellyfin.</sub>
 
+The colours come from Jellyfin's own — blue `#00A4DC` and purple
+`#AA5CC3`. If you preferred the earlier look, **Settings → Interface**
+switches back to it; the classic appearance restores the old colours and
+the old shapes, and you can switch again whenever you like.
+
 ---
 
 ## What it does

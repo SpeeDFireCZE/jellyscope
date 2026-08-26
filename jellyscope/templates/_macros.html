@@ -290,7 +290,7 @@
 {% if method == 'Transcode' %}
     <span class="badge serious"{% if tip %} data-tip="{{ tip }}"{% endif %}><span class="dot"></span>{{ _("transcode") }}</span>
 {% elif method == 'DirectStream' %}
-    <span class="badge neutral"><span class="dot"></span>{{ _("přebalení") }}</span>
+    <span class="badge info"><span class="dot"></span>{{ _("přebalení") }}</span>
 {% else %}
     <span class="badge good"><span class="dot"></span>{{ _("přímé") }}</span>
 {% endif %}

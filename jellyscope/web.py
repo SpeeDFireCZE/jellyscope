@@ -682,6 +682,16 @@ STROP_MAX = 50
 # volba, ne rozhodnuti za uzivatele.
 ZOOM_REZIMY = ("click", "wheel")
 
+# Vzhledy aplikace. "novy" jsou barvy Jellyfinu, "klasicky" puvodni
+# modra na neutralnim podkladu - viz konec style.css.
+VZHLEDY = ("novy", "klasicky")
+
+
+def _vzhled() -> str:
+    """Vybrany vzhled. Cokoliv jineho nez zname jmeno je novy."""
+    hodnota = db.get_setting("ui_skin", "novy")
+    return hodnota if hodnota in VZHLEDY else "novy"
+
 
 def _stropy() -> dict[str, int]:
     """Kolik položek karta vypíše rovnou, než zbytek schová do okna.
@@ -985,6 +995,10 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         "strop_max": STROP_MAX,
         # Čím se přibližuje mapa na stránce Síť - viz _zoom_rezim().
         "mapa_zoom": _zoom_rezim(),
+        # Vzhled - viz VZHLEDY a konec style.css. Dosazuje se do <html>
+        # rovnou na serveru, ne az JavaScriptem: jinak by stranka na
+        # okamzik problikla v jednom vzhledu a prepnula se do druheho.
+        "ui_skin": _vzhled(),
     }
     base.update(extra)
     return base
@@ -2094,6 +2108,7 @@ def settings_interface(request: Request,
                        ui_max_streams: str = Form(""),
                        ui_max_viewers: str = Form(""),
                        ui_map_zoom: str = Form("click"),
+                       ui_skin: str = Form("novy"),
                        account: dict[str, Any] = Depends(require_admin)):
     """Stropy dlouhých seznamů - kolik se vypíše, než se zbytek schová.
 
@@ -2110,6 +2125,7 @@ def settings_interface(request: Request,
     # v obou případech je správná odpověď výchozí hodnota, ne uložit to.
     db.set_setting("ui_map_zoom",
                    ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
+    db.set_setting("ui_skin", ui_skin if ui_skin in VZHLEDY else "novy")
     _flash(request, "Uloženo.", "success")
     return RedirectResponse("/settings?section=interface", status_code=303)
 

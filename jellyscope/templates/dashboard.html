@@ -39,7 +39,12 @@
     {{ period_filter(obdobi, '/') }}
 </div>
 
-<div class="card">
+{# Číslo vlevo, křivka vpravo. Dřív bylo obojí pod sebou a karta pak
+   zabírala třetinu obrazovky, přestože nese jediný údaj a jeho vývoj.
+   Vedle sebe se to čte jedním pohledem: kolik a jak to šlo. Na úzkém
+   okně se to vrátí pod sebe - viz .hero-card ve style.css. #}
+<div class="card hero-card">
+    <div class="hero-cislo">
     {# U vlastního období nemá `day_labels` co říct - vypíšeme rozmezí. #}
     <p class="tile-label">
         {{ _("Celkem odsledováno za") }}
@@ -60,9 +65,10 @@
            jako chyba a člověk ji hledá u sebe. #}
         <div class="delta flat">{{ poznamka_srovnani }}</div>
     {% endif %}
+    </div>
     {# Stejná data jako velký graf níže, jen bez os - a po najetí myší
        ukáže hodnotu daného dne, stejně jako on. #}
-    {{ charts.sparkline(daily, 'day', 'hours') | safe }}
+    <div class="hero-graf">{{ charts.sparkline(daily, 'day', 'hours') | safe }}</div>
 </div>
 
 <div class="kpi-row">

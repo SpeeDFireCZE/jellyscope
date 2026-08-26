@@ -1055,10 +1055,21 @@ EN: dict[str, str] = {
     "přepočítává se": "being re-encoded",
     "Titulky se vypalují do obrazu": "Subtitles are burned into the picture",
     "Hardwarově": "Hardware accelerated",
-    "Dlouhé seznamy a mapa": "Long lists and the map",
     "co karta ukáže rovnou a jak se ovládá mapa":
         "what a card shows straight away, and how the map is controlled",
     "Přibližování mapy": "Zooming the map",
+    "Vzhled": "Appearance",
+    "Nový": "New",
+    "Klasický": "Classic",
+    "Barvy z loga Jellyfinu, karty s jemným přechodem, stav přehrávání barevně (zelená přímé, oranžová přepočet). Hlavní číslo stojí vedle křivky.":
+        "Colours from the Jellyfin logo, cards with a soft gradient, playback state in colour (green for direct, orange for transcoding). The headline number sits beside the curve.",
+    "Původní podoba: modrá na neutrálním podkladu, ploché karty, odznaky s tečkou. Nic se neztratí, jen to vypadá jako dřív.":
+        "The original look: blue on a neutral ground, flat cards, badges with a dot. Nothing is lost, it just looks the way it did.",
+    "Změní se jen vzhled – žádná data, žádné výpočty. Přepnout jde kdykoliv zpátky.":
+        "Only the looks change - no data, no calculations. You can switch back at any time.",
+    "Vzhled, dlouhé seznamy a mapa": "Appearance, long lists and the map",
+    "jak aplikace vypadá, co karta ukáže rovnou a jak se ovládá mapa":
+        "how the app looks, what a card shows right away and how the map is controlled",
     "Klikáním": "By clicking",
     "Kolečkem": "With the wheel",
     "Kliknutím do mapy se přiblíží na to místo, s Altem oddálí; nad mapou jsou i tlačítka + a −. Kolečko mapa vůbec nechytá, takže stránka roluje jako všude jinde.":
@@ -1075,7 +1086,6 @@ EN: dict[str, str] = {
         "Scroll to zoom, drag to pan, double-click for the whole world.",
     "Klikáním přiblížíš, tažením posuneš, dvojklik vrátí celý svět.":
         "Click to zoom, drag to pan, double-click for the whole world.",
-    "Dlouhé seznamy": "Long lists",
     "Každý další stream (nebo další divák) posouvá zbytek stránky dolů. "
     "Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. "
     "Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, "

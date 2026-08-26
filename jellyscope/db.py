@@ -96,6 +96,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # vychozi: kolecko nad mapou by jinak zastavilo rolovani stranky
     # a clovek by u mapy uvizl. Viz web._stropy() a base.html.
     "ui_map_zoom": "click",
+    # Vzhled aplikace: "novy" (barvy Jellyfinu) nebo "klasicky" (puvodni
+    # modra na neutralnim podkladu). Neni to jen jina paleta - klasicky
+    # vraci i ploche karty, tecky u odznaku a cislo nad krivkou misto
+    # vedle ni. Viz konec style.css a web._context().
+    "ui_skin": "novy",
     "update_check_enabled": "0",
     "task_tidy_enabled": "1",
     # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje

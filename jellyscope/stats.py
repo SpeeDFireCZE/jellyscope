@@ -1104,8 +1104,24 @@ def play_method_breakdown(days: int) -> list[dict[str, Any]]:
         "Transcode": _t("Transcode"),
         "nezname": _t("Neznámé"),
     }
+    # Barva podle toho, co to server stoji - ne podle poradi v seznamu.
+    # Tyhle tri hodnoty nejsou libovolne kategorie, ale stupnice: prime
+    # prehravani neni prace zadna, prebaleni skoro zadna, prepocet vytizi
+    # procesor nebo grafickou kartu. Graf tim rika totez co odznak
+    # u prehravani a jantarovy kus na konci je varovani.
+    # Presne tytez role, jake nese odznak u prehravani - viz makro
+    # `method_badge`. Kdyz se lisily (odznak oranzovy, graf jantarovy),
+    # vypadalo to jako dve ruzne veci; pritom je to tentyz udaj jednou
+    # jako stav a podruhe jako podil.
+    role = {
+        "DirectPlay": "good",
+        "DirectStream": "info",
+        "Transcode": "serious",
+        "nezname": "muted",
+    }
     for row in rows:
         row["label"] = labels.get(row["method"], row["method"])
+        row["role"] = role.get(row["method"], "muted")
         # Graf deleneho pruhu ocekava klic "value" - pripravime ho tady,
         # at sablona nemusi nic pocitat.
         row["value"] = row["hours"]
@@ -2057,12 +2073,21 @@ def _sitove_radky(days: int) -> list[dict[str, Any]]:
 
 
 def _sekundy(text: Any) -> float | None:
-    """Cas z databaze na sekundy. None, kdyz se neda precist."""
+    """Cas z databaze na sekundy. None, kdyz se neda precist.
+
+    `replace(tzinfo=utc)` neni kosmetika. V databazi je cas v UTC a bez
+    zony; `datetime.timestamp()` ale takovy cas povazuje za MISTNI, takze
+    vysledek byl posunuty o cely offset. Popisky pod grafem pak ukazovaly
+    UTC, zatimco zbytek aplikace mistni cas - vecerni spicka tak v lete
+    "nastavala" o hodinu driv, nez ve skutecnosti byla.
+
+    Zbytek aplikace to dela stejne, viz formatting._parse_any().
+    """
     try:
-        return datetime.strptime(
-            str(text).replace("T", " ")[:19], db.TIME_FORMAT).timestamp()
+        cas = datetime.strptime(str(text).replace("T", " ")[:19], db.TIME_FORMAT)
     except (TypeError, ValueError):
         return None
+    return cas.replace(tzinfo=timezone.utc).timestamp()
 
 
 def bandwidth_prubeh(days: int, bodu: int = 120) -> list[dict[str, Any]]:

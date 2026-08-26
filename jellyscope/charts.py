@@ -42,7 +42,8 @@ SERIES_SLOTS = 8
 _PORADI_PRECHODU = itertools.count(1)
 
 
-def _prechod(slot: int, jmeno: str, sila: float = 0.34) -> str:
+def _prechod(slot: int, jmeno: str, sila: float = 0.34,
+             barva: str | None = None) -> str:
     """Svisly prechod z barvy serie do prazdna.
 
     Plna poloprusvitna vypln ma dve vady. U prekryvu dvou serii vznikne
@@ -52,11 +53,12 @@ def _prechod(slot: int, jmeno: str, sila: float = 0.34) -> str:
 
     Prechod obojiho zbavi: nahore drzi barvu serie, dole mizi.
     """
+    barva = barva or f"var(--series-{slot})"
     return (
         f'<linearGradient id="{jmeno}" x1="0" y1="0" x2="0" y2="1">'
-        f'<stop offset="0%" stop-color="var(--series-{slot})" '
+        f'<stop offset="0%" stop-color="{barva}" '
         f'stop-opacity="{sila:.2f}" />'
-        f'<stop offset="100%" stop-color="var(--series-{slot})" '
+        f'<stop offset="100%" stop-color="{barva}" '
         f'stop-opacity="0.015" />'
         f"</linearGradient>"
     )
@@ -182,6 +184,7 @@ def hbar_chart(
     limit: int = 12,
     link_prefix: str | None = None,
     link_key: str = "id",
+    poradi: bool = False,
 ) -> str:
     """Porovnani hodnot mezi kategoriemi.
 
@@ -196,6 +199,11 @@ def hbar_chart(
     z `link_key` daneho radku (napr. "/users/" + user_id). Radky bez te
     hodnoty zustanou obycejnym textem - odkaz, ktery nikam nevede, je
     horsi nez zadny.
+
+    `poradi=True` prida pred popisek cislo radku. Zapina se jen tam, kde
+    je graf opravdu **zebricek** - u nejsledovanejsich titulu nebo
+    nejaktivnejsich uzivatelu. Kde se jen porovnavaji kategorie mezi
+    sebou (kodeky, jazyky), by cislo lhalo o poradi, ktere zadne neni.
     """
     rows = [row for row in rows if row is not None][:limit]
     if not rows:
@@ -208,7 +216,12 @@ def hbar_chart(
         value = float(row.get(value_key) or 0)
         label = str(row.get(label_key, ""))
         percent = value / maximum * 100
-        slot = _slot_of(row, index) if row.get("slot") else 1
+        # Kdyz radek nerekne "slot", neni to serie - je to jedna velicina
+        # merena u ruznych kategorii (hodiny u uzivatelu, u prehravacu).
+        # Takovy graf dostane barvu aplikace; paleta serii je na to, kdyz
+        # se ma poznat, ktera cara je ktera.
+        vlastni_slot = bool(row.get("slot"))
+        slot = _slot_of(row, index) if vlastni_slot else 1
         title = f"{label}: {_fmt(value)} {unit}".strip()
 
         # Popisek je odkaz jen tehdy, kdyz opravdu vede na existujici
@@ -227,11 +240,20 @@ def hbar_chart(
         # Prechod po delce sloupce: u zakladny je barva o neco tlumenejsi,
         # na konci plna. Cislo stoji prave tam, takze oko jde po sloupci
         # k nemu. Delku to nemeni - hodnotu porad nese jen ona.
-        vypln = (f"linear-gradient(90deg, "
-                 f"color-mix(in oklab, var(--series-{slot}) 62%, var(--surface-1)), "
-                 f"var(--series-{slot}))")
+        # Prechod po delce sloupce. U serie jde od tlumene k plne barve
+        # (jina barva by pletla identitu); u jednobarevneho grafu jde
+        # rovnou fialova -> modra, tedy prechod znacky.
+        if vlastni_slot:
+            barva = f"var(--series-{slot})"
+            vypln = (f"linear-gradient(90deg, "
+                     f"color-mix(in oklab, {barva} 62%, var(--surface-1)), "
+                     f"{barva})")
+        else:
+            vypln = "linear-gradient(90deg, var(--accent-2), var(--accent))"
+        cislo = (f'<div class="hbar-rank">{index + 1}</div>') if poradi else ""
         parts.append(
-            f'<div class="hbar-row" data-tip="{_e(title)}">'
+            f'<div class="hbar-row{" is-ranked" if poradi else ""}" data-tip="{_e(title)}">'
+            f'{cislo}'
             f'<div class="hbar-label">{popisek}</div>'
             f'<div class="hbar-track">'
             f'<div class="hbar-fill" style="width: {percent:.2f}%; '
@@ -248,6 +270,28 @@ def hbar_chart(
 # Deleny pruh - podil na celku
 # ---------------------------------------------------------------------------
 
+# Kdyz casti pruhu nejsou libovolne kategorie, ale STAVY s poradim,
+# nesou klic "role" a barvu si vezmou podle vyznamu. Priklad je "jak
+# server obsah dorucuje": prime prehravani server nestoji nic (zelena),
+# prebaleni neco malo (barva aplikace), prepocet boli (jantarova).
+#
+# Barva pak rika totez co odznak u prehravani nad tim - a jantarovy
+# prouzek na konci je varovani, ne treti barva v poradi.
+ROLE_BARVY = {
+    "good": "var(--good)",
+    "info": "var(--accent)",
+    "warning": "var(--warning)",
+    "muted": "var(--text-muted)",
+}
+
+
+def _barva_segmentu(segment: dict[str, Any], index: int) -> str:
+    role = str(segment.get("role") or "").strip()
+    if role in ROLE_BARVY:
+        return ROLE_BARVY[role]
+    return f"var(--series-{_slot_of(segment, index)})"
+
+
 def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
     """Jeden pruh rozdeleny na casti - "z ceho se sklada celek".
 
@@ -263,7 +307,6 @@ def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
     for index, segment in enumerate(segments):
         value = float(segment.get("value") or 0)
         share = value / total * 100
-        slot = _slot_of(segment, index)
         label = segment.get("label", "")
         title = f"{label}: {_fmt(value)} {unit} ({share:.0f} %)".replace("  ", " ")
 
@@ -272,7 +315,7 @@ def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
         inner = f"{share:.0f} %" if share >= 9 else ""
         parts.append(
             f'<div class="stack-seg" style="flex-grow: {share:.4f}; '
-            f'background: var(--series-{slot})" data-tip="{_e(title)}">'
+            f'background: {_barva_segmentu(segment, index)}" data-tip="{_e(title)}">'
             f'<span>{inner}</span></div>'
         )
     parts.append("</div>")
@@ -379,12 +422,14 @@ def legend(items: Sequence[dict[str, Any]]) -> str:
 
     parts = ['<ul class="legend">']
     for index, item in enumerate(items):
-        slot = _slot_of(item, index)
         tip = str(item.get("tip") or "").strip()
         atribut = f' data-tip="{_e(tip)}"' if tip else ""
+        # Stejna barva jako v grafu, vcetne barvy podle vyznamu - legenda,
+        # ktera ma jiny odstin nez pruh, je horsi nez zadna.
+        barva = item.get("barva") or _barva_segmentu(item, index)
         parts.append(
             f'<li{atribut}><span class="legend-swatch" '
-            f'style="background: var(--series-{slot})">'
+            f'style="background: {barva}">'
             f'</span>{_e(item.get("label", ""))}</li>'
         )
     parts.append("</ul>")
@@ -536,12 +581,27 @@ def area_chart_multi(
         entry.get("slot", 1): f"prechod-{cislo}-{index}"
         for index, entry in enumerate(series)
     }
+    # Serie muze nest vlastni barvu misto cisla slotu. Pouziva to graf
+    # na Prehledu, kde jsou dve az tri cary a maji drzet barvy aplikace;
+    # tam, kde je kategorii vic (jazyky), zustava paleta serii, protoze
+    # ta je stavena tak, aby se navzajem nepletly.
+    barvy = {entry.get("slot", 1): entry.get("barva")
+             for entry in series if entry.get("barva")}
+
+    def barva_serie(slot: int) -> str:
+        return barvy.get(slot) or f"var(--series-{slot})"
 
     parts: list[str] = [
         f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Vyvoj v case, {len(series)} serii">',
         "<defs>",
-        *(_prechod(slot, jmeno) for slot, jmeno in prechody.items()),
+        # Cim vic serii, tim slabsi vypln. U jedne krivky plocha pomaha -
+        # ukazuje objem. U dvou se plochy prekryvaji a vznika treti, kalna
+        # barva, ve ktere se obe ztrati; tam uz nese informaci hlavne
+        # sama cara. Proto se u dvou a vic serii vypln stahuje.
+        *(_prechod(slot, jmeno, sila=0.34 if len(series) == 1 else 0.16,
+                   barva=barvy.get(slot))
+          for slot, jmeno in prechody.items()),
         "</defs>",
     ]
 
@@ -578,7 +638,7 @@ def area_chart_multi(
         slot = entry.get("slot", 1)
         parts.append(f'<path d="{area}" fill="url(#{prechody[slot]})" />')
         parts.append(
-            f'<path d="{line}" fill="none" stroke="var(--series-{slot})" '
+            f'<path d="{line}" fill="none" stroke="{barva_serie(slot)}" '
             f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
         )
 
@@ -606,14 +666,14 @@ def area_chart_multi(
         tip = _bublina(str(point.get(x_key, "")), [
             {"text": f'{entry["label"]}: {_fmt(float(point.get(entry["key"]) or 0))} '
                      f'{unit}'.strip(),
-             "barva": f'var(--series-{entry.get("slot", 1)})'}
+             "barva": barva_serie(entry.get("slot", 1))}
             for entry in series
         ])
 
         body = "".join(
             f'<circle cx="{x:.1f}" '
             f'cy="{py(float(point.get(entry["key"]) or 0)):.1f}" r="4" '
-            f'fill="var(--series-{entry.get("slot", 1)})" '
+            f'fill="{barva_serie(entry.get("slot", 1))}" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
             for entry in series
         )
@@ -684,9 +744,9 @@ def sparkline(
     parts = [
         f'<svg class="sparkline" viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Vyvoj v case, {len(points)} dnu">',
-        f"<defs>{_prechod(1, jmeno, sila=0.28)}</defs>",
+        f"<defs>{_prechod(1, jmeno, sila=0.28, barva='var(--accent)')}</defs>",
         f'<path d="{area}" fill="url(#{jmeno})" />',
-        f'<path d="{line}" fill="none" stroke="var(--series-1)" '
+        f'<path d="{line}" fill="none" stroke="var(--accent)" '
         f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />',
     ]
 
@@ -704,7 +764,7 @@ def sparkline(
         tip = _bublina(
             str(points[index].get(x_key, "")),
             [{"text": f"{_fmt(values[index])} {unit}".strip(),
-              "barva": "var(--series-1)"}])
+              "barva": "var(--accent)"}])
         hit_x, hit_w = _hit(x, hit_width / 2)
         parts.append(
             f'<g class="chart-hit" {tip}>'
@@ -712,7 +772,7 @@ def sparkline(
             f'width="{hit_w:.1f}" height="{height}" fill="transparent" />'
             f'<line x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="{height}" '
             f'stroke="var(--axis)" stroke-width="1" />'
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="var(--series-1)" '
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="var(--accent)" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
             f"</g>"
         )
@@ -758,10 +818,12 @@ def mapa_sveta(body: Sequence[dict[str, Any]], rezim: str = "click") -> str:
         # Zare kolem bodu. Jeden pruhledny prechod pro vsechny tecky:
         # gradient se pocita v souradnicich prvku, takze se sam prizpusobi
         # jeho velikosti a nemusi se definovat pro kazdou zvlast.
+        # Tecky na mape nejsou serie - je to jedna velicina na ruznych
+        # mistech. Barva aplikace, stejna jako u krivky na Prehledu.
         '<defs><radialGradient id="zare-mapa">'
-        '<stop offset="0%" stop-color="var(--series-1)" stop-opacity="0.95" />'
-        '<stop offset="35%" stop-color="var(--series-1)" stop-opacity="0.35" />'
-        '<stop offset="100%" stop-color="var(--series-1)" stop-opacity="0" />'
+        '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.95" />'
+        '<stop offset="35%" stop-color="var(--accent)" stop-opacity="0.35" />'
+        '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />'
         '</radialGradient></defs>',
         f'<rect x="0" y="0" width="{SIRKA}" height="{VYSKA}" '
         f'fill="var(--surface-2)" />',

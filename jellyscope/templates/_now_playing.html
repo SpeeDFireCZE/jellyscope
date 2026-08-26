@@ -51,20 +51,13 @@
                    jazyk, se kterým se začalo (patří do statistik); tady
                    ale chceme skutečnost - když si divák v půlce filmu
                    přepne stopu nebo vypne titulky, musí to být vidět. #}
-                {% if row.current_audio_language %}
-                    <span class="badge neutral"><span class="dot"></span>{{ lang.display(row.current_audio_language) }}</span>
+                {% set zvuk = row.current_audio_language or row.audio_language %}
+                {% set titulky = row.current_subtitle_language or row.subtitle_language %}
+                {% if zvuk %}
+                    <span class="badge neutral"><span class="dot"></span>{{ lang.display(zvuk) }}</span>
                 {% endif %}
-                {% if row.current_subtitle_language %}
-                    <span class="badge neutral"><span class="dot"></span>{{ _("titulky") }} {{ row.current_subtitle_language | upper }}</span>
-                {% endif %}
-                {% if row.height %}
-                    <span class="badge neutral"><span class="dot"></span>{{ row.height | resolution(row.width) }}</span>
-                {% endif %}
-                {% if row.video_codec %}
-                    <span class="badge neutral"><span class="dot"></span>{{ row.video_codec | upper }}</span>
-                {% endif %}
-                {% if row.bitrate %}
-                    <span class="badge neutral"><span class="dot"></span>{{ row.bitrate | bitrate }}</span>
+                {% if titulky %}
+                    <span class="badge neutral"><span class="dot"></span>{{ _("titulky") }} {{ titulky | upper }}</span>
                 {% endif %}
             </div>
 
@@ -93,6 +86,25 @@
                     {{ _("Běží") }} {{ row.watched_seconds | seconds }}
                 </span>
             </div>
+            {% endif %}
+        </div>
+
+        {# Pravý sloupec: co teče a v čem.
+
+           Tok je nahoře sám, protože je to jediné číslo na kartě, které
+           mluví o serveru, ne o filmu - a když se někdo ptá "proč je síť
+           plná", hledá právě jeho. Pod ním rozlišení a kodek toho, co
+           doopravdy jde k přehrávači (u přepočtu tedy výsledek, ne zdroj). #}
+        <div class="session-side">
+            {% if row.bitrate %}
+                <div class="session-bitrate">{{ row.bitrate | bitrate }}</div>
+            {% endif %}
+            {% if row.height or row.video_codec %}
+                <div class="session-tech">
+                    {% if row.height %}{{ row.height | resolution(row.width) }}{% endif %}
+                    {% if row.height and row.video_codec %}<span class="muted">&middot;</span>{% endif %}
+                    {% if row.video_codec %}{{ row.video_codec | upper }}{% endif %}
+                </div>
             {% endif %}
         </div>
     </div>
@@ -126,7 +138,7 @@
 {# Tlačítko stojí tam, kde by byl první stream - karta si tak drží své
    místo a nic pod ní neposkakuje podle toho, kolik se zrovna hraje. #}
 <div class="sessions" style="margin-bottom:4px">
-    <button class="btn primary session-vice" type="button" data-okno="okno-streamy">
+    <button class="btn session-vice" type="button" data-okno="okno-streamy">
         <span>
             <strong>{{ _("Přehrávání jsou skrytá – je jich hodně") }}</strong><br>
             <span class="session-vice-note">

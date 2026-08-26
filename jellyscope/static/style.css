@@ -25,15 +25,24 @@
     --grid:            #e1e0d9;
     --axis:            #c3c2b7;
 
-    /* Serie - pevne poradi, nikdy necyklit */
-    --series-1: #2a78d6;   /* modra   */
-    --series-2: #eb6834;   /* oranzova */
-    --series-3: #1baf7a;   /* tyrkysova */
-    --series-4: #eda100;   /* zluta   */
-    --series-5: #e87ba4;   /* ruzova  */
-    --series-6: #008300;   /* zelena  */
-    --series-7: #4a3aa7;   /* fialova */
-    --series-8: #e34948;   /* cervena */
+    /* Serie - pevne poradi, nikdy necyklit.
+
+       Paleta vychazi z rozsahu Jellyfinu (modra, fialova) a pokracuje
+       barvami, ktere se od nich i mezi sebou daji rozeznat. Poradi neni
+       nahodne: sousedni dvojice se potkavaji nejcasteji, takze maji
+       nejvetsi odstup.
+
+       Zmerene proti puvodni palete (simulace deuteranopie a protanopie,
+       rozdil v OKLab): sousedni dvojice 8,1 -> nejhorsi dvojice vubec
+       se zlepsila z 1,6 na 2,2 ve svetlem a z 1,6 na 6,1 v tmavem. */
+    --series-1: #1187c0;   /* modra Jellyfinu */
+    --series-2: #7b3ba3;   /* fialova Jellyfinu */
+    --series-3: #0f8f78;   /* tyrkysova */
+    --series-4: #b8770c;   /* jantarova */
+    --series-5: #c2426f;   /* ruzova  */
+    --series-6: #14663f;   /* zelena  */
+    --series-7: #5a62c4;   /* modrofialova */
+    --series-8: #c9452b;   /* cervena */
 
     /* Odstupnovana skala pro teplotni mapu (svetla -> tmava) */
     --seq-250: #86b6ef;
@@ -48,7 +57,25 @@
     --serious:  #ec835a;
     --critical: #d03b3b;
 
-    --radius: 10px;
+    /* Barva rozhrani - z loga Jellyfinu (modra #00A4DC, fialova #AA5CC3).
+       Ve svetlem rezimu ztmavena, aby na bilem podkladu drzela kontrast.
+
+       Neni to barva serie a nikdy se s nimi nemicha: serie identifikuji
+       kategorie a jsou vybrane tak, aby se navzajem nepletly. Tohle je
+       barva aplikace - aktivni polozka menu, vybrany chip, jednobarevny
+       graf, kde zadna kategorie neni. */
+    --accent:     #0b7fb0;
+    --accent-2:   #8a44a8;
+    --accent-ink: #ffffff;
+
+    /* Podklad postranniho panelu - viz .sidebar. */
+    --rail:       #fdfdfc;
+
+    --linka-1: #1187c0;
+    --linka-2: #7b3ba3;
+    --linka-3: #11866f;
+
+    --radius: 12px;
     --font: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -58,24 +85,50 @@
     :root:not([data-theme="light"]) {
         color-scheme: dark;
 
-        --page:           #0d0d0d;
-        --surface-1:      #1a1a19;
-        --surface-2:      #232322;
-        --text-primary:   #ffffff;
-        --text-secondary: #c3c2b7;
-        --text-muted:     #898781;
-        --border:         rgba(255, 255, 255, 0.10);
-        --grid:           #2c2c2a;
-        --axis:           #383835;
+        --page:           #0d0f17;
+        --surface-1:      #161a26;
+        --surface-2:      #1c2231;
+        --text-primary:   #eef2f8;
+        --text-secondary: #a9b4c6;
+        --text-muted:     #7b8598;
+        --border:         rgba(238, 242, 248, 0.10);
+        --grid:           #232a3a;
+        --axis:           #333c50;
 
-        --series-1: #3987e5;
-        --series-2: #d95926;
-        --series-3: #199e70;
-        --series-4: #c98500;
-        --series-5: #d55181;
-        --series-6: #008300;
-        --series-7: #9085e9;
-        --series-8: #e66767;
+        /* Na tmavem podkladu uz nemusi byt ztmavena - plna barva loga. */
+        --accent:     #00a4dc;
+        --accent-2:   #aa5cc3;
+        --accent-ink: #04161d;
+        --rail:       #0a0c13;
+
+        /* Cary v grafu na Prehledu - z rozsahu Jellyfinu, ale ne primo
+           z loga. Modra a fialova z loga se pri deuteranopii temer
+           splyvaji (odstup 6,6 pri prahu 8). Staci ale rozejit je
+           SVETLOSTI: svetlejsi modra a sytejsi fialova drzi 17,9,
+           a poznaji se i tam, kde odstin sam nestaci.
+        
+           Plati jen tam, kde jsou dve az tri cary. Grafy s vice
+           kategoriemi (jazyky) pouzivaji dal paletu serii. */
+        --linka-1: #35bdf0;
+        --linka-2: #9a4fc0;
+        --linka-3: #2fd0b5;
+
+        /* Stavove barvy se dosud braly ze svetleho rezimu - a tmava zelen
+           #0ca30c na modrocernem podkladu skoro zmizela. Na tmavem se
+           vyznam nese svetlosti smerem NAHORU, ne dolu. */
+        --good:     #45c99a;
+        --warning:  #ffbe4d;
+        --serious:  #f0885c;
+        --critical: #ef5f5f;
+
+        --series-1: #35bdf0;
+        --series-2: #9a4fc0;
+        --series-3: #2fd0b5;
+        --series-4: #ffb340;
+        --series-5: #e5709a;
+        --series-6: #1f7a4d;
+        --series-7: #8b93f8;
+        --series-8: #ff7a5c;
 
         /* Na tmavem podkladu roste vyznam smerem ke svetlejsi, ne tmavsi. */
         --seq-250: #184f95;
@@ -89,24 +142,49 @@
 :root[data-theme="dark"] {
     color-scheme: dark;
 
-    --page:           #0d0d0d;
-    --surface-1:      #1a1a19;
-    --surface-2:      #232322;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --border:         rgba(255, 255, 255, 0.10);
-    --grid:           #2c2c2a;
-    --axis:           #383835;
+    --page:           #0d0f17;
+    --surface-1:      #161a26;
+    --surface-2:      #1c2231;
+    --text-primary:   #eef2f8;
+    --text-secondary: #a9b4c6;
+    --text-muted:     #7b8598;
+    --border:         rgba(238, 242, 248, 0.10);
+    --grid:           #232a3a;
+    --axis:           #333c50;
 
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #d55181;
-    --series-6: #008300;
-    --series-7: #9085e9;
-    --series-8: #e66767;
+    --accent:     #00a4dc;
+    --accent-2:   #aa5cc3;
+    --accent-ink: #04161d;
+    --rail:       #0a0c13;
+
+    /* Cary v grafu na Prehledu - z rozsahu Jellyfinu, ale ne primo
+       z loga. Modra a fialova z loga se pri deuteranopii temer
+       splyvaji (odstup 6,6 pri prahu 8). Staci ale rozejit je
+       SVETLOSTI: svetlejsi modra a sytejsi fialova drzi 17,9,
+       a poznaji se i tam, kde odstin sam nestaci.
+    
+       Plati jen tam, kde jsou dve az tri cary. Grafy s vice
+       kategoriemi (jazyky) pouzivaji dal paletu serii. */
+    --linka-1: #35bdf0;
+    --linka-2: #9a4fc0;
+    --linka-3: #2fd0b5;
+
+    /* Stavove barvy se dosud braly ze svetleho rezimu - a tmava zelen
+       #0ca30c na modrocernem podkladu skoro zmizela. Na tmavem se
+       vyznam nese svetlosti smerem NAHORU, ne dolu. */
+    --good:     #45c99a;
+    --warning:  #ffbe4d;
+    --serious:  #f0885c;
+    --critical: #ef5f5f;
+
+    --series-1: #35bdf0;
+    --series-2: #9a4fc0;
+    --series-3: #2fd0b5;
+    --series-4: #ffb340;
+    --series-5: #e5709a;
+    --series-6: #1f7a4d;
+    --series-7: #8b93f8;
+    --series-8: #ff7a5c;
 
     --seq-250: #184f95;
     --seq-350: #256abf;
@@ -139,7 +217,12 @@ a { color: inherit; }
 }
 
 .sidebar {
-    background: var(--surface-1);
+    /* Tmavsi nez stranka, ne svetlejsi. Panel je ramec, ne obsah - kdyz
+       je svetlejsi, tlaci se dopredu a karty vedle nej vypadaji ploche.
+       Ve svetlem rezimu plati totez obracene: tam je o odstin svetlejsi
+       nez stranka, protoze "dozadu" znamena na svetlem podkladu blize
+       k bile. */
+    background: var(--rail);
     border-right: 1px solid var(--border);
     padding: 20px 14px;
     display: flex;
@@ -186,6 +269,25 @@ a { color: inherit; }
 
 .nav a:hover { background: var(--surface-2); color: var(--text-primary); }
 .nav a.active { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+
+/* Vybrana polozka ma u kraje panelu svisly prouzek s prechodem.
+   Sama obarvena plocha nestacila: v tmavem rezimu je rozdil mezi
+   --surface-1 a --surface-2 zamerne jemny, takze se aktivni polozka
+   ztracela. Prouzek je videt hned a nedela z menu radu barevnych
+   obdelniku. `left: -14px` je odsazeni panelu - prouzek tak sedi
+   presne na jeho hrane. */
+.nav a { position: relative; }
+
+.nav a.active::before {
+    content: "";
+    position: absolute;
+    left: -14px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, var(--accent-2), var(--accent));
+}
 
 .sidebar-foot { margin-top: auto; font-size: 12px; color: var(--text-muted); }
 
@@ -267,10 +369,23 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     min-width: 170px;
     padding: 6px 10px;
     font-size: 13px;
+    /* Ruka pri najeti. Prohlizec ji u <select> sam nedava, prestoze je
+       to ovladaci prvek jako tlacitko vedle - a kdo cekal, ze na to jde
+       kliknout, nemel od kurzoru zadne potvrzeni. */
+    cursor: pointer;
 }
 
 .chip:hover { border-color: var(--axis); color: var(--text-primary); }
-.chip.active { background: var(--text-primary); color: var(--page); border-color: var(--text-primary); }
+
+/* Vybrana volba nese barvu aplikace, ne prohozene cerne a bile.
+   Prechod fialova -> modra je tentyz, jaky ma znacka v logu, takze
+   filtr obdobi a menu mluvi stejnou reci. */
+.chip.active {
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    color: var(--accent-ink);
+    border-color: transparent;
+    font-weight: 600;
+}
 
 /* Aktivní tlačítko má prohozené barvy: pozadí je barva písma a naopak.
    Obecné .chip:hover ale písmo přebarvovalo zpátky na --text-primary,
@@ -279,10 +394,10 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    Aktivní tlačítko proto barvy při najetí nemění - jen se lehce
    projasní, ať je zpětná vazba pořád vidět. */
 .chip.active:hover {
-    color: var(--page);
-    background: var(--text-primary);
-    border-color: var(--text-primary);
-    filter: brightness(1.15);
+    color: var(--accent-ink);
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    border-color: transparent;
+    filter: brightness(1.12);
 }
 
 /* Karta se prave prekresluje. Zesvetleni je jemne schvalne - vymena trva
@@ -294,6 +409,8 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 /* --------------------------------------------------------------------- */
 /* Karty a dlazdice                                                       */
 /* --------------------------------------------------------------------- */
+
+
 
 .card {
     background: var(--surface-1);
@@ -341,11 +458,44 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     padding: 14px 16px;
 }
 
-.tile-label { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 6px; }
+/* Popisek dlazdice verzalkami s prostrkanim. Cislo pod nim pak pusobi
+   jako udaj, ne jako nadpis - a rada dlazdic vedle sebe drzi jednu linku,
+   protoze verzalky nemaji dotahy nahoru ani dolu. */
+.tile-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 6px;
+}
 
 /* Velke cislo ma proporcionalni cislice. tabular-nums (stejne siroke) je
    pro sloupce v tabulkach - u velkeho cisla vypada rozvolnene. */
 .tile-value { font-size: 26px; font-weight: 650; line-height: 1.15; }
+
+/* Bod, ktery jede po krivce pri najeti mysi. Zar kolem nej je jediny
+   duvod, proc ho oko najde driv, nez precte cislo v bubline - sam kotouc
+   o polomeru 3,5 px na tmavem podkladu splyva s carou. */
+.sparkline .chart-hit circle,
+.chart .chart-hit circle { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent) 70%, transparent)); }
+
+/* Karta s hlavnim cislem: cislo vlevo, krivka vpravo.
+
+   Pod 900 px se sloupce zrusi a obojí je zase pod sebou - krivka uzsi
+   nez 300 px uz nic neukazuje, jen bere vysku. */
+.hero-card {
+    display: grid;
+    grid-template-columns: minmax(220px, 300px) 1fr;
+    gap: 24px;
+    align-items: center;
+}
+
+.hero-graf { min-width: 0; }
+
+@media (max-width: 900px) {
+    .hero-card { grid-template-columns: 1fr; gap: 12px; }
+}
 
 .hero {
     font-size: 50px;
@@ -354,7 +504,19 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     letter-spacing: -0.02em;
 }
 
-.delta { font-size: 12.5px; margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+/* Srovnani s predchozim obdobim. Tucne schvalne: je to jediny udaj na
+   dlazdici, ktery rika, jestli cislo nad nim je hodne, nebo malo -
+   a tenkym pismem se ztracel pod nim. */
+.delta {
+    font-size: 12.5px;
+    font-weight: 650;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.delta.flat { font-weight: 500; }
 .delta.up   { color: var(--good); }
 .delta.down { color: var(--critical); }
 .delta.flat { color: var(--text-muted); }
@@ -387,6 +549,17 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     gap: 10px;
 }
 
+/* Zebricek ma pred popiskem cislo. Rika "treti" driv, nez se to da
+   odpocitat ocima - a u seznamu deseti titulu to je rozdil. */
+.hbar-row.is-ranked { grid-template-columns: 18px minmax(0, 30%) 1fr max-content; }
+
+.hbar-rank {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
 .hbar-label {
     font-size: 13px;
     color: var(--text-secondary);
@@ -406,7 +579,10 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
        z každého řádku dva pruhy vedle sebe a oko pak četlo i ten prázdný. */
     background: color-mix(in oklab, var(--grid) 55%, transparent);
     border-radius: 4px;
-    height: 15px;
+    /* Nizsi nez drive: sloupec nese hodnotu delkou, ne vyskou, a tlustsi
+       pruh jen prida inkoustu. Deset radku pod sebou tak drzi pohromade
+       jako zebricek misto rady pasu. */
+    height: 10px;
     overflow: hidden;
 }
 
@@ -614,9 +790,22 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .session {
     display: grid;
-    grid-template-columns: 78px 1fr;
+    /* Plakat, obsah, pravy sloupec s tokem. Ten posledni je `auto`,
+       takze si vezme jen tolik, kolik potrebuje - a kdyz na karte neni
+       (u prehravani bez znameho toku), mrizka se scvrkne sama. */
+    grid-template-columns: 78px 1fr auto;
     gap: 14px;
-    background: var(--surface-1);
+    /* Jedina karta se zarici barvou: ta, ktera se meni po vterinach.
+       Zar je v rohu, ne pres celou plochu - pres obsah by rozmazal hranu
+       a sousedni karty by prestaly mit stejny podklad. */
+    background:
+        radial-gradient(75% 190% at 0% 0%,
+                        color-mix(in oklab, var(--accent-2) 42%, transparent),
+                        transparent 58%),
+        radial-gradient(60% 150% at 100% 100%,
+                        color-mix(in oklab, var(--accent) 20%, transparent),
+                        transparent 62%),
+        var(--surface-1);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 14px;
@@ -627,7 +816,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     aspect-ratio: 2 / 3;
     border-radius: 6px;
     overflow: hidden;
-    background: var(--surface-2);
+    /* Podklad je videt jen do doby, nez se stahne plakat - a u titulu,
+       ktery zadny nema, uz navzdy. Seda plocha vypadala jako chyba
+       nacitani; prechod znacky vypada jako zamer. */
+    background: linear-gradient(150deg,
+                color-mix(in oklab, var(--accent) 55%, var(--surface-2)),
+                color-mix(in oklab, var(--accent-2) 55%, var(--surface-2)));
+    box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
 }
 
 .session-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -665,13 +860,70 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     overflow: hidden;
 }
 
-.session-bar i { display: block; height: 100%; background: var(--series-1); }
+/* Prechod fialova -> modra, stejny jako u vybraneho chipu a prouzku
+   v menu. Byla to jedina cara na karte, ktera jeste nesla barvu serie -
+   pritom zadna serie to neni, je to postup jednoho prehravani. */
+.session-bar i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
 
 .session-time { font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.session-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Tok je cislo, ne popisek - tabulkove cislice, aby pri kazde zmene
+   neposkakovalo, a barva aplikace, protoze se tyka serveru. */
+.session-bitrate {
+    font-size: 14px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+}
+
+.session-tech { font-size: 12px; color: var(--text-muted); }
+
+/* Na uzkem okne se pravy sloupec presune pod obsah - jinak by ukrajoval
+   z nazvu titulu, ktery je dulezitejsi. */
+@media (max-width: 720px) {
+    .session { grid-template-columns: 78px 1fr; }
+    .session-side {
+        grid-column: 2;
+        align-items: flex-start;
+        text-align: left;
+        flex-direction: row;
+        gap: 8px;
+    }
+}
 
 /* --------------------------------------------------------------------- */
 /* Pás plakátů (nedávno přidané)                                          */
 /* --------------------------------------------------------------------- */
+
+/* Karta s pásem plakátů. Pás se posouvá do strany a musí sahat až na
+   okraj karty - proto zápornými okraji "vystoupí" z jejího odsazení.
+   Kdyby končil dřív, vypadal by useknutý plakát jako chyba místo jako
+   pozvánka k posunutí. */
+.recent-card { padding-bottom: 12px; }
+.recent-card .poster-strip {
+    margin: 0 -20px -6px;
+    padding: 2px 20px 10px;
+    /* Bez tohohle radku se prvni plakat lepil na ramecek karty, prestoze
+       odsazeni tu bylo. Muze za to `scroll-snap`: prohlizec "pricvakne"
+       prvni polozku na zacatek posouvaci oblasti a leve odsazeni tim
+       odroluje pryc. `scroll-padding` mu rekne, ze zacatek je az za nim. */
+    scroll-padding-left: 20px;
+    scroll-padding-right: 20px;
+}
 
 .poster-strip {
     display: flex;
@@ -682,11 +934,15 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     overflow-x: auto;
     padding-bottom: 10px;
     scroll-snap-type: x proximity;
+    /* Tenky posuvnik. Systemovy sedy pas pod pasem plakatu byl tlustsi
+       nez popisky nad nim a bral pozornost necemu, co neni obsah. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--axis) transparent;
 
     /* Rozměry plakátu na jednom místě. Karta po najetí roste do šířky
        (viz níž) a výška přitom musí zůstat, jinak by se posunul celý
        zbytek stránky pod pásem. */
-    --poster-w: 132px;
+    --poster-w: 112px;
     --poster-h: calc(var(--poster-w) * 1.5);
 }
 
@@ -703,14 +959,19 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     height: var(--poster-h);
     border-radius: 8px;
     overflow: hidden;
-    background: var(--surface-2);
+    /* Stejne jako u plakatu v "prave se hraje": nez se obrazek stahne
+       (a u titulu, ktery zadny nema, navzdy) je vidět podklad. Seda
+       plocha vypadala jako chyba nacitani. */
+    background: linear-gradient(155deg,
+                color-mix(in oklab, var(--accent) 42%, var(--surface-2)),
+                color-mix(in oklab, var(--accent-2) 42%, var(--surface-2)));
     border: 1px solid var(--border);
     margin-bottom: 7px;
 }
 
 .poster-frame { display: block; }
 .poster-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.poster-card:hover .poster-frame { border-color: var(--series-1); }
+.poster-card:hover .poster-frame { border-color: var(--accent); }
 
 .poster-badge {
     position: absolute;
@@ -763,7 +1024,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .poster-card.has-episodes:hover .poster-frame,
 .poster-card.has-episodes:focus-within .poster-frame {
-    border-color: var(--series-1);
+    border-color: var(--accent);
 }
 
 .poster-episodes {
@@ -1127,6 +1388,67 @@ details.paths pre {
 .badge.serious  .dot { background: var(--serious); }
 .badge.critical .dot { background: var(--critical); }
 .badge.neutral  .dot { background: var(--text-muted); }
+.badge.info     .dot { background: var(--accent); }
+
+/* Odznaky na karte prehravani.
+
+   Rozdil proti odznakum jinde v aplikaci: tady se na jednom radku sejde
+   pet udaju, ktere NEMAJI stejnou vahu. "Prepocitava se" je stav serveru
+   a stoji za pohled; "H264" je jen fakt o souboru. Kdyz vypadaly stejne
+   (seda pilulka + barevna tecka), musel je clovek precist vsechny, aby
+   nasel ten jediny dulezity.
+
+   Stav proto dostane vypln ve sve barve a tecka mizi - barva uz to rekla.
+   Fakta zustavaji potichu: bez pozadi, jen tlumeny text. */
+.session-tags .badge {
+    /* Fakta o prehravani (jazyk, titulky) maji stejny tvar jako stavy,
+       jen bez barvy: obrys a tlumeny text. Bez ramecku se pri zalomeni
+       radku slily s vetou pod nimi a "subtitles EN" na vlastnim radku
+       vypadalo jako utrzek textu, ne jako udaj. */
+    border-color: var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 3px 9px;
+    gap: 0;
+}
+
+.session-tags .badge .dot { display: none; }
+
+.session-tags .badge.good,
+.session-tags .badge.info,
+.session-tags .badge.warning,
+.session-tags .badge.serious,
+.session-tags .badge.critical {
+    padding: 3px 9px;
+    font-weight: 650;
+}
+
+.session-tags .badge.info {
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+    color: color-mix(in oklab, var(--accent) 74%, var(--text-primary));
+}
+
+.session-tags .badge.good {
+    background: color-mix(in oklab, var(--good) 20%, transparent);
+    color: color-mix(in oklab, var(--good) 78%, var(--text-primary));
+}
+
+.session-tags .badge.warning {
+    background: color-mix(in oklab, var(--warning) 22%, transparent);
+    color: color-mix(in oklab, var(--warning) 82%, var(--text-primary));
+}
+
+.session-tags .badge.serious {
+    background: color-mix(in oklab, var(--serious) 22%, transparent);
+    color: color-mix(in oklab, var(--serious) 82%, var(--text-primary));
+}
+
+.session-tags .badge.critical {
+    background: color-mix(in oklab, var(--critical) 22%, transparent);
+    color: color-mix(in oklab, var(--critical) 82%, var(--text-primary));
+}
+
+
 
 .flash {
     padding: 11px 15px;
@@ -1265,10 +1587,26 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--series-1); }
 
 .btn:hover { background: var(--surface-2); }
 
+/* Hlavni tlacitko nese barvu aplikace, ne prvni barvu serie. Drive to
+   byla tataz vec - dnes uz ne: serie identifikuji kategorie v grafu
+   a tlacitko s nimi nema co spolecneho. */
 .btn.primary {
-    background: var(--series-1);
-    border-color: var(--series-1);
-    color: #fff;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    color: var(--accent-ink);
+    font-weight: 600;
+
+    /* Zadny ramecek - schvalne, a stalo to dva pokusy.
+
+       `border-color: transparent` nechavalo prosvitat vypln jeste
+       jednou (kresli se az pod ramecek), takze tlacitko melo kolem sebe
+       posunuty stin sebe sama. Jednobarevny ramecek to zlepsil, ale na
+       malem tlacitku porad drhnul: vypln jde z fialove do modre, kdezto
+       obrys mel jednu barvu - v levem rohu tedy nesedel.
+
+       Bez ramecku zadny rozpor nevznikne. Chybejici pixel dorovnava
+       odsazeni, takze tlacitko ma stejnou velikost jako ostatni. */
+    border: none;
+    padding: 9px 16px;
 }
 
 .btn.primary:hover { filter: brightness(1.07); }
@@ -2085,12 +2423,47 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    stream - proto je vysoké jako dlaždice streamu, ne jako běžné
    tlačítko. Karta si tím drží svou výšku bez ohledu na to, kolik se
    zrovna hraje. */
+/* "Skryto, protoze jich je hodne" neni hlavni akce stranky - je to
+   vysvetleni, proc tu neco neni, a nabidka to ukazat. Plna barevna plocha
+   pres celou sirku z toho delala nejvyraznejsi prvek na strance, ac je to
+   zastupce obsahu, ktery se sem nevesel.
+
+   Proto tlumene: podklad karty, prerusovany obrys (naznacuje "tady neco
+   chybi") a barva jen na druhem radku, kde je vyzva ke kliknuti. */
+/* Vedome BEZ tridy `primary` v sablone: hlavni akce stranky to neni.
+   Drive ji melo a bylo to nejvyraznejsi tlacitko na cele strance. */
 .session-vice {
     width: 100%;
     justify-content: center;
     padding: 22px 16px;
     font-size: 15px;
+    border-radius: var(--radius);
+    /* Tentyz prechod jako karta prehravani - tlacitko stoji presne tam,
+       kde by karty byly, takze ma vypadat jako jejich ozvena. Slabsi,
+       protoze zastupuje obsah, ktery tu neni; prerusovany obrys to
+       dopovi. Ploche pozadi bylo naopak neviditelne: splynulo s kartou
+       pod sebou a vypadalo jako prazdne misto. */
+    background:
+        radial-gradient(75% 190% at 0% 0%,
+                        color-mix(in oklab, var(--accent-2) 26%, transparent),
+                        transparent 58%),
+        radial-gradient(60% 150% at 100% 100%,
+                        color-mix(in oklab, var(--accent) 16%, transparent),
+                        transparent 62%),
+        var(--surface-1);
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--border));
+    color: var(--text-secondary);
+    font-weight: 500;
 }
+
+.session-vice strong { color: var(--text-primary); font-weight: 600; }
+
+.session-vice:hover {
+    border-color: var(--accent);
+    filter: brightness(1.12);
+}
+
+.session-vice .session-vice-note { color: var(--accent); font-weight: 600; }
 
 
 /* Druhý řádek v tlačítku "skryto kvůli počtu": je to doplněk k důvodu,
@@ -2099,4 +2472,173 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     font-size: 13px;
     opacity: 0.85;
     font-weight: 400;
+}
+
+
+/* =====================================================================
+   KLASICKY VZHLED
+
+   Puvodni podoba aplikace, prepinatelna v Nastaveni -> Rozhrani.
+   Vsechno nize plati jen pri `<html data-skin="klasicky">`.
+
+   Neni to jen jina paleta. Novy vzhled zmenil i tvary: karta prehravani
+   ma barevny nadech, odznaky stavu maji vypln misto tecky, hlavni cislo
+   stoji vedle krivky. Klasicky vzhled je vraci - proto je tahle sekce
+   delsi nez seznam barev.
+
+   Grafy se prebarvi samy: kresli se pres promenne (--accent, --series-*,
+   --good...), takze staci prepsat je a Python se nemeni.
+   ===================================================================== */
+
+:root[data-skin="klasicky"] {
+    --page:            #f9f9f7;
+    --surface-1:       #fcfcfb;
+    --surface-2:       #f2f1ed;
+    --text-primary:    #0b0b0b;
+    --text-secondary:  #52514e;
+    --text-muted:      #898781;
+    --border:          rgba(11, 11, 11, 0.10);
+    --grid:            #e1e0d9;
+    --axis:            #c3c2b7;
+
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --serious:  #ec835a;
+    --critical: #d03b3b;
+
+    /* Barva aplikace byla drive tataz jako prvni barva serie - a obe
+       strany prechodu stejne, takze z prechodu zbude plna barva. */
+    --accent:     var(--series-1);
+    --accent-2:   var(--series-1);
+    --accent-ink: #ffffff;
+    --rail:       var(--surface-1);
+
+    --linka-1: var(--series-1);
+    --linka-2: var(--series-2);
+    --linka-3: var(--series-3);
+
+    --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root[data-skin="klasicky"]:not([data-theme="light"]) {
+        --page:           #0d0d0d;
+        --surface-1:      #1a1a19;
+        --surface-2:      #232322;
+        --text-primary:   #ffffff;
+        --text-secondary: #c3c2b7;
+        --text-muted:     #898781;
+        --border:         rgba(255, 255, 255, 0.10);
+        --grid:           #2c2c2a;
+        --axis:           #383835;
+
+        --series-1: #3987e5;
+        --series-2: #d95926;
+        --series-3: #199e70;
+        --series-4: #c98500;
+        --series-5: #d55181;
+        --series-6: #008300;
+        --series-7: #9085e9;
+        --series-8: #e66767;
+    }
+}
+
+:root[data-skin="klasicky"][data-theme="dark"] {
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --border:         rgba(255, 255, 255, 0.10);
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+}
+
+/* --- tvary, ktere novy vzhled zmenil ------------------------------- */
+
+/* Vybrana polozka menu mela obarvenou plochu, ne prouzek u kraje. */
+[data-skin="klasicky"] .nav a.active::before { display: none; }
+
+/* Vybrany chip mel prohozene barvy pisma a podkladu. */
+[data-skin="klasicky"] .chip.active,
+[data-skin="klasicky"] .chip.active:hover {
+    background: var(--text-primary);
+    color: var(--page);
+    border-color: var(--text-primary);
+    font-weight: 550;
+}
+
+/* Popisek dlazdice byl bezny text, ne verzalky. */
+[data-skin="klasicky"] .tile-label {
+    font-size: 12.5px;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+/* Karta prehravani a plakaty byly ploche. */
+[data-skin="klasicky"] .session { background: var(--surface-1); }
+[data-skin="klasicky"] .session-poster,
+[data-skin="klasicky"] .poster-frame {
+    background: var(--surface-2);
+    box-shadow: none;
+}
+[data-skin="klasicky"] .session-bar i { background: var(--series-1); }
+[data-skin="klasicky"] .session-bitrate { color: var(--text-primary); }
+
+/* Odznaky mely tecku a sedou pilulku, at uz sly o stav nebo o fakt. */
+[data-skin="klasicky"] .session-tags .badge {
+    border-color: var(--border);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-weight: 600;
+    padding: 2px 8px;
+    gap: 5px;
+}
+[data-skin="klasicky"] .session-tags .badge .dot { display: block; }
+
+/* Hlavni cislo stalo nad krivkou, ne vedle ni. */
+[data-skin="klasicky"] .hero-card { display: block; }
+[data-skin="klasicky"] .delta { font-weight: 500; }
+
+/* Sloupce byly vyssi a bez zare pod bodem na krivce. */
+[data-skin="klasicky"] .hbar-track { height: 15px; }
+[data-skin="klasicky"] .sparkline .chart-hit circle,
+[data-skin="klasicky"] .chart .chart-hit circle { filter: none; }
+
+/* Tlacitko "je jich hodne" bylo plne barevne. */
+[data-skin="klasicky"] .session-vice {
+    background: var(--series-1);
+    border: 1px solid var(--series-1);
+    color: #fff;
+}
+[data-skin="klasicky"] .session-vice strong { color: #fff; }
+[data-skin="klasicky"] .session-vice .session-vice-note { color: rgb(255 255 255 / 82%); }
+
+/* Hlavni tlacitko melo obrys a plnou barvu. */
+[data-skin="klasicky"] .btn.primary {
+    background: var(--series-1);
+    border: 1px solid var(--series-1);
+    padding: 8px 15px;
+    font-weight: 550;
 }

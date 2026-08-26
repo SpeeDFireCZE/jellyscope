@@ -25,21 +25,26 @@
 {% set tip_ostatni = (ostatni or []) | map(attribute='label') | join(', ') %}
 
 {% if kind == 'movies' %}
-    {% set series = [{'key': 'movie_hours', 'label': _("Filmy"), 'slot': 1}] %}
+    {% set series = [{'key': 'movie_hours', 'label': _("Filmy"), 'slot': 1,
+                  'barva': 'var(--linka-1)'}] %}
     {% set hours_key = 'movie_hours' %}{% set plays_key = 'movie_plays' %}
 {% elif kind == 'series' %}
-    {% set series = [{'key': 'series_hours', 'label': _("Seriály"), 'slot': 2}] %}
+    {% set series = [{'key': 'series_hours', 'label': _("Seriály"), 'slot': 2,
+                  'barva': 'var(--linka-2)'}] %}
     {% set hours_key = 'series_hours' %}{% set plays_key = 'series_plays' %}
 {% elif kind == 'other' %}
     {% set series = [{'key': 'other_hours', 'label': _("Ostatní"), 'slot': 3,
-                      'tip': tip_ostatni}] %}
+                      'tip': tip_ostatni, 'barva': 'var(--linka-3)'}] %}
     {% set hours_key = 'other_hours' %}{% set plays_key = 'other_plays' %}
 {% else %}
-    {% set series = [{'key': 'movie_hours', 'label': _("Filmy"), 'slot': 1},
-                     {'key': 'series_hours', 'label': _("Seriály"), 'slot': 2}] %}
+    {% set series = [{'key': 'movie_hours', 'label': _("Filmy"), 'slot': 1,
+                      'barva': 'var(--linka-1)'},
+                     {'key': 'series_hours', 'label': _("Seriály"), 'slot': 2,
+                      'barva': 'var(--linka-2)'}] %}
     {% if ns.other > 0 %}
         {% set series = series + [{'key': 'other_hours', 'label': _("Ostatní"),
-                                   'slot': 3, 'tip': tip_ostatni}] %}
+                                   'slot': 3, 'tip': tip_ostatni,
+                                   'barva': 'var(--linka-3)'}] %}
     {% endif %}
     {% set hours_key = 'hours' %}{% set plays_key = 'plays' %}
 {% endif %}

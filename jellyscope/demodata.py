@@ -501,18 +501,27 @@ def seed() -> dict[str, int]:
             plays,
         )
 
-        # jedno "prave ted bezici", aby byla videt i karta na Prehledu
+        # jedno "prave ted bezici", aby byla videt i karta na Prehledu.
+        #
+        # Vyplnena je schvalne cela: tok, rozliseni i stopy, se kterymi
+        # se divak dvia. Karta prave se hraje je jedina, kterou clovek
+        # vidi driv nez cokoliv jineho - a v ukazce ma ukazat, co vsechno
+        # o prehravani vime, ne prazdna mista.
         conn.execute(
             """INSERT INTO playback (session_key, user_id, user_name, item_id, item_name,
                 item_type, series_name, library_id, client, device_name, play_method,
                 transcode_reasons, transcode_video_direct, transcode_audio_direct,
-                transcode_hw, video_codec, audio_codec,
-                audio_language, subtitle_language, started_at, last_seen_at,
+                transcode_hw, video_codec, audio_codec, bitrate,
+                video_width, video_height,
+                audio_language, subtitle_language,
+                current_audio_language, current_subtitle_language,
+                started_at, last_seen_at,
                 watched_seconds, paused_seconds, position_ticks, is_active)
                VALUES ('demo-live','demo-u2','Jana','demo-movie-0','Duna','Movie',NULL,
                        'demo-movies','Jellyfin Web','Chrome na notebooku','Transcode',
-                       'VideoCodecNotSupported',0,1,'qsv','h264','eac3',
-                       'cs','cs',
+                       'VideoCodecNotSupported',0,1,'qsv','h264','eac3',8600000,
+                       1280,720,
+                       'cs','cs','cs','en',
                        ?,?,2640,0,26400000000,1)""",
             (_ts(now - timedelta(minutes=44)), _ts(now)),
         )

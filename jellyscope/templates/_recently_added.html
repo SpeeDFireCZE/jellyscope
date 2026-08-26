@@ -6,10 +6,16 @@
    by se časem od druhé odchýlila. #}
 
 {% if recent %}
-<div class="section-head">
-    <h2>{{ _("Nedávno přidané") }}</h2>
-    <a class="card-note" href="/library">{{ _("celá knihovna") }} &rarr;</a>
-</div>
+{# Celý pás je karta, ne volný pruh na stránce.
+
+   Bez rámečku plakáty splývaly s podkladem a nebylo poznat, kde pás
+   začíná a kde končí - obzvlášť když se posouvá do strany a poslední
+   plakát je useknutý v půli. #}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ _("Nedávno přidané") }}</h2>
+        <a class="card-note" href="/library">{{ _("celá knihovna") }} &rarr;</a>
+    </div>
 
 {# Vodorovný pás plakátů. Posouvá se sám, když se nevejdou - u obsahu,
    který je ze své podstaty dlouhý seznam, je to správný tvar. #}
@@ -68,5 +74,6 @@
         </div>
     </div>
     {% endfor %}
+</div>
 </div>
 {% endif %}

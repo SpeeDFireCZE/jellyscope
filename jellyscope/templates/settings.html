@@ -1298,8 +1298,8 @@
 {# ------------------------------------------------------------------ #}
 <div class="card" id="rozhrani">
     <div class="card-head">
-        <h2>{{ _("Dlouhé seznamy a mapa") }}</h2>
-        <p class="card-note">{{ _("co karta ukáže rovnou a jak se ovládá mapa") }}</p>
+        <h2>{{ _("Vzhled, dlouhé seznamy a mapa") }}</h2>
+        <p class="card-note">{{ _("jak aplikace vypadá, co karta ukáže rovnou a jak se ovládá mapa") }}</p>
     </div>
 
     <p class="card-note" style="margin-bottom:14px">
@@ -1307,6 +1307,34 @@
     </p>
 
     <form method="post" action="/settings/interface">
+        <div class="field">
+            <label>{{ _("Vzhled") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_skin" value="novy"
+                           {{ 'checked' if ui_skin != 'klasicky' }}>
+                    <span>
+                        <span class="title">{{ _("Nový") }}</span>
+                        <span class="desc">
+                            {{ _("Barvy z loga Jellyfinu, karty s jemným přechodem, stav přehrávání barevně (zelená přímé, oranžová přepočet). Hlavní číslo stojí vedle křivky.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_skin" value="klasicky"
+                           {{ 'checked' if ui_skin == 'klasicky' }}>
+                    <span>
+                        <span class="title">{{ _("Klasický") }}</span>
+                        <span class="desc">
+                            {{ _("Původní podoba: modrá na neutrálním podkladu, ploché karty, odznaky s tečkou. Nic se neztratí, jen to vypadá jako dřív.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Změní se jen vzhled – žádná data, žádné výpočty. Přepnout jde kdykoliv zpátky.") }}</p>
+        </div>
+
         <div class="field">
             <label for="ui_max_streams">{{ _("Přehrávání na Přehledu") }}</label>
             <input type="number" id="ui_max_streams" name="ui_max_streams"

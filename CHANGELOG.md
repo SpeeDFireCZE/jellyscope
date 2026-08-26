@@ -6,6 +6,63 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.3.0
+
+### Changed
+
+- **The interface now wears Jellyfin's colours.** Blue `#00A4DC` and purple
+  `#AA5CC3` — the pair from its logo — run through the whole app: the
+  selected item in the menu, the chosen period, the progress of a playback,
+  single-colour charts and the poster placeholder before an image arrives.
+  The dark mode moved with them, from neutral black to a blue-violet
+  ground.
+
+  The straight logo colours could not be used for charts, though. Measured
+  against colour blindness (deuteranopia and protanopia, difference in
+  OKLab), blue and purple from the logo come out at 6.6 where the floor is
+  8 — a person with the most common form would see one line. Pulling them
+  apart by **lightness** instead of hue fixes it: a lighter blue and a
+  deeper purple measure 17.9 and still read as Jellyfin.
+
+  The whole series palette was rebuilt on that basis, and it came out
+  better than the one it replaces: the closest neighbouring pair went from
+  8.9 to 11.6, and the worst pair anywhere from 1.6 to 6.1 — under the old
+  palette teal and pink were practically the same colour to a person with
+  deuteranopia.
+
+- **Colour now says what it means.** Green is direct play, orange
+  transcoding, amber a warning — and the same colours appear in the
+  badge on a playback and in the "how the server delivers content" bar,
+  which used to disagree. The status colours were also picked for the dark
+  mode for the first time; until now it borrowed the light-mode ones, so a
+  dark green sat almost invisibly on a dark ground.
+
+- **Cards say more with less.** The "now playing" card carries the stream
+  rate in its top corner with the resolution and codec below it, states are
+  filled pills while facts stay quiet, and the language and subtitles are
+  shown even when the session reports only the track it started with.
+  "Recently added" became a card like the rest, the headline number moved
+  beside its curve instead of above it, and where two lines overlap the
+  fill is lighter so the muddy third colour stops forming.
+
+### Fixed
+
+- **The bandwidth chart labelled its axis in UTC.** Times are stored
+  without a zone, and `datetime.timestamp()` treats such a time as *local* —
+  so the axis came out shifted by the whole offset while the rest of the
+  app showed local time. In summer the evening peak therefore appeared an
+  hour earlier than it happened. The same slip moved the "peak at" line
+  above the chart.
+
+### Added
+
+- **A switch between the new appearance and the classic one** in Settings →
+  Interface. The classic option restores not only the old colours but the
+  old shapes: flat cards, badges with a dot, the headline number above the
+  curve. It is entirely CSS — the charts draw through variables, so the
+  application code knows nothing about which look is on, and a test keeps
+  it that way.
+
 ## 1.2.11
 
 ### Fixed
