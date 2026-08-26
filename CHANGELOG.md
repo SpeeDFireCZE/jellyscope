@@ -6,6 +6,49 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.3.1
+
+### Added
+
+- **The application has its own time zone**, in Settings → General. Until
+  now every time came out in the zone of the machine, so a server running
+  in UTC moved the evening peak in the charts two hours away from the one
+  people lived through — and nothing could be done about it without
+  touching the host or the container.
+
+  What is stored is the **name** of the zone, not an offset in hours: the
+  offset changes through the year, and a stored "+2" would be wrong for
+  half of it. An empty field means "whatever the server says", which is
+  what it did before.
+
+  The zone applies to every time at once, because there is one place that
+  decides. Splitting into days and hours is done by SQL, which reads the
+  zone of the *process*, so it is set into the environment at startup too
+  — that part therefore needs a restart. On Windows a process cannot be
+  moved to another zone at all; the times are still right, the split into
+  days follows the machine, and the log says so.
+
+### Fixed
+
+- **The delivery chart left transcoding variants grey.** Imported history
+  carries more detailed methods — `Transcode (v:h264 a:direct)` — and the
+  colour was matched on the exact name, so anything detailed fell through
+  to "unknown". The match now looks at the beginning of the name, and a
+  second variant of the same kind is shaded rather than recoloured: the
+  colour still says "transcoding", the shade tells the variants apart.
+
+### Changed
+
+- **The headline number sits above its curve again**, in the new
+  appearance as well. Beside it the card was shorter but the curve
+  narrower — and the curve is where the shape of the month shows. Width is
+  worth more here than the height it saved.
+
+- **The network chart says how long one slice is** (`one slice · 5 h`).
+  Nothing is sampled on a fixed clock: the starts and ends of playbacks
+  are walked through and each slice keeps its peak. Without that number
+  the curve looked random — one spike can be a single hour out of six.
+
 ## 1.3.0
 
 ### Changed

@@ -480,22 +480,12 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .sparkline .chart-hit circle,
 .chart .chart-hit circle { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent) 70%, transparent)); }
 
-/* Karta s hlavnim cislem: cislo vlevo, krivka vpravo.
+/* Karta s hlavnim cislem: cislo nahore, krivka pres celou sirku pod nim.
 
-   Pod 900 px se sloupce zrusi a obojí je zase pod sebou - krivka uzsi
-   nez 300 px uz nic neukazuje, jen bere vysku. */
-.hero-card {
-    display: grid;
-    grid-template-columns: minmax(220px, 300px) 1fr;
-    gap: 24px;
-    align-items: center;
-}
-
-.hero-graf { min-width: 0; }
-
-@media (max-width: 900px) {
-    .hero-card { grid-template-columns: 1fr; gap: 12px; }
-}
+   Zkusili jsme cislo vlevo a krivku vpravo - karta byla nizsi, ale
+   krivka uzsi, a prave na ni je videt tvar mesice. Sirka je tu cennejsi
+   nez usetrena vyska. */
+.hero-graf { min-width: 0; margin-top: 4px; }
 
 .hero {
     font-size: 50px;
@@ -2617,8 +2607,6 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 [data-skin="klasicky"] .session-tags .badge .dot { display: block; }
 
-/* Hlavni cislo stalo nad krivkou, ne vedle ni. */
-[data-skin="klasicky"] .hero-card { display: block; }
 [data-skin="klasicky"] .delta { font-weight: 500; }
 
 /* Sloupce byly vyssi a bez zare pod bodem na krivce. */

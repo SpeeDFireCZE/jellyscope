@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .db import TIME_FORMAT
 from .i18n import translate as _t
@@ -156,8 +157,48 @@ def percent(value: Any, decimals: int = 0) -> str:
         return "-"
 
 
+def zona():
+    """Casova zona aplikace. `None` znamena "co rika system".
+
+    Jedno misto pro celou aplikaci. Bez nej zalezelo na tom, jakou zonu
+    ma stroj - a kdyz server bezel v UTC a clovek se dival z Prahy,
+    vecerni spicka v grafech "nastavala" o dve hodiny driv, nez ji zazil.
+
+    Vraci se `ZoneInfo`, ne posun v hodinach: posun se behem roku meni
+    (letni cas) a ulozeny udaj z brezna se musi prepocitat jinak nez
+    udaj z prosince.
+    """
+    from .db import get_setting          # az tady, at nevznikne kruh
+
+    jmeno = (get_setting("app_timezone", "") or "").strip()
+    if not jmeno:
+        return None
+    try:
+        return ZoneInfo(jmeno)
+    except (ZoneInfoNotFoundError, ValueError):
+        # Nesmyslna zona nesmi shodit vypis casu - radeji systemova.
+        return None
+
+
+def usek(minut: Any) -> str:
+    """Delka useku grafu: "6 h", "45 min", "2 dny"."""
+    try:
+        m = int(minut or 0)
+    except (TypeError, ValueError):
+        return "-"
+    if m <= 0:
+        return "-"
+    if m < 90:
+        return f"{m} min"
+    if m < 60 * 36:
+        hodin = round(m / 60)
+        return f"{hodin} h"
+    dnu = round(m / 60 / 24)
+    return f"{dnu} " + (_t("dny") if dnu < 5 else _t("dnů"))
+
+
 def datetime_human(value: Any) -> str:
-    """Ulozeny cas (UTC) prevedeny na mistni cas a hezky vypsany."""
+    """Ulozeny cas (UTC) prevedeny na cas aplikace a hezky vypsany."""
     if not value:
         return "-"
     text = str(value)
@@ -165,7 +206,7 @@ def datetime_human(value: Any) -> str:
     if parsed is None:
         return text
 
-    local = parsed.astimezone()
+    local = parsed.astimezone(zona())
     return local.strftime("%d.%m.%Y %H:%M")
 
 
@@ -241,4 +282,5 @@ def register(env: Any) -> None:
         "percent": percent,
         "datetime": datetime_human,
         "relative": relative_human,
+        "usek": usek,
     })

@@ -281,15 +281,26 @@ ROLE_BARVY = {
     "good": "var(--good)",
     "info": "var(--accent)",
     "warning": "var(--warning)",
+    "serious": "var(--serious)",
+    "critical": "var(--critical)",
     "muted": "var(--text-muted)",
 }
 
 
 def _barva_segmentu(segment: dict[str, Any], index: int) -> str:
     role = str(segment.get("role") or "").strip()
-    if role in ROLE_BARVY:
-        return ROLE_BARVY[role]
-    return f"var(--series-{_slot_of(segment, index)})"
+    if role not in ROLE_BARVY:
+        return f"var(--series-{_slot_of(segment, index)})"
+
+    barva = ROLE_BARVY[role]
+    # Druha a dalsi cast te same role se ztmavuje. Vyznam nese barva,
+    # odstin uz jen rozlisuje varianty mezi sebou - proto se michá
+    # s podkladem, ne s jinym odstinem.
+    odstin = int(segment.get("odstin") or 0)
+    if odstin:
+        podil = max(35, 100 - odstin * 22)
+        return f"color-mix(in oklab, {barva} {podil}%, var(--surface-2))"
+    return barva
 
 
 def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:

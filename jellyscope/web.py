@@ -32,6 +32,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting, geoip,
                updates,
@@ -87,6 +88,29 @@ async def lifespan(app: FastAPI):
 
     db.init_db()
     log.info("databaze pripravena")
+
+    # Zona aplikace do prostredi procesu.
+    #
+    # Vypis casu si ji bere sam (formatting.zona()), ale deleni na dny
+    # a hodiny dela SQL - SQLite modifikatorem 'localtime', PostgreSQL
+    # podle zony spojeni. Obojí cte zonu OPERACNIHO SYSTEMU, ne nasi
+    # promennou, takze ji musime nastavit do prostredi drive, nez se
+    # otevre prvni spojeni.
+    #
+    # `tzset()` je jen na unixu. Na Windows se zona procesu za behu
+    # prepnout neda, takze tam plati systemova - vypis casu je spravne
+    # tak jako tak, jen deleni dnu jde podle stroje. Ostry provoz bezi
+    # na Linuxu, kde to plati cele.
+    zona_aplikace = (db.get_setting("app_timezone", "") or "").strip()
+    if zona_aplikace:
+        os.environ["TZ"] = zona_aplikace
+        if hasattr(time, "tzset"):
+            time.tzset()
+            log.info("casova zona aplikace: %s", zona_aplikace)
+        else:
+            log.warning("casovou zonu %s nejde na tomhle systemu nastavit procesu; "
+                        "vypis casu ji respektuje, deleni dnu v grafech ne",
+                        zona_aplikace)
 
     # Do logu, at se pri dotazu "proc mi to rika, ze jsem v kontejneru"
     # nemusi hadat. Rozlisujeme dve veci: jakykoliv kontejner (rozhoduje
@@ -685,6 +709,30 @@ ZOOM_REZIMY = ("click", "wheel")
 # Vzhledy aplikace. "novy" jsou barvy Jellyfinu, "klasicky" puvodni
 # modra na neutralnim podkladu - viz konec style.css.
 VZHLEDY = ("novy", "klasicky")
+
+
+# Nabidka casovych zon. Cely seznam ma pres sest set polozek, takze se
+# nabizi jen ty, ktere lidi opravdu pouzivaji - napsat jde libovolnou.
+CASTE_ZONY = (
+    "Europe/Prague", "Europe/Bratislava", "Europe/Vienna", "Europe/Berlin",
+    "Europe/Warsaw", "Europe/London", "Europe/Madrid", "Europe/Rome",
+    "Europe/Kyiv", "Europe/Moscow", "UTC",
+    "America/New_York", "America/Chicago", "America/Denver",
+    "America/Los_Angeles", "America/Sao_Paulo",
+    "Asia/Tokyo", "Asia/Shanghai", "Asia/Kolkata", "Asia/Dubai",
+    "Australia/Sydney", "Pacific/Auckland",
+)
+
+
+def _zona_existuje(jmeno: str) -> bool:
+    """Zna Python takovou zonu? Prazdne jmeno znamena "podle systemu"."""
+    if not jmeno:
+        return True
+    try:
+        ZoneInfo(jmeno)
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+    return True
 
 
 def _vzhled() -> str:
@@ -1799,6 +1847,13 @@ def settings_page(
             log_levels=applog.levels(),
         )
 
+    # Nabidka zon a aktualni cas v te zvolene - at je po ulozeni videt,
+    # ze se opravdu neco zmenilo. Bez toho by clovek koukal na pole
+    # s textem a musel hadat, jestli ta zona vubec plati.
+    context.setdefault("casove_zony", CASTE_ZONY)
+    context.setdefault("zona_ted",
+                       datetime.now(formatting.zona()).strftime("%d.%m.%Y %H:%M"))
+
     return templates.TemplateResponse(
         request, "settings.html", _context(request, account, **context)
     )
@@ -2163,6 +2218,7 @@ def settings_language(
     request: Request,
     ui_language: str = Form("cs"),
     log_language: str = Form("cs"),
+    app_timezone: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
     if ui_language not in i18n.LANGUAGES:
@@ -2175,6 +2231,24 @@ def settings_language(
         log_language = i18n.DEFAULT_LANGUAGE
     db.set_setting("log_language", log_language)
     applog.nastav_jazyk(log_language)
+
+    # Zona se uklada, jen kdyz ji Python zna. Preklep by jinak zpusobil,
+    # ze se casy vypisuji podle systemu, a nikdo by nevedel proc.
+    zona = app_timezone.strip()
+    if not zona:
+        db.set_setting("app_timezone", "")
+    elif _zona_existuje(zona):
+        db.set_setting("app_timezone", zona)
+        # Prostredi procesu prepiseme rovnou - vypis casu se tim srovna
+        # hned. Deleni dnu v SQL az po restartu, viz lifespan().
+        os.environ["TZ"] = zona
+        if hasattr(time, "tzset"):
+            time.tzset()
+    else:
+        _flash(request, "Časovou zónu {zona} neznám – nechal jsem tu původní.",
+               "error", zona=zona)
+        return RedirectResponse("/settings?section=general", status_code=303)
+
     _flash(request, i18n.translate("Uložit jazyk", ui_language) + " ✓", "success")
     return RedirectResponse("/settings?section=general", status_code=303)
 

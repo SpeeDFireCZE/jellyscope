@@ -825,6 +825,14 @@ EN: dict[str, str] = {
     "Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje.":
         "This overwrites ALL current data. The state before the restore is saved as another backup first, and the application then restarts.",
     "Jazyk rozhraní": "Interface language",
+    "Jazyk a čas": "Language and time",
+    "Časová zóna": "Time zone",
+    "podle systému": "as the system says",
+    "Teď je": "It is now",
+    "Podle ní se vypisují všechny časy a dělí dny v grafech. Prázdné pole znamená „co říká server“. Změna se plně projeví po restartu aplikace – rozdělení na dny dělá databáze a tu je potřeba přenastavit při startu.":
+        "All times are shown in it and the days in charts are split by it. An empty field means \"whatever the server says\". The change takes full effect after a restart - splitting into days is done by the database, and that has to be set at startup.",
+    "Časovou zónu {zona} neznám – nechal jsem tu původní.":
+        "I do not know the time zone {zona} - I kept the previous one.",
     "Volba platí pro celou aplikaci, ne jen pro tebe.":
         "The choice applies to the whole application, not just to you.",
     "Uložit jazyk": "Save language",
@@ -1238,6 +1246,7 @@ EN: dict[str, str] = {
     "Průměrný tok jednoho streamu": "Average bitrate of one stream",
     "Souběžný tok v čase": "Concurrent throughput over time",
     "nejvyšší hodnota v každém úseku": "the highest value in each slice",
+    "jeden úsek": "one slice",
     "Kdo nejvíc streamoval": "Who streamed the most",
     "Podle přehrávače": "By player",
     "Odkud se dívají": "Where they watch from",
@@ -1378,6 +1387,9 @@ EN: dict[str, str] = {
 # Díky tomu zůstávají volání `log.info(...)` čitelná a nikdo si při psaní
 # nové hlášky nemusí pamatovat na překlad.
 LOG_EN: dict[str, str] = {
+    "casova zona aplikace: %s": "application time zone: %s",
+    "casovou zonu %s nejde na tomhle systemu nastavit procesu; vypis casu ji respektuje, deleni dnu v grafech ne":
+        "the time zone %s cannot be set for the process on this system; times are shown in it, the split into days in charts is not",
     "jazyk odhadnut z nazvu souboru u %s polozek":
         "language guessed from the file name for %s items",
     "jazyk doplnen z Jellyfinu u %s stop":

@@ -1437,7 +1437,7 @@
 
 <div class="card">
     <div class="card-head">
-        <h2>{{ _("Jazyk rozhraní") }}</h2>
+        <h2>{{ _("Jazyk a čas") }}</h2>
         <p class="card-note">{{ _("Volba platí pro celou aplikaci, ne jen pro tebe.") }}</p>
     </div>
     <form method="post" action="/settings/language">
@@ -1464,7 +1464,24 @@
             </p>
         </div>
 
-        <button class="btn primary" type="submit">{{ _("Uložit jazyk") }}</button>
+        {# Časová zóna aplikace. Bez ní záleželo na tom, jakou má stroj -
+           a server běžící v UTC posouval večerní špičku v grafech
+           o dvě hodiny proti tomu, co člověk zažil. #}
+        <div class="field">
+            <label for="app_timezone">{{ _("Časová zóna") }}</label>
+            <input type="text" id="app_timezone" name="app_timezone" list="zony"
+                   value="{{ settings.app_timezone }}" placeholder="{{ _("podle systému") }}"
+                   style="width:260px">
+            <datalist id="zony">
+                {% for z in casove_zony %}<option value="{{ z }}">{% endfor %}
+            </datalist>
+            <p class="hint">
+                {{ _("Podle ní se vypisují všechny časy a dělí dny v grafech. Prázdné pole znamená „co říká server“. Změna se plně projeví po restartu aplikace – rozdělení na dny dělá databáze a tu je potřeba přenastavit při startu.") }}
+                {% if zona_ted %}<br>{{ _("Teď je") }} <strong>{{ zona_ted }}</strong>.{% endif %}
+            </p>
+        </div>
+
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
     </form>
 </div>
 

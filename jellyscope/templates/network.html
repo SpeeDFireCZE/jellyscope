@@ -32,7 +32,13 @@
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Souběžný tok v čase") }}</h2>
-        <p class="card-note">{{ _("nejvyšší hodnota v každém úseku") }}</p>
+        {# Delka useku patri k popisku: bez ni vypada krivka nahodne.
+           Nemeri se v pevnem taktu - prochazeji se zacatky a konce
+           prehravani a z kazdeho useku se bere spicka. #}
+        <p class="card-note">
+            {{ _("nejvyšší hodnota v každém úseku") }}{% if prubeh %}
+            &middot; {{ _("jeden úsek") }} {{ prubeh[0].krok_minut | usek }}{% endif %}
+        </p>
     </div>
     {# Maximum, ne průměr: průměr by špičky zahladil, a právě podle špičky
        se dimenzuje linka. #}

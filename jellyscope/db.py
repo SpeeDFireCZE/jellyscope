@@ -101,6 +101,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # vraci i ploche karty, tecky u odznaku a cislo nad krivkou misto
     # vedle ni. Viz konec style.css a web._context().
     "ui_skin": "novy",
+    # Casova zona aplikace (napr. "Europe/Prague"). Prazdne = zona
+    # systemu. Rozhoduje o tom, v jakem case se vypisuji udaje a podle
+    # ceho se deli dny v grafech - viz formatting.zona() a web.lifespan().
+    "app_timezone": "",
     "update_check_enabled": "0",
     "task_tidy_enabled": "1",
     # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import db
+from . import db, formatting
 from .i18n import translate as _t
 
 # Prevod vysky obrazu na skupinu rozliseni. Pouziva se na vic mistech,
@@ -1113,15 +1113,29 @@ def play_method_breakdown(days: int) -> list[dict[str, Any]]:
     # `method_badge`. Kdyz se lisily (odznak oranzovy, graf jantarovy),
     # vypadalo to jako dve ruzne veci; pritom je to tentyz udaj jednou
     # jako stav a podruhe jako podil.
-    role = {
-        "DirectPlay": "good",
-        "DirectStream": "info",
-        "Transcode": "serious",
-        "nezname": "muted",
-    }
+    # Role se hleda podle ZACATKU nazvu, ne presnou shodou. Importovana
+    # historie (Playback Reporting) nese podrobnejsi hodnoty - treba
+    # "Transcode (v:h264 a:direct)" - a ty by pri presne shode propadly
+    # do "muted", takze by v grafu zesedly, prestoze jde o prepocet.
+    def _role(metoda: str) -> str:
+        m = (metoda or "").strip().lower()
+        if m.startswith("transcode"):
+            return "serious"
+        if m.startswith("directstream") or m.startswith("remux"):
+            return "info"
+        if m.startswith("directplay") or m.startswith("direct play"):
+            return "good"
+        return "muted"
+
+    # Kolikaty segment te same role to je. Vic variant prepoctu pod sebou
+    # by jinak melo jednu barvu a nesly by rozeznat; takhle kazda dalsi
+    # ztmavne o kus, ale porad je poznat, ze patri k prepoctu.
+    poradi: dict[str, int] = {}
     for row in rows:
         row["label"] = labels.get(row["method"], row["method"])
-        row["role"] = role.get(row["method"], "muted")
+        row["role"] = _role(row["method"])
+        poradi[row["role"]] = poradi.get(row["role"], -1) + 1
+        row["odstin"] = poradi[row["role"]]
         # Graf deleneho pruhu ocekava klic "value" - pripravime ho tady,
         # at sablona nemusi nic pocitat.
         row["value"] = row["hours"]
@@ -2153,7 +2167,17 @@ def bandwidth_prubeh(days: int, bodu: int = 120) -> list[dict[str, Any]]:
     body.append({"cas": hranice - krok / 2, "mbit": round(vrchol / 1e6, 2)})
 
     for bod in body:
-        bod["popisek"] = datetime.fromtimestamp(bod["cas"]).strftime("%d.%m. %H:%M")
+        # Tataz zona jako u vypisu casu jinde - viz formatting.zona().
+        # Osa grafu a sloupec "kdy" v historii musi rikat totez, jinak
+        # clovek hleda tentyz zaznam na dvou ruznych casech.
+        bod["popisek"] = datetime.fromtimestamp(
+            bod["cas"], formatting.zona()).strftime("%d.%m. %H:%M")
+        # Jak dlouhy usek jeden bod zastupuje. Grafu se lidi casto ptaji
+        # "jak casto se to meri" - nemeri se vubec, prochazeji se zacatky
+        # a konce prehravani a z kazdeho useku se bere spicka. Bez tohohle
+        # udaje vypada krivka nahodne; s nim je videt, ze jeden vrchol
+        # muze byt jedina hodina z sesti.
+        bod["krok_minut"] = round(krok / 60)
     return body
 
 
