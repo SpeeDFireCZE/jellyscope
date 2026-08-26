@@ -220,9 +220,30 @@ _DABING = re.compile(r"^(cz|sk|en|de|hu|pl|ru)[-_.]?dab(ing|ovan[eyá])?$",
 
 # Podle čeho se pozná, že název filmu skončil a začaly značky.
 _HRANICE = re.compile(r"^(?:(?:19|20)\d{2}|[Ss]\d{1,2}[Ee]\d{1,3}"
-                      r"|\d{3,4}[pi]|2160p|4[Kk]|[Bb]lu[Rr]ay|WEB|WEBRip|WEB-DL"
-                      r"|BRRip|DVDRip|HDTV|REMUX|x26[45]|h26[45]|HEVC)$",
+                      r"|\d{3,4}[pi]|4K|HD|SD|FullHD"
+                      r"|Blu[Rr]ay|BDRip|BRRip|DVD|DVDRip|DVDScr|WEB|WEBRip"
+                      r"|WEBDL|HDTV|TVRip|TvRip|SATRip|REMUX|XviD|DivX"
+                      r"|x26[45]|h26[45]|HEVC|AVC|AC3|DTS|AAC)$",
                       re.IGNORECASE)
+
+
+# Rok nebo rozliseni slepene se znackou: "2003CZ", "1080pCZ".
+_SLEPENE = re.compile(r"^((?:19|20)\d{2}|\d{3,4}[pi])([A-Za-z]{2,3})$",
+                      re.IGNORECASE)
+
+
+def _rozdel_slepene(usek: str) -> list[str]:
+    """Z "2003CZ" udělá ["2003", "CZ"]. Z "x264" nechá ["x264"].
+
+    Dělíme hned při krájení názvu, ne až při porovnávání: kdyby zůstalo
+    "2003CZ" vcelku, nenašla by se v názvu ani hranice - a bez ní se
+    značka za ní neuzná. Přesně tak propadlo "Film-2003CZ.mp4".
+
+    Dělí se jen rok nebo rozlišení slepené s dvou až třípísmennou
+    značkou. Kdyby se dělilo cokoliv, rozpadl by se i "x264" nebo "C4U".
+    """
+    nalez = _SLEPENE.match(usek)
+    return [nalez.group(1), nalez.group(2)] if nalez else [usek]
 
 
 def _konec_nazvu(useky: list[str]) -> int:
@@ -256,7 +277,9 @@ def z_nazvu(cesta: str | None) -> dict[str, list[str]]:
 
     # Oddělovačem je cokoliv, co není písmeno ani číslice. Tím se z názvu
     # stanou úseky, které porovnáváme celé - o to tu jde.
-    useky = [u for u in re.split(r"[^0-9A-Za-zÀ-ž]+", nazev) if u]
+    useky = [rozdeleny
+             for u in re.split(r"[^0-9A-Za-zÀ-ž]+", nazev) if u
+             for rozdeleny in _rozdel_slepene(u)]
 
     # Kde končí název filmu a začínají značky. Skoro každý název má někde
     # rok, číslo dílu nebo rozlišení - a co je před ním, je titul.
@@ -271,8 +294,15 @@ def z_nazvu(cesta: str | None) -> dict[str, list[str]]:
 
     for i, usek in enumerate(useky):
         kod = None
-        if usek in _ZNACKY_VELKE:                 # jen velkými
+        za_hranici = 0 <= hranice < i
+
+        if usek in _ZNACKY_VELKE:                 # velkými kdekoliv
             kod = _ZNACKY_VELKE[usek]
+        elif za_hranici and usek.upper() in _ZNACKY_VELKE:
+            # Za rokem nebo rozlišením už je zóna značek, ne názvu -
+            # tam projde i "cz" malými. Před hranicí ne: tam by se chytlo
+            # "de" z Casa de Papel nebo "es" z názvu.
+            kod = _ZNACKY_VELKE[usek.upper()]
         elif usek.lower() in _ZNACKY_DELSI:
             # Celá slova ("italian", "cesky") bereme jen za hranicí názvu.
             # Zkratky (CZ, ENG) můžou být kdekoliv - ty se jako slovo
@@ -281,7 +311,7 @@ def z_nazvu(cesta: str | None) -> dict[str, list[str]]:
             # Když v názvu žádná hranice není ("The Italian Job.mkv"),
             # celá slova neuznáváme vůbec: nemáme podle čeho poznat, že
             # nejsou součástí názvu.
-            if len(usek) > 3 and (hranice < 0 or i < hranice):
+            if len(usek) > 3 and not za_hranici:
                 continue
             kod = _ZNACKY_DELSI[usek.lower()]
         elif _DABING.match(usek):

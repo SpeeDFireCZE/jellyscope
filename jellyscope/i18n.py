@@ -237,6 +237,7 @@ EN: dict[str, str] = {
     "řadách": "seasons",
     "z Jellyfinu": "from Jellyfin",
     "odhad z názvu": "guessed from the name",
+    "podle názvu souboru": "from the file name",
     "Jazyk nezná soubor ani Jellyfin – tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.":
         "Neither the file nor Jellyfin knows the language - this is a guess from the file name. The name tells which languages are in the file, not which track is which.",
     "Soubor jazyk neuvádí, doplněno z Jellyfinu.":
@@ -298,7 +299,7 @@ EN: dict[str, str] = {
     "Nepřeruší se uprostřed práce: dokončí položku, kterou má rozdělanou, a teprve pak skončí. Co se stihlo, zůstane uložené.":
         "It is not interrupted mid-work: it finishes the item it has in progress and only then ends. Whatever was done stays saved.",
     "Analýza souborů": "File analysis",
-    ", odhadnut z názvu u {n} stop": ", guessed from the name for {n} tracks",
+    ", odhadnut z názvu u {n} titulů": ", guessed from the name for {n} titles",
     ", jazyk doplněn z Jellyfinu u {n} stop":
         ", language filled in from Jellyfin for {n} tracks",
     "Obecné": "General",
@@ -1367,8 +1368,8 @@ EN: dict[str, str] = {
 # Díky tomu zůstávají volání `log.info(...)` čitelná a nikdo si při psaní
 # nové hlášky nemusí pamatovat na překlad.
 LOG_EN: dict[str, str] = {
-    "jazyk odhadnut z nazvu souboru u %s stop":
-        "language guessed from the file name for %s tracks",
+    "jazyk odhadnut z nazvu souboru u %s polozek":
+        "language guessed from the file name for %s items",
     "jazyk doplnen z Jellyfinu u %s stop":
         "language filled in from Jellyfin for %s tracks",
     "jazyky se z Jellyfinu doplnit nepodarilo: %s":

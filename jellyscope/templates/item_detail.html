@@ -160,7 +160,18 @@
         <div class="card">
             <div class="card-head">
                 <h2>{{ _("Zvukové stopy") }}</h2>
-                <p class="card-note">{{ streams.Audio | length }} {{ _("celkem") }}</p>
+                <p class="card-note">
+                    {{ streams.Audio | length }} {{ _("celkem") }}
+                    {# Jazyk, který slíbil název souboru, ale nejde ho přiřadit
+                       ke konkrétní stopě - viz scanner.doplnit_jazyky_z_nazvu.
+                       Statistika ho zná, tak ať je vidět, odkud. #}
+                    {% if item.audio_from_name %}
+                        &middot; {{ _("podle názvu souboru") }}:
+                        {% for kod in item.audio_from_name.split(',') %}
+                            {{ lang.display(kod) }}{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </p>
             </div>
             {% if streams.Audio %}
             <div class="table-wrap">
@@ -209,7 +220,15 @@
         <div class="card">
             <div class="card-head">
                 <h2>{{ _("Titulky") }}</h2>
-                <p class="card-note">{{ streams.Subtitle | length }} {{ _("celkem") }}</p>
+                <p class="card-note">
+                    {{ streams.Subtitle | length }} {{ _("celkem") }}
+                    {% if item.subtitle_from_name %}
+                        &middot; {{ _("podle názvu souboru") }}:
+                        {% for kod in item.subtitle_from_name.split(',') %}
+                            {{ lang.display(kod) }}{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </p>
             </div>
             {% if streams.Subtitle %}
             <div class="table-wrap">

@@ -60,6 +60,19 @@ NAJDE = [
     ("Show.S02E01.1080p.WEB-DL.GER.mkv", ["de"], []),
     ("Nejaky.film.2020.[CZ][SK].mkv", ["cs", "sk"], []),
     ("/mnt/filmy/Film.2018.1080p.multi.CZ.SK.mkv", ["cs", "sk"], []),
+    # Tvary z opravdové knihovny - všechny sem přišly jako hlášení, že
+    # se jazyk nepřiřadil. Malá písmena za rokem, značka slepená s rokem
+    # i rok schovaný v závorce.
+    ("Nejaky film (2004) HD cz.avi", ["cs"], []),
+    ("Nejaky film (2004) HD en.avi", ["en"], []),
+    ("Nejaky film 1080p - 5.1 CZ.mkv", ["cs"], []),
+    ("Nejaky film (1964)(CZ)[TvRip].mp4", ["cs"], []),
+    ("Film.2022.CZ.SK.EN.WebRip.1080p.HEVC.C4U.mkv", ["cs", "sk", "en"], []),
+    ("Film.2002.DVDRip.XviD.AC3-2.0.CZ.avi", ["cs"], []),
+    ("Nejaky film-2003CZ.mp4", ["cs"], []),
+    ("Film.1080p.BDRip.x264.CZ.dabing.mkv", ["cs"], []),
+    ("Film.2019.DVDRip.eng.avi", ["en"], []),
+    ("Serial.S01E02.HDTV.sk.mp4", ["sk"], []),
 ]
 for nazev, zvuk, titulky in NAJDE:
     v = languages.z_nazvu(nazev)
@@ -86,6 +99,11 @@ NENAJDE = [
     "Sk8er.Boi.2002.mkv",
     "Frozen.2013.1080p.DUAL.mkv",            # "DUAL" neříká které jazyky
     "Denis.Villeneuve.dokument.2020.mkv",
+    # Skupina vydavatele na konci nazvu. "C4U" se nesmi rozpadnout na
+    # "C" + "4U" ani chytit jako znacka.
+    "Film.2019.1080p.x264.C4U.mkv",
+    # Male "cz" PRED rokem je soucast nazvu, ne znacka.
+    "cz.film.o.nicem.2019.1080p.mkv",
 ]
 for nazev in NENAJDE:
     v = languages.z_nazvu(nazev)
@@ -118,7 +136,7 @@ def jazyky_stop(item_id: str) -> list[tuple]:
 # Případ ze screenshotu: tři stopy bez jazyka, název slibuje tři jazyky.
 polozka("f1", "/data/Duna.2021.CZ.SK.EN.1080p.mkv")
 stopy("f1", "und", "und", "und")
-check(scanner.doplnit_jazyky_z_nazvu(["f1"]) == 3, "tři stopy dostaly jazyk")
+check(scanner.doplnit_jazyky_z_nazvu(["f1"]) == 1, "položce se z názvu pomohlo")
 check(jazyky_stop("f1") == [("cs", "nazev"), ("sk", "nazev"), ("en", "nazev")],
       f"po řadě a označené jako odhad ({jazyky_stop('f1')})")
 souhrn = db.query_one("SELECT audio_languages FROM items WHERE id = 'f1'")
@@ -126,21 +144,39 @@ check(souhrn["audio_languages"] == "cs,en,sk",
       f"souhrn pro statistiky sedí ({souhrn['audio_languages']})")
 
 print()
-print("--- počty nesedí: radši nic ---")
-# Čtyři stopy, tři značky. Která značka nepatří zvuku, se hádat nedá.
-polozka("f2", "/data/Film.2020.CZ.SK.EN.1080p.mkv")
-stopy("f2", "und", "und", "und", "und")
-check(scanner.doplnit_jazyky_z_nazvu(["f2"]) == 0, "nedoplní se nic")
-check(jazyky_stop("f2") == [("und", None)] * 4, "stopy zůstaly beze změny")
+print("--- název jmenuje míň jazyků než kolik je stop ---")
+# Nejčastější případ ze skutečných knihoven: v souboru je dabing
+# i původní zvuk, ale v názvu je jen "CZ". Která z těch dvou stop je
+# česká, se hádat nedá - ale že v souboru čeština JE, víme jistě.
+polozka("f2", "/data/Film (2004) HD cz.avi")
+stopy("f2", "und", "und")
+check(scanner.doplnit_jazyky_z_nazvu(["f2"]) > 0, "něco se z názvu vytěžilo")
+check(jazyky_stop("f2") == [("und", None), ("und", None)],
+      f"ke stopám se nic nepřiřadilo ({jazyky_stop('f2')})")
+souhrn = db.query_one("SELECT audio_languages, audio_from_name FROM items WHERE id = 'f2'")
+check(souhrn["audio_from_name"] == "cs", f"ale čeština je zapsaná ({souhrn['audio_from_name']})")
+check(souhrn["audio_languages"] == "cs,und",
+      f"a statistika ji uvidí vedle neznámé stopy ({souhrn['audio_languages']})")
 
 print()
-print("--- známá stopa nesouhlasí s názvem: taky nic ---")
-# První stopa je prokazatelně anglická, ale název na prvním místě slibuje
-# češtinu. Pořadí v názvu tedy neodpovídá pořadí stop.
+print("--- co už víme, se z názvu odečte ---")
+# Stopy [angličtina, neznámá] a název "CZ.EN": angličtinu známe, takže
+# název přidává jedinou novinku - a je jediná neznámá stopa, kam patří.
 polozka("f3", "/data/Film.2020.CZ.EN.1080p.mkv")
 stopy("f3", "en", "und")
-check(scanner.doplnit_jazyky_z_nazvu(["f3"]) == 0, "pořadí nesedí, nedoplní se nic")
-check(jazyky_stop("f3") == [("en", None), ("und", None)], "druhá stopa zůstala neznámá")
+check(scanner.doplnit_jazyky_z_nazvu(["f3"]) == 1, "doplní se jedna stopa")
+check(jazyky_stop("f3") == [("en", None), ("und", None)][:1] + [("cs", "nazev")],
+      f"neznámá stopa dostala češtinu ({jazyky_stop('f3')})")
+
+print()
+print("--- čtyři stopy, tři značky: ke stopám nic ---")
+polozka("f7", "/data/Film.2020.CZ.SK.EN.1080p.mkv")
+stopy("f7", "und", "und", "und", "und")
+scanner.doplnit_jazyky_z_nazvu(["f7"])
+check(jazyky_stop("f7") == [("und", None)] * 4, "stopy zůstaly beze změny")
+souhrn = db.query_one("SELECT audio_languages FROM items WHERE id = 'f7'")
+check(souhrn["audio_languages"] == "cs,en,sk,und",
+      f"ale všechny tři jazyky statistika zná ({souhrn['audio_languages']})")
 
 print()
 print("--- známá stopa souhlasí: zbytek se doplní ---")
@@ -157,7 +193,7 @@ scanner.save_streams("f5", [
     {"stream_index": 1, "type": "Audio", "language": "und", "codec": "ac3"},
     {"stream_index": 2, "type": "Subtitle", "language": "und", "codec": "subrip"},
 ])
-check(scanner.doplnit_jazyky_z_nazvu(["f5"]) == 2, "obojí dostane své")
+check(scanner.doplnit_jazyky_z_nazvu(["f5"]) == 1, "obojí dostane své")
 check(jazyky_stop("f5") == [("en", "nazev"), ("cs", "nazev")],
       f"zvuk anglicky, titulky česky ({jazyky_stop('f5')})")
 
@@ -187,8 +223,14 @@ check(stranka.count("Jazyk nezná soubor ani Jellyfin") == 3,
       f"u všech tří stop ({stranka.count('Jazyk nezná soubor ani Jellyfin')})")
 
 # Položka, u které se nedoplnilo nic, zůstává bez poznámky.
-check("odhad z názvu" not in client.get("/item/f2").text,
-      "kde se nic neodhadovalo, poznámka není")
+stranka7 = client.get("/item/f7").text
+check("odhad z názvu" not in stranka7,
+      "kde se ke stopám nic nepřiřadilo, poznámka u stop není")
+# Zato v hlavičce karty musí být vidět, co název slíbil - jinak by
+# statistika znala jazyk, který na stránce nikde není.
+check("podle názvu souboru" in stranka7, "ale karta říká, co slíbil název")
+check("Čeština" in stranka7 and "Slovenština" in stranka7,
+      "a vyjmenuje je")
 
 # A stopa přečtená z souboru poznámku nemá ani na položce, kde se jinde
 # odhadovalo - jinak by značka ztratila smysl.

@@ -6,6 +6,37 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.2.11
+
+### Fixed
+
+- **The language from the file name almost never landed.** Reading the name
+  worked; what came after it did not. A track only got a language when the
+  name listed **exactly as many** languages as the file has audio tracks —
+  and real names hardly ever do. The common file has a Czech dub and the
+  original next to it while the name says only `CZ`: one tag, two unknown
+  tracks, so nothing was filled in at all.
+
+  Two things changed. What the file already knows is now subtracted from
+  what the name promises: tracks `[English, unknown]` with a name saying
+  `CZ.EN` leave one new language for one unknown track, so it is clear
+  what goes where. And when even that does not resolve it — one tag, two
+  unknown tracks — the languages are written to the **item** instead of to
+  a track. The statistics read the item, so they stop saying "unknown",
+  while the tracks keep saying it, because which of them is Czech is
+  genuinely not known. The card says where it came from: *from the file
+  name: Czech*.
+
+- **Three shapes of name that were read wrong.** Lowercase `cz` after the
+  year (`Film (2004) HD cz.avi`) — capitals are still required before it,
+  where a title lives. A tag glued to the year (`Film-2003CZ.mp4`), which
+  hid the boundary between title and tags, so nothing after it counted.
+  And names whose only marker is the source (`DVDRip`, `TvRip`, `XviD`,
+  `HD`), which now end the title the same way a year does.
+
+  `C4U` at the end of a release name is still not a language, and lowercase
+  `cz` **before** the year is still part of the title.
+
 ## 1.2.10
 
 ### Added

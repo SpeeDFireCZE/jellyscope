@@ -560,6 +560,10 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         "audio_languages": "TEXT",
         "subtitle_languages": "TEXT",
         "default_audio_language": "TEXT",
+        # Co slibuje nazev souboru, ale nejde priradit ke konkretni stope.
+        # Pricita se do souhrnu jazyku - viz scanner._prepocitej_jazyky_polozky.
+        "audio_from_name": "TEXT",
+        "subtitle_from_name": "TEXT",
         # Identifikátor z TMDB. Přežije překódování souboru, na rozdíl
         # od ItemId z Jellyfinu - viz scanner._merge_by_tmdb().
         "tmdb_id": "TEXT",

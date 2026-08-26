@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS items (
     audio_languages     TEXT,
     subtitle_languages  TEXT,
     default_audio_language TEXT,
+    audio_from_name     TEXT,
+    subtitle_from_name  TEXT,
 
     synced_at           TEXT,
     is_missing          INTEGER NOT NULL DEFAULT 0

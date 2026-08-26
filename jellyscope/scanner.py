@@ -1285,6 +1285,10 @@ def save_streams(item_id: str, streams: list[dict[str, Any]]) -> None:
 
     with db.connect() as conn:
         conn.execute("DELETE FROM item_streams WHERE item_id = ?", (item_id,))
+        # Cerstve zmereny soubor prebiji odhad z nazvu: kdyby zustal,
+        # pricital by se do souhrnu i potom, co uz je jazyk znamy.
+        conn.execute("UPDATE items SET audio_from_name = NULL, "
+                     "subtitle_from_name = NULL WHERE id = ?", (item_id,))
         # ON CONFLICT ... DO UPDATE misto SQLite konstrukce INSERT OR REPLACE -
         # rozumi mu SQLite i PostgreSQL. Navic je z nej videt, co presne se
         # pri konfliktu stane, coz u "REPLACE" nikdy nebylo jasne.
@@ -1667,7 +1671,7 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
         doplnek = (_t(", jazyk doplněn z Jellyfinu u {n} stop").format(n=doplneno)
                    if doplneno else "")
         if z_nazvu:
-            doplnek += _t(", odhadnut z názvu u {n} stop").format(n=z_nazvu)
+            doplnek += _t(", odhadnut z názvu u {n} titulů").format(n=z_nazvu)
 
         if results["skipped"]:
             finish_task_log(
@@ -1790,69 +1794,110 @@ def doplnit_jazyky_z_nazvu(item_ids: list[str]) -> int:
     je která. Rozdělujeme je proto po řadě a označíme jako odhad z názvu -
     množina jazyků (a tím i statistiky) sedí, pořadí je odhad.
 
-    Vrací počet stop, kterým se jazyk doplnil.
+    Vrací počet **položek**, kterým název pomohl - ne stop. U jedné
+    položky se totiž jazyk může dostat ke stopám, u druhé jen do souhrnu,
+    a "tři stopy a dva souhrny" by se sčítat nedalo.
     """
     doplneno = 0
     for item_id in item_ids:
         radek = db.query_one("SELECT id, path FROM items WHERE id = ?", (item_id,))
         if radek is None or not radek["path"]:
             continue
-        doplneno += _doplnit_z_nazvu_polozky(radek["id"], radek["path"])
+        if _doplnit_z_nazvu_polozky(radek["id"], radek["path"]):
+            doplneno += 1
     if doplneno:
-        log.info("jazyk odhadnut z nazvu souboru u %s stop", doplneno)
+        log.info("jazyk odhadnut z nazvu souboru u %s polozek", doplneno)
     return doplneno
 
 
-def _doplnit_z_nazvu_polozky(item_id: str, cesta: str) -> int:
+def _doplnit_z_nazvu_polozky(item_id: str, cesta: str) -> bool:
     nalezene = languages.z_nazvu(cesta)
     if not nalezene["zvuk"] and not nalezene["titulky"]:
-        return 0
+        return False
 
     stopy = db.query_all(
         "SELECT stream_index, type, language FROM item_streams "
         "WHERE item_id = ? ORDER BY stream_index", (item_id,))
 
     zmeny: list[tuple[str, str, int]] = []
-    for druh, klic in (("Audio", "zvuk"), ("Subtitle", "titulky")):
-        zmeny.extend(_rozdelit_podle_nazvu(
-            item_id, [s for s in stopy if s["type"] == druh], nalezene[klic]))
+    do_souhrnu: dict[str, str] = {}
+    for druh, klic, sloupec in (("Audio", "zvuk", "audio_from_name"),
+                                ("Subtitle", "titulky", "subtitle_from_name")):
+        prirazeni, hotovo = _rozdelit_podle_nazvu(
+            item_id, [s for s in stopy if s["type"] == druh], nalezene[klic])
+        zmeny.extend(prirazeni)
+        if not hotovo and nalezene[klic]:
+            # Ke stopám to přiřadit nejde, ale že ten jazyk v souboru je,
+            # víme. Do souhrnu položky s tím - odtud čte statistika, a ta
+            # se ptá "které jazyky tam jsou", ne "která stopa je která".
+            do_souhrnu[sloupec] = languages.pack(nalezene[klic])
 
-    if not zmeny:
-        return 0
+    if not zmeny and not do_souhrnu:
+        return False
 
     with db.connect() as conn:
-        conn.executemany(
-            "UPDATE item_streams SET language = ?, language_source = 'nazev' "
-            "WHERE item_id = ? AND stream_index = ?",
-            zmeny)
+        if zmeny:
+            conn.executemany(
+                "UPDATE item_streams SET language = ?, language_source = 'nazev' "
+                "WHERE item_id = ? AND stream_index = ?",
+                zmeny)
+        for sloupec, hodnota in do_souhrnu.items():
+            conn.execute(f"UPDATE items SET {sloupec} = ? WHERE id = ?",
+                         (hodnota, item_id))
     _prepocitej_jazyky_polozky(item_id)
-    return len(zmeny)
+    return True
 
 
 def _rozdelit_podle_nazvu(item_id: str, stopy: list[dict[str, Any]],
-                          z_nazvu: list[str]) -> list[tuple[str, str, int]]:
+                          z_nazvu: list[str]) -> tuple[list[tuple[str, str, int]], bool]:
     """Které stopě přiřadit který jazyk z názvu - nebo raději žádné.
 
-    Podmínky jsou schválně přísné, protože je to odhad:
+    Vrací dvojici (změny, přiřazeno_všechno).
 
-    * **Počty musí sedět.** Tři značky v názvu a čtyři stopy znamená, že
-      jedna značka nepatří zvuku (bývá to jazyk titulků) - a hádat, která,
-      by bylo losování.
-    * **Co už víme, musí souhlasit.** Když je jedna stopa známá jako
-      angličtina, ale název na jejím místě slibuje češtinu, je pořadí
-      v názvu jiné než v souboru. Pak nedoplňujeme nic: kdyby se to
-      dosadilo, sedělo by to jen náhodou.
+    Přiřazujeme jen tehdy, když **zbývá tolik neznámých stop, kolik
+    jazyků název přidává navíc**. Typický soubor má český dabing
+    a původní zvuk, ale v názvu je jen "CZ" - jedna značka na dvě
+    neznámé stopy. Která z nich je česká, se hádat nedá.
+
+    Dvě podoby té samé úvahy stojí za rozlišení:
+
+    * Název jmenuje víc jazyků, než kolik je stop **v celém pořadí** -
+      pak sedí i pozice a doplní se všechny (viz níže).
+    * Jazyky, které v souboru **už známe**, se z názvu odečtou: u stop
+      [angličtina, neznámá] a názvu "CZ.EN" zbývá jediný nový jazyk na
+      jedinou neznámou stopu, takže je jasné, co kam patří.
+
+    Když ani to nevyjde, vrátíme prázdno a `False` - a volající pak jazyky
+    zapíše aspoň do souhrnu položky, kde nic o pořadí netvrdí.
     """
-    if not z_nazvu or len(stopy) != len(z_nazvu):
-        return []
+    if not z_nazvu or not stopy:
+        return [], False
 
-    zmeny = []
-    for stopa, jazyk in zip(stopy, z_nazvu):
-        if stopa["language"] == languages.UNKNOWN:
-            zmeny.append((jazyk, item_id, stopa["stream_index"]))
-        elif stopa["language"] != jazyk:
-            return []          # pořadí nesedí, radši nic
-    return zmeny
+    neznama = [s for s in stopy if s["language"] == languages.UNKNOWN]
+    if not neznama:
+        return [], True          # není co doplňovat, vše už jazyk má
+
+    # Nejdřív celé pořadí: název jmenuje přesně tolik jazyků, kolik je
+    # stop. Pak se dá věřit i pozicím - a co už víme, to musí souhlasit.
+    if len(stopy) == len(z_nazvu):
+        zmeny = []
+        for stopa, jazyk in zip(stopy, z_nazvu):
+            if stopa["language"] == languages.UNKNOWN:
+                zmeny.append((jazyk, item_id, stopa["stream_index"]))
+            elif stopa["language"] != jazyk:
+                zmeny = []       # pořadí nesedí
+                break
+        if zmeny:
+            return zmeny, True
+
+    # Jinak zkusíme jazyky, které v souboru zatím nejsou.
+    znama = {s["language"] for s in stopy if s["language"] != languages.UNKNOWN}
+    nove = [j for j in z_nazvu if j not in znama]
+    if len(nove) == len(neznama):
+        return [(jazyk, item_id, stopa["stream_index"])
+                for stopa, jazyk in zip(neznama, nove)], True
+
+    return [], False
 
 
 def _sparuj_stopy(nase: list[dict[str, Any]],
@@ -1889,6 +1934,16 @@ def _prepocitej_jazyky_polozky(item_id: str) -> None:
         "ORDER BY stream_index", (item_id,))
     zvuk = [s["language"] for s in stopy if s["type"] == "Audio"]
     titulky = [s["language"] for s in stopy if s["type"] == "Subtitle"]
+
+    # A k tomu jazyky, které slíbil název souboru a nešly přiřadit ke
+    # konkrétní stopě. Bez nich by je statistika neviděla - a přitom to
+    # je jediné, co o tom souboru víme.
+    polozka = db.query_one(
+        "SELECT audio_from_name, subtitle_from_name FROM items WHERE id = ?",
+        (item_id,))
+    if polozka:
+        zvuk += languages.unpack(polozka["audio_from_name"] or "")
+        titulky += languages.unpack(polozka["subtitle_from_name"] or "")
 
     with db.connect() as conn:
         conn.execute(

@@ -82,7 +82,13 @@ CREATE TABLE IF NOT EXISTS items (
     -- jazyky, sjednocene na dvoupismenne kody a ulozene jako "cs,en,de"
     audio_languages     TEXT,
     subtitle_languages  TEXT,
-    default_audio_language TEXT,            -- prvni zvukova stopa v souboru
+    default_audio_language TEXT,
+    -- Jazyky, ktere slibuje NAZEV SOUBORU, ale nejde je priradit ke
+    -- konkretni stope (nazev jich jmenuje min, nez kolik je stop bez
+    -- jazyka). Do souhrnu vyse se pricitaji, at je statistika zna;
+    -- u stop zustava "neuvedeno", protoze kterou z nich to je, nevime.
+    audio_from_name     TEXT,
+    subtitle_from_name  TEXT,            -- prvni zvukova stopa v souboru
 
     synced_at           TEXT,
     -- 1 = uz v Jellyfinu neni. Polozku nemazeme - historie prehravani
