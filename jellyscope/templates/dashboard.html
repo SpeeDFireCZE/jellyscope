@@ -10,7 +10,7 @@
 {# Nahoře, protože to je jediná část stránky, která se mění po vteřinách #}
 {# a kvůli které se sem člověk vrací během dne.                        #}
 {# ================================================================== #}
-<div id="now-playing" data-refresh="{{ poll_interval }}">
+<div id="now-playing" data-refresh="{{ poll_interval }}" data-partial="/partials/now-playing">
     {% include "_now_playing.html" %}
 </div>
 

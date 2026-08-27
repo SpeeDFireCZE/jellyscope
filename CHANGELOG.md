@@ -6,6 +6,49 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.3.2
+
+### Added
+
+- **The Network page shows what is flowing right now.** A card with the
+  current throughput, how many streams make it up and how many of those
+  are transcoding, with the recent curve beside it. It refreshes itself,
+  by the same mechanism the "now playing" card on the Overview uses —
+  which is now shared rather than written twice.
+
+  The curve follows the period chosen at the top of the page, never
+  shorter than a day: an hour-long window said "nothing is flowing" on an
+  evening when it had been flowing the whole time, just because the last
+  episode had ended a minute ago. One point covers a minute over a day and
+  an hour over a week; the card says which.
+
+  Paused playbacks stay out of it — of the number and of the curve. A
+  paused stream ends where it was last actually playing, so the time it
+  did play stays in the curve while the pause adds nothing. And a playback
+  that is running counts even when the collector last reported a while
+  ago; without that the curve would fall to zero while the number next to
+  it showed a full stream.
+
+- **The users in "who streamed the most" lead to their detail.** The same
+  people are clickable in the Overview league table, so on the Network
+  page it looked broken rather than deliberate.
+
+### Changed
+
+- **The long chart became "peak by day".** One point per day, the highest
+  concurrent throughput of that day. Over a month the old chart cut the
+  period into 120 slices, so one point stood for five hours and the peak
+  inside it — which looked random, because a single spike could be one
+  hour out of six. The question "how much flows at once" belongs to the
+  live card; the question "how busy was Tuesday" belongs here.
+
+- **Transcoding variants in the delivery bar have their own colours.**
+  Shading one colour was the previous attempt and it failed in practice:
+  the segments are a few pixels wide and three shades of one brown are
+  indistinguishable there. The first variant keeps the orange of its role,
+  so it still reads as transcoding; the rest take colours from the same
+  palette the language statistics use.
+
 ## 1.3.1
 
 ### Added

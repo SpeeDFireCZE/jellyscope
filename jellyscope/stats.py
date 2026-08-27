@@ -1127,15 +1127,23 @@ def play_method_breakdown(days: int) -> list[dict[str, Any]]:
             return "good"
         return "muted"
 
-    # Kolikaty segment te same role to je. Vic variant prepoctu pod sebou
-    # by jinak melo jednu barvu a nesly by rozeznat; takhle kazda dalsi
-    # ztmavne o kus, ale porad je poznat, ze patri k prepoctu.
+    # Vic variant prepoctu pod sebou by melo jednu barvu a nesly by
+    # rozeznat. Prvni si nechava oranzovou role - at je na prvni pohled
+    # videt, ze jde o prepocet -, dalsi berou barvy z palety serii, tedy
+    # z te same, jakou pouziva "kdo v jakem jazyce sleduje".
+    #
+    # Odstinovani jedne barvy tu bylo drive a nefungovalo: casti byvaji
+    # uzke par pixelu a tri odstiny hnede na takove plose splynou.
+    DALSI_BARVY = ("var(--series-5)", "var(--series-7)", "var(--series-4)",
+                   "var(--series-8)", "var(--series-2)", "var(--series-6)")
     poradi: dict[str, int] = {}
     for row in rows:
         row["label"] = labels.get(row["method"], row["method"])
         row["role"] = _role(row["method"])
         poradi[row["role"]] = poradi.get(row["role"], -1) + 1
-        row["odstin"] = poradi[row["role"]]
+        kolikaty = poradi[row["role"]]
+        if kolikaty:
+            row["barva"] = DALSI_BARVY[(kolikaty - 1) % len(DALSI_BARVY)]
         # Graf deleneho pruhu ocekava klic "value" - pripravime ho tady,
         # at sablona nemusi nic pocitat.
         row["value"] = row["hours"]
@@ -2181,6 +2189,169 @@ def bandwidth_prubeh(days: int, bodu: int = 120) -> list[dict[str, Any]]:
     return body
 
 
+def tok_ted() -> dict[str, Any]:
+    """Kolik tece ze serveru PRAVE TED - z bezicich prehravani.
+
+    Na rozdil od krivky niz se tady nic nedopocitava z historie: bere se
+    to, co sberac videl pri poslednim dotazu. Pozastavena prehravani se
+    nepocitaji, protoze pri pauze nic netece - ale pocitaji se zvlast,
+    aby bylo videt, ze tam jsou.
+    """
+    radky = db.query_all(
+        "SELECT bitrate, is_paused, play_method, user_name, item_name "
+        "FROM playback WHERE is_active = 1")
+
+    tekouci = [r for r in radky if not r["is_paused"] and (r["bitrate"] or 0) > 0]
+    return {
+        "mbit": round(sum(int(r["bitrate"]) for r in tekouci) / 1e6, 2),
+        "streamu": len(tekouci),
+        "pozastavenych": sum(1 for r in radky if r["is_paused"]),
+        "bez_toku": sum(1 for r in radky
+                        if not r["is_paused"] and not (r["bitrate"] or 0)),
+        "prepoctu": sum(1 for r in tekouci
+                        if str(r["play_method"] or "").lower().startswith("transcode")),
+    }
+
+
+# Nejkratsi okno zive krivky. Pod jeden den nema smysl klesat: hodinovy
+# vyrez rekne "prave nic netece" i vecer, kdy se hralo celou dobu, jen
+# zrovna dobehl posledni dil.
+NEJKRATSI_ZIVE_OKNO = 24 * 3600
+
+
+def bandwidth_zive(days: Any = None, bodu: int = 180) -> list[dict[str, Any]]:
+    """Tok v case pro zive okno - podle zvoleneho obdobi, nejmene 24 hodin.
+
+    Proc zvlast a ne jen jiny rozsah te krivky niz: ta bere prehravani
+    podle toho, kdy ZACALA, takze stream spusteny predevcirem by do okna
+    vubec nespadl, prestoze prave tece. Tady se hledaji prehravani, ktera
+    se s oknem **prekryvaji**.
+
+    `OR is_active = 1` v podmince neni pojistka navic. Bezici prehravani
+    tece i tehdy, kdyz se sberac naposledy ozval pred delsi dobou - treba
+    protoze Jellyfin chvili neodpovidal. Bez toho by krivka spadla na nulu,
+    zatimco cislo vedle ni by ukazovalo plny tok.
+    """
+    ted = datetime.now(timezone.utc).timestamp()
+
+    # Okno se ridi filtrem stranky. Cislo vedle krivky je porad "ted",
+    # ale krivka ukazuje to, co si clovek vybral nahore - jinak by filtr
+    # na te karte nedelal nic a pusobil rozbite.
+    okno = NEJKRATSI_ZIVE_OKNO
+    if days is not None:
+        od_text, do_text = _meze(days)
+        zacatek = _sekundy(od_text)
+        konec = min(_sekundy(do_text) or ted, ted)
+        if zacatek is not None:
+            okno = max(NEJKRATSI_ZIVE_OKNO, konec - zacatek)
+    od = ted - okno
+
+    radky = db.query_all(
+        """
+        SELECT started_at, ended_at, last_seen_at, watched_seconds, bitrate,
+               is_paused, is_active
+          FROM playback
+         WHERE bitrate IS NOT NULL AND bitrate > 0
+           AND watched_seconds > 0
+           AND (COALESCE(ended_at, last_seen_at) >= ? OR is_active = 1)
+         ORDER BY started_at
+        """,
+        (datetime.fromtimestamp(od, timezone.utc).strftime(db.TIME_FORMAT),),
+    )
+
+    udalosti: list[tuple[float, int]] = []
+    for radek in radky:
+        zacatek = _sekundy(radek["started_at"])
+        if zacatek is None:
+            continue
+        konec = _sekundy(radek["ended_at"] or radek["last_seen_at"]) or ted
+        # Pozastavene prave ted netece - konec dame tam, kde se naposledy
+        # hralo. U ostatnich plati tataz uvaha jako u dlouhe krivky:
+        # tok trva tak dlouho, jak dlouho se doopravdy sledovalo.
+        odsledovano = float(radek["watched_seconds"] or 0)
+        if odsledovano > 0:
+            konec = min(konec, zacatek + odsledovano)
+        if radek["is_active"] and not radek["is_paused"]:
+            # Bezici stream tece i ted, i kdyz se sberac ozval pred chvili.
+            konec = max(konec, ted)
+        if konec <= od:
+            continue
+        udalosti.append((max(zacatek, od), int(radek["bitrate"])))
+        udalosti.append((konec, -int(radek["bitrate"])))
+
+    krok = (ted - od) / max(1, bodu)
+    body: list[dict[str, Any]] = []
+    udalosti.sort()
+    soucet = 0
+    index = 0
+    for i in range(bodu):
+        hranice = od + (i + 1) * krok
+        vrchol = soucet
+        while index < len(udalosti) and udalosti[index][0] <= hranice:
+            soucet += udalosti[index][1]
+            vrchol = max(vrchol, soucet)
+            index += 1
+        stred = hranice - krok / 2
+        # U kratkeho okna staci hodina a minuta; jakmile krivka prekroci
+        # dva dny, musi byt videt i datum - jinak se streda a ctvrtek na
+        # ose nedaji rozlisit.
+        tvar = "%H:%M" if okno <= 48 * 3600 else "%d.%m. %H:%M"
+        body.append({
+            "cas": stred,
+            "mbit": round(max(0, vrchol) / 1e6, 2),
+            "popisek": datetime.fromtimestamp(stred, formatting.zona()).strftime(tvar),
+            "krok_minut": round(krok / 60) or 1,
+        })
+    return body
+
+
+def bandwidth_denni_spicky(days: int) -> list[dict[str, Any]]:
+    """Nejvyssi soubezny tok kazdeho dne.
+
+    Pres delsi obdobi nema smysl kreslit kazdou minutu - bodu by bylo
+    vic nez pixelu a krivka by vypadala jako sum. Jeden den = jedno
+    cislo, a to nejvyssi: podle spicky se dimenzuje linka, prumer by ji
+    zahladil.
+    """
+    radky = _sitove_radky(days)
+    if not radky:
+        return []
+
+    udalosti: list[tuple[float, int]] = []
+    for radek in radky:
+        zacatek = _sekundy(radek["started_at"])
+        konec = _sekundy(radek["ended_at"] or radek["last_seen_at"])
+        if zacatek is None:
+            continue
+        if konec is None or konec <= zacatek:
+            konec = zacatek + float(radek["watched_seconds"] or 0)
+        odsledovano = float(radek["watched_seconds"] or 0)
+        if odsledovano > 0:
+            konec = min(konec, zacatek + odsledovano)
+        udalosti.append((zacatek, int(radek["bitrate"])))
+        udalosti.append((konec, -int(radek["bitrate"])))
+
+    if not udalosti:
+        return []
+    udalosti.sort()
+
+    # Prochazime udalosti a u kazdeho dne si pamatujeme nejvyssi soucet.
+    # Den se urcuje v ZONE APLIKACE - jinak by spicka z pulnoci padla do
+    # jineho dne, nez ve kterem ji clovek zazil.
+    zona = formatting.zona()
+    spicky: dict[str, float] = {}
+    soucet = 0
+    for cas, zmena in udalosti:
+        soucet += zmena
+        den = datetime.fromtimestamp(cas, zona).strftime("%Y-%m-%d")
+        spicky[den] = max(spicky.get(den, 0), soucet)
+
+    return [{"den": den,
+             "popisek": datetime.strptime(den, "%Y-%m-%d").strftime("%d.%m."),
+             "mbit": round(hodnota / 1e6, 2)}
+            for den, hodnota in sorted(spicky.items())]
+
+
 def bandwidth_prehled(days: int) -> dict[str, Any]:
     """Spicka, objem dat a podil transcode. Cisla nad grafem."""
     radky = _sitove_radky(days)
@@ -2222,7 +2393,11 @@ def bandwidth_podle(days: int, sloupec: str, limit: int = 12) -> list[dict[str, 
         SELECT COALESCE({sloupec}, '?')                        AS label,
                SUM(watched_seconds * bitrate) / 8.0            AS bajtu,
                MAX(bitrate)                                    AS spicka,
-               COUNT(*)                                        AS plays
+               COUNT(*)                                        AS plays,
+               -- Id uzivatele kvuli prokliku na jeho detail. MIN, protoze
+               -- PostgreSQL nedovoli sloupec mimo GROUP BY - a v jedne
+               -- skupine je stejne pokazde tentyz clovek.
+               MIN(user_id)                                    AS user_id
           FROM playback
          WHERE started_at >= ? AND started_at < ?
            AND watched_seconds > 0
@@ -2238,7 +2413,11 @@ def bandwidth_podle(days: int, sloupec: str, limit: int = 12) -> list[dict[str, 
     return [{"label": r["label"], "bajtu": int(r["bajtu"] or 0),
              "gb": round(float(r["bajtu"] or 0) / 1e9, 1),
              "spicka_mbit": round(float(r["spicka"] or 0) / 1e6, 2),
-             "plays": int(r["plays"] or 0)} for r in rows]
+             "plays": int(r["plays"] or 0),
+             # Jen u lidi - proklik na "Chrome" nebo "Shield TV" nikam
+             # nevede, takovou stranku nemame.
+             "user_id": r["user_id"] if sloupec == "user_name" else None}
+            for r in rows]
 
 
 # Adresy, ktere nevedou ven ze site. Nejde o bezpecnost, jen o rozliseni

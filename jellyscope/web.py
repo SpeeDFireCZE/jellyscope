@@ -1170,6 +1170,29 @@ def recently_added_partial(
     ))
 
 
+@app.get("/partials/network-live", response_class=HTMLResponse)
+def network_live_partial(
+    request: Request, account: dict[str, Any] = Depends(require_login)
+):
+    """Jen karta "Právě teče" ze stránky Síť.
+
+    Stejný nápad jako u "právě se hraje": stránka Síť ukazovala stav
+    z okamžiku načtení, takže kdo ji nechal otevřenou, viděl minulost.
+    Obnovuje se jen tenhle výřez - kdyby se načítala celá stránka,
+    odrolovala by na začátek a zahodila rozečtenou tabulku adres.
+    """
+    # Obdobi se bere z relace - tam si ho ulozila stranka, kdyz ho clovek
+    # vybral. Vyrez si ho tedy nemusi predavat v adrese a zustane platny
+    # i po prepnuti filtru bez obnoveni stranky.
+    days = _days(request, None)
+    return templates.TemplateResponse(request, "_sit_zive.html", _context(
+        request, account,
+        days=days,
+        ted=stats.tok_ted(),
+        zive=stats.bandwidth_zive(days),
+    ))
+
+
 @app.get("/partials/now-playing", response_class=HTMLResponse)
 def now_playing_partial(
     request: Request, account: dict[str, Any] = Depends(require_login)
@@ -2888,7 +2911,11 @@ def network_page(request: Request, days: Optional[int] = None,
         request, account,
         days=days,
         prehled=stats.bandwidth_prehled(days),
-        prubeh=stats.bandwidth_prubeh(days),
+        # Zive: co tece prave ted a posledni hodina po minutach. Nezalezi
+        # na vybranem obdobi - "prave ted" je porad ted.
+        ted=stats.tok_ted(),
+        zive=stats.bandwidth_zive(days),
+        denni_spicky=stats.bandwidth_denni_spicky(days),
         podle_uzivatele=stats.bandwidth_podle(days, "user_name"),
         podle_klienta=stats.bandwidth_podle(days, "client"),
         odkud=stats.odkud_se_divaji(days),

@@ -288,19 +288,22 @@ ROLE_BARVY = {
 
 
 def _barva_segmentu(segment: dict[str, Any], index: int) -> str:
+    # Vlastni barva ma prednost pred rolí. Pouziva to rozpad prepoctu:
+    # prvni varianta si nechava barvu role (aby bylo poznat, ze jde
+    # o prepocet), dalsi dostavaji vlastni odstiny z palety serii.
+    #
+    # Drive se druha a dalsi varianta ztmavovala michanim s podkladem.
+    # Vypadalo to spravne v tabulce barev, ale v grafu ne: casti byvaji
+    # uzke par pixelu a tri odstiny tehoz hneda od sebe na takove plose
+    # nikdo nerozezna.
+    vlastni = str(segment.get("barva") or "").strip()
+    if vlastni:
+        return vlastni
+
     role = str(segment.get("role") or "").strip()
     if role not in ROLE_BARVY:
         return f"var(--series-{_slot_of(segment, index)})"
-
-    barva = ROLE_BARVY[role]
-    # Druha a dalsi cast te same role se ztmavuje. Vyznam nese barva,
-    # odstin uz jen rozlisuje varianty mezi sebou - proto se michá
-    # s podkladem, ne s jinym odstinem.
-    odstin = int(segment.get("odstin") or 0)
-    if odstin:
-        podil = max(35, 100 - odstin * 22)
-        return f"color-mix(in oklab, {barva} {podil}%, var(--surface-2))"
-    return barva
+    return ROLE_BARVY[role]
 
 
 def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:

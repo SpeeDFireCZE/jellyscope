@@ -480,6 +480,27 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .sparkline .chart-hit circle,
 .chart .chart-hit circle { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent) 70%, transparent)); }
 
+/* Ziva karta na Siti: cislo vlevo, minutova krivka vpravo.
+
+   Tady davaji dva sloupce smysl - na rozdil od hlavniho cisla na
+   Prehledu, ktere se vratilo nad krivku. Rozdil je v tom, co krivka
+   nese: mesic potrebuje sirku, aby byl videt tvar; posledni hodina je
+   kratky pohled a hlavni sdeleni je cislo vedle ni. */
+.zive-cislo {
+    display: grid;
+    grid-template-columns: minmax(180px, 240px) 1fr;
+    gap: 22px;
+    align-items: center;
+}
+
+.zive-cislo .hero { font-size: 40px; }
+.zive-cislo .hero small { font-size: 16px; font-weight: 500; color: var(--text-secondary); }
+.zive-graf { min-width: 0; }
+
+@media (max-width: 820px) {
+    .zive-cislo { grid-template-columns: 1fr; gap: 10px; }
+}
+
 /* Karta s hlavnim cislem: cislo nahore, krivka pres celou sirku pod nim.
 
    Zkusili jsme cislo vlevo a krivku vpravo - karta byla nizsi, ale

@@ -1,0 +1,38 @@
+{# Živý tok - obnovuje se sám, viz /partials/network-live.
+
+   Vlastní šablona ze stejného důvodu jako "právě se hraje": kreslí se
+   ze dvou míst (při načtení stránky a pak při každé obnově) a dvě kopie
+   by se časem rozešly. #}
+<div class="card zive-karta">
+    <div class="card-head">
+        <h2>{{ _("Právě teče") }}</h2>
+        {# Okno se ridi filtrem nahore, ne pevnou hodinou - a musi to byt
+           videt, jinak vypada karta jako by filtr ignorovala. #}
+        <p class="card-note">
+            {% if zive %}{{ _("jeden bod") }} {{ zive[0].krok_minut | usek }}{% endif %}
+        </p>
+    </div>
+
+    <div class="zive-cislo">
+        <div>
+            <div class="hero">{{ ted.mbit }}<small> Mbit/s</small></div>
+            <p class="card-note" style="margin-top:2px">
+                {% if ted.streamu %}
+                    {{ ted.streamu }} {{ _("streamů teče") }}
+                    {%- if ted.prepoctu %} &middot; {{ ted.prepoctu }} {{ _("z toho přepočet") }}{% endif %}
+                {% else %}
+                    {{ _("nikdo právě nesleduje") }}
+                {% endif %}
+                {%- if ted.pozastavenych %} &middot; {{ ted.pozastavenych }} {{ _("pozastaveno") }}{% endif %}
+                {%- if ted.bez_toku %} &middot; {{ ted.bez_toku }} {{ _("bez známého toku") }}{% endif %}
+            </p>
+        </div>
+        <div class="zive-graf">
+            {# Jedna série, tedy barva aplikace - žádná kategorie se tu
+               nerozlišuje. unit='' schválně: jednotku nese název série. #}
+            {{ charts.area_chart_multi(zive, 'popisek',
+                   [{'key': 'mbit', 'label': _('Mbit/s'), 'barva': 'var(--accent)'}],
+                   unit='') | safe }}
+        </div>
+    </div>
+</div>

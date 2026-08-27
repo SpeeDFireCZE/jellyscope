@@ -29,23 +29,25 @@
     {{ tile(_("Průměrný tok jednoho streamu"), prehled.prumer_mbit ~ " Mbit/s") }}
 </div>
 
+{# Živý tok. `data-refresh` a `data-partial` obsluhuje base.html -
+   stejný mechanismus, jakým se obnovuje "právě se hraje" na Přehledu. #}
+<div id="sit-zive" data-refresh="{{ poll_interval }}" data-partial="/partials/network-live">
+    {% include "_sit_zive.html" %}
+</div>
+
 <div class="card">
     <div class="card-head">
-        <h2>{{ _("Souběžný tok v čase") }}</h2>
-        {# Delka useku patri k popisku: bez ni vypada krivka nahodne.
-           Nemeri se v pevnem taktu - prochazeji se zacatky a konce
-           prehravani a z kazdeho useku se bere spicka. #}
-        <p class="card-note">
-            {{ _("nejvyšší hodnota v každém úseku") }}{% if prubeh %}
-            &middot; {{ _("jeden úsek") }} {{ prubeh[0].krok_minut | usek }}{% endif %}
-        </p>
+        <h2>{{ _("Špička po dnech") }}</h2>
+        {# Přes měsíc nemá smysl kreslit každou minutu - bodů by bylo víc
+           než pixelů. Jeden den = jedno číslo, a to nejvyšší: podle
+           špičky se dimenzuje linka, průměr by ji zahladil. #}
+        <p class="card-note">{{ _("nejvyšší souběžný tok každého dne") }}</p>
     </div>
-    {# Maximum, ne průměr: průměr by špičky zahladil, a právě podle špičky
-       se dimenzuje linka. #}
     {# unit='' schválně: jednotku už nese název série, jinak by v bublině
        stálo „Mbit/s: 12,4 h“ - hodiny u datového toku nedávají smysl. #}
-    {{ charts.area_chart_multi(prubeh, 'popisek',
-           [{'key': 'mbit', 'label': _('Mbit/s'), 'slot': 1}], unit='') | safe }}
+    {{ charts.area_chart_multi(denni_spicky, 'popisek',
+           [{'key': 'mbit', 'label': _('Mbit/s'), 'barva': 'var(--accent)'}],
+           unit='') | safe }}
 </div>
 
 <div class="grid-2">
@@ -53,7 +55,11 @@
         <div class="card-head">
             <h2>{{ _("Kdo nejvíc streamoval") }}</h2>
         </div>
-        {{ charts.hbar_chart(podle_uzivatele, 'label', 'gb', unit='GB') | safe }}
+        {# Popisek vede na detail uzivatele - stejne jako v zebricku na
+   Prehledu. Bez toho se z grafu nedalo nikam kliknout, prestoze
+   jsou to titiz lide. #}
+        {{ charts.hbar_chart(podle_uzivatele, 'label', 'gb', unit='GB',
+               link_prefix='/users/', link_key='user_id') | safe }}
     </div>
     <div class="card">
         <div class="card-head">

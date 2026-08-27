@@ -645,9 +645,14 @@
     // celá, odrolovalo by to na začátek a zahodilo rozečtenou tabulku.
     // ------------------------------------------------------------------
     (function () {
-        var box = document.getElementById("now-playing");
+        // Kterykoliv prvek s `data-refresh` a `data-partial` se obnovuje
+        // sam. Drive to bylo napsane napevno pro "prave se hraje"; kdyz
+        // pribyl zivy tok na Siti, byla by z toho druha kopie tehoz -
+        // a ta se casem rozejde s prvni.
+        var box = document.querySelector("[data-refresh][data-partial]");
         if (!box || !window.fetch) { return; }
 
+        var vyrez = box.dataset.partial;
         var sekund = parseInt(box.dataset.refresh, 10) || 10;
         var bezi = false;
 
@@ -656,7 +661,7 @@
             // server i baterku telefonu; po návratu se stav dotáhne hned.
             if (bezi || document.hidden) { return; }
             bezi = true;
-            fetch("/partials/now-playing", {
+            fetch(vyrez, {
                 headers: { "X-Requested-With": "fetch" },
                 credentials: "same-origin"
             })
