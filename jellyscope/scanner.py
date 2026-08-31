@@ -1025,8 +1025,9 @@ def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
       1. stopy stare polozky smazeme - k novemu souboru stejne nepatri
          a cizi klic by nam nedovolil zmenit id, dokud existuji,
       2. historii prehravani prepiseme na nove id,
-      3. teprve pak zmenime id polozky - technicka data, datum pridani
-         a vsechno ostatni tim zustane zachovane.
+      3. teprve pak zmenime id polozky,
+      4. a technicka data smazeme - popisuji stary soubor, ktery uz
+         neexistuje. Datum pridani a zbytek zustavaji.
 
     Vraci pocet slouceni.
     """
@@ -1058,6 +1059,30 @@ def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
                 conn.execute(
                     "UPDATE items SET id = ?, is_missing = 0 WHERE id = ?",
                     (new_id, old_id),
+                )
+                # A technicka data pryc. Prejmenovanim polozky by jinak
+                # zustala viset na novem souboru - jenze popisuji ten
+                # STARY, ktery uz na disku neni. Slucujeme prave proto,
+                # ze se soubor vymenil.
+                #
+                # Nejhorsi na tom bylo `tech_source`: analyza souboru
+                # bere jen polozky, ktere zadna data nemaji, takze tuhle
+                # navzdy preskakovala. Na detailu pak svitilo rozliseni
+                # puvodniho souboru (nebo prazdno) a pomohlo jen rucni
+                # "Nacist metadata znovu".
+                conn.execute(
+                    """
+                    UPDATE items
+                       SET container = NULL, video_codec = NULL, audio_codec = NULL,
+                           audio_channels = NULL, width = NULL, height = NULL,
+                           bitrate = NULL, size_bytes = NULL, video_range = NULL,
+                           audio_languages = NULL, subtitle_languages = NULL,
+                           default_audio_language = NULL,
+                           audio_from_name = NULL, subtitle_from_name = NULL,
+                           tech_source = NULL, tech_updated_at = NULL, tech_error = NULL
+                     WHERE id = ?
+                    """,
+                    (new_id,),
                 )
 
             log.info("slouceno: %s -> %s", old_id, new_id)

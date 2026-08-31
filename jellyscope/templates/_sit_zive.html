@@ -30,9 +30,13 @@
         <div class="zive-graf">
             {# Jedna série, tedy barva aplikace - žádná kategorie se tu
                nerozlišuje. unit='' schválně: jednotku nese název série. #}
+            {# `schody=True`: tok se nemeni plynule. Dokud nikdo nezacne
+               ani neskonci, je porad stejny - a v okamziku, kdy stream
+               nabehne, skoci. Hlazena krivka mezi body dokreslovala
+               nabeh, ktery nikdy nenastal. #}
             {{ charts.area_chart_multi(zive, 'popisek',
                    [{'key': 'mbit', 'label': _('Mbit/s'), 'barva': 'var(--accent)'}],
-                   unit='') | safe }}
+                   unit='', schody=True) | safe }}
         </div>
     </div>
 </div>

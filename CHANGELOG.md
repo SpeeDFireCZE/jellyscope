@@ -6,6 +6,49 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.3.3
+
+### Changed
+
+- **The live network curve draws what happened, not a smooth version of
+  it.** Two things made it lie. One point stood for 56 minutes over a
+  week, and since each point keeps the peak of its slice, a ten-minute
+  stream was drawn as an hour of traffic. And the line was drawn as a
+  smooth curve, which invented a gradual rise where a stream had simply
+  started.
+
+  A point is five minutes now (a thousand and a half of them at most), and
+  the line is drawn as **steps**: it holds its value and jumps when
+  something starts or ends — which is what concurrent throughput actually
+  does. Quiet time reads as a flat zero rather than a slow descent to it.
+
+  Measured on a ten-minute stream in a week-long window: sixteen minutes
+  of chart instead of fifty-six.
+
+- Hover targets in charts are capped at two hundred. At a point every five
+  minutes there would be one and a half thousand of them, each carrying
+  its own tooltip — nearly a megabyte of HTML for one card, and a mouse
+  cannot hit a target narrower than a few pixels anyway.
+
+### Fixed
+
+- **A replaced file kept the technical data of the old one.** Swap a file
+  in Jellyfin and it becomes a new item with a new id; Jellyscope
+  recognises the title, merges the two and keeps the history — that part
+  worked. But it merged by *renaming* the old row to the new id, so the
+  codec, resolution, size and languages of the file that no longer exists
+  came along with it.
+
+  The damage was done by one of those columns: `tech_source`. The file
+  analysis only takes items that have no technical data yet, so this one
+  was skipped — during the quick sync, during the nightly run, forever.
+  On the detail page it showed the old file's numbers, or nothing at all,
+  and only *Reload the metadata* by hand fixed it.
+
+  Merging now clears the technical data, because it describes a file that
+  is gone. The quick sync measures the item in the same run, which is what
+  it had been trying to do all along.
+
 ## 1.3.2
 
 ### Added

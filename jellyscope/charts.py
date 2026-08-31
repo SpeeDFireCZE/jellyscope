@@ -64,6 +64,28 @@ def _prechod(slot: int, jmeno: str, sila: float = 0.34,
     )
 
 
+def _cesta_schody(body: Sequence[tuple[float, float]]) -> str:
+    """Schodovita cara - drzi hodnotu, pak skoci na dalsi.
+
+    Pro veliciny, ktere se **nemeni plynule**. Soubezny tok ze serveru je
+    presne takovy: dokud nikdo nezacne ani neskonci, je porad stejny, a v
+    okamziku, kdy stream nabehne, skoci. Hlazena krivka by mezi dvema
+    body dokreslila naberh, ktery nikdy nenastal - a hlavne by z desiti
+    minut prehravani udelala mekky kopec pres pul hodiny.
+
+    Rozdil proti _cesta(): tam je krivka tvar (kolik hodin se kdy divalo),
+    tady je to zaznam stavu.
+    """
+    if not body:
+        return ""
+    kusy = [f"M{body[0][0]:.1f},{body[0][1]:.1f}"]
+    for (x1, y1), (x2, y2) in zip(body, body[1:]):
+        kusy.append(f"H{x2:.1f}")
+        if abs(y2 - y1) > 0.01:
+            kusy.append(f"V{y2:.1f}")
+    return " ".join(kusy)
+
+
 def _cesta(body: Sequence[tuple[float, float]]) -> str:
     """Plynula cara pres zadane body - jako `d` pro <path>.
 
@@ -540,12 +562,19 @@ def _nice_ticks(maximum: float, count: int = 4) -> list[float]:
     return ticks or [0.0, 1.0]
 
 
+# Kolik nejvys plosek pro najeti mysi jeden graf dostane. Nad tim uz je
+# kazda uzsi nez prst a HTML roste o stovky kilobajtu - viz komentar
+# u jejich generovani.
+NEJVIC_PLOSEK = 200
+
+
 def area_chart_multi(
     points: Sequence[dict[str, Any]],
     x_key: str,
     series: Sequence[dict[str, Any]],
     unit: str = "h",
     height: int = 240,
+    schody: bool = False,
 ) -> str:
     """Vic serii v jednom case, prekryte pres sebe.
 
@@ -642,8 +671,8 @@ def area_chart_multi(
         values = [float(point.get(entry["key"]) or 0) for point in points]
         coordinates = [(px(i), py(v)) for i, v in enumerate(values)]
         # Cara i plocha jdou po tomtez tvaru - jinak by vypln vykukovala
-        # zpod cary. Viz _cesta().
-        line = _cesta(coordinates)
+        # zpod cary. Viz _cesta() a _cesta_schody().
+        line = _cesta_schody(coordinates) if schody else _cesta(coordinates)
         area = (
             f"M{coordinates[0][0]:.1f},{baseline:.1f} L"
             + line[1:]
@@ -669,10 +698,18 @@ def area_chart_multi(
             f'class="axis-label">{_e(label)}</text>'
         )
 
-    # Jedna ploska na den nese hodnoty vsech serii najednou - clovek se
-    # pta "co bylo tenhle den", ne "co byly tenhle den filmy".
-    hit_width = plot_width / max(1, len(points) - 1) if len(points) > 1 else plot_width
-    for index, point in enumerate(points):
+    # Jedna ploska nese hodnoty vsech serii najednou - clovek se pta
+    # "co bylo tenhle den", ne "co byly tenhle den filmy".
+    #
+    # Plosek je nejvys NEJVIC_PLOSEK, i kdyz bodu je tisic. Kazda z nich
+    # je vlastni <g> s bublinou v atributu, takze u jemne krivky (zivy tok
+    # ma bod na pet minut) by z toho bylo skoro megabajt HTML - a mys
+    # stejne neni schopna trefit ploshu uzsi nez par pixelu.
+    krok_plosek = max(1, len(points) // NEJVIC_PLOSEK + (1 if len(points) % NEJVIC_PLOSEK else 0))
+    hit_width = (plot_width / max(1, len(points) - 1) * krok_plosek
+                 if len(points) > 1 else plot_width)
+    for index in range(0, len(points), krok_plosek):
+        point = points[index]
         x = px(index)
         # Nadpis je den, pod nim kazda serie na svem radku a ve sve barve -
         # v prekryvu dvou car je to jediny zpusob, jak poznat, ktere cislo

@@ -2219,7 +2219,17 @@ def tok_ted() -> dict[str, Any]:
 NEJKRATSI_ZIVE_OKNO = 24 * 3600
 
 
-def bandwidth_zive(days: Any = None, bodu: int = 180) -> list[dict[str, Any]]:
+# Jak dlouhy usek zastupuje jeden bod zive krivky a kolik bodu nejvic.
+#
+# 180 bodu pres tyden znamenalo jeden bod na 56 minut - a protoze se
+# z useku bere spicka, desetiminutovy stream se v grafu roztahl na
+# hodinu. Peti minutam uz odpovida tvar krivky tomu, co se doopravdy
+# delo; strop je kvuli velikosti obrazku.
+USEK_ZIVE_SEKUND = 300
+NEJVIC_BODU_ZIVE = 1500
+
+
+def bandwidth_zive(days: Any = None, bodu: int | None = None) -> list[dict[str, Any]]:
     """Tok v case pro zive okno - podle zvoleneho obdobi, nejmene 24 hodin.
 
     Proc zvlast a ne jen jiny rozsah te krivky niz: ta bere prehravani
@@ -2245,6 +2255,10 @@ def bandwidth_zive(days: Any = None, bodu: int = 180) -> list[dict[str, Any]]:
         if zacatek is not None:
             okno = max(NEJKRATSI_ZIVE_OKNO, konec - zacatek)
     od = ted - okno
+
+    # Rozliseni podle delky okna, ne pevny pocet bodu.
+    if bodu is None:
+        bodu = int(min(NEJVIC_BODU_ZIVE, max(60, okno // USEK_ZIVE_SEKUND)))
 
     radky = db.query_all(
         """
