@@ -33,7 +33,11 @@
     <div>
         <h2>{{ _("Statistiky") }}</h2>
         <p class="card-note">
-            {{ _("Co se na serveru dělo za posledních") }} {{ _(day_labels[days]) }}.
+            {# U vlastního období `days` nic neříká - bez téhle větve tu
+               zbyla věta "Co se na serveru dělo za posledních ." #}
+            {% if obdobi.vlastni %}{{ _("Co se na serveru dělo ve vybraném období.") }}
+            {% else %}{{ _("Co se na serveru dělo za posledních") }} {{ _(day_labels[days]) }}.
+            {% endif %}
         </p>
     </div>
     {{ period_filter(obdobi, '/') }}
@@ -48,7 +52,7 @@
     {# U vlastního období nemá `day_labels` co říct - vypíšeme rozmezí. #}
     <p class="tile-label">
         {{ _("Celkem odsledováno za") }}
-        {% if obdobi.vlastni %}{{ obdobi.od_text }} – {{ obdobi.do_text }}
+        {% if obdobi.vlastni %}{{ obdobi.od_popis }} – {{ obdobi.do_popis }}
         {% else %}{{ _(day_labels[obdobi.days]) }}{% endif %}
     </p>
     <div class="hero">{{ (overview.watched_seconds / 3600) | hours }}</div>

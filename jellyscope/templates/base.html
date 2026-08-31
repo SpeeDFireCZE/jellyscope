@@ -644,6 +644,142 @@
     // Obnovuje se jen tenhle jeden kus, ne celá stránka. Kdyby se načítala
     // celá, odrolovalo by to na začátek a zahodilo rozečtenou tabulku.
     // ------------------------------------------------------------------
+    // Výběr rozsahu tažením v grafu
+    //
+    // Označení úseku nastaví stránce vlastní období - stejné, jako kdyby
+    // ho člověk vyklikal v přepínači nahoře. Ve špičce je vidět, že něco
+    // teklo; otázka, která přijde vzápětí, je "co to bylo" - a na tu
+    // odpovídají tabulky pod grafem, jakmile se zúží na ten úsek.
+    //
+    // Meze se posílají jako okamžiky (`od_ts`/`do_ts`), ne jako text.
+    // Prohlížeč nezná zónu aplikace - zná svou. Převod proto dělá server,
+    // viz stats.obdobi_z_okamziku().
+    // ------------------------------------------------------------------
+    (function () {
+        var MIN_TAH = 6;   // pod tímhle je to klik, ne tažení
+
+        var graf = null, rect = null, zacatek = 0, konec = 0;
+
+        // Z pixelu myši na souřadnici uvnitř viewBoxu. SVG se roztahuje
+        // podle šířky stránky, takže poměr se musí počítat z aktuálního
+        // rámečku, ne z čísel ve viewBoxu.
+        //
+        // `null` znamená "tenhle graf se měřit nedá". Stává se to: karta
+        // se sama obnovuje a stisk může trefit graf v okamžiku, kdy ho
+        // výměna zrovna odpojila z dokumentu. Odpojený prvek hlásí nulové
+        // rozměry - a z nich by vyšel výběr od kraje grafu, tedy úsek,
+        // na který nikdo neukazoval.
+        function xVeGrafu(svg, klientX) {
+            if (!svg.isConnected) { return null; }
+            var ramecek = svg.getBoundingClientRect();
+            if (!ramecek.width) { return null; }
+            var sirkaViewBox = (svg.viewBox && svg.viewBox.baseVal.width) || ramecek.width;
+            return (klientX - ramecek.left) / ramecek.width * sirkaViewBox;
+        }
+
+        function omez(hodnota, od, doKam) {
+            return Math.min(Math.max(hodnota, od), doKam);
+        }
+
+        // Kde na ose leží zadaný bod - 0 na levém kraji, 1 na pravém.
+        function podil(svg, x) {
+            var xOd = parseFloat(svg.dataset.xOd), xDo = parseFloat(svg.dataset.xDo);
+            return (omez(x, xOd, xDo) - xOd) / Math.max(1, xDo - xOd);
+        }
+
+        function cas(svg, x) {
+            var casOd = parseFloat(svg.dataset.casOd), casDo = parseFloat(svg.dataset.casDo);
+            return Math.round(casOd + podil(svg, x) * (casDo - casOd));
+        }
+
+        // Graf po dnech neví nic jemnějšího než den, tak se výběr zaokrouhlí
+        // na dny. Kdyby posílal čas, tvářil by se přesněji, než jaký je.
+        function den(svg, x) {
+            var dny = (svg.dataset.dny || "").split(",");
+            var index = Math.round(podil(svg, x) * (dny.length - 1));
+            return dny[Math.min(Math.max(index, 0), dny.length - 1)];
+        }
+
+        function nakresli() {
+            var od = Math.min(zacatek, konec), doKam = Math.max(zacatek, konec);
+            rect.setAttribute("x", od.toFixed(1));
+            rect.setAttribute("width", (doKam - od).toFixed(1));
+            // Atributem, ne `rect.hidden = false`: vlastnost `hidden` má
+            // jen HTML prvek. Na prvku SVG by se tím založila obyčejná
+            // proměnná, atribut by zůstal - a obdélník výběru by nebyl
+            // vidět, přestože všechno ostatní funguje.
+            rect.removeAttribute("hidden");
+        }
+
+        function uklid() {
+            if (rect) {
+                rect.setAttribute("hidden", "");
+                rect.setAttribute("width", "0");
+            }
+            if (graf) { graf.classList.remove("chart-tahne"); }
+            delete document.body.dataset.tahne;
+            graf = null;
+            rect = null;
+        }
+
+        document.addEventListener("pointerdown", function (event) {
+            if (event.button !== 0) { return; }
+            var svg = event.target.closest ? event.target.closest("svg[data-vyber]") : null;
+            if (!svg) { return; }
+            rect = svg.querySelector(".chart-vyber");
+            if (!rect) { return; }
+            var kde = xVeGrafu(svg, event.clientX);
+            if (kde === null) { return; }
+            graf = svg;
+            zacatek = konec = kde;
+            graf.classList.add("chart-tahne");
+            document.body.dataset.tahne = "1";
+            // Ať tažení pokračuje, i když myš vyjede z grafu ven.
+            if (svg.setPointerCapture) { svg.setPointerCapture(event.pointerId); }
+            event.preventDefault();
+        });
+
+        document.addEventListener("pointermove", function (event) {
+            if (!graf) { return; }
+            var kde = xVeGrafu(graf, event.clientX);
+            // Graf zmizel pod rukama - výběr zahodíme, ať se nedokreslí
+            // někam, kde už nic není.
+            if (kde === null) { uklid(); return; }
+            konec = kde;
+            nakresli();
+        });
+
+        document.addEventListener("pointerup", function () {
+            if (!graf) { return; }
+            var svg = graf;
+            var od = Math.min(zacatek, konec), doKam = Math.max(zacatek, konec);
+            uklid();
+            // Krátký tah je omyl nebo obyčejný klik - ten ať si graf
+            // nechá pro bublinu.
+            if (doKam - od < MIN_TAH) { return; }
+            var adresa = new URL(window.location.href);
+            ["days", "od", "do", "od_ts", "do_ts"].forEach(function (jmeno) {
+                adresa.searchParams.delete(jmeno);
+            });
+            if (svg.dataset.vyber === "dny") {
+                var d1 = den(svg, od), d2 = den(svg, doKam);
+                if (!d1 || !d2) { return; }
+                adresa.searchParams.set("od", d1);
+                adresa.searchParams.set("do", d2);
+            } else {
+                adresa.searchParams.set("od_ts", cas(svg, od));
+                adresa.searchParams.set("do_ts", cas(svg, doKam));
+            }
+            window.location.href = adresa.toString();
+        });
+
+        // Útěk klávesou - výběr se zruší a nikam se nejde.
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && graf) { uklid(); }
+        });
+    }());
+
+    // ------------------------------------------------------------------
     (function () {
         // Kterykoliv prvek s `data-refresh` a `data-partial` se obnovuje
         // sam. Drive to bylo napsane napevno pro "prave se hraje"; kdyz
@@ -659,7 +795,10 @@
         function obnov() {
             // Na skryté kartě prohlížeče nemá smysl se ptát. Ušetří to
             // server i baterku telefonu; po návratu se stav dotáhne hned.
-            if (bezi || document.hidden) { return; }
+            //
+            // Uprostřed tažení taky ne: výměna obsahu by vzala graf
+            // i s rozdělaným výběrem zpod ruky.
+            if (bezi || document.hidden || document.body.dataset.tahne) { return; }
             bezi = true;
             fetch(vyrez, {
                 headers: { "X-Requested-With": "fetch" },
@@ -672,6 +811,12 @@
                 .then(function (r) { return (r.ok && !r.redirected) ? r.text() : null; })
                 .then(function (html) {
                     if (!html) { return; }
+                    /* Odpověď mohla doletět až uprostřed tažení v grafu -
+                       hlídka výše brání jen tomu, aby se dotaz spustil,
+                       ne tomu, aby dorazil ten už rozeslaný. Výměna by
+                       vzala graf zpod ruky a označený úsek by zmizel;
+                       počká se tedy na další kolo. */
+                    if (document.body.dataset.tahne) { return; }
                     /* Kdyby se obsah vyměnil s otevřeným oknem, okno by
                        zmizelo uprostřed čtení - a jednou za deset vteřin
                        by to udělalo znovu. Zapamatujeme si tedy, že bylo

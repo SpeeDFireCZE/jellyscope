@@ -740,6 +740,19 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .heatmap-cells i:hover { outline: 1.5px solid var(--text-primary); outline-offset: 1px; }
 
 /* Svisla cara a bod v carovem grafu se ukazou az pri najeti. */
+/* Výběr rozsahu tažením myši. Kurzor je svislice, protože se vybírá
+   jen v čase - výška grafu se tím neomezuje. */
+.chart-lze-vybirat { cursor: col-resize; touch-action: pan-y; }
+.chart-vyber {
+    fill: color-mix(in oklab, var(--accent) 22%, transparent);
+    stroke: var(--accent);
+    stroke-width: 1;
+    pointer-events: none;
+}
+/* Během tažení nemá smysl ukazovat bubliny bodů - myš míří na rozsah,
+   ne na jeden okamžik. */
+.chart-tahne .chart-hit { pointer-events: none; }
+
 .chart-hit line, .chart-hit circle { opacity: 0; transition: opacity 0.08s ease; }
 .chart-hit:hover line, .chart-hit:hover circle { opacity: 1; }
 
@@ -2155,6 +2168,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 
 .mapa-napoveda { margin: 8px 0 0; }
+.chart-napoveda { margin: 8px 0 0; }
 
 /* Mapa světa na stránce Síť. Poměr stran drží viewBox (360:180), takže
    se sama přizpůsobí šířce karty a nikdy se nedeformuje. */

@@ -177,5 +177,46 @@ barvy = [r.get("barva") or r["role"] for r in zpusoby]
 check(len(set(barvy)) == len(barvy), f"a každá má svou barvu ({barvy})")
 
 print()
+print("--- spička jde přečíst z grafu ---")
+# Krivka pres tyden je hustá a spicka byva par pixelu siroka. Bez znacky
+# se na ni musela trefit mys - a bublina navic hlasila hodnotu prvniho
+# bodu v pasmu, ne toho nejvyssiho, takze i po trefe mohlo padnout cislo
+# souseda.
+from jellyscope import charts  # noqa: E402
+
+with db.connect() as conn:
+    conn.execute("DELETE FROM playback")
+for i in range(3):
+    prehravani(f"soubezne-{i}", pred_minutami=2 * 24 * 60, delka_minut=40, mbit=15)
+prehravani("maly", pred_minutami=24 * 60, delka_minut=30, mbit=5)
+
+body = stats.bandwidth_zive(7)
+vrchol_bod = max(body, key=lambda b: b["mbit"])
+check(vrchol_bod["mbit"] == 45.0, f"špička je součet tří streamů ({vrchol_bod['mbit']})")
+check(vrchol_bod["streamu"] == 3, f"a ví se, kolik jich bylo ({vrchol_bod['streamu']})")
+
+svg = charts.area_chart_multi(
+    body, "popisek", [{"key": "mbit", "label": "Mbit/s", "barva": "var(--accent)"}],
+    unit="", schody=True)
+# Hodnota spicky patri do bubliny, ne natvrdo do grafu: trvaly popisek
+# prekryval krivku a byl videt i tehdy, kdyz o nej nikdo nestal.
+check(vrchol_bod["popisek"] in svg, f"čas špičky je v bublině ({vrchol_bod['popisek']})")
+
+# Bublina musi hlasit vrchol pasma, ne prvni bod v nem.
+check(svg.count("chart-hit") <= charts.NEJVIC_PLOSEK,
+      f"plošek je nejvýš {charts.NEJVIC_PLOSEK} ({svg.count('chart-hit')})")
+check("45" in svg, "a hodnota špičky je v bublinách k nalezení")
+
+print()
+print("--- hustota křivky ---")
+# Petiminutovy krok pres tyden delal ze spicky vlas. Strop bodu z toho
+# udela sloupec, ktery jde trefit.
+check(len(body) <= stats.NEJVIC_BODU_ZIVE,
+      f"bodů nejvýš {stats.NEJVIC_BODU_ZIVE} ({len(body)})")
+check(body[0]["krok_minut"] >= 10, f"u týdne je krok větší ({body[0]['krok_minut']} min)")
+den = stats.bandwidth_zive(None)
+check(den[0]["krok_minut"] <= 5, f"u dne zůstává jemný ({den[0]['krok_minut']} min)")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

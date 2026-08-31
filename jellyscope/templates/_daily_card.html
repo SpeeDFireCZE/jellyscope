@@ -69,7 +69,9 @@
     </div>
     <p class="card-note" style="margin:-6px 0 12px">{{ _("v hodinách") }}</p>
 
-    {{ charts.area_chart_multi(daily, 'day', series) | safe }}
+    {# vyber=True: tažením v grafu jde vybrat rozmezí dnů a nastavit
+       ho stránce jako vlastní období. #}
+    {{ charts.area_chart_multi(daily, 'day', series, vyber=True) | safe }}
     {# Legenda je u dvou a více sérií povinná - barva sama identitu nenese.
        U jedné série se kreslí jen tehdy, když má co dovysvětlit; to je
        případ "Ostatního", kde samotný název nic neříká. #}

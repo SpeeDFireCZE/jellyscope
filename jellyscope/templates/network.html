@@ -47,7 +47,7 @@
        stálo „Mbit/s: 12,4 h“ - hodiny u datového toku nedávají smysl. #}
     {{ charts.area_chart_multi(denni_spicky, 'popisek',
            [{'key': 'mbit', 'label': _('Mbit/s'), 'barva': 'var(--accent)'}],
-           unit='') | safe }}
+           unit='', vyber=True) | safe }}
 </div>
 
 <div class="grid-2">

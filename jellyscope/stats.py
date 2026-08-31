@@ -62,6 +62,21 @@ class Obdobi:
     # Rozhoduje to o dvou vecech: jak se obdobi pojmenuje v prepinaci
     # a od ktereho dne zacina kalendar v grafu po dnech.
     relativni: bool = True
+    # Tytez meze, ale v ZONE APLIKACE.
+    #
+    # `od`/`do` jsou v UTC, protoze v UTC je ulozena historie. Do formulare
+    # a do popisku ale patri to, co clovek napsal - kdyz si vybere
+    # 20. srpna, ma tam stat 20. srpna, ne 19. srpna 22:00.
+    #
+    # Obe dvojice se chovaji stejne: dolni mez VCETNE, horni VYLUCNE.
+    # Zadne "nekdy vcetne, nekdy ne" - z toho vznikaji chyby o jeden den,
+    # ktere se hledaji tezko, protoze pul roku (v zime) nejsou videt.
+    od_mistni: str = ""
+    do_mistni: str = ""
+    # Zadal clovek cele dny, nebo presny cas? Rozhoduje to jen o tom, jak
+    # se obdobi napise: "20.8.2026" u celeho dne, "20.8.2026 21:30" u useku
+    # vybraneho tazenim v grafu.
+    cely_den: bool = True
 
     @property
     def vlastni(self) -> bool:
@@ -84,23 +99,82 @@ def obdobi_dnu(days: int) -> Obdobi:
     return Obdobi(od=zacatek.strftime(db.TIME_FORMAT), do=KONEC_CASU, dny=dny)
 
 
-def obdobi_od_do(od: Any, do: Any) -> Obdobi | None:
-    """Obdobi ze dvou datumu ve tvaru YYYY-MM-DD. None, kdyz nedavaji smysl.
+def _mistni_cas(text: Any) -> tuple[datetime, bool] | None:
+    """Text z adresy na cas v zone aplikace. Vraci (cas, je_to_datum).
 
-    `do` je v adrese posledni den, ktery clovek chce videt - do dotazu
-    proto jde pulnoc dne nasledujiciho, jinak by z posledniho dne
-    vypadlo vsechno po 00:00.
+    Bereme dva tvary: "2026-08-20" (cely den) a "2026-08-20 21:30"
+    (presny okamzik). Ten druhy pouziva vyber rozsahu tazenim v grafu -
+    tam by zaokrouhleni na cely den zahodilo prave to, co clovek vybral.
+    """
+    surovy = str(text or "").strip().replace("T", " ")
+    for tvar, je_datum in (("%Y-%m-%d %H:%M:%S", False),
+                           ("%Y-%m-%d %H:%M", False),
+                           ("%Y-%m-%d", True)):
+        try:
+            return datetime.strptime(surovy, tvar), je_datum
+        except ValueError:
+            continue
+    return None
+
+
+def obdobi_od_do(od: Any, do: Any) -> Obdobi | None:
+    """Obdobi ze dvou mezi. None, kdyz nedavaji smysl.
+
+    Meze prichazeji v ZONE APLIKACE - tak je clovek napsal a tak je vidi
+    v grafu. Historie je ale ulozena v UTC, takze se prevadeji; bez toho
+    "20. srpna" ve stredni Evrope v lete znamenalo 20. srpna od dvou rano
+    do dvou rano nasledujiciho dne.
+
+    U celeho dne je `do` posledni den, ktery clovek chce videt - do dotazu
+    proto jde pulnoc dne nasledujiciho, jinak by z posledniho dne vypadlo
+    vsechno po 00:00. U presneho casu se bere tak, jak prisel.
+    """
+    zacatek = _mistni_cas(od)
+    konec = _mistni_cas(do)
+    if zacatek is None or konec is None:
+        return None
+
+    zacatek_cas, _ = zacatek
+    konec_cas, konec_je_datum = konec
+    if konec_je_datum:
+        konec_cas += timedelta(days=1)
+    if konec_cas <= zacatek_cas:
+        return None
+
+    zona = formatting.zona()
+    def _utc(cas: datetime) -> str:
+        return cas.replace(tzinfo=zona).astimezone(timezone.utc).strftime(db.TIME_FORMAT)
+
+    return Obdobi(od=_utc(zacatek_cas),
+                  do=_utc(konec_cas),
+                  dny=max(1, round((konec_cas - zacatek_cas).total_seconds() / 86400)),
+                  relativni=False,
+                  od_mistni=zacatek_cas.strftime(db.TIME_FORMAT),
+                  do_mistni=konec_cas.strftime(db.TIME_FORMAT),
+                  cely_den=zacatek[1] and konec_je_datum)
+
+
+def obdobi_z_okamziku(od: Any, do: Any) -> Obdobi | None:
+    """Obdobi ze dvou okamziku v sekundach od epochy.
+
+    Takhle chodi vyber tazenim v grafu. Prohlizec posila cisla, ne text:
+    kdyby prevadel sam, pouzil by zonu POCITACE, kdezto aplikace ma svou
+    (Nastaveni -> Obecne). Prevod proto dela server.
     """
     try:
-        zacatek = datetime.strptime(str(od)[:10], "%Y-%m-%d")
-        konec = datetime.strptime(str(do)[:10], "%Y-%m-%d") + timedelta(days=1)
+        zacatek = float(od)
+        konec = float(do)
     except (TypeError, ValueError):
         return None
-    if konec <= zacatek:
+    if not (konec > zacatek):
         return None
-    return Obdobi(od=zacatek.strftime(db.TIME_FORMAT),
-                  do=konec.strftime(db.TIME_FORMAT),
-                  dny=max(1, (konec - zacatek).days), relativni=False)
+
+    zona = formatting.zona()
+    tvar = "%Y-%m-%d %H:%M"
+    return obdobi_od_do(
+        datetime.fromtimestamp(zacatek, zona).strftime(tvar),
+        datetime.fromtimestamp(konec, zona).strftime(tvar),
+    )
 
 
 def _obdobi(zadani: Any) -> Obdobi:
@@ -115,17 +189,36 @@ def _meze(zadani: Any) -> tuple[str, str]:
 
 
 def predchozi(zadani: Any) -> Obdobi:
-    """Stejne dlouhe okno tesne pred zvolenym - kvuli srovnani."""
+    """Stejne dlouhe okno tesne pred zvolenym - kvuli srovnani.
+
+    "Stejne dlouhe" se meri z mezi okna, ne z poctu dnu. U celych dnu
+    vyjde oboji nastejno, u useku vybraneho tazenim v grafu uz ne:
+    dvouhodinovy vyber ma `dny == 1`, takze by se poroval s celym
+    predchozim dnem - a kazda sipka "oproti predchozimu obdobi" by
+    ukazovala propad, ktery se nestal.
+    """
     obdobi = _obdobi(zadani)
     try:
         konec = datetime.strptime(obdobi.od, db.TIME_FORMAT)
+        # "Poslednich N dni" ma konec otevreny (KONEC_CASU), takze z mezi
+        # se delka merit neda - u toho plati pocet dnu.
+        delka = (timedelta(days=obdobi.dny) if obdobi.relativni
+                 else datetime.strptime(obdobi.do, db.TIME_FORMAT) - konec)
     except ValueError:
         return obdobi
-    zacatek = konec - timedelta(days=obdobi.dny)
+    zacatek = konec - delka
     # `relativni=False`: predchozi okno ma pevny konec (zacatek toho
     # zvoleneho), takze to uz neni "poslednich N dni".
+    zona = formatting.zona()
+
+    def _mistne(cas: datetime) -> str:
+        return (cas.replace(tzinfo=timezone.utc).astimezone(zona)
+                .strftime(db.TIME_FORMAT))
+
     return Obdobi(od=zacatek.strftime(db.TIME_FORMAT), do=obdobi.od,
-                  dny=obdobi.dny, relativni=False)
+                  dny=obdobi.dny, relativni=False,
+                  od_mistni=_mistne(zacatek), do_mistni=_mistne(konec),
+                  cely_den=obdobi.cely_den)
 
 
 def prvni_zaznam() -> str:
@@ -622,6 +715,21 @@ def rozpad_ostatnich(days: int) -> list[dict[str, Any]]:
     return sorted(slouceno.values(), key=lambda p: p["hours"], reverse=True)
 
 
+def _mistni_den(mistni: str, utc: str, konec: bool = False):
+    """Datum meze v zone aplikace.
+
+    Horni mez je vzdycky vylucna (pulnoc dne za poslednim), takze se
+    u konce vraci o vterinu zpatky - jinak by kalendar mel o den navic.
+    """
+    if mistni:
+        cas = datetime.strptime(mistni, db.TIME_FORMAT)
+    else:
+        cas = (datetime.strptime(utc, db.TIME_FORMAT)
+               .replace(tzinfo=timezone.utc).astimezone(formatting.zona())
+               .replace(tzinfo=None))
+    return (cas - timedelta(seconds=1)).date() if konec else cas.date()
+
+
 def daily_activity_split(days: int) -> list[dict[str, Any]]:
     """Sledovanost po dnech rozpadla na filmy a serialy.
 
@@ -674,13 +782,17 @@ def daily_activity_split(days: int) -> list[dict[str, Any]]:
     # zpatky - tedy N radku, ne N+1. U vlastniho obdobi zacina a konci
     # tam, kde rekl clovek.
     okno = _obdobi(days)
-    dnes = datetime.now().date()
+    # Vsechna data tu jsou uz prepoctena do zony aplikace (viz 'localtime'
+    # v dotazu vyse) - kalendar se proto musi stavet ze stejnych hodin.
+    # Meze okna jsou v UTC; kdyby se z nich bral den primo, zacinal by
+    # graf v lete o den driv, protoze pulnoc v Praze je 22:00 predchoziho
+    # dne v UTC.
+    dnes = datetime.now(formatting.zona()).date()
     if okno.relativni:
         prvni, posledni = dnes - timedelta(days=okno.dny - 1), dnes
     else:
-        prvni = datetime.strptime(okno.od, db.TIME_FORMAT).date()
-        posledni = min(dnes, (datetime.strptime(okno.do, db.TIME_FORMAT)
-                              - timedelta(seconds=1)).date())
+        prvni = _mistni_den(okno.od_mistni, okno.od)
+        posledni = min(dnes, _mistni_den(okno.do_mistni, okno.do, konec=True))
     calendar = [prvni + timedelta(days=offset)
                 for offset in range(max(1, (posledni - prvni).days + 1))]
 
@@ -2226,7 +2338,11 @@ NEJKRATSI_ZIVE_OKNO = 24 * 3600
 # hodinu. Peti minutam uz odpovida tvar krivky tomu, co se doopravdy
 # delo; strop je kvuli velikosti obrazku.
 USEK_ZIVE_SEKUND = 300
-NEJVIC_BODU_ZIVE = 1500
+# Strop bodu. Puvodne 1500, jenze u tydne z toho byla srst: spicka jeden
+# pixel siroka, kterou mys netrefi. Sest set bodu znamena u dne porad
+# petiminutovy krok a u tydne ctvrthodinovy - to uz je videt jako sloupec,
+# ne jako vlas. Delsi obdobi patri karte "Spicka po dnech".
+NEJVIC_BODU_ZIVE = 600
 
 
 def bandwidth_zive(days: Any = None, bodu: int | None = None) -> list[dict[str, Any]]:
@@ -2248,13 +2364,24 @@ def bandwidth_zive(days: Any = None, bodu: int | None = None) -> list[dict[str, 
     # ale krivka ukazuje to, co si clovek vybral nahore - jinak by filtr
     # na te karte nedelal nic a pusobil rozbite.
     okno = NEJKRATSI_ZIVE_OKNO
+    do_okna = ted
     if days is not None:
-        od_text, do_text = _meze(days)
-        zacatek = _sekundy(od_text)
-        konec = min(_sekundy(do_text) or ted, ted)
-        if zacatek is not None:
-            okno = max(NEJKRATSI_ZIVE_OKNO, konec - zacatek)
-    od = ted - okno
+        obdobi = _obdobi(days)
+        zacatek = _sekundy(obdobi.od)
+        konec = min(_sekundy(obdobi.do) or ted, ted)
+        if zacatek is not None and konec > zacatek:
+            if obdobi.relativni:
+                # "Poslednich N dni" konci ted a pod den se neklesa - viz
+                # NEJKRATSI_ZIVE_OKNO.
+                okno = max(NEJKRATSI_ZIVE_OKNO, konec - zacatek)
+            else:
+                # Pevne obdobi (vyklikane, nebo vybrane tazenim v grafu)
+                # se bere PRESNE tak, jak zni - vcetne konce v minulosti.
+                # Kdyby krivka porad koncila "ted", ukazovala by neco
+                # jineho, nez rika prepinac nad ni - a druhy tah by pak
+                # vybral uplne jiny cas, nez na ktery clovek ukazuje.
+                okno, do_okna = konec - zacatek, konec
+    od = do_okna - okno
 
     # Rozliseni podle delky okna, ne pevny pocet bodu.
     if bodu is None:
@@ -2293,17 +2420,22 @@ def bandwidth_zive(days: Any = None, bodu: int | None = None) -> list[dict[str, 
         udalosti.append((max(zacatek, od), int(radek["bitrate"])))
         udalosti.append((konec, -int(radek["bitrate"])))
 
-    krok = (ted - od) / max(1, bodu)
+    krok = (do_okna - od) / max(1, bodu)
     body: list[dict[str, Any]] = []
     udalosti.sort()
     soucet = 0
+    kolik = 0            # kolik streamu tece zaroven
     index = 0
     for i in range(bodu):
         hranice = od + (i + 1) * krok
         vrchol = soucet
+        vrchol_kolik = kolik
         while index < len(udalosti) and udalosti[index][0] <= hranice:
             soucet += udalosti[index][1]
-            vrchol = max(vrchol, soucet)
+            kolik += 1 if udalosti[index][1] > 0 else -1
+            if soucet > vrchol:
+                vrchol = soucet
+                vrchol_kolik = kolik
             index += 1
         stred = hranice - krok / 2
         # U kratkeho okna staci hodina a minuta; jakmile krivka prekroci
@@ -2313,6 +2445,10 @@ def bandwidth_zive(days: Any = None, bodu: int | None = None) -> list[dict[str, 
         body.append({
             "cas": stred,
             "mbit": round(max(0, vrchol) / 1e6, 2),
+            # Kolik streamu ten vrchol tvorilo. V bubline to odpovida na
+            # druhou otazku, kterou clovek u spicky ma: bylo to hodne lidi,
+            # nebo jeden film ve 4K?
+            "streamu": max(0, vrchol_kolik),
             "popisek": datetime.fromtimestamp(stred, formatting.zona()).strftime(tvar),
             "krok_minut": round(krok / 60) or 1,
         })

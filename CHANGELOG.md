@@ -6,6 +6,60 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.3.4
+
+### Added
+
+- **Drag across a chart to pick a range.** Seeing a spike raises the next
+  question by itself - what was that? Dragging over it sets the marked
+  stretch as the page's period, so the tables below answer. The live
+  network curve takes the exact stretch, down to the minute; charts that
+  only know days round to whole days rather than pretend to be finer.
+
+### Changed
+
+- **Time in charts can be exact to the minute.** Above ten hours the
+  decimals are dropped, so a day with 34.52 hours reports 35 - almost half
+  an hour that was never there. Settings › Interface now offers hours and
+  minutes ("34:31") instead, because "34.5 h" does not say half an hour to
+  anyone either. Rounded stays the default, and axis labels stay round
+  in both cases: there "40" is a mark on the scale, not a reading.
+
+- **A tooltip reports the peak of the band it covers.** With a point every
+  few minutes there are more points than hover targets, and a target used
+  to show the value of the first point under it - so even a well-aimed
+  mouse could read a neighbour's number instead of the spike. It also says
+  how many streams made the peak up: three people, or one film in 4K.
+
+- **The curve is less dense over long windows.** A point every five
+  minutes made a week look like fur. Six hundred points at most: still
+  five minutes over a day, a quarter of an hour over a week - a spike wide
+  enough to hit.
+
+- **A fixed period ends where it says it ends.** The live curve always ran
+  up to "now", even when the filter asked for two days last week - so the
+  chart showed something other than the switcher above it.
+
+### Fixed
+
+- **A period shorter than a day compares with the same length.** The
+  comparison window was derived from the number of days, which a two-hour
+  selection rounds up to one - so two hours were held against a whole
+  previous day and every "vs previous period" arrow reported a collapse
+  that never happened.
+
+- **A single day still draws.** One point has no neighbour, so the line
+  had no width and the chart looked empty even though the day had hours
+  in it. It now spreads across the plot, which is what one point means.
+  The sparkline under the headline number stays away instead of leaving
+  a blank strip - one day is not a trend.
+
+- **A custom period is read in the application's time zone.** "20 August"
+  was taken as UTC, which in central European summer means from two in the
+  morning to two in the morning the next day. The same slip moved the
+  calendar of the day-by-day chart by a day, and a custom period shifted
+  back every time you moved to another page.
+
 ## 1.3.3
 
 ### Changed

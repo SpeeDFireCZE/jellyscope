@@ -1336,6 +1336,35 @@
         </div>
 
         <div class="field">
+            <label>{{ _("Čas v grafech") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_cas_presne" value="0"
+                           {{ 'checked' if not ui_cas_presne }}>
+                    <span>
+                        <span class="title">{{ _("Zaokrouhlený") }}</span>
+                        <span class="desc">
+                            {{ _("„12 h“, „4,4 h“. Kulatá čísla se čtou rychleji a na první pohled je jasné, o jaký řád jde.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_cas_presne" value="1"
+                           {{ 'checked' if ui_cas_presne }}>
+                    <span>
+                        <span class="title">{{ _("Přesný na minuty") }}</span>
+                        <span class="desc">
+                            {{ _("„12:24“, „4:22“. Nad deset hodin se totiž desetinná místa utínají, takže den se 34,52 hodinami se hlásí jako 35 – skoro půlhodina rozdílu.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté – tam je „40“ značka měřítka, ne údaj.") }}</p>
+            <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
+        </div>
+
+        <div class="field">
             <label for="ui_max_streams">{{ _("Přehrávání na Přehledu") }}</label>
             <input type="number" id="ui_max_streams" name="ui_max_streams"
                    min="{{ strop_min }}" max="{{ strop_max }}"

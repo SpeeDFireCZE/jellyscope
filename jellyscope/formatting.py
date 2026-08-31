@@ -69,6 +69,45 @@ def hours_human(value: Any) -> str:
     return f"{whole_hours} h {minutes:02d} min"
 
 
+def hodiny_hhmm(value: Any) -> str:
+    """Hodiny jako "12:24" misto "12 h".
+
+    V grafech se hodiny pisou desetinne a nad deset se desetinna mista
+    utinaji, protoze na ose je "40" citelnejsi nez "39,6". U konkretni
+    hodnoty to ale znamena, ze den se 34,52 hodinami hlasi 35 hodin -
+    skoro pulhodina, ktera nikde nebyla. A "34,5 h" nikomu nerekne
+    pulhodinu; hodiny a minuty ano.
+
+    Zapina se v Nastaveni -> Rozhrani; viz presny_cas().
+    """
+    try:
+        hodin = float(value or 0)
+    except (TypeError, ValueError):
+        return "-"
+    if hodin < 0:
+        hodin = 0.0
+    minut = int(round(hodin * 60))
+    return f"{minut // 60}:{minut % 60:02d}"
+
+
+def presny_cas() -> bool:
+    """Ma se cas v grafech psat na minuty presne?
+
+    Vychozi je zaokrouhleni - kulata cisla se v grafu ctou lip a vetsine
+    lidi staci. Kdo potrebuje presnost, prepne si to v nastaveni.
+    """
+    from .db import get_setting          # az tady, at nevznikne kruh
+
+    try:
+        return (get_setting("ui_cas_presne", "0") or "0").strip() == "1"
+    except Exception:                       # noqa: BLE001
+        # Kresleni grafu nesmi zaviset na tom, jestli je databaze po ruce.
+        # Stava se to pri migraci (tabulka nastaveni jeste neexistuje)
+        # a v testech, ktere zkousi jen tvar grafu. Zaokrouhleni je
+        # vychozi stav, takze se nic neztrati.
+        return False
+
+
 def seconds_human(value: Any) -> str:
     try:
         seconds = int(value or 0)

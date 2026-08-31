@@ -588,13 +588,23 @@ def _days(request: Request, value: Optional[int],
     Cislo se porovnava proti pevnemu seznamu a datumy projdou pres
     `strptime`, takze se do SQL nikdy nedostane text primo z adresy.
     """
+    # Vyber tazenim v grafu posila okamziky, ne datumy - viz
+    # stats.obdobi_z_okamziku(). Ma prednost: kdyz clovek zrovna tahnul
+    # mysi, chce videt prave to.
+    od_ts = request.query_params.get("od_ts")
+    do_ts = request.query_params.get("do_ts")
+    if od_ts and do_ts:
+        obdobi = stats.obdobi_z_okamziku(od_ts, do_ts)
+        if obdobi is not None:
+            request.session[DAYS_SESSION_KEY] = _obdobi_do_session(obdobi)
+            return obdobi
+
     if od or do:
         # Datum se pise po cesku (1.8.2026), bere se i RRRR-MM-DD - stejny
         # parser jako ve filtru historie, at se to nikde nechova jinak.
         obdobi = stats.obdobi_od_do(_datum_z_textu(od), _datum_z_textu(do))
         if obdobi is not None:
-            request.session[DAYS_SESSION_KEY] = {"od": obdobi.od[:10],
-                                                 "do": _posledni_den(obdobi.do)}
+            request.session[DAYS_SESSION_KEY] = _obdobi_do_session(obdobi)
             return obdobi
 
     if value in ALLOWED_DAYS:
@@ -633,6 +643,22 @@ def _rychla_obdobi() -> list[tuple[str, str, str]]:
     ]
 
 
+def _obdobi_do_session(obdobi: stats.Obdobi) -> dict[str, str]:
+    """Co si o vlastnim obdobi pamatovat mezi strankami.
+
+    Uklada se v MISTNIM case. Kdyby se ukladaly meze z dotazu (UTC),
+    precetly by se pri dalsim kroku znovu jako mistni - a obdobi by se
+    pri kazdem prechodu jinam posunulo zpatky, casto o cely den.
+
+    Tvar nese vyznam a stejne ho cte i stats.obdobi_od_do():
+    samotne datum je cely den, datum s casem je presny usek vybrany
+    tazenim v grafu.
+    """
+    if obdobi.cely_den:
+        return {"od": obdobi.od_mistni[:10], "do": _posledni_den(obdobi.do_mistni)}
+    return {"od": obdobi.od_mistni[:16], "do": obdobi.do_mistni[:16]}
+
+
 def _obdobi_do_sablony(zadani: Any) -> dict[str, Any]:
     """Co o obdobi potrebuje prepinac nahore na strance.
 
@@ -640,21 +666,48 @@ def _obdobi_do_sablony(zadani: Any) -> dict[str, Any]:
     dostane obojí pripravene.
     """
     if isinstance(zadani, stats.Obdobi):
-        od, do = zadani.od[:10], _posledni_den(zadani.do)
+        # Mistni meze, ne ty z dotazu: v UTC by u pulnoci sedel jiny den.
+        od = (zadani.od_mistni or zadani.od)[:10]
+        do = _posledni_den(zadani.do_mistni or zadani.do)
         return {"days": None, "od": od, "do": do,
                 # Do formulare patri datum tak, jak ho clovek pise.
                 "od_text": _cesky_datum(od), "do_text": _cesky_datum(do),
+                # Vyber tazenim v grafu umi i cast dne. Ve formulari se to
+                # napsat neda (jsou tam kalendare), ale na strance to stat
+                # musi - jinak vypada vyber "od 21:30 do 23:45" jako cely
+                # den a cisla pod nim nedavaji smysl.
+                "od_popis": _obdobi_popis(zadani, zadani.od_mistni, od),
+                "do_popis": _obdobi_popis(zadani, zadani.do_mistni, do),
                 "dny": zadani.dny, "vlastni": True}
     return {"days": int(zadani), "od": "", "do": "",
             "od_text": "", "do_text": "",
+            "od_popis": "", "do_popis": "",
             "dny": int(zadani), "vlastni": False}
 
 
+def _obdobi_popis(obdobi: stats.Obdobi, mistni: str, den: str) -> str:
+    """Datum pro cloveka, s casem jen u useku vybraneho v grafu.
+
+    U celych dnu se cas nepise - "20.8.2026 00:00" nikomu nic nerekne.
+    U presneho useku ano, protoze bez nej vypada vyber "od 21:30 do 23:45"
+    jako cely den a cisla pod nim nedavaji smysl.
+    """
+    if obdobi.cely_den or not mistni:
+        return _cesky_datum(den)
+    return f"{_cesky_datum(mistni[:10])} {mistni[11:16]}"
+
+
 def _posledni_den(do: str) -> str:
-    """Horni mez je pulnoc dne PO poslednim dni - do formulare patri ten den."""
+    """Den, ktery jeste do obdobi patri.
+
+    Horni mez je vylucna, takze se od ni couva - ale o VTERINU, ne o den.
+    U celeho dne vyjde oboji stejne (pulnoc minus den i minus vterina
+    padne na predchozi den), u useku vybraneho v grafu uz ne: konec
+    ve 23:45 patri porad temuz dni, kdezto minus den by ukazal vcerejsek.
+    """
     try:
         return (datetime.strptime(do, db.TIME_FORMAT)
-                - timedelta(days=1)).strftime("%Y-%m-%d")
+                - timedelta(seconds=1)).strftime("%Y-%m-%d")
     except ValueError:
         return do[:10]
 
@@ -739,6 +792,11 @@ def _vzhled() -> str:
     """Vybrany vzhled. Cokoliv jineho nez zname jmeno je novy."""
     hodnota = db.get_setting("ui_skin", "novy")
     return hodnota if hodnota in VZHLEDY else "novy"
+
+
+def _cas_presne() -> bool:
+    """Ma se cas v grafech psat na minuty, nebo zaokrouhlene?"""
+    return formatting.presny_cas()
 
 
 def _stropy() -> dict[str, int]:
@@ -1047,6 +1105,7 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # rovnou na serveru, ne az JavaScriptem: jinak by stranka na
         # okamzik problikla v jednom vzhledu a prepnula se do druheho.
         "ui_skin": _vzhled(),
+        "ui_cas_presne": _cas_presne(),
     }
     base.update(extra)
     return base
@@ -1583,6 +1642,10 @@ def _datum_z_textu(text: Optional[str]) -> Optional[str]:
     text = (text or "").strip()
     if not text:
         return None
+    # "2026-08-20 21:30" - takhle chodi ulozeny vyber z grafu.
+    presny = re.match(r"^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})", text)
+    if presny:
+        return f"{presny.group(1)} {presny.group(2)}"
     if _VALID_DAY.match(text):
         return text
     shoda = re.match(r"^(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{4})$", text)
@@ -2187,6 +2250,7 @@ def settings_interface(request: Request,
                        ui_max_viewers: str = Form(""),
                        ui_map_zoom: str = Form("click"),
                        ui_skin: str = Form("novy"),
+                       ui_cas_presne: str = Form("0"),
                        account: dict[str, Any] = Depends(require_admin)):
     """Stropy dlouhých seznamů - kolik se vypíše, než se zbytek schová.
 
@@ -2204,6 +2268,7 @@ def settings_interface(request: Request,
     db.set_setting("ui_map_zoom",
                    ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
     db.set_setting("ui_skin", ui_skin if ui_skin in VZHLEDY else "novy")
+    db.set_setting("ui_cas_presne", "1" if ui_cas_presne == "1" else "0")
     _flash(request, "Uloženo.", "success")
     return RedirectResponse("/settings?section=interface", status_code=303)
 

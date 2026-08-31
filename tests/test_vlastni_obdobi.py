@@ -32,7 +32,7 @@ os.environ["JELLYSCOPE_HOME"] = _tmp
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "obdobi.db")
 os.environ["SECRET_KEY"] = "testovaci-klic"
 
-from jellyscope import accounts, db, stats  # noqa: E402
+from jellyscope import accounts, db, formatting, stats  # noqa: E402
 
 failures = 0
 
@@ -94,9 +94,20 @@ print()
 print("--- konec rozmezí je včetně celého dne ---")
 # Do dotazu jde půlnoc dne následujícího, jinak by z posledního dne
 # vypadlo všechno po 00:00 - tedy prakticky celý den.
-konec = datetime.strptime(obdobi.do, db.TIME_FORMAT)
-check(konec.date() == (TED - timedelta(days=9)).date(),
-      f"horní mez je půlnoc dalšího dne ({obdobi.do})")
+#
+# Ta půlnoc je MÍSTNÍ, tedy v zóně aplikace. V UTC (a tak je uložená
+# historie) vyjde na jiný okamžik - v létě na 22:00 předchozího dne.
+# Dřív se za půlnoc brala ta v UTC a "20. srpna" pak ve skutečnosti
+# znamenalo 20. srpna od dvou ráno do dvou ráno dne dalšího.
+konec_mistni = datetime.strptime(obdobi.do_mistni, db.TIME_FORMAT)
+check(konec_mistni.date() == (TED - timedelta(days=9)).date()
+      and konec_mistni.time().isoformat() == "00:00:00",
+      f"horní mez je místní půlnoc dalšího dne ({obdobi.do_mistni})")
+check(datetime.strptime(obdobi.do, db.TIME_FORMAT)
+      .replace(tzinfo=timezone.utc).astimezone(formatting.zona())
+      .strftime(db.TIME_FORMAT) == obdobi.do_mistni,
+      f"a v dotazu je tatáž chvíle přepočtená do UTC ({obdobi.do})")
+check(obdobi.cely_den, "období zadané dny je celodenní")
 
 print()
 print("--- co nedává smysl, se nepoužije ---")

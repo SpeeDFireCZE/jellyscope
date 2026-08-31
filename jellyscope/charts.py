@@ -174,6 +174,21 @@ def _fmt(value: float) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+def _udaj(value: float, unit: str = "") -> str:
+    """Hodnota i s jednotkou tak, jak ji clovek cte.
+
+    Jedno misto pro vsechny bubliny a cisla u pruhu - popisky os sem
+    nepatri. Na ose je "40" spravne (je to znacka meritka), kdezto
+    v bubline je to konkretni udaj, a ten muze byt na minuty presny.
+    Viz formatting.presny_cas().
+    """
+    from . import formatting             # az tady, at nevznikne kruh
+
+    if unit == "h" and formatting.presny_cas():
+        return formatting.hodiny_hhmm(value)
+    return f"{_fmt(value)} {unit}".strip()
+
+
 def _bublina(nadpis: str, radky: Sequence[dict[str, Any]]) -> str:
     """Atributy bubliny: nadpis a radky, kazdy ve sve barve.
 
@@ -244,7 +259,7 @@ def hbar_chart(
         # se ma poznat, ktera cara je ktera.
         vlastni_slot = bool(row.get("slot"))
         slot = _slot_of(row, index) if vlastni_slot else 1
-        title = f"{label}: {_fmt(value)} {unit}".strip()
+        title = f"{label}: {_udaj(value, unit)}"
 
         # Popisek je odkaz jen tehdy, kdyz opravdu vede na existujici
         # zaznam. Jinak by uzivatel klikal a nic by se nedelo.
@@ -281,7 +296,7 @@ def hbar_chart(
             f'<div class="hbar-fill" style="width: {percent:.2f}%; '
             f'background: {vypln}"></div>'
             f"</div>"
-            f'<div class="hbar-value">{_fmt(value)}{(" " + _e(unit)) if unit else ""}</div>'
+            f'<div class="hbar-value">{_e(_udaj(value, unit))}</div>'
             f"</div>"
         )
     parts.append("</div>")
@@ -344,7 +359,7 @@ def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
         value = float(segment.get("value") or 0)
         share = value / total * 100
         label = segment.get("label", "")
-        title = f"{label}: {_fmt(value)} {unit} ({share:.0f} %)".replace("  ", " ")
+        title = f"{label}: {_udaj(value, unit)} ({share:.0f} %)"
 
         # Popisek dovnitr jen tehdy, kdyz je cast dost siroka. Orezany text
         # uvnitr pruhu je horsi nez zadny - legenda ho stejne nese.
@@ -413,7 +428,7 @@ def donut_chart(
             f'stroke="var(--series-{_slot_of(row, index)})" '
             f'stroke-dasharray="{delka:.3f} {obvod:.3f}" '
             f'stroke-dashoffset="{-posun:.3f}" '
-            f'data-tip="{_e(popisek)}: {_fmt(hodnota)} {_e(unit)} '
+            f'data-tip="{_e(popisek)}: {_e(_udaj(hodnota, unit))} '
             f'({procenta:.0f} %)"></circle>'
         )
         posun += dil * obvod
@@ -513,7 +528,7 @@ def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
                 # Do ktereho z peti stupnu hodnota patri.
                 bucket = min(len(HEAT_STEPS) - 1, int(value / maximum * len(HEAT_STEPS)))
                 colour = HEAT_STEPS[bucket]
-            title = f"{_t(DAY_NAMES[day_index])} {hour}:00 - {_fmt(value)} {unit}"
+            title = f"{_t(DAY_NAMES[day_index])} {hour}:00 - {_udaj(value, unit)}"
             parts.append(
                 f'<i style="background: {colour}" data-tip="{_e(title)}"></i>'
             )
@@ -575,6 +590,7 @@ def area_chart_multi(
     unit: str = "h",
     height: int = 240,
     schody: bool = False,
+    vyber: bool = False,
 ) -> str:
     """Vic serii v jednom case, prekryte pres sebe.
 
@@ -634,8 +650,35 @@ def area_chart_multi(
     def barva_serie(slot: int) -> str:
         return barvy.get(slot) or f"var(--series-{slot})"
 
+    # Vyber tazenim: graf rekne, kde na ose lezi jaky okamzik, a zbytek
+    # uz zvladne prohlizec. Souradnice jsou ve viewBoxu, ne v pixelech -
+    # SVG se skaluje podle sirky stranky, takze prepocet dela JS.
+    #
+    # Dva rezimy podle toho, co je na ose:
+    #   "cas" - bod je okamzik (ziva krivka). Vybrat jde libovolny usek.
+    #   "dny" - bod je cely den. Vyber se **zaokrouhli na dny**, protoze
+    #           jemneji graf stejne nic nevi; kdyby posilal cas, tvaril by
+    #           se presneji, nez ve skutecnosti je.
+    lze_vybirat = vyber and len(points) > 1
+    dny = [str(b.get("den") or b.get("day") or "") for b in points]
+    ma_cas = lze_vybirat and all(b.get("cas") for b in points)
+    ma_dny = lze_vybirat and all(re.match(r"^\d{4}-\d{2}-\d{2}$", d) for d in dny)
+    lze_vybirat = ma_cas or ma_dny
+
+    vyber_atributy = ""
+    if lze_vybirat:
+        osa = (f' data-x-od="{margin_left}" data-x-do="{margin_left + plot_width}"'
+               f' data-y-od="{margin_top}" data-y-do="{margin_top + plot_height}"')
+        if ma_cas:
+            vyber_atributy = (f' data-vyber="cas"{osa}'
+                              f' data-cas-od="{int(points[0]["cas"])}"'
+                              f' data-cas-do="{int(points[-1]["cas"])}"')
+        else:
+            vyber_atributy = f' data-vyber="dny"{osa} data-dny="{",".join(dny)}"' 
+
     parts: list[str] = [
-        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" '
+        f'<svg class="chart{" chart-lze-vybirat" if lze_vybirat else ""}" '
+        f'viewBox="0 0 {width} {height}" role="img"{vyber_atributy} '
         f'aria-label="Vyvoj v case, {len(series)} serii">',
         "<defs>",
         # Cim vic serii, tim slabsi vypln. U jedne krivky plocha pomaha -
@@ -670,6 +713,14 @@ def area_chart_multi(
     for entry in series:
         values = [float(point.get(entry["key"]) or 0) for point in points]
         coordinates = [(px(i), py(v)) for i, v in enumerate(values)]
+        # Jeden bod nema delku, takze by z nej byla cara o nulove sirce -
+        # graf vypadal prazdny, i kdyz se ten den koukalo. Stava se to
+        # u obdobi kratsiho nez dva dny (treba useku vybraneho tazenim).
+        # Rozpustime ho na sirku grafu: cte se to jako "tuhle celou dobu
+        # to bylo takhle", coz je presne, co jeden bod znamena.
+        if len(coordinates) == 1:
+            vyska = coordinates[0][1]
+            coordinates = [(margin_left, vyska), (margin_left + plot_width, vyska)]
         # Cara i plocha jdou po tomtez tvaru - jinak by vypln vykukovala
         # zpod cary. Viz _cesta() a _cesta_schody().
         line = _cesta_schody(coordinates) if schody else _cesta(coordinates)
@@ -709,21 +760,38 @@ def area_chart_multi(
     hit_width = (plot_width / max(1, len(points) - 1) * krok_plosek
                  if len(points) > 1 else plot_width)
     for index in range(0, len(points), krok_plosek):
-        point = points[index]
+        # Ploska muze zastupovat vic bodu - a pak nesmi ukazovat hodnotu
+        # toho prvniho, ale **nejvyssi v tom pasmu**. Spicka byva jeden
+        # bod siroka; kdyby bublina hlasila jejiho souseda, byl by graf
+        # k necemu jen na pohled a presne cislo by se z nej vycist nedalo.
+        pasmo = points[index:index + krok_plosek]
+        vrcholy = {}
+        for entry in series:
+            klic = entry["key"]
+            nejvyssi = max(pasmo, key=lambda b: float(b.get(klic) or 0))
+            vrcholy[klic] = (float(nejvyssi.get(klic) or 0), nejvyssi)
+
+        # Cas bereme od te serie, ktera v pasmu vrcholi nejvys - to je ten
+        # okamzik, na ktery se clovek pta.
+        hlavni = max(vrcholy.values(), key=lambda dvojice: dvojice[0])[1]
         x = px(index)
-        # Nadpis je den, pod nim kazda serie na svem radku a ve sve barve -
+
+        # Nadpis je cas, pod nim kazda serie na svem radku a ve sve barve -
         # v prekryvu dvou car je to jediny zpusob, jak poznat, ktere cislo
         # patri ktere.
-        tip = _bublina(str(point.get(x_key, "")), [
-            {"text": f'{entry["label"]}: {_fmt(float(point.get(entry["key"]) or 0))} '
-                     f'{unit}'.strip(),
+        radky_bubliny = [
+            {"text": f'{entry["label"]}: {_udaj(vrcholy[entry["key"]][0], unit)}',
              "barva": barva_serie(entry.get("slot", 1))}
             for entry in series
-        ])
+        ]
+        if hlavni.get("streamu"):
+            radky_bubliny.append(
+                {"text": _t("souběžných streamů: {n}").format(n=hlavni["streamu"])})
+        tip = _bublina(str(hlavni.get(x_key, "")), radky_bubliny)
 
         body = "".join(
             f'<circle cx="{x:.1f}" '
-            f'cy="{py(float(point.get(entry["key"]) or 0)):.1f}" r="4" '
+            f'cy="{py(vrcholy[entry["key"]][0]):.1f}" r="4" '
             f'fill="{barva_serie(entry.get("slot", 1))}" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
             for entry in series
@@ -737,7 +805,24 @@ def area_chart_multi(
             f"{body}</g>"
         )
 
+    if lze_vybirat:
+        # Obdelnik vyberu kresli JS, ale patri do dokumentu uz ted - takhle
+        # ho styluje CSS jako vsechno ostatni a JS jen meni souradnice.
+        # `pointer-events: none`, aby nesebral bubliny pod sebou.
+        parts.append(
+            f'<rect class="chart-vyber" x="0" y="{margin_top}" width="0" '
+            f'height="{plot_height}" hidden />'
+        )
+
     parts.append("</svg>")
+    if lze_vybirat:
+        # Funkce, o ktere se neni jak dozvedet, neexistuje. Kurzor sice
+        # naznaci, ze se s grafem da neco delat, ale co, uz ne - stejne
+        # jako u mapy pod tim je proto pod grafem jedna radka.
+        parts.append(
+            f'<p class="card-note chart-napoveda">'
+            f'{_e(_t("Tažením v grafu vybereš rozmezí."))}</p>'
+        )
     return "".join(parts)
 
 
@@ -761,6 +846,11 @@ def sparkline(
     """
     values = [float(p.get(y_key) or 0) for p in points]
     if not values or max(values) <= 0:
+        return ""
+    # Jeden bod neni vyvoj. Stava se to u vlastniho obdobi kratsiho nez
+    # dva dny (treba useku vybraneho tazenim v grafu) - a kreslila se pak
+    # prazdna plocha pod hlavnim cislem, ktera vypadala jako chybejici graf.
+    if len(values) < 2:
         return ""
 
     maximum = max(values)
@@ -814,7 +904,7 @@ def sparkline(
     for index, (x, y) in enumerate(coordinates):
         tip = _bublina(
             str(points[index].get(x_key, "")),
-            [{"text": f"{_fmt(values[index])} {unit}".strip(),
+            [{"text": _udaj(values[index], unit),
               "barva": "var(--accent)"}])
         hit_x, hit_w = _hit(x, hit_width / 2)
         parts.append(

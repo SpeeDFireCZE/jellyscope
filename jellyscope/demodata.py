@@ -392,19 +392,34 @@ def seed() -> dict[str, int]:
         # ukazalo realistickou hodnotu, ne nulu.
         watchable = [item for item in items if random.random() < 0.55]
 
-        for session in range(900):
+        # Dva a pul tisice prehravani, ne devet set.
+        #
+        # Duvod neni "vic je vic": graf souběžneho toku na Siti byl pri
+        # devíti stech tak ridky, ze pres tyden ukazoval par osamelych
+        # spicek a mezi nimi rovnou nulu. Skutecny server, kde se diva
+        # rodina, vypada jinak - vecer bezi tri streamy naraz a graf ma
+        # tvar, ne cárky. Ukazka ma ukazovat, jak to vypada v provozu.
+        for session in range(2500):
             item = random.choice(watchable)
             user = random.choice(USERS)
             client, device = random.choice(CLIENTS)
 
             # Vecerni spicka: vetsina prehravani mezi 18. a 23. hodinou.
-            day_offset = random.uniform(0, 360)
+            # Polovina pripada na posledni mesic - tam se clovek diva
+            # nejcasteji a graf tam ma byt husty.
+            day_offset = (random.uniform(0, 30) if random.random() < 0.5
+                          else random.uniform(0, 360))
             hour = random.choice([19, 20, 20, 21, 21, 22, 18, 23, 14, 10])
             started = (now - timedelta(days=day_offset)).replace(
                 hour=hour, minute=random.randint(0, 59)
             )
             if started > now:
-                started = now - timedelta(hours=2)
+                # Vecerni hodina dnesniho dne je casto jeste v budoucnosti.
+                # Drive se takovy zaznam posunul na "pred dvema hodinami" -
+                # jenze to potkalo stovky zaznamu naraz a v grafu z toho
+                # byla jedna nesmyslna vez o par stech Mbit/s v okamziku,
+                # kdy se ukazka nasela. Posuneme ho tedy o den zpet.
+                started -= timedelta(days=1, minutes=random.randint(0, 240))
 
             runtime_seconds = item[10] / 10_000_000
             watched = int(runtime_seconds * random.uniform(0.08, 1.0))

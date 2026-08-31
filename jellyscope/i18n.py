@@ -304,6 +304,7 @@ EN: dict[str, str] = {
         ", language filled in from Jellyfin for {n} tracks",
     "Obecné": "General",
     "Co se na serveru dělo za posledních": "Server activity over the last",
+    "Co se na serveru dělo ve vybraném období.": "Server activity in the selected period.",
     "Uživatel": "User",
     "Zařízení": "Device",
     "Způsob": "Method",
@@ -1075,6 +1076,25 @@ EN: dict[str, str] = {
         "The original look: blue on a neutral ground, flat cards, badges with a dot. Nothing is lost, it just looks the way it did.",
     "Změní se jen vzhled – žádná data, žádné výpočty. Přepnout jde kdykoliv zpátky.":
         "Only the looks change - no data, no calculations. You can switch back at any time.",
+    "Čas v grafech": "Time in charts",
+    "Zaokrouhlený": "Rounded",
+    "„12 h“, „4,4 h“. Kulatá čísla se čtou rychleji a na první pohled je jasné, o jaký řád jde.":
+        "„12 h“, „4.4 h“. Round numbers read faster and the order of "
+        "magnitude is obvious at a glance.",
+    "Přesný na minuty": "Exact to the minute",
+    "„12:24“, „4:22“. Nad deset hodin se totiž desetinná místa utínají, takže den se 34,52 hodinami se hlásí jako 35 – skoro půlhodina rozdílu.":
+        "„12:24“, „4:22“. Above ten hours the decimals are dropped, so a day "
+        "with 34.52 hours reports 35 – almost half an hour out.",
+    "Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté – tam je „40“ značka měřítka, ne údaj.":
+        "It applies to numbers read as a value: chart tooltips and the "
+        "figures beside bars. Axis labels stay round – there „40“ is a mark "
+        "on the scale, not a reading.",
+    "Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.":
+        "This is purely a display setting. Internally the application always "
+        "works with the seconds Jellyfin reported, and the headline figures "
+        "(„Total watched“) are summed from those – not from what the chart "
+        "shows. The switch changes no data and no calculation, only the "
+        "notation.",
     "Vzhled, dlouhé seznamy a mapa": "Appearance, long lists and the map",
     "jak aplikace vypadá, co karta ukáže rovnou a jak se ovládá mapa":
         "how the app looks, what a card shows right away and how the map is controlled",
@@ -1245,6 +1265,8 @@ EN: dict[str, str] = {
     "Z toho překódovaných": "Of that transcoded",
     "Průměrný tok jednoho streamu": "Average bitrate of one stream",
     "Právě teče": "Flowing right now",
+    "souběžných streamů: {n}": "streams at once: {n}",
+    "Tažením v grafu vybereš rozmezí.": "Drag across the chart to pick a range.",
     "jeden bod": "one point",
     "streamů teče": "streams flowing",
     "z toho přepočet": "of them transcoding",
