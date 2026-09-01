@@ -193,6 +193,19 @@ check(langstats.undefined_language_count(search="serial") == 1,
       "hledat jde i podle cesty")
 check(langstats.undefined_language_count(search="Neznamy") == 1, "i podle názvu")
 
+# Nejen spocitat, ale i vypsat. Seznam pripojuje knihovny a ty maji taky
+# sloupec `name`, takze nepredznacena podminka byla nejednoznacna -
+# a stranka spadla na 500 v okamziku, kdy nekdo neco napsal do hledani.
+nalezene = langstats.undefined_language_files(10, 0, search="Neznamy")
+check([r["id"] for r in nalezene] == ["und"],
+      f"a výpis s hledáním taky projde ({[r['id'] for r in nalezene]})")
+check([r["id"] for r in langstats.undefined_language_files(10, 0, search="Duna")]
+      == ["prazdne"], "hledání podle jména souboru vrátí svůj řádek")
+check([r["id"] for r in langstats.undefined_language_files(10, 0, search="serial")]
+      == ["bez-textu"], "i hledání podle cesty vrátí řádek")
+check(langstats.undefined_language_files(10, 0, search="Filmy") == [],
+      "název knihovny se neprohledává")
+
 # Archivované soubory sem nepatří - ty už na disku nejsou, není co opravovat.
 with db.connect() as conn:
     conn.execute("UPDATE items SET is_missing = 1 WHERE id = 'und'")

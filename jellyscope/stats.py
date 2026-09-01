@@ -1708,17 +1708,53 @@ def resolution_breakdown(library_id: str | None = None) -> list[dict[str, Any]]:
     return rows
 
 
+# Dynamicky rozsah tak, jak ho ukazujeme.
+#
+# Dolby Vision je POZITIVNI NALEZ: kdyz ho ohlasi kterykoli ze zdroju,
+# plati. Zadny z nich ho totiz nehlasi omylem - zato ho oba umi minout.
+# Konkretne ffprobe pred verzi 5 neumi cist DV z Matrosky, takze o filmu,
+# ktery Jellyfin popisuje jako "Dolby Vision Profile 8.1", rekne jen
+# "HDR" - a treti sloupec prehledu by zustal prazdny, prestoze knihovna
+# DV obsahuje.
+#
+# Jinak plati zmereny udaj; kdyz chybi, bere se hlaseny.
+ROZSAH_CASE = """
+    CASE WHEN video_range = 'DOVI' OR video_range_reported = 'DOVI' THEN 'DOVI'
+         ELSE COALESCE(video_range, video_range_reported) END
+"""
+
+
+def rozsah_polozky(polozka: dict[str, Any] | None) -> str | None:
+    """Totez pro jednu polozku - pro detail, kde neni SQL po ruce."""
+    if not polozka:
+        return None
+    zmereny = (polozka.get("video_range") or "").strip().upper()
+    hlaseny = (polozka.get("video_range_reported") or "").strip().upper()
+    if "DOVI" in (zmereny, hlaseny):
+        return "DOVI"
+    return zmereny or hlaseny or None
+
+
 def video_range_breakdown() -> list[dict[str, Any]]:
-    return db.query_all(
-        """
-        SELECT COALESCE(video_range, 'nezname') AS label,
+    radky = db.query_all(
+        f"""
+        SELECT {ROZSAH_CASE} AS rozsah,
                COUNT(*) AS item_count
         FROM items
         WHERE is_missing = 0 AND tech_source IS NOT NULL
-        GROUP BY label
+        GROUP BY rozsah
         ORDER BY item_count DESC
         """
     )
+    # Vic zapisu muze skoncit pod jednim popiskem (prazdny retezec i NULL
+    # jsou obojí "neznamé"), takze se secte, co k sobe patri - jinak by
+    # graf mel dva stejne pojmenovane sloupce.
+    souhrn: dict[str, int] = {}
+    for radek in radky:
+        popis = formatting.video_range_human(radek["rozsah"])
+        souhrn[popis] = souhrn.get(popis, 0) + int(radek["item_count"] or 0)
+    return [{"label": popis, "item_count": pocet}
+            for popis, pocet in sorted(souhrn.items(), key=lambda d: -d[1])]
 
 
 # ---------------------------------------------------------------------------
@@ -2000,7 +2036,7 @@ def library_overview(library_id: str) -> dict[str, Any]:
                COALESCE(SUM(runtime_ticks), 0) / 36000000000.0 AS hours,
                COALESCE(AVG(bitrate), 0)      AS avg_bitrate,
                SUM(CASE WHEN {RESOLUTION_CASE} = '4K' THEN 1 ELSE 0 END) AS uhd_count,
-               SUM(CASE WHEN video_range IN ('HDR', 'DOVI') THEN 1 ELSE 0 END) AS hdr_count,
+               SUM(CASE WHEN {ROZSAH_CASE} IN ('HDR', 'DOVI') THEN 1 ELSE 0 END) AS hdr_count,
                SUM(CASE WHEN tech_source IS NULL THEN 1 ELSE 0 END) AS without_tech
         FROM items
         WHERE is_missing = 0 AND library_id = ?

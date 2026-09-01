@@ -47,6 +47,60 @@ def check(condition: bool, label: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Obě schémata musí popisovat tytéž tabulky
+# ---------------------------------------------------------------------------
+print("--- SQLite a PostgreSQL schéma vedle sebe ---")
+#
+# Schémata jsou dva soubory a sloupec se snadno přidá jen do jednoho.
+# Na SQLite by se nic nestalo, na PostgreSQL by chyběl - a protože migrace
+# ho pak stejně doplní, projevilo by se to až nekonzistencí mezi tím, co
+# je v souboru, a tím, co je v databázi.
+
+
+def _sloupce_tabulek(text: str) -> dict[str, set[str]]:
+    """Z CREATE TABLE vytáhne názvy sloupců. Klíčová slova a omezení ne."""
+    KLICOVA = {"PRIMARY", "FOREIGN", "UNIQUE", "CHECK", "CONSTRAINT", "REFERENCES"}
+    tabulky: dict[str, set[str]] = {}
+    jmeno = None
+    for radek in text.splitlines():
+        holy = radek.strip()
+        if not holy or holy.startswith("--"):
+            continue
+        velky = holy.upper()
+        if velky.startswith("CREATE TABLE"):
+            # "CREATE TABLE IF NOT EXISTS jmeno (" -> jmeno
+            slova = holy.replace("(", " ").split()
+            jmeno = slova[-1].lower() if slova else None
+            if jmeno:
+                tabulky[jmeno] = set()
+            continue
+        if jmeno is None:
+            continue
+        if holy.startswith(")"):
+            jmeno = None
+            continue
+        prvni = holy.split()[0].strip('",')
+        if prvni.upper() not in KLICOVA:
+            tabulky[jmeno].add(prvni.lower())
+    return tabulky
+
+
+sqlite_tabulky = _sloupce_tabulek(
+    (PROJECT / "jellyscope" / "schema.sql").read_text(encoding="utf-8"))
+pg_tabulky = _sloupce_tabulek(
+    (PROJECT / "jellyscope" / "schema_postgres.sql").read_text(encoding="utf-8"))
+
+check(sqlite_tabulky and pg_tabulky, "z obou schémat se dají přečíst tabulky")
+check(set(sqlite_tabulky) == set(pg_tabulky),
+      "obě schémata mají tytéž tabulky "
+      f"({set(sqlite_tabulky) ^ set(pg_tabulky) or 'shodné'})")
+for jmeno in sorted(set(sqlite_tabulky) & set(pg_tabulky)):
+    rozdil = sqlite_tabulky[jmeno] ^ pg_tabulky[jmeno]
+    check(not rozdil, f"tabulka {jmeno} má v obou stejné sloupce"
+                      + (f" (liší se: {sorted(rozdil)})" if rozdil else ""))
+
+print()
+# ---------------------------------------------------------------------------
 # Rozdělení schématu na tabulky a indexy
 # ---------------------------------------------------------------------------
 print("--- rozdělení schématu ---")

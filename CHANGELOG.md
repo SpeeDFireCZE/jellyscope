@@ -6,6 +6,47 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.3.5
+
+### Fixed
+
+- **Dolby Vision is recognised as Dolby Vision.** Jellyfin's `VideoRange`
+  field knows only SDR and HDR, so a Dolby Vision file arrived as ordinary
+  HDR - the "SDR / HDR / Dolby Vision" breakdown never had a third column.
+  The profile is read from `VideoRangeType` now. (It counted towards HDR
+  before and still does; it is simply no longer hidden inside it.)
+
+- **Dolby Vision survives an older ffmpeg.** Reading DV out of a Matroska
+  file needs ffmpeg 5; before that, ffprobe reports no side data, no codec
+  tag and profile "Main 10" - nothing that says Dolby Vision - so a file
+  Jellyfin describes as "Dolby Vision Profile 8.1" was measured as plain
+  HDR. What Jellyfin says is now kept beside what ffprobe measured, and DV
+  counts as found when either of them sees it: neither reports it by
+  mistake, but both can miss it.
+
+- **"Unknown" is no longer sold as a dynamic range.** Jellyfin can answer
+  "Unknown" and that answer was stored verbatim, so the chart grew a column
+  literally named Unknown next to the one for missing data. Both now read
+  "unknown", and DOVI is written out as "Dolby Vision" instead of the
+  internal shorthand.
+
+- **The language from a filename is actually used.** The step that guesses
+  from a name like "Film.2002.DVDRip.XviD.AC3-2.0.CZ.avi" ran on the
+  tracks Jellyfin could not help with - but the step before it marks
+  exactly those tracks as asked-and-unknown, and the search excluded
+  anything marked. The list was therefore always empty, and the guess only
+  ever happened when Jellyfin failed to answer at all.
+
+- **Files with no analysed tracks get a chance too.** When the file itself
+  was never readable - a library the container cannot reach - there were no
+  tracks to look at, so those titles stayed in "Files with no language"
+  forever, even when the name said "CZ" plainly.
+
+- **Searching in "Files with no language" no longer errors out.** The
+  listing joins libraries, which have a `name` column of their own, and the
+  filter did not say which table it meant. Counting worked, listing did
+  not - so the page broke the moment anyone typed into the search box.
+
 ## 1.3.4
 
 ### Added

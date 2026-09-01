@@ -359,6 +359,32 @@ class JellyfinClient:
 # Vytahovani technickych dat z odpovedi Jellyfinu
 # ---------------------------------------------------------------------------
 
+def _dynamicky_rozsah(video: dict[str, Any]) -> str | None:
+    """SDR / HDR / DOVI z toho, co o video stope rika Jellyfin.
+
+    `VideoRange` zna jen SDR a HDR, takze Dolby Vision se pod nim schova
+    jako obycejne HDR. Rozlisi ho az `VideoRangeType` ("DOVI",
+    "DOVIWithHDR10" - to je profil 8.1). Bez nej mel prehled "SDR / HDR /
+    Dolby Vision" treti sloupec vzdycky prazdny, prestoze knihovna DV
+    obsahovala; a co horsi, tentyz soubor se pocital ruzne podle toho,
+    odkud se technicke udaje vzaly - ffprobe DV rozlisuje.
+
+    Neznamy rozsah vraci None, ne "SDR". Jellyfin umi odpovedet "Unknown"
+    a to se drive ulozilo tak, jak prislo, takze v grafu pribyl sloupec
+    doslova nazvany "Unknown" vedle naseho "nezname".
+    """
+    typ = str(video.get("VideoRangeType") or "").strip().upper()
+    if typ.startswith("DOVI"):
+        return "DOVI"
+    if typ in {"HDR", "HDR10", "HDR10PLUS", "HLG"}:
+        return "HDR"
+    if typ == "SDR":
+        return "SDR"
+
+    rozsah = str(video.get("VideoRange") or "").strip().upper()
+    return rozsah if rozsah in {"HDR", "SDR"} else None
+
+
 def extract_tech_from_item(item: dict[str, Any]) -> dict[str, Any]:
     """Z odpovedi Jellyfinu vytahne technicke udaje o souboru.
 
@@ -400,7 +426,7 @@ def extract_tech_from_item(item: dict[str, Any]) -> dict[str, Any]:
             "video_codec": video.get("Codec"),
             "width": video.get("Width"),
             "height": video.get("Height"),
-            "video_range": video.get("VideoRange") or "SDR",
+            "video_range": _dynamicky_rozsah(video),
         })
         # Kdyz kontejner bitrate neuvedl, vezmi aspon ten z video stopy.
         if not tech.get("bitrate"):
@@ -413,6 +439,20 @@ def extract_tech_from_item(item: dict[str, Any]) -> dict[str, Any]:
         })
 
     return tech
+
+
+def video_range_of(item: dict[str, Any]) -> str | None:
+    """Dynamicky rozsah z odpovedi Jellyfinu - i kdyz zbytek udaju nebereme.
+
+    Uklada se vedle zmereneho rozsahu, protoze Dolby Vision v Matrosce
+    umi cist az ffmpeg 5. Starsi ffprobe o nem nerekne nic (nema ani
+    postranni data, ani znacku kodeku) a soubor se tvari jako obycejne
+    HDR - kdezto Jellyfin ho zna. Viz stats.ROZSAH_CASE.
+    """
+    sources = item.get("MediaSources") or []
+    streams = (sources[0].get("MediaStreams") if sources else None) or []
+    video = next((s for s in streams if s.get("Type") == "Video"), None)
+    return _dynamicky_rozsah(video) if video else None
 
 
 def extract_streams(item: dict[str, Any]) -> list[dict[str, Any]]:

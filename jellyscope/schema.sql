@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS items (
     height              INTEGER,
     bitrate             INTEGER,            -- bit/s
     size_bytes          INTEGER,
-    video_range         TEXT,               -- SDR / HDR / DV
+    video_range         TEXT,               -- SDR / HDR / DV (zmereno)
+    video_range_reported TEXT,              -- totez podle Jellyfinu
     tech_source         TEXT,               -- 'jellyfin' nebo 'ffprobe'
     tech_updated_at     TEXT,
     tech_error          TEXT,               -- proc se analyza nepovedla

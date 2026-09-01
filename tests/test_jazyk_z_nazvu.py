@@ -239,5 +239,81 @@ check(smisena.count("Jazyk nezná soubor ani Jellyfin") == 1,
       f"jen u té odhadnuté, ne u obou ({smisena.count('Jazyk nezná soubor ani Jellyfin')})")
 
 print()
+print("--- podoby z opravdové knihovny ---")
+# Deset názvů z ostré knihovny. Nejsou to výmysly: liší se oddělovačem
+# před značkou (tečka, pomlčka, mezera, závorka, podtržítko, vlnovka),
+# velikostí písmen i tím, co za značkou následuje.
+for nazev, ocekavane in (
+    ("Vratne lahve 2022.CZ.SK.EN.WebRip.1080p.HEVC.C4U.mkv", ["cs", "sk", "en"]),
+    ("Vratne lahve_ (2004) HD cz.avi", ["cs"]),
+    ("Vratne lahve (Nejlepší Kvalita) CZ.avi", ["cs"]),
+    ("Vratne lahve 1080p - 5.1 CZ.mkv", ["cs"]),
+    ("Vratne lahve (1964)(CZ)[TvRip].mp4", ["cs"]),
+    ("Vratne lahve ~ (2015) HD cz.avi", ["cs"]),
+    ("Vratne lahve.2002.DVDRip.XviD.AC3-2.0.CZ.avi", ["cs"]),
+    ("Vratne lahve-2003CZ.mp4", ["cs"]),
+    ("Vratne lahve-1990-1080p-cz.mp4", ["cs"]),
+    ("Vratne lahve.2015.THEATRiCAL.1080p.BDRip.x264.CZ.dabing.mkv", ["cs"]),
+):
+    nalezene = languages.z_nazvu(nazev)["zvuk"]
+    check(nalezene == ocekavane,
+          f"{nazev[13:]:<48} -> {nalezene or 'nic'}")
+
+print()
+print("--- ke kroku 'z názvu' se soubory musí vůbec dostat ---")
+# Tohle byla ta chyba, kvůli které to v ostrém provozu nefungovalo:
+# krok výš označí stopy, se kterými Jellyfin nepomohl, jako "neznamy" -
+# a hledání kandidátů se ptalo jen na stopy BEZ označení. Seznam byl
+# proto vždycky prázdný a název souboru se nepoužil vůbec; fungovalo to
+# jen ve chvíli, kdy Jellyfin neodpověděl.
+with db.connect() as conn:
+    conn.execute("INSERT INTO libraries (id, name) VALUES ('kn1','Filmy')"
+                 " ON CONFLICT(id) DO NOTHING")
+    # a) stopa, na kterou se Jellyfina už ptalo a nevěděl
+    conn.execute(
+        "INSERT INTO items (id, name, type, library_id, is_missing, path)"
+        " VALUES ('kand1','Film','Movie','kn1',0,"
+        "'/media/Film.2002.DVDRip.XviD.AC3-2.0.CZ.avi')")
+    conn.execute("INSERT INTO item_streams (item_id, stream_index, type, language,"
+                 " language_source) VALUES ('kand1', 1, 'Audio', 'und', 'neznamy')")
+    # b) položka bez jediné stopy - analýza souboru se nikdy nepovedla
+    conn.execute(
+        "INSERT INTO items (id, name, type, library_id, is_missing, path)"
+        " VALUES ('kand2','Film2','Movie','kn1',0,'/media/Film2-1990-1080p-cz.mp4')")
+    # c) co jazyk zná, se do seznamu plést nesmí
+    conn.execute(
+        "INSERT INTO items (id, name, type, library_id, is_missing, path,"
+        " audio_languages) VALUES ('kand3','Film3','Movie','kn1',0,"
+        "'/media/Film3.CZ.mkv','cs')")
+    conn.commit()
+
+kandidati = scanner.kandidati_na_jazyk_z_nazvu()
+check("kand1" in kandidati, "stopa označená 'neznamy' je kandidát")
+check("kand2" in kandidati, "položka bez stop taky")
+check("kand3" not in kandidati, "a co jazyk zná, se nepřidává")
+
+check(scanner.doplnit_jazyky_z_nazvu(["kand1", "kand2"]) == 2, "oběma se jazyk doplní")
+prvni = db.query_one("SELECT language, language_source FROM item_streams"
+                     " WHERE item_id = 'kand1'")
+check(prvni["language"] == "cs" and prvni["language_source"] == "nazev",
+      "u stopy je čeština z názvu")
+druhy = db.query_one("SELECT audio_languages, audio_from_name FROM items"
+                     " WHERE id = 'kand2'")
+check((druhy["audio_languages"] or druhy["audio_from_name"]) == "cs",
+      "u položky bez stop je čeština aspoň v souhrnu")
+
+# Podruhé už není co dělat - jinak by se to počítalo dokola při každé
+# analýze knihovny.
+check("kand2" not in scanner.kandidati_na_jazyk_z_nazvu(),
+      "hotová položka se podruhé nenabízí")
+
+# Rozsah: obnova jedné položky nesmí projít celou knihovnu.
+check(scanner.kandidati_na_jazyk_z_nazvu(item_ids=["kand1"]) == ["kand1"]
+      or scanner.kandidati_na_jazyk_z_nazvu(item_ids=["kand1"]) == [],
+      "omezení na položku se dodrží")
+check("kand1" not in scanner.kandidati_na_jazyk_z_nazvu(library_id="jina"),
+      "a omezení na knihovnu taky")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

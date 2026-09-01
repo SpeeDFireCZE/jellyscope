@@ -543,7 +543,7 @@ def undefined_language_files(limit: int, offset: int,
 def undefined_language_count(search: str | None = None) -> int:
     where, params = _filtr_bez_jazyka(search)
     return int(db.query_value(
-        f"SELECT COUNT(*) FROM items WHERE {' AND '.join(where)}", tuple(params)))
+        f"SELECT COUNT(*) FROM items i WHERE {' AND '.join(where)}", tuple(params)))
 
 
 def _filtr_bez_jazyka(search: str | None) -> tuple[list[str], list[Any]]:
@@ -551,13 +551,18 @@ def _filtr_bez_jazyka(search: str | None) -> tuple[list[str], list[Any]]:
 
     Obe funkce se musi ptat na tutez mnozinu; kdyz se filtr opisoval
     dvakrat, stacilo upravit jeden a strankovani zacalo lhat.
+
+    Sloupce jsou psane s prefixem `i.`, protoze seznam pripojuje knihovny
+    a ty maji taky sloupec `name`. Bez prefixu byl dotaz nejednoznacny -
+    jenze jen s vyplnenym hledanim, takze stranka fungovala az do chvile,
+    kdy nekdo neco napsal do vyhledavaciho pole.
     """
-    where = ["is_missing = 0",
-             "(audio_languages IS NULL OR audio_languages = '' "
-             "OR audio_languages = 'und')"]
+    where = ["i.is_missing = 0",
+             "(i.audio_languages IS NULL OR i.audio_languages = '' "
+             "OR i.audio_languages = 'und')"]
     params: list[Any] = []
     if search:
-        where.append("(name LIKE ? OR series_name LIKE ? OR path LIKE ?)")
+        where.append("(i.name LIKE ? OR i.series_name LIKE ? OR i.path LIKE ?)")
         params.extend([f"%{search}%"] * 3)
     return where, params
 

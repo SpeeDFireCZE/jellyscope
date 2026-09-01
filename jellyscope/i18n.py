@@ -503,6 +503,7 @@ EN: dict[str, str] = {
     "Aktivita": "Activity",
     "Ve 4K": "In 4K",
     "HDR / Dolby Vision": "HDR / Dolby Vision",
+    "neznámé": "unknown",
     "Jazyky v této knihovně": "Languages in this library",
     "kolik titulů danou zvukovou stopu obsahuje": "how many titles contain each audio track",
     "Titul s českou i anglickou stopou se počítá do obou řádků, součet proto převyšuje počet titulů.":

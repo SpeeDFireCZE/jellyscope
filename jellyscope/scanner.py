@@ -22,7 +22,7 @@ from . import db, languages, probe
 from .i18n import translate as _t
 from .config import load_config
 from .jellyfin import (JellyfinClient, JellyfinError, extract_streams,
-                       extract_tech_from_item)
+                       extract_tech_from_item, video_range_of)
 
 log = logging.getLogger("jellyscope.scanner")
 
@@ -796,6 +796,11 @@ def _radek_polozky(item: dict[str, Any], library_id: Any,
         tech.get("bitrate"),
         tech.get("size_bytes"),
         tech.get("video_range"),
+        # Co o rozsahu rika Jellyfin. Uklada se i v rezimu ffprobe, kde
+        # se zbytek technickych udaju z Jellyfinu nebere: Dolby Vision
+        # v Matrosce umi cist az ffmpeg 5, takze starsi ffprobe hlasi jen
+        # "HDR" - a Jellyfin je pak jediny, kdo o DV vi.
+        video_range_of(item),
         tech.get("audio_languages"),
         tech.get("subtitle_languages"),
         tech.get("default_audio_language"),
@@ -1076,6 +1081,7 @@ def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
                        SET container = NULL, video_codec = NULL, audio_codec = NULL,
                            audio_channels = NULL, width = NULL, height = NULL,
                            bitrate = NULL, size_bytes = NULL, video_range = NULL,
+                           video_range_reported = NULL,
                            audio_languages = NULL, subtitle_languages = NULL,
                            default_audio_language = NULL,
                            audio_from_name = NULL, subtitle_from_name = NULL,
@@ -1137,6 +1143,7 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
                     bitrate         = COALESCE(excluded.bitrate, items.bitrate),
                     size_bytes      = COALESCE(excluded.size_bytes, items.size_bytes),
                     video_range     = COALESCE(excluded.video_range, items.video_range),
+                    video_range_reported = excluded.video_range_reported,
                     audio_languages = COALESCE(excluded.audio_languages, items.audio_languages),
                     subtitle_languages = COALESCE(excluded.subtitle_languages, items.subtitle_languages),
                     default_audio_language = COALESCE(excluded.default_audio_language,
@@ -1155,6 +1162,7 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
                     bitrate         = excluded.bitrate,
                     size_bytes      = excluded.size_bytes,
                     video_range     = excluded.video_range,
+                    video_range_reported = excluded.video_range_reported,
                     audio_languages = excluded.audio_languages,
                     subtitle_languages = excluded.subtitle_languages,
                     default_audio_language = excluded.default_audio_language,
@@ -1169,9 +1177,10 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
             index_number, parent_index_number, production_year, runtime_ticks,
             date_created, path, tmdb_id, genres, container, video_codec, audio_codec,
             audio_channels, width, height, bitrate, size_bytes, video_range,
+            video_range_reported,
             audio_languages, subtitle_languages, default_audio_language,
             tech_source, tech_updated_at, series_image_tag, image_tag, synced_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             type = excluded.type,
@@ -1686,9 +1695,7 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
         # Co nezná ani Jellyfin, zkusíme uhodnout z názvu souboru. Až
         # teď a jen na tom, co zbylo: název je odhad, kdežto soubor
         # a knihovna jsou údaj.
-        zbyle = {radek["item_id"] for radek in db.query_all(
-            f"SELECT DISTINCT item_id FROM item_streams WHERE {podminka}",
-            tuple(parametry_zpetne))}
+        zbyle = set(kandidati_na_jazyk_z_nazvu(library_id, item_ids))
         z_nazvu = 0
         if zbyle and not stop_requested():
             z_nazvu = await asyncio.to_thread(doplnit_jazyky_z_nazvu, sorted(zbyle))
@@ -1805,6 +1812,59 @@ def _doplnit_jazyky_polozky(item: dict[str, Any]) -> int:
     if zmeny:
         _prepocitej_jazyky_polozky(item_id)
     return len(zmeny)
+
+
+def kandidati_na_jazyk_z_nazvu(library_id: str | None = None,
+                               item_ids: list[str] | None = None) -> list[str]:
+    """Polozky, u kterych ma smysl zkusit jazyk odhadnout z nazvu souboru.
+
+    Dve skupiny, a obe se daly prehlednout:
+
+    * **Stopy, se kterymi nepomohl Jellyfin.** Ten krok si je oznaci jako
+      "neznamy", aby se na ne priste neptal znovu. Kdyz se pak hledaly
+      stopy BEZ oznaceni, byl seznam vzdycky prazdny a nazev souboru se
+      nepouzil vubec - fungovalo to jen ve chvili, kdy Jellyfin
+      neodpovedel. Proto se tu berou obe podoby.
+
+    * **Polozky, ktere nemaji ani stopu.** U nich se analyza souboru
+      nikdy nepovedla - typicky knihovna, ke ktere kontejner nema
+      pristup. Nazev je pak jediny zdroj, jaky existuje; bez toho by
+      takove soubory zustaly v "Souborech bez urceneho jazyka" navzdy.
+
+    `library_id` a `item_ids` drzi stejny rozsah jako analyza: obnova
+    jedne polozky nesmi spustit prochazeni cele knihovny.
+    """
+    kde_stop = ["language = ?",
+                "(language_source IS NULL OR language_source = 'neznamy')",
+                "type IN ('Audio', 'Subtitle')"]
+    hodnoty_stop: list[Any] = [languages.UNKNOWN]
+    # `audio_from_name IS NULL` hlida, at se to nepocita dokola u toho,
+    # co uz nazev jednou vydal.
+    kde_polozek = ["is_missing = 0", "path IS NOT NULL", "path <> ''",
+                   "audio_from_name IS NULL",
+                   "(audio_languages IS NULL OR audio_languages = ''"
+                   " OR audio_languages = ?)"]
+    hodnoty_polozek: list[Any] = [languages.UNKNOWN]
+
+    if library_id:
+        kde_stop.append("item_id IN (SELECT id FROM items WHERE library_id = ?)")
+        hodnoty_stop.append(library_id)
+        kde_polozek.append("library_id = ?")
+        hodnoty_polozek.append(library_id)
+    if item_ids:
+        otazniky = ",".join("?" for _ in item_ids)
+        kde_stop.append(f"item_id IN ({otazniky})")
+        hodnoty_stop.extend(item_ids)
+        kde_polozek.append(f"id IN ({otazniky})")
+        hodnoty_polozek.extend(item_ids)
+
+    nalezene = {radek["item_id"] for radek in db.query_all(
+        f"SELECT DISTINCT item_id FROM item_streams "
+        f"WHERE {' AND '.join(kde_stop)}", tuple(hodnoty_stop))}
+    nalezene |= {radek["id"] for radek in db.query_all(
+        f"SELECT id FROM items WHERE {' AND '.join(kde_polozek)}",
+        tuple(hodnoty_polozek))}
+    return sorted(nalezene)
 
 
 def doplnit_jazyky_z_nazvu(item_ids: list[str]) -> int:

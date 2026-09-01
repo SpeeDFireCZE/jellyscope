@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS items (
     bitrate             BIGINT,
     size_bytes          BIGINT,
     video_range         TEXT,
+    video_range_reported TEXT,
     tech_source         TEXT,
     tech_updated_at     TEXT,
     tech_error          TEXT,

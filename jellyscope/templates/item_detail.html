@@ -109,7 +109,7 @@
                     <tr><th>{{ _("Délka") }}</th><td>{{ item.runtime_ticks | ticks | timecode }}</td></tr>
                     <tr><th>{{ _("Velikost") }}</th><td>{{ item.size_bytes | bytes }}</td></tr>
                     <tr><th>{{ _("Celkový bitrate") }}</th><td>{{ item.bitrate | bitrate }}</td></tr>
-                    <tr><th>{{ _("Dynamický rozsah") }}</th><td>{{ item.video_range or '-' }}</td></tr>
+                    <tr><th>{{ _("Dynamický rozsah") }}</th><td>{{ rozsah | video_range if rozsah else '-' }}</td></tr>
                     <tr><th>{{ _("Knihovna") }}</th><td>{{ item.library_name or '-' }}</td></tr>
                     <tr><th>{{ _("Přidáno") }}</th><td>{{ item.date_created | datetime }}</td></tr>
                     <tr><th>{{ _("Data změřena") }}</th><td>{{ item.tech_updated_at | relative }}</td></tr>

@@ -181,6 +181,17 @@ def resolution_human(height: Any, width: Any = None) -> str:
     return f"{h}p" if h > 0 else f"{w}x?"
 
 
+# Jak se vnitrni zkratka rozsahu pise cloveku. "DOVI" je nas zapis, ne
+# nazev technologie, a "nezname" byla vylozene programatorska zkratka -
+# oboji se pritom ukazovalo v grafu tak, jak stoji v databazi.
+ROZSAHY = {"SDR": "SDR", "HDR": "HDR", "DOVI": "Dolby Vision"}
+
+
+def video_range_human(value: Any) -> str:
+    """Dynamicky rozsah pro cloveka. Co neznáme, se prizna."""
+    return ROZSAHY.get(str(value or "").strip().upper()) or _t("neznámé")
+
+
 def number(value: Any) -> str:
     """Cislo s mezerou po tisicich - ceska konvence."""
     try:
@@ -322,4 +333,5 @@ def register(env: Any) -> None:
         "datetime": datetime_human,
         "relative": relative_human,
         "usek": usek,
+        "video_range": video_range_human,
     })

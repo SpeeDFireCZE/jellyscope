@@ -242,14 +242,50 @@ def _language_of(stream: dict[str, Any] | None) -> str | None:
     return (stream.get("tags") or {}).get("language")
 
 
+# Znacky kodeku, kterymi se Dolby Vision hlasi v kontejneru: dvh1/dvhe
+# je HEVC s DV, dvav/dva1 totez pro H.264 a dav1 pro AV1. Obycejne
+# hev1/hvc1 tuhle znacku nemaji, takze planou detekci nehrozi.
+DV_ZNACKY = {"dvh1", "dvhe", "dvav", "dva1", "dav1"}
+
+
+def _je_dolby_vision(video: dict[str, Any]) -> bool:
+    """Nese video stopa Dolby Vision?
+
+    Ptame se na tri veci, protoze ruzne verze ffprobe a ruzne kontejnery
+    to hlasi jinak - a staci, aby se minula jedna, a DV soubor se zapsal
+    jako obycejne HDR:
+
+    * **postranni data** - hlavni cesta ("DOVI configuration record").
+      Nazev se ale mezi verzemi lisil, tak se hleda podretezec, a jako
+      pojistka staci i to, ze blok nese pole `dv_profile`.
+    * **znacka kodeku** ("dvh1", "dvhe") - u MP4 a MOV je v kontejneru
+      i tehdy, kdyz ffprobe postranni data nevypise.
+    * **jmeno profilu** - nektere sestaveni pisou "Dolby Vision" rovnou
+      do `profile`.
+
+    Co tohle nechyti, je stary ffmpeg nad MKV: cist DV z Matrosky umi az
+    novejsi verze, a starsi o nem nerekne vubec nic.
+    """
+    for blok in (video.get("side_data_list") or []):
+        typ = str(blok.get("side_data_type") or "").lower()
+        if "dovi" in typ or "dolby vision" in typ:
+            return True
+        if any(str(klic).startswith("dv_") for klic in blok):
+            return True
+
+    if str(video.get("codec_tag_string") or "").strip().lower() in DV_ZNACKY:
+        return True
+
+    return "dolby vision" in str(video.get("profile") or "").lower()
+
+
 def _detect_video_range(video: dict[str, Any]) -> str:
     """Odhadne, jestli je video SDR, HDR nebo Dolby Vision.
 
     Jde o odhad podle barevnych metadat. Presnejsi klasifikace by chtela
     hlubsi rozbor, ale pro statistiku "kolik mam HDR obsahu" tohle staci.
     """
-    if any(sd.get("side_data_type") == "DOVI configuration record"
-           for sd in (video.get("side_data_list") or [])):
+    if _je_dolby_vision(video):
         return "DOVI"
 
     transfer = (video.get("color_transfer") or "").lower()

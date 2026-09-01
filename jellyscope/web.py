@@ -1415,6 +1415,9 @@ def item_detail(
     return templates.TemplateResponse(request, "item_detail.html", _context(
         request, account,
         item=item_row,
+        # Rozsah slucuje zmereny udaj s tim, co hlasi Jellyfin - viz
+        # stats.ROZSAH_CASE. Sablona nema kde to spocitat.
+        rozsah=stats.rozsah_polozky(item_row),
         streams=stats.item_streams(item_id),
         playback=stats.item_playback(item_id),
         summary=stats.item_playback_summary(item_id),

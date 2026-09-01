@@ -214,7 +214,10 @@ def seed() -> dict[str, int]:
                 int(height * 16 / 9), height,
                 int(size * 8 / (random.uniform(90, 160) * 60)),
                 size,
-                "HDR" if is_huge else "SDR",
+                # Cast velkych filmu je Dolby Vision - v knihovnach je to
+                # bezne a bez nej by treti sloupec "SDR / HDR / Dolby
+                # Vision" v ukazce nikdy nic neukazal.
+                (random.choice(["HDR", "HDR", "DOVI"]) if is_huge else "SDR"),
                 *_audio_tracks(random),
                 random.choice(["ffprobe", "ffprobe", "jellyfin"]),
                 _ts(now), _ts(now),
@@ -245,7 +248,7 @@ def seed() -> dict[str, int]:
                 "matroska", codec, "eac3", 6,
                 int(height * 16 / 9), height,
                 int(size * 1024 ** 3 * 8 / (169 * 60)), size * 1024 ** 3,
-                "HDR" if height > 2000 else "SDR",
+                "DOVI" if height > 2000 else "SDR",
                 "cs,en", "cs,en", "cs",
                 "ffprobe", _ts(now), _ts(now),
             ))

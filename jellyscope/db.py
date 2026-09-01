@@ -579,6 +579,11 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # Zanry z Jellyfinu, oddelene svislitkem. Pouzivaji se v detailu
         # uzivatele - "co ten clovek vlastne sleduje".
         "genres": "TEXT",
+        # Dynamicky rozsah tak, jak ho hlasi Jellyfin (SDR/HDR/DOVI).
+        # Vedle toho, co zmeril ffprobe: Dolby Vision v Matrosce umi cist
+        # az ffmpeg 5, takze starsi ffprobe hlasi jen "HDR" a DV se ztrati.
+        # Jellyfin ho pritom zna. Viz stats.ROZSAH_CASE.
+        "video_range_reported": "TEXT",
     },
     "item_streams": {
         # Odkud jazyk stopy je. Prazdne = ze zdroje technickych dat,
