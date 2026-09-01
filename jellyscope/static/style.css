@@ -2665,3 +2665,180 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     padding: 8px 15px;
     font-weight: 550;
 }
+
+/* ------------------------------------------------------------------ */
+/* Vlastní přehled                                                     */
+/* ------------------------------------------------------------------ */
+.dash-ovladani {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+/* Šest sloupců, aby vyšly třetiny i půlky. Pod 900 px jde všechno pod
+   sebe: z grafu v třetině úzké obrazovky by byl proužek. */
+.dash-plocha { display: flex; flex-direction: column; gap: 18px; }
+
+/* Rozestup dělá výhradně `gap`, stejně jako u `.grid-2` na ostatních
+   stránkách. Karta uvnitř sekce si ale nese vlastní spodní okraj 18 px,
+   takže bez tohohle byla mezera dvojnásobná proti Jazykům nebo Síti. */
+.dash-sekce > *:last-child { margin-bottom: 0; }
+
+@media (min-width: 900px) {
+    .dash-plocha {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 18px;
+        align-items: start;
+    }
+    .dash-sekce.dash-tretina { grid-column: span 2; }
+    .dash-sekce.dash-pul     { grid-column: span 3; }
+    .dash-sekce.dash-cela    { grid-column: span 6; }
+}
+
+.dash-vyzva { text-align: center; padding: 28px 20px; }
+
+/* --- okno s rozvržením --------------------------------------------- */
+/* Skládá se tady, ne přetahováním skutečných panelů: panel s grafem je
+   vysoký přes půl obrazovky, takže při jeho tažení nebylo vidět, kam
+   míří. Na mřížce dlaždic je celé rozvržení naráz.
+
+   Okno má strop výšky a uvnitř se dělí na hlavu, dva posuvné sloupce
+   a patu. Bez toho rostlo s počtem dlaždic, až nabídka i tlačítka
+   skončily pod spodním okrajem obrazovky - a nedalo se k nim dostat. */
+.okno-rozvrzeni {
+    width: min(1040px, calc(100vw - 40px));
+    max-height: min(88vh, 900px);
+    /* Sloupce si posuv řeší samy; okno nic neořezává. */
+    overflow: hidden;
+}
+
+/* `display` patří výhradně na otevřené okno. Zavřený <dialog> skrývá
+   prohlížeč vlastním `display: none` - a obyčejné `display: flex` mu to
+   přebije, takže okno zůstane viset na stránce i po zavření. Přesně to
+   se stalo: křížek okno zavřel, ale nebylo to vidět. */
+.okno-rozvrzeni[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+.okno-sloupce {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px;
+    /* `min-height: 0` je nutnost, ne kosmetika: bez něj se posuvný
+       potomek v gridu roztáhne podle obsahu a přeteče okno. */
+    min-height: 0;
+    flex: 1;
+}
+
+.dash-sloupec {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.dash-sloupec > .card-note { margin-bottom: 8px; }
+
+/* Nabídka je vpravo, ne pod mřížkou - jinak se s přibývajícími sekcemi
+   odsouvá dolů a zmizí pod okrajem. */
+@media (max-width: 860px) {
+    .okno-sloupce { grid-template-columns: minmax(0, 1fr); }
+    .dash-sloupec-nabidka { max-height: 240px; }
+}
+
+.dash-mrizka {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    padding: 10px;
+    min-height: 92px;
+    /* Posouvá se jen mřížka, ne celé okno. */
+    overflow-y: auto;
+    flex: 1;
+    border-radius: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--rail);
+    position: relative;      /* kvůli proužku, kam dlaždice spadne */
+}
+.dash-mrizka.dash-prazdno::before {
+    content: attr(data-prazdno);
+    color: var(--text-muted);
+    font-size: 13px;
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 22px 0;
+}
+
+.dash-dlazdice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 54px;
+    padding: 8px 8px 8px 12px;
+    border-radius: 10px;
+    background: var(--surface-1);
+    border: 1px solid var(--rail);
+    cursor: grab;
+    user-select: none;
+}
+.dash-mrizka.dash-tahne .dash-dlazdice { cursor: grabbing; }
+.dash-dlazdice.dash-tretina { grid-column: span 2; }
+.dash-dlazdice.dash-pul     { grid-column: span 3; }
+.dash-dlazdice.dash-cela    { grid-column: span 6; }
+.dash-tazena { opacity: 0.35; }
+
+.dash-dl-nazev { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+.dash-dl-nastroje { display: flex; gap: 5px; flex: none; }
+.dash-dl-nastroje .btn { padding: 2px 8px; font-size: 12px; cursor: pointer; }
+.dash-sirka { min-width: 30px; font-variant-numeric: tabular-nums; }
+
+/* Kam dlaždice spadne. Kreslí se absolutně, takže se rozmístění kvůli
+   němu nemění - a rozhodnutí "kam to patří" se nemá o co překlápět. */
+.dash-cil {
+    position: absolute;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 70%, transparent);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.dash-nabidka-seznam {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    flex: 1;
+    padding-right: 4px;
+}
+.dash-polozka {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    text-align: left;
+    padding: 9px 11px;
+    border-radius: 10px;
+    border: 1px solid var(--rail);
+    background: var(--surface-2);
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+}
+.dash-polozka:hover:not(:disabled) { border-color: var(--accent); }
+.dash-polozka:disabled { opacity: 0.4; cursor: default; }
+.dash-polozka-nazev { font-weight: 600; font-size: 12.5px; }
+.dash-polozka-popis { font-size: 11.5px; color: var(--text-muted); }
+
+/* Pata drží tlačítka na místě, ať je v mřížce cokoliv. */
+.okno-pata {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin: 16px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--rail);
+    flex: none;
+}

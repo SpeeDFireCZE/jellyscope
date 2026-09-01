@@ -10,7 +10,7 @@ Registruji se jako filtry Jinja2, takze v sablone se pak pise:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -185,6 +185,17 @@ def resolution_human(height: Any, width: Any = None) -> str:
 # nazev technologie, a "nezname" byla vylozene programatorska zkratka -
 # oboji se pritom ukazovalo v grafu tak, jak stoji v databazi.
 ROZSAHY = {"SDR": "SDR", "HDR": "HDR", "DOVI": "Dolby Vision"}
+
+
+def cesky_datum(iso: Any) -> str:
+    """2026-08-01 -> 1.8.2026. Do formulare i do vet o obdobi."""
+    if not iso:
+        return ""
+    try:
+        den = date.fromisoformat(str(iso)[:10])
+    except ValueError:
+        return ""
+    return f"{den.day}.{den.month}.{den.year}"
 
 
 def video_range_human(value: Any) -> str:

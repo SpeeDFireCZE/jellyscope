@@ -45,6 +45,13 @@
 
         <nav class="nav">
             {% set path = request.url.path %}
+            {# Vlastní přehled stojí nad Přehledem - je to první, co člověk
+               po přihlášení uvidí. V menu je jen tehdy, když je zapnutý
+               A něco v něm je: zapnutá prázdná záložka by byla horší než
+               žádná. #}
+            {% if vlastni_prehled %}
+            <a href="/dashboard" class="{{ 'active' if path.startswith('/dashboard') }}">{{ _("Vlastní přehled") }}</a>
+            {% endif %}
             <a href="/"          class="{{ 'active' if path == '/' }}">{{ _("Přehled") }}</a>
             <a href="/insights"  class="{{ 'active' if path.startswith('/insights') }}">{{ _("Zjištění") }}</a>
             <a href="/languages" class="{{ 'active' if path.startswith('/languages') }}">{{ _("Jazyky") }}</a>
@@ -643,6 +650,218 @@
     //
     // Obnovuje se jen tenhle jeden kus, ne celá stránka. Kdyby se načítala
     // celá, odrolovalo by to na začátek a zahodilo rozečtenou tabulku.
+    // ------------------------------------------------------------------
+    // Rozvržení vlastního přehledu
+    //
+    // Skládá se v okně, na mřížce dlaždic - ne přetahováním skutečných
+    // panelů po stránce. Panel s grafem je vysoký přes půl obrazovky,
+    // takže při jeho tažení nebylo vidět, kam míří, a celé rozvržení se
+    // nevešlo na jednu obrazovku. Na mřížce je vidět naráz.
+    //
+    // Během tažení se s dlaždicemi NEHÝBE: ukazuje se jen proužek tam,
+    // kam dlaždice spadne. Dokud se pořadí měnilo už během tahu,
+    // přeskládala se mřížka pod kurzorem a další rozhodnutí se z té
+    // změněné geometrie překlopilo zpátky - dlaždice pak poskakovaly.
+    // ------------------------------------------------------------------
+    (function () {
+        var mrizka = document.getElementById("dash-mrizka");
+        if (!mrizka) { return; }
+
+        var nabidka = document.getElementById("dash-nabidka");
+        var formular = document.getElementById("dash-form");
+        var poradiPole = document.getElementById("dash-poradi");
+        var zrusit = document.getElementById("dash-zrusit");
+        var okno = document.getElementById("okno-rozvrzeni");
+        var SIRKY = ["tretina", "pul", "cela"];
+        var ZNACKY = { tretina: "⅓", pul: "½", cela: "1" };
+
+        var tazena = null;       // dlaždice, která se přesouvá
+        var ukazatel = null;     // proužek na místě, kam spadne
+        var cil = null;          // před kterou dlaždici se vloží
+        var mista = [];          // kam všude se dá pustit
+
+        function dlazdice() {
+            return Array.prototype.slice.call(
+                mrizka.querySelectorAll(".dash-dlazdice"));
+        }
+
+        function zadani() {
+            return dlazdice().map(function (d) {
+                return d.dataset.sekce + ":" + (d.dataset.sirka || "cela");
+            }).join(",");
+        }
+
+        function obnovNabidku() {
+            if (!nabidka) { return; }
+            var pouzite = {};
+            dlazdice().forEach(function (d) { pouzite[d.dataset.sekce] = true; });
+            Array.prototype.forEach.call(
+                nabidka.querySelectorAll("[data-pridat]"), function (b) {
+                    b.disabled = !!pouzite[b.dataset.pridat];
+                });
+            mrizka.classList.toggle("dash-prazdno", dlazdice().length === 0);
+        }
+
+        // --- přidání a odebrání ---------------------------------------
+        if (nabidka) {
+            nabidka.addEventListener("click", function (event) {
+                var tlacitko = event.target.closest("[data-pridat]");
+                if (!tlacitko || tlacitko.disabled) { return; }
+                var sirka = tlacitko.dataset.sirka || "cela";
+                var nova = document.createElement("div");
+                nova.className = "dash-dlazdice dash-" + sirka;
+                nova.dataset.sekce = tlacitko.dataset.pridat;
+                nova.dataset.sirka = sirka;
+
+                var nazev = document.createElement("span");
+                nazev.className = "dash-dl-nazev";
+                // textContent, ne innerHTML: název je text, ne značky.
+                nazev.textContent =
+                    tlacitko.querySelector(".dash-polozka-nazev").textContent;
+
+                var nastroje = document.createElement("span");
+                nastroje.className = "dash-dl-nastroje";
+                var prepinac = document.createElement("button");
+                prepinac.className = "btn dash-sirka";
+                prepinac.type = "button";
+                prepinac.textContent = ZNACKY[sirka];
+                var pryc = document.createElement("button");
+                pryc.className = "btn dash-pryc";
+                pryc.type = "button";
+                pryc.textContent = "×";
+                nastroje.appendChild(prepinac);
+                nastroje.appendChild(pryc);
+
+                nova.appendChild(nazev);
+                nova.appendChild(nastroje);
+                mrizka.appendChild(nova);
+                obnovNabidku();
+                nova.scrollIntoView({ block: "nearest" });
+            });
+        }
+
+        mrizka.addEventListener("click", function (event) {
+            var dl = event.target.closest(".dash-dlazdice");
+            if (!dl) { return; }
+
+            if (event.target.closest(".dash-pryc")) {
+                dl.remove();
+                obnovNabidku();
+                return;
+            }
+            var prepinac = event.target.closest(".dash-sirka");
+            if (prepinac) {
+                var dalsi = SIRKY[(SIRKY.indexOf(dl.dataset.sirka) + 1) % SIRKY.length];
+                SIRKY.forEach(function (s) { dl.classList.remove("dash-" + s); });
+                dl.classList.add("dash-" + dalsi);
+                dl.dataset.sirka = dalsi;
+                prepinac.textContent = ZNACKY[dalsi];
+            }
+        });
+
+        // --- přesouvání tažením ---------------------------------------
+        function spoctiMista() {
+            // Před každou dlaždici jedno místo a za tu poslední ještě
+            // jedno. Geometrie se bere teď a během tažení se nemění.
+            var seznam = [];
+            dlazdice().forEach(function (d) {
+                var r = d.getBoundingClientRect();
+                seznam.push({ pred: d, x: r.left - 5, y: r.top, vyska: r.height });
+                seznam.push({ pred: d.nextElementSibling, x: r.right + 5,
+                              y: r.top, vyska: r.height });
+            });
+            return seznam;
+        }
+
+        function ukazCil(misto) {
+            // Souřadnice míst jsou z okna, ukazatel se kreslí do obsahu
+            // mřížky - a ta se posouvá. Bez připočtení posuvu by proužek
+            // u odrolované mřížky seděl jinde, než kam dlaždice spadne.
+            var r = mrizka.getBoundingClientRect();
+            ukazatel.style.left = (misto.x - r.left + mrizka.scrollLeft) + "px";
+            ukazatel.style.top = (misto.y - r.top + mrizka.scrollTop) + "px";
+            ukazatel.style.height = misto.vyska + "px";
+        }
+
+        mrizka.addEventListener("pointerdown", function (event) {
+            if (event.button !== 0) { return; }
+            if (event.target.closest(".dash-pryc") ||
+                event.target.closest(".dash-sirka")) { return; }
+            tazena = event.target.closest(".dash-dlazdice");
+            if (!tazena) { return; }
+
+            mista = spoctiMista();
+            cil = null;
+            tazena.classList.add("dash-tazena");
+            mrizka.classList.add("dash-tahne");
+            ukazatel = document.createElement("div");
+            ukazatel.className = "dash-cil";
+            mrizka.appendChild(ukazatel);
+            if (mrizka.setPointerCapture) { mrizka.setPointerCapture(event.pointerId); }
+            event.preventDefault();
+        });
+
+        // Posuv během tažení mění, co kde leží - místa se proto spočítají
+        // znovu. Jinak by proužek ukazoval na dlaždice tam, kde už nejsou.
+        mrizka.addEventListener("scroll", function () {
+            if (tazena) { mista = spoctiMista(); }
+        });
+
+        mrizka.addEventListener("pointermove", function (event) {
+            if (!tazena) { return; }
+            var nejlepsi = null;
+            var nejmin = Infinity;
+            mista.forEach(function (m) {
+                // Pustit dlaždici tam, kde už je, nemá smysl.
+                if (m.pred === tazena) { return; }
+                var dx = event.clientX - m.x;
+                var dy = event.clientY - (m.y + m.vyska / 2);
+                var vzdalenost = dx * dx + dy * dy;
+                if (vzdalenost < nejmin) { nejmin = vzdalenost; nejlepsi = m; }
+            });
+            if (!nejlepsi) { return; }
+            cil = nejlepsi;
+            ukazCil(nejlepsi);
+        });
+
+        function konecTazeni() {
+            if (!tazena) { return; }
+            // Teprve teď se dlaždice přesune - během tažení se nehýbalo.
+            if (cil) { mrizka.insertBefore(tazena, cil.pred || null); }
+            tazena.classList.remove("dash-tazena");
+            mrizka.classList.remove("dash-tahne");
+            if (ukazatel && ukazatel.parentNode) {
+                ukazatel.parentNode.removeChild(ukazatel);
+            }
+            tazena = null;
+            ukazatel = null;
+            cil = null;
+        }
+
+        mrizka.addEventListener("pointerup", konecTazeni);
+        mrizka.addEventListener("pointercancel", konecTazeni);
+
+        // --- uložení a zavření ----------------------------------------
+        if (formular) {
+            formular.addEventListener("submit", function () {
+                poradiPole.value = zadani();
+            });
+        }
+        // Zavřít bez uložení - křížek i tlačítko Zrušit. Načte se stránka
+        // znovu, aby v mřížce nezůstalo rozdělané rozvržení: kdo okno
+        // zavřel, ten ho zahodil.
+        if (okno) {
+            Array.prototype.forEach.call(
+                okno.querySelectorAll(".dash-zavrit"), function (tlacitko) {
+                    tlacitko.addEventListener("click", function () {
+                        okno.close();
+                        window.location.reload();
+                    });
+                });
+        }
+        obnovNabidku();
+    }());
+
     // ------------------------------------------------------------------
     // Výběr rozsahu tažením v grafu
     //

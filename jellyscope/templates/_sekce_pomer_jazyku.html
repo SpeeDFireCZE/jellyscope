@@ -1,0 +1,45 @@
+{# Sekce „pomer_jazyku".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Poměr jazyků") }}</h2>
+        <p class="card-note">{{ _("podle odsledovaného času") }}</p>
+    </div>
+
+    {{ charts.stacked_bar(watched.rows) | safe }}
+    {{ charts.legend(watched.rows) | safe }}
+
+    <div class="table-wrap" style="margin-top:16px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Jazyk") }}</th><th class="num">{{ _("Podíl") }}</th>
+                <th class="num">{{ _("Odsledováno") }}</th><th class="num">{{ _("Spuštění") }}</th>
+                <th class="num">{{ _("Titulů") }}</th><th class="num">{{ _("Diváků") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in watched.rows %}
+            <tr>
+                <td class="strong">
+                    {% if row.slot %}
+                        <span class="legend-swatch" style="background: var(--series-{{ row.slot }})"></span>
+                    {% endif %}
+                    {{ row.label }}
+                    <span class="muted">{{ row.code | upper }}</span>
+                </td>
+                <td class="num strong">{{ row.percent | percent(1) }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.plays | number }}</td>
+                <td class="num muted">{{ row.item_count | number }}</td>
+                <td class="num muted">{{ row.users | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

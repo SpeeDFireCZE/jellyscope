@@ -1,0 +1,20 @@
+{# Sekce „spicky".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Špička po dnech") }}</h2>
+        {# Přes měsíc nemá smysl kreslit každou minutu - bodů by bylo víc
+           než pixelů. Jeden den = jedno číslo, a to nejvyšší: podle
+           špičky se dimenzuje linka, průměr by ji zahladil. #}
+        <p class="card-note">{{ _("nejvyšší souběžný tok každého dne") }}</p>
+    </div>
+    {# unit='' schválně: jednotku už nese název série, jinak by v bublině
+       stálo „Mbit/s: 12,4 h“ - hodiny u datového toku nedávají smysl. #}
+    {{ charts.area_chart_multi(denni_spicky, 'popisek',
+           [{'key': 'mbit', 'label': _('Mbit/s'), 'barva': 'var(--accent)'}],
+           unit='', vyber=True) | safe }}
+</div>

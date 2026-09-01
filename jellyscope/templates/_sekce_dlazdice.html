@@ -1,0 +1,17 @@
+{# Sekce „dlazdice".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na Přehledu
+   a ve vlastním přehledu, kde si ji člověk může přeskladádat.
+   Jedna kopie, aby se obě místa nerozešla - viz sekce.py.
+
+   Makro `tile` si šablonka natáhne sama: ve vlastním přehledu
+   se kreslí samostatně, takže nesmí spoléhat na import stránky
+   kolem sebe. #}
+{% from "_macros.html" import tile with context %}
+<div class="kpi-row">
+    {{ tile(_("Spuštění"), overview.plays | number, delta=deltas.plays) }}
+    {{ tile(_("Aktivních uživatelů"), overview.users | number) }}
+    {{ tile(_("Různých titulů"), overview.item_count | number) }}
+    {{ tile(_("Podíl transcode"), overview.transcode_share | percent,
+            note=_("čím míň, tím líp pro server")) }}
+</div>

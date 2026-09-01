@@ -204,5 +204,60 @@ check(stats.library_overview("l1")["hdr_count"] == 6,
       f"a dlaždice počítá HDR i DV ({stats.library_overview('l1')['hdr_count']})")
 
 print()
+print("--- doplnění rozsahu při analýze souborů ---")
+# Hlaseny rozsah zapisovala jen synchronizace knihovny. Clovek si ale
+# technicka data spojuje s "Analyzou souboru": spustil ji, nic se
+# nezmenilo, a nemel duvod tusit, ze Dolby Vision doplni az jina uloha.
+import asyncio  # noqa: E402
+
+from jellyscope import scanner  # noqa: E402
+
+with db.connect() as conn:
+    conn.execute(
+        "INSERT INTO items (id, name, type, library_id, is_missing, tech_source,"
+        " video_range) VALUES ('an1','Analyzovaný','Movie','l1',0,'ffprobe','HDR')")
+    conn.commit()
+
+check("an1" in scanner.kandidati_na_rozsah_z_jellyfinu(),
+      "položka bez hlášeného rozsahu je kandidát")
+check("dv1" not in scanner.kandidati_na_rozsah_z_jellyfinu(),
+      "co už hlášené má, se znovu netahá")
+
+
+class _FalesnyKlient:
+    """Jellyfin, který odpoví tak, jak odpověděl ten skutečný."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def items_by_ids(self, ids):
+        return [{"Id": "an1", "MediaSources": [{"MediaStreams": [
+            {"Type": "Video", "Codec": "hevc", "VideoRange": "HDR",
+             "VideoRangeType": "DOVIWithHDR10Plus",
+             "VideoDoViTitle": "Dolby Vision Profile 8.1 (HDR10)"}]}]}]
+
+
+puvodni = scanner.JellyfinClient
+scanner.JellyfinClient = _FalesnyKlient
+try:
+    check(asyncio.run(scanner.doplnit_rozsah_z_jellyfinu(["an1"])) == 1,
+          "analýza si rozsah od Jellyfinu vyžádá")
+finally:
+    scanner.JellyfinClient = puvodni
+
+po = stats.item("an1")
+check(po["video_range"] == "HDR", "změřený údaj zůstává nedotčený")
+check(po["video_range_reported"] == "DOVI", "a vedle něj přibude hlášený")
+check(stats.rozsah_polozky(po) == "DOVI", "položka je Dolby Vision")
+check("an1" not in scanner.kandidati_na_rozsah_z_jellyfinu(),
+      "a podruhé se na ni Jellyfina neptáme")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

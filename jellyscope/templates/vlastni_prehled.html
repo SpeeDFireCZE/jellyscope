@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter with context %}
+{% block title %}{{ _("Vlastní přehled") }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Vlastní přehled") }}</h1>
+        <p class="page-note">
+            {% if rozvrzeni %}
+                {{ _("Poskládaný z existujících statistik. Počítá se jen to, co je tady – nic navíc.") }}
+            {% else %}
+                {{ _("Zatím prázdný. Přidej si sekce, které chceš vidět po přihlášení.") }}
+            {% endif %}
+        </p>
+    </div>
+
+    {# Tlačítko a pod ním filtr období - vpravo, jako na ostatních
+       záložkách. Filtr je tu jen tehdy, když ho aspoň jedna sekce
+       používá: u přehledu složeného ze samých stavů (právě se hraje,
+       knihovna) by přepínač nic nedělal a mátl by. #}
+    <div class="dash-ovladani">
+        {% if muze_upravovat %}
+        <div class="btn-row">
+            <button class="btn" type="button" data-okno="okno-rozvrzeni">
+                {{ _("Upravit přehled") }}
+            </button>
+        </div>
+        {% endif %}
+        {% if potrebuje_obdobi %}
+            {{ period_filter(obdobi, '/dashboard') }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="dash-plocha{{ ' dash-prazdny' if not rozvrzeni }}">
+    {% for sekce in rozvrzeni %}
+    {% include "_dash_sekce.html" %}
+    {% endfor %}
+
+    {% if not rozvrzeni %}
+    <div class="card dash-vyzva">
+        <p>{{ _("Vlastní přehled je zapnutý, ale ještě v něm nic není.") }}</p>
+        {% if muze_upravovat %}
+        <p class="card-note">{{ _("Klikni na „Upravit přehled“ a vyber si sekce.") }}</p>
+        {% else %}
+        <p class="card-note">{{ _("Sestavit ho může správce serveru.") }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% if muze_upravovat %}
+{# ====================================================================== #}
+{# Okno s rozvržením                                                      #}
+{#                                                                        #}
+{# Skládá se v mřížce dlaždic, ne přetahováním skutečných panelů.         #}
+{# Panel s grafem je vysoký přes půl obrazovky, takže se při jeho tažení  #}
+{# nedalo vidět, kam vlastně míří - a celé rozvržení se nevešlo na jednu  #}
+{# obrazovku. Tady je vidět naráz.                                        #}
+{# ====================================================================== #}
+<dialog class="okno okno-rozvrzeni" id="okno-rozvrzeni">
+    {# Křížek dělá totéž co Zrušit: zavře okno a zahodí rozdělané změny.
+       Dvě různá zavření jednoho okna by byla past - člověk by čekal, že
+       se něco uloží, a ono ne (nebo naopak). #}
+    <div class="okno-hlava">
+        <h2>{{ _("Rozvržení přehledu") }}</h2>
+        <button class="btn okno-zavrit dash-zavrit" type="button"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </div>
+
+    {# Dva sloupce: vlevo rozvržení, vpravo co se dá přidat. Nabídka
+       bývala pod mřížkou - jenže s deseti sekcemi se mřížka roztáhla
+       přes celou obrazovku a nabídka i tlačítka skončily pod jejím
+       spodním okrajem, kam se nedalo dostat. Každý sloupec se teď
+       posouvá zvlášť a tlačítka jsou v patě, která zůstává na místě. #}
+    <div class="okno-sloupce">
+        <div class="dash-sloupec">
+            <p class="card-note">
+                {{ _("Dlaždice odpovídají panelům na stránce. Přetažením změníš pořadí, tlačítkem šířku.") }}
+            </p>
+            <div class="dash-mrizka" id="dash-mrizka"
+                 data-prazdno="{{ _('Zatím nic – vyber si vpravo ze seznamu.') }}">
+                {% for sekce in rozvrzeni %}
+                <div class="dash-dlazdice dash-{{ sekce.sirka }}"
+                     data-sekce="{{ sekce.klic }}" data-sirka="{{ sekce.sirka }}">
+                    <span class="dash-dl-nazev">{{ _(sekce.nazev) }}</span>
+                    <span class="dash-dl-nastroje">
+                        {# Šířka se přepíná dokola: třetina -> půlka -> celá. #}
+                        <button class="btn dash-sirka" type="button"
+                                title="{{ _('Změnit šířku panelu') }}">
+                            {{ {'tretina': '⅓', 'pul': '½', 'cela': '1'}[sekce.sirka] }}
+                        </button>
+                        <button class="btn dash-pryc" type="button"
+                                title="{{ _('Odebrat z přehledu') }}">&times;</button>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="dash-sloupec dash-sloupec-nabidka">
+            <p class="card-note">{{ _("Sekce k přidání") }}</p>
+            <div class="dash-nabidka-seznam" id="dash-nabidka">
+                {% for sekce in vsechny_sekce %}
+                <button class="dash-polozka" type="button" data-pridat="{{ sekce.klic }}"
+                        data-sirka="{{ sekce.sirka }}"
+                        {{ 'disabled' if sekce.klic in pouzite }}>
+                    <span class="dash-polozka-nazev">{{ _(sekce.nazev) }}</span>
+                    <span class="dash-polozka-popis">{{ _(sekce.popis) }}</span>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="/dashboard/layout" id="dash-form" class="okno-pata">
+        <input type="hidden" name="poradi" id="dash-poradi" value="">
+        <button class="btn dash-zavrit" type="button" id="dash-zrusit">{{ _("Zrušit") }}</button>
+        <button class="btn primary" type="submit" id="dash-ulozit">{{ _("Uložit") }}</button>
+    </form>
+</dialog>
+{% endif %}
+{% endblock %}

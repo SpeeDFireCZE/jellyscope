@@ -1,0 +1,13 @@
+{# Sekce „rozsah".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Dynamický rozsah") }}</h2>
+        <p class="card-note">SDR / HDR / Dolby Vision</p>
+    </div>
+    {{ charts.hbar_chart(ranges, 'label', 'item_count', unit='') | safe }}
+</div>

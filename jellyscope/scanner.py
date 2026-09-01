@@ -1700,10 +1700,26 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
         if zbyle and not stop_requested():
             z_nazvu = await asyncio.to_thread(doplnit_jazyky_z_nazvu, sorted(zbyle))
 
+        # Dynamicky rozsah podle Jellyfinu. Zapisuje ho sice uz
+        # synchronizace knihovny, jenze technicka data si clovek spojuje
+        # s TOUHLE ulohou - spustil "Analyzu souboru", videl, ze se nic
+        # nezmenilo, a nemel duvod tusit, ze chybejici Dolby Vision
+        # doplni az jina uloha.
+        rozsahy = 0
+        if not stop_requested():
+            chybejici = kandidati_na_rozsah_z_jellyfinu(library_id, item_ids)
+            if chybejici:
+                try:
+                    rozsahy = await doplnit_rozsah_z_jellyfinu(chybejici)
+                except JellyfinError as exc:
+                    log.warning("rozsah se z Jellyfinu doplnit nepodarilo: %s", exc)
+
         doplnek = (_t(", jazyk doplněn z Jellyfinu u {n} stop").format(n=doplneno)
                    if doplneno else "")
         if z_nazvu:
             doplnek += _t(", odhadnut z názvu u {n} titulů").format(n=z_nazvu)
+        if rozsahy:
+            doplnek += _t(", rozsah z Jellyfinu u {n} titulů").format(n=rozsahy)
 
         if results["skipped"]:
             finish_task_log(
@@ -1733,6 +1749,59 @@ def _chybi_jazyk(streams: list[dict[str, Any]]) -> bool:
     return any(s.get("type") in ("Audio", "Subtitle")
                and s.get("language") == languages.UNKNOWN
                for s in streams)
+
+
+def kandidati_na_rozsah_z_jellyfinu(library_id: str | None = None,
+                                    item_ids: list[str] | None = None) -> list[str]:
+    """Polozky, u kterych jeste nevime, co o rozsahu rika Jellyfin.
+
+    Jen ty s prazdnym udajem: jinak by kazda analyza tahala z Jellyfinu
+    celou knihovnu znovu, prestoze se ta hodnota meni jen pri prekodovani
+    souboru - a to zachyti synchronizace.
+    """
+    kde = ["is_missing = 0", "video_range_reported IS NULL"]
+    hodnoty: list[Any] = []
+    if library_id:
+        kde.append("library_id = ?")
+        hodnoty.append(library_id)
+    if item_ids:
+        otazniky = ",".join("?" for _ in item_ids)
+        kde.append(f"id IN ({otazniky})")
+        hodnoty.extend(item_ids)
+    return [radek["id"] for radek in db.query_all(
+        f"SELECT id FROM items WHERE {' AND '.join(kde)}", tuple(hodnoty))]
+
+
+async def doplnit_rozsah_z_jellyfinu(item_ids: list[str]) -> int:
+    """Zapise k polozkam dynamicky rozsah tak, jak ho vidi Jellyfin.
+
+    Vedle toho, co zmeril ffprobe. Dolby Vision v Matrosce umi cist az
+    ffmpeg 5, takze starsi ffprobe hlasi jen "HDR" - a Jellyfin je pak
+    jediny, kdo o DV vi. Viz stats.ROZSAH_CASE.
+
+    Vraci pocet polozek, u kterych Jellyfin nejaky rozsah rekl.
+    """
+    if not item_ids:
+        return 0
+
+    async with JellyfinClient(*db.jellyfin_connection()) as client:
+        polozky = await client.items_by_ids(list(item_ids))
+
+    zmeny = [(video_range_of(item), item.get("Id"))
+             for item in polozky if item.get("Id")]
+    if not zmeny:
+        return 0
+
+    def _uloz() -> None:
+        with db.connect() as conn:
+            conn.executemany(
+                "UPDATE items SET video_range_reported = ? WHERE id = ?", zmeny)
+
+    await asyncio.to_thread(_uloz)
+    nalezeno = sum(1 for rozsah, _ in zmeny if rozsah)
+    if nalezeno:
+        log.info("rozsah z Jellyfinu doplnen u %s polozek", nalezeno)
+    return nalezeno
 
 
 async def doplnit_jazyky_z_jellyfinu(item_ids: list[str]) -> int:

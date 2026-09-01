@@ -47,55 +47,16 @@
    zabírala třetinu obrazovky, přestože nese jediný údaj a jeho vývoj.
    Vedle sebe se to čte jedním pohledem: kolik a jak to šlo. Na úzkém
    okně se to vrátí pod sebe - viz .hero-card ve style.css. #}
-<div class="card hero-card">
-    <div class="hero-cislo">
-    {# U vlastního období nemá `day_labels` co říct - vypíšeme rozmezí. #}
-    <p class="tile-label">
-        {{ _("Celkem odsledováno za") }}
-        {% if obdobi.vlastni %}{{ obdobi.od_popis }} – {{ obdobi.do_popis }}
-        {% else %}{{ _(day_labels[obdobi.days]) }}{% endif %}
-    </p>
-    <div class="hero">{{ (overview.watched_seconds / 3600) | hours }}</div>
-    {% if deltas.watched is not none %}
-        {% if deltas.watched > 1 %}
-            <div class="delta up">&#9650; {{ zmena(deltas.watched) }} {{ _("oproti předchozímu období") }}</div>
-        {% elif deltas.watched < -1 %}
-            <div class="delta down">&#9660; {{ zmena(deltas.watched) }} {{ _("oproti předchozímu období") }}</div>
-        {% else %}
-            <div class="delta flat">{{ _("beze změny") }}</div>
-        {% endif %}
-    {% elif poznamka_srovnani %}
-        {# Když srovnat nejde, řekneme proč. Tiše chybějící šipka vypadá
-           jako chyba a člověk ji hledá u sebe. #}
-        <div class="delta flat">{{ poznamka_srovnani }}</div>
-    {% endif %}
-    </div>
-    {# Stejná data jako velký graf níže, jen bez os - a po najetí myší
-       ukáže hodnotu daného dne, stejně jako on. #}
-    <div class="hero-graf">{{ charts.sparkline(daily, 'day', 'hours') | safe }}</div>
-</div>
+{% include "_sekce_souhrn.html" %}
 
-<div class="kpi-row">
-    {{ tile(_("Spuštění"), overview.plays | number, delta=deltas.plays) }}
-    {{ tile(_("Aktivních uživatelů"), overview.users | number) }}
-    {{ tile(_("Různých titulů"), overview.item_count | number) }}
-    {{ tile(_("Podíl transcode"), overview.transcode_share | percent,
-            note=_("čím míň, tím líp pro server")) }}
-</div>
+{% include "_sekce_dlazdice.html" %}
 
 {# Karta se vykresluje ze samostatné šablony - stejný kus vrací
    i /partials/daily při přepnutí filtru bez načtení stránky. #}
 <div id="daily-card">{% include "_daily_card.html" %}</div>
 
 <div class="grid-2">
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Nejaktivnější uživatelé") }}</h2>
-            <p class="card-note">{{ _("v hodinách") }}</p>
-        </div>
-        {{ charts.hbar_chart(top_users, 'label', 'hours',
-                     link_prefix='/users/', link_key='user_id') | safe }}
-    </div>
+    {% include "_sekce_uzivatele.html" %}
 
     <div class="card" id="top-items-card">
         {% include "_top_items.html" %}
@@ -103,35 +64,10 @@
 </div>
 
 <div class="grid-2">
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Jak server obsah doručuje") }}</h2>
-        </div>
-        {{ charts.stacked_bar(methods) | safe }}
-        {# Legenda je u dvou a více sérií povinná - barva sama identitu nenese. #}
-        {{ charts.legend(methods) | safe }}
-        <p class="card-note" style="margin-top:12px">
-            {{ _("Přímé přehrávání nestojí server nic. Transcode znamená, že video musí za běhu překódovat – a to už procesor nebo grafická karta cítí.") }}
-        </p>
-    </div>
+    {% include "_sekce_doruceni.html" %}
 
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Přehrávače") }}</h2>
-            <p class="card-note">{{ _("v hodinách") }}</p>
-        </div>
-        {{ charts.hbar_chart(clients, 'label', 'hours') | safe }}
-    </div>
+    {% include "_sekce_prehravace.html" %}
 </div>
 
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Kdy se sleduje") }}</h2>
-        {# Ve světlém režimu roste sytost směrem k tmavé, v tmavém ke světlé -
-           v obou případech je "víc hodin" výraznější. Popisek proto nesmí
-           mluvit o tmavé, jak tu chybně stálo. #}
-        <p class="card-note">{{ _("místní čas, výraznější barva = více hodin") }}</p>
-    </div>
-    {{ charts.heatmap(heatmap) | safe }}
-</div>
+{% include "_sekce_heatmapa.html" %}
 {% endblock %}

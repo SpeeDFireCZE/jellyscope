@@ -1362,6 +1362,34 @@
             </div>
             <p class="hint">{{ _("Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté – tam je „40“ značka měřítka, ne údaj.") }}</p>
             <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
+
+        <div class="field">
+            <label>{{ _("Vlastní přehled") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_dashboard" value="0"
+                           {{ 'checked' if not ui_dashboard }}>
+                    <span>
+                        <span class="title">{{ _("Vypnutý") }}</span>
+                        <span class="desc">
+                            {{ _("Po přihlášení se otevře Přehled, jako doteď.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_dashboard" value="1"
+                           {{ 'checked' if ui_dashboard }}>
+                    <span>
+                        <span class="title">{{ _("Zapnutý") }}</span>
+                        <span class="desc">
+                            {{ _("Přibude záložka, ve které si z existujících statistik poskládáš vlastní stránku. Po přihlášení se otevře ona.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Sestavuje ho správce a platí pro celý server – stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.") }}</p>
+        </div>
         </div>
 
         <div class="field">

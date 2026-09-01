@@ -6,6 +6,45 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.4.0
+
+### Added
+
+- **Build your own overview.** Settings › Interface can switch on a tab
+  where the statistics that already exist get arranged into a page of your
+  own: click to add a section, drag to order it, save. Signing in then
+  opens that page instead of the Overview.
+
+  It is composed by an administrator and applies to the whole server, like
+  every other setting - and the layout is stored so that per-account
+  overviews can arrive later without moving any data. Until something is
+  in it the tab stays hidden, and only the sections actually placed there
+  get computed: the Overview works out ten of them for everyone, whether
+  they are looked at or not.
+
+  It is composed on a grid of tiles in a dialog, not by hauling the real
+  panels around: a panel holding a chart is half a screen tall, so while
+  dragging one there was no way to see where it was heading, and the whole
+  layout never fit on one screen. On the grid it does. Each panel is a
+  third, a half or the full width, and nothing shifts while a tile is
+  being dragged - a bar marks where it will land, and the tile moves on
+  release.
+
+  Twenty-three sections to start with, from every page that had something
+  worth reusing - including the Overview's headline figure and its row of
+  tiles. The sections are the same templates their original pages use, so
+  the two places cannot drift apart.
+
+### Fixed
+
+- **The file analysis fills in the dynamic range as well.** What Jellyfin
+  says about the range - the only place Dolby Vision shows up when ffprobe
+  is older than ffmpeg 5 - was written by the library sync alone. Running
+  "Analyse files" therefore changed nothing about it, which is the exact
+  opposite of what the task's name promises: people go there for technical
+  data. It now asks Jellyfin for the titles whose range it does not know
+  yet, once each.
+
 ## 1.3.5
 
 ### Fixed

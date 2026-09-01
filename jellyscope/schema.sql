@@ -228,6 +228,18 @@ CREATE INDEX IF NOT EXISTS idx_streams_lang ON item_streams (language);
 --
 -- COLLATE NOCASE u jmena znamena, ze "Petr" a "petr" je tentyz ucet.
 -- Bez toho by si dva lide mohli zalozit jmena, ktera nejdou rozlisit.
+-- Vlastni prehled: ktere sekce a v jakem poradi.
+--
+-- `account_id` je pripravene na pozdejsi uzivatelska nastaveni. Dnes je
+-- vsude NULL = spolecne rozvrzeni serveru; az bude cim ho prebit, pribudou
+-- radky s konkretnim uctem. Viz sekce.nacti_rozvrzeni().
+CREATE TABLE IF NOT EXISTS dashboard_layout (
+    account_id  INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    sekce       TEXT    NOT NULL,
+    poradi      INTEGER NOT NULL,
+    sirka       TEXT                -- tretina / pul / cela; prazdne = jak to ma sekce v registru
+);
+
 CREATE TABLE IF NOT EXISTS accounts (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT NOT NULL UNIQUE COLLATE NOCASE,

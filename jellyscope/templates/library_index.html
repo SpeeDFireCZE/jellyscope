@@ -41,70 +41,15 @@
 
 {# ------------------------------------------------------------------ #}
 {# Souhrn za všechny knihovny dohromady                                #}
-{# ------------------------------------------------------------------ #}
-<h2 style="margin:30px 0 4px">{{ _("Celkem za všechny knihovny") }}</h2>
-<p class="subtitle" style="margin-bottom:16px">{{ _("Aktuální stav, nezávisle na období.") }}</p>
-
-<div class="kpi-row">
-    {{ tile(_("Položek celkem"), coverage.total | number) }}
-    {{ tile(_("Velikost celkem"), coverage.size_bytes | bytes,
-            note=_("všechny knihovny dohromady")) }}
-    {{ tile(_("Změřeno přes ffprobe"), coverage.from_ffprobe | number,
-            note=_("přesná data ze souborů")) }}
-    {{ tile(_("Převzato z Jellyfinu"), coverage.from_jellyfin | number,
-            note=_("rychlé, méně detailů")) }}
-    {{ tile(_("Bez technických dat"), coverage.missing | number,
-            note=_("spusť analýzu v Nastavení")) }}
-</div>
+{% include "_sekce_knihovna_celkem.html" %}
 
 <div class="grid-2">
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Kodeky") }}</h2>
-            <p class="card-note">{{ _("počet položek") }}</p>
-        </div>
-        {{ charts.hbar_chart(codecs, 'label', 'item_count', unit='') | safe }}
-    </div>
+    {% include "_sekce_kodeky.html" %}
 
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Rozlišení") }}</h2>
-            <p class="card-note">{{ _("podíl na velikosti knihovny") }}</p>
-        </div>
-        {% set res_segments = [] %}
-        {% for row in resolutions %}
-            {% set _x = res_segments.append({'label': row.label, 'value': row.size_bytes}) %}
-        {% endfor %}
-        {{ charts.stacked_bar(res_segments, unit='B') | safe }}
-        {{ charts.legend(res_segments) | safe }}
-
-        <div class="table-wrap" style="margin-top:14px">
-            <table>
-                <thead><tr>
-                    <th>{{ _("Rozlišení") }}</th><th class="num">{{ _("Položek") }}</th>
-                    <th class="num">{{ _("Velikost") }}</th>
-                </tr></thead>
-                <tbody>
-                {% for row in resolutions %}
-                <tr>
-                    <td>{{ row.label }}</td>
-                    <td class="num">{{ row.item_count | number }}</td>
-                    <td class="num">{{ row.size_bytes | bytes }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+    {% include "_sekce_rozliseni.html" %}
 </div>
 
 {% if ranges %}
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Dynamický rozsah") }}</h2>
-        <p class="card-note">SDR / HDR / Dolby Vision</p>
-    </div>
-    {{ charts.hbar_chart(ranges, 'label', 'item_count', unit='') | safe }}
-</div>
+{% include "_sekce_rozsah.html" %}
 {% endif %}
 {% endblock %}

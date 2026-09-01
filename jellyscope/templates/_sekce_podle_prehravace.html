@@ -1,0 +1,12 @@
+{# Sekce „podle_prehravace".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Podle přehrávače") }}</h2>
+    </div>
+    {{ charts.hbar_chart(podle_klienta, 'label', 'gb', unit='GB') | safe }}
+</div>

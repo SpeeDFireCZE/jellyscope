@@ -186,6 +186,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_playback_session_active
     ON playback (session_key) WHERE is_active = 1;
 
 
+-- Vlastni prehled: ktere sekce a v jakem poradi.
+--
+-- `account_id` je pripravene na pozdejsi uzivatelska nastaveni. Dnes je
+-- vsude NULL = spolecne rozvrzeni serveru; az bude cim ho prebit, pribudou
+-- radky s konkretnim uctem. Viz sekce.nacti_rozvrzeni().
+CREATE TABLE IF NOT EXISTS dashboard_layout (
+    account_id  INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    sekce       TEXT    NOT NULL,
+    poradi      INTEGER NOT NULL,
+    sirka       TEXT                -- tretina / pul / cela; prazdne = jak to ma sekce v registru
+);
+
 CREATE TABLE IF NOT EXISTS accounts (
     id            BIGSERIAL PRIMARY KEY,
     username      TEXT NOT NULL,

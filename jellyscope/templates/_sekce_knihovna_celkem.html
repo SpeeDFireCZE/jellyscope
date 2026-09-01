@@ -1,0 +1,22 @@
+{# Sekce „knihovna_celkem".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+{% from "_macros.html" import tile with context %}
+{# ------------------------------------------------------------------ #}
+<h2 style="margin:30px 0 4px">{{ _("Celkem za všechny knihovny") }}</h2>
+<p class="subtitle" style="margin-bottom:16px">{{ _("Aktuální stav, nezávisle na období.") }}</p>
+
+<div class="kpi-row">
+    {{ tile(_("Položek celkem"), coverage.total | number) }}
+    {{ tile(_("Velikost celkem"), coverage.size_bytes | bytes,
+            note=_("všechny knihovny dohromady")) }}
+    {{ tile(_("Změřeno přes ffprobe"), coverage.from_ffprobe | number,
+            note=_("přesná data ze souborů")) }}
+    {{ tile(_("Převzato z Jellyfinu"), coverage.from_jellyfin | number,
+            note=_("rychlé, méně detailů")) }}
+    {{ tile(_("Bez technických dat"), coverage.missing | number,
+            note=_("spusť analýzu v Nastavení")) }}
+</div>

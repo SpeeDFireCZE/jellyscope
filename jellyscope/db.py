@@ -585,6 +585,11 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # Jellyfin ho pritom zna. Viz stats.ROZSAH_CASE.
         "video_range_reported": "TEXT",
     },
+    "dashboard_layout": {
+        # Sirka panelu ve vlastnim prehledu. Prazdna = jak ji ma sekce
+        # v registru; clovek si ji muze prepnout pri uprave prehledu.
+        "sirka": "TEXT",
+    },
     "item_streams": {
         # Odkud jazyk stopy je. Prazdne = ze zdroje technickych dat,
         # "jellyfin" = soubor ho neuvadel a doplnil se z knihovny.

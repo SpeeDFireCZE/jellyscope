@@ -35,93 +35,14 @@
     {% include "_sit_zive.html" %}
 </div>
 
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Špička po dnech") }}</h2>
-        {# Přes měsíc nemá smysl kreslit každou minutu - bodů by bylo víc
-           než pixelů. Jeden den = jedno číslo, a to nejvyšší: podle
-           špičky se dimenzuje linka, průměr by ji zahladil. #}
-        <p class="card-note">{{ _("nejvyšší souběžný tok každého dne") }}</p>
-    </div>
-    {# unit='' schválně: jednotku už nese název série, jinak by v bublině
-       stálo „Mbit/s: 12,4 h“ - hodiny u datového toku nedávají smysl. #}
-    {{ charts.area_chart_multi(denni_spicky, 'popisek',
-           [{'key': 'mbit', 'label': _('Mbit/s'), 'barva': 'var(--accent)'}],
-           unit='', vyber=True) | safe }}
-</div>
+{% include "_sekce_spicky.html" %}
 
 <div class="grid-2">
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Kdo nejvíc streamoval") }}</h2>
-        </div>
-        {# Popisek vede na detail uzivatele - stejne jako v zebricku na
-   Prehledu. Bez toho se z grafu nedalo nikam kliknout, prestoze
-   jsou to titiz lide. #}
-        {{ charts.hbar_chart(podle_uzivatele, 'label', 'gb', unit='GB',
-               link_prefix='/users/', link_key='user_id') | safe }}
-    </div>
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Podle přehrávače") }}</h2>
-        </div>
-        {{ charts.hbar_chart(podle_klienta, 'label', 'gb', unit='GB') | safe }}
-    </div>
+    {% include "_sekce_kdo_streamoval.html" %}
+    {% include "_sekce_podle_prehravace.html" %}
 </div>
 
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Odkud se dívají") }}</h2>
-        <p class="card-note">{{ _("podle adresy, kterou hlásí Jellyfin") }}</p>
-    </div>
-
-    <div class="kpi-row" style="margin-bottom:16px">
-        {{ tile(_("Z domácí sítě"), odkud.skupiny.doma.plays | number,
-                note=odkud.skupiny.doma.bajtu | bytes) }}
-        {{ tile(_("Z internetu"), odkud.skupiny.internet.plays | number,
-                note=odkud.skupiny.internet.bajtu | bytes) }}
-        {{ tile(_("Neznámo odkud"), odkud.skupiny.neznamo.plays | number,
-                note=_("z importu – adresu nenesou")) }}
-    </div>
-
-    {% if odkud.adresy %}
-    <div class="table-wrap">
-        <table>
-            <thead>
-            <tr>
-                <th>{{ _("Adresa") }}</th>
-                <th>{{ _("Odkud") }}</th>
-                <th class="num">{{ _("Lidí") }}</th>
-                <th class="num">{{ _("Spuštění") }}</th>
-                <th class="num">{{ _("Čas") }}</th>
-                <th class="num">{{ _("Přeneseno") }}</th>
-                <th class="num">{{ _("Naposledy") }}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for radek in odkud.adresy %}
-            <tr>
-                <td><code>{{ radek.adresa }}</code></td>
-                <td>
-                    {% if radek.domaci %}
-                        <span class="badge good"><span class="dot"></span>{{ _("domácí síť") }}</span>
-                    {% else %}
-                        <span class="badge warning"><span class="dot"></span>{{ _("internet") }}</span>
-                    {% endif %}
-                </td>
-                <td class="num">{{ radek.lidi | number }}</td>
-                <td class="num">{{ radek.plays | number }}</td>
-                <td class="num">{{ radek.sekund | seconds }}</td>
-                <td class="num">{{ radek.bajtu | bytes }}</td>
-                <td class="num nowrap muted">{{ radek.naposledy | relative }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-
-</div>
+{% include "_sekce_odkud.html" %}
 
 <div class="card" id="mapa">
     <div class="card-head">

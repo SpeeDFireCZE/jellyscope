@@ -300,6 +300,8 @@ EN: dict[str, str] = {
         "It is not interrupted mid-work: it finishes the item it has in progress and only then ends. Whatever was done stays saved.",
     "Analýza souborů": "File analysis",
     ", odhadnut z názvu u {n} titulů": ", guessed from the name for {n} titles",
+    ", rozsah z Jellyfinu u {n} titulů":
+        ", dynamic range from Jellyfin for {n} titles",
     ", jazyk doplněn z Jellyfinu u {n} stop":
         ", language filled in from Jellyfin for {n} tracks",
     "Obecné": "General",
@@ -313,6 +315,7 @@ EN: dict[str, str] = {
     "přebalení": "remux",
     "přímé": "direct",
     "Celkem odsledováno za": "Total watched over",
+    "Celkem odsledováno": "Total watched",
     "Spuštění": "Plays",
     "Aktivních uživatelů": "Active users",
     "Různých titulů": "Distinct titles",
@@ -1268,6 +1271,100 @@ EN: dict[str, str] = {
     "Právě teče": "Flowing right now",
     "souběžných streamů: {n}": "streams at once: {n}",
     "Tažením v grafu vybereš rozmezí.": "Drag across the chart to pick a range.",
+
+    # --- vlastni prehled (viz jellyscope/sekce.py) ---
+    "Rozvržení přehledu":
+        "Overview layout",
+    "Dlaždice odpovídají panelům na stránce. Přetažením změníš pořadí, tlačítkem šířku.":
+        "The tiles match the panels on the page. Drag to reorder, use the button to change the width.",
+    "Zatím nic – vyber si vpravo ze seznamu.":
+        "Nothing yet - pick from the list on the right.",
+    "Hlavní číslo období, změna proti minulému a křivka vedle něj.":
+        "The headline figure for the period, the change against the previous one, and the curve beside it.",
+    "Spuštění, uživatelé, tituly, transcode":
+        "Plays, users, titles, transcode",
+    "Řada dlaždic s hlavními čísly období.":
+        "A row of tiles with the period's headline numbers.",
+    "Šířka":
+        "Width",
+    "Změnit šířku panelu":
+        "Change the panel width",
+    "Přenos podle přehrávače":
+        "Transfer per player",
+    "Kolik dat proteklo přes kterou aplikaci.":
+        "How much data went through which app.",
+    "Adresy, ze kterých se streamuje - domácí síť, nebo zvenku.":
+        "The addresses streams come from - home network, or outside.",
+    "V jakém jazyce se na serveru sleduje.":
+        "Which language people watch in on this server.",
+    "Kolik se sleduje v dabingu a kolik v původním znění.":
+        "How much is watched dubbed and how much in the original.",
+    "Jak často a v jakém jazyce se zapínají titulky.":
+        "How often subtitles are switched on, and in which language.",
+    "Co je v knihovně k dispozici - nezávisle na tom, co se sleduje.":
+        "What the library offers - regardless of what gets watched.",
+    "Položky, velikost a odkud jsou technická data. Stav, ne období.":
+        "Items, size and where the technical data comes from. A state, not a period.",
+    "Vlastní přehled":
+        "Custom overview",
+    "Vypnutý":
+        "Off",
+    "Zapnutý":
+        "On",
+    "Po přihlášení se otevře Přehled, jako doteď.":
+        "After signing in the Overview opens, as it does today.",
+    "Přibude záložka, ve které si z existujících statistik poskládáš vlastní stránku. Po přihlášení se otevře ona.":
+        "Adds a tab where you build your own page out of the statistics that already exist. That is what opens after signing in.",
+    "Sestavuje ho správce a platí pro celý server – stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.":
+        "An administrator builds it and it applies to the whole server, like every other setting. Until something is in it, the tab stays hidden.",
+    "Poskládaný z existujících statistik. Počítá se jen to, co je tady – nic navíc.":
+        "Built from the statistics that already exist. Only what is here gets computed - nothing else.",
+    "Zatím prázdný. Přidej si sekce, které chceš vidět po přihlášení.":
+        "Empty so far. Add the sections you want to see after signing in.",
+    "Upravit přehled":
+        "Edit the overview",
+    "Odebrat":
+        "Remove",
+    "Odebrat z přehledu":
+        "Remove from the overview",
+    "Vlastní přehled je zapnutý, ale ještě v něm nic není.":
+        "The custom overview is on, but there is nothing in it yet.",
+    "Klikni na „Upravit přehled“ a vyber si sekce.":
+        "Click „Edit the overview“ and pick your sections.",
+    "Sestavit ho může správce serveru.":
+        "The server administrator can build it.",
+    "Sekce k přidání":
+        "Sections to add",
+    "Přehled je teď prázdný.":
+        "The overview is empty now.",
+    "Kdo se zrovna dívá a na čem - stejná karta jako na Přehledu.":
+        "Who is watching what right now - the same card as on the Overview.",
+    "Pás plakátů toho, co do knihovny přibylo naposledy.":
+        "A strip of posters of what arrived in the library most recently.",
+    "Křivka filmů a seriálů den po dni, s tabulkou pod ní.":
+        "Films and TV shows day by day, with a table underneath.",
+    "Žebříček filmů a seriálů za zvolené období.":
+        "The ranking of films and shows over the chosen period.",
+    "Kdo za zvolené období odsledoval nejvíc hodin.":
+        "Who watched the most hours over the chosen period.",
+    "Přímé přehrávání, remux, transcode - a co to stojí server.":
+        "Direct play, remux, transcode - and what each costs the server.",
+    "Z čeho se lidé dívají - aplikace, prohlížeč, televize.":
+        "What people watch on - app, browser, television.",
+    "Mřížka dnů a hodin - kdy je server nejvytíženější.":
+        "A grid of days and hours - when the server is busiest.",
+    "Souběžný tok v čase, obnovuje se sám.":
+        "Concurrent throughput over time, refreshing on its own.",
+    "Nejvyšší souběžný tok každého dne.":
+        "The highest concurrent throughput of each day.",
+    "Přenesená data podle uživatele.":
+        "Data transferred per user.",
+    "Čím je knihovna zakódovaná. Období neřeší - je to stav knihovny.":
+        "What the library is encoded with. It ignores the period - it is the state of the library.",
+    "Kolik je v knihovně 4K, kolik Full HD a kolik zbytku.":
+        "How much of the library is 4K, how much Full HD and how much the rest.",
+    "SDR, HDR a Dolby Vision v knihovně.":
+        "SDR, HDR and Dolby Vision in the library.",
     "jeden bod": "one point",
     "streamů teče": "streams flowing",
     "z toho přepočet": "of them transcoding",
@@ -1421,6 +1518,10 @@ LOG_EN: dict[str, str] = {
         "the time zone %s cannot be set for the process on this system; times are shown in it, the split into days in charts is not",
     "jazyk odhadnut z nazvu souboru u %s polozek":
         "language guessed from the file name for %s items",
+    "rozsah z Jellyfinu doplnen u %s polozek":
+        "dynamic range from Jellyfin filled in for %s items",
+    "rozsah se z Jellyfinu doplnit nepodarilo: %s":
+        "the dynamic range could not be filled in from Jellyfin: %s",
     "jazyk doplnen z Jellyfinu u %s stop":
         "language filled in from Jellyfin for %s tracks",
     "jazyky se z Jellyfinu doplnit nepodarilo: %s":

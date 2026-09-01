@@ -1,0 +1,13 @@
+{# Sekce „kodeky".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Kodeky") }}</h2>
+        <p class="card-note">{{ _("počet položek") }}</p>
+    </div>
+    {{ charts.hbar_chart(codecs, 'label', 'item_count', unit='') | safe }}
+</div>

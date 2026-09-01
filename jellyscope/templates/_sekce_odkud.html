@@ -1,0 +1,63 @@
+{# Sekce „odkud".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+{# Makro si šablonka natáhne sama. Ve vlastním přehledu se kreslí
+   samostatně, takže nesmí spoléhat na to, co si naimportovala
+   stránka kolem ní - na Síti to prošlo, na vlastním přehledu ne. #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Odkud se dívají") }}</h2>
+        <p class="card-note">{{ _("podle adresy, kterou hlásí Jellyfin") }}</p>
+    </div>
+
+    <div class="kpi-row" style="margin-bottom:16px">
+        {{ tile(_("Z domácí sítě"), odkud.skupiny.doma.plays | number,
+                note=odkud.skupiny.doma.bajtu | bytes) }}
+        {{ tile(_("Z internetu"), odkud.skupiny.internet.plays | number,
+                note=odkud.skupiny.internet.bajtu | bytes) }}
+        {{ tile(_("Neznámo odkud"), odkud.skupiny.neznamo.plays | number,
+                note=_("z importu – adresu nenesou")) }}
+    </div>
+
+    {% if odkud.adresy %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Adresa") }}</th>
+                <th>{{ _("Odkud") }}</th>
+                <th class="num">{{ _("Lidí") }}</th>
+                <th class="num">{{ _("Spuštění") }}</th>
+                <th class="num">{{ _("Čas") }}</th>
+                <th class="num">{{ _("Přeneseno") }}</th>
+                <th class="num">{{ _("Naposledy") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for radek in odkud.adresy %}
+            <tr>
+                <td><code>{{ radek.adresa }}</code></td>
+                <td>
+                    {% if radek.domaci %}
+                        <span class="badge good"><span class="dot"></span>{{ _("domácí síť") }}</span>
+                    {% else %}
+                        <span class="badge warning"><span class="dot"></span>{{ _("internet") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ radek.lidi | number }}</td>
+                <td class="num">{{ radek.plays | number }}</td>
+                <td class="num">{{ radek.sekund | seconds }}</td>
+                <td class="num">{{ radek.bajtu | bytes }}</td>
+                <td class="num nowrap muted">{{ radek.naposledy | relative }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+</div>

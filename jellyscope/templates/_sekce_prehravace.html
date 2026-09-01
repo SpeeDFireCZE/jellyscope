@@ -1,0 +1,13 @@
+{# Sekce „prehravace".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Přehrávače") }}</h2>
+        <p class="card-note">{{ _("v hodinách") }}</p>
+    </div>
+    {{ charts.hbar_chart(clients, 'label', 'hours') | safe }}
+</div>

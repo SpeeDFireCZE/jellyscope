@@ -1,0 +1,16 @@
+{# Sekce „kdo_streamoval".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Kdo nejvíc streamoval") }}</h2>
+    </div>
+    {# Popisek vede na detail uzivatele - stejne jako v zebricku na
+   Prehledu. Bez toho se z grafu nedalo nikam kliknout, prestoze
+   jsou to titiz lide. #}
+    {{ charts.hbar_chart(podle_uzivatele, 'label', 'gb', unit='GB',
+           link_prefix='/users/', link_key='user_id') | safe }}
+</div>

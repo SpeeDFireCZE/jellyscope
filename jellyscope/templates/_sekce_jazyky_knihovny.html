@@ -1,0 +1,23 @@
+{# Sekce „jazyky_knihovny".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jazyky v knihovně") }}</h2>
+        <p class="card-note">{{ _("kolik titulů danou stopu obsahuje") }}</p>
+    </div>
+    {% if library %}
+        {{ charts.hbar_chart(library, 'label', 'item_count', unit='') | safe }}
+        <p class="card-note" style="margin-top:14px">
+            {{ _("Jeden titul se počítá do každé stopy, kterou má – film s českou i anglickou stopou je v obou řádcích. Součet proto převyšuje počet titulů.") }}
+        </p>
+    {% else %}
+        <p class="chart-empty">
+            {{ _("Žádná jazyková data.") }}
+            {{ _("Žádné knihovny. Spusť synchronizaci v Nastavení.") }}
+        </p>
+    {% endif %}
+</div>

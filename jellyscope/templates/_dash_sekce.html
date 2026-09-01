@@ -1,0 +1,18 @@
+{# Jeden panel vlastního přehledu.
+
+   Vlastní šablonka kvůli tomu, že obal panelu (šířka, klíč sekce) je
+   společný pro všechny sekce - kdyby se opisoval ve smyčce na stránce,
+   změna obalu by se musela dělat na dvou místech.
+
+   Skládá se v okně s mřížkou dlaždic (viz vlastni_prehled.html), takže
+   tady žádné ovládání není - panel je jen panel.
+
+   Čeká `sekce` (položka registru, viz jellyscope/sekce.py). #}
+<div class="dash-sekce dash-{{ sekce.sirka }}" data-sekce="{{ sekce.klic }}"
+     data-sirka="{{ sekce.sirka }}">
+    {% if sekce.obal_karta %}
+        <div class="card">{% include sekce.sablona %}</div>
+    {% else %}
+        {% include sekce.sablona %}
+    {% endif %}
+</div>

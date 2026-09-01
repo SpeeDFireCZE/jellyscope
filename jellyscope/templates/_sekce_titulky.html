@@ -1,0 +1,37 @@
+{# Sekce „titulky".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Titulky") }}</h2>
+        <p class="card-note">{{ _("podíl času se zapnutými titulky") }}</p>
+    </div>
+    <div class="tile-value">{{ subtitles.percent | percent(1) }}</div>
+    <div class="delta flat">
+        {{ _("s titulky") }} {{ subtitles.with_hours | hours }}
+        &middot; {{ _("bez titulků") }} {{ subtitles.without_hours | hours }}
+    </div>
+
+    {% if subtitles.rows %}
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Jazyk titulků") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                <th class="num">{{ _("Spuštění") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in subtitles.rows %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num muted">{{ row.plays | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>

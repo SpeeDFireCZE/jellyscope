@@ -1,0 +1,16 @@
+{# Sekce „heatmapa".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Kdy se sleduje") }}</h2>
+        {# Ve světlém režimu roste sytost směrem k tmavé, v tmavém ke světlé -
+           v obou případech je "víc hodin" výraznější. Popisek proto nesmí
+           mluvit o tmavé, jak tu chybně stálo. #}
+        <p class="card-note">{{ _("místní čas, výraznější barva = více hodin") }}</p>
+    </div>
+    {{ charts.heatmap(heatmap) | safe }}
+</div>

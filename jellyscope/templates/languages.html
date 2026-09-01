@@ -112,45 +112,7 @@
 {# ------------------------------------------------------------------ #}
 {# Poměr jazyků                                                        #}
 {# ------------------------------------------------------------------ #}
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Poměr jazyků") }}</h2>
-        <p class="card-note">{{ _("podle odsledovaného času") }}</p>
-    </div>
-
-    {{ charts.stacked_bar(watched.rows) | safe }}
-    {{ charts.legend(watched.rows) | safe }}
-
-    <div class="table-wrap" style="margin-top:16px">
-        <table>
-            <thead>
-            <tr>
-                <th>{{ _("Jazyk") }}</th><th class="num">{{ _("Podíl") }}</th>
-                <th class="num">{{ _("Odsledováno") }}</th><th class="num">{{ _("Spuštění") }}</th>
-                <th class="num">{{ _("Titulů") }}</th><th class="num">{{ _("Diváků") }}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for row in watched.rows %}
-            <tr>
-                <td class="strong">
-                    {% if row.slot %}
-                        <span class="legend-swatch" style="background: var(--series-{{ row.slot }})"></span>
-                    {% endif %}
-                    {{ row.label }}
-                    <span class="muted">{{ row.code | upper }}</span>
-                </td>
-                <td class="num strong">{{ row.percent | percent(1) }}</td>
-                <td class="num">{{ row.hours | hours }}</td>
-                <td class="num">{{ row.plays | number }}</td>
-                <td class="num muted">{{ row.item_count | number }}</td>
-                <td class="num muted">{{ row.users | number }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+{% include "_sekce_pomer_jazyku.html" %}
 
 {# ------------------------------------------------------------------ #}
 {# Kdo jak                                                             #}
@@ -260,63 +222,9 @@
 {# Dabing versus originál + titulky                                    #}
 {# ------------------------------------------------------------------ #}
 <div class="grid-2">
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Dabing, nebo originál?") }}</h2>
-            <p class="card-note">{{ _("jen tam, kde víme, co bylo na výběr") }}</p>
-        </div>
-        {% if dubbing %}
-            {{ charts.stacked_bar(dubbing) | safe }}
-            {{ charts.legend(dubbing) | safe }}
-            <div class="table-wrap" style="margin-top:14px">
-                <table>
-                    <tbody>
-                    {% for row in dubbing %}
-                    <tr>
-                        <td>{{ row.label }}</td>
-                        <td class="num strong">{{ row.percent | percent }}</td>
-                        <td class="num muted">{{ row.hours | hours }}</td>
-                    </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <p class="chart-empty">{{ _("Zatím nemáme dost dat o dostupných stopách.") }}</p>
-        {% endif %}
-    </div>
+    {% include "_sekce_dabing.html" %}
 
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Titulky") }}</h2>
-            <p class="card-note">{{ _("podíl času se zapnutými titulky") }}</p>
-        </div>
-        <div class="tile-value">{{ subtitles.percent | percent(1) }}</div>
-        <div class="delta flat">
-            {{ _("s titulky") }} {{ subtitles.with_hours | hours }}
-            &middot; {{ _("bez titulků") }} {{ subtitles.without_hours | hours }}
-        </div>
-
-        {% if subtitles.rows %}
-        <div class="table-wrap" style="margin-top:14px">
-            <table>
-                <thead><tr>
-                    <th>{{ _("Jazyk titulků") }}</th><th class="num">{{ _("Odsledováno") }}</th>
-                    <th class="num">{{ _("Spuštění") }}</th>
-                </tr></thead>
-                <tbody>
-                {% for row in subtitles.rows %}
-                <tr>
-                    <td>{{ row.label }}</td>
-                    <td class="num">{{ row.hours | hours }}</td>
-                    <td class="num muted">{{ row.plays | number }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
+    {% include "_sekce_titulky.html" %}
 </div>
 
 {% endif %}{# konec bloku, který potřebuje historii #}
@@ -334,23 +242,7 @@
 </p>
 
 <div class="grid-2">
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Jazyky v knihovně") }}</h2>
-            <p class="card-note">{{ _("kolik titulů danou stopu obsahuje") }}</p>
-        </div>
-        {% if library %}
-            {{ charts.hbar_chart(library, 'label', 'item_count', unit='') | safe }}
-            <p class="card-note" style="margin-top:14px">
-                {{ _("Jeden titul se počítá do každé stopy, kterou má – film s českou i anglickou stopou je v obou řádcích. Součet proto převyšuje počet titulů.") }}
-            </p>
-        {% else %}
-            <p class="chart-empty">
-                {{ _("Žádná jazyková data.") }}
-                {{ _("Žádné knihovny. Spusť synchronizaci v Nastavení.") }}
-            </p>
-        {% endif %}
-    </div>
+    {% include "_sekce_jazyky_knihovny.html" %}
 
     <div class="card">
         <div class="card-head">

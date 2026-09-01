@@ -1,0 +1,35 @@
+{# Sekce „souhrn".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na Přehledu
+   a ve vlastním přehledu, kde si ji člověk může přeskladádat.
+   Jedna kopie, aby se obě místa nerozešla - viz sekce.py. #}
+{# Makro si šablonka natáhne sama: ve vlastním přehledu se kreslí
+   samostatně, takže nesmí spoléhat na import stránky kolem sebe. #}
+{% from "_macros.html" import zmena with context %}
+<div class="card hero-card">
+    <div class="hero-cislo">
+    {# U vlastního období nemá `day_labels` co říct - vypíšeme rozmezí. #}
+    <p class="tile-label">
+        {{ _("Celkem odsledováno za") }}
+        {% if obdobi.vlastni %}{{ obdobi.od_popis }} – {{ obdobi.do_popis }}
+        {% else %}{{ _(day_labels[obdobi.days]) }}{% endif %}
+    </p>
+    <div class="hero">{{ (overview.watched_seconds / 3600) | hours }}</div>
+    {% if deltas.watched is not none %}
+        {% if deltas.watched > 1 %}
+            <div class="delta up">&#9650; {{ zmena(deltas.watched) }} {{ _("oproti předchozímu období") }}</div>
+        {% elif deltas.watched < -1 %}
+            <div class="delta down">&#9660; {{ zmena(deltas.watched) }} {{ _("oproti předchozímu období") }}</div>
+        {% else %}
+            <div class="delta flat">{{ _("beze změny") }}</div>
+        {% endif %}
+    {% elif poznamka_srovnani %}
+        {# Když srovnat nejde, řekneme proč. Tiše chybějící šipka vypadá
+           jako chyba a člověk ji hledá u sebe. #}
+        <div class="delta flat">{{ poznamka_srovnani }}</div>
+    {% endif %}
+    </div>
+    {# Stejná data jako velký graf níže, jen bez os - a po najetí myší
+       ukáže hodnotu daného dne, stejně jako on. #}
+    <div class="hero-graf">{{ charts.sparkline(daily, 'day', 'hours') | safe }}</div>
+</div>

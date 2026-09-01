@@ -89,6 +89,11 @@ class FalesnyKlient:
         return {"Items": KNIHOVNA[start:start + limit],
                 "TotalRecordCount": len(KNIHOVNA)}
 
+    async def items_by_ids(self, ids: Any) -> list[dict[str, Any]]:
+        """Doptání na konkrétní položky - analýza jím doplňuje jazyky
+        a dynamický rozsah. Tenhle test na ně necílí, tak nic nevrací."""
+        return []
+
     async def _first_admin_id(self) -> str | None:
         return None
 

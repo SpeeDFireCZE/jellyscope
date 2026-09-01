@@ -1,0 +1,31 @@
+{# Sekce „dabing".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Dabing, nebo originál?") }}</h2>
+        <p class="card-note">{{ _("jen tam, kde víme, co bylo na výběr") }}</p>
+    </div>
+    {% if dubbing %}
+        {{ charts.stacked_bar(dubbing) | safe }}
+        {{ charts.legend(dubbing) | safe }}
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <tbody>
+                {% for row in dubbing %}
+                <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="num strong">{{ row.percent | percent }}</td>
+                    <td class="num muted">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="chart-empty">{{ _("Zatím nemáme dost dat o dostupných stopách.") }}</p>
+    {% endif %}
+</div>

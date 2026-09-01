@@ -1,0 +1,14 @@
+{# Sekce „uzivatele".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Nejaktivnější uživatelé") }}</h2>
+        <p class="card-note">{{ _("v hodinách") }}</p>
+    </div>
+    {{ charts.hbar_chart(top_users, 'label', 'hours',
+                 link_prefix='/users/', link_key='user_id') | safe }}
+</div>

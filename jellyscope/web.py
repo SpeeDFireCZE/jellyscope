@@ -36,8 +36,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting, geoip,
                updates,
-               i18n, importers, insights, langstats, languages, scanner, stats,
-               tasks)
+               i18n, importers, insights, langstats, languages, scanner, sekce,
+               stats, tasks)
 # Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
 # leží na disku nová, ale tenhle proces pořád běží starý kód - a čekárna
 # po aktualizaci potřebuje vědět přesně to, co běží tady, ne co je na
@@ -520,7 +520,10 @@ def login_submit(
     # prihlasenim a pak se do ni "sveze".
     request.session.clear()
     request.session["account_id"] = account["id"]
-    return RedirectResponse("/", status_code=303)
+    # Vlastní přehled je po přihlášení první, co člověk uvidí - o to jde.
+    # Prázdný ale ne: to by byl horší začátek než Přehled.
+    kam = "/dashboard" if (sekce.je_zapnuty() and sekce.nacti_rozvrzeni()) else "/"
+    return RedirectResponse(kam, status_code=303)
 
 
 @app.post("/logout")
@@ -1106,6 +1109,11 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # okamzik problikla v jednom vzhledu a prepnula se do druheho.
         "ui_skin": _vzhled(),
         "ui_cas_presne": _cas_presne(),
+        # Zapnutý v nastavení? Tohle potřebuje přepínač v Rozhraní.
+        "ui_dashboard": sekce.je_zapnuty(),
+        # Záložka v menu. Zapnutý a prázdný se nepočítá: kdo si ho
+        # nesestavil, ať ho nemá v menu překážet.
+        "vlastni_prehled": sekce.je_zapnuty() and bool(sekce.nacti_rozvrzeni()),
     }
     base.update(extra)
     return base
@@ -1123,36 +1131,10 @@ def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] 
     days = _days(request, days, od, do)
     kind = _kind(request, kind)
     top_kind = _kind(request, top_kind, TOP_KIND_SESSION_KEY)
-    current = stats.overview(days)
-    previous = stats.previous_overview(days)
-
-    # Srovnavat se da jen s obdobim, ze ktereho mame data. Kdyz sahá
-    # dal, nez kam nase historie, neni to srovnani dvou obdobi, ale
-    # obdobi s prazdnem - a procenta z toho vyjdou libovolne velka.
-    # (Skutecny pripad: filtr "letos" ukazal 1 619 572 %, protoze
-    # predchozi okno padlo do doby, kdy Jellyscope jeste nebezel.)
-    srovnatelne = stats.lze_srovnat(days)
-
-    def change(now: Any, before: Any) -> Optional[float]:
-        """Zmena v procentech oproti minulemu obdobi."""
-        if not srovnatelne:
-            return None
-        try:
-            now_value, before_value = float(now or 0), float(before or 0)
-        except (TypeError, ValueError):
-            return None
-        if before_value <= 0:
-            return None
-        return (now_value - before_value) / before_value * 100
-
-    # Kdyz srovnat nejde, rekneme proc - misto tise chybejici sipky.
-    poznamka_srovnani = ""
-    if not srovnatelne:
-        odkdy = stats.prvni_zaznam()
-        poznamka_srovnani = (
-            _t("nemáme data za předchozí období – historie začíná {datum}")
-            .format(datum=_cesky_datum(odkdy[:10])) if odkdy
-            else _t("zatím není co srovnávat"))
+    # Souhrn, změny proti minulému období a případné vysvětlení, proč
+    # se srovnat nedá - vše na jednom místě, protože tatáž čísla kreslí
+    # i sekce vlastního přehledu.
+    souhrn = sekce.souhrn_obdobi(days)
 
     daily = stats.daily_activity_split(days)
 
@@ -1160,12 +1142,7 @@ def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] 
         request, account,
         days=days,
         kind=kind,
-        overview=current,
-        poznamka_srovnani=poznamka_srovnani,
-        deltas={
-            "watched": change(current.get("watched_seconds"), previous.get("watched_seconds")),
-            "plays": change(current.get("plays"), previous.get("plays")),
-        },
+        **souhrn,
         daily=daily,
         # Z ceho se sklada "Ostatní". Kresli se z toho popisek pod grafem -
         # bez nej je ta serie slepa skvrna: hodiny vidis, ale nevis, co to
@@ -1604,6 +1581,57 @@ def user_detail(
     ))
 
 
+@app.get("/dashboard", response_class=HTMLResponse)
+def vlastni_prehled(request: Request, days: Optional[int] = None,
+                    od: Optional[str] = None, do: Optional[str] = None,
+                    account: dict[str, Any] = Depends(require_login)):
+    """Přehled poskládaný z existujících sekcí.
+
+    Vypnutý je jako by nebyl: záložka není v menu a adresa vede zpátky
+    na Přehled. Zapíná se v Nastavení -> Rozhraní.
+    """
+    if not sekce.je_zapnuty():
+        return RedirectResponse("/", status_code=303)
+
+    rozvrzeni = sekce.nacti_rozvrzeni()
+    obdobi = _days(request, days, od, do)
+    # Spočítá se JEN to, co je poskládané. Přehled naproti tomu počítá
+    # všech deset sekcí každému bez ohledu na to, na co se dívá.
+    data = sekce.data_pro(rozvrzeni, obdobi)
+
+    return templates.TemplateResponse(request, "vlastni_prehled.html", _context(
+        request, account,
+        days=obdobi,
+        rozvrzeni=rozvrzeni,
+        # Do okna jde CELÝ registr; co už v přehledu je, se jen zašedne.
+        # Kdyby se použité sekce vynechávaly, seznam by při přidávání
+        # a odebírání poskakoval a člověk by ztrácel místo, kde byl.
+        vsechny_sekce=sekce.SEZNAM,
+        pouzite={s.klic for s in rozvrzeni},
+        # Přepínač období má smysl jen tehdy, když ho aspoň jedna sekce
+        # používá - jinak by tam stál a nic nedělal.
+        potrebuje_obdobi=any(s.obdobi for s in rozvrzeni),
+        # V ukázce tlačítko zůstává vidět schválně - stejně jako všude
+        # jinde. Akci zastaví až `_demo_blokuje` a řekne to nahlas.
+        muze_upravovat=bool(account.get("is_admin")),
+        **data,
+    ))
+
+
+@app.post("/dashboard/layout")
+def vlastni_prehled_uloz(request: Request, poradi: str = Form(""),
+                         account: dict[str, Any] = Depends(require_admin)):
+    """Uloží poskládané pořadí sekcí.
+
+    Chodí sem "klíč:šířka" oddělené čárkami - přesně to, co drží skryté
+    pole formuláře, které při přeskládání aktualizuje JavaScript.
+    """
+    ulozene = sekce.uloz_rozvrzeni(poradi or "")
+    _flash(request, "Uloženo." if ulozene else "Přehled je teď prázdný.",
+           "success" if ulozene else "info")
+    return RedirectResponse("/dashboard", status_code=303)
+
+
 @app.get("/insights", response_class=HTMLResponse)
 def insights_page(request: Request, days: Optional[int] = None,
                   od: Optional[str] = None, do: Optional[str] = None,
@@ -1663,14 +1691,12 @@ def _datum_z_textu(text: Optional[str]) -> Optional[str]:
 
 
 def _cesky_datum(iso: Optional[str]) -> str:
-    """Opak: 2026-08-01 -> 1.8.2026, pro vypsání zpátky do formuláře."""
-    if not iso:
-        return ""
-    try:
-        d = date.fromisoformat(iso)
-    except ValueError:
-        return ""
-    return f"{d.day}.{d.month}.{d.year}"
+    """Opak: 2026-08-01 -> 1.8.2026, pro vypsání zpátky do formuláře.
+
+    Vlastní práci dělá `formatting.cesky_datum` - potřebuje ho i sekce
+    vlastního přehledu a dvě kopie téhož převodu jsou o jednu moc.
+    """
+    return formatting.cesky_datum(iso)
 
 
 @app.get("/history", response_class=HTMLResponse)
@@ -2254,6 +2280,7 @@ def settings_interface(request: Request,
                        ui_map_zoom: str = Form("click"),
                        ui_skin: str = Form("novy"),
                        ui_cas_presne: str = Form("0"),
+                       ui_dashboard: str = Form("0"),
                        account: dict[str, Any] = Depends(require_admin)):
     """Stropy dlouhých seznamů - kolik se vypíše, než se zbytek schová.
 
@@ -2272,6 +2299,7 @@ def settings_interface(request: Request,
                    ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
     db.set_setting("ui_skin", ui_skin if ui_skin in VZHLEDY else "novy")
     db.set_setting("ui_cas_presne", "1" if ui_cas_presne == "1" else "0")
+    db.set_setting(sekce.ZAPNUTO, "1" if ui_dashboard == "1" else "0")
     _flash(request, "Uloženo.", "success")
     return RedirectResponse("/settings?section=interface", status_code=303)
 

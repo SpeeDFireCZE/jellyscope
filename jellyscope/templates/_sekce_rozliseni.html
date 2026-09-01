@@ -1,0 +1,36 @@
+{# Sekce „rozliseni".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Rozlišení") }}</h2>
+        <p class="card-note">{{ _("podíl na velikosti knihovny") }}</p>
+    </div>
+    {% set res_segments = [] %}
+    {% for row in resolutions %}
+        {% set _x = res_segments.append({'label': row.label, 'value': row.size_bytes}) %}
+    {% endfor %}
+    {{ charts.stacked_bar(res_segments, unit='B') | safe }}
+    {{ charts.legend(res_segments) | safe }}
+
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Rozlišení") }}</th><th class="num">{{ _("Položek") }}</th>
+                <th class="num">{{ _("Velikost") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in resolutions %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

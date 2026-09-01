@@ -1,0 +1,17 @@
+{# Sekce „doruceni".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na své
+   původní stránce a ve vlastním přehledu, kde si ji člověk
+   může přeskládat. Jedna kopie, aby se obě místa nerozešla -
+   viz jellyscope/sekce.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jak server obsah doručuje") }}</h2>
+    </div>
+    {{ charts.stacked_bar(methods) | safe }}
+    {# Legenda je u dvou a více sérií povinná - barva sama identitu nenese. #}
+    {{ charts.legend(methods) | safe }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Přímé přehrávání nestojí server nic. Transcode znamená, že video musí za běhu překódovat – a to už procesor nebo grafická karta cítí.") }}
+    </p>
+</div>
