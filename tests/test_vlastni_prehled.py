@@ -217,8 +217,10 @@ with TestClient(app) as client:
     sekce.uloz_rozvrzeni([])
     stranka = client.get("/dashboard").text
     check("ještě v něm nic není" in stranka, "zapnutý a prázdný to řekne")
-    check('href="/dashboard"' not in client.get("/").text,
-          "prázdný se do menu nedává - zapnutá prázdná záložka je horší než žádná")
+    # Prazdny prehled se ostatnim neukazuje, ale spravce ho vidi - jinak
+    # by ho zapnul a nemel kudy dovnitr, aby si ho sestavil.
+    check('href="/dashboard"' in client.get("/").text,
+          "správce prázdný přehled v menu má - jinak se k němu nedostane")
 
     sekce.uloz_rozvrzeni(["prave_se_hraje", "nejaktivnejsi_uzivatele"])
     stranka = client.get("/dashboard").text
@@ -299,6 +301,43 @@ with TestClient(app) as divak:
           "a uložit ho nemůže")
     check([s.klic for s in sekce.nacti_rozvrzeni()] == ["kodeky", "rozliseni"],
           "rozvržení zůstalo, jak bylo")
+
+print()
+print("--- zapnutí vede rovnou k sestavení ---")
+prepni(False)
+sekce.uloz_rozvrzeni([])
+with TestClient(app) as client:
+    client.post("/login", data={"username": "spravce", "password": "dlouheheslo"},
+                follow_redirects=False)
+    odpoved = client.post("/settings/interface",
+                          data={"ui_max_streams": "10", "ui_max_viewers": "10",
+                                "ui_map_zoom": "click", "ui_skin": "novy",
+                                "ui_cas_presne": "0", "ui_dashboard": "1"},
+                          follow_redirects=False)
+    check(odpoved.headers.get("location") == "/dashboard",
+          "po zapnutí to hodí rovnou do přehledu")
+
+    # Uz sestaveny prehled uz clovek videt nepotrebuje - zustane
+    # v nastavení, kde zrovna je.
+    sekce.uloz_rozvrzeni(["kodeky"])
+    prepni(False)
+    odpoved = client.post("/settings/interface",
+                          data={"ui_max_streams": "10", "ui_max_viewers": "10",
+                                "ui_map_zoom": "click", "ui_skin": "novy",
+                                "ui_cas_presne": "0", "ui_dashboard": "1"},
+                          follow_redirects=False)
+    check(odpoved.headers.get("location", "").startswith("/settings"),
+          "u sestaveného přehledu zůstane v nastavení")
+
+print()
+print("--- prázdný přehled a neadmin ---")
+prepni(True)
+sekce.uloz_rozvrzeni([])
+with TestClient(app) as divak:
+    divak.post("/login", data={"username": "divak", "password": "dlouheheslo"},
+               follow_redirects=False)
+    check('href="/dashboard"' not in divak.get("/").text,
+          "kdo ho nesestaví, tomu prázdná záložka v menu nepřekáží")
 
 print()
 print("--- přesměrování po přihlášení ---")

@@ -1111,9 +1111,11 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         "ui_cas_presne": _cas_presne(),
         # Zapnutý v nastavení? Tohle potřebuje přepínač v Rozhraní.
         "ui_dashboard": sekce.je_zapnuty(),
-        # Záložka v menu. Zapnutý a prázdný se nepočítá: kdo si ho
-        # nesestavil, ať ho nemá v menu překážet.
-        "vlastni_prehled": sekce.je_zapnuty() and bool(sekce.nacti_rozvrzeni()),
+        # Záložka v menu. Prázdný přehled se ostatním neukazuje - nemá
+        # jim co říct -, ale SPRÁVCE ho vidět musí: jinak by ho zapnul
+        # a neměl kudy dovnitř, aby si ho sestavil.
+        "vlastni_prehled": sekce.je_zapnuty() and bool(
+            sekce.nacti_rozvrzeni() or (account or {}).get("is_admin")),
     }
     base.update(extra)
     return base
@@ -2299,8 +2301,14 @@ def settings_interface(request: Request,
                    ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
     db.set_setting("ui_skin", ui_skin if ui_skin in VZHLEDY else "novy")
     db.set_setting("ui_cas_presne", "1" if ui_cas_presne == "1" else "0")
+    zapina_prehled = ui_dashboard == "1" and not sekce.je_zapnuty()
     db.set_setting(sekce.ZAPNUTO, "1" if ui_dashboard == "1" else "0")
     _flash(request, "Uloženo.", "success")
+
+    # Kdo přehled právě zapnul, jde rovnou sestavit - zapnout a sestavit
+    # jsou dva kroky téže věci, ne dvě různá místa k hledání.
+    if zapina_prehled and not sekce.nacti_rozvrzeni():
+        return RedirectResponse("/dashboard", status_code=303)
     return RedirectResponse("/settings?section=interface", status_code=303)
 
 

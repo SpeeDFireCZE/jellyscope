@@ -6,6 +6,17 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.4.3
+
+### Fixed
+
+- **Switching the custom overview on now leads somewhere.** The tab stays
+  hidden while the overview is empty, which left an administrator who had
+  just switched it on with no way in to build it. Administrators see the
+  tab from the start, everyone else only once there is something in it -
+  and switching it on goes straight to the page, because turning it on and
+  filling it are two halves of the same act.
+
 ## 1.4.2
 
 ### Fixed
