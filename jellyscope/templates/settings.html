@@ -1464,21 +1464,17 @@
     </div>
     {% endif %}
 
+    {# Pravidelné hlídání je úloha jako každá jiná - zapíná se a plánuje
+       v Úlohách, ne tady. Dvě místa, kde se totéž zapíná, jsou past:
+       člověk vypne jedno a druhé mu běží dál. #}
     <form method="post" action="/settings/updates">
-        <label class="radio-card" style="margin-top:6px">
-            <input type="checkbox" name="update_check_enabled" value="1"
-                   {{ 'checked' if verze.zapnuto }}>
-            <span>
-                <span class="title">{{ _("Hlídat novou verzi") }}</span>
-                <span class="desc">
-                    {{ _("Jednou denně se zeptá GitHubu, jestli nevyšlo novější vydání. Nic neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu vypnuté.") }}
-                </span>
-            </span>
-        </label>
-
+        <p class="card-note">
+            {{ _("Pravidelné hlídání zapneš a načasuješ v") }}
+            <a href="/settings?section=tasks">{{ _("Úlohách") }}</a>
+            {{ _("jako úlohu „Kontrola aktualizací“. Nic neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu vypnutá.") }}
+        </p>
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
-            <button class="btn" type="submit" name="action" value="check">
+            <button class="btn primary" type="submit">
                 {{ _("Zkontrolovat teď") }}
             </button>
         </div>

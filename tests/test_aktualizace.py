@@ -172,5 +172,31 @@ config.load_config(reload=True)
 check(updates.lze_aktualizovat() is True, "a mimo demo zase jde")
 
 print()
+print("--- hlídání verze je úloha, ne nastavení v Obecném ---")
+from jellyscope import tasks  # noqa: E402
+
+check("updates" in tasks.TASKS, "úloha „Kontrola aktualizací“ je v rozvrhu")
+uloha = tasks.TASKS["updates"]
+check(uloha.je_denni and uloha.time_setting == "task_updates_time",
+      "plánuje se na čas jako ostatní denní úlohy")
+check(updates.ZAPNUTO == uloha.enabled_setting,
+      "zapíná se týmž klíčem jako úloha - dvě místa by byla past")
+
+# Kdo mel hlidani zapnute pod puvodnim klicem, ma ho mit zapnute i po
+# aktualizaci. Jinak by mu tise prestalo fungovat a nemel by jak poznat
+# proc.
+with db.connect() as conn:
+    conn.execute("INSERT INTO settings (key, value)"
+                 " VALUES ('update_check_enabled', '1')"
+                 " ON CONFLICT (key) DO UPDATE SET value = '1'")
+    conn.commit()
+db.forget_settings()
+db.init_db()                      # to, co se stane při startu nové verze
+db.forget_settings()
+check(tasks.is_enabled(uloha), "zapnuté hlídání se přenese do úlohy")
+check(db.get_setting("update_check_enabled", "") == "",
+      "a starý klíč se uklidí, ať v databázi neplete")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

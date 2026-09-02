@@ -105,7 +105,6 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # systemu. Rozhoduje o tom, v jakem case se vypisuji udaje a podle
     # ceho se deli dny v grafech - viz formatting.zona() a web.lifespan().
     "app_timezone": "",
-    "update_check_enabled": "0",
     "task_tidy_enabled": "1",
     # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje
     # s tim, co synchronizace prave stahla, a zaloha uz ma ulozit
@@ -135,6 +134,9 @@ ZRUSENA_NASTAVENI = (
     # Synchronizace knihovny a zaloha se planuji na cas, ne na interval.
     "library_sync_minutes",
     "task_backup_minutes",
+    # Hlidani nove verze je uloha jako kazda jina - zapina se v Ulohach.
+    # Hodnota se pri startu prenese do `task_updates_enabled`, viz init_db.
+    "update_check_enabled",
 )
 
 
@@ -731,6 +733,17 @@ def init_db(config: dialect.DatabaseConfig | None = None) -> list[str]:
                 " ON CONFLICT (key) DO NOTHING",
                 (key, value),
             )
+        # Hlidani nove verze se prestehovalo mezi ulohy. Kdo ho mel
+        # zapnute, ma ho mit zapnute i dal - jinak by mu po aktualizaci
+        # tise prestalo fungovat a nemel by jak poznat proc.
+        stare = conn.execute(
+            "SELECT value FROM settings WHERE key = 'update_check_enabled'"
+        ).fetchone()
+        if stare is not None and str(stare[0]) == "1":
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('task_updates_enabled', '1')"
+                " ON CONFLICT (key) DO NOTHING")
+
         for key in ZRUSENA_NASTAVENI:
             conn.execute("DELETE FROM settings WHERE key = ?", (key,))
 

@@ -152,6 +152,26 @@ async def _run_backup() -> dict[str, Any]:
     return await backup_database()
 
 
+async def _run_updates() -> dict[str, Any]:
+    """Dotaz na GitHub, jestli nevyslo novejsi vydani.
+
+    `vynuceno=True` schvalne: kdy se ma ptat, rozhoduje rozvrh teto ulohy,
+    ne vlastni denni brzda uvnitr `updates`. Ta by jinak rozhodovala
+    dvakrat a cas nastaveny v rozvrhu by neplatil.
+    """
+    from . import updates
+
+    vysledek = await updates.zkontroluj(vynuceno=True)
+    if vysledek.get("status") == "error":
+        return {"status": "error",
+                "message": vysledek.get("message") or _t("Kontrola se nezdařila.")}
+    if vysledek.get("je_novejsi"):
+        return {"status": "ok",
+                "message": _t("Je k dispozici verze {verze}.").format(
+                    verze=vysledek.get("nalezena") or "?")}
+    return {"status": "ok", "message": _t("Běží nejnovější vydání.")}
+
+
 async def _run_tidy() -> dict[str, Any]:
     """Narovnani dat na pozadi.
 
@@ -220,6 +240,19 @@ TASKS: dict[str, Task] = {
             default_time="04:00",
             runner=_run_tidy,
             log_kind="tidy",
+        ),
+        Task(
+            key="updates",
+            name="Kontrola aktualizací",
+            description=(
+                "Zeptá se GitHubu, jestli nevyšlo novější vydání. Nic "
+                "neinstaluje - jen to řekne. Je to jediné spojení jinam než "
+                "na Jellyfin, proto je ve výchozím stavu vypnutá."
+            ),
+            time_setting="task_updates_time",
+            default_time="05:00",
+            runner=_run_updates,
+            log_kind="updates",
         ),
         Task(
             key="backup",
@@ -1045,12 +1078,6 @@ async def run_scheduler() -> None:
                     result = await task.runner()
                     log.info("uloha %s skoncila: %s", task.key, result.get("status"))
 
-            # Kontrola nove verze. Neni to uloha v seznamu: nesaha na data,
-            # nema smysl ji poustet rucne a clovek by ji v rozvrhu jen
-            # marne hledal. Sama si hlida, ze na sit jde nejvys jednou
-            # denne - a kdyz je vypnuta, neudela nic.
-            from . import updates
-            await updates.zkontroluj()
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001

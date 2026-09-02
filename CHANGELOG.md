@@ -6,6 +6,24 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.4.1
+
+### Fixed
+
+- **The custom overview no longer breaks the whole application on
+  PostgreSQL.** Its layout query used `account_id IS ?`, which SQLite
+  accepts as a null-safe comparison and PostgreSQL rejects as a syntax
+  error - and because the layout is read on every request, for the tab in
+  the menu, one bad query took every page down with it.
+
+### Changed
+
+- **Checking for a new version is a scheduled task.** Switching it on and
+  picking the hour belong with everything else that runs on its own, so
+  they moved to Settings › Tasks; General keeps the button that checks
+  right now. Whoever had the check switched on keeps it on - the old
+  setting is carried over on start.
+
 ## 1.4.0
 
 ### Added

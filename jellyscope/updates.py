@@ -40,7 +40,10 @@ STRANKA = "https://github.com/SpeeDFireCZE/jellyscope/releases/latest"
 
 # Klice v nastaveni. Vysledek se uklada, aby se nemuselo na sit pri
 # kazdem nacteni stranky.
-ZAPNUTO = "update_check_enabled"
+# Zapnuti a rozvrh drzi uloha "Kontrola aktualizaci" (viz tasks.py),
+# takze klic je jeji. Dve mista, kde se totez zapina, jsou past: clovek
+# vypne jedno a druhe mu bezi dal.
+ZAPNUTO = "task_updates_enabled"
 POSLEDNI_KONTROLA = "update_last_check"
 NALEZENA_VERZE = "update_latest_version"
 NALEZENA_ADRESA = "update_latest_url"
@@ -101,6 +104,8 @@ async def zkontroluj(vynuceno: bool = False) -> dict[str, Any]:
     """
     from . import __version__
 
+    # Kdy se ptat, rozhoduje rozvrh ulohy - odsud uz jen kontrola, ze
+    # nekdo neposila dotazy castejí, nez je slusne.
     if not vynuceno and (not je_zapnute() or not _je_cas()):
         return stav()
 

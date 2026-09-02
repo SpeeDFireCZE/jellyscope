@@ -212,6 +212,20 @@ VYCHOZI: tuple[str, ...] = ("prave_se_hraje", "sledovanost_po_dnech",
 ZAPNUTO = "ui_dashboard"
 
 
+def _podminka_uctu(account_id: int | None) -> tuple[str, list[Any]]:
+    """Podminka na vlastnika rozvrzeni - spolecne (NULL), nebo konkretni ucet.
+
+    Nedá se napsat `account_id IS ?`. SQLite to bere jako porovnani, ktere
+    zvlada i NULL, ale PostgreSQL zna jen `IS NULL` - a `IS %s` je pro nej
+    syntakticka chyba. Protoze rozvrzeni cte kazdy pozadavek (kvuli
+    zalozce v menu), shodilo to na PostgreSQL celou aplikaci, ne jen tuhle
+    stranku.
+    """
+    if account_id is None:
+        return "account_id IS NULL", []
+    return "account_id = ?", [account_id]
+
+
 def je_zapnuty() -> bool:
     """Je vlastní přehled zapnutý v nastavení?"""
     return (db.get_setting(ZAPNUTO, "0") or "0").strip() == "1"
@@ -226,9 +240,10 @@ def nacti_rozvrzeni(account_id: int | None = None) -> list[Sekce]:
     přibudou řádky s konkrétním účtem a pravidlo bude znít "má-li člověk
     vlastní, platí ony; jinak společné". Žádná migrace dat.
     """
+    kde, hodnoty = _podminka_uctu(account_id)
     radky = db.query_all(
-        "SELECT sekce, sirka FROM dashboard_layout"
-        " WHERE account_id IS ? ORDER BY poradi", (account_id,))
+        f"SELECT sekce, sirka FROM dashboard_layout"
+        f" WHERE {kde} ORDER BY poradi", tuple(hodnoty))
     if not radky and account_id is not None:
         radky = db.query_all(
             "SELECT sekce, sirka FROM dashboard_layout"
@@ -282,9 +297,9 @@ def uloz_rozvrzeni(polozky: Any, account_id: int | None = None) -> list[str]:
             videne.add(klic)
             ulozene.append((klic, sirka if sirka in SIRKY else ""))
 
+    kde, hodnoty = _podminka_uctu(account_id)
     with db.connect() as conn:
-        conn.execute("DELETE FROM dashboard_layout WHERE account_id IS ?",
-                     (account_id,))
+        conn.execute(f"DELETE FROM dashboard_layout WHERE {kde}", tuple(hodnoty))
         conn.executemany(
             "INSERT INTO dashboard_layout (account_id, sekce, poradi, sirka)"
             " VALUES (?, ?, ?, ?)",

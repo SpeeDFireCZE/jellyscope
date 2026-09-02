@@ -435,6 +435,40 @@ vzorek = "UPDATE t SET a = CASE WHEN ? THEN ? ELSE a END"
 check(bool(re.search(r"CASE\s+WHEN\s*\?", vzorek, re.I)),
       "kontrola takový dotaz opravdu pozná")
 
+print()
+print("--- `IS ?` se nepoužívá ---")
+#
+# SQLite bere `sloupec IS ?` jako porovnání, které zvládne i NULL.
+# PostgreSQL zná jen `IS NULL` / `IS NOT NULL`, takže z `IS %s` je
+# syntaktická chyba - a vývoj na SQLite ji neukáže.
+#
+# Skutečný případ: rozvržení vlastního přehledu se čte při každém
+# požadavku (kvůli záložce v menu), takže to na PostgreSQL neshodilo
+# jednu stránku, ale celou aplikaci.
+#
+# Řešení je rozhodnout se v Pythonu: "account_id IS NULL" bez parametru,
+# nebo "account_id = ?" s ním.
+nalezene_is = []
+for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+    zdroj = soubor.read_text(encoding="utf-8")
+    for uzel in _ast.walk(_ast.parse(zdroj)):
+        if isinstance(uzel, _ast.Constant) and isinstance(uzel.value, str):
+            text = uzel.value
+        elif isinstance(uzel, _ast.JoinedStr):
+            text = "".join(c.value if isinstance(c, _ast.Constant) else "{X}"
+                           for c in uzel.values)
+        else:
+            continue
+        # Docstring o tom psát smíme; jde o skutečný dotaz.
+        if "SELECT" not in text.upper() and "DELETE" not in text.upper()                 and "UPDATE" not in text.upper():
+            continue
+        if re.search(r"\bIS\s+\?", text, re.I):
+            nalezene_is.append(f"{soubor.name}:{uzel.lineno}")
+
+check(not nalezene_is, f"nikde v projektu; nalezeno: {nalezene_is}")
+check(bool(re.search(r"\bIS\s+\?", "DELETE FROM t WHERE a IS ?", re.I)),
+      "kontrola takový dotaz opravdu pozná")
+
 # ---------------------------------------------------------------------------
 # Zápisy sběrače: sedí počty parametrů a projdou přes psycopg?
 # ---------------------------------------------------------------------------

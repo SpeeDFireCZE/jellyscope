@@ -2305,29 +2305,24 @@ def settings_interface(request: Request,
 
 
 @app.post("/settings/updates")
-async def settings_updates(request: Request, action: str = Form(""),
-                           update_check_enabled: str = Form(""),
+async def settings_updates(request: Request,
                            account: dict[str, Any] = Depends(require_admin)):
-    """Hlídání nové verze - zapnutí, vypnutí a ruční kontrola.
+    """Ruční kontrola nové verze.
 
-    Tlačítko „Zkontrolovat teď" se ptá i tehdy, když je hlídání vypnuté:
-    je to jednorázová akce na kliknutí, tedy něco jiného než pravidelné
-    volání na pozadí.
+    Jestli se má ptát pravidelně a kdy, se nastavuje v Úlohách jako
+    u všeho ostatního, co běží samo - viz úloha "Kontrola aktualizací".
+    Tady zůstalo jen jednorázové kliknutí, které se zeptá bez ohledu na
+    to, jestli je úloha zapnutá: to je akce, ne rozvrh.
     """
-    db.set_setting(updates.ZAPNUTO, "1" if update_check_enabled else "0")
-
-    if action == "check":
-        vysledek = await updates.zkontroluj(vynuceno=True)
-        if vysledek.get("status") == "error":
-            _flash(request, "Kontrolu se nepovedlo provést: {duvod}", "error",
-                   duvod=vysledek.get("message", "?"))
-        elif vysledek.get("je_novejsi"):
-            _flash(request, "Je k dispozici verze {verze}.", "success",
-                   verze=vysledek.get("nalezena", "?"))
-        else:
-            _flash(request, "Máš nejnovější verzi.", "success")
+    vysledek = await updates.zkontroluj(vynuceno=True)
+    if vysledek.get("status") == "error":
+        _flash(request, "Kontrolu se nepovedlo provést: {duvod}", "error",
+               duvod=vysledek.get("message", "?"))
+    elif vysledek.get("je_novejsi"):
+        _flash(request, "Je k dispozici verze {verze}.", "success",
+               verze=vysledek.get("nalezena", "?"))
     else:
-        _flash(request, "Uloženo.", "success")
+        _flash(request, "Máš nejnovější verzi.", "success")
 
     return RedirectResponse("/settings?section=general#verze", status_code=303)
 

@@ -1195,13 +1195,6 @@ EN: dict[str, str] = {
     "jakýkoliv": "any",
     "všichni": "everyone",
     "neuvedený": "not given",
-    "Hlídat novou verzi": "Watch for a new version",
-    "Jednou denně se zeptá GitHubu, jestli nevyšlo novější vydání. Nic "
-    "neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, "
-    "proto je ve výchozím stavu vypnuté.":
-        "Once a day it asks GitHub whether a newer release is out. It "
-        "installs nothing – it only tells you. This is the only connection "
-        "anywhere other than Jellyfin, which is why it is off by default.",
     "Zkontrolovat teď": "Check now",
     "Naposledy kontrolováno": "Last checked",
     "nejnovější vydání": "latest release",
@@ -1273,6 +1266,20 @@ EN: dict[str, str] = {
     "Tažením v grafu vybereš rozmezí.": "Drag across the chart to pick a range.",
 
     # --- vlastni prehled (viz jellyscope/sekce.py) ---
+    "Pravidelné hlídání zapneš a načasuješ v":
+        "Regular checks are switched on and scheduled in",
+    "Úlohách":
+        "Tasks",
+    "jako úlohu „Kontrola aktualizací“. Nic neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu vypnutá.":
+        "as the „Check for updates“ task. It installs nothing - it only says so. It is the only connection anywhere other than Jellyfin, which is why it is off by default.",
+    "Kontrola aktualizací":
+        "Check for updates",
+    "Zeptá se GitHubu, jestli nevyšlo novější vydání. Nic neinstaluje - jen to řekne. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu vypnutá.":
+        "Asks GitHub whether a newer release is out. It installs nothing - it only says so. It is the only connection anywhere other than Jellyfin, which is why it is off by default.",
+    "Kontrola se nezdařila.":
+        "The check failed.",
+    "Běží nejnovější vydání.":
+        "You are running the latest release.",
     "Rozvržení přehledu":
         "Overview layout",
     "Dlaždice odpovídají panelům na stránce. Přetažením změníš pořadí, tlačítkem šířku.":

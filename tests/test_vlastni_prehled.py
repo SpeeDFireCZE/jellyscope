@@ -79,6 +79,80 @@ check(not nesedi, "sdílené klíče znamenají u všech sekcí totéž",
       f"(rozcházejí se: {nesedi})")
 
 print()
+print("--- dotazy projdou i na PostgreSQL ---")
+# `sloupec IS ?` SQLite bere, PostgreSQL ne - z `IS %s` je pro nej
+# syntakticka chyba. A protoze se rozvrzeni cte pri KAZDEM pozadavku
+# (kvuli zalozce v menu), neshodilo to jednu stranku, ale celou
+# aplikaci. Chytame proto skutecne dotazy, ne jen zdrojak.
+from jellyscope import dialect  # noqa: E402
+
+zachycene: list[str] = []
+_puvodni_all = db.query_all
+_puvodni_connect = db.connect
+
+
+def _zachyt_all(sql, params=()):
+    zachycene.append(sql)
+    return _puvodni_all(sql, params)
+
+
+class _Odposlech:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        zachycene.append(sql)
+        return self._conn.execute(sql, params)
+
+    def executemany(self, sql, params):
+        zachycene.append(sql)
+        return self._conn.executemany(sql, params)
+
+    def __getattr__(self, jmeno):
+        return getattr(self._conn, jmeno)
+
+
+import contextlib  # noqa: E402
+
+
+@contextlib.contextmanager
+def _zachyt_connect(*args, **kwargs):
+    with _puvodni_connect(*args, **kwargs) as conn:
+        yield _Odposlech(conn)
+
+
+db.query_all = _zachyt_all
+db.connect = _zachyt_connect
+try:
+    sekce.nacti_rozvrzeni()
+    sekce.nacti_rozvrzeni(account_id=1)
+    sekce.uloz_rozvrzeni(["kodeky"])
+    sekce.uloz_rozvrzeni(["kodeky"], account_id=1)
+finally:
+    db.query_all = _puvodni_all
+    db.connect = _puvodni_connect
+
+nase = [s for s in zachycene if "dashboard_layout" in s]
+check(len(nase) >= 4, f"zachyceno {len(nase)} dotazů nad rozvržením")
+prelozene = [dialect.translate(s, dialect.POSTGRES) for s in nase]
+# Hledá se bez ohledu na velikost písmen - `%s` se `.upper()` změní na
+# `%S` a porovnání s "IS %s" by pak nenašlo nic nikdy.
+import re as _re  # noqa: E402
+
+VADNE = _re.compile(r"\bIS\s+%s", _re.I)
+spatne = [s for s in prelozene if VADNE.search(s)]
+check(not spatne, "žádný nekončí jako `IS %s`", f"({spatne})")
+check(any(_re.search(r"\bIS\s+NULL", s, _re.I) for s in prelozene),
+      "společné rozvržení se ptá na IS NULL")
+
+# Kontrola sama sebe: kdyby hledání přestalo hledat, mlčelo by.
+check(bool(VADNE.search(dialect.translate(
+    "SELECT 1 FROM t WHERE a IS ?", dialect.POSTGRES))),
+    "a starý zápis `IS ?` by opravdu propadl")
+
+sekce.uloz_rozvrzeni([])
+
+print()
 print("--- ukládání rozvržení ---")
 check(sekce.nacti_rozvrzeni() == [], "nové rozvržení je prázdné")
 ulozene = sekce.uloz_rozvrzeni(["nejaktivnejsi_uzivatele", "prave_se_hraje"])
