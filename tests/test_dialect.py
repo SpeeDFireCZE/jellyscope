@@ -469,6 +469,67 @@ check(not nalezene_is, f"nikde v projektu; nalezeno: {nalezene_is}")
 check(bool(re.search(r"\bIS\s+\?", "DELETE FROM t WHERE a IS ?", re.I)),
       "kontrola takový dotaz opravdu pozná")
 
+print()
+print("--- řádek se nečte podle pořadí ---")
+#
+# PostgreSQL vraci radky jako slovniky, SQLite jako `sqlite3.Row`, ze
+# ktereho jde cist obojim zpusobem. `radek[0]` tedy pri vyvoji funguje
+# a u uzivatele s PostgreSQL spadne na `KeyError: 0`.
+#
+# Skutecny pripad: prenos jednoho nastaveni pri startu. Aplikace kvuli
+# nemu vubec nenabehla - ani ne stranka, cely proces.
+
+
+def _cteni_podle_poradi(zdroj: str) -> list[int]:
+    """Radky, kde se ctou data z fetchone() podle poradi."""
+    nalezene = []
+    for uzel in _ast.walk(_ast.parse(zdroj)):
+        # Jen v ramci jedne funkce - stejne jmeno jinde neni totez.
+        if not isinstance(uzel, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+            continue
+        z_radku = set()
+        for pod in _ast.walk(uzel):
+            if (isinstance(pod, _ast.Assign) and isinstance(pod.value, _ast.Call)
+                    and isinstance(pod.value.func, _ast.Attribute)
+                    and pod.value.func.attr == "fetchone"):
+                z_radku.update(cil.id for cil in pod.targets
+                               if isinstance(cil, _ast.Name))
+        for pod in _ast.walk(uzel):
+            if not (isinstance(pod, _ast.Subscript)
+                    and isinstance(pod.slice, _ast.Constant)
+                    and isinstance(pod.slice.value, int)):
+                continue
+            primo = (isinstance(pod.value, _ast.Call)
+                     and isinstance(pod.value.func, _ast.Attribute)
+                     and pod.value.func.attr == "fetchone")
+            pres_jmeno = (isinstance(pod.value, _ast.Name)
+                          and pod.value.id in z_radku)
+            if primo or pres_jmeno:
+                nalezene.append(pod.lineno)
+    return sorted(set(nalezene))
+
+
+podle_poradi = []
+for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+    for radek in _cteni_podle_poradi(soubor.read_text(encoding="utf-8")):
+        podle_poradi.append(f"{soubor.name}:{radek}")
+
+check(not podle_poradi, f"nikde v projektu; nalezeno: {podle_poradi}")
+SPATNE = """def f(c):
+    radek = c.fetchone()
+    return radek[0]
+"""
+DOBRE = """def f(c):
+    radek = c.fetchone()
+    return radek["value"]
+"""
+
+# Kontrola sama sebe - kdyby hledání přestalo hledat, mlčelo by.
+check(_cteni_podle_poradi(SPATNE) == [3],
+      "kontrola takový zápis opravdu pozná")
+check(_cteni_podle_poradi(DOBRE) == [],
+      "a čtení podle jména nechá být")
+
 # ---------------------------------------------------------------------------
 # Zápisy sběrače: sedí počty parametrů a projdou přes psycopg?
 # ---------------------------------------------------------------------------

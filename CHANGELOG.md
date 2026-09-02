@@ -6,6 +6,16 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.4.2
+
+### Fixed
+
+- **The application starts again on PostgreSQL.** The setting carried over
+  in 1.4.1 was read from the row by position, and PostgreSQL hands rows
+  back as dictionaries - so `KeyError: 0` stopped the process before it
+  could serve anything. It is read by column name now, which both
+  databases understand.
+
 ## 1.4.1
 
 ### Fixed

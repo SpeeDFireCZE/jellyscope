@@ -238,7 +238,9 @@ class Connection:
             row = cursor.fetchone()
             if row is None:
                 return 0
-            return int(row["id"] if isinstance(row, dict) else row[0])
+            # Vetev je jen pro PostgreSQL, a ten vraci slovnik - cist
+            # podle poradi tu neni proc.
+            return int(row["id"])
 
         cursor = self.execute(sql, params)
         return int(cursor.lastrowid or 0)
@@ -739,7 +741,11 @@ def init_db(config: dialect.DatabaseConfig | None = None) -> list[str]:
         stare = conn.execute(
             "SELECT value FROM settings WHERE key = 'update_check_enabled'"
         ).fetchone()
-        if stare is not None and str(stare[0]) == "1":
+        # Podle jmena sloupce, ne podle poradi: PostgreSQL vraci slovnik
+        # a `radek[0]` je na nem KeyError. SQLite zvlada oboji, takze se
+        # to pri vyvoji neprojevi - projevi se to az pri startu u lidi
+        # s PostgreSQL, a to tak, ze aplikace vubec nenabehne.
+        if stare is not None and str(dict(stare).get("value")) == "1":
             conn.execute(
                 "INSERT INTO settings (key, value) VALUES ('task_updates_enabled', '1')"
                 " ON CONFLICT (key) DO NOTHING")

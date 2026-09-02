@@ -197,6 +197,31 @@ check(tasks.is_enabled(uloha), "zapnuté hlídání se přenese do úlohy")
 check(db.get_setting("update_check_enabled", "") == "",
       "a starý klíč se uklidí, ať v databázi neplete")
 
+# Prenos musi zvladnout i radek tak, jak ho vraci psycopg - tedy slovnik.
+# SQLite vraci `sqlite3.Row`, ze ktereho jde cist i podle poradi, takze
+# `radek[0]` se pri vyvoji tvari spravne a u cloveka s PostgreSQL shodi
+# cely start na "KeyError: 0". Presne to se stalo.
+import sqlite3 as _sqlite3  # noqa: E402
+
+
+def _prenese(radek: object) -> bool:
+    """Rozhodne migrace stejne pro oba tvary radku?"""
+    return radek is not None and str(dict(radek).get("value")) == "1"
+
+
+class _RadekPsycopg(dict):
+    """Co vrátí psycopg: slovník, kde `radek[0]` je KeyError."""
+
+
+check(_prenese(_RadekPsycopg(value="1")), "slovníkový řádek se přenese")
+check(not _prenese(_RadekPsycopg(value="0")), "a vypnutý zůstane vypnutý")
+
+_spojeni = _sqlite3.connect(":memory:")
+_spojeni.row_factory = _sqlite3.Row
+_radek = _spojeni.execute("SELECT '1' AS value").fetchone()
+check(_prenese(_radek), "a řádek ze SQLite taky")
+_spojeni.close()
+
 print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)
