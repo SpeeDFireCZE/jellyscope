@@ -20,7 +20,9 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    # Tag smí být "v1.2.3" i "1.2.3" - starší vydání mají "v",
+    # novější ne.
+    tags: ["v*", "[0-9]*"]
 
 permissions:
   contents: write   # bez toho vydání nevznikne
@@ -78,14 +80,24 @@ jobs:
               ctu            { print }
           ' CHANGELOG.md > poznamky.md
 
+          # Název vydání je popis tagu, když ho tag má:
+          #
+          #     git tag -a 1.4.4 -m "1.4.4 security and cleaning"
+          #
+          # Bez popisu zůstává jméno tagu. Díky tomu se dá vydání
+          # pojmenovat při vydávání a nemusí se kvůli tomu sahat sem.
+          titul=$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")
+          [ -n "$titul" ] || titul="$GITHUB_REF_NAME"
+          echo "název vydání: $titul"
+          
           if [ -s poznamky.md ]; then
               echo "poznámky z CHANGELOG.md, $(wc -l < poznamky.md) řádků"
               gh release create "$GITHUB_REF_NAME" \
-                  --title "$GITHUB_REF_NAME" \
+                  --title "$titul" \
                   --notes-file poznamky.md
           else
               echo "::warning::CHANGELOG.md nemá oddíl pro $verze, beru commity"
               gh release create "$GITHUB_REF_NAME" \
-                  --title "$GITHUB_REF_NAME" \
+                  --title "$titul" \
                   --generate-notes
           fi

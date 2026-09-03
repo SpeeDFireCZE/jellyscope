@@ -33,7 +33,7 @@
     </div>
 </div>
 
-<div class="dash-plocha{{ ' dash-prazdny' if not rozvrzeni }}">
+<div class="dash-plocha">
     {% for sekce in rozvrzeni %}
     {% include "_dash_sekce.html" %}
     {% endfor %}
@@ -79,7 +79,13 @@
             <p class="card-note">
                 {{ _("Dlaždice odpovídají panelům na stránce. Přetažením změníš pořadí, tlačítkem šířku.") }}
             </p>
+            {# Značky šířek jedou z registru i do JavaScriptu - aby
+               nebyly dvakrát a jedna z nich se časem nerozešla. #}
             <div class="dash-mrizka" id="dash-mrizka"
+                 {# Apostrofy schválně: `tojson` escapuje `'`, ale ne `"`,
+                    takže v atributu s dvojitými uvozovkami by JSON značku
+                    ukončil uprostřed. #}
+                 data-sirky='{{ sirky | tojson }}'
                  data-prazdno="{{ _('Zatím nic – vyber si vpravo ze seznamu.') }}">
                 {% for sekce in rozvrzeni %}
                 <div class="dash-dlazdice dash-{{ sekce.sirka }}"
@@ -89,7 +95,7 @@
                         {# Šířka se přepíná dokola: třetina -> půlka -> celá. #}
                         <button class="btn dash-sirka" type="button"
                                 title="{{ _('Změnit šířku panelu') }}">
-                            {{ {'tretina': '⅓', 'pul': '½', 'cela': '1'}[sekce.sirka] }}
+                            {{ sirky[sekce.sirka] }}
                         </button>
                         <button class="btn dash-pryc" type="button"
                                 title="{{ _('Odebrat z přehledu') }}">&times;</button>

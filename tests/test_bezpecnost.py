@@ -296,6 +296,18 @@ for jmeno, hodnota in [("X-Content-Type-Options", "nosniff"),
     check(hlavicky.get(jmeno) == hodnota,
           f"{jmeno}: {hlavicky.get(jmeno)!r}")
 
+# Aplikace nic z toho nepotřebuje, tak ať si o to nemůže říct ani kus
+# stránky, který by se sem nedopatřením dostal.
+pravidla = hlavicky.get("Permissions-Policy", "")
+check(all(f"{co}=()" in pravidla
+          for co in ("camera", "microphone", "geolocation")),
+      f"Permissions-Policy zakazuje kameru, mikrofon i polohu ({pravidla!r})")
+
+# HSTS jen po HTTPS: prohlížeč si ho pamatuje dlouho, takže zapnuté na
+# serveru bez certifikátu by lidi zamklo venku.
+check("Strict-Transport-Security" not in hlavicky,
+      "HSTS se bez HTTPS neposílá")
+
 print()
 print("--- odkud smí stránka načítat a kam smí posílat ---")
 # Jellyscope nemá jediný cizí zdroj: žádné CDN, žádné písmo z internetu,

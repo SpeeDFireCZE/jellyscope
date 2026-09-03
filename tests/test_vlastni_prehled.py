@@ -166,11 +166,10 @@ check([s.klic for s in sekce.nacti_rozvrzeni()] == ulozene, "a tak se i načte")
 check(sekce.uloz_rozvrzeni(["prave_se_hraje", "neexistuje", "prave_se_hraje"])
       == ["prave_se_hraje"], "neznámé klíče i duplicity se zahodí")
 
-# Nabidka je zbytek registru.
-rozvrzeni = sekce.nacti_rozvrzeni()
-check({s.klic for s in sekce.nabidka(rozvrzeni)}
-      == {s.klic for s in sekce.SEZNAM} - {"prave_se_hraje"},
-      "nabídka je to, co v přehledu není")
+# Nabidka v okne uz neni "zbytek registru": ukazuji se vsechny sekce
+# a pouzite se zasednou. Kdyby se vynechavaly, seznam by pri pridavani
+# a odebirani poskakoval a clovek by ztracel misto, kde byl. Overuje se
+# to na strance nize.
 
 print()
 print("--- počítá se jen to, co je poskládané ---")
@@ -228,6 +227,13 @@ with TestClient(app) as client:
     check('href="/dashboard"' in client.get("/").text, "a záložka je v menu")
     check("Upravit přehled" in stranka, "správce má tlačítko úprav")
 
+    # Okno nabizi CELY registr a pouzite sekce zasedne. Kdyby se
+    # vynechavaly, seznam by pri pridavani a odebirani poskakoval.
+    check(stranka.count("data-pridat=") == len(sekce.SEZNAM),
+          f"v nabídce jsou všechny sekce ({stranka.count('data-pridat=')})")
+    check(stranka.count("disabled") >= 2,
+          "a ty, které v přehledu jsou, jsou zašedlé")
+
     # Filtr obdobi se ukazuje jen tehdy, kdyz ho aspon jedna sekce
     # pouziva - jinak by nahore stal prepinac, ktery nic nedela.
     sekce.uloz_rozvrzeni(["prave_se_hraje", "kodeky"])
@@ -265,6 +271,20 @@ with TestClient(app) as client:
     kolik = vse.text.count('class="dash-sekce')
     check(kolik == len(sekce.SEZNAM),
           f"vykreslí se všechny ({kolik} z {len(sekce.SEZNAM)})")
+
+    print()
+    print("--- značky šířek jsou na jednom místě ---")
+    # Znacky (⅓ ½ 1) potrebuje sablona i JavaScript. Kdyby je mel kazdy
+    # svoje, jedna z kopii by se casem rozesla - proto jdou z registru
+    # a do prohlizece se vezou v atributu.
+    sekce.uloz_rozvrzeni("kodeky:tretina,rozliseni:pul,odkud:cela")
+    stranka = client.get("/dashboard").text
+    check(all(z in stranka for z in sekce.SIRKY.values()),
+          f"všechny značky se vykreslí ({list(sekce.SIRKY.values())})")
+    check("data-sirky=" in stranka, "a JavaScript je dostane ze stránky")
+    # Atribut musi byt v apostrofech: `tojson` escapuje `'`, ale ne `"`,
+    # takze v uvozovkach by JSON znacku ukoncil uprostred.
+    check("data-sirky='" in stranka, "atribut je v apostrofech, ať JSON značku neukončí")
 
     print()
     print("--- šířka panelu ---")

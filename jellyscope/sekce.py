@@ -201,13 +201,9 @@ SEZNAM: tuple[Sekce, ...] = (
 
 PODLE_KLICE: dict[str, Sekce] = {s.klic: s for s in SEZNAM}
 
-# Šířky panelu. Mřížka má šest sloupců, aby vyšly třetiny i půlky.
-SIRKY: dict[str, int] = {"tretina": 2, "pul": 3, "cela": 6}
-
-# Co se nabídne, když si člověk přehled ještě neposkládal. Záměrně krátké:
-# prázdná stránka nikomu nepomůže a dlouhý seznam by byl jen druhý Přehled.
-VYCHOZI: tuple[str, ...] = ("prave_se_hraje", "sledovanost_po_dnech",
-                            "nejaktivnejsi_uzivatele", "nejsledovanejsi")
+# Šířky panelu. Mřížka má šest sloupců, aby vyšly třetiny i půlky;
+# značka je to, co stojí na přepínači šířky v okně s rozvržením.
+SIRKY: dict[str, str] = {"tretina": "⅓", "pul": "½", "cela": "1"}
 
 ZAPNUTO = "ui_dashboard"
 
@@ -307,12 +303,6 @@ def uloz_rozvrzeni(polozky: Any, account_id: int | None = None) -> list[str]:
              for poradi, (klic, sirka) in enumerate(ulozene)])
         conn.commit()
     return [klic for klic, _ in ulozene]
-
-
-def nabidka(rozvrzeni: list[Sekce]) -> list[Sekce]:
-    """Sekce, které v přehledu ještě nejsou - nabídka do editoru."""
-    pouzite = {s.klic for s in rozvrzeni}
-    return [s for s in SEZNAM if s.klic not in pouzite]
 
 
 def data_pro(rozvrzeni: list[Sekce], obdobi: Any) -> dict[str, Any]:

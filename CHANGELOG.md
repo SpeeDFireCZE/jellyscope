@@ -6,6 +6,24 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.4.4
+
+### Fixed
+
+- **A link cannot crash the network page any more.** The range picked by
+  dragging travels in the address, and an instant outside the calendar -
+  `od_ts=-1e308`, or plain `0` on Windows - reached the conversion and
+  raised. A nonsensical period is not a server error; it is simply no
+  period.
+
+### Changed
+
+- **Two more response headers.** `Permissions-Policy` turns off the camera,
+  microphone, location, payment and USB, none of which the application
+  uses. `Strict-Transport-Security` is sent only where it already runs over
+  HTTPS (`SECURE_COOKIES`), without `includeSubDomains` or `preload` -
+  those are decisions about a whole domain, not about us.
+
 ## 1.4.3
 
 ### Fixed

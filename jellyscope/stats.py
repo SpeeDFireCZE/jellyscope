@@ -171,10 +171,17 @@ def obdobi_z_okamziku(od: Any, do: Any) -> Obdobi | None:
 
     zona = formatting.zona()
     tvar = "%Y-%m-%d %H:%M"
-    return obdobi_od_do(
-        datetime.fromtimestamp(zacatek, zona).strftime(tvar),
-        datetime.fromtimestamp(konec, zona).strftime(tvar),
-    )
+    try:
+        return obdobi_od_do(
+            datetime.fromtimestamp(zacatek, zona).strftime(tvar),
+            datetime.fromtimestamp(konec, zona).strftime(tvar),
+        )
+    except (OverflowError, OSError, ValueError):
+        # Okamzik mimo rozsah kalendare. Chodi z adresy, takze staci
+        # podstrcit odkaz s `od_ts=-1e308` a stranka spadne na 500 -
+        # a `0` shodi Windows uz na prevodu do mistni zony. Nesmyslne
+        # obdobi neni chyba serveru; proste zadne obdobi neni.
+        return None
 
 
 def _obdobi(zadani: Any) -> Obdobi:

@@ -86,6 +86,22 @@ zkontroluj("není relativní", o.relativni is False)
 zkontroluj("obrácené meze se odmítnou", stats.obdobi_z_okamziku(do, od) is None)
 zkontroluj("nesmysl se odmítne", stats.obdobi_z_okamziku("x", "y") is None)
 
+# Okamziky chodi z adresy, takze staci podstrcit odkaz. Kalendar ma svuj
+# rozsah a prevod mimo nej vyhodi OverflowError nebo OSError - stranka
+# na to padala na 500. Nesmyslne obdobi neni chyba serveru.
+for popis, od, do in (("obrovské", 1e308, 1.5e308),
+                      ("záporné obrovské", -1e308, 0.0),
+                      ("nula (na Windows padá převod)", 0.0, 1.0),
+                      ("mimo kalendář", 10 ** 20, 10 ** 20 + 1),
+                      ("nečíslo", float("nan"), 1.0),
+                      ("nekonečno", float("inf"), float("inf"))):
+    try:
+        vysledek = stats.obdobi_z_okamziku(od, do)
+        spadlo = False
+    except Exception:  # noqa: BLE001 - o to tu jde
+        vysledek, spadlo = "výjimka", True
+    zkontroluj(f"{popis} nespadne", not spadlo, f"({vysledek})")
+
 print("Cely den v mistni zone, ne v UTC")
 den = stats.obdobi_od_do("2026-08-20", "2026-08-20")
 zkontroluj("léto: den začíná ve 22:00 UTC předchozího dne",

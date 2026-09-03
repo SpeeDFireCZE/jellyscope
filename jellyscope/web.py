@@ -271,6 +271,18 @@ async def bezpecnostni_hlavicky(request: Request, call_next):
     # "Pri odchodu na cizi web neposilej, odkud clovek prisel."
     # Adresy Jellyscope obsahuji id polozek i uzivatelu.
     response.headers.setdefault("Referrer-Policy", "same-origin")
+    # Nic z tohohle aplikace nepotrebuje, tak at si to o to nemuze rict
+    # ani kus stranky, ktery by se sem nedopatrenim dostal.
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+    # HSTS jen tam, kde uz aplikace bezi po HTTPS (SECURE_COOKIES) -
+    # prohlizec si ho pamatuje dlouho, takze zaplé na serveru bez
+    # certifikatu by lidi zamklo venku. Bez `includeSubDomains`
+    # a `preload` zamerne: to jsou rozhodnuti o cele domene, ne o nas.
+    if config.secure_cookies:
+        response.headers.setdefault("Strict-Transport-Security",
+                                    "max-age=31536000")
     # Odkud smi stranka cokoliv nacist a kam smi cokoliv poslat.
     #
     # Jellyscope nema jediny cizi zdroj - zadne CDN, zadne pismo z internetu,
@@ -1610,6 +1622,7 @@ def vlastni_prehled(request: Request, days: Optional[int] = None,
         # a odebírání poskakoval a člověk by ztrácel místo, kde byl.
         vsechny_sekce=sekce.SEZNAM,
         pouzite={s.klic for s in rozvrzeni},
+        sirky=sekce.SIRKY,
         # Přepínač období má smysl jen tehdy, když ho aspoň jedna sekce
         # používá - jinak by tam stál a nic nedělal.
         potrebuje_obdobi=any(s.obdobi for s in rozvrzeni),

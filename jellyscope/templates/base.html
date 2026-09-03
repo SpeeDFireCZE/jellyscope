@@ -672,8 +672,10 @@
         var poradiPole = document.getElementById("dash-poradi");
         var zrusit = document.getElementById("dash-zrusit");
         var okno = document.getElementById("okno-rozvrzeni");
-        var SIRKY = ["tretina", "pul", "cela"];
-        var ZNACKY = { tretina: "⅓", pul: "½", cela: "1" };
+        // Šířky i jejich značky jdou z registru (sekce.SIRKY) - jedna
+        // pravda místo dvou, které se časem rozejdou.
+        var ZNACKY = JSON.parse(mrizka.dataset.sirky || "{}");
+        var SIRKY = Object.keys(ZNACKY);
 
         var tazena = null;       // dlaždice, která se přesouvá
         var ukazatel = null;     // proužek na místě, kam spadne
