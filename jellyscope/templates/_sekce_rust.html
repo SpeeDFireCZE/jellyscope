@@ -1,0 +1,57 @@
+{# Sekce „Růst knihovny".
+
+   Vlastní šablonka, protože se kreslí ze dvou míst: na Knihovně a ve
+   vlastním přehledu, kde si ji člověk může přeskládat. Jedna kopie, aby
+   se obě místa nerozešla - viz jellyscope/sekce.py.
+
+   Makro `tile` si šablonka natáhne sama: ve vlastním přehledu se kreslí
+   samostatně, takže nesmí spoléhat na import stránky kolem sebe.
+
+   Čeká `snimky` (denní řádky) a `rust` (souhrn, viz stats.rust_knihovny).
+   Snímky se zapisují po synchronizaci a zpětně je vzít odkud, takže první
+   dny je křivka krátká - a je lepší to říct, než kreslit prázdno. #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Růst knihovny") }}</h2>
+        <p class="card-note">{{ _("velikost knihovny den po dni") }}</p>
+    </div>
+
+    {% if rust.dost_dat %}
+        {# Dvě série, ne jedna: dopočtená minulost se nesmí tvářit jako
+           měření. Barvu si drží věc, ne pořadí - dopočet je vždycky
+           tlumený, měření vždycky v barvě aplikace. #}
+        {{ charts.area_chart_multi(snimky, 'den',
+               [{'key': 'gb_dopocteno', 'label': _('dopočteno'),
+                 'barva': 'var(--text-muted)'},
+                {'key': 'gb_zmereno', 'label': _('změřeno'),
+                 'barva': 'var(--accent)', 'slot': 2}],
+               unit='') | safe }}
+
+        {% if rust.dopocteno %}
+        <p class="card-note" style="margin-top:10px">
+            {{ _("Do {datum} je křivka dopočítaná z data vzniku položek a posazená na první změřenou hodnotu: kdy co přibylo víme, ale minulost se popisuje dnešními velikostmi. Od té doby jde o denní snímky, tedy o to, co se skutečně změřilo.").format(datum=rust.dopocteno_do | cesky_datum) }}
+        </p>
+        {% endif %}
+
+        <div class="kpi-row" style="margin-top:14px">
+            {{ tile(_("Přibylo za období"), rust.prirustek | bytes,
+                    note=_("položek") ~ ': ' ~ (rust.polozek | number)) }}
+            {{ tile(_("Denně"), rust.denne | bytes) }}
+            {% if rust.dnu_do_konce is not none %}
+                {# Volné místo známe jen tam, kam aplikace na soubory vidí.
+                   Když ho známe, je tohle ta užitečnější odpověď. #}
+                {{ tile(_("Místo dojde za"),
+                        (rust.dnu_do_konce | number) ~ ' ' ~ _("dnů"),
+                        note=_("volného místa") ~ ': ' ~ (rust.volne_misto | bytes)) }}
+            {% elif rust.za_rok %}
+                {{ tile(_("Za rok poroste na"), rust.za_rok | bytes,
+                        note=_("na volné místo aplikace nevidí")) }}
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="card-note">
+            {{ _("Zatím je málo dat – křivka dá smysl za pár dní. Snímek se zapisuje po každé synchronizaci knihovny.") }}
+        </p>
+    {% endif %}
+</div>

@@ -228,6 +228,16 @@ CREATE INDEX IF NOT EXISTS idx_streams_lang ON item_streams (language);
 --
 -- COLLATE NOCASE u jmena znamena, ze "Petr" a "petr" je tentyz ucet.
 -- Bez toho by si dva lide mohli zalozit jmena, ktera nejdou rozlisit.
+CREATE TABLE IF NOT EXISTS accounts (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,      -- otisk hesla, nikdy heslo samotne
+    is_admin      INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    last_login    TEXT
+);
+
+
 -- Vlastni prehled: ktere sekce a v jakem poradi.
 --
 -- `account_id` je pripravene na pozdejsi uzivatelska nastaveni. Dnes je
@@ -240,13 +250,28 @@ CREATE TABLE IF NOT EXISTS dashboard_layout (
     sirka       TEXT                -- tretina / pul / cela; prazdne = jak to ma sekce v registru
 );
 
-CREATE TABLE IF NOT EXISTS accounts (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    password_hash TEXT NOT NULL,      -- otisk hesla, nikdy heslo samotne
-    is_admin      INTEGER NOT NULL DEFAULT 0,
-    created_at    TEXT NOT NULL,
-    last_login    TEXT
+
+-- Denni snimek knihovny.
+--
+-- Jellyscope si jinak pamatuje jen SOUCASNY stav: velikost, pocet polozek,
+-- pomer kodeku. Historii ma vyhradne prehravani, takze na otazku "jak nam
+-- knihovna roste" nebylo z ceho odpovedet. Jeden radek na den staci -
+-- knihovna se behem dne nemeni tolik, aby se vyplatilo merit castejí.
+--
+-- Zapisuje se po uspesne synchronizaci (viz scanner.zapis_snimek), takze
+-- na to neni potreba dalsi uloha. Tyz den se prepisuje: platí posledni
+-- znamy stav dne, ne prvni.
+CREATE TABLE IF NOT EXISTS library_snapshot (
+    den            TEXT PRIMARY KEY,   -- YYYY-MM-DD v zone aplikace
+    polozek        INTEGER NOT NULL,
+    filmu          INTEGER NOT NULL,
+    epizod         INTEGER NOT NULL,
+    velikost       INTEGER NOT NULL,   -- bajty, soucet za vsechny knihovny
+    uhd            INTEGER NOT NULL,   -- kolik je 4K
+    hdr            INTEGER NOT NULL,   -- HDR i Dolby Vision dohromady
+    bez_technik    INTEGER NOT NULL,   -- polozky bez technickych dat
+    volne_misto    INTEGER,            -- na disku s knihovnou; NULL = nevime
+    zapsano_v      TEXT NOT NULL
 );
 
 

@@ -223,6 +223,14 @@ def setup() -> Path | None:
     # na INFO každý jednotlivý požadavek a log by se jimi zaplavil.
     logging.getLogger("jellyscope").setLevel(logging.INFO)
 
+    # HTTP klient loguje každý požadavek včetně CELÉ adresy - a v adrese
+    # je u Telegramu token bota a u Discordu celý webhook. Za běžného
+    # provozu se ta hláška zahodí (kořenový logger je na WARNING), jenže
+    # stačí spustit server s --log-level debug a token je v souboru.
+    # Práh se proto nastavuje natvrdo, místo spoléhání na výchozí hodnotu.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     _handler = handler
     return cesta
 
@@ -243,6 +251,12 @@ def _tajemstvi() -> list[str]:
         databaze = db.database_config()
         if getattr(databaze, "password", ""):
             hodnoty.append(databaze.password)
+        # Přístupové údaje k upozorněním. Token Telegramu je součástí
+        # adresy, takže se do hlášky dostane i bez toho, aby ho tam někdo
+        # psal - viz notifikace.bez_tajemstvi().
+        from . import notifikace
+
+        hodnoty += [db.get_setting(klic, "") for klic in notifikace.TAJNA]
     except Exception:  # noqa: BLE001
         # Nedostupná databáze nesmí zabránit zobrazení logu - právě v něm
         # bude nejspíš napsané, proč nejde.

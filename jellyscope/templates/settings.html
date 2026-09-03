@@ -23,21 +23,32 @@
 
 {# Rozcestník sekcí. Každá má vlastní adresu, takže funguje zpětné
    tlačítko i posílání odkazu - a načítá se jen to, co je vidět. #}
+{# Na mobilu rozbalovací seznam, na desktopu záložky.
+
+   Jedenáct záložek se na úzkou obrazovku vejde jen zalomením do šesti
+   řádků - 207 px odkazů, než člověk uvidí první nastavení. Seznam zabere
+   jeden řádek.
+
+   Obojí se kreslí z `sekce_nabidka`, kterou skládá routa: dva ručně psané
+   seznamy by se časem rozešly a v jednom by nová sekce chyběla. #}
+<form method="get" action="/settings" class="tabs-vyber">
+    <label for="vyber-sekce">{{ _("Sekce") }}</label>
+    {# `onchange` odešle formulář, takže se vybírá jedním tahem. Bez
+       JavaScriptu zůstane tlačítko - v nastavení se člověk nesmí zaseknout
+       kvůli skriptu. #}
+    <select id="vyber-sekce" name="section" onchange="this.form.submit()">
+        {% for klic, nazev in sekce_nabidka %}
+            <option value="{{ klic }}" {{ 'selected' if section == klic }}>{{ nazev }}</option>
+        {% endfor %}
+    </select>
+    <noscript><button class="btn" type="submit">{{ _("Přejít") }}</button></noscript>
+</form>
+
 <div class="tabs">
-    {% if account.is_admin %}
-        <a href="/settings?section=jellyfin" class="{{ 'active' if section == 'jellyfin' }}">Jellyfin</a>
-        <a href="/settings?section=data"     class="{{ 'active' if section == 'data' }}">{{ _("Sběr dat") }}</a>
-        <a href="/settings?section=tasks"    class="{{ 'active' if section == 'tasks' }}">{{ _("Úlohy a zálohy") }}</a>
-        <a href="/settings?section=import"   class="{{ 'active' if section == 'import' }}">{{ _("Import historie") }}</a>
-        <a href="/settings?section=database" class="{{ 'active' if section == 'database' }}">{{ _("Databáze") }}</a>
-    {% endif %}
-    <a href="/settings?section=accounts" class="{{ 'active' if section == 'accounts' }}">{{ _("Účty") }}</a>
-    {% if account.is_admin %}
-        <a href="/settings?section=blocks"  class="{{ 'active' if section == 'blocks' }}">{{ _("Blokace") }}</a>
-        <a href="/settings?section=log"     class="{{ 'active' if section == 'log' }}">{{ _("Log") }}</a>
-        <a href="/settings?section=interface" class="{{ 'active' if section == 'interface' }}">{{ _("Rozhraní") }}</a>
-        <a href="/settings?section=general" class="{{ 'active' if section == 'general' }}">{{ _("Obecné") }}</a>
-    {% endif %}
+    {% for klic, nazev in sekce_nabidka %}
+        <a href="/settings?section={{ klic }}"
+           class="{{ 'active' if section == klic }}">{{ nazev }}</a>
+    {% endfor %}
 </div>
 
 {% if not account.is_admin %}
@@ -202,6 +213,28 @@
             {{ _("Potřebné jen tehdy, když Jellyfin vidí soubory na jiné cestě než Jellyscope (typicky při běhu v Dockeru). Formát JSON, například:") }}<br>
             <code>[{"from": "/media", "to": "/mnt/media"}]</code><br>
             {{ _("Když obě aplikace běží na stejném stroji, nech") }} <code>[]</code>.
+        </p>
+    </div>
+
+    {# Kapacita úložiště.
+
+       `shutil.disk_usage` měří disk, na kterém běží JELLYSCOPE - jenže
+       data bývají jinde (NAS, jiný stroj, jiný kontejner) a pak se měří
+       cizí disk. Proto se nejdřív ptáme Jellyfinu, který u těch souborů
+       sedí. A když knihovna leží v cloudu, nepozná velikost ani on -
+       tehdy platí tohle číslo. #}
+    <div class="field">
+        <label for="library_capacity_gb">{{ _("Kapacita úložiště knihovny (GB)") }}</label>
+        <input type="number" id="library_capacity_gb" name="library_capacity_gb"
+               value="{{ kapacita_gb }}" min="0" step="1">
+        <p class="hint">
+            {{ _("Zadané číslo přebije všechno ostatní. Volné místo se z něj počítá jako kapacita minus velikost knihovny, takže předpokládá, že na tom úložišti nic jiného neleží. Nech 0 a zjistí se to samo.") }}
+            {% if misto_zdroj %}
+                <br><span class="badge {{ 'good' if misto_zdroj != 'rucne' else 'info' }}">
+                    <span class="dot"></span>{{ zdroj_popis }}</span>
+            {% else %}
+                <br><span class="badge warning"><span class="dot"></span>{{ _("volné místo se zatím nepodařilo zjistit") }}</span>
+            {% endif %}
         </p>
     </div>
 
@@ -1287,6 +1320,273 @@
 </div>
 
 {# ================================================================== #}
+{% elif section == 'notifications' %}
+{# ================================================================== #}
+{# Upozornění.
+                                                                       #}
+{# Jellyscope je pasivní: otevřeš ho, když tě něco zajímá. Sběrač se
+   ale ptá Jellyfinu každých pár vteřin, a když mu vyprší token, běží
+   aplikace dál a historie se tiše zastaví. Zjistíš to podle díry
+   v grafu, kterou už nic nezaplní.
+
+   Nejdřív kanály (kudy), pak události (na co). V tomhle pořadí to má
+   smysl číst: zapnout upozornění na něco, co nemá kudy dojít, je
+   jenom past. #}
+
+<div class="flash info">
+    <span class="dot"></span>
+    <span>
+        {{ _("Tyto notifikace upozorňují jen na to, co se děje v Jellyscope. Pokud Jellyscope nefunguje, nefungují ani notifikace – pro kontrolu funkčnosti Jellyscope využij například Uptime Kuma.") }}
+    </span>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Kudy zprávy chodí                                                   #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="kanaly">
+    <div class="card-head">
+        <h2>{{ _("Kudy posílat") }}</h2>
+        <p class="card-note">{{ _("stačí jeden kanál; když jich je víc, jde zpráva všemi") }}</p>
+    </div>
+
+    {% if notifikace.posledni_odeslani %}
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Naposledy odesláno") }}: {{ notifikace.posledni_odeslani | datetime }}
+        {% if notifikace.posledni_chyba %}
+            &middot; <span class="badge warning"><span class="dot"></span>{{ notifikace.posledni_chyba }}</span>
+        {% endif %}
+    </p>
+    {% endif %}
+
+    <form method="post" action="/settings/notifications">
+
+        {# --- SMTP --- #}
+        <h3 style="margin:4px 0 10px">{{ _("E-mail (SMTP)") }}</h3>
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="smtp_enabled" value="1"
+                   {{ 'checked' if settings.notify_smtp_enabled == '1' }}>
+            <span>{{ _("posílat e-mailem") }}</span>
+        </label>
+
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="smtp-host">{{ _("Server") }}</label>
+                <input type="text" id="smtp-host" name="smtp_host"
+                       value="{{ settings.notify_smtp_host or '' }}"
+                       placeholder="smtp.seznam.cz" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="smtp-port">{{ _("Port") }}</label>
+                <input type="number" id="smtp-port" name="smtp_port" min="1" max="65535"
+                       value="{{ settings.notify_smtp_port or '587' }}">
+                {# 465 je šifrované od prvního bajtu, 587 se povyšuje přes
+                   STARTTLS. Zaměnit je znamená, že spojení jen visí. #}
+                <p class="hint">{{ _("587 pro STARTTLS, 465 pro SMTPS") }}</p>
+            </div>
+        </div>
+
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="smtp-uzivatel">{{ _("Uživatel") }}</label>
+                <input type="text" id="smtp-uzivatel" name="smtp_uzivatel"
+                       value="{{ settings.notify_smtp_uzivatel or '' }}"
+                       autocomplete="off">
+                <p class="hint">{{ _("Prázdné = server přihlášení nechce.") }}</p>
+            </div>
+            <div class="field">
+                <label for="smtp-heslo">{{ _("Heslo") }}</label>
+                <input type="password" id="smtp-heslo" name="smtp_heslo"
+                       value="" autocomplete="new-password"
+                       placeholder="{{ _('uloženo – nech prázdné, ať zůstane') if ma_smtp_heslo else '' }}">
+                <p class="hint">{{ _("Uložené heslo se do stránky nikdy nevypisuje. Prázdné pole ho nechá být.") }}</p>
+            </div>
+        </div>
+
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="smtp-odesilatel">{{ _("Odesílatel") }}</label>
+                <input type="text" id="smtp-odesilatel" name="smtp_odesilatel"
+                       value="{{ settings.notify_smtp_odesilatel or '' }}"
+                       placeholder="jellyscope@doma.cz" autocomplete="off">
+                <p class="hint">{{ _("Prázdné = použije se uživatel.") }}</p>
+            </div>
+            <div class="field">
+                <label for="smtp-komu">{{ _("Komu") }}</label>
+                <input type="text" id="smtp-komu" name="smtp_komu"
+                       value="{{ settings.notify_smtp_komu or '' }}"
+                       placeholder="ja@doma.cz" autocomplete="off">
+            </div>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:20px">
+            <input type="checkbox" name="smtp_tls" value="1"
+                   {{ 'checked' if settings.notify_smtp_tls != '0' }}>
+            <span>{{ _("povýšit spojení přes STARTTLS") }}</span>
+        </label>
+
+        {# --- Discord --- #}
+        <h3 style="margin:22px 0 10px; border-top:1px solid var(--border); padding-top:18px">
+            {{ _("Discord") }}
+        </h3>
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="discord_enabled" value="1"
+                   {{ 'checked' if settings.notify_discord_enabled == '1' }}>
+            <span>{{ _("posílat na Discord") }}</span>
+        </label>
+
+        <div class="field" style="max-width:100%">
+            <label for="discord-webhook">{{ _("Adresa webhooku") }}</label>
+            <input type="password" id="discord-webhook" name="discord_webhook"
+                   value="" autocomplete="off"
+                   placeholder="{{ _('uloženo – nech prázdné, ať zůstane') if ma_discord else 'https://discord.com/api/webhooks/…' }}">
+            <p class="hint">{{ _("Na kanálu: Upravit kanál → Integrace → Webhooky. Kdo tu adresu má, může psát do kanálu za tebe – proto se sem už nevypisuje.") }}</p>
+        </div>
+
+        {# --- Telegram --- #}
+        <h3 style="margin:22px 0 10px; border-top:1px solid var(--border); padding-top:18px">
+            {{ _("Telegram") }}
+        </h3>
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="telegram_enabled" value="1"
+                   {{ 'checked' if settings.notify_telegram_enabled == '1' }}>
+            <span>{{ _("posílat na Telegram") }}</span>
+        </label>
+
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="telegram-token">{{ _("Token bota") }}</label>
+                <input type="password" id="telegram-token" name="telegram_token"
+                       value="" autocomplete="off"
+                       placeholder="{{ _('uloženo – nech prázdné, ať zůstane') if ma_telegram else '123456:ABC…' }}">
+                <p class="hint">{{ _("Bota založí @BotFather.") }}</p>
+            </div>
+            <div class="field">
+                <label for="telegram-chat">{{ _("ID chatu") }}</label>
+                <input type="text" id="telegram-chat" name="telegram_chat"
+                       value="{{ settings.notify_telegram_chat or '' }}"
+                       autocomplete="off">
+                <p class="hint">{{ _("Napiš botovi zprávu a ID najdeš přes @userinfobot.") }}</p>
+            </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+    </form>
+
+    {# Zkušební zpráva. Bez ní se nastavení ověří až tím, že se něco
+       pokazí - a to je přesně ta chvíle, kdy už musí fungovat. #}
+    <div class="btn-row" style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px">
+        {% for kanal in notifikace.kanaly %}
+        <form method="post" action="/settings/notifications/test" style="display:inline">
+            <input type="hidden" name="kanal" value="{{ kanal.klic }}">
+            <button class="btn" type="submit" {{ 'disabled' if not kanal.nastaveny }}>
+                {{ _("Zkusit") }} {{ nazvy_kanalu[kanal.klic] }}
+            </button>
+        </form>
+        {% endfor %}
+    </div>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("Zkušební zpráva se pošle hned a jen tím jedním kanálem.") }}
+    </p>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Na co upozorňovat                                                   #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="udalosti">
+    <div class="card-head">
+        <h2>{{ _("U čeho se ozvat") }}</h2>
+        <p class="card-note">{{ _("zpráva chodí jen při změně, ne pořád dokola") }}</p>
+    </div>
+
+    <form method="post" action="/settings/notifications/events">
+        <div class="field" style="max-width:100%">
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="event_sberac" value="1"
+                       {{ 'checked' if settings.notify_event_sberac == '1' }}>
+                <span>
+                    <span class="title">{{ _("Sběrač běží, ale nesbírá") }}</span>
+                    <span class="desc">
+                        {{ _("Vyprší token, změní se adresa Jellyfinu, rozbije se přihlášení – aplikace běží dál a historie se tiše zastaví. Přehrávání se dá zpětně doimportovat, ale jazyk stopy ani bitrate v importu nejsou, takže díra zůstane.") }}
+                    </span>
+                </span>
+            </label>
+
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="event_misto" value="1"
+                       {{ 'checked' if settings.notify_event_misto == '1' }}>
+                <span>
+                    <span class="title">{{ _("Dochází místo na disku") }}</span>
+                    <span class="desc">
+                        {{ _("Počítá se z růstu knihovny. Funguje jen tam, kam aplikace na soubory vidí – u knihovny na cizím serveru volné místo neznáme a upozornění nepřijde.") }}
+                    </span>
+                </span>
+            </label>
+
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="event_souhrn" value="1"
+                       {{ 'checked' if settings.notify_event_souhrn == '1' }}>
+                <span>
+                    <span class="title">{{ _("Týdenní souhrn") }}</span>
+                    <span class="desc">
+                        {{ _("Není to porucha – kolik se za týden odsledovalo, co se dívalo nejvíc a kdo byl nejaktivnější.") }}
+                    </span>
+                </span>
+            </label>
+        </div>
+
+        <div class="obdobi-pole" style="margin-top:6px">
+            <div class="field">
+                <label for="ticho-minut">{{ _("Ticho sběrače (minut)") }}</label>
+                <input type="number" id="ticho-minut" name="ticho_minut" min="5" max="1440"
+                       value="{{ notifikace.ticho_minut }}">
+                <p class="hint">{{ _("Sběrač se ptá po vteřinách, takže půlhodina je jistota, ne netrpělivost – krátký výpadek sítě by jinak posílal zprávu pokaždé.") }}</p>
+            </div>
+            <div class="field">
+                <label for="misto-dnu">{{ _("Ozvat se, když místo dojde za (dnů)") }}</label>
+                <input type="number" id="misto-dnu" name="misto_dnu" min="1" max="365"
+                       value="{{ notifikace.misto_dnu }}">
+            </div>
+        </div>
+
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="souhrn-den">{{ _("Souhrn posílat v") }}</label>
+                <select id="souhrn-den" name="souhrn_den">
+                    {% for cislo, jmeno in dny_v_tydnu %}
+                        <option value="{{ cislo }}"
+                                {{ 'selected' if cislo == notifikace.souhrn_den }}>{{ jmeno }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="souhrn-hodina">{{ _("v") }}</label>
+                {# Dvě čísla, ne <input type="time">. Ten si kreslí prohlížeč
+                   a v každém vypadá jinak - stejná úvaha jako u rozvrhu úloh
+                   a u data ve filtru období. #}
+                <div class="time-picker">
+                    <input type="number" id="souhrn-hodina" name="souhrn_hodina"
+                           value="{{ notifikace.souhrn_cas.split(':')[0] }}"
+                           min="0" max="23" aria-label="{{ _('Hodina') }}">
+                    <span aria-hidden="true">:</span>
+                    <input type="number" name="souhrn_minuta"
+                           value="{{ notifikace.souhrn_cas.split(':')[1] }}"
+                           min="0" max="59" aria-label="{{ _('Minuta') }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+    </form>
+
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Kontrolu pouští úloha „Upozornění“ – jak často, se nastavuje v Úlohách a zálohách.") }}
+    </p>
+</div>
+
 {% elif section == 'interface' %}
 {# ================================================================== #}
 {# Co si člověk nastavuje na vzhledu stránek. Vlastní sekce schválně:

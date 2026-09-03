@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% from "_macros.html" import obdobi_prepinac with context %}
+{% block title %}{{ _("Srovnání období") }} &middot; Jellyscope{% endblock %}
+
+{# Srovnání dvou období.
+
+   „Oproti minulému období" umí aplikace na Přehledu, jenže minulé období
+   si člověk nevybírá - je to okno těsně před tím zvoleným. Na otázku
+   „byl srpen lepší než prosinec?" to neodpoví. Tady jsou obě období
+   volitelná a čísla stojí vedle sebe.
+
+   Formát je tabulka, ne dva sloupce grafů: srovnání je otázka
+   „o kolik víc", a na tu odpovídá číslo vedle čísla. #}
+
+{# Jedno číslo ve tvaru, který mu přísluší. Tvar určuje stats.srovnani(),
+   protože tam se ví, co se počítalo - šablona jen kreslí. #}
+{% macro cislo(tvar, hodnota) -%}
+    {%- if tvar == 'hodiny' -%}{{ hodnota | hours }}
+    {%- elif tvar == 'procenta' -%}{{ hodnota | percent(1) }}
+    {%- elif tvar == 'bajty' -%}{{ hodnota | bytes }}
+    {%- elif tvar == 'mbit' -%}{{ hodnota | round(1) }} Mbit/s
+    {%- else -%}{{ hodnota | number }}
+    {%- endif -%}
+{%- endmacro %}
+
+{# Rozdíl A proti B.
+
+   Formátuje se absolutní hodnota a znaménko se připíše: `| hours`
+   i `| bytes` berou záporné číslo jako nulu, takže „-25 h" by se vypsalo
+   jako „0 min" a sloupec by tvrdil, že se nic nezměnilo.
+
+   U údaje, který sám je procento, se relativní změna nepřipisuje:
+   „z 12 % na 18 %" je +6 procentních bodů, ne +50 %. #}
+{% macro rozdil(radek) %}
+    {% if radek.rozdil > 0 %}
+        <span class="delta up">&#9650;
+            +{{ cislo(radek.tvar, radek.rozdil | abs) }}{% if radek.tvar == 'procenta' %} {{ _("p. b.") }}{% endif %}
+            {% if radek.relativni is not none %}
+                <span class="muted">({{ radek.relativni | percent }})</span>
+            {% endif %}
+        </span>
+    {% elif radek.rozdil < 0 %}
+        <span class="delta down">&#9660;
+            &minus;{{ cislo(radek.tvar, radek.rozdil | abs) }}{% if radek.tvar == 'procenta' %} {{ _("p. b.") }}{% endif %}
+            {% if radek.relativni is not none %}
+                <span class="muted">({{ (radek.relativni | abs) | percent }})</span>
+            {% endif %}
+        </span>
+    {% else %}
+        <span class="delta flat">{{ _("beze změny") }}</span>
+    {% endif %}
+{% endmacro %}
+
+{# Jak se období jmenuje v hlavičce sloupce. #}
+{% macro popis_obdobi(obdobi) -%}
+    {%- if obdobi.vlastni -%}
+        {{ obdobi.od_popis }} &ndash; {{ obdobi.do_popis }}
+    {%- else -%}
+        {{ _(day_labels[obdobi.days]) }}
+    {%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Srovnání období") }}</h1>
+        <p class="subtitle">
+            {{ _("Dvě libovolná období vedle sebe – tytéž statistiky pod sebou.") }}
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="srovnani-volby">
+        {{ obdobi_prepinac(_("Období A"), obdobi_a, '/srovnani', 'a', dotaz_b) }}
+        {{ obdobi_prepinac(_("Období B"), obdobi_b, '/srovnani', 'b', dotaz_a) }}
+    </div>
+</div>
+
+{# Dvě věci, které by tabulka jinak zamlčela. #}
+{% if srovnani.prekryv %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("Období se překrývají – část přehrávání se počítá do obou sloupců a rozdíl mezi nimi tak neměří změnu.") }}
+    </span>
+</div>
+{% endif %}
+
+{% if not srovnani.stejne_dlouha %}
+<div class="flash info">
+    <span class="dot"></span>
+    <span>
+        {{ _("Období nejsou stejně dlouhá") }}
+        ({{ srovnani.a.dnu | round(0) | int | number }} {{ _("dnů") }}
+        vs. {{ srovnani.b.dnu | round(0) | int | number }} {{ _("dnů") }}) –
+        {{ _("v součtech vyhraje delší období skoro vždycky. Srovnávej denní průměr.") }}
+    </span>
+</div>
+{% endif %}
+
+{% if not srovnani.ma_data %}
+<div class="card">
+    <h2>{{ _("Za obě období nemáme co srovnávat") }}</h2>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Ani v jednom z vybraných období není zaznamenané přehrávání. Zkus jiná období – historie se sbírá od chvíle, kdy Jellyscope běží.") }}
+    </p>
+</div>
+{% else %}
+
+{% for skupina in srovnani.skupiny %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ skupina.nadpis }}</h2>
+    </div>
+    <div class="table-wrap">
+        <table class="srovnani">
+            <thead><tr>
+                <th></th>
+                <th class="num">{{ _("Období A") }}<br>
+                    <span class="muted">{{ popis_obdobi(obdobi_a) }}</span></th>
+                <th class="num">{{ _("Období B") }}<br>
+                    <span class="muted">{{ popis_obdobi(obdobi_b) }}</span></th>
+                <th class="num">{{ _("Rozdíl") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for radek in skupina.radky %}
+            <tr>
+                <td>{{ radek.popisek }}</td>
+                {# U jazyků stojí vedle hodin i podíl. Při různě dlouhých
+                   obdobích je podíl to jediné poctivé číslo: za rok se
+                   nasleduje víc hodin čehokoliv než za srpen, ale poměr
+                   češtiny a angličtiny se tím nemění. #}
+                {# `data-popisek` nese jméno sloupce. Na mobilu se z tabulky
+                   stanou bloky (viz `table.srovnani` ve stylu) a hlavička
+                   zmizí - bez toho by tam stála čtyři čísla bez určení,
+                   které patří kterému období. #}
+                <td class="num strong" data-popisek="{{ _("Období A") }}">{{ cislo(radek.tvar, radek.a) }}
+                    {% if skupina.s_podilem %}
+                        <span class="muted">({{ radek.podil_a | percent }})</span>
+                    {% endif %}
+                </td>
+                <td class="num strong" data-popisek="{{ _("Období B") }}">{{ cislo(radek.tvar, radek.b) }}
+                    {% if skupina.s_podilem %}
+                        <span class="muted">({{ radek.podil_b | percent }})</span>
+                    {% endif %}
+                </td>
+                <td class="num" data-popisek="{{ _("Rozdíl") }}">{{ rozdil(radek) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+{# Dopočtená minulost není měření a nesmí se za něj vydávat. #}
+{% if srovnani.knihovna_zname and srovnani.knihovna_dopoctena %}
+<p class="card-note" style="margin:-8px 0 18px 4px">
+    {{ _("Část růstu knihovny je dopočítaná z data vzniku položek – popisuje minulost dnešními velikostmi, takže překódovaný film v ní byl odjakživa malý.") }}
+</p>
+{% endif %}
+
+{# Když o růstu knihovny za některé období nevíme, řekne se to. Tiše
+   chybějící tabulka vypadá jako chyba a „nepřibylo nic" je něco jiného
+   než „nevíme". #}
+{% if not srovnani.knihovna_zname %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Knihovna") }}</h2>
+    </div>
+    <p class="card-note">
+        {{ _("Růst knihovny se dá srovnat až od chvíle, kdy se zapisují denní snímky – aspoň dva v každém z obou období. Za starší období je zpětně vzít odkud.") }}
+    </p>
+</div>
+{% endif %}
+
+{# Žebříčky se nesčítají, takže do tabulky rozdílů nepatří - patří vedle
+   sebe. Právě u nich je vidět to, co čísla neřeknou: že se v prosinci
+   díval někdo jiný na něco jiného. #}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejsledovanější tituly") }}</h2>
+            <p class="card-note">{{ _("Období A") }}: {{ popis_obdobi(obdobi_a) }}</p>
+        </div>
+        {% if srovnani.a.top %}
+        <div class="table-wrap">
+            <table>
+                <tbody>
+                {% for row in srovnani.a.top %}
+                <tr>
+                    <td class="strong">{{ row.label }}</td>
+                    <td class="num">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="chart-empty">{{ _("Nic za tohle období.") }}</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejsledovanější tituly") }}</h2>
+            <p class="card-note">{{ _("Období B") }}: {{ popis_obdobi(obdobi_b) }}</p>
+        </div>
+        {% if srovnani.b.top %}
+        <div class="table-wrap">
+            <table>
+                <tbody>
+                {% for row in srovnani.b.top %}
+                <tr>
+                    <td class="strong">{{ row.label }}</td>
+                    <td class="num">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="chart-empty">{{ _("Nic za tohle období.") }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejaktivnější uživatelé") }}</h2>
+            <p class="card-note">{{ _("Období A") }}: {{ popis_obdobi(obdobi_a) }}</p>
+        </div>
+        {% if srovnani.a.uzivatele %}
+        <div class="table-wrap">
+            <table>
+                <tbody>
+                {% for row in srovnani.a.uzivatele %}
+                <tr>
+                    <td class="strong">{{ row.label }}</td>
+                    <td class="num">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="chart-empty">{{ _("Nic za tohle období.") }}</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Nejaktivnější uživatelé") }}</h2>
+            <p class="card-note">{{ _("Období B") }}: {{ popis_obdobi(obdobi_b) }}</p>
+        </div>
+        {% if srovnani.b.uzivatele %}
+        <div class="table-wrap">
+            <table>
+                <tbody>
+                {% for row in srovnani.b.uzivatele %}
+                <tr>
+                    <td class="strong">{{ row.label }}</td>
+                    <td class="num">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="chart-empty">{{ _("Nic za tohle období.") }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

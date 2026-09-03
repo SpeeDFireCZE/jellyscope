@@ -16,9 +16,13 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
-from . import db, languages, probe
+# `stats` a `formatting` kvuli dennimu snimku knihovny (zapis_snimek).
+# Ani jeden si netahne scanner zpatky, takze kruh nevznikne - na rozdil
+# od `tasks`, ktere se proto importuje az uvnitr funkce.
+from . import db, formatting, languages, probe, stats
 from .i18n import translate as _t
 from .config import load_config
 from .jellyfin import (JellyfinClient, JellyfinError, extract_streams,
@@ -582,6 +586,16 @@ async def sync_library() -> dict[str, Any]:
                 if not zastaveno:
                     _mark_missing(started_at)
 
+                # Kolik zbyva mista - podle SAMOTNEHO Jellyfinu. Ptame se
+                # tady, dokud je klient otevreny: snimek se pise az potom
+                # a je synchronni. Kdyz to nevyjde (starsi Jellyfin ten
+                # endpoint nema), jde se dal - je to udaj navic, ne
+                # podminka prace.
+                try:
+                    zapamatuj_misto_z_jellyfinu(await client.storage())
+                except Exception as exc:      # noqa: BLE001
+                    log.info("misto z Jellyfinu se nepodarilo zjistit: %s", exc)
+
             # Ted uz zname uzivatele i polozky - srovname s nimi historii,
             # ktera se naimportovala driv, nez bylo pripojeni k Jellyfinu.
             # Takovy import ma v historii "?" misto jmen, nezna typ polozky
@@ -622,10 +636,249 @@ async def sync_library() -> dict[str, Any]:
             )
             return {"status": "stopped", **counts}
 
+        # Snimek knihovny se zapisuje az sem: po uspesne synchronizaci,
+        # kdy je stav uplny. Po zastavene nebo spadle by zachytil pulku
+        # knihovny a v grafu rustu by z toho byl propad, ktery se nestal.
+        await asyncio.to_thread(zapis_snimek)
+
         finish_task_log(
             scan_id, "done", total=counts["items"], ok=counts["items"], message=popis,
         )
         return {"status": "ok", **counts}
+
+
+# ---------------------------------------------------------------------------
+# Kolik zbyva mista
+# ---------------------------------------------------------------------------
+#
+# Tri zdroje, v tomhle poradi - a stranka pak rekne, ktery to byl:
+#
+#   1. RUCNE ZADANA kapacita. Kdyz knihovna lezi v cloudu nebo na sdilenem
+#      ulozisti, nepozna velikost ani Jellyfin. Spravce ji vi a muze ji
+#      napsat; jeho cislo prebiji vsechno ostatni.
+#   2. JELLYFIN. Sedi u tech souboru, takze se ptame jeho.
+#   3. DISK POD APLIKACI. Puvodni zpusob. Plati jen tehdy, kdyz data lezi
+#      na temze stroji - jinak merime uplne cizi disk, a to bylo spatne.
+
+KAPACITA_KLIC = "library_capacity_bytes"      # rucne zadana, v bajtech
+JF_VOLNE_KLIC = "jellyfin_free_bytes"         # z posledni synchronizace
+JF_CELKEM_KLIC = "jellyfin_total_bytes"
+ZDROJ_KLIC = "volne_misto_zdroj"              # 'rucne' / 'jellyfin' / 'disk'
+
+
+def _cislo(hodnota: Any) -> int | None:
+    """Cislo z odpovedi Jellyfinu. None u vseho, co cislo neni."""
+    try:
+        cislo = int(float(hodnota))
+    except (TypeError, ValueError):
+        return None
+    return cislo if cislo > 0 else None
+
+
+def misto_z_jellyfinu(odpoved: Any, cesta: str = "") -> dict[str, int]:
+    """Volne a celkove misto z odpovedi /System/Storage.
+
+    Nazvy poli se mezi verzemi Jellyfinu lisily, takze se berou vsechny
+    obvykle podoby. Kdyz nesedi nic, vratime prazdno - hadat cislo, ze
+    ktereho se pak pocita "misto dojde za X dnu", by bylo horsi nez
+    priznat, ze ho neznáme.
+
+    `cesta` je slozka knihovny. Kdyz ji mezi slozkami najdeme, plati ta;
+    jinak se vezme ta s nejmensim volnym mistem, protoze prvni dojde.
+    """
+    if not isinstance(odpoved, dict):
+        return {}
+
+    slozky: list[dict[str, Any]] = []
+    for klic in ("Folders", "folders", "StorageFolders", "Items"):
+        hodnota = odpoved.get(klic)
+        if isinstance(hodnota, list):
+            slozky = [s for s in hodnota if isinstance(s, dict)]
+            break
+    if not slozky:
+        # Nekdy prijde rovnou jedna slozka, ne seznam.
+        slozky = [odpoved]
+
+    def pole(slozka: dict[str, Any], *jmena: str) -> int | None:
+        for jmeno in jmena:
+            cislo = _cislo(slozka.get(jmeno))
+            if cislo is not None:
+                return cislo
+        return None
+
+    zmerene = []
+    for slozka in slozky:
+        volne = pole(slozka, "FreeSpace", "freeSpace", "FreeSpaceBytes")
+        celkem = pole(slozka, "TotalSpace", "totalSpace", "TotalSpaceBytes")
+        if volne is None and celkem is None:
+            continue
+        zmerene.append({
+            "cesta": str(slozka.get("Path") or slozka.get("path") or ""),
+            "volne": volne, "celkem": celkem,
+        })
+    if not zmerene:
+        return {}
+
+    cesta = (cesta or "").replace("\\", "/").rstrip("/").lower()
+    if cesta:
+        for polozka in zmerene:
+            jina = polozka["cesta"].replace("\\", "/").rstrip("/").lower()
+            if jina and (cesta.startswith(jina) or jina.startswith(cesta)):
+                return {k: v for k, v in polozka.items()
+                        if k != "cesta" and v is not None}
+
+    # Zadna slozka nesedi na knihovnu - bereme tu nejtesnejsi, protoze
+    # misto dojde na ni.
+    s_volnym = [p for p in zmerene if p["volne"] is not None]
+    nejtesnejsi = min(s_volnym, key=lambda p: p["volne"]) if s_volnym else zmerene[0]
+    return {k: v for k, v in nejtesnejsi.items() if k != "cesta" and v is not None}
+
+
+def zapamatuj_misto_z_jellyfinu(odpoved: Any) -> dict[str, int]:
+    """Ulozi, co Jellyfin rekl o mistu. Vola se pri synchronizaci.
+
+    Uklada se do nastaveni, ne do snimku: snimek se pise az potom
+    a `zapis_snimek()` je synchronni - na Jellyfin uz se odtud ptat
+    nemuze.
+    """
+    radek = db.query_one(
+        "SELECT path FROM items"
+        " WHERE is_missing = 0 AND path IS NOT NULL AND path != ''"
+        " ORDER BY COALESCE(size_bytes, 0) DESC")
+    cesta = str((radek or {}).get("path") or "")
+
+    misto = misto_z_jellyfinu(odpoved, cesta)
+    db.set_setting(JF_VOLNE_KLIC, str(misto.get("volne", "")))
+    db.set_setting(JF_CELKEM_KLIC, str(misto.get("celkem", "")))
+    return misto
+
+
+def _volne_z_kapacity() -> int | None:
+    """Volne misto z rucne zadane kapacity: kapacita minus velikost knihovny.
+
+    Je to odhad a stranka to rika: predpoklada, ze na tom ulozisti nic
+    jineho nelezi. Spravce ale zna cislo, ktere jinak nezna nikdo -
+    u knihovny v cloudu je to jedina cesta, jak neco rict.
+    """
+    kapacita = db.get_int_setting(KAPACITA_KLIC, 0, 10 ** 18, 0)
+    if kapacita <= 0:
+        return None
+    velikost = int(db.query_value(
+        "SELECT COALESCE(SUM(COALESCE(size_bytes, 0)), 0) FROM items"
+        " WHERE is_missing = 0", default=0) or 0)
+    return max(0, kapacita - velikost)
+
+
+def _volne_misto_knihovny() -> int | None:
+    """Volne misto tam, kde knihovna lezi. None, kdyz ho nezname.
+
+    Poradi zdroju viz komentar na zacatku teto sekce.
+    """
+    rucne = _volne_z_kapacity()
+    if rucne is not None:
+        db.set_setting(ZDROJ_KLIC, "rucne")
+        return rucne
+
+    z_jellyfinu = db.get_int_setting(JF_VOLNE_KLIC, 0, 10 ** 18, 0)
+    if z_jellyfinu > 0:
+        db.set_setting(ZDROJ_KLIC, "jellyfin")
+        return z_jellyfinu
+
+    # `tasks` az tady: samo si tahne scanner, takze nahore by z toho byl kruh.
+    from . import tasks
+
+    radek = db.query_one(
+        "SELECT path FROM items"
+        " WHERE is_missing = 0 AND path IS NOT NULL AND path != ''"
+        " ORDER BY COALESCE(size_bytes, 0) DESC")
+    if not radek or not radek.get("path"):
+        db.set_setting(ZDROJ_KLIC, "")
+        return None
+
+    try:
+        mappings = json.loads(db.get_setting("path_mappings", "") or "[]")
+        if not isinstance(mappings, list):
+            mappings = []
+    except ValueError:
+        mappings = []
+
+    cesta = Path(probe.apply_path_mappings(str(radek["path"]), mappings))
+    # Slozka souboru, ne soubor sam - `disk_usage` chce adresar.
+    volne = tasks.free_space(str(cesta.parent))
+    db.set_setting(ZDROJ_KLIC, "disk" if volne is not None else "")
+    return volne
+
+
+def zapis_snimek() -> dict[str, Any] | None:
+    """Ulozi dnesni stav knihovny - jeden radek na den.
+
+    Tyz den se prepisuje: platí posledni znamy stav dne, ne prvni. Kdyz
+    se behem dne neco doanalyzuje nebo prida, ma snimek ukazat to.
+
+    Den se bere v ZONE APLIKACE, aby řádky sedely s tim, co je videt
+    v grafech - ne v UTC, kde by se vecerni synchronizace zapsala uz
+    na zitrek.
+    """
+    souhrn = db.query_one(
+        f"""
+        SELECT COUNT(*)                        AS polozek,
+               SUM(CASE WHEN type = 'Movie'    THEN 1 ELSE 0 END) AS filmu,
+               SUM(CASE WHEN type = 'Episode'  THEN 1 ELSE 0 END) AS epizod,
+               COALESCE(SUM(COALESCE(size_bytes, 0)), 0)          AS velikost,
+               SUM(CASE WHEN {stats.RESOLUTION_CASE} = '4K' THEN 1 ELSE 0 END) AS uhd,
+               SUM(CASE WHEN {stats.ROZSAH_CASE} IN ('HDR', 'DOVI') THEN 1 ELSE 0 END) AS hdr,
+               SUM(CASE WHEN tech_source IS NULL THEN 1 ELSE 0 END) AS bez_technik
+          FROM items
+         WHERE is_missing = 0
+        """
+    )
+    if not souhrn or not souhrn.get("polozek"):
+        return None          # prazdna knihovna: neni co zaznamenat
+
+    den = datetime.now(formatting.zona()).strftime("%Y-%m-%d")
+    radek = {
+        "den": den,
+        "polozek": int(souhrn["polozek"] or 0),
+        "filmu": int(souhrn["filmu"] or 0),
+        "epizod": int(souhrn["epizod"] or 0),
+        "velikost": int(souhrn["velikost"] or 0),
+        "uhd": int(souhrn["uhd"] or 0),
+        "hdr": int(souhrn["hdr"] or 0),
+        "bez_technik": int(souhrn["bez_technik"] or 0),
+        "volne_misto": _volne_misto_knihovny(),
+        "zapsano_v": db.utcnow(),
+    }
+
+    # Hodnoty se vyjmenovavaji, ne berou z `radek.values()`: spolehat se
+    # na poradi klicu ve slovniku je past, ktera se pri pridani sloupce
+    # projevi tim, ze se cisla prohodí - a nikdo si toho nevsimne.
+    sloupce = ("den", "polozek", "filmu", "epizod", "velikost", "uhd", "hdr",
+               "bez_technik", "volne_misto", "zapsano_v")
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO library_snapshot
+                (den, polozek, filmu, epizod, velikost, uhd, hdr,
+                 bez_technik, volne_misto, zapsano_v)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT (den) DO UPDATE SET
+                polozek     = excluded.polozek,
+                filmu       = excluded.filmu,
+                epizod      = excluded.epizod,
+                velikost    = excluded.velikost,
+                uhd         = excluded.uhd,
+                hdr         = excluded.hdr,
+                bez_technik = excluded.bez_technik,
+                volne_misto = excluded.volne_misto,
+                zapsano_v   = excluded.zapsano_v
+            """,
+            tuple(radek[jmeno] for jmeno in sloupce),
+        )
+        conn.commit()
+
+    log.info("snimek knihovny %s: %s polozek, %s bajtu",
+             den, radek["polozek"], radek["velikost"])
+    return radek
 
 
 async def _sync_users(client: JellyfinClient) -> int:

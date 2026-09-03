@@ -61,10 +61,16 @@
         <table>
             <thead>
             <tr>
+                {# `sloupec-navic`: na mobilu se skryje. Osm sloupců se na
+                   úzkou obrazovku nevejde a z tabulky pak byla vidět
+                   třetina, s řádky vysokými 120 px, protože se obsah
+                   lámal. Zůstává to podstatné: kdy, kdo, co a jak dlouho. #}
                 <th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Titul") }}</th>
-                <th>{{ _("Jazyk") }}</th><th>{{ _("Zařízení") }}</th>
-                <th>{{ _("Druh") }}</th>
-                <th>{{ _("Způsob") }}</th><th class="num">{{ _("Délka") }}</th>
+                <th class="sloupec-navic">{{ _("Jazyk") }}</th>
+                <th class="sloupec-navic">{{ _("Zařízení") }}</th>
+                <th class="sloupec-navic">{{ _("Druh") }}</th>
+                <th class="sloupec-navic">{{ _("Způsob") }}</th>
+                <th class="num">{{ _("Délka") }}</th>
             </tr>
             </thead>
             <tbody>
@@ -97,7 +103,7 @@
 
                 {# Jazyk zvukové stopy, kterou si divák skutečně pustil,
                    a případně jazyk zapnutých titulků. #}
-                <td class="nowrap">
+                <td class="nowrap sloupec-navic">
                     {% if row.audio_language %}
                         {{ lang.display(row.audio_language) }}
                         {% if row.subtitle_language %}
@@ -110,12 +116,12 @@
                     {% endif %}
                 </td>
 
-                <td class="muted">{{ row.device_name or '?' }}<br>{{ row.client or '' }}</td>
+                <td class="muted sloupec-navic">{{ row.device_name or '?' }}<br>{{ row.client or '' }}</td>
                 {# Druh záznamu. Bez něj se u „Ostatního“ z grafu nedalo
                    dohledat, o co vlastně šlo - v seznamu byly jen názvy,
                    které samy o sobě nic neříkají. #}
-                <td class="nowrap muted">{{ row.item_type | type_name }}</td>
-                <td>
+                <td class="nowrap muted sloupec-navic">{{ row.item_type | type_name }}</td>
+                <td class="sloupec-navic">
                     {{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}
                     {% if row.play_method == 'Transcode' and row.transcode_reasons %}
                         <div class="muted" style="font-size:12px">{{ row.transcode_reasons }}</div>

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import db, formatting
@@ -248,6 +248,21 @@ def lze_srovnat(zadani: Any) -> bool:
     return predchozi(zadani).od >= zacatek
 
 
+def je_transcode(sloupec: str = "play_method") -> str:
+    """Podminka "tohle je prepocet" - jedno misto pro vsechny dotazy.
+
+    Hleda se podle ZACATKU nazvu, ne presnou shodou. Importovana historie
+    (Playback Reporting) nese podrobnejsi hodnoty - treba
+    "Transcode (v:h264 a:direct)" - a pri presne shode by propadly.
+
+    Az na tuhle funkci se to pocitalo dvakrat ruzne: graf doruceni je
+    podle zacatku uz davno (viz `_role`), kdezto podil transcode presnou
+    shodou. Na jedne strance tak mohlo stat "Transcode: 1 h" a hned vedle
+    "Podil transcode: 0 %".
+    """
+    return f"{sloupec} LIKE 'Transcode%'"
+
+
 # ---------------------------------------------------------------------------
 # Prehled (dashboard)
 # ---------------------------------------------------------------------------
@@ -255,13 +270,13 @@ def lze_srovnat(zadani: Any) -> bool:
 def overview(days: int) -> dict[str, Any]:
     """Hlavni cisla za zvolene obdobi."""
     row = db.query_one(
-        """
+        f"""
         SELECT
             COUNT(*)                                        AS plays,
             COALESCE(SUM(watched_seconds), 0)               AS watched_seconds,
             COUNT(DISTINCT user_id)                         AS users,
             COUNT(DISTINCT item_id)                         AS item_count,
-            COALESCE(SUM(CASE WHEN play_method = 'Transcode'
+            COALESCE(SUM(CASE WHEN {je_transcode()}
                               THEN watched_seconds ELSE 0 END), 0) AS transcoded_seconds
         FROM playback
         WHERE started_at >= ? AND started_at < ?
@@ -295,6 +310,229 @@ def previous_overview(days: int) -> dict[str, Any]:
         _meze(predchozi(days)),
     ) or {}
 
+
+
+# ---------------------------------------------------------------------------
+# Dve obdobi vedle sebe
+# ---------------------------------------------------------------------------
+
+def delka_sekund(zadani: Any) -> float:
+    """Jak dlouhe obdobi doopravdy je - v sekundach.
+
+    Meri se z mezi, ne z poctu dnu. U celych dnu vyjde oboji nastejno,
+    u useku vybraneho tazenim v grafu uz ne: dvouhodinovy vyber ma
+    `dny == 1` a denni prumer by z nej vysel dvanactkrat mensi, nez je.
+
+    "Poslednich N dni" ma konec otevreny (KONEC_CASU), takze z mezi se
+    delka zmerit neda - u toho plati pocet dnu.
+    """
+    obdobi = _obdobi(zadani)
+    if obdobi.relativni:
+        return obdobi.dny * 86400.0
+    try:
+        od = datetime.strptime(obdobi.od, db.TIME_FORMAT)
+        do = datetime.strptime(obdobi.do, db.TIME_FORMAT)
+    except ValueError:
+        return max(1, obdobi.dny) * 86400.0
+    return max(1.0, (do - od).total_seconds())
+
+
+def _prekryvaji_se(prvni: Obdobi, druhe: Obdobi) -> bool:
+    """Maji obdobi spolecny kus casu?
+
+    Dve prekryvajici se obdobi nejsou "srpen versus prosinec": cast dat je
+    v obou sloupcich a rozdil mezi nimi nemeri nic. Rict to nahlas je
+    poctivejsi nez to spocitat a mlcet.
+    """
+    return prvni.od < druhe.do and druhe.od < prvni.do
+
+
+def _radek(popisek: str, tvar: str, hodnota_a: Any, hodnota_b: Any) -> dict[str, Any]:
+    """Jeden radek tabulky srovnani i s rozdilem.
+
+    `relativni` (o kolik procent) se u procentualnich udaju nepocita:
+    "z 12 % na 18 %" je +6 PROCENTNICH BODU, ne +50 %. Druhe cislo je
+    formalne spravne a v praxi matouci, tak se nedodava vubec.
+    """
+    a = float(hodnota_a or 0)
+    b = float(hodnota_b or 0)
+    return {"popisek": popisek, "tvar": tvar,
+            "a": hodnota_a or 0, "b": hodnota_b or 0,
+            "rozdil": a - b,
+            "relativni": None if tvar == "procenta" or not b else (a - b) / b * 100}
+
+
+# Role zpusobu doruceni -> popisek v tabulce. Scita se podle ROLE, ne
+# podle presneho nazvu: importovana historie nese hodnoty jako
+# "Transcode (v:h264 a:direct)" a pri shode na presny retezec by
+# propadly, takze by prepocet z importu v srovnani chybel.
+DORUCENI_ROLE: tuple[tuple[str, str], ...] = (
+    ("good", "Přímé přehrávání"),
+    ("info", "Přebalení (direct stream)"),
+    ("serious", "Transcode"),
+)
+
+
+def _jazykove_radky(prvni: Any, druhe: Any) -> list[dict[str, Any]]:
+    """Kolik se v kterem jazyce sledovalo - v obou obdobich.
+
+    `langstats` az tady, ne nahore: stats je nejnizsi patro a nema se na
+    co vysoke vazat. Cyklus by to dnes neudelalo, ale poradi importu se
+    tim uz nikdy nebude muset resit.
+
+    Radky jsou SJEDNOCENI obou obdobi. Jazyk, ktery je jen v jednom, musi
+    byt videt - "v prosinci se nove zacalo koukat slovensky" je prave ta
+    odpoved, kvuli ktere se clovek na srovnani diva. Pri pruniku by
+    z tabulky tise vypadl.
+
+    Vedle hodin jde i podil. U ruzne dlouhych obdobi je podil to jedine
+    poctive cislo: v roce se nasleduje vic hodin cehokoliv nez v srpnu,
+    ale pomer cestiny a anglictiny se tim nemeni.
+    """
+    from . import langstats
+
+    barvy = langstats.colour_map()
+    a = {r["code"]: r for r in langstats.watched_languages(prvni, barvy)["rows"]}
+    b = {r["code"]: r for r in langstats.watched_languages(druhe, barvy)["rows"]}
+
+    kody = sorted(set(a) | set(b),
+                  key=lambda k: -max(float((a.get(k) or {}).get("hours") or 0),
+                                     float((b.get(k) or {}).get("hours") or 0)))
+
+    radky = []
+    for kod in kody:
+        prvni_radek, druhy_radek = a.get(kod) or {}, b.get(kod) or {}
+        radek = _radek(str(prvni_radek.get("label") or druhy_radek.get("label") or kod),
+                       "hodiny",
+                       prvni_radek.get("hours") or 0, druhy_radek.get("hours") or 0)
+        radek["podil_a"] = float(prvni_radek.get("percent") or 0)
+        radek["podil_b"] = float(druhy_radek.get("percent") or 0)
+        radky.append(radek)
+    return radky
+
+
+def srovnani(prvni_zadani: Any, druhe_zadani: Any) -> dict[str, Any]:
+    """Tytez statistiky za dve libovolna obdobi, vedle sebe.
+
+    "Oproti minulemu obdobi" umi aplikace davno, jenze minule obdobi si
+    clovek nevybira - je to okno tesne pred tim zvolenym. Na otazku
+    "byl srpen lepsi nez prosinec?" to neodpovi.
+
+    Dve veci, ktere se tady daji snadno zamlcet, a nesmi:
+
+    * **Ruzne dlouha obdobi.** Souctem vyhraje delsi obdobi skoro vzdycky.
+      Proto je hned pod souctem denni prumer a stranka rekne, ze se delky
+      lisi.
+    * **Prekryv.** Kdyz maji obdobi spolecny kus, je cast dat v obou
+      sloupcich a rozdil nemeri nic.
+    """
+    prvni, druhe = _obdobi(prvni_zadani), _obdobi(druhe_zadani)
+    sekund_a, sekund_b = delka_sekund(prvni), delka_sekund(druhe)
+
+    prehled_a, prehled_b = overview(prvni), overview(druhe)
+    sit_a, sit_b = bandwidth_prehled(prvni), bandwidth_prehled(druhe)
+
+    def hodin(prehled: dict[str, Any]) -> float:
+        return float(prehled.get("watched_seconds") or 0) / 3600.0
+
+    def denne(prehled: dict[str, Any], sekund: float) -> float:
+        return hodin(prehled) / max(1.0, sekund / 86400.0)
+
+    def podle_role(zadani: Any) -> dict[str, float]:
+        soucty: dict[str, float] = {}
+        for radek in play_method_breakdown(zadani):
+            role = str(radek.get("role") or "")
+            soucty[role] = soucty.get(role, 0.0) + float(radek.get("hours") or 0)
+        return soucty
+
+    role_a, role_b = podle_role(prvni), podle_role(druhe)
+
+    skupiny = [
+        {
+            "nadpis": _t("Sledování"),
+            "radky": [
+                _radek(_t("Odsledováno"), "hodiny", hodin(prehled_a), hodin(prehled_b)),
+                _radek(_t("Denní průměr"), "hodiny",
+                       denne(prehled_a, sekund_a), denne(prehled_b, sekund_b)),
+                _radek(_t("Spuštění"), "cislo",
+                       prehled_a.get("plays"), prehled_b.get("plays")),
+                _radek(_t("Diváci"), "cislo",
+                       prehled_a.get("users"), prehled_b.get("users")),
+                _radek(_t("Různých titulů"), "cislo",
+                       prehled_a.get("item_count"), prehled_b.get("item_count")),
+            ],
+        },
+        {
+            "nadpis": _t("Jak server obsah doručoval"),
+            "radky": [
+                _radek(_t(popisek), "hodiny",
+                       role_a.get(role, 0.0), role_b.get(role, 0.0))
+                for role, popisek in DORUCENI_ROLE
+            ] + [
+                _radek(_t("Podíl transcode"), "procenta",
+                       prehled_a.get("transcode_share"),
+                       prehled_b.get("transcode_share")),
+            ],
+        },
+        {
+            "nadpis": _t("Síť"),
+            "radky": [
+                _radek(_t("Přeneseno"), "bajty",
+                       sit_a.get("bajtu"), sit_b.get("bajtu")),
+                _radek(_t("Špička"), "mbit",
+                       sit_a.get("spicka_mbit"), sit_b.get("spicka_mbit")),
+            ],
+        },
+    ]
+
+    # Jazyky maji promenlivy pocet radku, takze se skupina prida jen kdyz
+    # je co ukazat - prazdna tabulka s nadpisem tvrdi, ze se nedivalo,
+    # coz je jiná informace nez "jazyk stopy neznáme".
+    jazyky = _jazykove_radky(prvni, druhe)
+    if jazyky:
+        skupiny.append({"nadpis": _t("V jakém jazyce se sledovalo"),
+                        "radky": jazyky, "s_podilem": True})
+
+    # Knihovna stoji na dennich snimcich, a ty zacinaji az u verze, ktera
+    # je umi zapisovat. Za starsi obdobi proto nejsou - a misto tabulky
+    # nul se rekne proc. "Nepribylo nic" a "nevime" jsou dve ruzne veci.
+    rust_a, rust_b = rust_knihovny(prvni), rust_knihovny(druhe)
+    knihovna_zname = bool(rust_a.get("dost_dat") and rust_b.get("dost_dat"))
+    knihovna_dopoctena = bool(rust_a.get("dopocteno") or rust_b.get("dopocteno"))
+    if knihovna_zname:
+        skupiny.append({
+            "nadpis": _t("Knihovna"),
+            "radky": [
+                _radek(_t("Přibylo položek"), "cislo",
+                       rust_a.get("polozek"), rust_b.get("polozek")),
+                _radek(_t("Přibylo dat"), "bajty",
+                       rust_a.get("prirustek"), rust_b.get("prirustek")),
+                _radek(_t("Velikost na konci období"), "bajty",
+                       rust_a.get("velikost"), rust_b.get("velikost")),
+            ],
+        })
+
+    return {
+        "a": {"obdobi": prvni, "dnu": sekund_a / 86400.0,
+              "top": top_items(prvni, limit=5, kind=KIND_BOTH),
+              "uzivatele": top_users(prvni, limit=5)},
+        "b": {"obdobi": druhe, "dnu": sekund_b / 86400.0,
+              "top": top_items(druhe, limit=5, kind=KIND_BOTH),
+              "uzivatele": top_users(druhe, limit=5)},
+        "skupiny": skupiny,
+        # Rozdil delek do jednoho procenta je zaokrouhleni, ne rozdil.
+        "stejne_dlouha": abs(sekund_a - sekund_b) <= max(sekund_a, sekund_b) * 0.01,
+        "prekryv": _prekryvaji_se(prvni, druhe),
+        # Ma vubec co srovnavat? Dve prazdna obdobi vedle sebe jsou tabulka
+        # nul a je lepsi rict proc.
+        "ma_data": bool((prehled_a.get("plays") or 0) or (prehled_b.get("plays") or 0)),
+        # Kdyz o knihovne za nektere obdobi nic nevime, stranka to rekne
+        # misto toho, aby skupina tise chybela.
+        "knihovna_zname": knihovna_zname,
+        # A kdyz cast stoji na dopoctu z data vzniku polozek, rekne i to:
+        # dopocet popisuje minulost dnesnimi velikostmi.
+        "knihovna_dopoctena": knihovna_dopoctena,
+    }
 
 def active_session_count() -> int:
     """Kolik se toho prave hraje. Jen cislo, ne cely seznam.
@@ -1490,7 +1728,7 @@ def hodnoty_filtru() -> dict[str, list[Any]]:
 
 def user_table(days: int) -> list[dict[str, Any]]:
     return db.query_all(
-        """
+        f"""
         SELECT u.id,
                u.name,
                u.is_administrator,
@@ -1498,7 +1736,7 @@ def user_table(days: int) -> list[dict[str, Any]]:
                COUNT(p.id)                                  AS plays,
                COUNT(DISTINCT p.item_id)                    AS item_count,
                MAX(p.started_at)                            AS last_seen,
-               COALESCE(SUM(CASE WHEN p.play_method = 'Transcode'
+               COALESCE(SUM(CASE WHEN {je_transcode('p.play_method')}
                                  THEN p.watched_seconds ELSE 0 END), 0) / 3600.0
                                                             AS transcoded_hours
         FROM users u
@@ -1740,6 +1978,223 @@ def rozsah_polozky(polozka: dict[str, Any] | None) -> str | None:
     if "DOVI" in (zmereny, hlaseny):
         return "DOVI"
     return zmereny or hlaseny or None
+
+
+def _dopoctena_krivka(prvni: str, posledni: str) -> list[dict[str, Any]]:
+    """Velikost knihovny den po dni, dopoctena z toho, co uz v datech je.
+
+    Denni snimky zacinaji az u verze, ktera je umi zapisovat. Minulost se
+    ale dopocitat DA, protoze dva sloupce ji nesou:
+
+    * `date_created` - kdy polozka vznikla,
+    * `synced_at` u polozky v archivu (`is_missing = 1`) - posledni
+      synchronizace, ktera ji jeste videla. Polozky se nemazou, jen
+      schovavaji, takze i ubytek je videt.
+
+    Polozka se tedy do knihovny pocita od sveho vzniku do dne, kdy ji
+    aplikace naposledy videla.
+
+    **Ceho se dopocet nikdy nedobere** (proto snimky zustavaji):
+
+    * Minulost popisuje DNESNIMI velikostmi. Film prekodovany z 30 GB na
+      10 GB vyjde, jako by byl 10GB odjakziva - snimek z toho dne rika
+      30 GB a ma pravdu.
+    * Prekodovani zaklada v Jellyfinu novou polozku s novym datem (proto
+      je v `items` vubec `tmdb_id`), takze se cte jako "pribylo dnes".
+    * Co bylo smazane pred prvni synchronizaci, v datech neni vubec.
+    * Volne misto se dopocitat neda - to je jen ve snimcich.
+
+    Den se bere z `date_created`, ktere je v UTC, kdezto snimky jsou
+    v zone aplikace. U krivky pres mesice je to posun o hodiny a nestoji
+    za to ho resit; u presnosti na den by stalo.
+    """
+    radky = db.query_all(
+        """
+        SELECT substr(date_created, 1, 10) AS vznik,
+               CASE WHEN is_missing = 1 THEN substr(synced_at, 1, 10) END AS naposledy,
+               COALESCE(size_bytes, 0) AS velikost,
+               type
+          FROM items
+         WHERE date_created IS NOT NULL AND date_created != ''
+        """
+    )
+    if not radky:
+        return []
+
+    # Zmeny se posbiraji do jednoho slovniku a pak se jednou projdou -
+    # jeden dotaz na kazdy den by pri roce znamenal 365 dotazu.
+    zmeny: dict[str, dict[str, int]] = {}
+
+    def zmena(den: str, polozek: int, velikost: int, filmu: int, epizod: int) -> None:
+        z = zmeny.setdefault(den, {"polozek": 0, "velikost": 0,
+                                   "filmu": 0, "epizod": 0})
+        z["polozek"] += polozek
+        z["velikost"] += velikost
+        z["filmu"] += filmu
+        z["epizod"] += epizod
+
+    for radek in radky:
+        vznik = str(radek["vznik"] or "")
+        if len(vznik) != 10:
+            continue
+        velikost = int(radek["velikost"] or 0)
+        film = 1 if str(radek["type"] or "") == "Movie" else 0
+        epizoda = 1 if str(radek["type"] or "") == "Episode" else 0
+        zmena(vznik, 1, velikost, film, epizoda)
+
+        naposledy = str(radek["naposledy"] or "")
+        if len(naposledy) == 10:
+            # Ten den tam jeste byla, ubyde az nasledujici den.
+            konec = (date.fromisoformat(naposledy) + timedelta(days=1)).isoformat()
+            zmena(konec, -1, -velikost, -film, -epizoda)
+
+    # Prubezny soucet od nejstarsi zmeny az po konec obdobi.
+    krivka: list[dict[str, Any]] = []
+    stav = {"polozek": 0, "velikost": 0, "filmu": 0, "epizod": 0}
+    den = date.fromisoformat(min(zmeny))
+    konec_dne = date.fromisoformat(posledni)
+    zacatek_dne = date.fromisoformat(prvni)
+    while den <= konec_dne:
+        klic = den.isoformat()
+        if klic in zmeny:
+            for jmeno, hodnota in zmeny[klic].items():
+                stav[jmeno] += hodnota
+        if den >= zacatek_dne:
+            krivka.append({"den": klic, "polozek": stav["polozek"],
+                           "filmu": stav["filmu"], "epizod": stav["epizod"],
+                           "velikost": stav["velikost"], "uhd": None, "hdr": None,
+                           "bez_technik": None, "volne_misto": None,
+                           "dopocteno": True})
+        den += timedelta(days=1)
+    return krivka
+
+
+def snimky(days: Any = 90) -> list[dict[str, Any]]:
+    """Velikost knihovny den po dni - podklad pro krivku rustu.
+
+    Slozene ze dvou zdroju, a stranka ma vedet, ktery je ktery:
+
+    * **denni snimky** od chvile, kdy se zacaly zapisovat - to, co se ten
+      den skutecne zmerilo, vcetne volneho mista;
+    * **dopoctena minulost** pro dobu pred prvnim snimkem, viz
+      `_dopoctena_krivka()`. Bez ni by krivka zacinala dnem instalace
+      a otazka "o kolik knihovna narostla za rok" nemela odpoved.
+
+    Snimek ma prednost vzdycky, kdyz pro dany den existuje: je to mereni,
+    ne odhad.
+    """
+    obdobi = _obdobi(days)
+    prvni = _mistni_den(obdobi.od_mistni, obdobi.od).isoformat()
+    posledni = _mistni_den(obdobi.do_mistni, obdobi.do, konec=True).isoformat() \
+        if not obdobi.relativni else datetime.now(formatting.zona()).date().isoformat()
+
+    zmerene = db.query_all(
+        """
+        SELECT den, polozek, filmu, epizod, velikost, uhd, hdr,
+               bez_technik, volne_misto
+          FROM library_snapshot
+         WHERE den >= ? AND den <= ?
+         ORDER BY den
+        """,
+        (prvni, posledni),
+    )
+    for radek in zmerene:
+        radek["dopocteno"] = False
+
+    # Dopocet konci tam, kde zacina prvni snimek VUBEC - ne prvni snimek
+    # v obdobi. Kdyby se bral az ten v obdobi, u obdobi zacinajiciho po
+    # instalaci by se minulost dopocitala znovu pres dobu, o ktere mame
+    # mereni.
+    od_kdy_merime = db.query_value(
+        "SELECT MIN(den) FROM library_snapshot", default=None)
+
+    hranice = str(od_kdy_merime or "")
+    if hranice and hranice <= prvni:
+        return zmerene           # cele obdobi mame zmerene
+
+    cela = _dopoctena_krivka(prvni, posledni)
+    dopoctene = [radek for radek in cela if not hranice or radek["den"] < hranice]
+    if not dopoctene:
+        return zmerene
+
+    # Dopocet se POSADI na prvni zmerenou hodnotu.
+    #
+    # Tvar minulosti (kdy co pribylo) z dat vycteme spolehlive, ale jeji
+    # VYSKA je systematicky posunuta: dopocet popisuje minulost dnesnimi
+    # velikostmi, kdezto snimek zna tu tehdejsi. Bez posazeni je na spoji
+    # schod - a "knihovna pres noc prisla o 200 GB" je tvrzeni o konkretnim
+    # dni, ktere je proste nepravdive. Posun je jedno cislo pro celou
+    # dopoctenou cast, takze se tvar nemeni.
+    prvni_zmereny = next((r for r in zmerene if r["den"] >= hranice), None)
+    if prvni_zmereny:
+        ve_spoji = next((r for r in cela if r["den"] == prvni_zmereny["den"]), None)
+        if ve_spoji:
+            for jmeno in ("velikost", "polozek", "filmu", "epizod"):
+                posun = int(prvni_zmereny.get(jmeno) or 0) - int(ve_spoji.get(jmeno) or 0)
+                if not posun:
+                    continue
+                for radek in dopoctene:
+                    # Zaporna knihovna neexistuje; u velkeho posunu se
+                    # nejstarsi dny opreou o nulu.
+                    radek[jmeno] = max(0, int(radek.get(jmeno) or 0) + posun)
+
+    # Krivka musi navazovat: posledni dopocteny den a prvni zmereny den
+    # jsou vedle sebe, takze se cara neprerusi.
+    return dopoctene + zmerene
+
+
+def rust_knihovny(days: Any = 90) -> dict[str, Any]:
+    """Kam knihovna spěje: o kolik za obdobi narostla a co z toho plyne.
+
+    Odhad umi dve podoby, protoze volne misto zname jen tam, kam aplikace
+    na soubory vidi:
+
+    * zname-li ho, odpovida na "za jak dlouho dojde";
+    * jinak rekne, jak velka knihovna bude za rok.
+
+    Slibovat prvni tam, kde plati jen druhe, by bylo horsi nez mlcet.
+    """
+    radky = snimky(days)
+    if len(radky) < 2:
+        # Jeden bod neni rust. Do te doby se hlasi, kolik dni uz mame -
+        # at je videt, ze se neco deje a jen to jeste nema co rict.
+        return {"dost_dat": False, "dnu": len(radky),
+                "velikost": radky[-1]["velikost"] if radky else 0}
+
+    prvni, posledni = radky[0], radky[-1]
+    dnu = max(1, (date.fromisoformat(posledni["den"])
+                  - date.fromisoformat(prvni["den"])).days)
+    prirustek = int(posledni["velikost"]) - int(prvni["velikost"])
+    denne = prirustek / dnu
+
+    vysledek: dict[str, Any] = {
+        "dost_dat": True,
+        "dnu": dnu,
+        "velikost": int(posledni["velikost"]),
+        "prirustek": prirustek,
+        "denne": denne,
+        "polozek": int(posledni["polozek"]) - int(prvni["polozek"]),
+        "volne_misto": posledni.get("volne_misto"),
+        "za_rok": None,
+        "dnu_do_konce": None,
+        # Stoji cast obdobi na dopoctu misto na mereni? Stranka to ma
+        # rict - dopocet popisuje minulost dnesnimi velikostmi, takze
+        # cislo je odhad, i kdyz vypada stejne presne jako ostatni.
+        "dopocteno": any(radek.get("dopocteno") for radek in radky),
+        "dopocteno_do": next((radek["den"] for radek in reversed(radky)
+                              if radek.get("dopocteno")), ""),
+    }
+
+    # Klesajici nebo stojici knihovna zadny odhad nepotrebuje - a delit
+    # nulou uz vubec ne.
+    if denne <= 0:
+        return vysledek
+
+    vysledek["za_rok"] = int(posledni["velikost"] + denne * 365)
+    volne = posledni.get("volne_misto")
+    if volne:
+        vysledek["dnu_do_konce"] = int(volne / denne)
+    return vysledek
 
 
 def video_range_breakdown() -> list[dict[str, Any]]:

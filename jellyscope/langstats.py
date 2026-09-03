@@ -455,6 +455,49 @@ def library_languages(colours: dict[str, int],
     return result
 
 
+def _kombinace_radky() -> list[dict[str, Any]]:
+    """Kombinace stop tak, jak jsou v knihovne - od nejcastejsi.
+
+    Jeden dotaz pro kartu i pro okno se vsemi kombinacemi. Dve kopie
+    tehoz SELECTu by se driv nebo pozdeji rozesly a v okne by pak stala
+    jina cisla nez na karte, ze ktere se otevrelo.
+    """
+    return db.query_all(
+        """
+        SELECT audio_languages              AS packed,
+               COUNT(*)                     AS item_count,
+               COALESCE(SUM(size_bytes), 0) AS size_bytes
+        FROM items
+        WHERE is_missing = 0
+          AND audio_languages IS NOT NULL
+          AND audio_languages != ''
+          AND audio_languages != 'und'      -- tituly bez urceneho jazyka sem nepatri
+        GROUP BY audio_languages
+        ORDER BY item_count DESC
+        """
+    )
+
+
+def vsechny_kombinace() -> list[dict[str, Any]]:
+    """Uplny seznam kombinaci - podklad pro okno za radkem "Ostatni".
+
+    Karta ukazuje ctyri nejcastejsi a zbytek shrne, protoze dlouhy seznam
+    nikdo necte. Kdo ale chce vedet, co se v tom "Ostatni" skryva, ma na
+    to mit kam kliknout - jinak je to slepy radek.
+
+    Procenta se pocitaji ze stejneho celku jako na karte, aby "56 %"
+    znamenalo totez na obou mistech.
+    """
+    radky = _kombinace_radky()
+    celkem = sum(int(radek["item_count"] or 0) for radek in radky)
+    for radek in radky:
+        radek["label"] = languages.combination_label(radek["packed"])
+        radek["value"] = radek["item_count"]
+        radek["percent"] = (int(radek["item_count"] or 0) / celkem * 100) \
+            if celkem else 0.0
+    return radky
+
+
 def language_combinations(limit: int = 4) -> list[dict[str, Any]]:
     """Nejcastejsi kombinace stop - "CS + EN", "jen EN", ...
 
@@ -469,20 +512,7 @@ def language_combinations(limit: int = 4) -> list[dict[str, Any]]:
     nic o tom, jak je knihovna sestavena, jen o tom, ze chybi metadata.
     Jejich pocet vracime zvlast, aby bylo poctive videt, kolik jich je.
     """
-    rows = db.query_all(
-        """
-        SELECT audio_languages              AS packed,
-               COUNT(*)                     AS item_count,
-               COALESCE(SUM(size_bytes), 0) AS size_bytes
-        FROM items
-        WHERE is_missing = 0
-          AND audio_languages IS NOT NULL
-          AND audio_languages != ''
-          AND audio_languages != 'und'      -- tituly bez urceneho jazyka sem nepatri
-        GROUP BY audio_languages
-        ORDER BY item_count DESC
-        """
-    )
+    rows = _kombinace_radky()
 
     top = rows[:limit]
     rest = rows[limit:]

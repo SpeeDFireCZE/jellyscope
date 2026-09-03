@@ -154,8 +154,19 @@ jeden = charts.area_chart_multi([{"day": "2026-08-31", "movie_hours": 3.65}], "d
                                 [{"key": "movie_hours", "label": "Filmy"}])
 cesty = re.findall(r'<path d="([^"]+)"', jeden)
 zkontroluj("z jednoho dne se graf nakreslí", len(cesty) == 2, f"(cest: {len(cesty)})")
+# Okraje se nečtou natvrdo: levý se rozšířil, aby se do něj na mobilu
+# vešly větší popisky osy. Podstatné je, že čára jde od kraje ke kraji
+# plochy, ne kolik ten kraj zrovna měří.
+def vodorovny_rozsah(cesta: str) -> tuple[float, float]:
+    """Nejmenší a největší x v cestě - dvojice „x,y" včetně řídicích bodů."""
+    xka = [float(x) for x, _ in re.findall(r"([\d.]+),([\d.]+)", cesta)]
+    return min(xka), max(xka)
+
+
+kraje = [vodorovny_rozsah(c) for c in cesty]
 zkontroluj("a čára jde přes celou šířku",
-           all("46.0," in c and "738.0," in c for c in cesty))
+           all(od < 120 and do > 700 and do - od > 600 for od, do in kraje),
+           f"({kraje})")
 # Cara (druha cesta) zacina na vysce hodnoty. Nula lezi na zakladne,
 # takze cim vys, tim mensi souradnice - a rovnou na zakladne by to
 # znamenalo, ze se ten den nekoukalo.

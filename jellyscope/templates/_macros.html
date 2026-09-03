@@ -58,12 +58,14 @@
             <div class="field">
                 <label for="obdobi-od">{{ _("Od") }}</label>
                 <input type="text" id="obdobi-od" name="od" required data-kalendar
+                       data-pole="od"
                        value="{{ obdobi.od_text }}" placeholder="1.8.2026"
                        inputmode="numeric" autocomplete="off">
             </div>
             <div class="field">
                 <label for="obdobi-do">{{ _("Do") }}</label>
                 <input type="text" id="obdobi-do" name="do" required data-kalendar
+                       data-pole="do"
                        value="{{ obdobi.do_text }}" placeholder="{{ dnes_text }}"
                        inputmode="numeric" autocomplete="off">
             </div>
@@ -83,6 +85,84 @@
             {% if obdobi.vlastni %}
                 <a class="btn" href="{{ base_url }}?days=30">{{ _("Zpět na 30 dnů") }}</a>
             {% endif %}
+        </div>
+    </form>
+</dialog>
+{% endmacro %}
+
+
+{# Přepínač období na Srovnání.
+
+   Proč vlastní makro a ne to nahoře: tam je jedno období na stránku,
+   a tak se jeho hodnota jmenuje prostě `days`. Tady jsou dvě a musí se
+   v adrese rozeznat, takže nesou předponu (`a_days`, `b_od`, `b_do`).
+
+   `druhy` je to druhé období jako dvojice do adresy. Bez něj by se při
+   přepnutí jednoho období to druhé vrátilo na zapamatovanou hodnotu
+   a skákalo by pod rukama. #}
+{% macro obdobi_prepinac(popisek, obdobi, base_url, predpona, druhy) %}
+<div class="srovnani-volba">
+    <p class="tile-label">{{ popisek }}</p>
+    <div class="filters">
+        {% for days in allowed_days %}
+            <a class="chip {{ 'active' if not obdobi.vlastni and days == obdobi.days }}"
+               href="{{ base_url }}?{{ druhy | urlencode }}&{{ predpona }}_days={{ days }}">{{ _(day_labels[days]) }}</a>
+        {% endfor %}
+        <button class="chip {{ 'active' if obdobi.vlastni }}" type="button"
+                data-okno="okno-obdobi-{{ predpona }}">
+            {% if obdobi.vlastni %}
+                {{ obdobi.od_popis }} – {{ obdobi.do_popis }}
+            {% else %}
+                {{ _("Vlastní") }}
+            {% endif %}
+        </button>
+    </div>
+</div>
+
+<dialog class="okno" id="okno-obdobi-{{ predpona }}">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ popisek }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    <p class="card-note">
+        {{ _("Statistiky se spočítají za zvolené rozmezí včetně obou dnů.") }}
+    </p>
+
+    <form method="get" action="{{ base_url }}" class="obdobi-form">
+        {# Druhé období musí projít i formulářem, jinak by se po odeslání
+           vrátilo na zapamatovanou hodnotu. #}
+        {% for jmeno, hodnota in druhy.items() %}
+            <input type="hidden" name="{{ jmeno }}" value="{{ hodnota }}">
+        {% endfor %}
+
+        <div class="obdobi-pole">
+            <div class="field">
+                <label for="obdobi-{{ predpona }}-od">{{ _("Od") }}</label>
+                <input type="text" id="obdobi-{{ predpona }}-od"
+                       name="{{ predpona }}_od" required data-kalendar data-pole="od"
+                       value="{{ obdobi.od_text }}" placeholder="1.8.2026"
+                       inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="obdobi-{{ predpona }}-do">{{ _("Do") }}</label>
+                <input type="text" id="obdobi-{{ predpona }}-do"
+                       name="{{ predpona }}_do" required data-kalendar data-pole="do"
+                       value="{{ obdobi.do_text }}" placeholder="{{ dnes_text }}"
+                       inputmode="numeric" autocomplete="off">
+            </div>
+        </div>
+
+        <div class="btn-row obdobi-rychle">
+            {% for popis, od_h, do_h in rychla_obdobi %}
+                <button class="chip" type="button"
+                        data-obdobi-od="{{ od_h }}" data-obdobi-do="{{ do_h }}">{{ _(popis) }}</button>
+            {% endfor %}
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn primary" type="submit">{{ _("Použít") }}</button>
         </div>
     </form>
 </dialog>

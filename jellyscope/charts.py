@@ -612,7 +612,11 @@ def area_chart_multi(
         return _empty(_t("Zatím žádná data"))
 
     width = 760
-    margin_left, margin_right = 46, 22
+    # Levý okraj je na popisky osy. Musí se do něj vejít i tehdy, když
+    # jsou na úzké obrazovce v jednotkách viewBoxu větší (viz .axis-label
+    # v mobilní části stylu) - jinak popisek uteče mimo graf a ořízne se.
+    # Na desktopu to z 760 jednotek ubere dvě procenta plochy.
+    margin_left, margin_right = 80, 22
     margin_top, margin_bottom = 16, 30
     plot_width = width - margin_left - margin_right
     plot_height = height - margin_top - margin_bottom
@@ -711,30 +715,61 @@ def area_chart_multi(
         )
 
     for entry in series:
-        values = [float(point.get(entry["key"]) or 0) for point in points]
-        coordinates = [(px(i), py(v)) for i, v in enumerate(values)]
-        # Jeden bod nema delku, takze by z nej byla cara o nulove sirce -
-        # graf vypadal prazdny, i kdyz se ten den koukalo. Stava se to
-        # u obdobi kratsiho nez dva dny (treba useku vybraneho tazenim).
-        # Rozpustime ho na sirku grafu: cte se to jako "tuhle celou dobu
-        # to bylo takhle", coz je presne, co jeden bod znamena.
-        if len(coordinates) == 1:
-            vyska = coordinates[0][1]
-            coordinates = [(margin_left, vyska), (margin_left + plot_width, vyska)]
-        # Cara i plocha jdou po tomtez tvaru - jinak by vypln vykukovala
-        # zpod cary. Viz _cesta() a _cesta_schody().
-        line = _cesta_schody(coordinates) if schody else _cesta(coordinates)
-        area = (
-            f"M{coordinates[0][0]:.1f},{baseline:.1f} L"
-            + line[1:]
-            + f" L{coordinates[-1][0]:.1f},{baseline:.1f} Z"
-        )
+        # `None` ZNAMENA "tady serie neplati", ne nulu. Kreslit z toho nulu
+        # by byl propad k ose, ktery se nestal - u kridky rustu knihovny
+        # jsou to dve serie, ktere se stridaji (dopoctena minulost a
+        # zmerene snimky), a jedna vzdycky nekde konci.
+        #
+        # Chybejici klic je porad nula: vsechny ostatni grafy spolehaji
+        # na to, ze serie bez hodnoty pro dany den kresli nulu.
+        useky: list[list[tuple[float, float]]] = []
+        usek: list[tuple[float, float]] = []
+        for index, point in enumerate(points):
+            hodnota = point.get(entry["key"], 0)
+            if hodnota is None:
+                if usek:
+                    useky.append(usek)
+                usek = []
+                continue
+            usek.append((px(index), py(float(hodnota))))
+        if usek:
+            useky.append(usek)
+
         slot = entry.get("slot", 1)
-        parts.append(f'<path d="{area}" fill="url(#{prechody[slot]})" />')
-        parts.append(
-            f'<path d="{line}" fill="none" stroke="{barva_serie(slot)}" '
-            f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
-        )
+        for coordinates in useky:
+            # Jeden bod nema delku, takze by z nej byla cara o nulove sirce -
+            # graf vypadal prazdny, i kdyz se ten den koukalo. Stava se to
+            # u obdobi kratsiho nez dva dny (treba useku vybraneho tazenim).
+            # Rozpustime ho na sirku grafu: cte se to jako "tuhle celou dobu
+            # to bylo takhle", coz je presne, co jeden bod znamena.
+            #
+            # Plati jen pro serii, ktera JE jeden bod. Osamely bod uprostred
+            # rozdelene serie zadnou takovou vypoved nenese, tak se z nej
+            # udela tecka.
+            if len(coordinates) == 1:
+                if len(useky) == 1:
+                    vyska = coordinates[0][1]
+                    coordinates = [(margin_left, vyska),
+                                   (margin_left + plot_width, vyska)]
+                else:
+                    parts.append(
+                        f'<circle cx="{coordinates[0][0]:.1f}" '
+                        f'cy="{coordinates[0][1]:.1f}" r="2.5" '
+                        f'fill="{barva_serie(slot)}" />')
+                    continue
+            # Cara i plocha jdou po tomtez tvaru - jinak by vypln vykukovala
+            # zpod cary. Viz _cesta() a _cesta_schody().
+            line = _cesta_schody(coordinates) if schody else _cesta(coordinates)
+            area = (
+                f"M{coordinates[0][0]:.1f},{baseline:.1f} L"
+                + line[1:]
+                + f" L{coordinates[-1][0]:.1f},{baseline:.1f} Z"
+            )
+            parts.append(f'<path d="{area}" fill="url(#{prechody[slot]})" />')
+            parts.append(
+                f'<path d="{line}" fill="none" stroke="{barva_serie(slot)}" '
+                f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
+            )
 
     step = max(1, len(points) // 6)
     for index in range(0, len(points), step):
@@ -768,12 +803,19 @@ def area_chart_multi(
         vrcholy = {}
         for entry in series:
             klic = entry["key"]
-            nejvyssi = max(pasmo, key=lambda b: float(b.get(klic) or 0))
+            # Dny, kde serie neplati (None), se do vrcholu nepocitaji -
+            # jinak by bublina u dopoctene casti krivky hlasila "0 GB"
+            # u serie, ktera tam vubec nema co rict.
+            platne = [b for b in pasmo if b.get(klic, 0) is not None]
+            if not platne:
+                continue
+            nejvyssi = max(platne, key=lambda b: float(b.get(klic) or 0))
             vrcholy[klic] = (float(nejvyssi.get(klic) or 0), nejvyssi)
 
         # Cas bereme od te serie, ktera v pasmu vrcholi nejvys - to je ten
         # okamzik, na ktery se clovek pta.
-        hlavni = max(vrcholy.values(), key=lambda dvojice: dvojice[0])[1]
+        hlavni = (max(vrcholy.values(), key=lambda dvojice: dvojice[0])[1]
+                  if vrcholy else pasmo[0])
         x = px(index)
 
         # Nadpis je cas, pod nim kazda serie na svem radku a ve sve barve -
@@ -782,7 +824,7 @@ def area_chart_multi(
         radky_bubliny = [
             {"text": f'{entry["label"]}: {_udaj(vrcholy[entry["key"]][0], unit)}',
              "barva": barva_serie(entry.get("slot", 1))}
-            for entry in series
+            for entry in series if entry["key"] in vrcholy
         ]
         if hlavni.get("streamu"):
             radky_bubliny.append(
@@ -794,7 +836,7 @@ def area_chart_multi(
             f'cy="{py(vrcholy[entry["key"]][0]):.1f}" r="4" '
             f'fill="{barva_serie(entry.get("slot", 1))}" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
-            for entry in series
+            for entry in series if entry["key"] in vrcholy
         )
         parts.append(
             f'<g class="chart-hit" {tip}>'

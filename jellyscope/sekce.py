@@ -26,6 +26,36 @@ from . import db, formatting, langstats, stats
 from .i18n import translate as _t
 
 
+def data_rustu(obdobi: Any) -> dict[str, Any]:
+    """Podklad pro křivku růstu knihovny.
+
+    Graf kreslí čísla, ne bajty, takže se ke každému snímku dopočítá
+    velikost v gigabajtech. Dělá se to tady, ne v SQL: v databázi má
+    zůstat to, co se změřilo, ne převod kvůli jednomu grafu.
+
+    Křivka se rozpadá na dvě série, aby šlo poznat, co je měření a co
+    dopočet z data vzniku položek (viz stats.snimky). Kde série neplatí,
+    je `None`, ne nula - nula by nakreslila propad k ose, který se nestal.
+
+    Poslední dopočtený den nese hodnotu i v měřené sérii, takže na sebe
+    obě čáry navazují a mezi nimi není díra.
+    """
+    radky = stats.snimky(obdobi)
+    prvni_zmereny = next((i for i, r in enumerate(radky)
+                          if not r.get("dopocteno")), None)
+    for index, radek in enumerate(radky):
+        gb = round(int(radek.get("velikost") or 0) / 1024 ** 3, 2)
+        radek["gb"] = gb
+        dopocteno = bool(radek.get("dopocteno"))
+        radek["gb_dopocteno"] = gb if dopocteno else None
+        radek["gb_zmereno"] = None if dopocteno else gb
+        # Spoj: poslední dopočtený den patří i měřené čáře, jinak by mezi
+        # nimi byla mezera přes celý den.
+        if prvni_zmereny is not None and index == prvni_zmereny - 1:
+            radek["gb_zmereno"] = gb
+    return {"snimky": radky, "rust": stats.rust_knihovny(obdobi)}
+
+
 def souhrn_obdobi(obdobi: Any) -> dict[str, Any]:
     """Cisla hlavni karty Prehledu: souhrn, zmeny a proc se nedá srovnat.
 
@@ -184,6 +214,9 @@ SEZNAM: tuple[Sekce, ...] = (
           "Položky, velikost a odkud jsou technická data. Stav, ne období.",
           "_sekce_knihovna_celkem.html",
           lambda o: {"coverage": langstats.coverage()}, obdobi=False),
+    Sekce("rust_knihovny", "Růst knihovny",
+          "Velikost knihovny den po dni a kam to spěje.",
+          "_sekce_rust.html", lambda o: data_rustu(o)),
     Sekce("kodeky", "Kodeky",
           "Čím je knihovna zakódovaná. Období neřeší - je to stav knihovny.",
           "_sekce_kodeky.html", lambda o: {"codecs": stats.codec_breakdown()},

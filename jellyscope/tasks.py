@@ -172,6 +172,18 @@ async def _run_updates() -> dict[str, Any]:
     return {"status": "ok", "message": _t("Běží nejnovější vydání.")}
 
 
+async def _run_notifikace() -> dict[str, Any]:
+    """Projde hlidane veci a posle, co je potreba.
+
+    Intervalova uloha, ne denni: kdyz sberac prestane sbirat, ma se to
+    vedet dneska, ne zitra rano. Vsechna prace i ochrana proti opakovani
+    je v notifikace.zkontroluj().
+    """
+    from . import notifikace
+
+    return await notifikace.zkontroluj()
+
+
 async def _run_tidy() -> dict[str, Any]:
     """Narovnani dat na pozadi.
 
@@ -240,6 +252,21 @@ TASKS: dict[str, Task] = {
             default_time="04:00",
             runner=_run_tidy,
             log_kind="tidy",
+        ),
+        Task(
+            key="notifikace",
+            name="Upozornění",
+            description=(
+                "Zkontroluje, jestli sběrač sbírá a jestli nedochází místo, "
+                "a v určený den pošle týdenní souhrn. Zprávu pošle jen při "
+                "změně - z hlídače, který se ozývá pořád, si člověk udělá "
+                "ticho a pak mu unikne to podstatné. Kudy se posílá a na co "
+                "se hlídá, je v Upozorněních."
+            ),
+            interval_setting="notifikace_minuty",
+            default_minutes=15,
+            runner=_run_notifikace,
+            log_kind="notifikace",
         ),
         Task(
             key="updates",

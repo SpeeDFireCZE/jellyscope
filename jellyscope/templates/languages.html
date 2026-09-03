@@ -261,9 +261,16 @@
                 {% for row in combinations %}
                 <tr>
                     <td class="strong">
-                        {{ _(row.label) if row.label == 'Ostatni' else row.label }}
                         {% if row.combinations %}
-                            <span class="muted">({{ row.combinations }} {{ _("dalších kombinací") }})</span>
+                            {# Řádek "Ostatní" je jinak slepý: říká, že se něco
+                               skrývá, a nedá to jak zobrazit. Tady se z něj
+                               stane tlačítko do okna s úplným seznamem. #}
+                            <button class="link-button" type="button" data-okno="okno-kombinace">
+                                {{ row.label }}
+                                <span class="muted">({{ row.combinations }} {{ _("dalších kombinací") }})</span>
+                            </button>
+                        {% else %}
+                            {{ row.label }}
                         {% endif %}
                     </td>
                     <td class="num">{{ row.item_count | number }}</td>
@@ -279,6 +286,56 @@
             <a href="/languages/bez-jazyka">{{ undefined_items | number }} {{ _("souborů") }}</a> &ndash;
             {{ _("u kterých jazyk stopy nikdo nevyplnil. To nevypovídá o skladbě knihovny, jen o chybějících metadatech.") }}
         </p>
+        {% endif %}
+
+        {# Okno se vším. Kreslí se jen tehdy, když karta něco skrývá -
+           u knihovny se čtyřmi kombinacemi by bylo jen druhou kopií
+           téže tabulky. Pozná se to podle téhož znaku jako tlačítko:
+           souhrnný řádek na konci má `combinations`. #}
+        {% set souhrn = combinations | last %}
+        {% if souhrn.combinations %}
+        <dialog class="okno okno-siroke" id="okno-kombinace">
+            <form method="dialog" class="okno-hlava">
+                <h2>{{ _("Všechny kombinace stop") }} ({{ all_combinations | length }})</h2>
+                <button class="btn okno-zavrit" type="submit"
+                        aria-label="{{ _("Zavřít") }}">&times;</button>
+            </form>
+
+            <div class="okno-obsah">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr>
+                            <th>{{ _("Kombinace") }}</th>
+                            <th class="num">{{ _("Titulů") }}</th>
+                            <th class="num">{{ _("Podíl") }}</th>
+                            <th class="num">{{ _("Velikost") }}</th>
+                        </tr></thead>
+                        <tbody>
+                        {% for row in all_combinations %}
+                        <tr>
+                            <td class="strong">{{ row.label }}</td>
+                            <td class="num">{{ row.item_count | number }}</td>
+                            <td class="num strong">{{ row.percent | percent(1) }}</td>
+                            <td class="num muted">{{ row.size_bytes | bytes }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                        {# Součet je tu proto, že se v dlouhém seznamu ztrácí,
+                           z čeho se ta procenta vlastně počítají. #}
+                        <tfoot><tr>
+                            <td class="strong">{{ _("Celkem") }}</td>
+                            <td class="num strong">
+                                {{ all_combinations | sum(attribute='item_count') | number }}
+                            </td>
+                            <td class="num">100 %</td>
+                            <td class="num muted">
+                                {{ all_combinations | sum(attribute='size_bytes') | bytes }}
+                            </td>
+                        </tr></tfoot>
+                    </table>
+                </div>
+            </div>
+        </dialog>
         {% endif %}
         {% else %}
             <p class="chart-empty">{{ _("Žádná jazyková data.") }}</p>

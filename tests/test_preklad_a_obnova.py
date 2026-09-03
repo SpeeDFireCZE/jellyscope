@@ -262,6 +262,42 @@ vzor = re.compile(r"%\(?\w*\)?[sdrf]")
 rozdilne = [k for k, v in i18n.LOG_EN.items() if vzor.findall(k) != vzor.findall(v)]
 check(not rozdilne, f"zástupné znaky (%s, %d) sedí ({rozdilne[:2]})")
 
+# A ted to same doopravdy: kazda hlaska se ZAPISE do skutecneho souboru
+# s anglickym prekladem a se spravnym poctem hodnot. Shoda slovniku sama
+# o sobe nestaci - preklad s jinym typem zastupce (%s misto %d) projde
+# kontrolou vyse a spadne az za behu, u konkretni hlasky, kterou nikdo
+# necekal.
+import logging  # noqa: E402
+
+cesta_logu = applog.setup()
+applog.nastav_jazyk("en")
+pred = len(Path(cesta_logu).read_text(encoding="utf-8").splitlines())
+zkusebni = logging.getLogger("jellyscope.zkouska_prekladu")
+spadle = []
+for hlaska in sorted(ve_zdroji):
+    znaky = vzor.findall(hlaska)
+    if any(z.startswith("%(") for z in znaky):
+        # Pojmenovaní zástupci - aplikace posílá slovník, ne n-tici.
+        hodnoty = ({j: "x" for j in re.findall(r"%\((\w+)\)", hlaska)},)
+    else:
+        hodnoty = tuple(7 if z[-1] in "df" else "x" for z in znaky)
+    try:
+        zkusebni.warning(hlaska, *hodnoty)
+    except Exception as chyba:      # noqa: BLE001
+        spadle.append((hlaska[:44], str(chyba)[:44]))
+for rukojet in logging.getLogger().handlers:
+    rukojet.flush()
+
+check(not spadle, f"každá hláška se anglicky opravdu zapíše ({spadle[:2]})")
+
+# V anglickem logu nesmi zustat ceska hlaska - to by znamenalo, ze
+# preklad sice ve slovniku je, ale klic neodpovida tomu, co se loguje.
+napsane = Path(cesta_logu).read_text(encoding="utf-8").splitlines()[pred:]
+ceske = [r.split("] ", 1)[-1] for r in napsane
+         if re.search(r"[ěščřžýáíéůúňť]", r.split(": ", 2)[-1])]
+check(not ceske, f"a v anglickém logu nezůstane česká věta ({ceske[:1]})")
+applog.nastav_jazyk("cs")
+
 
 print()
 print("HOTOVO - chyb:", failures)

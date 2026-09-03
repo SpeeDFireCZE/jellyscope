@@ -439,6 +439,7 @@ EN: dict[str, str] = {
     "Kombinace": "Combination",
     "Titulů": "Titles",
     "dalších kombinací": "more combinations",
+    "Všechny kombinace stop": "All track combinations",
     "Sledujete to, ale stopa chybí": "You watch it, but the track is missing",
     "Dostupné stopy": "Available tracks",
     "celý seriál": "whole series",
@@ -1265,6 +1266,183 @@ EN: dict[str, str] = {
     "souběžných streamů: {n}": "streams at once: {n}",
     "Tažením v grafu vybereš rozmezí.": "Drag across the chart to pick a range.",
 
+    "Sekce": "Section",
+    "Přejít": "Go",
+    # --- kapacita uloziste (viz scanner._volne_misto_knihovny) ---
+    "Kapacita úložiště knihovny (GB)": "Library storage capacity (GB)",
+    "Zadané číslo přebije všechno ostatní. Volné místo se z něj počítá jako kapacita minus velikost knihovny, takže předpokládá, že na tom úložišti nic jiného neleží. Nech 0 a zjistí se to samo.":
+        "The number you enter overrides everything else. Free space is worked "
+        "out from it as capacity minus the size of the library, so it assumes "
+        "nothing else lives on that storage. Leave 0 and it is worked out "
+        "automatically.",
+    "volné místo se zatím nepodařilo zjistit": "free space could not be determined yet",
+    "volné místo se počítá ze zadané kapacity":
+        "free space is worked out from the capacity you entered",
+    "volné místo hlásí Jellyfin": "free space is reported by Jellyfin",
+    "volné místo se čte z disku pod aplikací":
+        "free space is read from the disk the application runs on",
+    # --- upozorneni (viz notifikace.py) ---
+    "e-mail": "e-mail",
+    "Upozornění": "Notifications",
+    "Kudy posílat": "How to send",
+    "stačí jeden kanál; když jich je víc, jde zpráva všemi":
+        "one channel is enough; with several, the message goes through all of them",
+    "Naposledy odesláno": "Last sent",
+    "Tyto notifikace upozorňují jen na to, co se děje v Jellyscope. Pokud Jellyscope nefunguje, nefungují ani notifikace – pro kontrolu funkčnosti Jellyscope využij například Uptime Kuma.":
+        "These notifications only report on what happens inside Jellyscope. "
+        "If Jellyscope is not running, neither are the notifications - to "
+        "check that Jellyscope itself is up, use something like Uptime Kuma.",
+    "E-mail (SMTP)": "E-mail (SMTP)",
+    "posílat e-mailem": "send by e-mail",
+    "587 pro STARTTLS, 465 pro SMTPS": "587 for STARTTLS, 465 for SMTPS",
+    "Prázdné = server přihlášení nechce.": "Empty = the server wants no login.",
+    "Uložené heslo se do stránky nikdy nevypisuje. Prázdné pole ho nechá být.":
+        "A stored password is never written into the page. An empty field leaves it alone.",
+    "Odesílatel": "From",
+    "Prázdné = použije se uživatel.": "Empty = the user is used.",
+    "Komu": "To",
+    "povýšit spojení přes STARTTLS": "upgrade the connection with STARTTLS",
+    "Discord": "Discord",
+    "posílat na Discord": "send to Discord",
+    "Adresa webhooku": "Webhook address",
+    "Na kanálu: Upravit kanál → Integrace → Webhooky. Kdo tu adresu má, může psát do kanálu za tebe – proto se sem už nevypisuje.":
+        "On the channel: Edit Channel -> Integrations -> Webhooks. Anyone with "
+        "that address can post to the channel as you, which is why it is not "
+        "written back here.",
+    "Telegram": "Telegram",
+    "posílat na Telegram": "send to Telegram",
+    "Token bota": "Bot token",
+    "Bota založí @BotFather.": "@BotFather creates the bot.",
+    "ID chatu": "Chat ID",
+    "Napiš botovi zprávu a ID najdeš přes @userinfobot.":
+        "Message the bot, then find the ID with @userinfobot.",
+    "Zkusit": "Try",
+    "Zkušební zpráva se pošle hned a jen tím jedním kanálem.":
+        "The test message goes out at once, through that one channel only.",
+    "uloženo – nech prázdné, ať zůstane": "stored - leave empty to keep it",
+    "U čeho se ozvat": "What to speak up about",
+    "zpráva chodí jen při změně, ne pořád dokola":
+        "a message goes out on change only, not over and over",
+    "Sběrač běží, ale nesbírá": "The collector runs but collects nothing",
+    "Vyprší token, změní se adresa Jellyfinu, rozbije se přihlášení – aplikace běží dál a historie se tiše zastaví. Přehrávání se dá zpětně doimportovat, ale jazyk stopy ani bitrate v importu nejsou, takže díra zůstane.":
+        "A token expires, the Jellyfin address changes, authentication breaks - "
+        "the application keeps running and history quietly stops. Playback can "
+        "be imported afterwards, but an import carries neither the track "
+        "language nor the bitrate, so the hole stays.",
+    "Dochází místo na disku": "The disk is filling up",
+    "Počítá se z růstu knihovny. Funguje jen tam, kam aplikace na soubory vidí – u knihovny na cizím serveru volné místo neznáme a upozornění nepřijde.":
+        "Worked out from the library growth. It only works where the "
+        "application can see the files - for a library on someone else's "
+        "server the free space is unknown and no warning arrives.",
+    "Týdenní souhrn": "Weekly summary",
+    "Není to porucha – kolik se za týden odsledovalo, co se dívalo nejvíc a kdo byl nejaktivnější.":
+        "Not a fault - how much was watched over the week, what was watched "
+        "most and who was busiest.",
+    "Ticho sběrače (minut)": "Collector silence (minutes)",
+    "Sběrač se ptá po vteřinách, takže půlhodina je jistota, ne netrpělivost – krátký výpadek sítě by jinak posílal zprávu pokaždé.":
+        "The collector asks every few seconds, so half an hour is certainty "
+        "rather than impatience - a short network outage would otherwise send "
+        "a message every time.",
+    "Ozvat se, když místo dojde za (dnů)": "Speak up when space runs out within (days)",
+    "Souhrn posílat v": "Send the summary on",
+    "Kontrolu pouští úloha „Upozornění“ – jak často, se nastavuje v Úlohách a zálohách.":
+        "The check is run by the \"Notifications\" task - how often is set in "
+        "Tasks and backups.",
+    "Kanály uloženy.": "Channels saved.",
+    "Neznámý kanál.": "Unknown channel.",
+    "Zkušební zpráva odeslána.": "Test message sent.",
+    "Nepodařilo se odeslat: {chyba}": "Could not send: {chyba}",
+    "Jellyscope: zkušební zpráva": "Jellyscope: test message",
+    "Když tohle čteš, upozornění fungují.":
+        "If you are reading this, notifications work.",
+    "Kanál není vyplněný.": "The channel is not filled in.",
+    "Žádný kanál není nastavený.": "No channel is set up.",
+    "Nic nového k hlášení.": "Nothing new to report.",
+    "Odesláno: {co}": "Sent: {co}",
+    "sběrač nesbírá": "the collector is not collecting",
+    "dochází místo": "the disk is filling up",
+    "zase to běží": "it is running again",
+    "týdenní souhrn": "weekly summary",
+    "poslední úspěšný dotaz na Jellyfin byl před {minut} minutami":
+        "the last successful request to Jellyfin was {minut} minutes ago",
+    "při současném tempu dojde místo za {dnu} dnů":
+        "at the current rate the space runs out in {dnu} days",
+    "pondělí": "Monday",
+    "úterý": "Tuesday",
+    "středa": "Wednesday",
+    "čtvrtek": "Thursday",
+    "pátek": "Friday",
+    "sobota": "Saturday",
+    "neděle": "Sunday",
+    "Zkontroluje, jestli sběrač sbírá a jestli nedochází místo, a v určený den pošle týdenní souhrn. Zprávu pošle jen při změně - z hlídače, který se ozývá pořád, si člověk udělá ticho a pak mu unikne to podstatné. Kudy se posílá a na co se hlídá, je v Upozorněních.":
+        "Checks that the collector is collecting and that the disk is not "
+        "filling up, and on the chosen day sends the weekly summary. A message "
+        "goes out on change only - a watchdog that keeps talking gets muted, "
+        "and then the one that mattered is missed. Where it sends and what it "
+        "watches is in Notifications.",
+    # --- srovnani dvou obdobi (viz stats.srovnani) ---
+    "Menu": "Menu",
+    "Srovnání": "Comparison",
+    "Srovnání období": "Period comparison",
+    "Dvě libovolná období vedle sebe – tytéž statistiky pod sebou.":
+        "Any two periods side by side - the same statistics under each other.",
+    "Období A": "Period A",
+    "Období B": "Period B",
+    "Rozdíl": "Difference",
+    # Procentni body: rozdil dvou procentualnich udaju. "Z 12 % na 18 %"
+    # je +6 bodu; napsat "+50 %" by bylo formalne spravne a matouci.
+    "p. b.": "pp",
+    "Sledování": "Watching",
+    "V jakém jazyce se sledovalo": "Which language was watched in",
+    "Přibylo položek": "Items added",
+    "Část růstu knihovny je dopočítaná z data vzniku položek – popisuje minulost dnešními velikostmi, takže překódovaný film v ní byl odjakživa malý.":
+        "Part of the library growth is reconstructed from when the items were "
+        "created - it describes the past with today's sizes, so a re-encoded "
+        "film was always small in it.",
+    "Přibylo dat": "Data added",
+    "Velikost na konci období": "Size at the end of the period",
+    "Růst knihovny se dá srovnat až od chvíle, kdy se zapisují denní snímky – aspoň dva v každém z obou období. Za starší období je zpětně vzít odkud.":
+        "Library growth can only be compared once daily snapshots are being "
+        "written - at least two in each of the periods. There is nowhere to "
+        "take them from for earlier periods.",
+    "Denní průměr": "Daily average",
+    "Jak server obsah doručoval": "How the server delivered the content",
+    "Období se překrývají – část přehrávání se počítá do obou sloupců a rozdíl mezi nimi tak neměří změnu.":
+        "The periods overlap - some playback is counted in both columns, "
+        "so the difference between them does not measure a change.",
+    "Období nejsou stejně dlouhá": "The periods are not the same length",
+    "v součtech vyhraje delší období skoro vždycky. Srovnávej denní průměr.":
+        "in totals the longer period wins almost every time. Compare the daily average.",
+    "Za obě období nemáme co srovnávat": "There is nothing to compare in either period",
+    "Ani v jednom z vybraných období není zaznamenané přehrávání. Zkus jiná období – historie se sbírá od chvíle, kdy Jellyscope běží.":
+        "Neither of the chosen periods has any recorded playback. Try other "
+        "periods - history is collected from the moment Jellyscope runs.",
+    "Nic za tohle období.": "Nothing in this period.",
+    # --- denni snimek knihovny (viz scanner.zapis_snimek) ---
+    "Růst knihovny": "Library growth",
+    "dopočteno": "reconstructed",
+    "změřeno": "measured",
+    "Do {datum} je křivka dopočítaná z data vzniku položek a posazená na první změřenou hodnotu: kdy co přibylo víme, ale minulost se popisuje dnešními velikostmi. Od té doby jde o denní snímky, tedy o to, co se skutečně změřilo.":
+        "Up to {datum} the curve is reconstructed from when the items were "
+        "created and anchored to the first measured value: we know when things "
+        "arrived, but the past is described with today's sizes. From then on "
+        "these are daily snapshots, that is, what was actually measured.",
+    "velikost knihovny den po dni": "the size of the library day by day",
+    "Velikost knihovny den po dni a kam to spěje.":
+        "The size of the library day by day, and where it is heading.",
+    "Přibylo za období": "Added over the period",
+    "položek": "items",
+    "Denně": "Per day",
+    "Místo dojde za": "Space runs out in",
+    "dnů": "days",
+    "volného místa": "free space",
+    "Za rok poroste na": "In a year it grows to",
+    "na volné místo aplikace nevidí":
+        "the application cannot see the free space",
+    "Zatím je málo dat – křivka dá smysl za pár dní. Snímek se zapisuje po každé synchronizaci knihovny.":
+        "Not enough data yet - the curve will mean something in a few days. "
+        "A snapshot is taken after every library sync.",
+
     # --- vlastni prehled (viz jellyscope/sekce.py) ---
     "Pravidelné hlídání zapneš a načasuješ v":
         "Regular checks are switched on and scheduled in",
@@ -1520,11 +1698,20 @@ EN: dict[str, str] = {
 # Díky tomu zůstávají volání `log.info(...)` čitelná a nikdo si při psaní
 # nové hlášky nemusí pamatovat na překlad.
 LOG_EN: dict[str, str] = {
+    "Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak":
+        "Jellyfin does not know /System/Storage (%s) - free space will be "
+        "determined some other way",
+    "misto z Jellyfinu se nepodarilo zjistit: %s":
+        "could not get the free space from Jellyfin: %s",
+    "upozorneni pres %s se nepodarilo poslat: %s: %s":
+        "could not send a notification through %s: %s: %s",
     "casova zona aplikace: %s": "application time zone: %s",
     "casovou zonu %s nejde na tomhle systemu nastavit procesu; vypis casu ji respektuje, deleni dnu v grafech ne":
         "the time zone %s cannot be set for the process on this system; times are shown in it, the split into days in charts is not",
     "jazyk odhadnut z nazvu souboru u %s polozek":
         "language guessed from the file name for %s items",
+    "snimek knihovny %s: %s polozek, %s bajtu":
+        "library snapshot %s: %s items, %s bytes",
     "rozsah z Jellyfinu doplnen u %s polozek":
         "dynamic range from Jellyfin filled in for %s items",
     "rozsah se z Jellyfinu doplnit nepodarilo: %s":

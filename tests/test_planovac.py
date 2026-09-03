@@ -106,9 +106,10 @@ def zapis_beh(kind: str, kdy_mistni: datetime) -> None:
 
 
 print("--- z čeho se skládá seznam úloh ---")
-check(set(tasks.TASKS) == {"sync", "recent", "tidy", "updates", "backup"},
-      f"pět úloh; analýza samostatná není, kontrola aktualizací ano "
-      f"({sorted(tasks.TASKS)})")
+check(set(tasks.TASKS) == {"sync", "recent", "tidy", "notifikace",
+                           "updates", "backup"},
+      f"šest úloh; analýza samostatná není, kontrola aktualizací "
+      f"a upozornění ano ({sorted(tasks.TASKS)})")
 check(SYNC.je_denni and ZALOHA.je_denni, "synchronizace a záloha běží v daný čas")
 check(not RECENT.je_denni, "nově přidané tituly zůstávají na minutách")
 

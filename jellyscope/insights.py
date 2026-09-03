@@ -124,7 +124,7 @@ def transcode_offenders(days: int, limit: int = 15) -> list[dict[str, Any]]:
                MAX(i.bitrate)                 AS bitrate
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
-        WHERE p.play_method = 'Transcode'
+        WHERE {stats.je_transcode('p.play_method')}
           AND p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
     GROUP BY {stats.SKUPINA_TITULU_KLIC}
@@ -152,10 +152,10 @@ def transcode_offenders(days: int, limit: int = 15) -> list[dict[str, Any]]:
 def transcode_reasons(days: int) -> list[dict[str, Any]]:
     """Proc se vlastne prepocitava. Jellyfin duvod hlasi - jen ho nikdo necte."""
     rows = db.query_all(
-        """
+        f"""
         SELECT transcode_reasons AS reasons, COUNT(*) AS plays
         FROM playback
-        WHERE play_method = 'Transcode'
+        WHERE {stats.je_transcode()}
           AND transcode_reasons IS NOT NULL AND transcode_reasons != ''
           AND started_at >= ? AND started_at < ?
         GROUP BY transcode_reasons

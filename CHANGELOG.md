@@ -6,6 +6,170 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.5.0
+
+### Added
+
+- **The library remembers what it looked like yesterday.** Until now
+  Jellyscope kept only the *current* state of the library - size, item
+  count, the mix of codecs - and had history for playback alone. A daily
+  snapshot is written after every successful library sync, and out of it
+  comes a curve of how the library grows, how much arrived over a period,
+  and where it is heading.
+
+  The estimate speaks in two ways, because free space is only knowable
+  where the application can see the files: "space runs out in N days" when
+  it can, and "in a year it grows to X" when it cannot. Promising the
+  first where only the second holds would be worse than saying nothing.
+
+  A falling or flat library gets no estimate at all - and nothing divides
+  by zero. It is on the Library page, which now carries the same period
+  filter as every other page - including a custom range - and the choice
+  made there holds across the application. In the custom overview the
+  section follows the period chosen there.
+
+  **The curve does not start on the day you upgrade.** Snapshots can only
+  be written from now on, but the past is already in the data: an item
+  carries the date it was created, and one that is gone from Jellyfin is
+  archived rather than deleted, with the last sync that still saw it. The
+  library before the first snapshot is reconstructed from those two, so
+  "how much did it grow over the year" has an answer today.
+
+  The reconstruction is drawn in its own colour and the chart says where
+  it ends, because it is not a measurement: it describes the past with
+  today's sizes, so a film re-encoded from 30 GB to 10 GB was always small
+  in it, and anything deleted before the first sync is not in it at all.
+  Its shape - when things arrived - is sound, so it is anchored to the
+  first measured value; otherwise there would be a step at the joint,
+  claiming the library lost half its size overnight.
+
+- **"Other" on the track combinations card opens.** The card shows the
+  four most common combinations and sums up the rest into a row that said
+  a quarter of the library was somewhere else and gave no way to look.
+  That row is now a link to a window with the complete list, plus a total,
+  so it is clear what the percentages are counted from. They are counted
+  from the same whole as on the card, so a share means the same thing in
+  both places.
+
+- **Two periods side by side.** "Compared to the previous period" has
+  been on the Overview for a long time, but the previous period is not
+  something you choose - it is the window immediately before the one you
+  picked. It cannot answer "was August better than December?".
+
+  The new Comparison tab takes any two periods and puts the same
+  statistics next to each other: watching, how the server delivered the
+  content, network, which language was watched in, how the library grew,
+  and the top titles and users of each period. Two things it refuses to
+  leave unsaid - that the periods overlap, so part of the playback is
+  counted in both columns; and that they are not the same length, where a
+  total will favour the longer one almost every time, which is why the
+  daily average sits right under it.
+
+  Languages carry their share next to the hours, because a share is the
+  one honest number when the periods differ in length: a year holds more
+  hours of everything than August, but the ratio of Czech to English does
+  not move with it. A language present in only one of the periods is
+  listed anyway - "in December they started watching in Slovak" is the
+  answer people come here for.
+
+  Library growth is compared from the daily snapshots, so it only works
+  for periods where snapshots exist. Where they do not, the page says so
+  instead of showing zeros: "nothing was added" and "we do not know" are
+  different statements.
+
+  A difference between two percentages is stated in percentage points:
+  "from 12 % to 18 %" is +6 points, not +50 %.
+
+- **Settings has a dropdown on a phone.** Eleven tabs wrapped into six
+  rows - 207 px of links before the first setting was visible. The list
+  now takes one row. Only the tabs the dropdown replaces are hidden; the
+  three on a library detail have no dropdown and stay as they are.
+
+- **A pass over the whole application on a phone.** Measured at 390 px
+  in a real browser, not guessed at. Nothing overflowed sideways, but four
+  things were wrong and are now fixed.
+
+  The menu is behind a burger. Ten items were 794 px wide in a 390 px
+  window, so two were visible and the rest needed a sideways scroll that
+  nothing hinted at; the button now carries the name of the page you are
+  on. It is a checkbox and a label rather than a script, so the menu opens
+  even if the script does not run - it is the only way to the other pages.
+
+  Chart axis labels were rendering at 4.6 px. An SVG has a fixed 760-unit
+  viewBox and stretches to the width available, so the text shrinks with
+  it; on a narrow screen the labels are now larger in viewBox units and
+  come out at about 9 px.
+
+  The Comparison table turned into a list of blocks. Four columns do not
+  fit on 350 px, and the horizontal scroll pushed the Difference column
+  off the screen - the one thing the page exists for.
+
+  History rows were 120 px tall and a third of the table was visible.
+  The columns that do not fit are hidden on a phone, which brought the
+  rows down to 39 px.
+
+- **Notifications.** Jellyscope is passive: you open it when something
+  interests you. The collector, though, asks Jellyfin every few seconds,
+  and when its token expires the application keeps running, the pages look
+  normal and history quietly stops. You find out three weeks later from a
+  hole in the chart - and that hole is mostly permanent, because an
+  imported history carries neither the track language nor the bitrate.
+
+  Settings has a Notifications section: first the channels (SMTP, Discord,
+  Telegram), then what to speak up about. Each channel has a Try button,
+  because otherwise the configuration is only ever verified by something
+  going wrong - which is exactly the moment it has to work.
+
+  Three things can be switched on, and no more: the collector runs but
+  collects nothing; the disk is filling up (from the library growth, so
+  only where the application can see the files); and a weekly summary,
+  which is the one that is not a fault. There is deliberately no "a new
+  version is out" - it is in the interface already, and as a message it is
+  the kind of noise that makes people stop reading the channel, and then
+  miss the first item.
+
+  A message goes out **on change only**, including when it starts working
+  again. A watchdog that repeats itself every fifteen minutes gets muted
+  on the first day.
+
+  These notifications only report on what happens inside Jellyscope: if
+  Jellyscope is not running, neither are they. The page says so rather
+  than letting you find out the hard way, and points at a watchdog like
+  Uptime Kuma for the other question. Passwords, webhooks and tokens never
+  travel back into the page, and an empty field leaves a stored one alone.
+
+### Fixed
+
+- **A bot token could end up on the screen.** An error from the HTTP
+  client carries the whole address in it - and for Telegram the address
+  contains the bot token, while for Discord the address *is* the webhook.
+  That message is stored and shown in Settings, so a failed send put the
+  token on the page. Error text is now masked against the stored secrets,
+  and the HTTP client's own logger is pinned at WARNING: it logs every
+  request with the full address, which is harmless until somebody starts
+  the server with --log-level debug.
+
+- **A file named "@everyone" no longer pings a Discord channel.** Titles
+  from the library travel into the message, and a name is a name, not an
+  instruction. Mentions are switched off for the whole message; the text
+  itself is not trimmed.
+
+- **Transcode was counted two different ways on the same page.** The
+  delivery chart recognises a transcode by the start of the name, because
+  imported history (Playback Reporting) writes values like "Transcode
+  (v:h264 a:direct)". The transcode share, the per-user transcode hours
+  and the transcode pages matched the name exactly, so for an imported
+  history they could show "Transcode: 1 h" and "Transcode share: 0 %"
+  right next to each other. There is now one condition for all of them.
+
+- **Free space was measured on the wrong disk under PostgreSQL.** To find
+  out how much room is left, Jellyscope looks at the largest file in the
+  library and asks about the disk it sits on. SQLite sorts NULLs last on a
+  descending sort, PostgreSQL puts them first - so on PostgreSQL the query
+  returned the first file of unknown size instead of the largest one, and
+  the estimate could describe a different disk entirely. Nothing crashed,
+  which is what made it worth catching.
+
 ## 1.4.4
 
 ### Fixed

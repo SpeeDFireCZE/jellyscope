@@ -13,6 +13,8 @@ Spuštění:
 
 from __future__ import annotations
 
+import ast
+import re
 import sys
 from pathlib import Path
 
@@ -138,6 +140,35 @@ REAL_QUERIES = [
     WHERE is_missing = 0 AND audio_languages NOT LIKE '%cs%'
     """,
     "SELECT (julianday('now') - julianday(?)) * 24 * 60",
+    # Denní snímek knihovny: zápis přes ON CONFLICT i čtení za období.
+    """
+    INSERT INTO library_snapshot
+        (den, polozek, filmu, epizod, velikost, uhd, hdr,
+         bez_technik, volne_misto, zapsano_v)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT (den) DO UPDATE SET
+        polozek = excluded.polozek, velikost = excluded.velikost
+    """,
+    """
+    SELECT den, polozek, velikost, volne_misto FROM library_snapshot
+    WHERE den >= ? AND den <= ? ORDER BY den
+    """,
+    # Podminka "tohle je prepocet" - hleda podle zacatku nazvu, takze nese
+    # procento uvnitr retezce. Viz stats.je_transcode().
+    """
+    SELECT COALESCE(SUM(CASE WHEN play_method LIKE 'Transcode%'
+                        THEN watched_seconds ELSE 0 END), 0) AS transcoded
+    FROM playback WHERE started_at >= ? AND started_at < ?
+    """,
+    # Dopoctena minulost knihovny - viz stats._dopoctena_krivka().
+    """
+    SELECT substr(date_created, 1, 10) AS vznik,
+           CASE WHEN is_missing = 1 THEN substr(synced_at, 1, 10) END AS naposledy,
+           COALESCE(size_bytes, 0) AS velikost,
+           type
+      FROM items
+     WHERE date_created IS NOT NULL AND date_created != ''
+    """,
 ]
 
 BANNED = ["datetime('now'", "julianday", "strftime", "'localtime'",
@@ -381,6 +412,21 @@ check(not spatne, f"v schema_postgres.sql; chybné: {spatne}")
 nalezeno = len(re.findall(r"(?mi)^\s*\w*ticks\w*\s+BIGINT", schema_pg))
 check(nalezeno >= 3, f"a je jich tam dost ({nalezeno})")
 
+# Totéž platí pro bajty. INTEGER je v PostgreSQL čtyřbajtový, takže se do
+# něj vejde 2,1 GB - knihovna ani volné místo se tam nevejdou. SQLite tuhle
+# past nemá (INTEGER je tam osmibajtový), takže se pozná až na Postgresu.
+BAJTOVE = ("size_bytes", "velikost", "volne_misto", "bitrate")
+spatne_bajty = [
+    radek.strip()
+    for radek in schema_pg.splitlines()
+    if re.match(r"^\s*(" + "|".join(BAJTOVE) + r")\s+", radek)
+    and "BIGINT" not in radek.upper()
+]
+check(not spatne_bajty, f"bajtové sloupce jsou BIGINT; chybné: {spatne_bajty}")
+check(len([r for r in schema_pg.splitlines()
+           if re.match(r"^\s*(" + "|".join(BAJTOVE) + r")\s+", r)]) >= 6,
+      "a hledá se jich dost")
+
 spatne_migrace = [
     f"{tabulka}.{sloupec}"
     for tabulka, sloupce in db.MIGRATIONS.items()
@@ -580,6 +626,128 @@ for uzel in _ast.walk(_ast.parse(zdroj_collector)):
     check(prosel, f"{druh} na řádku {uzel.lineno} projde přes psycopg")
 
 check(zapisu >= 2, f"našly se oba zápisy sběrače ({zapisu})")
+
+
+# ---------------------------------------------------------------------------
+# Sestupné řazení podle sloupce, který smí být NULL
+# ---------------------------------------------------------------------------
+# SQLite považuje NULL za nejmenší hodnotu, takže u DESC skončí nakonec.
+# PostgreSQL má u DESC výchozí NULLS FIRST a dá je na začátek. U dotazu,
+# který bere JEDEN řádek, to není kosmetika - vrátí se jiný řádek. Přesně
+# takhle by se volné místo měřilo na disku prvního nezměřeného souboru.
+
+def _nullovatelne_sloupce() -> set[str]:
+    """Sloupce ze schématu, které smí být NULL."""
+    text = (PROJECT / "jellyscope" / "schema.sql").read_text(encoding="utf-8")
+    text = re.sub(r"--[^\n]*", "", text)          # komentáře pryč
+    volne: set[str] = set()
+    for telo in re.findall(r"CREATE TABLE[^(]*\((.*?)\n\);", text, re.S):
+        for radek in telo.split("\n"):
+            radek = radek.strip().rstrip(",")
+            m = re.match(r"^([a-z_][a-z0-9_]*)\s+(TEXT|INTEGER|REAL|BLOB|BIGINT)",
+                         radek, re.I)
+            if m and not re.search(r"NOT NULL|PRIMARY KEY", radek, re.I):
+                volne.add(m.group(1).lower())
+    return volne
+
+
+def _terminy(vyraz: str) -> list[str]:
+    """Rozdělí ORDER BY na termíny; čárky uvnitř závorek nedělí."""
+    terminy: list[str] = []
+    hloubka = 0
+    kus = ""
+    for znak in vyraz:
+        if znak == "(":
+            hloubka += 1
+        elif znak == ")":
+            hloubka -= 1
+        if znak == "," and hloubka == 0:
+            terminy.append(kus)
+            kus = ""
+        else:
+            kus += znak
+    terminy.append(kus)
+    return [t.strip() for t in terminy if t.strip()]
+
+
+def _sql_z_volani(uzel: ast.Call) -> str:
+    """Text dotazu z prvního argumentu - i když je poskládaný z kusů."""
+    kusy: list[str] = []
+    for arg in uzel.args[:1]:
+        for n in ast.walk(arg):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str):
+                kusy.append(n.value)
+    return " ".join(kusy)
+
+
+def _rizikova_razeni(zdroj: str) -> list[str]:
+    """Dotazy na jeden řádek řazené sestupně podle nullovatelného sloupce."""
+    volne = _nullovatelne_sloupce()
+    nalezy: list[str] = []
+    for uzel in ast.walk(ast.parse(zdroj)):
+        if not isinstance(uzel, ast.Call):
+            continue
+        jmeno = (uzel.func.attr if isinstance(uzel.func, ast.Attribute)
+                 else getattr(uzel.func, "id", ""))
+        if jmeno not in ("query_one", "query_value"):
+            continue
+        sql = _sql_z_volani(uzel)
+        for vyraz in re.findall(r"ORDER BY\s+(.+?)(?:\s+LIMIT\b|$)", sql, re.I | re.S):
+            for termin in _terminy(vyraz):
+                if not re.search(r"\bDESC\b", termin, re.I):
+                    continue
+                if re.search(r"COALESCE|NULLS", termin, re.I):
+                    continue
+                sloupec = re.sub(r"\bDESC\b", "", termin, flags=re.I).strip()
+                sloupec = sloupec.split(".")[-1].strip().lower()
+                if sloupec in volne:
+                    nalezy.append(f"řádek {uzel.lineno}: ORDER BY {termin.strip()}")
+    return nalezy
+
+
+print()
+print('--- podmínka „tohle je přepočet“ projde překladem ---')
+# Nese procento uvnitř řetězce. Kdyby se nezdvojilo, psycopg by ho četl
+# jako začátek zástupného znaku a dotaz by spadl - a spadl by až na
+# PostgreSQL, na SQLite se nic nestane.
+from jellyscope import stats as _stats  # noqa: E402
+
+for sloupec in ("play_method", "p.play_method"):
+    prelozene = pg(f"SELECT 1 WHERE {_stats.je_transcode(sloupec)}")
+    check("'Transcode%%'" in prelozene,
+          f"procento je zdvojené ({sloupec}): {prelozene[-24:]}")
+    check("ILIKE" in prelozene, f"a LIKE se přeložilo na ILIKE ({sloupec})")
+
+# Past: kdyby se podmínka psala napevno, tenhle test by nic nehlídal.
+check(_stats.je_transcode().startswith("play_method LIKE 'Transcode"),
+      "podmínka má tvar, na který test spoléhá")
+# A hlavně: nikde se transcode nesmí hledat přesnou shodou. Graf doručení
+# ho hledá podle začátku (kvůli importu "Transcode (v:h264 a:direct)")
+# a druhé pravidlo by znamenalo dvě různá čísla na jedné stránce.
+presna_shoda = []
+for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+    for cislo, radek in enumerate(soubor.read_text(encoding="utf-8").splitlines(), 1):
+        if re.search(r"play_method\s*=\s*'Transcode'", radek):
+            presna_shoda.append(f"{soubor.name}:{cislo}")
+check(not presna_shoda, f"nikde se nehledá přesnou shodou: {presna_shoda}")
+
+print()
+print("--- jeden řádek se nebere podle sloupce, který smí být NULL ---")
+spatne: list[str] = []
+for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+    for nalez in _rizikova_razeni(soubor.read_text(encoding="utf-8")):
+        spatne.append(f"{soubor.name} {nalez}")
+check(not spatne, "žádné rizikové řazení " + (", ".join(spatne) or "(čisto)"))
+
+# Past: bez tohohle by test prošel i nad rozbitým kódem.
+past = _rizikova_razeni(
+    'db.query_one("SELECT path FROM items ORDER BY size_bytes DESC")')
+check(len(past) == 1, f"a chybu umí najít ({len(past)})")
+cisto = _rizikova_razeni(
+    'db.query_one("SELECT path FROM items ORDER BY COALESCE(size_bytes, 0) DESC")')
+check(not cisto, "COALESCE projde")
+klic = _rizikova_razeni('db.query_one("SELECT id FROM items ORDER BY id DESC")')
+check(not klic, "sloupec, který NULL být nesmí, projde taky")
 
 print()
 print("HOTOVO - chyb:", failures)

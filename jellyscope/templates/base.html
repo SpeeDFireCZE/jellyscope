@@ -43,23 +43,60 @@
             <span>Jellyscope</span>
         </a>
 
-        <nav class="nav">
-            {% set path = request.url.path %}
-            {# Vlastní přehled stojí nad Přehledem - je to první, co člověk
-               po přihlášení uvidí. V menu je jen tehdy, když je zapnutý
-               A něco v něm je: zapnutá prázdná záložka by byla horší než
-               žádná. #}
-            {% if vlastni_prehled %}
-            <a href="/dashboard" class="{{ 'active' if path.startswith('/dashboard') }}">{{ _("Vlastní přehled") }}</a>
+        {# Položky menu na jednom místě: kreslí se z nich jak seznam, tak
+           název aktuální stránky na tlačítku burgeru. Dvě kopie by se
+           rozešly a tlačítko by hlásilo jinou stránku, než která je
+           otevřená.
+
+           Třetí hodnota je n-tice předpon, které se počítají za tutéž
+           sekci - detail položky patří ke Knihovně, i když je na /item.
+           Prázdná n-tice znamená „jen přesná shoda" (Přehled na „/",
+           jinak by svítil pořád). #}
+        {% set path = request.url.path %}
+        {% set polozky = [] %}
+        {# Vlastní přehled stojí nad Přehledem - je to první, co člověk
+           po přihlášení uvidí. V menu je jen tehdy, když je zapnutý
+           A něco v něm je: zapnutá prázdná záložka by byla horší než
+           žádná. #}
+        {% if vlastni_prehled %}
+            {% set zahod = polozky.append(("/dashboard", _("Vlastní přehled"), ("/dashboard",))) %}
+        {% endif %}
+        {% set zahod = polozky.append(("/", _("Přehled"), ())) %}
+        {# Hned za Přehledem: je to tentýž pohled, jen za dvě období. #}
+        {% set zahod = polozky.append(("/srovnani", _("Srovnání"), ("/srovnani",))) %}
+        {% set zahod = polozky.append(("/insights", _("Zjištění"), ("/insights",))) %}
+        {% set zahod = polozky.append(("/languages", _("Jazyky"), ("/languages",))) %}
+        {% set zahod = polozky.append(("/network", _("Síť"), ("/network",))) %}
+        {% set zahod = polozky.append(("/library", _("Knihovna"), ("/library", "/item"))) %}
+        {% set zahod = polozky.append(("/users", _("Uživatelé"), ("/users",))) %}
+        {% set zahod = polozky.append(("/history", _("Historie"), ("/history",))) %}
+        {% set zahod = polozky.append(("/settings", _("Nastavení"), ("/settings",))) %}
+
+        {% set otevrena = namespace(nazev=_("Menu")) %}
+        {% for adresa, nazev, predpony in polozky %}
+            {% if (path.startswith(predpony) if predpony else path == adresa) %}
+                {% set otevrena.nazev = nazev %}
             {% endif %}
-            <a href="/"          class="{{ 'active' if path == '/' }}">{{ _("Přehled") }}</a>
-            <a href="/insights"  class="{{ 'active' if path.startswith('/insights') }}">{{ _("Zjištění") }}</a>
-            <a href="/languages" class="{{ 'active' if path.startswith('/languages') }}">{{ _("Jazyky") }}</a>
-            <a href="/network" class="{{ 'active' if path.startswith('/network') }}">{{ _("Síť") }}</a>
-            <a href="/library"   class="{{ 'active' if path.startswith('/library') or path.startswith('/item') }}">{{ _("Knihovna") }}</a>
-            <a href="/users"     class="{{ 'active' if path.startswith('/users') }}">{{ _("Uživatelé") }}</a>
-            <a href="/history"   class="{{ 'active' if path.startswith('/history') }}">{{ _("Historie") }}</a>
-            <a href="/settings"  class="{{ 'active' if path.startswith('/settings') }}">{{ _("Nastavení") }}</a>
+        {% endfor %}
+
+        {# Burger. Zaškrtávátko se štítkem, ne tlačítko s JavaScriptem:
+           menu musí jít otevřít i tehdy, když skript neproběhne. Na
+           desktopu se štítek schová a seznam je vidět pořád, takže se
+           tam nic nemění.
+
+           Na tlačítku stojí jméno otevřené stránky - jinak by z menu
+           schovaného pod ikonou nešlo poznat, kde člověk je. #}
+        <input type="checkbox" id="menu-prepinac" class="menu-prepinac" hidden>
+        <label class="menu-tlacitko" for="menu-prepinac">
+            <span class="menu-carky" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>{{ otevrena.nazev }}</span>
+        </label>
+
+        <nav class="nav">
+            {% for adresa, nazev, predpony in polozky %}
+                <a href="{{ adresa }}"
+                   class="{{ 'active' if (path.startswith(predpony) if predpony else path == adresa) }}">{{ nazev }}</a>
+            {% endfor %}
         </nav>
 
         <div class="sidebar-foot">
@@ -461,8 +498,14 @@
         if (!tlacitko) { return; }
         var form = tlacitko.closest("form");
         if (!form) { return; }
-        form.querySelector('input[name="od"]').value = tlacitko.dataset.obdobiOd;
-        form.querySelector('input[name="do"]').value = tlacitko.dataset.obdobiDo;
+        // Pole se hledají podle data-pole, ne podle name: na Srovnání mají
+        // obě období vlastní předponu (a_od, b_od), aby se v adrese
+        // nepřebila, a hledání podle jména by tam nenašlo nic.
+        var od = form.querySelector('[data-pole="od"]');
+        var doPole = form.querySelector('[data-pole="do"]');
+        if (!od || !doPole) { return; }
+        od.value = tlacitko.dataset.obdobiOd;
+        doPole.value = tlacitko.dataset.obdobiDo;
     });
 
     // ------------------------------------------------------------------

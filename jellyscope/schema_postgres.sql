@@ -186,18 +186,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_playback_session_active
     ON playback (session_key) WHERE is_active = 1;
 
 
--- Vlastni prehled: ktere sekce a v jakem poradi.
---
--- `account_id` je pripravene na pozdejsi uzivatelska nastaveni. Dnes je
--- vsude NULL = spolecne rozvrzeni serveru; az bude cim ho prebit, pribudou
--- radky s konkretnim uctem. Viz sekce.nacti_rozvrzeni().
-CREATE TABLE IF NOT EXISTS dashboard_layout (
-    account_id  INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    sekce       TEXT    NOT NULL,
-    poradi      INTEGER NOT NULL,
-    sirka       TEXT                -- tretina / pul / cela; prazdne = jak to ma sekce v registru
-);
-
 CREATE TABLE IF NOT EXISTS accounts (
     id            BIGSERIAL PRIMARY KEY,
     username      TEXT NOT NULL,
@@ -211,6 +199,47 @@ CREATE TABLE IF NOT EXISTS accounts (
 -- pismeny, takze "Petr" a "petr" je tentyz ucet.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_username
     ON accounts (LOWER(username));
+
+
+-- Vlastni prehled: ktere sekce a v jakem poradi.
+--
+-- `account_id` je pripravene na pozdejsi uzivatelska nastaveni. Dnes je
+-- vsude NULL = spolecne rozvrzeni serveru; az bude cim ho prebit, pribudou
+-- radky s konkretnim uctem. Viz sekce.nacti_rozvrzeni().
+--
+-- AZ ZA `accounts`: odkazuje se na ni, a PostgreSQL cizi klic na jeste
+-- neexistujici tabulku odmitne. Na SQLite by to proslo, takze by se to
+-- naslo az u nekoho s cerstvou PostgreSQL databazi.
+CREATE TABLE IF NOT EXISTS dashboard_layout (
+    account_id  INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    sekce       TEXT    NOT NULL,
+    poradi      INTEGER NOT NULL,
+    sirka       TEXT                -- tretina / pul / cela; prazdne = jak to ma sekce v registru
+);
+
+
+-- Denni snimek knihovny.
+--
+-- Jellyscope si jinak pamatuje jen SOUCASNY stav: velikost, pocet polozek,
+-- pomer kodeku. Historii ma vyhradne prehravani, takze na otazku "jak nam
+-- knihovna roste" nebylo z ceho odpovedet. Jeden radek na den staci -
+-- knihovna se behem dne nemeni tolik, aby se vyplatilo merit castejí.
+--
+-- Zapisuje se po uspesne synchronizaci (viz scanner.zapis_snimek), takze
+-- na to neni potreba dalsi uloha. Tyz den se prepisuje: platí posledni
+-- znamy stav dne, ne prvni.
+CREATE TABLE IF NOT EXISTS library_snapshot (
+    den            TEXT PRIMARY KEY,   -- YYYY-MM-DD v zone aplikace
+    polozek        INTEGER NOT NULL,
+    filmu          INTEGER NOT NULL,
+    epizod         INTEGER NOT NULL,
+    velikost       BIGINT  NOT NULL,   -- bajty, soucet za vsechny knihovny
+    uhd            INTEGER NOT NULL,   -- kolik je 4K
+    hdr            INTEGER NOT NULL,   -- HDR i Dolby Vision dohromady
+    bez_technik    INTEGER NOT NULL,   -- polozky bez technickych dat
+    volne_misto    BIGINT,             -- na disku s knihovnou; NULL = nevime
+    zapsano_v      TEXT NOT NULL
+);
 
 
 CREATE TABLE IF NOT EXISTS settings (

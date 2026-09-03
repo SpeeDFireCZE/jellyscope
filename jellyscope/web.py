@@ -26,6 +26,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
@@ -1180,6 +1181,91 @@ def dashboard(request: Request, days: Optional[int] = None, kind: Optional[str] 
     ))
 
 
+
+# ---------------------------------------------------------------------------
+# Srovnani dvou obdobi
+# ---------------------------------------------------------------------------
+#
+# Vlastni pamet, ne ta spolecna: stranka ma obdobi dve a spolecny filtr
+# nese jedno. Kdyby si bralo to spolecne, prepnuti tady by prehodilo
+# obdobi i na vsech ostatnich strankach - a naopak.
+SROVNANI_A_KEY = "srovnani_a"
+SROVNANI_B_KEY = "srovnani_b"
+
+
+def _obdobi_srovnani(request: Request, klic: str, days: Optional[int],
+                     od: Optional[str], do: Optional[str], vychozi: Any) -> Any:
+    """Jedno ze dvou obdobi na strance Srovnani.
+
+    Chova se jako `_days()`, jen si pamatuje pod vlastnim klicem a nezna
+    vyber tazenim v grafu - na teto strance zadny graf k tazeni neni.
+    """
+    if od or do:
+        obdobi = stats.obdobi_od_do(_datum_z_textu(od), _datum_z_textu(do))
+        if obdobi is not None:
+            request.session[klic] = _obdobi_do_session(obdobi)
+            return obdobi
+
+    if days in ALLOWED_DAYS:
+        request.session[klic] = int(days)
+        return int(days)
+
+    zapamatovane = request.session.get(klic)
+    if isinstance(zapamatovane, dict):
+        obdobi = stats.obdobi_od_do(zapamatovane.get("od"), zapamatovane.get("do"))
+        if obdobi is not None:
+            return obdobi
+    if zapamatovane in ALLOWED_DAYS:
+        return int(zapamatovane)
+
+    return vychozi
+
+
+def _dotaz_obdobi(predpona: str, zadani: Any) -> dict[str, str]:
+    """Obdobi jako dvojice do adresy - aby odkazy jednoho to druhe neztratily.
+
+    Kdyby v odkazu chybelo, vratilo by se pri kazdem prepnuti na to, co je
+    v pameti, a vyber druheho obdobi by pod rukama skakal.
+
+    Vraci se slovnik, ne hotovy retezec: sablona ho potrebuje dvakrat -
+    v adrese odkazu (`| urlencode`) a jako skryta pole formulare.
+    """
+    if isinstance(zadani, stats.Obdobi):
+        od = (zadani.od_mistni or zadani.od)[:10]
+        do = _posledni_den(zadani.do_mistni or zadani.do)
+        return {f"{predpona}_od": od, f"{predpona}_do": do}
+    return {f"{predpona}_days": str(int(zadani))}
+
+
+@app.get("/srovnani", response_class=HTMLResponse)
+def srovnani(request: Request,
+             a_days: Optional[int] = None, a_od: Optional[str] = None,
+             a_do: Optional[str] = None,
+             b_days: Optional[int] = None, b_od: Optional[str] = None,
+             b_do: Optional[str] = None,
+             account: dict[str, Any] = Depends(require_login)):
+    """Dve libovolna obdobi vedle sebe.
+
+    Vychozi dvojice je to, co uz clovek zna z Prehledu: zvolene obdobi
+    a stejne dlouhe okno pred nim. Stranka tak neco ukazuje hned a teprve
+    kdo chce "srpen versus prosinec", saha na prepinace.
+    """
+    prvni = _obdobi_srovnani(request, SROVNANI_A_KEY, a_days, a_od, a_do,
+                             vychozi=_days(request, None))
+    druhe = _obdobi_srovnani(request, SROVNANI_B_KEY, b_days, b_od, b_do,
+                             vychozi=stats.predchozi(prvni))
+
+    return templates.TemplateResponse(request, "srovnani.html", _context(
+        request, account,
+        srovnani=stats.srovnani(prvni, druhe),
+        obdobi_a=_obdobi_do_sablony(prvni),
+        obdobi_b=_obdobi_do_sablony(druhe),
+        # Do odkazu jednoho prepinace patri stav toho druheho.
+        dotaz_a=_dotaz_obdobi("a", prvni),
+        dotaz_b=_dotaz_obdobi("b", druhe),
+    ))
+
+
 @app.get("/partials/top-items", response_class=HTMLResponse)
 def top_items_partial(
     request: Request,
@@ -1293,15 +1379,25 @@ def daily_partial(
 
 
 @app.get("/library", response_class=HTMLResponse)
-def library_index(request: Request, account: dict[str, Any] = Depends(require_login)):
-    """Rozcestnik: dlazdice jednotlivych knihoven z Jellyfinu."""
+def library_index(request: Request, days: Optional[int] = None,
+                  od: Optional[str] = None, do: Optional[str] = None,
+                  account: dict[str, Any] = Depends(require_login)):
+    """Rozcestnik: dlazdice jednotlivych knihoven z Jellyfinu.
+
+    Obdobi je tytez jako vsude jinde - jedna volba pro celou aplikaci,
+    vcetne vlastniho rozmezi. Tyka se jedineho grafu na strance (rust
+    knihovny); dlazdice nad nim jsou stav, ne obdobi, a rikaji to samy.
+    """
+    days = _days(request, days, od, do)
     return templates.TemplateResponse(request, "library_index.html", _context(
         request, account,
+        days=days,
         libraries=stats.library_cards(),
         coverage=stats.tech_coverage(),
         codecs=stats.codec_breakdown(),
         resolutions=stats.resolution_breakdown(),
         ranges=stats.video_range_breakdown(),
+        **sekce.data_rustu(days),
     ))
 
 
@@ -1828,10 +1924,17 @@ def history(
 # vsechno naraz, vcetne poctu radku v databazi a vypisu zaloh z disku.
 #
 # Ted se nacita jen to, co patri k otevrene sekci.
+def _dny_v_tydnu() -> list[tuple[int, str]]:
+    """(cislo, nazev) pro vyber dne - pondeli je nula, jako v Pythonu."""
+    jmena = ("pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle")
+    return [(cislo, _t(jmeno)) for cislo, jmeno in enumerate(jmena)]
+
+
 SETTINGS_SECTIONS = [
     ("jellyfin", "Jellyfin", True),
     ("data", "Sběr dat", True),
     ("tasks", "Úlohy a zálohy", True),
+    ("notifications", "Upozornění", True),
     ("import", "Import historie", True),
     ("database", "Databáze", True),
     ("accounts", "Účty", False),      # False = vidí i čtenář
@@ -1861,7 +1964,17 @@ def settings_page(
 
     # Šabloně dáváme nastavení BEZ tajemství - API klíč se do stránky
     # nesmí dostat ani nedopatřením.
-    context: dict[str, Any] = {"section": section, "settings": db.get_public_settings()}
+    # Nabidka sekci se kresli DVAKRAT - jako zalozky na desktopu a jako
+    # rozbalovaci seznam na mobilu - a proto se sklada tady, jednou.
+    # Dva rucne psane seznamy by se casem rozesly a v jednom by nova
+    # sekce chybela.
+    context: dict[str, Any] = {
+        "section": section,
+        "settings": db.get_public_settings(),
+        "sekce_nabidka": [(klic, _t(nazev)) for klic, nazev, jen_admin
+                          in SETTINGS_SECTIONS
+                          if account["is_admin"] or not jen_admin],
+    }
 
     if section == "jellyfin":
         # Když uživatel jen testoval spojení, nastavení se neuložilo -
@@ -1877,13 +1990,42 @@ def settings_page(
             scan_running=scanner.is_scan_running(),
             stop_pending=scanner.stop_requested(),
         )
+    elif section == "notifications":
+        from . import notifikace
+
+        # Ulozena tajemstvi se do stranky nevypisuji (db.TAJNA_NASTAVENI),
+        # ale formular ma poznat, ze uz neco ulozeneho JE - jinak by
+        # prazdne pole vypadalo jako nenastaveno.
+        context.update(
+            notifikace=notifikace.stav(),
+            ma_smtp_heslo=bool(db.get_setting(
+                notifikace.klic("smtp", "heslo"), "").strip()),
+            ma_discord=bool(db.get_setting(
+                notifikace.klic("discord", "webhook"), "").strip()),
+            ma_telegram=bool(db.get_setting(
+                notifikace.klic("telegram", "token"), "").strip()),
+            nazvy_kanalu={"smtp": _t("e-mail"), "discord": "Discord",
+                          "telegram": "Telegram"},
+            dny_v_tydnu=_dny_v_tydnu(),
+        )
     elif section == "data":
         from . import probe  # az tady, at start aplikace nic nezdrzuje
         # Karta s analýzou souborů se přestěhovala mezi Úlohy - tahle
         # sekce už jen vybírá zdroj dat, takže nepotřebuje ani pokrytí,
         # ani stav posledního běhu.
+        zdroj = db.get_setting(scanner.ZDROJ_KLIC, "")
         context.update(
             ffprobe_found=probe.find_ffprobe(db.get_setting("ffprobe_path")),
+            # Kapacita se zadava v GB, uklada v bajtech - nikdo nepise
+            # dvanactimistne cislo.
+            kapacita_gb=db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0)
+                        // 1024 ** 3,
+            misto_zdroj=zdroj,
+            zdroj_popis={
+                "rucne": _t("volné místo se počítá ze zadané kapacity"),
+                "jellyfin": _t("volné místo hlásí Jellyfin"),
+                "disk": _t("volné místo se čte z disku pod aplikací"),
+            }.get(zdroj, ""),
         )
     elif section == "tasks":
         context.update(
@@ -1994,6 +2136,7 @@ def settings_save(
     request: Request,
     tech_source: str = Form("jellyfin"),
     poll_interval: str = Form("10"),
+    library_capacity_gb: str = Form("0"),
     ffprobe_path: str = Form(""),
     ffprobe_concurrency: str = Form("3"),
     path_mappings: str = Form("[]"),
@@ -2009,6 +2152,9 @@ def settings_save(
     # Cas synchronizace knihovny se sem uz nepise - patri k naplanovanym ulohám
     # a meni se ve vlastnim formulari. Kdyby ho ukladaly oba, prepsaly by
     # si hodnotu navzajem.
+    # Kapacita se zadava v GB. Nula znamena "zjisti si to sam".
+    db.set_setting(scanner.KAPACITA_KLIC,
+                   str(int(_clamp(library_capacity_gb, 0, 10 ** 9, 0)) * 1024 ** 3))
     db.set_setting("ffprobe_concurrency", _clamp(ffprobe_concurrency, 1, 16, 3))
     db.set_setting("ffprobe_path", ffprobe_path.strip())
 
@@ -2287,6 +2433,129 @@ def settings_database(
     )
     return RedirectResponse("/settings?section=database", status_code=303)
 
+
+
+# ---------------------------------------------------------------------------
+# Upozorneni
+# ---------------------------------------------------------------------------
+
+def _uloz_tajemstvi(klic: str, hodnota: str) -> None:
+    """Ulozi heslo/token jen tehdy, kdyz neco prislo.
+
+    Do formulare se ulozena hodnota nevypisuje (viz db.TAJNA_NASTAVENI),
+    takze prazdne pole znamena "nech, jak bylo" - jinak by kazde ulozeni
+    ostatnich poli heslo smazalo.
+    """
+    hodnota = (hodnota or "").strip()
+    if hodnota:
+        db.set_setting(klic, hodnota)
+
+
+@app.post("/settings/notifications")
+def settings_notifications(
+    request: Request,
+    smtp_enabled: str = Form(""),
+    smtp_host: str = Form(""),
+    smtp_port: str = Form("587"),
+    smtp_uzivatel: str = Form(""),
+    smtp_heslo: str = Form(""),
+    smtp_odesilatel: str = Form(""),
+    smtp_komu: str = Form(""),
+    smtp_tls: str = Form(""),
+    discord_enabled: str = Form(""),
+    discord_webhook: str = Form(""),
+    telegram_enabled: str = Form(""),
+    telegram_token: str = Form(""),
+    telegram_chat: str = Form(""),
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Nastaveni kanalu, kterymi upozorneni chodi."""
+    from . import notifikace
+
+    db.set_setting(notifikace.klic("smtp", "enabled"), "1" if smtp_enabled else "0")
+    db.set_setting(notifikace.klic("smtp", "host"), smtp_host.strip())
+    db.set_setting(notifikace.klic("smtp", "port"),
+                   _clamp(smtp_port, 1, 65535, 587))
+    db.set_setting(notifikace.klic("smtp", "uzivatel"), smtp_uzivatel.strip())
+    _uloz_tajemstvi(notifikace.klic("smtp", "heslo"), smtp_heslo)
+    db.set_setting(notifikace.klic("smtp", "odesilatel"), smtp_odesilatel.strip())
+    db.set_setting(notifikace.klic("smtp", "komu"), smtp_komu.strip())
+    db.set_setting(notifikace.klic("smtp", "tls"), "1" if smtp_tls else "0")
+
+    db.set_setting(notifikace.klic("discord", "enabled"), "1" if discord_enabled else "0")
+    _uloz_tajemstvi(notifikace.klic("discord", "webhook"), discord_webhook)
+
+    db.set_setting(notifikace.klic("telegram", "enabled"),
+                   "1" if telegram_enabled else "0")
+    _uloz_tajemstvi(notifikace.klic("telegram", "token"), telegram_token)
+    db.set_setting(notifikace.klic("telegram", "chat"), telegram_chat.strip())
+
+    db.forget_settings()
+    request.session["flash"] = _t("Kanály uloženy.")
+    return RedirectResponse("/settings?section=notifications", status_code=303)
+
+
+@app.post("/settings/notifications/events")
+def settings_notification_events(
+    request: Request,
+    event_sberac: str = Form(""),
+    event_misto: str = Form(""),
+    event_souhrn: str = Form(""),
+    ticho_minut: str = Form(""),
+    misto_dnu: str = Form(""),
+    souhrn_den: str = Form("0"),
+    souhrn_hodina: str = Form("9"),
+    souhrn_minuta: str = Form("0"),
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Na co upozornovat a kdy."""
+    from . import notifikace
+
+    for udalost, hodnota in (("sberac", event_sberac), ("misto", event_misto),
+                             ("souhrn", event_souhrn)):
+        db.set_setting(notifikace.klic_udalosti(udalost), "1" if hodnota else "0")
+
+    db.set_setting("notify_ticho_minut",
+                   _clamp(ticho_minut, 5, 1440, notifikace.VYCHOZI_TICHO_MINUT))
+    db.set_setting("notify_misto_dnu",
+                   _clamp(misto_dnu, 1, 365, notifikace.VYCHOZI_MISTO_DNU))
+    db.set_setting("notify_souhrn_den", _clamp(souhrn_den, 0, 6, 0))
+    # Hodina a minuta chodí ze dvou polí; `_clamp` ohlídá rozsah a doplní
+    # nulu, `tasks.platny_cas` je poslední pojistka - do rozvrhu se nesmí
+    # dostat nic jiného než "HH:MM".
+    cas = (f"{int(_clamp(souhrn_hodina, 0, 23, 9)):02d}"
+           f":{int(_clamp(souhrn_minuta, 0, 59, 0)):02d}")
+    db.set_setting("notify_souhrn_cas", tasks.platny_cas(cas, "09:00"))
+
+    db.forget_settings()
+    request.session["flash"] = _t("Uloženo.")
+    return RedirectResponse("/settings?section=notifications", status_code=303)
+
+
+@app.post("/settings/notifications/test")
+async def settings_notification_test(
+    request: Request,
+    kanal: str = Form(""),
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Zkusebni zprava jednim kanalem.
+
+    Kanal se porovnava proti pevnemu seznamu - z formulare se do
+    odesilani nesmi dostat nic jineho.
+    """
+    from . import notifikace
+
+    if kanal not in notifikace.KANALY:
+        request.session["flash"] = _t("Neznámý kanál.")
+        return RedirectResponse("/settings?section=notifications", status_code=303)
+
+    vysledek = await notifikace.posli_zkusebni(kanal)
+    if vysledek.get("ok"):
+        request.session["flash"] = _t("Zkušební zpráva odeslána.")
+    else:
+        request.session["flash"] = _t("Nepodařilo se odeslat: {chyba}").format(
+            chyba=vysledek.get("chyba") or "?")
+    return RedirectResponse("/settings?section=notifications", status_code=303)
 
 @app.post("/settings/interface")
 def settings_interface(request: Request,
@@ -3098,6 +3367,10 @@ def languages_page(
         # Tohle je stav knihovny tady a ted - s obdobim nema nic spolecneho.
         library=langstats.library_languages(colours),
         combinations=langstats.language_combinations(),
+        # Úplný seznam pro okno za řádkem "Ostatní". Posílá se rovnou se
+        # stránkou: je to jedno GROUP BY nad tabulkou, kterou už stejně
+        # čteme, a doskakovat si pro to zvlášť by byl dotaz navíc za nic.
+        all_combinations=langstats.vsechny_kombinace(),
         undefined_items=langstats.undefined_language_items(),
         coverage=langstats.coverage(),
         # Kolik přehrávání se do čísel výše nepočítá, protože přišlo

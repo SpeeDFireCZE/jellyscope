@@ -1135,6 +1135,36 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     flex-wrap: wrap;
 }
 
+/* Rozcestník sekcí jako rozbalovací seznam. Na desktopu se nekreslí -
+   tam jsou záložky, ve kterých je vidět všechno naráz. */
+.tabs-vyber { display: none; }
+
+@media (max-width: 860px) {
+    /* Jedenáct záložek se na 390 px zalomí do šesti řádků: 207 px odkazů,
+       než člověk uvidí první nastavení. Seznam zabere jeden řádek.
+
+       Schovají se JEN záložky, které rozbalovací seznam nahrazuje - proto
+       sourozenecký selektor, ne prosté `.tabs`. Detail knihovny má taky
+       záložky, jenže tři a bez seznamu; ty by prostým pravidlem zmizely
+       a nebylo by se jak přepnout. */
+    .tabs-vyber + .tabs { display: none; }
+
+    .tabs-vyber {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .tabs-vyber label {
+        font-weight: 600;
+        font-size: 13.5px;
+        white-space: nowrap;
+    }
+
+    .tabs-vyber select { flex: 1; min-width: 0; }
+}
+
 .tabs a {
     padding: 8px 16px;
     text-decoration: none;
@@ -1338,6 +1368,12 @@ table.facts th {
 @media (max-width: 720px) {
     .item-layout { grid-template-columns: 1fr; }
     .item-poster { max-width: 180px; position: static; }
+
+    /* Sloupce, které se na úzkou obrazovku nevejdou. Osmisloupcová
+       historie byla v 316px okně široká 1007 px, takže byla vidět
+       třetina - a řádky měly 120 px, protože se dlouhý obsah lámal.
+       Zůstává kdy, kdo, co a jak dlouho; zbytek je na detailu. */
+    .sloupec-navic { display: none; }
 }
 
 /* --------------------------------------------------------------------- */
@@ -1369,6 +1405,94 @@ td {
 
 tbody tr:hover { background: var(--surface-2); }
 tbody tr:last-child td { border-bottom: none; }
+
+/* --------------------------------------------------------------------- */
+/* Srovnání dvou období                                                   */
+/* --------------------------------------------------------------------- */
+
+/* Dva přepínače vedle sebe. Pod sebou by vypadaly jako filtr a podfiltr;
+   vedle sebe je vidět, že jsou to dvě rovnocenné volby. */
+.srovnani-volby {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 24px;
+}
+
+/* První sloupec je popisek řádku, zbylé tři čísla. Bez pevné šířky by se
+   popisek roztáhl a čísla by se slepila u pravého okraje. */
+table.srovnani th:first-child,
+table.srovnani td:first-child { width: 34%; }
+
+/* .delta je jinak dlaždicový popisek pod číslem, takže má odsazení
+   shora. V buňce tabulky by od něj řádek povyrostl. */
+table.srovnani .delta {
+    justify-content: flex-end;
+    white-space: nowrap;
+    margin-top: 0;
+}
+
+@media (max-width: 780px) {
+    .srovnani-volby { grid-template-columns: minmax(0, 1fr); }
+
+    /* Na mobilu se ze srovnání stanou bloky, ne tabulka.
+       Čtyři sloupce se na 350 px nevejdou a vodorovný posuv odsune
+       z obrazovky sloupec Rozdíl - tedy to jediné, kvůli čemu se člověk
+       na tuhle stránku dívá. Popisek sloupce nese `data-popisek`,
+       protože hlavička tabulky tady zmizí. */
+    table.srovnani,
+    table.srovnani tbody,
+    table.srovnani tr,
+    table.srovnani td { display: block; width: auto; }
+
+    table.srovnani thead { display: none; }
+
+    table.srovnani tr {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    table.srovnani tr:last-child { border-bottom: none; }
+
+    table.srovnani td:first-child {
+        width: auto;
+        font-weight: 600;
+        color: var(--text-primary);
+        padding-bottom: 4px;
+        border-bottom: none;
+    }
+
+    /* Hodnota vpravo, popisek vlevo - čte se to jako řádek "Období A … 753 h". */
+    table.srovnani td:not(:first-child) {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        text-align: right;
+        border-bottom: none;
+        padding: 3px 0;
+    }
+
+    table.srovnani td[data-popisek]::before {
+        content: attr(data-popisek);
+        color: var(--text-secondary);
+        font-weight: 500;
+        text-align: left;
+    }
+
+    table.srovnani .delta { justify-content: flex-end; }
+}
+
+.srovnani-volba .tile-label { margin: 0 0 8px; }
+.srovnani-volba .filters { margin: 0; }
+
+/* Souhrnný řádek. Bez oddělení splyne s daty a čte se jako další
+   položka - jenže "Celkem 91" mezi řádky po dvou titulech mate. */
+tfoot td {
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    padding-top: 11px;
+    color: var(--text-secondary);
+}
 
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .muted { color: var(--text-muted); }
@@ -1857,20 +1981,115 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 /* Uzsi obrazovky                                                         */
 /* --------------------------------------------------------------------- */
 
+/* Tlačítko menu. Na desktopu není - tam je celý seznam pořád vidět. */
+.menu-tlacitko { display: none; }
+
+.menu-carky {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 18px;
+}
+
+.menu-carky i {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
 @media (max-width: 860px) {
     .layout { grid-template-columns: 1fr; }
     .sidebar {
         position: static;
         height: auto;
-        flex-direction: row;
+        /* Menu se rozbaluje pod hlavičku, takže panel musí umět druhý
+           řádek - proto `wrap`, ne prostý řádek. */
+        flex-flow: row wrap;
         align-items: center;
-        overflow-x: auto;
+        gap: 10px;
+        overflow-x: visible;
         border-right: none;
         border-bottom: 1px solid var(--border);
     }
-    .nav { flex-direction: row; }
+
+    /* Burger.
+
+       Deset položek se na 390px displej nevejde: seznam byl široký
+       794 px, takže byly vidět DVĚ a na zbytek se muselo rolovat do
+       strany - a že se roluje, nebylo poznat. Teď je pod tlačítkem,
+       na kterém stojí, kde člověk zrovna je.
+
+       Zaškrtávátko a štítek, ne JavaScript: menu musí jít otevřít
+       i tehdy, když skript neproběhne. */
+    .menu-tlacitko {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-left: auto;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .menu-prepinac:focus-visible + .menu-tlacitko {
+        outline: 2px solid var(--series-1);
+        outline-offset: 2px;
+    }
+
+    /* Zavřené menu zabírá nulu; otevřené se rozloží přes celou šířku
+       pod hlavičku. */
+    .nav { display: none; }
+
+    .menu-prepinac:checked ~ .nav {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 2px;
+        padding-bottom: 6px;
+    }
+
+    /* Na řádek se vejde jen jedna položka, takže se nemá kde zalomit. */
+    .nav a { white-space: nowrap; padding: 10px 12px; }
+
+    /* Proužek u aktivní položky se na desktopu opírá o hranu postranního
+       panelu (`left: -14px`). Tady žádná taková hrana není, takže by
+       visel mimo obrazovku - patří k položce samotné. */
+    .nav a.active::before { left: 0; border-radius: 3px; }
+
     .sidebar-foot { display: none; }
     .main { padding: 18px 16px 48px; }
+
+    /* Dlaždice po jedné na řádek dělaly ze stránky nekonečné rolování.
+       Na 350 px obsahu se při 150px vejdou dvě. */
+    .kpi-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+
+    /* Nadpis karty a poznámka vedle sebe se na úzké obrazovce lámaly
+       oba naráz - z „How to send" byly dva řádky a poznámka se do nich
+       zaklínila. Pod sebou se to čte jako nadpis a podtitul. */
+    .card-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    /* Popisky os v grafu.
+
+       SVG má pevný viewBox 760 jednotek a roztahuje se na šířku, takže
+       se s ním zmenšuje i text: na 390px displeji vycházel popisek
+       z 11 jednotek na 4,6 SKUTEČNÝCH pixelů, což se přečíst nedá.
+       V jednotkách viewBoxu je proto na úzké obrazovce větší - měřítko
+       je tam kolem 0,42, takže 22 jednotek vyjde na čitelných 9 px.
+
+       Víc už ne: popisek se kreslí doleva od osy a musí se vejít do
+       levého okraje grafu (viz margin_left v charts.py). */
+    .axis-label { font-size: 22px; }
 }
 
 @media print {

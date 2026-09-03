@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile %}
+{% from "_macros.html" import tile, period_filter with context %}
 {% block title %}{{ _("Knihovna") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -8,6 +8,11 @@
         <h1>{{ _("Knihovny") }}</h1>
         <p class="subtitle">{{ _("Vyber knihovnu a podívej se, co v ní doopravdy je.") }}</p>
     </div>
+    {# Tentýž filtr jako na ostatních stránkách a tatáž volba: co si
+       člověk vybere tady, platí i jinde. Týká se jediného grafu na téhle
+       stránce - růstu knihovny; dlaždice nad ním jsou stav, ne období,
+       a říkají to samy. #}
+    {{ period_filter(obdobi, '/library') }}
 </div>
 
 {% if libraries %}
@@ -42,6 +47,8 @@
 {# ------------------------------------------------------------------ #}
 {# Souhrn za všechny knihovny dohromady                                #}
 {% include "_sekce_knihovna_celkem.html" %}
+
+{% include "_sekce_rust.html" %}
 
 <div class="grid-2">
     {% include "_sekce_kodeky.html" %}

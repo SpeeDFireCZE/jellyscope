@@ -161,6 +161,25 @@ class JellyfinClient:
         """Knihovny vcetne cest na disku."""
         return await self._get("/Library/VirtualFolders") or []
 
+    async def storage(self) -> dict[str, Any]:
+        """Kolik mista maji slozky serveru - podle SAMOTNEHO Jellyfinu.
+
+        Zasadni rozdil proti `shutil.disk_usage`: ta meri disk, na kterem
+        bezi JELLYSCOPE. Data ale byvaji jinde - na NASu, na jinem stroji,
+        v jinem kontejneru - a pak merime uplne cizi disk. Jellyfin sedi
+        u tech souboru, takze se ptame jeho.
+
+        Endpoint pribyl az v novejsim Jellyfinu. Na starsim vrati 404
+        a to NENI chyba: vratime prazdno a volajici sahne po zaloznim
+        zpusobu. Shodit kvuli tomu synchronizaci by bylo neumerne.
+        """
+        try:
+            return await self._get("/System/Storage") or {}
+        except JellyfinError as chyba:
+            log.info("Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak",
+                     chyba)
+            return {}
+
     async def image_bytes(
         self, item_id: str, kind: str = "Primary", max_width: int = 400
     ) -> tuple[bytes, str] | None:

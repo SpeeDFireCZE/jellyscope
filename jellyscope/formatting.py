@@ -341,6 +341,9 @@ def register(env: Any) -> None:
         "resolution": resolution_human,
         "number": number,
         "percent": percent,
+        # Datum tak, jak ho člověk píše do filtru období - ať je to na
+        # stránce jedno datum, ne dva různé zápisy téhož.
+        "cesky_datum": cesky_datum,
         "datetime": datetime_human,
         "relative": relative_human,
         "usek": usek,

@@ -824,7 +824,11 @@ def get_setting(key: str, default: str | None = None) -> str:
 #
 # API klíč k Jellyfinu je heslo: kdo ho má, může s cizím serverem dělat
 # cokoliv, co umí jeho vlastník. Do prohlížeče proto nepatří ani omylem.
-TAJNA_NASTAVENI = ("jellyfin_api_key",)
+# Nastaveni, ktera se nesmi dostat do sablony. Heslo k SMTP, webhook
+# Discordu i token Telegramu jsou pristupove udaje jako klic k Jellyfinu -
+# kdo je ma, muze posilat zpravy misto tebe.
+TAJNA_NASTAVENI = ("jellyfin_api_key", "notify_smtp_heslo",
+                   "notify_discord_webhook", "notify_telegram_token")
 
 
 def predvyplnene_zalohy() -> str:
