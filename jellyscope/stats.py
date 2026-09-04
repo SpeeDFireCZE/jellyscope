@@ -2012,6 +2012,7 @@ def _dopoctena_krivka(prvni: str, posledni: str) -> list[dict[str, Any]]:
         """
         SELECT substr(date_created, 1, 10) AS vznik,
                CASE WHEN is_missing = 1 THEN substr(synced_at, 1, 10) END AS naposledy,
+               is_missing,
                COALESCE(size_bytes, 0) AS velikost,
                type
           FROM items
@@ -2037,16 +2038,28 @@ def _dopoctena_krivka(prvni: str, posledni: str) -> list[dict[str, Any]]:
         vznik = str(radek["vznik"] or "")
         if len(vznik) != 10:
             continue
+
+        # Polozka, ktera uz v knihovne NENI a nevime kdy odesla, se
+        # nepocita vubec. Jinak by v krivce zustala navzdy a posledni bod
+        # by byl vyssi nez "Velikost celkem" hned vedle - graf by si
+        # protirecil s cislem na teze strance. Podhodnotit minulost je
+        # mensi zlo nez prepsat pritomnost.
+        naposledy = str(radek["naposledy"] or "")
+        if int(radek["is_missing"] or 0) and len(naposledy) != 10:
+            continue
+
         velikost = int(radek["velikost"] or 0)
         film = 1 if str(radek["type"] or "") == "Movie" else 0
         epizoda = 1 if str(radek["type"] or "") == "Episode" else 0
         zmena(vznik, 1, velikost, film, epizoda)
 
-        naposledy = str(radek["naposledy"] or "")
         if len(naposledy) == 10:
-            # Ten den tam jeste byla, ubyde az nasledujici den.
-            konec = (date.fromisoformat(naposledy) + timedelta(days=1)).isoformat()
-            zmena(konec, -1, -velikost, -film, -epizoda)
+            # Ubyde TIM dnem, ne az nasledujicim. `synced_at` je posledni
+            # synchronizace, ktera polozku jeste videla - ted uz v knihovne
+            # neni. Kdyby se odecetla az zitra, polozka smazana dnes by se
+            # do dnesniho bodu jeste zapocitala a konec krivky by byl vyssi
+            # nez "Velikost celkem" hned vedle.
+            zmena(naposledy, -1, -velikost, -film, -epizoda)
 
     # Prubezny soucet od nejstarsi zmeny az po konec obdobi.
     krivka: list[dict[str, Any]] = []

@@ -1268,6 +1268,18 @@ EN: dict[str, str] = {
 
     "Sekce": "Section",
     "Přejít": "Go",
+    # --- nadpisy skupin v nastaveni ---
+    "Vzhled aplikace": "How the application looks",
+    "barvy, karty a jak se píše čas": "colours, cards and how time is written",
+    "záložka, kterou si člověk poskládá sám": "the tab you put together yourself",
+    "Dlouhé seznamy": "Long lists",
+    "kolik toho karta ukáže rovnou, než se zbytek schová do okna":
+        "how much a card shows outright before the rest moves into a window",
+    "Mapa na stránce Síť": "The map on the Network page",
+    "Úložiště knihovny": "Library storage",
+    "odkud se bere volné místo pro odhad růstu":
+        "where the free space for the growth estimate comes from",
+    "Sběr přehrávání": "Collecting playback",
     # --- kapacita uloziste (viz scanner._volne_misto_knihovny) ---
     "Kapacita úložiště knihovny (GB)": "Library storage capacity (GB)",
     "Zadané číslo přebije všechno ostatní. Volné místo se z něj počítá jako kapacita minus velikost knihovny, takže předpokládá, že na tom úložišti nic jiného neleží. Nech 0 a zjistí se to samo.":
@@ -1330,10 +1342,11 @@ EN: dict[str, str] = {
         "be imported afterwards, but an import carries neither the track "
         "language nor the bitrate, so the hole stays.",
     "Dochází místo na disku": "The disk is filling up",
-    "Počítá se z růstu knihovny. Funguje jen tam, kam aplikace na soubory vidí – u knihovny na cizím serveru volné místo neznáme a upozornění nepřijde.":
-        "Worked out from the library growth. It only works where the "
-        "application can see the files - for a library on someone else's "
-        "server the free space is unknown and no warning arrives.",
+    "Počítá se z růstu knihovny a z volného místa, které hlásí Jellyfin. U knihovny v cloudu nebo na sdíleném úložišti ho nepozná ani on – pro ten případ jde ve Sběru dat zadat kapacitu ručně a volné místo se dopočítá z ní.":
+        "Worked out from the library growth and from the free space Jellyfin "
+        "reports. For a library in the cloud or on shared storage not even "
+        "Jellyfin knows it - for that case the capacity can be entered by hand "
+        "in Data collection, and free space is worked out from it.",
     "Týdenní souhrn": "Weekly summary",
     "Není to porucha – kolik se za týden odsledovalo, co se dívalo nejvíc a kdo byl nejaktivnější.":
         "Not a fault - how much was watched over the week, what was watched "
@@ -1344,7 +1357,8 @@ EN: dict[str, str] = {
         "rather than impatience - a short network outage would otherwise send "
         "a message every time.",
     "Ozvat se, když místo dojde za (dnů)": "Speak up when space runs out within (days)",
-    "Souhrn posílat v": "Send the summary on",
+    "Souhrn posílat": "Send the summary on",
+    "V kolik hodin": "At what time",
     "Kontrolu pouští úloha „Upozornění“ – jak často, se nastavuje v Úlohách a zálohách.":
         "The check is run by the \"Notifications\" task - how often is set in "
         "Tasks and backups.",

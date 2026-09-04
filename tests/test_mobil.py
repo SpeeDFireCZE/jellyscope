@@ -228,8 +228,12 @@ check("{% set _ = " not in base,
 
 check(".nav a { white-space: nowrap" in mobil_menu,
       "položky menu drží na jednom řádku")
-check("minmax(150px" in mobil_menu,
-      "a dlaždice se vejdou dvě vedle sebe")
+# `min(150px, 100%)`, ne holých 150: na 320px displeji si sloupec o těch
+# 150 řekl i tam, kde bylo k dispozici míň, a karta vylezla z obrazovky.
+check("minmax(min(150px, 100%), 1fr)" in mobil_menu,
+      "a dlaždice se vejdou dvě vedle sebe, aniž by přetekly")
+check("minmax(min(340px, 100%), 1fr)" in STYL,
+      "mřížka karet si taky neřekne o víc, než kolik má")
 
 print()
 print("HOTOVO - chyb:", failures)

@@ -6,6 +6,42 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.5.1
+
+### Fixed
+
+- **The application ran off the screen on a phone.** The item detail and
+  the now-playing card pushed the page sideways, so it had to be scrolled
+  or zoomed out. Both are the same trap: a grid item has `min-width: auto`
+  and will not shrink below its own content, so a row of three tiles
+  stretched a 358px column to 520px. The card grid also asked for 340px
+  columns where only 288 were available. Measured at 320, 360 and 390 px -
+  no page scrolls sideways now.
+
+- **The growth curve ended higher than the library size beside it.** Items
+  that are gone from the library but carry no last-seen date never left
+  the reconstruction, so they were counted forever; and an item archived
+  today was still counted in today's point, because it was removed the day
+  *after* it was last seen. It is removed on that day now, and an item
+  whose departure is unknown is left out - understating the past is a
+  smaller wrong than misstating the present. The last point of the curve
+  equals the library size to the byte.
+
+- **The disk-space warning described only half the story.** It now says
+  that where neither the application nor Jellyfin can see the storage, the
+  capacity can be entered by hand in Data collection.
+
+- **The time for the weekly summary drifted away from its label.** That
+  picker is right-aligned for the tasks table; in a form it belongs under
+  its own label.
+
+### Changed
+
+- **Settings sections are split into groups.** A card with ten fields in a
+  row reads as one setting to anyone who does not read every word - it was
+  not obvious that "Appearance" and "Time in charts" are separate things.
+  Each group now has a heading in the accent colour with a rule above it.
+
 ## 1.5.0
 
 ### Added

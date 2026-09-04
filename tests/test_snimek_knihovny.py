@@ -119,6 +119,34 @@ novejsi = next(r for r in krivka if r["den"] == (dnes - timedelta(days=100)).iso
 check(novejsi["polozek"] == starsi["polozek"] + 5,
       f"a přírůstek sedí ({starsi['polozek']} → {novejsi['polozek']})")
 
+# NEJDULEZITEJSI INVARIANT: posledni bod krivky se musi rovnat tomu, co
+# hlasi "Velikost celkem" na teze strance. Kdyz se lisi, graf si
+# protireci s cislem hned vedle - a presne to se stalo: polozky
+# v archivu, u kterych chybi `synced_at`, z krivky nikdy neodesly
+# a drzely ji navzdy vys.
+with db.connect() as conn:
+    conn.execute("UPDATE items SET is_missing = 1, synced_at = NULL"
+                 " WHERE id IN (SELECT id FROM items LIMIT 2)")
+    conn.execute("UPDATE items SET is_missing = 1, synced_at = ''"
+                 " WHERE id IN (SELECT id FROM items WHERE is_missing = 0 LIMIT 2)")
+    conn.commit()
+
+skutecnost = int(db.query_value(
+    "SELECT COALESCE(SUM(COALESCE(size_bytes, 0)), 0) FROM items"
+    " WHERE is_missing = 0", default=0) or 0)
+konec_krivky = stats.snimky(400)[-1]
+check(int(konec_krivky["velikost"]) == skutecnost,
+      f"konec křivky sedí s velikostí knihovny"
+      f" ({int(konec_krivky['velikost'])} vs {skutecnost})")
+check(int(konec_krivky["polozek"]) == db.query_value(
+          "SELECT COUNT(*) FROM items WHERE is_missing = 0", default=0),
+      "a počet položek taky")
+
+# Vratime zpatky, at dalsi kontroly meri, co maji.
+with db.connect() as conn:
+    conn.execute("UPDATE items SET is_missing = 0, synced_at = ?", (db.utcnow(),))
+    conn.commit()
+
 # Polozka v archivu z knihovny ubyde tim dnem, kdy ji aplikace naposledy
 # videla - jinak by krivka jen rostla a mazani by z ni zmizelo.
 with db.connect() as conn:

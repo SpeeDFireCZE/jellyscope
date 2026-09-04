@@ -190,6 +190,7 @@
         </label>
     </div>
 
+    <h3 class="skupina">{{ _("Analýza souborů") }}</h3>
     <div class="field" style="margin-top:18px">
         <label for="ffprobe_path">{{ _("Cesta k ffprobe") }}</label>
         <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ settings.ffprobe_path }}"
@@ -223,6 +224,8 @@
        cizí disk. Proto se nejdřív ptáme Jellyfinu, který u těch souborů
        sedí. A když knihovna leží v cloudu, nepozná velikost ani on -
        tehdy platí tohle číslo. #}
+    <h3 class="skupina">{{ _("Úložiště knihovny") }}</h3>
+    <p class="skupina-popis">{{ _("odkud se bere volné místo pro odhad růstu") }}</p>
     <div class="field">
         <label for="library_capacity_gb">{{ _("Kapacita úložiště knihovny (GB)") }}</label>
         <input type="number" id="library_capacity_gb" name="library_capacity_gb"
@@ -238,6 +241,7 @@
         </p>
     </div>
 
+    <h3 class="skupina">{{ _("Sběr přehrávání") }}</h3>
     <div class="field">
         <label for="poll_interval">{{ _("Jak často se ptát, co se hraje (sekundy)") }}</label>
         <input type="number" id="poll_interval" name="poll_interval"
@@ -731,7 +735,7 @@
         </form>
     </details>
 
-    <h3 style="margin-top:24px">{{ _("Jellystat (záloha JSON)") }}</h3>
+    <h3 class="skupina">{{ _("Jellystat (záloha JSON)") }}</h3>
     <p class="card-note" style="margin-bottom:12px">
         {{ _("V Jellystatu si vyexportuj zálohu do JSON a nahraj ji sem.") }}
     </p>
@@ -1361,7 +1365,7 @@
     <form method="post" action="/settings/notifications">
 
         {# --- SMTP --- #}
-        <h3 style="margin:4px 0 10px">{{ _("E-mail (SMTP)") }}</h3>
+        <h3 class="skupina">{{ _("E-mail (SMTP)") }}</h3>
         <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
             <input type="checkbox" name="smtp_enabled" value="1"
                    {{ 'checked' if settings.notify_smtp_enabled == '1' }}>
@@ -1425,9 +1429,7 @@
         </label>
 
         {# --- Discord --- #}
-        <h3 style="margin:22px 0 10px; border-top:1px solid var(--border); padding-top:18px">
-            {{ _("Discord") }}
-        </h3>
+        <h3 class="skupina">{{ _("Discord") }}</h3>
         <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
             <input type="checkbox" name="discord_enabled" value="1"
                    {{ 'checked' if settings.notify_discord_enabled == '1' }}>
@@ -1443,9 +1445,7 @@
         </div>
 
         {# --- Telegram --- #}
-        <h3 style="margin:22px 0 10px; border-top:1px solid var(--border); padding-top:18px">
-            {{ _("Telegram") }}
-        </h3>
+        <h3 class="skupina">{{ _("Telegram") }}</h3>
         <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
             <input type="checkbox" name="telegram_enabled" value="1"
                    {{ 'checked' if settings.notify_telegram_enabled == '1' }}>
@@ -1519,7 +1519,7 @@
                 <span>
                     <span class="title">{{ _("Dochází místo na disku") }}</span>
                     <span class="desc">
-                        {{ _("Počítá se z růstu knihovny. Funguje jen tam, kam aplikace na soubory vidí – u knihovny na cizím serveru volné místo neznáme a upozornění nepřijde.") }}
+                        {{ _("Počítá se z růstu knihovny a z volného místa, které hlásí Jellyfin. U knihovny v cloudu nebo na sdíleném úložišti ho nepozná ani on – pro ten případ jde ve Sběru dat zadat kapacitu ručně a volné místo se dopočítá z ní.") }}
                     </span>
                 </span>
             </label>
@@ -1552,7 +1552,7 @@
 
         <div class="obdobi-pole">
             <div class="field">
-                <label for="souhrn-den">{{ _("Souhrn posílat v") }}</label>
+                <label for="souhrn-den">{{ _("Souhrn posílat") }}</label>
                 <select id="souhrn-den" name="souhrn_den">
                     {% for cislo, jmeno in dny_v_tydnu %}
                         <option value="{{ cislo }}"
@@ -1561,7 +1561,7 @@
                 </select>
             </div>
             <div class="field">
-                <label for="souhrn-hodina">{{ _("v") }}</label>
+                <label for="souhrn-hodina">{{ _("V kolik hodin") }}</label>
                 {# Dvě čísla, ne <input type="time">. Ten si kreslí prohlížeč
                    a v každém vypadá jinak - stejná úvaha jako u rozvrhu úloh
                    a u data ve filtru období. #}
@@ -1607,6 +1607,8 @@
     </p>
 
     <form method="post" action="/settings/interface">
+        <h3 class="skupina">{{ _("Vzhled aplikace") }}</h3>
+        <p class="skupina-popis">{{ _("barvy, karty a jak se píše čas") }}</p>
         <div class="field">
             <label>{{ _("Vzhled") }}</label>
             <div class="radio-set" style="margin-top:6px">
@@ -1662,7 +1664,10 @@
             </div>
             <p class="hint">{{ _("Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté – tam je „40“ značka měřítka, ne údaj.") }}</p>
             <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
+        </div>
 
+        <h3 class="skupina">{{ _("Vlastní přehled") }}</h3>
+        <p class="skupina-popis">{{ _("záložka, kterou si člověk poskládá sám") }}</p>
         <div class="field">
             <label>{{ _("Vlastní přehled") }}</label>
             <div class="radio-set" style="margin-top:6px">
@@ -1690,8 +1695,9 @@
             </div>
             <p class="hint">{{ _("Sestavuje ho správce a platí pro celý server – stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.") }}</p>
         </div>
-        </div>
 
+        <h3 class="skupina">{{ _("Dlouhé seznamy") }}</h3>
+        <p class="skupina-popis">{{ _("kolik toho karta ukáže rovnou, než se zbytek schová do okna") }}</p>
         <div class="field">
             <label for="ui_max_streams">{{ _("Přehrávání na Přehledu") }}</label>
             <input type="number" id="ui_max_streams" name="ui_max_streams"
@@ -1708,6 +1714,7 @@
             <p class="hint">{{ _("Nad tento počet se pruhy „Kdo v jakém jazyce sleduje“ schovají do okna.") }}</p>
         </div>
 
+        <h3 class="skupina">{{ _("Mapa na stránce Síť") }}</h3>
         <div class="field">
             <label>{{ _("Přibližování mapy") }}</label>
             <div class="radio-set" style="margin-top:6px">

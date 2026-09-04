@@ -438,7 +438,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    mezery mizi - proto ho tady drzi kontejner, ne jeho deti. */
 .grid-2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    /* `min(340px, 100%)`, ne holých 340 px: na úzké obrazovce by si
+       sloupec o těch 340 řekl i tam, kde je k dispozici 288 - a karta
+       by vylezla z obrazovky. Tohle je ta hranice, pod kterou se
+       stránka dala posouvat do strany. */
+    grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
     gap: 18px;
     margin-bottom: 18px;
 }
@@ -446,7 +450,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .kpi-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
     gap: 14px;
     margin-bottom: 18px;
 }
@@ -834,6 +838,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     border-radius: var(--radius);
     padding: 14px;
 }
+
+/* Položky mřížky mají `min-width: auto`, takže se nesmrsknou pod šířku
+   svého obsahu - a dlouhý název zařízení nebo výčet důvodů přepočtu pak
+   roztáhne celou kartu za okraj obrazovky. */
+.session > * { min-width: 0; }
 
 .session-poster {
     display: block;
@@ -1341,6 +1350,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     align-items: start;
 }
 
+/* Položka mřížky má ve výchozím stavu `min-width: auto`, takže se
+   NESMRSKNE pod šířku svého obsahu. Uvnitř je řada dlaždic, která si
+   říká o tři sloupce po 150 px - a sloupec se kvůli tomu roztáhl na
+   520 px v rodiči širokém 358. Stránka pak na mobilu jela do strany
+   a musela se oddalovat. */
+.item-layout > * { min-width: 0; }
+
 .item-poster {
     aspect-ratio: 2 / 3;
     background: var(--surface-2);
@@ -1652,6 +1668,11 @@ select, textarea {
     margin-left: auto;
 }
 
+/* V tabulce úloh sedí výběr času v pravém sloupci, proto to zarovnání
+   doprava. Ve formuláři ale patří pod svůj popisek - jinak stojí u pravého
+   okraje a k popisku vlevo se nehlásí. */
+.field .time-picker { margin-left: 0; justify-content: flex-start; }
+
 .time-picker input {
     width: 100%;
     text-align: center;
@@ -1833,6 +1854,41 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--series-1); }
 
 .link-button:hover { color: var(--text-primary); }
 .link-button:focus-visible { outline: 2px solid var(--series-1); outline-offset: 3px; border-radius: 3px; }
+
+/* Nadpis skupiny uvnitř dlouhé sekce nastavení.
+
+   Karta s deseti poli za sebou vypadá jako jedno nastavení. Kdo nečte
+   všechen text, nepozná, že „Vzhled" a „Čas v grafech" spolu nesouvisí.
+   Linka nad nadpisem to rozdělí na díly, které jdou přeletět očima.
+
+   První skupina v kartě linku nemá - nad ní je nadpis karty. */
+.skupina {
+    margin: 26px 0 14px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 700;
+    /* Barva aplikace, ne bílá. Nadpis skupiny stojí mezi popiskami polí,
+       které jsou taky tučné a světlé - bílý nadpis se v nich ztratí.
+       Verzálky a rozpal písmen dělají zbytek: čte se to jako předěl,
+       ne jako další položka. */
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.skupina:first-of-type {
+    margin-top: 4px;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Věta pod nadpisem skupiny - co ta skupina vlastně řídí. */
+.skupina + .skupina-popis {
+    margin: -8px 0 14px;
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
 
 /* --------------------------------------------------------------------- */
 /* Vyskakovací okno                                                       */
@@ -2068,7 +2124,10 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 
     /* Dlaždice po jedné na řádek dělaly ze stránky nekonečné rolování.
        Na 350 px obsahu se při 150px vejdou dvě. */
-    .kpi-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .kpi-row {
+        grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+        gap: 10px;
+    }
 
     /* Nadpis karty a poznámka vedle sebe se na úzké obrazovce lámaly
        oba naráz - z „How to send" byly dva řádky a poznámka se do nich
