@@ -6,6 +6,58 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.0
+
+### Added
+
+- **A read-only API, with keys of its own.** A source of numbers for
+  Grafana, Homepage or a script of your own - not a second way into the
+  data. Four addresses: an index, watching over a period, what is playing
+  right now, and the library with its growth and free space. Everything
+  under `/api/` is a `GET` and anything else is refused by the router
+  itself, rather than by a rule somebody has to keep in mind.
+
+  Keys are made in **Settings → API**, one per tool, each revocable on its
+  own so a leak costs one dashboard rather than all of them. A key is
+  shown **once**, when it is made: what is stored is a SHA-256 hash and
+  the first five characters, so afterwards not even the page can read it
+  back. It travels in the `Authorization` header and is refused in the
+  query string - that is where it would end up in a proxy log, in the
+  browser history and in a forwarded link. The documentation is behind a
+  button in the corner of that section, with a `curl` line carrying the
+  address of that particular installation.
+
+- **Translations are files anybody can edit.** They used to be two Python
+  dictionaries, which meant a translation could only be contributed by
+  somebody willing to edit Python - and no translation tool could see them
+  at all. They are JSON files now, one per language, with the Czech source
+  beside them.
+
+  **A new language is one file.** The list in Settings is built from what
+  is in the folder, so nothing in the code has to change to add one, and a
+  file that will not parse takes down only its own language rather than
+  the application. Translating needs neither git nor Python:
+  <https://translate.jellyscope.cz/>. See
+  [TRANSLATING.md](TRANSLATING.md).
+
+- **Clearing out the history.** A daily task deletes playbacks older than a
+  limit set beside it, and Settings says how many rows that limit would
+  remove before anything is saved. Off unless switched on, and it stays
+  off across updates: deleting data must never start on its own. Playback
+  that is running is never deleted. The same section can forget one
+  viewer - everything recorded about them goes, and nobody else is
+  touched.
+
+### Fixed
+
+- **The log was only ever translated into English.** It reached straight
+  for the English dictionary, so any other language would have kept
+  writing Czech even where a translation existed.
+
+- **A 401 from the API did not say what to authenticate with.** The error
+  handler was dropping an exception's headers, `WWW-Authenticate` among
+  them.
+
 ## 1.5.3
 
 ### Fixed

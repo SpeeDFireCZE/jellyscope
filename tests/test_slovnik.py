@@ -1,30 +1,38 @@
 # -*- coding: utf-8 -*-
-r"""Překladový slovník: bez dvojích klíčů a bez mrtvých hesel.
+r"""Překladové soubory: bez dvojích klíčů, bez mrtvých hesel, s celými větami.
 
-Slovník je obyčejný Python dict, takže **stejný klíč napsaný dvakrát
-tiše přebije ten dřívější** - a nikde se to neohlásí. Zrovna to se stalo
-šestadvacetkrát a u osmi z nich se ty dva překlady lišily, takže si
-aplikace vybírala ten pozdější:
+Překlady jsou v `jellyscope/translations/`, jeden soubor na jazyk, a smí
+do nich sáhnout i někdo, kdo neprogramuje - přes překladatelský nástroj
+nebo rovnou v editoru. Tenhle test je pojistka proti tomu, co se přitom
+dá pokazit, aniž by cokoliv spadlo:
 
-  * na Síti stálo u zařízení „Last run" místo „Last seen",
-  * u seriálu „at 3 seasons" místo „in 3 seasons",
-  * u tabulek databáze „Lines" místo „Rows".
+* **Stejný klíč dvakrát.** JSON to dovolí zapsat a čtečka si vezme ten
+  poslední - tiše. Dřív, když slovník bydlel v Pythonu, se to stalo
+  šestadvacetkrát a u osmi z nich se ty dva překlady lišily:
 
-Česky je to pokaždé stejné slovo, anglicky ne - a jeden klíč dvě věci
-neunese. Řešení je pojmenovat obojí zvlášť (například „Naposledy" proti
-„Naposledy běželo"), ne jeden překlad umazat.
+    * na Síti stálo u zařízení „Last run" místo „Last seen",
+    * u seriálu „at 3 seasons" místo „in 3 seasons",
+    * u tabulek databáze „Lines" místo „Rows".
 
-Druhá půlka testu hlídá opačný směr: heslo, které se nikde nepoužívá.
-Těch se našlo 43 - zbytky po přepsaných hláškách a zrušených tlačítkách.
-Nic nerozbijí, jen dělají ze slovníku smetiště, ve kterém se překlad
-hledá hůř.
+  Česky je to pokaždé stejné slovo, anglicky ne - a jeden klíč dvě věci
+  neunese.
+
+* **Heslo, které se nikde nepoužívá.** Nic nerozbije, jen dělá ze slovníku
+  smetiště, ve kterém se překlad hledá hůř (a překladatel na něm ztrácí
+  čas).
+
+* **Ztracené zástupné místo.** „{n} dílů" -> „episodes" vypadá jako věta,
+  jen v ní chybí číslo, kvůli kterému vznikla.
+
+* **Překlad věty, kterou zdroj nezná.** Typicky po opravě překlepu
+  v češtině: klíč se změnil a starý překlad zůstal viset.
 
 Spuštění:
     .\.venv\Scripts\python.exe tests\test_slovnik.py
 """
 from __future__ import annotations
 
-import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -42,79 +50,146 @@ def check(condition: bool, label: str) -> None:
         failures += 1
 
 
-I18N = PROJECT / "jellyscope" / "i18n.py"
-slovniky: dict[str, list[tuple[str, int]]] = {}
-for uzel in ast.parse(I18N.read_text(encoding="utf-8")).body:
-    if isinstance(uzel, ast.AnnAssign) and isinstance(uzel.value, ast.Dict):
-        jmeno = getattr(uzel.target, "id", "")
-        if jmeno in ("EN", "LOG_EN"):
-            slovniky[jmeno] = [(k.value, k.lineno) for k in uzel.value.keys
-                               if isinstance(k, ast.Constant)]
+SLOZKA = PROJECT / "jellyscope" / "translations"
+SOUBORY = sorted(SLOZKA.glob("*.json")) + sorted((SLOZKA / "log").glob("*.json"))
 
-print("--- žádný klíč dvakrát ---")
-check(set(slovniky) == {"EN", "LOG_EN"}, f"oba slovníky se našly ({list(slovniky)})")
-for jmeno, klice in slovniky.items():
-    videno: dict[str, int] = {}
-    dvojmo = []
-    for klic, radek in klice:
-        if klic in videno:
-            dvojmo.append(f"{klic[:40]!r} (řádky {videno[klic]} a {radek})")
-        videno[klic] = radek
-    check(not dvojmo, f"{jmeno}: {len(klice)} klíčů, duplicity: {dvojmo[:3] or 'žádné'}")
+
+def nazev(cesta: Path) -> str:
+    return f"{cesta.parent.name}/{cesta.name}" if cesta.parent.name == "log" \
+        else cesta.name
+
+
+def nacti_s_duplicitami(cesta: Path) -> tuple[dict[str, str], list[str]]:
+    """Obsah souboru a klíče, které v něm byly víc než jednou."""
+    dvojmo: list[str] = []
+    videno: set[str] = set()
+
+    def hook(dvojice):
+        for klic, _hodnota in dvojice:
+            if klic in videno:
+                dvojmo.append(klic)
+            videno.add(klic)
+        return dict(dvojice)
+
+    return json.loads(cesta.read_text(encoding="utf-8"),
+                      object_pairs_hook=hook), dvojmo
+
+
+print("--- soubory se dají přečíst ---")
+check(bool(SOUBORY), f"překlady se našly ({[nazev(c) for c in SOUBORY]})")
+obsah: dict[str, dict[str, str]] = {}
+for cesta in SOUBORY:
+    try:
+        data, dvojmo = nacti_s_duplicitami(cesta)
+    except ValueError as chyba:
+        check(False, f"{nazev(cesta)} je platný JSON ({chyba})")
+        continue
+    obsah[nazev(cesta)] = data
+    check(not dvojmo,
+          f"{nazev(cesta)}: {len(data)} vět, duplicity: {dvojmo[:3] or 'žádné'}")
+
+print()
+print("--- překlad nezná větu, kterou nezná zdroj ---")
+# Klic je ceska veta. Kdyz se v ni opravi preklep, prekladu zustane
+# klic stary - a nikdy uz se nepouzije. Ve Weblate se takova veta ukaze
+# jako "zastarala", tady jako chyba.
+for slozka, zdroj_jmeno in (("", "cs.json"), ("log/", "log/cs.json")):
+    zdroj = set(obsah.get(zdroj_jmeno, {}))
+    if not zdroj:
+        continue
+    for jmeno, data in obsah.items():
+        if jmeno == zdroj_jmeno or not jmeno.startswith(slozka) \
+                or (slozka == "" and jmeno.startswith("log/")):
+            continue
+        navic = sorted(set(data) - zdroj)
+        check(not navic,
+              f"{jmeno}: věty mimo zdroj: {len(navic)} {[v[:30] for v in navic[:2]]}")
+
+print()
+print("--- zdrojový soubor je opravdu zdroj ---")
+# V cs.json je klic i hodnota tataz veta. Kdyby se lisily, prekladatel by
+# ve Weblate videl jinou vetu, nez jaka je v aplikaci.
+for jmeno in ("cs.json", "log/cs.json"):
+    data = obsah.get(jmeno, {})
+    jine = [k for k, v in data.items() if k != v]
+    check(not jine,
+          f"{jmeno}: klíč = hodnota ({len(jine)} nesedících {[k[:25] for k in jine[:2]]})")
 
 print()
 print("--- žádné heslo navíc ---")
 # Klíč se v kódu může objevit rozdělený přes dva řádky ("začátek "
 # "pokračování"), takže se hledá i ve slepené podobě. Bez toho by test
 # hlásil jako nepoužité skoro každou delší větu.
-zdroj = ""
+zdroj_kodu = ""
 for cesta in (list((PROJECT / "jellyscope").glob("*.py"))
               + list((PROJECT / "jellyscope" / "templates").glob("*.html"))
               + [PROJECT / x for x in ("run.py", "manage.py", "demo.py")]):
-    if cesta.name == "i18n.py":
-        continue
-    zdroj += cesta.read_text(encoding="utf-8") + "\n"
+    zdroj_kodu += cesta.read_text(encoding="utf-8") + "\n"
 
-slepeny = re.sub(r'"\s*\n\s*"', "", zdroj)
+slepeny = re.sub(r'"\s*\n\s*"', "", zdroj_kodu)
 slepeny = re.sub(r"'\s*\n\s*'", "", slepeny)
 slepeny = re.sub(r"\s*\n\s*", " ", slepeny)
 slepeny = re.sub(r'"\s*"', "", slepeny)
 
-for jmeno, klice in slovniky.items():
-    nepouzite = [k for k, _ in klice
-                 if k not in zdroj and re.sub(r"\s+", " ", k) not in slepeny]
+for jmeno in ("cs.json", "log/cs.json"):
+    nepouzite = [k for k in obsah.get(jmeno, {})
+                 if k not in zdroj_kodu and re.sub(r"\s+", " ", k) not in slepeny]
     check(not nepouzite,
           f"{jmeno}: bez použití {len(nepouzite)} {[k[:35] for k in nepouzite[:3]]}")
 
 print()
-print("--- co šablony chtějí přeložit, to ve slovníku je ---")
-# Jinak se na anglické stránce objeví české slovo. Kontrolují se jen
-# doslovné klíče: `_(promenna)` se staticky přečíst nedá.
-EN = dict(slovniky["EN"])
+print("--- co šablony chtějí přeložit, to ve zdroji je ---")
+# Jinak se na cizojazycne strance objevi ceske slovo. Kontroluji se jen
+# doslovne klice: `_(promenna)` se staticky precist neda.
+zdroj = set(obsah.get("cs.json", {}))
 chybi = []
 for cesta in sorted((PROJECT / "jellyscope" / "templates").glob("*.html")):
     text = cesta.read_text(encoding="utf-8")
     for nalez in re.finditer(r'_\(\s*"([^"]{2,})"\s*\)', text):
         klic = nalez.group(1)
-        if klic not in EN and not klic.startswith("{"):
+        if klic not in zdroj and not klic.startswith("{"):
             chybi.append(f"{cesta.name}: {klic[:40]!r}")
-check(not chybi, f"nepřeložených klíčů v šablonách: {len(chybi)} {chybi[:3]}")
+check(not chybi, f"chybějících vět ve zdroji: {len(chybi)} {chybi[:3]}")
 
 print()
-print("--- dosazovaná místa sedí v obou jazycích ---")
+print("--- dosazovaná místa sedí ve všech jazycích ---")
 # "{n} dílů" -> "{n} episodes". Kdyby v překladu {n} chybělo, číslo se
 # tiše ztratí: věta dává smysl, jen v ní není údaj, kvůli kterému vznikla.
+# U logu je to totéž s "%s".
+for jmeno, data in obsah.items():
+    vzor = re.compile(r"%[sdrf]") if jmeno.startswith("log/") \
+        else re.compile(r"\{(\w+)\}")
+    spatne = []
+    for klic, preklad in data.items():
+        if sorted(vzor.findall(klic)) != sorted(vzor.findall(preklad)):
+            spatne.append(f"{klic[:35]!r}")
+    check(not spatne, f"{jmeno}: {len(spatne)} nesedících {spatne[:3]}")
+
+print()
+print("--- a jazyk se pozná podle souboru, ne podle kódu ---")
 from jellyscope import i18n  # noqa: E402
 
-spatne = []
-for klic, anglicky in i18n.EN.items():
-    v_klici = set(re.findall(r"\{(\w+)\}", klic))
-    v_prekladu = set(re.findall(r"\{(\w+)\}", anglicky))
-    if v_klici != v_prekladu:
-        spatne.append(f"{klic[:40]!r}: {sorted(v_klici)} -> {sorted(v_prekladu)}")
-check(not spatne, f"nesedících: {len(spatne)} {spatne[:3]}")
+check(set(i18n.LANGUAGES) >= {"cs", "en"},
+      f"čeština a angličtina jsou v nabídce ({sorted(i18n.LANGUAGES)})")
+check(i18n.LANGUAGES["en"] == "English", "a jmenují se svým jménem")
 
-# A jedna věta na zkoušku: přesně ta, kvůli které vznikl klíč s frází.
+# Novy jazyk = jeden soubor navic. Zkousi se na docasne slozce, at se
+# do balicku nic nepodstrkuje.
+import tempfile  # noqa: E402
+
+docasna = Path(tempfile.mkdtemp())
+(docasna / "de.json").write_text('{"Přehled": "Übersicht"}', encoding="utf-8")
+(docasna / "cs.json").write_text('{"Přehled": "Přehled"}', encoding="utf-8")
+nactene = i18n._nacti_slozku(docasna)
+check(set(nactene) == {"de"},
+      f"soubor navíc = jazyk navíc, zdroj se nenačítá ({sorted(nactene)})")
+
+# A rozbity soubor smi shodit jen sam sebe, ne aplikaci.
+(docasna / "xx.json").write_text("{tohle není JSON", encoding="utf-8")
+nactene = i18n._nacti_slozku(docasna)
+check(set(nactene) == {"de"}, "rozbitý překlad se přeskočí, aplikace běží dál")
+
+# Zkouska prekladu pres verejne rozhrani.
 veta = i18n.translate("v {n} řadách", "en").format(n=3)
 check(veta == "in 3 seasons", f"věta o řadách: {veta!r}")
 obdobi = i18n.translate("za {obdobi}", "en").format(obdobi="30 days")

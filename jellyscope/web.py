@@ -35,7 +35,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting, geoip,
+from . import (accounts, api, applog, charts, collector, db, dbmigrate, dialect,
+               formatting, geoip,
                updates,
                i18n, importers, insights, langstats, languages, odklizeni,
                scanner, sekce,
@@ -230,6 +231,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 #
 # Tlacitka zustavaji videt schvalne: ukazka ma ukazat, co aplikace umi.
 # Misto akce se objevi hlaska.
+# Ctecí API. Vlastni modul a vlastni zavora: stranky se prokazuji
+# prihlasovaci cookie, API tokenem. Nic pod /api/ nic nemeni - jsou tam
+# sama GET.
+app.include_router(api.router)
+
+
 DEMO_POVOLENO = frozenset({
     "/login",
     "/logout",
@@ -412,7 +419,11 @@ async def handle_http_error(request: Request, exc: HTTPException):
             {"code": 404, "message": exc.detail or "Stranka nenalezena."},
             status_code=404,
         )
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    # Hlavičky výjimky patří do odpovědi. U 401 z API je v nich
+    # `WWW-Authenticate: Bearer`, tedy jediná věta, která volajícímu
+    # řekne, čím se má prokázat - bez ní je to jen "nesmíš".
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                        headers=exc.headers or None)
 
 
 # ---- prvni spusteni ---------------------------------------------------
@@ -1968,6 +1979,7 @@ SETTINGS_SECTIONS = [
     ("import", "Import historie", True),
     ("database", "Databáze", True),
     ("accounts", "Účty", False),      # False = vidí i čtenář
+    ("api", "API", True),
     ("blocks", "Blokace", True),
     ("log", "Log", True),
     ("interface", "Rozhraní", True),   # vzhled stránek
@@ -2088,6 +2100,15 @@ def settings_page(
             retence_max=odklizeni.MAX_DNU,
             odklid=odklizeni.prehled(),
             divaci=odklizeni.divaci(),
+        )
+    elif section == "api":
+        context.update(
+            api_tokeny=api.seznam(),
+            # Nově vyrobený klíč se ukazuje jen jednou, hned po
+            # přesměrování; drží se proto v relaci, ne v adrese - a při
+            # dalším načtení stránky už ho nemá kdo vypsat.
+            novy_token=request.session.pop("novy_api_token", ""),
+            api_ukazka_znaku=api.UKAZKA_ZNAKU,
         )
     elif section == "blocks":
         context.update(
@@ -3269,6 +3290,36 @@ def account_role(
     except accounts.AccountError as exc:
         _flash(request, exc.prelozena(), "error")
     return RedirectResponse("/settings?section=accounts", status_code=303)
+
+
+@app.post("/settings/api/token")
+def api_token_novy(request: Request, name: str = Form(""),
+                   account: dict[str, Any] = Depends(require_admin)):
+    """Vyrobí token pro čtecí API a jednou ho ukáže."""
+    vysledek = api.vytvor(name)
+    # Do relace, ne do adresy: adresa se objeví v logu proxy i v historii
+    # prohlížeče, a tohle je jediná chvíle, kdy je token čitelný.
+    request.session["novy_api_token"] = vysledek["token"]
+    _flash(request, "Klíč „{jmeno}“ vznikl.", "success",
+           jmeno=vysledek["jmeno"])
+    return RedirectResponse("/settings?section=api", status_code=303)
+
+
+@app.post("/settings/api/token/zrusit")
+def api_token_zrusit(request: Request, token_id: str = Form(""),
+                     account: dict[str, Any] = Depends(require_admin)):
+    """Zneplatní jeden token. Ostatních se to nedotkne."""
+    try:
+        cislo = int(token_id)
+    except (TypeError, ValueError):
+        cislo = 0
+    jmeno = api.zrus(cislo) if cislo else ""
+    if jmeno:
+        _flash(request, "Klíč „{jmeno}“ už neplatí.", "success",
+               jmeno=jmeno)
+    else:
+        _flash(request, "Takový klíč tu není.", "info")
+    return RedirectResponse("/settings?section=api", status_code=303)
 
 
 @app.post("/settings/accounts/delete")

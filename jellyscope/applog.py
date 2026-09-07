@@ -134,11 +134,11 @@ def _bezpecna_cesta(name: str) -> Path | None:
 # Jazyk logu
 # ---------------------------------------------------------------------------
 #
-# Log je psany cesky, protoze cesky je cely program. Kdo chce anglicky,
+# Log je psany cesky, protoze cesky je cely program. Kdo chce jinak,
 # prepne si to v Nastaveni - hlasky se prelozi az pri zapisu do souboru
-# (viz i18n.LOG_EN). Volani `log.info(...)` ve zdrojacich zustavaji ceska,
-# takze pri psani nove hlasky nikdo nemusi myslet na preklad; neprelozena
-# hlaska se proste zapise cesky.
+# (viz jellyscope/translations/log/). Volani `log.info(...)` ve zdrojacich
+# zustavaji ceska, takze pri psani nove hlasky nikdo nemusi myslet na
+# preklad; neprelozena hlaska se proste zapise cesky.
 #
 # Jazyk se drzi v promenne modulu, ne aby se cetl z databaze u kazdeho
 # radku logu: logovat se muze i behem startu (kdy databaze jeste nemusi
@@ -151,7 +151,10 @@ def nastav_jazyk(kod: str) -> None:
     """Rekne logu, v jakem jazyce se ma zapisovat. Vola se pri startu
     a pri zmene v Nastaveni."""
     global _jazyk_logu
-    _jazyk_logu = kod if kod in i18n.TRANSLATIONS or kod == "cs" else "cs"
+    # Log ma vlastni slovniky - jazyk, do ktereho je prelozene rozhrani,
+    # jeste nemusi mit prelozeny log.
+    _jazyk_logu = (kod if kod in i18n.LOG_TRANSLATIONS
+                   or kod == i18n.DEFAULT_LANGUAGE else i18n.DEFAULT_LANGUAGE)
 
 
 class _PrekladHlasek(logging.Filter):
@@ -163,10 +166,10 @@ class _PrekladHlasek(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if _jazyk_logu == "cs" or not isinstance(record.msg, str):
+        if _jazyk_logu == i18n.DEFAULT_LANGUAGE or not isinstance(record.msg, str):
             return True
-        preklad = i18n.LOG_EN.get(record.msg)
-        if not preklad:
+        preklad = i18n.prelozit_log(record.msg, _jazyk_logu)
+        if preklad == record.msg:
             return True
 
         record.msg = preklad
@@ -180,7 +183,8 @@ class _PrekladHlasek(logging.Filter):
         # by znamenalo měnit data, ne popis.
         if isinstance(record.args, tuple):
             record.args = tuple(
-                i18n.EN.get(hodnota, hodnota) if isinstance(hodnota, str) else hodnota
+                i18n.translate(hodnota, _jazyk_logu) if isinstance(hodnota, str)
+                else hodnota
                 for hodnota in record.args
             )
         return True

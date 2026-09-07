@@ -297,6 +297,21 @@ CREATE TABLE IF NOT EXISTS scan_log (
 
 -- Blokace prihlasovani. Kdo hada hesla, dostane pauzu - a kdyz nepresta,
 -- delsi. Trva to i pres restart, jinak by stacilo pockat na aktualizaci.
+-- Tokeny pro ctecí API (jellyscope/api.py).
+--
+-- Ukládá se OTISK, ne token - kdo si přečte databázi, přístup nedostane.
+-- `ukazka` je prvních pár znaků, aby šly dva tokeny v Nastavení rozeznat
+-- od sebe; uhodnout se z ní nedá nic.
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT NOT NULL,
+    token_hash   TEXT NOT NULL UNIQUE,
+    ukazka       TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    last_used_at TEXT
+);
+
+
 CREATE TABLE IF NOT EXISTS login_blocks (
     ip            TEXT PRIMARY KEY,
     level         INTEGER NOT NULL DEFAULT 0,  -- kolikata blokace v rade

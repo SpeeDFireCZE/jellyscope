@@ -43,6 +43,15 @@ Python 3.10 and 3.13.
 and check that the test goes red. A test that passes both ways guards nothing —
 this is the single most useful habit in the project.
 
+## Translations
+
+The one contribution that needs no Python — and, through
+**<https://translate.jellyscope.cz/>**, no git either: `jellyscope/translations/` holds one JSON
+file per language, the Czech source among them. Copy it, translate
+the values, run `tests/test_slovnik.py`, open a pull request — the language
+shows up in Settings by itself. **[TRANSLATING.md](TRANSLATING.md)** has
+the whole of it, including the two things that break a translation.
+
 ## Style
 
 - **Comments explain *why*, not *what*.** The code says what it does; the

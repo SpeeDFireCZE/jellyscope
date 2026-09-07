@@ -256,6 +256,49 @@ Restoring saves the current state first, so a misclick costs nothing.
 SQLite backups use the built-in snapshot function rather than a file copy —
 a copy taken mid-write can be corrupt.
 
+### Read-only API
+
+Numbers for Grafana, Homepage or a script of your own. It only reads:
+everything under `/api/` is a `GET`, and anything else is refused - the API
+is a source of numbers, not a second way into the data.
+
+**Settings → API** makes the keys. A key is shown **once**, when it is
+made; what is stored is a hash and the first five characters, so nobody -
+including the page itself - can read it back afterwards. Lost one? Revoke
+it and make another; no other key is affected. There can be as many as you
+have tools, and the *last used* column shows which one nobody needs any
+more.
+
+The key travels in a header. Not in the address: that ends up in the proxy
+log, in the browser history and in the link somebody forwards.
+
+```bash
+curl -H "Authorization: Bearer js_your_key" http://localhost:8097/api/v1/summary
+```
+
+| Address | What it returns |
+|---|---|
+| `GET /api/v1/` | The version and the list of addresses. |
+| `GET /api/v1/summary?days=30` | Hours watched, plays, viewers, titles, transcode share, and how much is playing right now. |
+| `GET /api/v1/now-playing` | What is playing: who, what, on what, transcoded or not, how far in. |
+| `GET /api/v1/library` | Size of the library, item counts, free space, growth over a period. |
+
+```json
+{
+  "days": 30,
+  "watched_hours": 647.0,
+  "plays": 1066,
+  "users": 11,
+  "titles": 36,
+  "transcode_share_percent": 29.6,
+  "active_now": 1
+}
+```
+
+The answers carry no CORS headers, so another site cannot read them from a
+browser — this is for tools running on a server. The same documentation is
+in the application itself, behind the button in *Settings → API*.
+
 ### History import
 
 Jellyscope only records playbacks while it runs. If you already have history
@@ -456,6 +499,15 @@ The application log has its own language setting — a log is often read by
 somebody else, and English messages are easier to search for.
 
 A missing translation falls back to Czech, so you never get a blank spot.
+That is what makes a half-finished translation usable, and why one is
+welcome: **adding a language is one file**, not a code change. The
+sentences live in `jellyscope/translations/`, one JSON file per language,
+and the list in Settings is built from whatever is in that folder — see
+**[TRANSLATING.md](TRANSLATING.md)**
+
+Translating needs no git and no Python: **<https://translate.jellyscope.cz/>** shows the Czech
+sentence and a box for yours, and sends the result to the repository
+itself. A file and a pull request work just as well.
 
 ### ffmpeg (optional)
 
@@ -575,9 +627,11 @@ jellyscope/
     ├── worldmap.py         the map on the Network page
     ├── geoip.py            the offline GeoLite2 lookup
     ├── formatting.py       numbers for humans
-    ├── i18n.py             translations, including log messages
+    ├── i18n.py             loads the translations, picks the language
+    ├── translations/       one JSON file per language (+ log/)
     ├── applog.py           log file and its viewer
     ├── porucha.py          the page shown when the database will not open
+    ├── api.py              the read-only API and its keys
     ├── web.py              routes
     ├── demodata.py         generator of made-up data for the demo
     ├── templates/          HTML templates
@@ -649,6 +703,11 @@ Bug reports and pull requests are welcome — please open an issue first for
 anything bigger than a bug fix. How to run the app, how to write a test that
 can actually fail, and what falls outside the scope of the project:
 **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+Translations are the easiest thing to contribute and need no Python at
+all — and no git either: **<https://translate.jellyscope.cz/>**. By hand it is copying
+`jellyscope/translations/cs.json`, translating the values and opening a
+pull request. **[TRANSLATING.md](TRANSLATING.md)** has the details.
 
 Found a security hole? Do not open an issue — see
 **[SECURITY.md](SECURITY.md)**.
