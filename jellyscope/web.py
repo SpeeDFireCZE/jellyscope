@@ -37,7 +37,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import (accounts, applog, charts, collector, db, dbmigrate, dialect, formatting, geoip,
                updates,
-               i18n, importers, insights, langstats, languages, scanner, sekce,
+               i18n, importers, insights, langstats, languages, odklizeni,
+               scanner, sekce,
                stats, tasks)
 # Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
 # leží na disku nová, ale tenhle proces pořád běží starý kód - a čekárna
@@ -825,8 +826,21 @@ def _stropy() -> dict[str, int]:
     return {
         "strop_streamu": db.get_int_setting(
             "ui_max_streams", minimum=STROP_MIN, maximum=STROP_MAX, fallback=10),
+        # Na mobilu se vejde míň: karta streamu tam zabírá celou šířku
+        # a čtyři pod sebou už znamenají, že zbytek stránky je mimo
+        # obrazovku. Rozhoduje o tom CSS, ne server - ten neví, na čem
+        # se člověk dívá, tak pošle obojí a zobrazí se to, co platí.
+        "strop_streamu_mobil": db.get_int_setting(
+            "ui_max_streams_mobile", minimum=STROP_MIN, maximum=STROP_MAX,
+            fallback=3),
         "strop_lidi": db.get_int_setting(
             "ui_max_viewers", minimum=STROP_MIN, maximum=STROP_MAX, fallback=10),
+        # Pruh diváka je nižší než karta streamu, ale i tak jich na
+        # telefon patří míň - pod deseti pruhy by legenda i tabulka pod
+        # nimi začínaly až za druhou obrazovkou.
+        "strop_lidi_mobil": db.get_int_setting(
+            "ui_max_viewers_mobile", minimum=STROP_MIN, maximum=STROP_MAX,
+            fallback=5),
     }
 
 
@@ -1930,6 +1944,22 @@ def _dny_v_tydnu() -> list[tuple[int, str]]:
     return [(cislo, _t(jmeno)) for cislo, jmeno in enumerate(jmena)]
 
 
+# V cem se zadava kapacita uloziste. Klic je to, co stoji ve vyberu.
+KAPACITA_JEDNOTKY = {"GB": 1024 ** 3, "TB": 1024 ** 4}
+
+
+def _kapacita_do_formulare() -> dict[str, Any]:
+    """Rucne zadana kapacita zpatky do pole - v jednotce, kterou clovek zvolil."""
+    bajtu = db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0)
+    jednotka = db.get_setting("library_capacity_unit", "GB")
+    if jednotka not in KAPACITA_JEDNOTKY:
+        # Starsi nastaveni jednotku neznalo - u velkych hodnot jsou
+        # terabajty citelnejsi.
+        jednotka = "TB" if bajtu >= 1024 ** 4 else "GB"
+    return {"kapacita_cislo": bajtu // KAPACITA_JEDNOTKY[jednotka],
+            "kapacita_jednotka": jednotka}
+
+
 SETTINGS_SECTIONS = [
     ("jellyfin", "Jellyfin", True),
     ("data", "Sběr dat", True),
@@ -2016,10 +2046,10 @@ def settings_page(
         zdroj = db.get_setting(scanner.ZDROJ_KLIC, "")
         context.update(
             ffprobe_found=probe.find_ffprobe(db.get_setting("ffprobe_path")),
-            # Kapacita se zadava v GB, uklada v bajtech - nikdo nepise
-            # dvanactimistne cislo.
-            kapacita_gb=db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0)
-                        // 1024 ** 3,
+            # Kapacita se uklada v bajtech, ale zadava se v jednotce, kterou
+            # si clovek vybral - u dvacetiterabajtoveho pole je "30000 GB"
+            # zbytecne dlouhe cislo.
+            **_kapacita_do_formulare(),
             misto_zdroj=zdroj,
             zdroj_popis={
                 "rucne": _t("volné místo se počítá ze zadané kapacity"),
@@ -2051,6 +2081,13 @@ def settings_page(
             last_library_scan=scanner.last_scan("library"),
             last_tech_scan=scanner.last_scan("tech"),
             coverage=stats.tech_coverage(),
+            # Odklízení historie. Čísla se počítají i když je vypnuté -
+            # právě podle nich se člověk rozhoduje, jestli ho zapnout.
+            retence_dnu=odklizeni.retence_dnu(),
+            retence_min=odklizeni.MIN_DNU,
+            retence_max=odklizeni.MAX_DNU,
+            odklid=odklizeni.prehled(),
+            divaci=odklizeni.divaci(),
         )
     elif section == "blocks":
         context.update(
@@ -2137,6 +2174,7 @@ def settings_save(
     tech_source: str = Form("jellyfin"),
     poll_interval: str = Form("10"),
     library_capacity_gb: str = Form("0"),
+    library_capacity_unit: str = Form("GB"),
     ffprobe_path: str = Form(""),
     ffprobe_concurrency: str = Form("3"),
     path_mappings: str = Form("[]"),
@@ -2152,9 +2190,12 @@ def settings_save(
     # Cas synchronizace knihovny se sem uz nepise - patri k naplanovanym ulohám
     # a meni se ve vlastnim formulari. Kdyby ho ukladaly oba, prepsaly by
     # si hodnotu navzajem.
-    # Kapacita se zadava v GB. Nula znamena "zjisti si to sam".
+    # Kapacita se zadava v GB nebo TB. Nula znamena "zjisti si to sam".
+    jednotka = library_capacity_unit if library_capacity_unit in KAPACITA_JEDNOTKY else "GB"
+    db.set_setting("library_capacity_unit", jednotka)
     db.set_setting(scanner.KAPACITA_KLIC,
-                   str(int(_clamp(library_capacity_gb, 0, 10 ** 9, 0)) * 1024 ** 3))
+                   str(int(_clamp(library_capacity_gb, 0, 10 ** 6, 0))
+                       * KAPACITA_JEDNOTKY[jednotka]))
     db.set_setting("ffprobe_concurrency", _clamp(ffprobe_concurrency, 1, 16, 3))
     db.set_setting("ffprobe_path", ffprobe_path.strip())
 
@@ -2560,7 +2601,9 @@ async def settings_notification_test(
 @app.post("/settings/interface")
 def settings_interface(request: Request,
                        ui_max_streams: str = Form(""),
+                       ui_max_streams_mobile: str = Form(""),
                        ui_max_viewers: str = Form(""),
+                       ui_max_viewers_mobile: str = Form(""),
                        ui_map_zoom: str = Form("click"),
                        ui_skin: str = Form("novy"),
                        ui_cas_presne: str = Form("0"),
@@ -2575,8 +2618,13 @@ def settings_interface(request: Request,
     """
     db.set_setting("ui_max_streams", str(_clamp(ui_max_streams, STROP_MIN,
                                                 STROP_MAX, 10)))
+    db.set_setting("ui_max_streams_mobile",
+                   _clamp(ui_max_streams_mobile, STROP_MIN,
+                          STROP_MAX, 3))
     db.set_setting("ui_max_viewers", str(_clamp(ui_max_viewers, STROP_MIN,
                                                 STROP_MAX, 10)))
+    db.set_setting("ui_max_viewers_mobile",
+                   _clamp(ui_max_viewers_mobile, STROP_MIN, STROP_MAX, 5))
     # Cokoli mimo znamé režimy je překlep nebo podvržený formulář -
     # v obou případech je správná odpověď výchozí hodnota, ne uložit to.
     db.set_setting("ui_map_zoom",
@@ -2835,12 +2883,35 @@ def _naplanuj_restart() -> None:
 # Naplanovane ulohy
 # ---------------------------------------------------------------------------
 
+@app.post("/settings/historie/zapomen")
+def historie_zapomen(request: Request, user_id: str = Form(""),
+                     account: dict[str, Any] = Depends(require_admin)):
+    """Smaže historii jednoho diváka. Účet zůstává v Jellyfinu.
+
+    Vlastní routa, ne součást formuláře úloh: je to jednorázový zásah do
+    dat, ne nastavení, a nemá se stát mimochodem při ukládání něčeho
+    jiného.
+    """
+    vysledek = odklizeni.zapomen_uzivatele(user_id)
+    if not vysledek["smazano"]:
+        _flash(request, "Nebylo co zapomenout - k tomu divákovi nic nemáme.",
+               "info")
+    else:
+        log.info("Zapomenut divak %s: smazano %s prehravani",
+                 vysledek["jmeno"] or user_id, vysledek["smazano"])
+        _flash(request,
+               f"Historie diváka {vysledek['jmeno'] or user_id} smazána "
+               f"({vysledek['smazano']} přehrávání).", "success")
+    return RedirectResponse("/settings?section=tasks", status_code=303)
+
+
 @app.post("/settings/tasks")
 async def tasks_save(
     request: Request,
     backup_path: str = Form(""),
     backup_keep: str = Form("7"),
     pg_dump_path: str = Form(""),
+    history_retention_days: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
     """Ulozi nastaveni vsech uloh najednou.
@@ -2879,6 +2950,11 @@ async def tasks_save(
                        0, 10080, task.default_minutes),
             )
 
+    # Kolik historie se necha. Ulozi se i kdyz je odklizeni vypnute -
+    # az se zapne, ma platit cislo, ktere clovek videl na strance.
+    db.set_setting(odklizeni.RETENCE_KLIC,
+                   _clamp(history_retention_days, odklizeni.MIN_DNU,
+                          odklizeni.MAX_DNU, odklizeni.VYCHOZI_DNU))
     db.set_setting("backup_path", backup_path.strip())
     db.set_setting("backup_keep", _clamp(backup_keep, 1, 365, 7))
     db.set_setting("pg_dump_path", pg_dump_path.strip())

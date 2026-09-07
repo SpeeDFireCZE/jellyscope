@@ -46,6 +46,13 @@ services:
       # schválně: prázdný klíč je díra, ne výchozí hodnota.
       SECRET_KEY: "${SECRET_KEY:?vyplň SECRET_KEY v souboru .env}"
 
+      # 1 = ukázkový režim: všechno je vidět, nic nejde uložit. Pro
+      # veřejnou ukázku, ne jako ochrana běžné instalace - od toho je
+      # přihlášení a účty. Bez téhle řádky by šel kontejner pustit jen
+      # jako plnohodnotná instalace a veřejná ukázka by se dala přenastavit
+      # každému, kdo se do ní podívá.
+      JELLYSCOPE_DEMO: "${JELLYSCOPE_DEMO:-0}"
+
       # Připojení k Jellyfinu se vyplňuje v aplikaci a bydlí v databázi;
       # tohle je jen první nastřelení při úplně prvním startu.
       JELLYFIN_URL: "${JELLYFIN_URL:-http://jellyfin:8096}"
@@ -65,6 +72,12 @@ services:
       # Jediné, o co jde v kontejneru přijít: databáze, log, mezipaměť
       # obrázků a zálohy. Složka na hostiteli, ne pojmenovaný svazek -
       # zálohu si tak odneseš prostým zkopírováním.
+      #
+      # Vlastníka téhle složky si kontejner při startu srovná sám, ale
+      # jen když je prázdná - tedy když ji před chvílí vyrobil Docker
+      # a není v ní nic tvého (deploy/docker-entrypoint.sh). Do složky,
+      # ve které něco je, nesahá: pak aplikace naběhne a na každé
+      # stránce řekne, co spustit.
       #
       # Cesta pro zálohy se nastavuje v aplikaci a musí ležet UVNITŘ téhle
       # složky (třeba /app/data/backups), jinak se uloží do kontejneru

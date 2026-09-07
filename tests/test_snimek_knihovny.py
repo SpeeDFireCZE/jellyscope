@@ -205,6 +205,32 @@ check(graf_dopoctene[-1]["den"] == graf_zmerene[0]["den"],
 check(data["rust"]["dopocteno"] and data["rust"]["dopocteno_do"],
       f"souhrn hlásí, že část je dopočtená (do {data['rust']['dopocteno_do']})")
 
+# Graf musi mluvit toutez jednotkou jako dlazdice "Velikost celkem" vedle
+# nej. Kdyz kreslil vzdycky gigabajty, stalo u dvanactiterabajtove
+# knihovny na ose 13 101 a v dlazdici 12,8 - jedno a totez cislo, jen
+# jinou jednotkou, coz se cte jako "graf ukazuje vic".
+check(data["jednotka_rustu"] in ("GB", "TB"),
+      f"data nesou jednotku ({data['jednotka_rustu']})")
+
+with db.connect() as conn:
+    conn.execute("UPDATE items SET size_bytes = ?", (200 * 1024 ** 3,))
+    conn.commit()
+velka = sekce.data_rustu(400)
+check(velka["jednotka_rustu"] == "TB",
+      f"u terabajtové knihovny se kreslí terabajty ({velka['jednotka_rustu']})")
+nejvic = max(r["gb"] for r in velka["snimky"])
+check(nejvic < 1000,
+      f"a čísla na ose zůstávají malá ({nejvic}) - ne desetitisíce gigabajtů")
+with db.connect() as conn:
+    conn.execute("UPDATE items SET size_bytes = ?", (1024 ** 3,))
+    # I ten podstrceny snimek pryc - jednotka se vybira z CELE krivky,
+    # takze devet terabajtu ve starem snimku by ji drzelo nahore.
+    conn.execute("DELETE FROM library_snapshot")
+    conn.commit()
+mala = sekce.data_rustu(400)
+check(mala["jednotka_rustu"] == "GB",
+      f"u malé knihovny zůstávají gigabajty ({mala['jednotka_rustu']})")
+
 print()
 print("--- růst v čase ---")
 # Dal uz jde o samotny vypocet rustu ze snimku, takze se dopocet vypne:

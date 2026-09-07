@@ -21,8 +21,9 @@ Worth knowing before you report, and worth checking if you are reviewing:
 - everything is behind a login; there is no anonymous page except the login
   and setup forms and a `/health` endpoint that says only "alive"
 - passwords are stored as PBKDF2-SHA256 hashes, 600 000 iterations, salted
-- repeated failed logins block the address, each block longer than the last,
-  the fourth one permanently
+- repeated failed logins block the address, each block longer than the last
+  (1, 2, 5 and 15 minutes), and after the fourth one permanently; an address
+  that behaves for a day starts again from the first level
 - the session cookie is signed with a key that is generated on first start
   and stored in `data/secret_key` — there is no fallback value in the source
 - the Jellyfin API key never reaches the browser, travels in a header (not a

@@ -135,6 +135,25 @@ def ensure_demo_account() -> None:
     db.set_setting("log_language", "en")
 
 
+def pripravit(tichy: bool = False) -> dict[str, int]:
+    """Nachysta ukazku, pokud jeste nachystana neni.
+
+    Vola se ze dvou mist: z `demo.py` (ukazka na svem stroji) a ze
+    `run.py`, kdyz je zapnuty ukazkovy rezim (ukazka v kontejneru -
+    ten spousti run.py a k demo.py se nedostane). Bez tohohle by
+    verejna ukazka v Dockeru nabehla prazdna a zamcena: v ukazkovem
+    rezimu se nic neuklada, takze by si ji nesel zalozit ani spravce.
+
+    `tichy` jen zavre pusu - run.py si vypisuje svoje.
+    """
+    hotovo = already_seeded()
+    if not hotovo and not tichy:
+        print("Pripravuji vymyslena data...")
+    pocty = {"items": 0, "plays": 0, "users": 0} if hotovo else seed()
+    ensure_demo_account()
+    return pocty
+
+
 def _audio_tracks(random_source) -> tuple[str, str, str]:
     """Vymysli jazykove stopy jednoho titulu.
 

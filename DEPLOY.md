@@ -67,7 +67,7 @@ sudo supervisorctl reread && sudo supervisorctl update
 ```
 
 Open `http://<server>:8097`, create the administrator account, fill in the
-Jellyfin address and API key in **Settings → Jellyfin connection**.
+Jellyfin address and API key in **Settings → Jellyfin**.
 
 ---
 
@@ -115,8 +115,10 @@ git clone https://github.com/SpeeDFireCZE/jellyscope.git
 cd jellyscope
 cp .env.example .env
 
-# SECRET_KEY is the only value the container refuses to start without
-python3 -c "import secrets; print(secrets.token_hex(32))"
+# SECRET_KEY is the only value the container refuses to start without.
+# Rewrite the line, do not append a second one: compose takes the last
+# SECRET_KEY in the file, the application the first.
+sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')|" .env
 
 docker compose up -d
 ```
@@ -133,13 +135,65 @@ Then open <http://localhost:8097> and create the first account.
 | `SECRET_KEY` | signs the login cookie. **Required** — an empty one is a hole, not a default, so the container will not start without it. |
 | `TZ` | the container's time zone. Without it it runs in UTC and the evening peak in the charts moves by a couple of hours. |
 | `FFPROBE` | `0` builds an image without ffmpeg — about 250 MB smaller, and the technical data is limited to what Jellyfin reports. |
+| `PGDUMP` | `0` builds an image without `pg_dump` — about 30 MB smaller. Only affects PostgreSQL backups, which then use the app's own export. |
 | `SECURE_COOKIES`, `FORWARDED_ALLOW_IPS` | behind HTTPS, same meaning as anywhere else — see [Reverse proxy](#reverse-proxy). |
+| `JELLYSCOPE_DEMO` | `1` runs the container as a public demo: everything can be looked at, nothing can be saved. Off unless set. Not a substitute for the login on a normal installation. |
 
 **Data.** Everything worth keeping — the database, the log, the image
 cache, backups — is in the folder mounted at `/app/data`. `docker compose
-down` does not touch it; a backup is a copy of that folder. The container
-runs as UID 10001, so if the folder ends up owned by somebody else:
-`sudo chown -R 10001:10001 ./data`.
+down` does not touch it; a backup is a copy of that folder.
+
+**Who owns that folder.** The application runs as UID 10001, while the
+folder on the host belongs to whoever created it — on a first `docker
+compose up` that is Docker itself, as root, and the application could not
+write a single byte into it. The container therefore starts as root, and
+drops the privileges before the application starts; the application itself
+never runs as root.
+
+While it is still root, it corrects the owner of that folder — **but only
+when the folder is empty**, which is exactly the one Docker created a
+moment earlier. There is nothing in it to overwrite, so a first start
+needs nothing from you.
+
+A folder that already has something in it is left alone, even when the
+owner is wrong: those are your files, and changing them behind your back
+is not the container's business. The application starts anyway and every
+page says which folder it cannot write to and what to run —
+
+```bash
+sudo chown -R 10001:10001 ./data
+docker compose restart
+```
+
+Setting your own `user:` in `docker-compose.yml` skips all of this: the
+ownership is then yours to manage, and the same page appears if the
+application cannot reach the folder.
+
+**Only `data/` — never the project folder.** `sudo chown -R 10001:10001 .`
+looks like the same command and breaks the next `git pull` and the next
+`scp`: the files then belong to a user that does not exist on the host, so
+your own account can no longer write them, and git refuses a repository it
+sees as somebody else's (*detected dubious ownership*). Keep the two apart:
+
+```bash
+sudo chown -R $USER:$USER /opt/jellyscope        # the code is yours
+sudo chown -R 10001:10001 /opt/jellyscope/data   # the data is the container's
+```
+
+`data/` is in `.gitignore`, so git never touches it and the split holds.
+
+**Or hand the container your own account instead.** Add `user:` to
+`docker-compose.yml` and the application runs as you, so `data/` can stay
+yours and no `chown` is needed at all:
+
+```yaml
+services:
+  jellyscope:
+    user: "1000:1000"       # id -u : id -g
+```
+
+The container then changes no ownership whatsoever; a folder it cannot
+write to is reported on the page as usual.
 
 **Reading files with ffprobe.** The container has to see the media. Mount
 the library **read-only** and map the paths in *Settings → Data
@@ -206,7 +260,7 @@ example configs:
 
 ## Access to media files
 
-Only when the data source is **ffprobe** (**Settings → Technical data source**);
+Only when the data source is **ffprobe** (**Settings → Data collection**);
 `install.sh` has already put `ffmpeg` in place for you. Jellyscope then
 reads the files itself and has to see the same paths Jellyfin does. When
 they differ — typically Jellyfin in Docker — fill in **Path mapping** in
@@ -249,7 +303,7 @@ and restores the same way.
 
 ## Backups
 
-**Settings → Scheduled tasks**: pick a folder and a time. Runs daily,
+**Settings → Tasks and backups**: pick a folder and a time. Runs daily,
 keeps as many copies as you set. Each one can be downloaded, deleted or
 restored from the same page; restoring saves the current state first.
 
@@ -298,7 +352,9 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m pip install "psycopg[binary,pool]"   # only for PostgreSQL
 cp .env.example .env
-python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))" >> .env
+# The example already has an empty SECRET_KEY= line - rewrite it rather
+# than adding a second one, or the empty one wins.
+sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')|" .env
 
 # one of the two, not both
 sudo cp deploy/jellyscope.service /etc/systemd/system/
@@ -313,7 +369,7 @@ are not obvious:
 |---|---|
 | full path to `.venv/bin/python` | Process managers do not know your `PATH`. |
 | `TZ=Europe/Prague` | Daily totals are grouped by local time. |
-| `stopasgroup=true` / `KillMode=mixed` | Stops `ffprobe` and `pg_dump` children too. |
+| `stopasgroup=true` / `KillMode=control-group` | Stops `ffprobe` and `pg_dump` children too. |
 | `autorestart=true` / `Restart=always` | Comes back after a crash. |
 
 ---

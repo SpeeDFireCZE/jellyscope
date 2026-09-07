@@ -58,12 +58,20 @@ RUN python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Nic tu neběží jako root. Uživatel má pevné UID, aby šlo svazku s daty
-# nastavit vlastníka na hostiteli (chown -R 10001:10001 ./data).
+# Aplikace běží pod vlastním uživatelem s pevným UID - nikdy jako root.
+# Pevné číslo proto, aby šlo připojené složce nastavit vlastníka i na
+# hostiteli.
 RUN useradd --create-home --uid 10001 jellyscope \
     && mkdir -p /app/data \
     && chown -R jellyscope:jellyscope /app
-USER jellyscope
+
+# setpriv zahazuje rootovská práva ve spouštěči (viz níž). V debianím
+# základu bývá, ale spoléhat se na to nebudeme: chybějící nástroj by se
+# projevil až na cizím serveru tím, že by aplikace běžela jako root.
+RUN command -v setpriv >/dev/null 2>&1 \
+    || (apt-get update \
+        && apt-get install --no-install-recommends -y util-linux \
+        && rm -rf /var/lib/apt/lists/*)
 
 # Na 127.0.0.1 uvnitř kontejneru se zvenku nikdo nedovolá.
 # JELLYSCOPE_DOCKER rekne aplikaci, ze bezi v kontejneru. Podle toho
@@ -81,4 +89,13 @@ EXPOSE 8097
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/setup', timeout=4)"
 
+# Kontejner startuje jako root JEN kvůli jedné věci: srovnat vlastníka
+# připojené složky s daty. Ta na hostiteli patří tomu, kdo ji vyrobil -
+# při prvním `docker compose up` tedy rootovi - a aplikace by se do ní
+# nedostala. Spouštěč to spraví a hned nato práva zahodí; samotná
+# aplikace běží jako jellyscope (UID 10001).
+#
+# Přes `sh` schválně: repozitář se vyvíjí i na Windows, kde se právo
+# ke spuštění v gitu neudrží, a chybějící "x" by kontejner shodilo.
+ENTRYPOINT ["/bin/sh", "/app/deploy/docker-entrypoint.sh"]
 CMD ["python", "run.py"]

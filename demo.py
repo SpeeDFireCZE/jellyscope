@@ -23,7 +23,10 @@ BASE_DIR = Path(__file__).resolve().parent
 os.environ["DATABASE_PATH"] = "data/demo.db"
 os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"   # zamerne nefunkcni
 os.environ["JELLYFIN_API_KEY"] = "ukazkovy-rezim-bez-serveru"
-os.environ["SECRET_KEY"] = "ukazkovy-rezim"
+# setdefault, ne prirazeni: timhle klicem se podepisuji prihlasovaci
+# cookies a "ukazkovy-rezim" stoji ve verejnem zdrojaku. Doma to
+# nevadi, na verejne ukazce si klic ma server nastavit vlastni.
+os.environ.setdefault("SECRET_KEY", "ukazkovy-rezim")
 # Ukazkovy rezim: sberac se nespousti (nema se koho ptat)
 # a vymyslene "prave se hraje" tak na Prehledu zustane videt.
 os.environ["JELLYSCOPE_DEMO"] = "1"
@@ -47,13 +50,10 @@ def main() -> None:
 
     if demodata.already_seeded():
         print("Ukazkova data uz v databazi jsou, jen spoustim server.")
-    else:
-        print("Pripravuji vymyslena data...")
-        counts = demodata.seed()
+    counts = demodata.pripravit()
+    if counts["items"]:
         print(f"  {counts['items']} titulu, {counts['plays']} prehravani, "
               f"{counts['users']} uzivatelu")
-
-    demodata.ensure_demo_account()
 
     print()
     print("=" * 58)

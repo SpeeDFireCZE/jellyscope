@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -133,9 +134,14 @@ with TestClient(app) as client:
     # Past: kdyby se okno naplnilo tymiz radky jako karta, vsechny testy
     # vyse by presto prosly. Karta ty drobne kombinace mit NESMI - jinak
     # se nic neschovava a okno neni k cemu.
+    # Hleda se v BUNKACH tabulky, ne v cele strance: dvouznakovy nazev
+    # jako "PL" se jinak trefi do libovolneho slova - naposledy do
+    # "AGPL-3.0" v paticce.
     karta_html = html.split('id="okno-kombinace"', 1)[0]
+    bunky = re.findall(r'<td class="strong">(.*?)</td>', karta_html, re.S)
+    bunky = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", b)).strip() for b in bunky]
     navic = [j for j in DROBNE
-             if langstats.languages.combination_label(j) in karta_html]
+             if langstats.languages.combination_label(j) in bunky]
     check(not navic, f"a na kartě samotné nejsou (přebývá: {navic})")
 
 print()

@@ -6,6 +6,130 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.5.2
+
+### Changed
+
+- **The licence is now AGPL-3.0.** Jellyscope stays free, and anyone who
+  passes it on has to pass on the source with it - including when they run
+  a modified version as a service over the network. That last part is why
+  Affero and not plain GPL: this is a web application, and plain GPL would
+  let someone host a closed fork without ever publishing anything. Selling
+  it is still allowed; hiding the source is not.
+
+  Versions up to and including 1.5.1 were released under MIT and stay that
+  way - a licence already given cannot be taken back.
+
+### Added
+
+- **The number of streams shown on a phone is set separately.** A stream
+  card takes the full width there, so four of them push everything else
+  off the screen; the previous single setting had to be a compromise
+  between a phone and a monitor. The server sends both and CSS picks,
+  because the server cannot know what someone is looking at.
+
+- **The capacity entered by hand is given in GB or TB.** A thirty-terabyte
+  array was `30000` in a field that then read the number back the same way;
+  now the unit sits beside the number and the value is stored in bytes
+  either way. Settings saved before this keep their size - they are shown
+  in terabytes when they are large enough to deserve it.
+
+- **A public demo can run in Docker.** `docker compose` now passes
+  `JELLYSCOPE_DEMO` to the container, and the demo data is prepared by
+  whichever launcher starts the application - not only by `demo.py`. The
+  image runs `run.py`, so a demo container used to come up empty *and*
+  locked: nothing is saved in demo mode, so not even an administrator
+  could be created in it. Off unless asked for; a normal installation
+  notices nothing.
+
+- **The history can be cleared out on a schedule.** A tool that remembers
+  who watched what and when will sooner or later be asked to forget some
+  of it. A daily task deletes playbacks older than a limit that is set
+  alongside it, and Settings says how many rows that limit would remove
+  before it is saved - "40,000 playbacks deleted" is a bad moment for a
+  surprise. It is **off unless switched on**: deleting data must never
+  start on its own, least of all because somebody updated. Playback that
+  is running is never deleted; it belongs to the collector, which would
+  only write it again a moment later, without its beginning.
+
+- **One viewer can be forgotten.** Everything recorded about them goes,
+  and nobody else is touched. The account itself lives in Jellyfin, so the
+  next synchronisation sees it again - without the history.
+
+- **How many viewers the language page shows is set separately for a
+  phone.** The same split the now-playing card already had: a bar takes
+  the full width there, and the legend and the table below it start a
+  screen further down. Above the phone limit the rest hides behind a
+  button that opens the same viewers in a window - on a wide screen every
+  bar stays where it was.
+
+### Fixed
+
+- **A container had to be told, by hand, who owns its data folder.** The
+  application runs as UID 10001; the folder on the host belongs to whoever
+  created it, which on a first `docker compose up` is Docker itself, as
+  root. So the first start of a fresh installation ended in an error that
+  had to be fixed on the host - a `chown` in a place nobody was told to
+  look. The container now corrects that owner itself, but only while the
+  folder is **empty**, which is exactly the one Docker made seconds
+  earlier: nothing in it can be overwritten, because there is nothing in
+  it. A folder that already holds something is left alone even when the
+  owner is wrong - those are somebody's files, and rewriting them behind
+  their back is not the container's business. It starts as root for that
+  one step and drops the privileges before the application starts, so the
+  application itself still never runs as root.
+
+- **A container that could not reach its data left nothing but a log
+  entry.** The process ended, so the browser said "cannot connect" and the
+  reason sat in `docker compose logs`, where nobody had been sent. The
+  application now starts anyway and answers every address with one page:
+  what happened, which folder it cannot write to, and the command that
+  fixes it. It answers 503, so a health check still sees that something is
+  wrong instead of reporting a healthy container with a broken
+  application.
+
+  A database that opens but cannot be written to counts as the same
+  failure. SQLite opens a read-only file happily and gives way only on the
+  first write - so the crash arrived two lines later, on a `PRAGMA`, past
+  everything that was watching for it.
+
+  The page says all of it in Czech and in English, the message itself
+  included. It cannot be translated afterwards: which language to use is a
+  setting, and settings live in the database that could not be opened.
+
+- **A container that could not open its database said only "unable to open
+  database file".** No path, no reason, no advice - and in Docker this is
+  the most common first-start failure there is: the mounted folder belongs
+  to root while the container runs as UID 10001. The message now names the
+  file, says what is wrong with it, and inside a container adds the command
+  that fixes it. Without a database the launcher stops instead of raising a
+  stack trace from the depths of sqlite3.
+
+- **The now-playing card was wider than the screen.** The grid asked for
+  380px columns even where only 358 were available, so the card ran past
+  the right edge and its border was cut off. Every fixed grid minimum in
+  the stylesheet now says `min(X, 100%)` - the same trap had already been
+  fixed in two other places, and this sweep covers the rest.
+
+- **The estimate ignored a capacity entered by hand.** "Space runs out in
+  N days" was worked out from the free space stored in the last snapshot,
+  which is written during a sync - so a capacity typed into Settings did
+  nothing until the next one ran. It uses the current value now, and the
+  number changes as soon as it is saved.
+
+- **The growth curve still read higher than the library size.** Both
+  numbers were right; they were in different units. The chart plotted
+  gigabytes ("13 101") while the tile beside it said terabytes ("12.8 TB"),
+  so the curve looked like it ended a thousand times above the size it was
+  supposed to match. The chart now picks its unit from the data - terabytes
+  once the library passes one - so the end of the curve and the tile say
+  the same thing.
+
+- **The calendar was cut off on a phone.** In the custom-period window the
+  "To" field sits in the second column, so its calendar started 202px in
+  and ran 80px past the screen edge. The two date fields are stacked on a
+  narrow screen, and the calendar never exceeds the width it has.
+
 ## 1.5.1
 
 ### Fixed

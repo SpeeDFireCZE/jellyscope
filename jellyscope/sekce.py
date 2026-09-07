@@ -41,19 +41,33 @@ def data_rustu(obdobi: Any) -> dict[str, Any]:
     obě čáry navazují a mezi nimi není díra.
     """
     radky = stats.snimky(obdobi)
+
+    # Jednotka se vybírá podle velikosti knihovny, ne napevno.
+    #
+    # Graf kreslil vždycky gigabajty, kdežto dlaždice vedle něj píše
+    # „12,8 TB". U dvanáctiterabajtové knihovny tak na ose stálo 13 101
+    # a v dlaždici 12,8 - jedno a totéž číslo, jen jinou jednotkou, což
+    # se čte jako „graf ukazuje víc". Teď mluví obojí stejně.
+    nejvic = max((int(r.get("velikost") or 0) for r in radky), default=0)
+    if nejvic >= 1024 ** 4:
+        delitel, jednotka, mist = 1024 ** 4, "TB", 2
+    else:
+        delitel, jednotka, mist = 1024 ** 3, "GB", 2
+
     prvni_zmereny = next((i for i, r in enumerate(radky)
                           if not r.get("dopocteno")), None)
     for index, radek in enumerate(radky):
-        gb = round(int(radek.get("velikost") or 0) / 1024 ** 3, 2)
-        radek["gb"] = gb
+        hodnota = round(int(radek.get("velikost") or 0) / delitel, mist)
+        radek["gb"] = hodnota
         dopocteno = bool(radek.get("dopocteno"))
-        radek["gb_dopocteno"] = gb if dopocteno else None
-        radek["gb_zmereno"] = None if dopocteno else gb
+        radek["gb_dopocteno"] = hodnota if dopocteno else None
+        radek["gb_zmereno"] = None if dopocteno else hodnota
         # Spoj: poslední dopočtený den patří i měřené čáře, jinak by mezi
         # nimi byla mezera přes celý den.
         if prvni_zmereny is not None and index == prvni_zmereny - 1:
-            radek["gb_zmereno"] = gb
-    return {"snimky": radky, "rust": stats.rust_knihovny(obdobi)}
+            radek["gb_zmereno"] = hodnota
+    return {"snimky": radky, "rust": stats.rust_knihovny(obdobi),
+            "jednotka_rustu": jednotka}
 
 
 def souhrn_obdobi(obdobi: Any) -> dict[str, Any]:

@@ -227,9 +227,18 @@
     <h3 class="skupina">{{ _("Úložiště knihovny") }}</h3>
     <p class="skupina-popis">{{ _("odkud se bere volné místo pro odhad růstu") }}</p>
     <div class="field">
-        <label for="library_capacity_gb">{{ _("Kapacita úložiště knihovny (GB)") }}</label>
-        <input type="number" id="library_capacity_gb" name="library_capacity_gb"
-               value="{{ kapacita_gb }}" min="0" step="1">
+        <label for="library_capacity_gb">{{ _("Kapacita úložiště knihovny") }}</label>
+        {# Číslo a jednotka vedle sebe: u dvacetiterabajtového pole je
+           „30000 GB" zbytečně dlouhé číslo, u půlterabajtového disku
+           zase „0,5 TB" nepohodlné. Ať si člověk vybere. #}
+        <div class="pole-s-jednotkou">
+            <input type="number" id="library_capacity_gb" name="library_capacity_gb"
+                   value="{{ kapacita_cislo }}" min="0" step="1">
+            <select name="library_capacity_unit" aria-label="{{ _('Jednotka') }}">
+                <option value="GB" {{ 'selected' if kapacita_jednotka == 'GB' }}>GB</option>
+                <option value="TB" {{ 'selected' if kapacita_jednotka == 'TB' }}>TB</option>
+            </select>
+        </div>
         <p class="hint">
             {{ _("Zadané číslo přebije všechno ostatní. Volné místo se z něj počítá jako kapacita minus velikost knihovny, takže předpokládá, že na tom úložišti nic jiného neleží. Nech 0 a zjistí se to samo.") }}
             {% if misto_zdroj %}
@@ -284,6 +293,7 @@
     </p>
     {% endif %}
 
+    <form method="post" action="/settings/historie/zapomen" id="zapomenut"></form>
     <form method="post" action="/settings/tasks">
     <div class="table-wrap">
         <table>
@@ -380,6 +390,59 @@
             {% endfor %}
             </tbody>
         </table>
+    </div>
+
+    <h3 class="skupina" style="margin-top:22px">{{ _("Odklízení historie") }}</h3>
+    <p class="skupina-popis">{{ _("jak dlouhá historie přehrávání se nechává") }}</p>
+
+    <div class="field">
+        <label for="history_retention_days">{{ _("Historie se nechává (dní)") }}</label>
+        <input type="number" id="history_retention_days" name="history_retention_days"
+               value="{{ retence_dnu }}" min="{{ retence_min }}" max="{{ retence_max }}"
+               style="width:120px">
+        <p class="hint">
+            {{ _("Platí, teprve když je úloha „Odklízení historie“ výš zapnutá – bez ní se nemaže nic. Právě běžící přehrávání se nemaže nikdy.") }}
+            <br>
+            {% if odklid.celkem %}
+                {{ _("V historii je") }} <strong>{{ odklid.celkem | number }}</strong>
+                {{ _("přehrávání") }}{% if odklid.nejstarsi %}, {{ _("nejstarší z") }}
+                {{ odklid.nejstarsi[:10] | cesky_datum }}{% endif %}.
+                {% if odklid.odejde %}
+                    <br><span class="badge warning"><span class="dot"></span>{{ _("při tomhle nastavení by odešlo") }}
+                    {{ odklid.odejde | number }} {{ _("přehrávání") }}</span>
+                {% else %}
+                    <br><span class="badge good"><span class="dot"></span>{{ _("při tomhle nastavení by teď neodešlo nic") }}</span>
+                {% endif %}
+            {% else %}
+                {{ _("Historie je zatím prázdná.") }}
+            {% endif %}
+        </p>
+    </div>
+
+    {# Zapomenutí diváka je jednorázový zásah, ne nastavení - proto má
+       vlastní formulář a neukládá se spolu s úlohami. #}
+    <div class="field">
+        <label for="zapomenout_divaka">{{ _("Zapomenout jednoho diváka") }}</label>
+        <div class="pole-s-jednotkou">
+            <select id="zapomenout_divaka" name="user_id" form="zapomenut"
+                    {{ 'disabled' if not divaci }}>
+                {% for divak in divaci %}
+                    <option value="{{ divak.user_id }}">
+                        {{ divak.jmeno or divak.user_id }} ({{ divak.relaci | number }})
+                    </option>
+                {% else %}
+                    <option value="">{{ _("nikdo tu není") }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn danger" type="submit" form="zapomenut"
+                    {{ 'disabled' if not divaci }}
+                    onclick="return confirm('{{ _("Smazat celou historii tohoto diváka? Zpět to nejde.") }}')">
+                {{ _("Zapomenout") }}
+            </button>
+        </div>
+        <p class="hint">
+            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie.") }}
+        </p>
     </div>
 
     <div class="field" style="margin-top:18px">
@@ -1707,11 +1770,31 @@
         </div>
 
         <div class="field">
+            <label for="ui_max_streams_mobile">{{ _("Přehrávání na Přehledu – mobil") }}</label>
+            <input type="number" id="ui_max_streams_mobile" name="ui_max_streams_mobile"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_streamu_mobil }}" style="width:120px">
+            <p class="hint">
+                {{ _("Na úzké obrazovce zabírá karta streamu celou šířku, takže se jich vejde míň. Zbytek se schová za tlačítko, které otevře tytéž streamy v okně.") }}
+            </p>
+        </div>
+
+        <div class="field">
             <label for="ui_max_viewers">{{ _("Diváků v jazykových statistikách") }}</label>
             <input type="number" id="ui_max_viewers" name="ui_max_viewers"
                    min="{{ strop_min }}" max="{{ strop_max }}"
                    value="{{ strop_lidi }}" style="width:120px">
             <p class="hint">{{ _("Nad tento počet se pruhy „Kdo v jakém jazyce sleduje“ schovají do okna.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_viewers_mobile">{{ _("Diváků v jazykových statistikách – mobil") }}</label>
+            <input type="number" id="ui_max_viewers_mobile" name="ui_max_viewers_mobile"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_lidi_mobil }}" style="width:120px">
+            <p class="hint">
+                {{ _("Na úzké obrazovce je pruh přes celou šířku a pod diváky je ještě legenda a tabulka. Zbytek se schová za tlačítko, které otevře tytéž diváky v okně.") }}
+            </p>
         </div>
 
         <h3 class="skupina">{{ _("Mapa na stránce Síť") }}</h3>

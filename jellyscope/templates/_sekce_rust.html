@@ -21,12 +21,14 @@
         {# Dvě série, ne jedna: dopočtená minulost se nesmí tvářit jako
            měření. Barvu si drží věc, ne pořadí - dopočet je vždycky
            tlumený, měření vždycky v barvě aplikace. #}
+        {# Jednotku vybírá `sekce.data_rustu()` podle velikosti knihovny -
+           ať na ose stojí totéž, co v dlaždici „Velikost celkem". #}
         {{ charts.area_chart_multi(snimky, 'den',
                [{'key': 'gb_dopocteno', 'label': _('dopočteno'),
                  'barva': 'var(--text-muted)'},
                 {'key': 'gb_zmereno', 'label': _('změřeno'),
                  'barva': 'var(--accent)', 'slot': 2}],
-               unit='') | safe }}
+               unit=jednotka_rustu) | safe }}
 
         {% if rust.dopocteno %}
         <p class="card-note" style="margin-top:10px">

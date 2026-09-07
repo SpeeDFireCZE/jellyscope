@@ -1,7 +1,7 @@
 # Jellyscope
 
 [![tests](https://github.com/SpeeDFireCZE/jellyscope/actions/workflows/tests.yml/badge.svg)](https://github.com/SpeeDFireCZE/jellyscope/actions/workflows/tests.yml)
-[![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 [![demo: jellyscope.cz](https://img.shields.io/badge/demo-jellyscope.cz-3987e5.svg)](https://jellyscope.cz)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
@@ -45,6 +45,12 @@ a map you can zoom into.
 
 ![Network](docs/screenshots/network.png)
 
+**Comparison** — any two periods side by side, the same statistics under
+each other: watching, how the server delivered it, network, languages and
+what the library gained or lost.
+
+![Comparison](docs/screenshots/srovnani.png)
+
 | Library | Languages |
 |---|---|
 | ![Library](docs/screenshots/library.png) | ![Languages](docs/screenshots/languages.png) |
@@ -65,12 +71,15 @@ the old shapes, and you can switch again whenever you like.
 | Page | Contents |
 |---|---|
 | **Overview** | Live playbacks, watched time, most active users and titles, transcode share, a "when do people watch" heatmap |
+| **Comparison** | Any two periods side by side — watching, delivery, network, languages, library growth |
 | **Insights** | Dead storage, most transcoded files, upgrade candidates, oversized files, possible duplicates |
 | **Languages** | Language split in percent, who watches dubbed and who in the original, subtitles, titles with no Czech track |
-| **Library** | Tiles for each Jellyfin library → detail with Overview / Media / Activity tabs → file detail |
+| **Network** | Throughput over time, volume transferred, home network vs internet, a map of where people watch from |
+| **Library** | Tiles for each Jellyfin library → detail with Overview / Media / Activity tabs → file detail; day-by-day growth of the whole library |
 | **Users** | Watch time per user, devices, individual detail |
 | **History** | Every recorded playback, with language and links to the user and the title |
-| **Settings** | Data source, scheduled tasks, backups, history import, accounts, blocked logins, log |
+| **Your own dashboard** | An extra tab you compose yourself out of the cards the other pages are made of — off until you switch it on |
+| **Settings** | Jellyfin connection, data collection, scheduled tasks and backups, notifications, history import, database, accounts, blocked logins, log, interface, general |
 
 ### Library and file detail
 
@@ -125,27 +134,116 @@ It is an honest estimate, not a measurement of the wire — seeking,
 buffering and pauses move the real numbers. The page says so.
 
 **The map** places public addresses with a GeoLite2 database: one file
-in `data/`, downloaded on a button press and queried offline. No address
-of your viewers is ever sent anywhere. It needs the optional
-`maxminddb` library (see `requirements.txt`); without it the page
-explains what to install instead of showing an empty map. Addresses from
-the home network are never placed — `192.168.1.5` marks no spot on
-Earth. Data © MaxMind, GeoLite2 (CC BY-SA 4.0).
+in `data/`, downloaded on a button press in Settings and queried offline.
+No address of your viewers is ever sent anywhere — the library that reads
+that file (`maxminddb`, part of the installation) opens a local file and
+never asks the network. Until the file is downloaded the page explains
+what is missing instead of showing an empty map. Addresses from the home
+network are never placed — `192.168.1.5` marks no spot on Earth.
+Data © MaxMind, GeoLite2 (CC BY-SA 4.0).
+
+### Comparison of two periods
+
+"August versus December" rather than "compared to the previous period".
+Two independent pickers, each with its own custom range, and the same
+statistics under each other: watching, how the server delivered the
+content, network, which language people watched in, and what the library
+gained or lost.
+
+The page says out loud when the two periods **overlap** or are **not the
+same length** — a percentage between a week and a month is a comparison of
+nothing.
+
+### Your own dashboard
+
+The cards the other pages are built from can be stacked into a tab of your
+own: pick them, order them, and it becomes the page you land on after
+signing in. The administrator composes it and it applies to the whole
+server, the same as every other setting. Until something is in it, the tab
+does not appear at all — an empty tab is worse than none.
+
+### Library growth and free space
+
+A daily snapshot of the library (size, title count) turns into a
+**day-by-day curve** on the Library page, and the past before the first
+snapshot is reconstructed from the dates titles were added. The
+reconstruction is drawn in a different colour and the page says what it
+is: we know when a title arrived, but its past is described with today's
+sizes.
+
+Alongside it: how much arrived over the period, the daily average, and
+**how long the free space will last**. Free space comes from Jellyfin
+itself, because the data is usually on a different machine than
+Jellyscope; where the library sits in the cloud, not even Jellyfin knows
+its size, so *Settings → Data collection* takes a capacity **entered by
+hand** (in GB or TB) which overrides everything else.
+
+### Notifications
+
+The application runs in the background and knows when something breaks —
+it just has nobody to tell. *Settings → Notifications* has the channels
+(**SMTP**, **Discord**, **Telegram**, each with a test button) and three
+events that can be switched on and off separately:
+
+- **the collector has stopped collecting** — nothing has been recorded for
+  a while, so the history is quietly growing a hole
+- **space is running out** — from the growth of the library and the free
+  space that is known
+- **a weekly summary** — on a day and at a time you choose
+
+A message is only sent **on change**, including "it works again". A watch
+that keeps repeating itself is a watch people stop reading.
+
+One limit the page states itself: nobody can tell you that Jellyscope is
+not running — there would be nobody to send it. That belongs to an uptime
+monitor.
+
+### Clearing out the history
+
+A tool that records who watched what and when will sooner or later be
+asked to forget some of it. *Settings → Tasks and backups* has a daily
+**Clearing out the history** task: it deletes playbacks older than a limit
+set beside it, and the page says how many rows that limit would remove
+**before** anything is saved.
+
+It is **off unless switched on**, and it stays off across updates —
+deleting data must never start on its own. Playback that is running is
+never deleted; it belongs to the collector, which would only write it
+again a moment later without its beginning.
+
+The same section can **forget one viewer**: everything recorded about them
+goes, and nobody else is touched. The account itself lives in Jellyfin, so
+the next synchronisation sees it again — without the history.
+
+### On a phone
+
+Every page was measured at 320, 360 and 390 px, and none of them scrolls
+sideways. The menu is a burger with the name of the open page, the
+Settings sections are a dropdown, wide tables turn into blocks or hide
+their secondary columns, and how many live streams (or viewers in the
+language statistics) are shown outright is set **separately for a phone**,
+where a card takes the full width.
 
 ### Scheduled tasks and backups
 
-**Settings → Scheduled tasks** has four tasks:
+**Settings → Tasks and backups** has seven tasks:
 
 | Task | When | What it does |
 |---|---|---|
 | Library sync | daily at a set time | Downloads users, libraries and titles. With ffprobe selected, an analysis of files without technical data follows. |
 | Recently added titles | every N minutes | Only fetches what is not in the library yet. Barely touches Jellyfin, so it can run often. |
 | Data tidy-up | daily at a set time | Asks Jellyfin about records that lead nowhere in the library, links them by name and episode number, merges duplicates and aligns names with the library. It deletes nothing. |
+| Notifications | every N minutes | Checks whether the collector is collecting and whether space is running out, and sends the weekly summary on its day. |
+| Check for updates | daily at a set time | Asks GitHub whether a newer release is out. Installs nothing, and is off by default. |
+| Clearing out the history | daily at a set time | Deletes playbacks older than the limit that is set. Off by default. |
 | Database backup | daily at a set time | Saves a copy into the chosen folder and deletes surplus older ones. |
 
 Their default times are in that order — the tidy-up works on what the
 sync has just fetched, and the backup then stores data that is already
 straight.
+
+The same page also holds **File analysis** (reading technical data with
+ffprobe, with its coverage) and the manual **Data tidy-up** button.
 
 The nightly tasks are scheduled by **time of day**, not by interval:
 an interval counts from the last run, so every manual run would push the
@@ -179,8 +277,8 @@ stores them. Some Playback Reporting versions do record the language, and
 those rows are counted.
 
 Imported history often refers to titles by name only ("Episode 7"), which
-matches nothing in particular. **Data tidy-up** (in *Settings → Scheduled
-tasks*) sorts that out in one action, and the daily task does it without
+matches nothing in particular. **Data tidy-up** (in *Settings → Tasks and
+backups*) sorts that out in one action, and the daily task does it without
 being asked:
 
 1. Jellyfin is asked about the identifiers in the imported history — they
@@ -199,7 +297,8 @@ by reason, and can be assigned to a library title by hand.
 ### Accounts and signing in
 
 The whole app is behind a login. On first open it asks you to create an
-administrator account; further accounts are added in **Settings → Jellyscope accounts**.
+administrator account; further accounts are added in **Settings →
+Accounts**.
 
 Two roles:
 
@@ -227,13 +326,16 @@ python3 -m venv .venv
 .venv/bin/python demo.py
 ```
 
-Open <http://127.0.0.1:8097> and sign in as `demo` / `demodemo`. It writes
+Open <http://127.0.0.1:8098> and sign in as `demo` / `demodemo`. It writes
 into `data/demo.db`, so your real database (if you already have one) stays
-untouched.
+untouched. It needs no `.env` and no API key — `demo.py` sets everything
+itself.
 
 ---
 
 ## Installation
+
+### The installer (Linux)
 
 On a Linux server one command does it:
 
@@ -256,7 +358,38 @@ writes `.env` with a generated key and prints how to hand the app over to
 systemd or supervisord. The whole procedure — reverse proxy, HTTPS,
 PostgreSQL, backups — is in **[DEPLOY.md](DEPLOY.md)**.
 
-By hand, without the script (Python 3.10 or newer):
+### Docker
+
+```bash
+git clone https://github.com/SpeeDFireCZE/jellyscope.git
+cd jellyscope
+cp .env.example .env
+# SECRET_KEY is the one value the container refuses to start without:
+sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')|" .env
+docker compose up -d
+```
+
+Then open <http://localhost:8097> and create the first account. Everything
+is configured in the same `.env` the app uses without Docker; the data
+folder is mounted from the host, so a backup is a copy of a folder.
+
+The application inside runs as UID 10001 and never as root. When the data
+folder is **empty** the container puts its owner right on the first start,
+so there is nothing to do; a folder that already holds something is left
+alone, and if the application cannot write into it, every page says which
+folder and what to run. Details, including a reverse proxy and HTTPS, are
+in **[DEPLOY.md](DEPLOY.md)**.
+
+Changing the code means rebuilding the image — `docker compose up -d`
+alone reuses the one that is already built:
+
+```bash
+git pull && docker compose up -d --build
+```
+
+### By hand
+
+Python 3.10 or newer:
 
 ```bash
 python3 -m venv .venv
@@ -266,7 +399,7 @@ cp .env.example .env
 ```
 
 Open **<http://127.0.0.1:8097>**. The app asks you to **create an
-administrator account**, then go to **Settings → Jellyfin connection**, fill in the
+administrator account**, then go to **Settings → Jellyfin**, fill in the
 address and an API key (Dashboard → Advanced → API Keys), test the
 connection and run **Synchronise library**.
 
@@ -317,9 +450,10 @@ what tells us how to connect.
 
 ### Interface language
 
-**Settings → Interface language** switches between Czech and English, for the whole
-app. The application log has its own language setting — a log is often read
-by somebody else, and English messages are easier to search for.
+**Settings → General → Language and time** switches between Czech and
+English, for the whole app — it is a server setting, not a per-person one.
+The application log has its own language setting — a log is often read by
+somebody else, and English messages are easier to search for.
 
 A missing translation falls back to Czech, so you never get a blank spot.
 
@@ -330,9 +464,10 @@ for you** — this is for the case where you skipped it with `SKIP_FFMPEG=1`
 or installed by hand.
 
 1. `sudo apt install ffmpeg`
-2. In **Settings → Technical data source** switch the source to **ffprobe +
+2. In **Settings → Data collection** switch the source to **ffprobe +
    Jellyfin** and fill in the path to `ffprobe` if it is not on `PATH`
-3. In **Settings → File analysis** press **Analyse missing**
+3. In **Settings → Tasks and backups → File analysis** press
+   **Analyse missing**
 
 ---
 
@@ -388,7 +523,7 @@ What the app does on its own:
 - signing in discards the old session (session fixation)
 - repeated failed logins block that address, each block longer than the last
   (1, 2, 5, 15 minutes, then permanent); administrators can lift a block in
-  **Settings → Blocked addresses**
+  **Settings → Blocked logins**
 - when `SECRET_KEY` is not set, a random one is generated and stored —
   never a fixed value from the source code
 - permissions are enforced on the server, not by hiding buttons
@@ -428,14 +563,21 @@ jellyscope/
     ├── collector.py        background playback collection
     ├── scanner.py          library sync + file analysis
     ├── tasks.py            scheduler and backups
+    ├── odklizeni.py        clearing out the history, forgetting a viewer
+    ├── notifikace.py       SMTP, Discord, Telegram
+    ├── updates.py          asking GitHub about a newer release
     ├── importers.py        history import and its repairs
     ├── stats.py            statistical SQL queries
     ├── insights.py         behaviour meets technique ← the core idea
     ├── langstats.py        language statistics
+    ├── sekce.py            the cards the custom dashboard is built from
     ├── charts.py           hand-drawn SVG charts
+    ├── worldmap.py         the map on the Network page
+    ├── geoip.py            the offline GeoLite2 lookup
     ├── formatting.py       numbers for humans
     ├── i18n.py             translations, including log messages
     ├── applog.py           log file and its viewer
+    ├── porucha.py          the page shown when the database will not open
     ├── web.py              routes
     ├── demodata.py         generator of made-up data for the demo
     ├── templates/          HTML templates
@@ -458,10 +600,10 @@ General*. What changed in each of them is in
 **[CHANGELOG.md](CHANGELOG.md)**, and the release notes on GitHub are
 taken from there.
 
-Releases are tagged `v1.2.3` on GitHub; the tag has to match
-`__version__` in `jellyscope/__init__.py`, and a workflow refuses to
-publish a release when it does not — a release nobody can identify is
-worse than none.
+Releases are tagged on GitHub as `1.2.3` (older ones as `v1.2.3`, both
+are accepted); the tag has to match `__version__` in
+`jellyscope/__init__.py`, and a workflow refuses to publish a release when
+it does not — a release nobody can identify is worse than none.
 
 Jellyscope can watch for a new one: once a day it asks GitHub whether a
 newer release is out and says so in the corner. It installs nothing, and
@@ -482,6 +624,8 @@ Jellyfin, so that is your call. Updating stays with `deploy/update.sh`.
 | Insights page is empty | Not enough history yet. Let it run for a few days. |
 | Charts and library are both empty | The library sync has not run yet. |
 | Everyone was signed out | The signing key changed — see `SECRET_KEY` in [Configuration](#configuration). |
+| In Docker, every page says the database cannot be opened | The mounted `data/` folder belongs to somebody else. On the host: `sudo chown -R 10001:10001 ./data && docker compose restart` — only that folder, never the whole project, or the next `git pull` stops working. |
+| In Docker, a change to the code does nothing | The image was not rebuilt: `docker compose up -d --build`. |
 
 ---
 
@@ -513,5 +657,14 @@ Found a security hole? Do not open an issue — see
 
 ## Licence
 
-[MIT](LICENSE). The code is written independently; nothing was taken from
-Jellystat or MediaLyze — only the idea of what is worth measuring.
+[AGPL-3.0](LICENSE). Free to use, change and pass on - and anyone who
+does must pass on the source too, including when they run a modified
+version as a service over the network. That last part is why AGPL and not
+plain GPL: Jellyscope is a web application, and plain GPL would let
+someone host a closed fork without ever publishing anything.
+
+Versions up to and including 1.5.1 were released under MIT and stay that
+way - a licence already given cannot be taken back.
+
+The code is written independently; nothing was taken from Jellystat or
+MediaLyze - only the idea of what is worth measuring.

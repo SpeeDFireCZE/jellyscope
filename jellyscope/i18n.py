@@ -1268,6 +1268,51 @@ EN: dict[str, str] = {
 
     "Sekce": "Section",
     "Přejít": "Go",
+    "Přehrávání na Přehledu – mobil": "Playback on the Overview - phone",
+    "Na úzké obrazovce zabírá karta streamu celou šířku, takže se jich vejde míň. Zbytek se schová za tlačítko, které otevře tytéž streamy v okně.":
+        "On a narrow screen a stream card takes the full width, so fewer of "
+        "them fit. The rest hides behind a button that opens the same streams "
+        "in a window.",
+    "Diváků v jazykových statistikách – mobil":
+        "Viewers in the language statistics - phone",
+    "Na úzké obrazovce je pruh přes celou šířku a pod diváky je ještě legenda a tabulka. Zbytek se schová za tlačítko, které otevře tytéž diváky v okně.":
+        "On a narrow screen a bar takes the full width, and below the viewers "
+        "there is still a legend and a table. The rest hides behind a button "
+        "that opens the same viewers in a window.",
+    # --- odklizeni historie (viz odklizeni.py) ---
+    "Odklízení historie": "Clearing out the history",
+    "jak dlouhá historie přehrávání se nechává":
+        "how much playback history is kept",
+    "Historie se nechává (dní)": "History is kept for (days)",
+    "Platí, teprve když je úloha „Odklízení historie“ výš zapnutá – bez ní se nemaže nic. Právě běžící přehrávání se nemaže nikdy.":
+        "This applies only once the \u201eClearing out the history\u201c task "
+        "above is switched on - without it nothing is deleted. Playback that "
+        "is running right now is never deleted.",
+    "V historii je": "The history holds",
+    "nejstarší z": "the oldest from",
+    "při tomhle nastavení by odešlo": "with this setting it would remove",
+    "při tomhle nastavení by teď neodešlo nic":
+        "with this setting nothing would be removed right now",
+    "Historie je zatím prázdná.": "The history is empty so far.",
+    "Zapomenout jednoho diváka": "Forget one viewer",
+    "nikdo tu není": "nobody here",
+    "Smazat celou historii tohoto diváka? Zpět to nejde.":
+        "Delete this viewer's entire history? There is no way back.",
+    "Zapomenout": "Forget",
+    "Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie.":
+        "Deletes everything recorded about that viewer. The account itself "
+        "lives in Jellyfin - it cannot be deleted from here, so the next "
+        "synchronisation will see it again, just without the history.",
+    # Uloha a jeji hlasky.
+    "Smaže přehrávání starší než nastavená hranice. Ve výchozím stavu je vypnuté a zapnout se musí ručně - spolu s tím, jak dlouhá historie se nechává. Právě běžící přehrávání se nemaže, ať sběrač nepřijde o rozdělanou relaci.":
+        "Deletes playbacks older than the limit that is set. It is off by "
+        "default and has to be switched on by hand, together with how much "
+        "history is kept. Playback that is running is not deleted, so the "
+        "collector does not lose a session it has half-written.",
+    "Odklízení je vypnuté, nic se nemazalo.":
+        "Clearing out is switched off, nothing was deleted.",
+    "Nebylo co zapomenout - k tomu divákovi nic nemáme.":
+        "There was nothing to forget - we have nothing about that viewer.",
     # --- nadpisy skupin v nastaveni ---
     "Vzhled aplikace": "How the application looks",
     "barvy, karty a jak se píše čas": "colours, cards and how time is written",
@@ -1281,7 +1326,8 @@ EN: dict[str, str] = {
         "where the free space for the growth estimate comes from",
     "Sběr přehrávání": "Collecting playback",
     # --- kapacita uloziste (viz scanner._volne_misto_knihovny) ---
-    "Kapacita úložiště knihovny (GB)": "Library storage capacity (GB)",
+    "Kapacita úložiště knihovny": "Library storage capacity",
+    "Jednotka": "Unit",
     "Zadané číslo přebije všechno ostatní. Volné místo se z něj počítá jako kapacita minus velikost knihovny, takže předpokládá, že na tom úložišti nic jiného neleží. Nech 0 a zjistí se to samo.":
         "The number you enter overrides everything else. Free space is worked "
         "out from it as capacity minus the size of the library, so it assumes "
@@ -1712,6 +1758,11 @@ EN: dict[str, str] = {
 # Díky tomu zůstávají volání `log.info(...)` čitelná a nikdo si při psaní
 # nové hlášky nemusí pamatovat na překlad.
 LOG_EN: dict[str, str] = {
+    # --- odklizeni historie ---
+    "Odklizeno %s prehravani starsich nez %s dni":
+        "Cleared out %s playbacks older than %s days",
+    "Zapomenut divak %s: smazano %s prehravani":
+        "Viewer %s forgotten: %s playbacks deleted",
     "Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak":
         "Jellyfin does not know /System/Storage (%s) - free space will be "
         "determined some other way",

@@ -65,8 +65,14 @@ print("--- start bez nastaveného Jellyfinu ---")
 launcher = (PROJECT / "run.py").read_text(encoding="utf-8")
 check("config.jellyfin_api_key" not in launcher,
       "spouštěč nečte API klíč z .env")
-check("return 1" not in launcher,
-      "spouštěč nemá cestu, kterou by start odmítl")
+# Ani nedostupna databaze uz start neukonci: aplikace nabehne a na
+# kazdou adresu odpovi strankou, ktera rekne proc. Skoncit by znamenalo,
+# ze v prohlizeci je "nelze se pripojit" a duvod lezi v logu.
+check(re.search(r"except db\.DatabaseNedostupna[\s\S]{0,700}?_rezim_poruchy",
+                launcher) is not None,
+      "nedostupná databáze vede na náhradní stránku, ne na konec")
+check("porucha.aplikace" in launcher,
+      "a tu stránku obsluhuje samostatný modul")
 
 print("--- soubory pro nasazení ---")
 for name in ("DEPLOY.md", "README.md", "deploy/jellyscope.conf", "deploy/jellyscope.service"):
@@ -536,6 +542,188 @@ instalator = (PROJECT / "deploy" / "install.sh").read_text(encoding="utf-8")
 check(f"{strop} MB" in instalator and f"{strop}M" in instalator,
       f"a instalator radi tutez hodnotu ({strop} MB)")
 
+
+print("--- spouštěč kontejneru ---")
+# Pripojena slozka s daty patri na hostiteli tomu, kdo ji vyrobil - pri
+# prvnim `docker compose up` rootovi. Aplikace bezi jako UID 10001, takze
+# by na ni nedosahla. Kontejner proto startuje jako root, srovna vlastnika
+# a prava hned zahodi. Kdyby to posledni vypadlo, bezela by cela aplikace
+# jako root a nikdo by si toho nevsiml.
+vstup = PROJECT / "deploy" / "docker-entrypoint.sh"
+check(vstup.is_file(), "deploy/docker-entrypoint.sh existuje")
+spoustec = vstup.read_text(encoding="utf-8")
+dockerfile = (PROJECT / "Dockerfile").read_text(encoding="utf-8")
+
+check('ENTRYPOINT ["/bin/sh", "/app/deploy/docker-entrypoint.sh"]' in dockerfile,
+      "obraz ho spouští (a přes sh, ať nezáleží na právu ke spuštění)")
+check("deploy/" not in (PROJECT / ".dockerignore").read_text(encoding="utf-8"),
+      "a nevynechává ho z obrazu")
+check("command -v setpriv" in dockerfile,
+      "build si ověří, že nástroj na zahození práv v obrazu je")
+
+# Aplikace se nikdy nesmi spustit s rootovskymi pravy.
+check(re.search(r'id -u.*=.*"0"', spoustec) is not None,
+      "spouštěč pozná, že běží jako root")
+check(re.search(r'exec setpriv --reuid="?\$?\{?APP_UID', spoustec) is not None,
+      "a v té větvi předává řízení až po zahození práv")
+korenova_vetev = spoustec.split('if [ "$(id -u)" = "0" ]', 1)[1].split("fi", 1)[0]
+check('exec "$@"' not in korenova_vetev,
+      "z rootovské větve se aplikace nespustí přímo")
+
+# Konce radku CRLF ve spousteci znamenaji pri startu kontejneru hlasku
+# o nenalezenem prikazu - konec radku se stane soucasti nazvu. Repozitar
+# se vyviji na Windows, takze je to na dosah ruky.
+check(bytes([13, 10]) not in vstup.read_bytes(),
+      "skript má unixové konce řádků")
+
+check("stat -c" in spoustec, "vlastníka řeší jen tehdy, když nesedí")
+
+# A i tehdy jen u prazdne slozky - tu prave vyrobil Docker a neni v ni
+# nic, co by patrilo cloveku. Slozka s obsahem je necich data a prepsat
+# jim vlastnika za zady je vic, nez si spoustec smi dovolit.
+check("ls -A" in spoustec, "a jen u prázdné složky")
+check("chown -R" not in spoustec.split("else", 1)[0],
+      "prázdné složce stačí jedno chown, ne rekurze")
+rada = spoustec.split("else", 1)[1] if "else" in spoustec else ""
+check("chown -R" in rada,
+      "u neprázdné složky se rekurzivní chown jen poradí, nespustí")
+
+print("--- databáze, kterou nejde otevřít ---")
+# V kontejneru je tohle nejcastejsi chyba prvniho startu: pripojena
+# slozka patri rootovi, uvnitr bezi UID 10001. SQLite k tomu umi jedinou
+# vetu - "unable to open database file" - bez cesty, duvodu i rady.
+import tempfile as _tempfile  # noqa: E402
+
+from jellyscope import db as _db  # noqa: E402
+from jellyscope import dialect as _dialect  # noqa: E402
+
+_kam = Path(_tempfile.mkdtemp())
+_prekazka = _kam / "tohle-je-soubor"
+_prekazka.write_text("neni to slozka", encoding="utf-8")
+_nastaveni = _dialect.DatabaseConfig(path=str(_prekazka / "jellyscope.db"))
+
+try:
+    with _db.connect(_nastaveni):
+        pass
+    hlaska = ""
+    check(False, "otevření nemožné databáze mělo skončit chybou")
+except _db.DatabaseNedostupna as chyba:
+    hlaska = str(chyba)
+    check(True, "nedostupná databáze má vlastní výjimku")
+except Exception as chyba:  # noqa: BLE001
+    hlaska = ""
+    check(False, f"vyletěla holá {type(chyba).__name__}: {chyba}")
+
+check(str(_prekazka) in hlaska, "hláška říká, o kterou cestu jde")
+check("nejde otevřít" in hlaska, "a co se stalo")
+
+# V kontejneru navic to, co s tim - jinak clovek hleda v aplikaci chybu,
+# ktera je na hostiteli.
+os.environ["JELLYSCOPE_DOCKER"] = "1"
+try:
+    with _db.connect(_nastaveni):
+        pass
+    v_dockeru = ""
+except _db.DatabaseNedostupna as chyba:
+    v_dockeru = str(chyba)
+finally:
+    os.environ.pop("JELLYSCOPE_DOCKER", None)
+
+check("chown -R 10001:10001" in v_dockeru,
+      "v kontejneru poradí, komu složku předat")
+_cesky, _anglicky = _db._proc_nejde_otevrit(_prekazka, OSError("x"))
+check("cannot be opened" in _anglicky,
+      "hláška z databáze existuje i anglicky")
+check(str(_prekazka) in _anglicky, "a nese tutéž cestu")
+check(_cesky != _anglicky, "a nejsou to dva stejné texty")
+check("10001" not in hlaska,
+      "a mimo kontejner tou radou neplete (tam žádné UID 10001 není)")
+
+# Druhy zpusob, jak se to stane: soubor s databazi existuje a otevrit se
+# da, ale psat do nej nejde. Spojeni tedy vznikne a spadne az prvni zapis
+# ("attempt to write a readonly database") - zvenku je to tataz porucha
+# a patri k ni tataz odpoved.
+import os as _os  # noqa: E402
+import sqlite3 as _sqlite3  # noqa: E402
+import stat as _stat  # noqa: E402
+
+_kam2 = Path(_tempfile.mkdtemp())
+_soubor = _kam2 / "jenprocteni.db"
+_spojeni = _sqlite3.connect(_soubor)
+_spojeni.execute("CREATE TABLE zkouska (a INTEGER)")
+_spojeni.commit()
+_spojeni.close()
+_os.chmod(_soubor, _stat.S_IREAD)
+
+try:
+    with _db.connect(_dialect.DatabaseConfig(path=str(_soubor))):
+        pass
+    check(False, "databáze jen pro čtení měla skončit chybou")
+    _hlaska2 = ""
+except _db.DatabaseNedostupna as chyba:
+    _hlaska2 = str(chyba)
+    check(True, "i databáze jen pro čtení má vlastní výjimku")
+except Exception as chyba:  # noqa: BLE001
+    _hlaska2 = ""
+    check(False, f"vyletěla holá {type(chyba).__name__}: {chyba}")
+check("jen pro čtení" in _hlaska2,
+      "a hláška říká, že je soubor jen pro čtení")
+_os.chmod(_soubor, _stat.S_IWRITE | _stat.S_IREAD)
+
+print()
+print("--- náhradní stránka bez databáze ---")
+# Kontejner ma nabehnout i tak a rict, co se deje - jinak je v prohlizeci
+# jen "nelze se pripojit" a odpoved lezi v logu, kam nikdo neposlal.
+from starlette.testclient import TestClient as _TestClient  # noqa: E402
+
+from jellyscope import porucha  # noqa: E402
+
+_hlaska = "Databázi /app/data/jellyscope.db nejde otevřít: do složky se nesmí zapisovat."
+_hlaska_en = "The database /app/data/jellyscope.db cannot be opened: the folder cannot be written to."
+with _TestClient(porucha.aplikace(_hlaska, _hlaska_en)) as _klient:
+    for _cesta in ("/", "/login", "/settings?section=data", "/cokoliv"):
+        _odpoved = _klient.get(_cesta)
+        check(_odpoved.status_code == 503,
+              f"{_cesta} odpoví 503 ({_odpoved.status_code})")
+    _telo = _klient.get("/").text
+
+check(_hlaska in _telo, "stránka nese hlášku z databáze")
+# Vcetne te hlasky samotne: nadpis anglicky a text cesky by byl pulkrok.
+check(_hlaska_en in _telo, "a tutéž hlášku i anglicky")
+check("cannot open its database" in _telo,
+      "stránka kolem ní je dvojjazyčná taky (jazyk rozhraní je v databázi)")
+check("docker compose restart" in _telo, "říká i to, co udělat potom")
+
+# Hlaska nese cesty ze systemu. Do stranky patri jako text - jinak by
+# nazev slozky mohl do stranky propasovat znacky.
+_utok = porucha.stranka('<script>alert(1)</script>')
+check("<script>alert(1)</script>" not in _utok, "text z hlášky se escapuje")
+check("&lt;script&gt;" in _utok, "a projde jako text")
+
+print("--- docker compose ---")
+# Compose predava kontejneru jen to, co je v souboru vypsane. Co tam
+# chybi, se do kontejneru nedostane - a pozna se to az na serveru, kde
+# se aplikace chova jinak nez doma.
+compose = (PROJECT / "docker-compose.yml").read_text(encoding="utf-8")
+for needle, why in [
+    ("SECRET_KEY: \"${SECRET_KEY:?", "bez podpisového klíče se kontejner nespustí"),
+    ("JELLYSCOPE_DEMO: \"${JELLYSCOPE_DEMO:-0}\"",
+     "ukázkový režim jde zapnout, ale sám se nezapne"),
+    ("HOST: \"0.0.0.0\"", "uvnitř kontejneru se poslouchá na všech adresách"),
+    (":/app/data", "data leží na hostiteli, ne v kontejneru"),
+    ("no-new-privileges:true", "kontejner si nepřidá práva"),
+]:
+    check(needle in compose, f"compose: {why}")
+
+# Ukazkovy rezim se nesmi zapnout sam - verejna ukazka je jina vec nez
+# domaci instalace a zamenit je znamena bud nefunkcni nastaveni, nebo
+# verejne pristupnou konfiguraci.
+check(cfg.load_config(reload=True).demo_mode is False,
+      "bez proměnné je ukázkový režim vypnutý")
+os.environ["JELLYSCOPE_DEMO"] = "1"
+check(cfg.load_config(reload=True).demo_mode is True,
+      "a s JELLYSCOPE_DEMO=1 zapnutý")
+os.environ.pop("JELLYSCOPE_DEMO", None)
 
 print("--- .env.example ---")
 example = (PROJECT / ".env.example").read_text(encoding="utf-8")

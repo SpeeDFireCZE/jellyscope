@@ -19,7 +19,7 @@ cp .env.example .env
 ```
 
 You do not need a Jellyfin server to develop: `demo.py` fills the database with
-made-up data and starts the app on <http://127.0.0.1:8097>.
+made-up data and starts the app on <http://127.0.0.1:8098>.
 
 ```bash
 .venv/bin/python demo.py

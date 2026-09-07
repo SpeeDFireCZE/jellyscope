@@ -136,5 +136,37 @@ check(odpoved.status_code == 303, "běžný provoz zůstává, jak byl")
 check(web._demo_blokuje.__doc__ is not None, "a funkce je popsaná")
 
 print()
+print("--- ukázka se nachystá i tam, kde neběží demo.py ---")
+# Obraz spousti run.py. Bez pripravy by verejna ukazka nabehla prazdna
+# a zamcena: v ukazkovem rezimu se nic neuklada, takze by si ji nesel
+# zalozit ani spravce. Proto je priprava v demodata a vola se z obou
+# spoustecu.
+import tempfile as _tempfile  # noqa: E402
+
+from jellyscope import demodata  # noqa: E402
+
+check(hasattr(demodata, "pripravit"), "demodata umí ukázku nachystat")
+
+# Prazdna databaze stranou, ať se nesahá na tu, ve které bezi testy vyse.
+_druhy = _tempfile.mkdtemp()
+_puvodni = os.environ["DATABASE_PATH"]
+os.environ["DATABASE_PATH"] = str(Path(_druhy) / "prazdna.db")
+config.load_config(reload=True)
+db.init_db()
+
+check(demodata.already_seeded() is False, "nová databáze je prázdná")
+pocty = demodata.pripravit(tichy=True)
+check(pocty["items"] > 0, f"po přípravě jsou v ní data ({pocty['items']} titulů)")
+check(accounts.get_by_name(demodata.DEMO_USERNAME) is not None,
+      "a účet, kterým se do ukázky dá přihlásit")
+
+# Podruhe uz nic - jinak by kazdy restart kontejneru ukazku zdvojil.
+znovu = demodata.pripravit(tichy=True)
+check(znovu["items"] == 0, "druhé spuštění data nezdvojí")
+
+os.environ["DATABASE_PATH"] = _puvodni
+config.load_config(reload=True)
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

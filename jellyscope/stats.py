@@ -2156,6 +2156,27 @@ def snimky(days: Any = 90) -> list[dict[str, Any]]:
     return dopoctene + zmerene
 
 
+def _volne_misto_ted(ze_snimku: Any) -> int | None:
+    """Kolik mista zbyva TED, ne kolik ho bylo pri posledni synchronizaci.
+
+    Snimek nese volne misto z okamziku, kdy se zapsal - a ten byva
+    v noci. Kdyz se mezitim v nastaveni zada kapacita uloziste rucne,
+    musi se odhad "misto dojde za X dnu" prepocitat hned; cekat na dalsi
+    synchronizaci by znamenalo, ze zadana hodnota jako by nic neudelala.
+
+    `scanner` az tady: sam si tahne stats, takze nahore by z toho byl kruh.
+    """
+    try:
+        from . import scanner
+
+        ted = scanner._volne_misto_knihovny()
+    except Exception:                     # noqa: BLE001
+        # Zjistovani mista sahá na disk a na nastaveni - kdyz se to
+        # nepovede, plati posledni znama hodnota ze snimku.
+        return ze_snimku
+    return ted if ted is not None else ze_snimku
+
+
 def rust_knihovny(days: Any = 90) -> dict[str, Any]:
     """Kam knihovna spěje: o kolik za obdobi narostla a co z toho plyne.
 
@@ -2187,7 +2208,7 @@ def rust_knihovny(days: Any = 90) -> dict[str, Any]:
         "prirustek": prirustek,
         "denne": denne,
         "polozek": int(posledni["polozek"]) - int(prvni["polozek"]),
-        "volne_misto": posledni.get("volne_misto"),
+        "volne_misto": _volne_misto_ted(posledni.get("volne_misto")),
         "za_rok": None,
         "dnu_do_konce": None,
         # Stoji cast obdobi na dopoctu misto na mereni? Stranka to ma
@@ -2204,7 +2225,10 @@ def rust_knihovny(days: Any = 90) -> dict[str, Any]:
         return vysledek
 
     vysledek["za_rok"] = int(posledni["velikost"] + denne * 365)
-    volne = posledni.get("volne_misto")
+    # Tatáž hodnota jako o kus výš, ne znovu ze snímku: jinak by se
+    # ručně zadaná kapacita projevila na řádku „volného místa", ale
+    # odhad „místo dojde za" by dál počítal s tím, co bylo v noci.
+    volne = vysledek["volne_misto"]
     if volne:
         vysledek["dnu_do_konce"] = int(volne / denne)
     return vysledek

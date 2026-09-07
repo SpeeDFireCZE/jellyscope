@@ -13,6 +13,22 @@ import uvicorn
 from jellyscope.config import load_config
 
 
+def _rezim_poruchy(config, hlaska: str, hlaska_en: str = "") -> int:
+    """Náhradní server, který jen vysvětlí, proč aplikace neběží.
+
+    Odděleně od `main`, aby bylo na první pohled vidět, že se v tomhle
+    režimu nespouští nic dalšího - žádný sběrač, žádné úlohy. Jen
+    stránka.
+    """
+    from jellyscope import porucha
+
+    print(f"Náhradní stránka běží na  http://{config.host}:{config.port}")
+    print("Až bude přístup k databázi v pořádku, aplikaci restartuj.")
+    uvicorn.run(porucha.aplikace(hlaska, hlaska_en), host=config.host, port=config.port,
+                log_level="warning", use_colors=False)
+    return 1
+
+
 def main() -> int:
     config = load_config()
 
@@ -21,15 +37,48 @@ def main() -> int:
     # v logu při startu, ne až u prvního požadavku.
     from jellyscope import accounts, db
 
-    added = db.init_db()
+    try:
+        added = db.init_db()
+    except db.DatabaseNedostupna as chyba:
+        # Bez databáze se nedá dělat nic. Skončit ale znamená, že v
+        # kontejneru nezůstane nic než záznam v logu, kam se nikdo dívat
+        # nešel: v prohlížeči je jen "nelze se připojit". Aplikace proto
+        # naběhne a na každou adresu odpoví jednou stránkou, která říká,
+        # co se stalo a co s tím - viz jellyscope/porucha.py.
+        print()
+        print(str(chyba))
+        print()
+        return _rezim_poruchy(config, chyba.cesky, chyba.anglicky)
     if added:
         print(f"Databáze doplněna o sloupce: {', '.join(added)}")
+
+    # Ukázkový režim v kontejneru: obraz spouští tenhle soubor, ne
+    # demo.py, takže by ukázka nabehla prázdná - a protože se v ní nic
+    # neukládá, nešel by v ní založit ani správce. Data se proto nachystají
+    # tady. Na běžnou instalaci to nesahá: bez JELLYSCOPE_DEMO se nestane
+    # vůbec nic.
+    ukazka = None
+    if config.demo_mode:
+        from jellyscope import demodata
+
+        ukazka = demodata.pripravit(tichy=True)
 
     database = db.database_config()
     jellyfin_url, jellyfin_key = db.jellyfin_connection()
 
-    print(f"Jellyscope startuje na  http://{config.host}:{config.port}")
+    # Verze rovnou na prvním řádku: v kontejneru je `docker compose logs`
+    # jediné místo, kde se dá zjistit, jestli běží to, co člověk před
+    # chvílí nakopíroval - obraz se sám od sebe nepřestaví.
+    from jellyscope import __version__
+
+    print(f"Jellyscope {__version__} startuje na  http://{config.host}:{config.port}")
     print(f"Databáze:               {database.describe()}")
+
+    if ukazka is not None:
+        print("Ukázka:                 " + (
+            f"nachystáno {ukazka['items']} titulů, {ukazka['plays']} přehrávání"
+            if ukazka["items"] else "vymyšlená data už v databázi jsou")
+            + " (nic se v ní neuloží)")
 
     # Adresa Jellyfinu ani API klíč nejsou v .env - nastavují se v aplikaci
     # (Nastavení -> Připojení k Jellyfinu). Nevyplněné připojení proto NENÍ

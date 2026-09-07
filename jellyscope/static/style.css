@@ -492,7 +492,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    kratky pohled a hlavni sdeleni je cislo vedle ni. */
 .zive-cislo {
     display: grid;
-    grid-template-columns: minmax(180px, 240px) 1fr;
+    grid-template-columns: minmax(min(180px, 100%), 240px) minmax(0, 1fr);
     gap: 22px;
     align-items: center;
 }
@@ -811,7 +811,10 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .sessions {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    /* `min(380px, 100%)`, ne holých 380: sloupec by si o ně řekl i tam,
+       kde je k dispozici 358 - a karta „právě se hraje" pak vylezla
+       z obrazovky a vpravo se ořízla. */
+    grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
     gap: 16px;
     margin-bottom: 8px;
 }
@@ -821,7 +824,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     /* Plakat, obsah, pravy sloupec s tokem. Ten posledni je `auto`,
        takze si vezme jen tolik, kolik potrebuje - a kdyz na karte neni
        (u prehravani bez znameho toku), mrizka se scvrkne sama. */
-    grid-template-columns: 78px 1fr auto;
+    /* `minmax(0, 1fr)`, ne holé `1fr`: dráha mřížky má vlastní minimum
+       podle obsahu, a to `min-width: 0` na položce neodstraní. Dlouhý
+       název zařízení tak kartu roztáhl o dvacet pixelů za okraj a vpravo
+       se ořezávala. */
+    grid-template-columns: 78px minmax(0, 1fr) auto;
     gap: 14px;
     /* Jedina karta se zarici barvou: ta, ktera se meni po vterinach.
        Zar je v rohu, ne pres celou plochu - pres obsah by rozmazal hranu
@@ -928,7 +935,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 /* Na uzkem okne se pravy sloupec presune pod obsah - jinak by ukrajoval
    z nazvu titulu, ktery je dulezitejsi. */
 @media (max-width: 720px) {
-    .session { grid-template-columns: 78px 1fr; }
+    .session { grid-template-columns: 78px minmax(0, 1fr); }
     .session-side {
         grid-column: 2;
         align-items: flex-start;
@@ -1201,7 +1208,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .lib-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
     gap: 18px;
 }
 
@@ -1264,7 +1271,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     display: grid;
     /* auto-fill + minmax = pocet sloupcu si urci prohlizec podle sirky.
        Zadny pevny pocet, zadne posouvani do strany. */
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
     gap: 16px;
     margin-bottom: 18px;
 }
@@ -2548,6 +2555,19 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 
 /* Okno s vlastním obdobím. Dvě pole vedle sebe, pod nimi rychlé volby. */
+/* Číslo a jeho jednotka vedle sebe (kapacita úložiště).
+
+   Vlastní třída, ne půjčená `.obdobi-pole`: ta se na úzkém displeji
+   skládá pod sebe, což u dvojice „3 | TB" nedává smysl - jednotka
+   patří k číslu i na mobilu. */
+.pole-s-jednotkou {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+.pole-s-jednotkou input { width: 100%; }
+
 .obdobi-pole {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2555,6 +2575,17 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 .obdobi-pole input { width: 100%; }
 .obdobi-rychle { margin-top: 12px; flex-wrap: wrap; }
+
+/* Na mobilu jsou pole „Od" a „Do" pod sebou a kalendář se vejde.
+
+   Vedle sebe kotví kalendář u levé hrany DRUHÉHO pole, takže na 390px
+   displeji sahal od 202 do 470 - osmdesát pixelů mimo obrazovku a nešel
+   dopsat. `min(268px, 100%)` k tomu drží šířku i na úzkých displejích,
+   kde je samo okno užší než těch 268. */
+@media (max-width: 560px) {
+    .obdobi-pole { grid-template-columns: minmax(0, 1fr); }
+    .kalendar { width: min(268px, 100%); }
+}
 
 /* Hláška ukázky. Vyjede zdola uprostřed, počká pár vteřin a zmizí -
    stránka se přitom nikam nehne, což je celý smysl: člověk zůstane tam,
@@ -2668,7 +2699,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    se musí zalomit sama, jinak by z nich byl vodorovný posuvník. */
 .filtr {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
     gap: 12px;
     align-items: end;
     margin-bottom: 16px;
@@ -3119,4 +3150,32 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     padding-top: 14px;
     border-top: 1px solid var(--rail);
     flex: none;
+}
+
+
+/* --------------------------------------------------------------------- */
+/* Co platí jen pro širokou obrazovku a co jen pro úzkou                  */
+/* --------------------------------------------------------------------- */
+/*
+   Server neví, na čem se člověk dívá, takže pošle obojí a vybere CSS.
+   Streamů se na mobil vejde míň: karta tam zabírá celou šířku a čtyři
+   pod sebou znamenají, že zbytek stránky je mimo obrazovku.
+
+   Stojí to na konci schválně. Jsou to pomocné třídy, které musí přebít
+   `display` z třídy prvku (`.btn-row` má `display: flex`) - a při stejné
+   specificitě vyhrává to, co je v souboru níž.
+*/
+.verze-licence {
+    margin-top: 4px;
+    font-size: 11.5px;
+}
+
+.verze-licence a { color: var(--text-muted); text-decoration: none; }
+.verze-licence a:hover { text-decoration: underline; }
+
+.jen-mobil { display: none; }
+
+@media (max-width: 860px) {
+    .jen-desktop { display: none; }
+    .jen-mobil { display: flex; }
 }

@@ -186,6 +186,38 @@ with TestClient(app) as client:
     check(db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0) == 0,
           "záporná kapacita se srovná na nulu")
 
+    # Terabajty. Kdo má třicetiterabajtové pole, nemá psát "30000".
+    client.post("/settings", follow_redirects=False, data={
+        "tech_source": "jellyfin", "poll_interval": "10",
+        "ffprobe_concurrency": "3", "path_mappings": "[]",
+        "library_capacity_gb": "30", "library_capacity_unit": "TB"})
+    db.forget_settings()
+    check(db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0) == 30 * 1024 ** 4,
+          "zadané TB se uloží jako bajty")
+    html = client.get("/settings?section=data").text
+    check('value="30"' in html, "a do formuláře se vrátí zase v TB, ne jako 30720")
+    check('<option value="TB" selected>' in html, "s vybranou jednotkou TB")
+
+    # Vymyslena jednotka je vstup z formulare jako kazdy jiny - plati GB.
+    client.post("/settings", follow_redirects=False, data={
+        "tech_source": "jellyfin", "poll_interval": "10",
+        "ffprobe_concurrency": "3", "path_mappings": "[]",
+        "library_capacity_gb": "8", "library_capacity_unit": "PB"})
+    db.forget_settings()
+    check(db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0) == 8 * GB,
+          "neznámá jednotka se bere jako GB")
+
+    # Nastaveni z drivejska jednotku neznalo. Ulozene bajty ale zustavaji
+    # ulozene bajty - nesmi se z nich stat jina kapacita.
+    db.set_setting(scanner.KAPACITA_KLIC, str(20 * 1024 ** 4))
+    db.set_setting("library_capacity_unit", "")
+    db.forget_settings()
+    html = client.get("/settings?section=data").text
+    check('value="20"' in html and '<option value="TB" selected>' in html,
+          "starší nastavení bez jednotky se ukáže v TB")
+    check(db.get_int_setting(scanner.KAPACITA_KLIC, 0, 10 ** 18, 0) == 20 * 1024 ** 4,
+          "a samotná hodnota se přitom nezmění")
+
 print()
 print("--- starší Jellyfin endpoint nemá ---")
 import asyncio  # noqa: E402

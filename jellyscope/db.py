@@ -82,6 +82,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # --- naplanovane ulohy (viz tasks.py) ---------------------------------
     "task_sync_enabled": "1",
     "task_backup_enabled": "0",
+    # Mazani dat nikdy nezacina samo od sebe - viz odklizeni.py.
+    "task_purge_enabled": "0",
+    "history_retention_days": "365",
     # Zaloha je taky nocni uloha - stejny duvod jako u synchronizace.
     # Kousek za ni, at si nelezou do zamku.
     # Hlidani nove verze je vychozi VYPNUTE: je to odchozi spojeni
@@ -92,6 +95,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # a languages.html.
     "ui_max_streams": "10",
     "ui_max_viewers": "10",
+    # A totez pro uzkou obrazovku - vejde se tam min, viz web._stropy().
+    "ui_max_streams_mobile": "3",
+    "ui_max_viewers_mobile": "5",
     # Jak se priblizuje mapa na strance Sit. "click" schvalne jako
     # vychozi: kolecko nad mapou by jinak zastavilo rolovani stranky
     # a clovek by u mapy uvizl. Viz web._stropy() a base.html.
@@ -111,6 +117,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # srovnana data.
     "task_tidy_time": "04:00",
     "task_backup_time": "04:30",
+    "task_purge_time": "04:45",
     "backup_path": "",
     "backup_keep": "7",
     # Prazdne = Jellyscope si pg_dump najde sam a vybere verzi,
@@ -373,6 +380,83 @@ def _get_pool(config: dialect.DatabaseConfig) -> Any:
     return pool
 
 
+class DatabaseNedostupna(RuntimeError):
+    """Databázi nejde otevřít - a víme proč.
+
+    Vlastní typ, aby se dal odchytit ve spouštěči a vypsat bez
+    zásobníku volání: člověku, kterému nenaběhl kontejner, je dvacet
+    řádků z útrob sqlite3 k ničemu.
+
+    Nese hlášku česky i anglicky. Přeložit ji dodatečně nejde: překlad
+    se řídí nastavením, které je uložené v databázi - a ta je právě to,
+    co se nepodařilo otevřít.
+    """
+
+    def __init__(self, cesky: str, anglicky: str = "") -> None:
+        super().__init__(cesky)
+        self.cesky = cesky
+        self.anglicky = anglicky or cesky
+
+
+def _proc_nejde_otevrit(cesta: Path, chyba: Exception) -> tuple[str, str]:
+    """Proč nejde otevřít databázový soubor - a co s tím. Česky i anglicky.
+
+    Píše se to sem, protože odpověď zná jen tenhle okamžik: cesta,
+    práva ke složce a to, jestli běžíme v kontejneru. O kus dál už je
+    z toho jen "unable to open database file".
+    """
+    slozka = cesta.parent
+    if not slozka.is_dir():
+        duvod = f"složka {slozka} neexistuje a nejde vyrobit"
+        duvod_en = f"the folder {slozka} does not exist and cannot be created"
+    elif not os.access(slozka, os.W_OK | os.X_OK):
+        duvod = f"do složky {slozka} se nesmí zapisovat"
+        duvod_en = f"the folder {slozka} cannot be written to"
+    elif cesta.exists() and not os.access(cesta, os.W_OK):
+        duvod = f"soubor {cesta} je jen pro čtení"
+        duvod_en = f"the file {cesta} is read-only"
+    else:
+        duvod = duvod_en = f"{chyba}"
+
+    radky = [f"Databázi {cesta} nejde otevřít: {duvod}."]
+    radky_en = [f"The database {cesta} cannot be opened: {duvod_en}."]
+
+    # Kdo jsme - bez toho se vlastník složky nedá s ničím porovnat.
+    if hasattr(os, "getuid"):
+        radky.append(f"Aplikace běží pod UID {os.getuid()}:{os.getgid()}.")
+        radky_en.append(
+            f"The application runs as UID {os.getuid()}:{os.getgid()}.")
+
+    if Path("/.dockerenv").exists() or os.environ.get("JELLYSCOPE_DOCKER"):
+        radky.append(
+            "V kontejneru za to skoro vždycky může vlastník připojené "
+            "složky: uvnitř běží uživatel s UID 10001, ale složka na "
+            "hostiteli patří někomu jinému (typicky rootovi, když ji "
+            "vyrobil Docker sám). Sprav to na hostiteli, ve složce "
+            "vedle docker-compose.yml - a jen složce data, ne celému "
+            "projektu:")
+        radky.append("    sudo chown -R 10001:10001 data")
+        radky.append("    docker compose restart")
+        radky_en.append(
+            "In a container this is nearly always the owner of the mounted "
+            "folder: inside runs a user with UID 10001, while on the host "
+            "the folder belongs to somebody else - typically root, when "
+            "Docker created it itself. Fix it on the host, in the folder "
+            "next to docker-compose.yml - and only the data folder, not "
+            "the whole project:")
+        radky_en.append("    sudo chown -R 10001:10001 data")
+        radky_en.append("    docker compose restart")
+    else:
+        radky.append(
+            "Zkontroluj, že složka existuje a že do ní smí zapisovat "
+            "uživatel, pod kterým aplikace běží.")
+        radky_en.append(
+            "Check that the folder exists and that the user the "
+            "application runs as is allowed to write into it.")
+
+    return "\n".join(radky), "\n".join(radky_en)
+
+
 def _open_raw(config: dialect.DatabaseConfig) -> Any:
     if config.is_postgres:
         try:
@@ -438,16 +522,29 @@ def _open_raw(config: dialect.DatabaseConfig) -> Any:
     path = Path(config.path)
     if not path.is_absolute():
         path = BASE_DIR / path
-    path.parent.mkdir(parents=True, exist_ok=True)
 
-    connection = sqlite3.connect(path, timeout=15.0)
-    # row_factory nám zařídí, že výsledky lezou jako slovníky (row["name"])
-    # místo anonymních n-tic (row[3]). Kód je pak čitelný.
-    connection.row_factory = sqlite3.Row
-    # WAL = Write-Ahead Logging. Umožní, aby jeden proces psal a jiný zároveň
-    # četl. Přesně náš případ: sběrač na pozadí zapisuje, web čte.
-    connection.execute("PRAGMA journal_mode = WAL")
-    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(path, timeout=15.0)
+        # row_factory nám zařídí, že výsledky lezou jako slovníky (row["name"])
+        # místo anonymních n-tic (row[3]). Kód je pak čitelný.
+        connection.row_factory = sqlite3.Row
+        # WAL = Write-Ahead Logging. Umožní, aby jeden proces psal a jiný zároveň
+        # četl. Přesně náš případ: sběrač na pozadí zapisuje, web čte.
+        #
+        # Uvnitř `try` schválně: otevřít soubor jen pro čtení SQLite umí,
+        # takže spojení vznikne a teprve tenhle PRAGMA spadne na
+        # "attempt to write a readonly database". Zvenku je to táž
+        # porucha jako "unable to open database file" a patří k ní táž
+        # odpověď.
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA foreign_keys = ON")
+    except (OSError, sqlite3.Error) as chyba:
+        # SQLite umi na tohle jedinou vetu: "unable to open database file"
+        # nebo "attempt to write a readonly database". Neni v ni cesta,
+        # duvod ani co s tim - a v kontejneru je to nejcastejsi chyba
+        # pri prvnim startu vubec.
+        raise DatabaseNedostupna(*_proc_nejde_otevrit(path, chyba)) from chyba
     return connection
 
 
@@ -717,11 +814,37 @@ def _oddel_indexy(script: str) -> tuple[str, str]:
 
 
 def init_db(config: dialect.DatabaseConfig | None = None) -> list[str]:
-    """Vytvoří tabulky, doplní chybějící sloupce a nastaví výchozí hodnoty."""
+    """Vytvoří tabulky, doplní chybějící sloupce a nastaví výchozí hodnoty.
+
+    Když se přitom ukáže, že do databáze nejde psát, vyletí
+    `DatabaseNedostupna` se srozumitelným vysvětlením - viz `_open_raw`.
+    Zjistit se to totiž nemusí při otevírání: soubor jen pro čtení se
+    otevře v pořádku a teprve první zápis řekne, že to nepůjde.
+    """
     config = config or database_config()
     schema_file = SCHEMA_POSTGRES if config.is_postgres else SCHEMA_SQLITE
     tabulky, indexy = _oddel_indexy(schema_file.read_text(encoding="utf-8"))
 
+    with _hlidane_psani(config):
+        return _init_db(config, tabulky, indexy)
+
+
+@contextmanager
+def _hlidane_psani(config: dialect.DatabaseConfig) -> Iterator[None]:
+    """Zápis, který selhal kvůli právům, přeloží na `DatabaseNedostupna`."""
+    try:
+        yield
+    except sqlite3.Error as chyba:
+        if config.is_postgres:
+            raise
+        cesta = Path(config.path)
+        if not cesta.is_absolute():
+            cesta = BASE_DIR / cesta
+        raise DatabaseNedostupna(*_proc_nejde_otevrit(cesta, chyba)) from chyba
+
+
+def _init_db(config: dialect.DatabaseConfig, tabulky: str,
+             indexy: str) -> list[str]:
     with connect(config) as conn:
         conn.executescript(tabulky)
         added = _migrate(conn)

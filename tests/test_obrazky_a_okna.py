@@ -196,12 +196,22 @@ with TestClient(app) as client:
     stranka = client.get("/settings?section=interface").text
     check('name="ui_max_streams"' in stranka and 'name="ui_max_viewers"' in stranka,
           "a v ní jsou obě pole")
+    # Strop streamů je dvojí: na mobil se jich vejde míň, protože karta
+    # tam zabírá celou šířku.
+    # Oba stropy jsou dvoji: na mobil se toho vejde min, protoze karta
+    # i pruh tam zabiraji celou sirku.
+    check('name="ui_max_streams_mobile"' in stranka
+          and 'name="ui_max_viewers_mobile"' in stranka,
+          "a zvlášť stropy pro mobil")
     odpoved = client.post("/settings/interface",
-                          data={"ui_max_streams": "7", "ui_max_viewers": "9"},
+                          data={"ui_max_streams": "7", "ui_max_viewers": "9",
+                                "ui_max_streams_mobile": "2",
+                                "ui_max_viewers_mobile": "4"},
                           follow_redirects=False)
     check(odpoved.headers.get("location") == "/settings?section=interface",
           "uložení vrací zpátky na tu samou sekci")
-    check(web._stropy() == {"strop_streamu": 7, "strop_lidi": 9},
+    check(web._stropy() == {"strop_streamu": 7, "strop_streamu_mobil": 2,
+                            "strop_lidi": 9, "strop_lidi_mobil": 4},
           f"a hodnoty z formuláře se uložily ({web._stropy()})")
 db.set_setting("ui_max_streams", "2")
 
@@ -240,8 +250,10 @@ sablona = (PROJECT / "jellyscope" / "templates" / "_now_playing.html").read_text
     encoding="utf-8")
 check('data-okno="okno-streamy"' in sablona, "tlačítko otevírá okno se streamy")
 check('data-filtr-okna="okno-streamy"' in sablona, "a v okně je filtr uživatelů")
-check(sablona.count("{{ stream(row) }}") == 2,
-      "stream se kreslí jedním makrem pro kartu i okno")
+# Trikrat: v karte (do mobilniho stropu), v karte nad nim (schovane
+# na mobilu) a v okne. Vsude tyz makro - tri kopie by se casem rozesly.
+check(sablona.count("{{ stream(row) }}") == 3,
+      f"stream se kreslí jedním makrem všude ({sablona.count('{{ stream(row) }}')}x)")
 
 sablona = (PROJECT / "jellyscope" / "templates" / "languages.html").read_text(
     encoding="utf-8")

@@ -76,7 +76,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import db, dialect, scanner
+from . import db, dialect, odklizeni, scanner
 from .i18n import translate as _t
 from .config import BASE_DIR
 
@@ -150,6 +150,35 @@ async def _run_recent() -> dict[str, Any]:
 
 async def _run_backup() -> dict[str, Any]:
     return await backup_database()
+
+
+async def _run_purge() -> dict[str, Any]:
+    """Odklidi historii starsi nez nastavena hranice.
+
+    Uloha se pousti jen kdyz je zapnuta - to hlida planovac. Presto se
+    tady ptame znovu: `odklizeni.zapnuto()` je jedina branka pred
+    mazanim dat a spustit uloh rucne jde i tlacitkem.
+    """
+    scan_id = scanner.start_task_log("purge")
+    if not odklizeni.zapnuto():
+        scanner.finish_task_log(scan_id, "ok",
+                                message="Odklízení je vypnuté, nic se nemazalo.")
+        return {"status": "ok", "smazano": 0}
+
+    try:
+        vysledek = await asyncio.to_thread(odklizeni.smaz_stare)
+    except Exception as exc:  # noqa: BLE001 - do logu patri i necekana chyba
+        scanner.finish_task_log(scan_id, "error", message=str(exc))
+        raise
+
+    smazano = vysledek["smazano"]
+    scanner.finish_task_log(
+        scan_id, "ok", total=smazano, ok=smazano,
+        message=(f"Odklizeno {smazano} přehrávání starších než "
+                 f"{vysledek['dnu']} dní."
+                 if smazano else
+                 f"Nic staršího než {vysledek['dnu']} dní tu není."))
+    return {"status": "ok", **vysledek}
 
 
 async def _run_updates() -> dict[str, Any]:
@@ -280,6 +309,20 @@ TASKS: dict[str, Task] = {
             default_time="05:00",
             runner=_run_updates,
             log_kind="updates",
+        ),
+        Task(
+            key="purge",
+            name="Odklízení historie",
+            description=(
+                "Smaže přehrávání starší než nastavená hranice. Ve výchozím "
+                "stavu je vypnuté a zapnout se musí ručně - spolu s tím, jak "
+                "dlouhá historie se nechává. Právě běžící přehrávání se "
+                "nemaže, ať sběrač nepřijde o rozdělanou relaci."
+            ),
+            time_setting="task_purge_time",
+            default_time="04:45",
+            runner=_run_purge,
+            log_kind="purge",
         ),
         Task(
             key="backup",

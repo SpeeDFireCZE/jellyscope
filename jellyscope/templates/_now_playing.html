@@ -113,7 +113,11 @@
 {# Do `strop_streamu` se přehrávání vypisují rovnou - kvůli nim ta karta
    je. Nad ním se schovají do okna: každý další stream jinak posouvá
    statistiky níž a při dvaceti přehráváních by stránka nekončila. #}
+{# Dva stropy: jeden pro širokou obrazovku, druhý pro mobil. Server
+   neví, na čem se člověk dívá, takže pošle obojí a rozhodne CSS -
+   proto `jen-desktop` a `jen-mobil` místo dvou různých stránek. #}
 {% set schovat = active | length > strop_streamu %}
+{% set schovat_mobil = active | length > strop_streamu_mobil %}
 
 <div class="page-head" style="margin-bottom:14px">
     <div>
@@ -130,8 +134,25 @@
 
 {% if active and not schovat %}
 <div class="sessions">
-    {% for row in active %}{{ stream(row) }}{% endfor %}
+    {# Streamy nad mobilním stropem se na úzké obrazovce schovají -
+       na široké zůstávají všechny. #}
+    {% for row in active %}
+        {% if loop.index > strop_streamu_mobil %}
+            <div class="jen-desktop">{{ stream(row) }}</div>
+        {% else %}
+            {{ stream(row) }}
+        {% endif %}
+    {% endfor %}
 </div>
+
+{% if schovat_mobil %}
+{# Na mobilu vede na tytéž streamy v okně jako u širokého stropu. #}
+<div class="btn-row jen-mobil" style="margin-bottom:8px">
+    <button class="btn" type="button" data-okno="okno-streamy">
+        {{ _("zobrazit všech") }} {{ active | length }}
+    </button>
+</div>
+{% endif %}
 {% endif %}
 
 {% if schovat %}
@@ -147,7 +168,11 @@
         </span>
     </button>
 </div>
+{% endif %}
 
+{# Okno musí být na stránce i tehdy, když se schovává jen na mobilu -
+   tlačítko výš na něj míří. #}
+{% if schovat or schovat_mobil %}
 <dialog class="okno okno-siroke" id="okno-streamy">
     <form method="dialog" class="okno-hlava">
         <h2>{{ _("Právě se hraje") }} ({{ active | length }})</h2>
