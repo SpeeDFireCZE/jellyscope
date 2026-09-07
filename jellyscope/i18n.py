@@ -1058,6 +1058,8 @@ EN: dict[str, str] = {
 
     # --- verze a hlidani noveho vydani ------------------------------------
     "Velikost celkem": "Total size",
+    "nepočítá se {kolik} položek bez velikosti":
+        "{kolik} items without a size are not counted in",
     "všechny knihovny dohromady": "all libraries together",
     "Přehrávání jsou skrytá – je jich hodně": "Playbacks are hidden – there are many",
     "Diváci jsou skrytí – je jich hodně": "Viewers are hidden – there are many",

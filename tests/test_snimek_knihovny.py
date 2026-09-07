@@ -386,5 +386,24 @@ with TestClient(app) as client:
           f"a nakreslí jen svůj výsek ({bodu(vlastni.text)} bodů)")
 
 print()
+print("--- graf a dlaždice říkají totéž číslo ---")
+# Graf kreslil terabajty pres `_fmt`, ktery nad desitkou zahazuje
+# desetinne misto: z 28,8 TB se stalo "29 TB", zatimco dlazdice vedle
+# grafu psala 28,8. Pulterabajtovy rozdil ve dvou cislech o tomtez.
+from jellyscope import charts, formatting  # noqa: E402
+
+for tb in (28.8, 12.83, 1.75, 145.3):
+    bajtu = int(tb * 1024 ** 4)
+    z_grafu = charts._udaj(round(bajtu / 1024 ** 4, 2), "TB")
+    z_dlazdice = formatting.bytes_human(bajtu)
+    check(z_grafu == z_dlazdice, f"{tb} TB: graf {z_grafu!r} = dlaždice {z_dlazdice!r}")
+
+# A past: kdyby se `_udaj` vratilo k `_fmt`, tenhle rozdil se vrati.
+check(charts._udaj(28.8, "TB") != "29 TB",
+      "terabajty se nezaokrouhlují na celé")
+check(charts._udaj(28.8, "h") == "29 h",
+      "u hodin celé číslo naopak zůstává")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

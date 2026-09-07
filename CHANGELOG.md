@@ -6,6 +6,33 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.5.3
+
+### Fixed
+
+- **The growth chart said 29 TB where the tile beside it said 28.8 TB.**
+  The number in the bubble went through the formatter the charts use for
+  hours, which drops the decimal above ten - right for "29 h", half a
+  terabyte out for a library. The data was never wrong; it is accurate to
+  about ten gigabytes, and the precision was lost only on the way to the
+  screen. Sizes in TB, GB and MB now carry the same decimals as the tile,
+  so the two numbers about the same thing read the same. The axis is
+  unchanged: "29" on it is a mark on a scale, not a reading.
+
+- **"Total size" said nothing about what it left out.** An item without
+  technical data enters the sum as zero - which is exactly what happens
+  after a file is replaced, when the technical data is deliberately
+  discarded and waits for the next analysis. Until then the total is a
+  lower bound, and the tile now says so: *"N items without a size are not
+  counted in"*. The number that explains the gap is better than the gap.
+
+### Changed
+
+- **The library's current size is worked out in one place.** The tile, the
+  daily snapshot and anything else asking "how big is the library right
+  now" used to each carry their own copy of the query. They cannot drift
+  apart any more.
+
 ## 1.5.2
 
 ### Changed

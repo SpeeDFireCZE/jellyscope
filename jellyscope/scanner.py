@@ -819,19 +819,10 @@ def zapis_snimek() -> dict[str, Any] | None:
     v grafech - ne v UTC, kde by se vecerni synchronizace zapsala uz
     na zitrek.
     """
-    souhrn = db.query_one(
-        f"""
-        SELECT COUNT(*)                        AS polozek,
-               SUM(CASE WHEN type = 'Movie'    THEN 1 ELSE 0 END) AS filmu,
-               SUM(CASE WHEN type = 'Episode'  THEN 1 ELSE 0 END) AS epizod,
-               COALESCE(SUM(COALESCE(size_bytes, 0)), 0)          AS velikost,
-               SUM(CASE WHEN {stats.RESOLUTION_CASE} = '4K' THEN 1 ELSE 0 END) AS uhd,
-               SUM(CASE WHEN {stats.ROZSAH_CASE} IN ('HDR', 'DOVI') THEN 1 ELSE 0 END) AS hdr,
-               SUM(CASE WHEN tech_source IS NULL THEN 1 ELSE 0 END) AS bez_technik
-          FROM items
-         WHERE is_missing = 0
-        """
-    )
+    # Tytéž součty, jaké kreslí konec křivky růstu a ukazuje dlaždice
+    # „Velikost celkem" - jedna funkce, aby se ta tři čísla nemohla
+    # rozejít. Viz stats.stav_knihovny().
+    souhrn = stats.stav_knihovny()
     if not souhrn or not souhrn.get("polozek"):
         return None          # prazdna knihovna: neni co zaznamenat
 

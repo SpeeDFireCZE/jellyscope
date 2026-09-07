@@ -174,6 +174,14 @@ def _fmt(value: float) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+# Jednotky, u kterych jeden dilek znamena hodne. `_fmt` zahazuje nad
+# desitkou desetinne misto - u hodin je to spravne ("29 h"), u terabajtu
+# to je pulterabajtova chyba: knihovna o 28,8 TB se v bubline hlasila
+# jako "29 TB", zatimco dlazdice vedle grafu psala "28,8 TB". Dve cisla
+# o tomtez, lisici se o 200 GB, a obe "spravne".
+VELKE_JEDNOTKY = ("TB", "GB", "MB", "PB")
+
+
 def _udaj(value: float, unit: str = "") -> str:
     """Hodnota i s jednotkou tak, jak ji clovek cte.
 
@@ -186,6 +194,12 @@ def _udaj(value: float, unit: str = "") -> str:
 
     if unit == "h" and formatting.presny_cas():
         return formatting.hodiny_hhmm(value)
+    if unit in VELKE_JEDNOTKY:
+        # Tytez desetinna mista jako `formatting.bytes_human`, aby graf
+        # a dlazdice vedle nej rekly totez.
+        cislo = (f"{value:,.0f}".replace(",", " ") if value >= 100
+                 else f"{value:.1f}".replace(".", ","))
+        return f"{cislo} {unit}".strip()
     return f"{_fmt(value)} {unit}".strip()
 
 

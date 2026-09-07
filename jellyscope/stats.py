@@ -1903,7 +1903,14 @@ def tech_coverage() -> dict[str, Any]:
                SUM(CASE WHEN tech_source = 'ffprobe'  THEN 1 ELSE 0 END) AS from_ffprobe,
                SUM(CASE WHEN tech_source = 'jellyfin' THEN 1 ELSE 0 END) AS from_jellyfin,
                SUM(CASE WHEN tech_source IS NULL      THEN 1 ELSE 0 END) AS missing,
-               SUM(CASE WHEN tech_error IS NOT NULL   THEN 1 ELSE 0 END) AS errors
+               SUM(CASE WHEN tech_error IS NOT NULL   THEN 1 ELSE 0 END) AS errors,
+               -- Kolik polozek do souctu prispiva nulou. Bez tohohle cisla
+               -- vypada "Velikost celkem" jako cela pravda i ve chvili, kdy
+               -- se cast knihovny prave ceka na analyzu - typicky po vymene
+               -- souboru, kdy se technicka data schvalne zahodila (viz
+               -- scanner.slouc_archiv_do_zivych).
+               SUM(CASE WHEN size_bytes IS NULL OR size_bytes = 0
+                        THEN 1 ELSE 0 END)            AS bez_velikosti
         FROM items
         WHERE is_missing = 0
         """
@@ -2080,6 +2087,32 @@ def _dopoctena_krivka(prvni: str, posledni: str) -> list[dict[str, Any]]:
                            "dopocteno": True})
         den += timedelta(days=1)
     return krivka
+
+
+def stav_knihovny() -> dict[str, int]:
+    """Jak knihovna vypadá teď - tytéž součty, jaké zapisuje denní snímek.
+
+    Jedna funkce, protože se ptají tři místa: dlaždice „Velikost celkem",
+    zápis snímku po synchronizaci a konec křivky růstu. Kdyby si každé
+    počítalo po svém, dřív nebo později se rozejdou - a hádat se pak dá
+    jen o tom, které z těch čísel lže.
+    """
+    radek = db.query_one(
+        f"""
+        SELECT COUNT(*)                        AS polozek,
+               SUM(CASE WHEN type = 'Movie'    THEN 1 ELSE 0 END) AS filmu,
+               SUM(CASE WHEN type = 'Episode'  THEN 1 ELSE 0 END) AS epizod,
+               COALESCE(SUM(COALESCE(size_bytes, 0)), 0)          AS velikost,
+               SUM(CASE WHEN {RESOLUTION_CASE} = '4K' THEN 1 ELSE 0 END) AS uhd,
+               SUM(CASE WHEN {ROZSAH_CASE} IN ('HDR', 'DOVI') THEN 1 ELSE 0 END) AS hdr,
+               SUM(CASE WHEN tech_source IS NULL THEN 1 ELSE 0 END) AS bez_technik
+          FROM items
+         WHERE is_missing = 0
+        """
+    ) or {}
+    return {jmeno: int(radek.get(jmeno) or 0)
+            for jmeno in ("polozek", "filmu", "epizod", "velikost",
+                          "uhd", "hdr", "bez_technik")}
 
 
 def snimky(days: Any = 90) -> list[dict[str, Any]]:

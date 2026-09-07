@@ -11,8 +11,14 @@
 
 <div class="kpi-row">
     {{ tile(_("Položek celkem"), coverage.total | number) }}
+    {# Součet zná jen velikosti, které máme. Položka bez technických dat
+       do něj vstupuje nulou, takže dokud nějaká taková je, je číslo
+       spodní odhad - a má to říct, ne vypadat jako celá pravda. #}
     {{ tile(_("Velikost celkem"), coverage.size_bytes | bytes,
-            note=_("všechny knihovny dohromady")) }}
+            note=(_("nepočítá se {kolik} položek bez velikosti").format(
+                      kolik=coverage.bez_velikosti | number)
+                  if coverage.bez_velikosti
+                  else _("všechny knihovny dohromady"))) }}
     {{ tile(_("Změřeno přes ffprobe"), coverage.from_ffprobe | number,
             note=_("přesná data ze souborů")) }}
     {{ tile(_("Převzato z Jellyfinu"), coverage.from_jellyfin | number,
