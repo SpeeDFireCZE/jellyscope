@@ -3,6 +3,7 @@
 [![tests](https://github.com/SpeeDFireCZE/jellyscope/actions/workflows/tests.yml/badge.svg)](https://github.com/SpeeDFireCZE/jellyscope/actions/workflows/tests.yml)
 [![licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 [![demo: jellyscope.cz](https://img.shields.io/badge/demo-jellyscope.cz-3987e5.svg)](https://jellyscope.cz)
+[![translate: Weblate](https://img.shields.io/badge/translate-weblate-2eccaa.svg)](https://translate.jellyscope.cz/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 Jellyfin statistics that **connect what people watch with the technical
