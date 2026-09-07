@@ -163,19 +163,48 @@ def current_language() -> str:
     return value if value in LANGUAGES else DEFAULT_LANGUAGE
 
 
+# Jazyk, na který se propadá, když překlad chybí.
+#
+# Ne čeština, i když je to zdroj: čeština je užitečná Čechům a nikomu
+# jinému. Kdo si zapne němčinu a překlad je hotový ze dvou třetin, má
+# u zbytku číst anglicky - to je jazyk, který u mediaserveru umí skoro
+# každý, kdo se dostal až sem. Česky se ukáže jen to, co nemá ani
+# anglický překlad, a na to je test.
+ZALOZNI_JAZYK = "en"
+
+
 def translate(text: str, language: str | None = None) -> str:
-    """Přeloží větu. Když překlad chybí, vrátí původní český text."""
+    """Přeloží větu.
+
+    Když překlad v cílovém jazyce chybí, zkusí se ještě angličtina
+    a teprve pak zůstane česká věta tak, jak je. Nedodělaný překlad
+    tak není napůl český, ale napůl anglický - viz ZALOZNI_JAZYK.
+    """
     language = language or current_language()
     if language == DEFAULT_LANGUAGE:
         return text
-    return TRANSLATIONS.get(language, {}).get(text, text)
+    slovnik = TRANSLATIONS.get(language, {})
+    if text in slovnik:
+        return slovnik[text]
+    if language != ZALOZNI_JAZYK:
+        return TRANSLATIONS.get(ZALOZNI_JAZYK, {}).get(text, text)
+    return text
 
 
 def prelozit_log(text: str, language: str) -> str:
-    """Totéž pro hlášky do logu - ty mají vlastní slovník i vlastní volbu."""
+    """Totéž pro hlášky do logu - ty mají vlastní slovník i vlastní volbu.
+
+    Log se čte i cizíma očima (u poruchy se posílá dál), takže záložní
+    angličtina dává smysl o to víc.
+    """
     if language == DEFAULT_LANGUAGE:
         return text
-    return LOG_TRANSLATIONS.get(language, {}).get(text, text)
+    slovnik = LOG_TRANSLATIONS.get(language, {})
+    if text in slovnik:
+        return slovnik[text]
+    if language != ZALOZNI_JAZYK:
+        return LOG_TRANSLATIONS.get(ZALOZNI_JAZYK, {}).get(text, text)
+    return text
 
 
 def register(env: Any) -> None:

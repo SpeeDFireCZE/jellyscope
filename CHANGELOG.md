@@ -6,6 +6,29 @@ something only gets fixed.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.1
+
+### Fixed
+
+- **An unfinished translation fell back to Czech.** Czech is the source
+  language, so a sentence nobody had translated yet was shown in Czech -
+  which helps a Czech and nobody else. Somebody who switches to German and
+  finds the translation two thirds done now reads the rest in **English**,
+  the language nearly everyone who got this far can read. Czech appears
+  only where even the English is missing, which the tests do not allow.
+  The application log falls back the same way; it gets forwarded to other
+  people when something breaks, so it matters there even more.
+
+  This lands before the first translations arrive on purpose: a language
+  that is 70 % done should read as English for the rest, not as a language
+  its readers cannot even guess at.
+
+- **The translation files are indented the way Weblate writes them.** Four
+  spaces, not two. It is a cosmetic difference with an uncosmetic effect:
+  the first commit from a translation tool would have rewritten every line
+  of the file, and the one sentence somebody actually translated would
+  have been lost in a diff of 1 176 changed lines.
+
 ## 1.6.0
 
 ### Added

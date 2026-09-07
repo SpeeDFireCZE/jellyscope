@@ -5,8 +5,10 @@ the templates carry whole Czech sentences, not keys like `dashboard.title`.
 A translation is a file that maps each of those sentences to your language.
 
 Nothing is required of you but a text editor. There is no build step, no
-compiler, and **a half-finished translation is fine** — a sentence without
-a translation is shown in Czech rather than as a blank space or a key.
+compiler, and **a half-finished translation is fine** — a sentence you have
+not translated yet falls back to **English**, never to a blank space or a
+key. (Czech shows only where even the English is missing, which the tests
+do not allow.)
 
 ```
 jellyscope/translations/

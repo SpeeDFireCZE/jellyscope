@@ -189,6 +189,37 @@ check(set(nactene) == {"de"},
 nactene = i18n._nacti_slozku(docasna)
 check(set(nactene) == {"de"}, "rozbitý překlad se přeskočí, aplikace běží dál")
 
+print()
+print("--- nedodělaný překlad propadne na angličtinu, ne na češtinu ---")
+# Cestina je zdroj, ale rozumi ji jen Cesi. Kdo si zapne nemcinu a preklad
+# je hotovy z poloviny, ma u zbytku cist anglicky.
+i18n.TRANSLATIONS["zkouska"] = {"Přehled": "Prehľad"}
+try:
+    check(i18n.translate("Přehled", "zkouska") == "Prehľad",
+          "přeložená věta se vezme z toho jazyka")
+    nahradni = i18n.translate("Knihovna", "zkouska")
+    check(nahradni == i18n.EN["Knihovna"],
+          f"nepřeložená propadne na angličtinu ({nahradni!r})")
+    check(nahradni != "Knihovna", "tedy ne na češtinu")
+    # Cestina a anglictina samy zustavaji, jak byly.
+    check(i18n.translate("Knihovna", "cs") == "Knihovna", "čeština je beze změny")
+    check(i18n.translate("Knihovna", "en") == i18n.EN["Knihovna"],
+          "angličtina taky")
+    # Veta, kterou nezna ani anglictina, zustane cesky - lepsi nez prazdno.
+    check(i18n.translate("Tuhle větu nikdo nepřeložil", "zkouska")
+          == "Tuhle větu nikdo nepřeložil",
+          "co nezná ani angličtina, zůstane česky")
+
+    # Totez u logu, ktery se u poruchy posila dal.
+    i18n.LOG_TRANSLATIONS["zkouska"] = {}
+    hlaska = "Odklizeno %s prehravani starsich nez %s dni"
+    check(i18n.prelozit_log(hlaska, "zkouska") == i18n.LOG_EN[hlaska],
+          "log propadne na angličtinu taky")
+finally:
+    i18n.TRANSLATIONS.pop("zkouska", None)
+    i18n.LOG_TRANSLATIONS.pop("zkouska", None)
+
+print()
 # Zkouska prekladu pres verejne rozhrani.
 veta = i18n.translate("v {n} řadách", "en").format(n=3)
 check(veta == "in 3 seasons", f"věta o řadách: {veta!r}")
