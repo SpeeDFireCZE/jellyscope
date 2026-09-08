@@ -1174,5 +1174,14 @@
     "Odpovědi nemají hlavičky CORS, takže je nepřečte cizí stránka v prohlížeči. API je pro nástroje na serveru.": "The answers carry no CORS headers, so no other site can read them in a browser. The API is for tools on a server.",
     "Klíč „{jmeno}“ vznikl.": "Key „{jmeno}“ created.",
     "Klíč „{jmeno}“ už neplatí.": "Key „{jmeno}“ no longer works.",
-    "Takový klíč tu není.": "There is no such key here."
+    "Takový klíč tu není.": "There is no such key here.",
+    "Generace serveru": "Server generation",
+    "Zjistit ze serveru": "Detect from the server",
+    "Jellyfin 12 a novější": "Jellyfin 12 and newer",
+    "Jellyfin 10.x": "Jellyfin 10.x",
+    "Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné – mění se jen to, jak se posílají dotazy.": "Version 12 no longer accepts the old authentication headers and has no /emby/ paths. The address and the key stay the same - only the way requests are sent differs.",
+    "Server naposledy hlásil verzi": "The server last reported version",
+    "server hlásí jinou generaci, než jaká je zvolená": "the server reports a different generation than the one selected",
+    "Platí ruční volba – od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.": "The manual choice wins - that is what it is for. If that was not the intention, switch back to „Detect from the server“.",
+    "Po přepnutí se verze zjistí znovu – hned při uložení, nebo při testu spojení.": "After switching, the version is detected again - right when you save, or at a connection test."
 }

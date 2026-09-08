@@ -97,6 +97,40 @@
             </p>
         </div>
 
+        {# Generace serveru. Jellyfin 12 přestal přijímat staré
+           přihlašovací hlavičky a zrušil pár cest; Jellyscope umí obojí
+           a podle téhle volby ví, co má posílat. Výchozí „zjistit"
+           si přečte verzi z /System/Info při testu spojení
+           a synchronizaci - ruční volba je pro případ, kdy se server
+           hlásí jinak, než se chová (za proxy, vlastní sestavení). #}
+        <div class="field">
+            <label for="jellyfin_generation">{{ _("Generace serveru") }}</label>
+            <select id="jellyfin_generation" name="jellyfin_generation"
+                    style="width:auto">
+                <option value="auto" {{ 'selected' if generace == 'auto' }}>
+                    {{ _("Zjistit ze serveru") }}
+                </option>
+                <option value="12" {{ 'selected' if generace == '12' }}>
+                    {{ _("Jellyfin 12 a novější") }}
+                </option>
+                <option value="10" {{ 'selected' if generace == '10' }}>
+                    {{ _("Jellyfin 10.x") }}
+                </option>
+            </select>
+            <p class="hint">
+                {{ _("Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné – mění se jen to, jak se posílají dotazy.") }}
+                {{ _("Po přepnutí se verze zjistí znovu – hned při uložení, nebo při testu spojení.") }}
+                {% if zjistena_verze %}<br>{{ _("Server naposledy hlásil verzi") }}
+                    <strong>{{ zjistena_verze }}</strong>.{% endif %}
+            </p>
+            {% if generace_nesedi %}
+            <p class="hint">
+                <span class="badge warning"><span class="dot"></span>{{ _("server hlásí jinou generaci, než jaká je zvolená") }}</span>
+                <br>{{ _("Platí ruční volba – od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.") }}
+            </p>
+            {% endif %}
+        </div>
+
         {# Obě tlačítka patří do TOHOTO formuláře, aby pracovala s tím,
            co je vyplněné. Test byl dřív samostatný formulář vedle - nic
            neposílal, takže testoval uložené nastavení místo vyplněného

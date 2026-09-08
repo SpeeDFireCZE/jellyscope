@@ -80,6 +80,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "ffprobe_concurrency": "3",
 
     # --- naplanovane ulohy (viz tasks.py) ---------------------------------
+    # Verze Jellyfinu, kterou jsme naposledy videli, a rucni volba
+    # generace ("auto" / "12" / "10"). Podle nich se rozhoduje, co ma
+    # smysl serveru posilat - viz jellyfin.hlavicky().
+    "jellyfin_version": "",
+    "jellyfin_generation": "auto",
     "task_sync_enabled": "1",
     "task_backup_enabled": "0",
     # Mazani dat nikdy nezacina samo od sebe - viz odklizeni.py.

@@ -92,5 +92,7 @@
     "preklad %s nejde precist: %s": "translation %s cannot be read: %s",
     "preklad %s neni slovnik": "translation %s is not a dictionary",
     "Vyroben API token %s": "API token %s created",
-    "Zrusen API token %s": "API token %s revoked"
+    "Zrusen API token %s": "API token %s revoked",
+    "Jellyfin hlasi verzi %s": "Jellyfin reports version %s",
+    "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s": "the Jellyfin version could not be detected while saving: %s"
 }

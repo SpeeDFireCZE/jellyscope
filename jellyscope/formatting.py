@@ -46,8 +46,21 @@ def bytes_human(value: Any) -> str:
         size /= 1024
         index += 1
 
-    decimals = 0 if index <= 1 or size >= 100 else 1
-    return f"{size:.{decimals}f} {_UNITS[index]}".replace(".", ",")
+    # Bajty a kilobajty bez desetinneho mista - u nich by neneslo
+    # zadnou informaci.
+    return f"{cislo_v_jednotce(size, celociselne=index <= 1)} {_UNITS[index]}"
+
+
+def cislo_v_jednotce(hodnota: float, celociselne: bool = False) -> str:
+    """Cislo velikosti tak, jak se pise: „28,8" nebo „145".
+
+    Jedno misto pro dlazdice i pro grafy. Kdyz to bylo na dvou, rozeslo
+    se to: graf psal „29 TB" tam, kde dlazdice vedle nej psala „28,8 TB",
+    a byl z toho pulterabajtovy rozdil ve dvou cislech o tomtez.
+    """
+    if celociselne or hodnota >= 100:
+        return f"{hodnota:,.0f}".replace(",", " ")
+    return f"{hodnota:.1f}".replace(".", ",")
 
 
 def hours_human(value: Any) -> str:

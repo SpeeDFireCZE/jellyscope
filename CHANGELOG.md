@@ -1,10 +1,64 @@
 # Changelog
 
 Notable changes, newest first. Versions follow [semantic versioning](https://semver.org):
-the middle number goes up when something new arrives, the last one when
-something only gets fixed.
+the middle number goes up for a **large** release — several new features
+together, a reworked interface, something you would notice at a glance.
+The last one goes up for a fix or a small addition, and one useful
+feature on its own usually counts as that: an existing capability
+growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
+
+## 1.6.2
+
+### Added
+
+- **Jellyfin 12 is supported, and 10.x still is.** Version 12 stopped
+  reading the old authentication headers (`X-Emby-Token` and its
+  relatives) and removed the `/emby/` and `/mediabrowser/` paths
+  altogether. Jellyscope was never affected: it has always asked with
+  `Authorization: MediaBrowser Token="..."`, which is what 12 wants and
+  what every 10.x understands as well. The old headers were being sent
+  alongside it, and they now go only to a server old enough to want them.
+
+  The version comes from the server itself, out of `/System/Info`, and is
+  re-read whenever the connection is saved or tested. Where that answer
+  cannot be trusted - a proxy that rewrites it, a build that reports
+  something odd - **Settings → Jellyfin** has a *server generation*
+  dropdown to say it outright. The address and the key stay the same
+  either way; only the shape of the questions changes. Switching the
+  dropdown forgets the detected version, so that a manual choice and a
+  stale detection cannot end up contradicting each other, and the page
+  says so when the two disagree.
+
+### Fixed
+
+- **A colour from outside can no longer become code.** Charts are put
+  into the page as HTML, without the escaping that protects everything
+  else, and a colour was written into the `style` attribute exactly as it
+  arrived. Today every colour comes from the application's own templates,
+  so nothing was exploitable - but a single future chart taking its
+  colour from the database or from a translation would have been, and
+  that is not a thing to leave lying around. A colour now has to look
+  like a colour to be used at all; anything else is drawn in the muted
+  default.
+
+  The security tests no longer check a couple of known places. They fire
+  four kinds of attack into **every** text that enters a chart - labels,
+  ids, country codes, place names, colours - across all ten charts, and
+  read the result the way a browser would, by taking the HTML apart into
+  tags and attributes rather than searching it for a string. The test
+  also proves it can fail: it repeats the whole run with the escaping
+  switched off and insists the holes reappear.
+
+### Changed
+
+- **Two rules that lived in two places now live in one.** The number of
+  decimal places on a size was written once for the tiles and again for
+  the charts - which is precisely why they drifted apart, the chart
+  saying `29 TB` next to a tile saying `28.8 TB` about the same library.
+  Reading the manually chosen Jellyfin generation had likewise grown a
+  second copy beside the first.
 
 ## 1.6.1
 

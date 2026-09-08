@@ -38,7 +38,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from . import (accounts, api, applog, charts, collector, db, dbmigrate, dialect,
                formatting, geoip,
                updates,
-               i18n, importers, insights, langstats, languages, odklizeni,
+               i18n, importers, insights, jellyfin, langstats, languages,
+               odklizeni,
                scanner, sekce,
                stats, tasks)
 # Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
@@ -1971,6 +1972,15 @@ def _kapacita_do_formulare() -> dict[str, Any]:
             "kapacita_jednotka": jednotka}
 
 
+def _generace_nesedi() -> bool:
+    """Hlásí server jinou generaci, než jaká je ručně zvolená?"""
+    volba = db.get_setting(jellyfin.GENERACE_KLIC, "auto")
+    zjistena = db.get_setting(jellyfin.VERZE_KLIC, "")
+    if volba not in ("12", "10") or not zjistena:
+        return False
+    return jellyfin.verze_serveru(zjistena)[0] != int(volba)
+
+
 SETTINGS_SECTIONS = [
     ("jellyfin", "Jellyfin", True),
     ("data", "Sběr dat", True),
@@ -2027,6 +2037,13 @@ def settings_page(
         context.update(
             jellyfin_url=rozepsane_jf.get("url") or db.get_setting("jellyfin_url", ""),
             has_api_key=bool(rozepsane_jf.get("api_key") or ulozeny_klic),
+            # Generace serveru: co je zvolené a co se naposledy zjistilo.
+            generace=db.get_setting(jellyfin.GENERACE_KLIC, "auto"),
+            zjistena_verze=db.get_setting(jellyfin.VERZE_KLIC, ""),
+            # Ruční volba proti tomu, co server hlásí. Když si odporují,
+            # není to chyba (od toho ta volba je), ale má to být vidět -
+            # jinak se ptáš proč aplikace posílá jiné dotazy, než čekáš.
+            generace_nesedi=_generace_nesedi(),
             jellyfin_draft=bool(rozepsane_jf),
             last_library_scan=scanner.last_scan("library"),
             scan_running=scanner.is_scan_running(),
@@ -2353,6 +2370,7 @@ async def settings_connection(
     request: Request,
     jellyfin_url: str = Form(""),
     jellyfin_api_key: str = Form(""),
+    jellyfin_generation: str = Form("auto"),
     action: str = Form("save"),
     account: dict[str, Any] = Depends(require_admin),
 ):
@@ -2372,6 +2390,19 @@ async def settings_connection(
     url = jellyfin_url.strip().rstrip("/")
     if url and not url.startswith(("http://", "https://")):
         url = "http://" + url
+
+    # Generace serveru. Adresa ani klíč se nezahazují - ty jsou pro obě
+    # generace tytéž a liší se jen to, jak se posílají dotazy.
+    #
+    # Zahodí se ale **zjištěná verze**, a jen při skutečné změně volby:
+    # patří k tomu, co bylo vybrané předtím, takže by na stránce zůstala
+    # dvě čísla, která si odporují. Prázdná se zjistí znovu při nejbližším
+    # testu spojení nebo synchronizaci.
+    volba = jellyfin_generation if jellyfin_generation in ("auto", "12", "10") \
+        else "auto"
+    if volba != db.get_setting(jellyfin.GENERACE_KLIC, "auto"):
+        db.set_setting(jellyfin.GENERACE_KLIC, volba)
+        db.set_setting(jellyfin.VERZE_KLIC, "")
 
     # Prazdny klic znamena "nech stavajici". Pri testu bereme i rozepsany,
     # aby slo otestovat vic pokusu za sebou bez opakovaneho vypisovani.
@@ -2405,6 +2436,22 @@ async def settings_connection(
     if key:
         db.set_setting("jellyfin_api_key", key)
     _draft_clear(account, "jellyfin")
+
+    # Verzi zjistíme rovnou při uložení, ne až při testu spojení nebo
+    # noční synchronizaci: kdo přepne generaci a klikne na Uložit, má
+    # hned vidět, co server hlásí - a hlavně se hned pozná, když si to
+    # s ruční volbou odporuje.
+    #
+    # Krátký strop a spolknutá chyba: uložení nesmí selhat kvůli tomu,
+    # že server zrovna neběží. Verze pak zůstane prázdná a doplní se
+    # při nejbližší příležitosti.
+    if url and key:
+        try:
+            async with JellyfinClient(url, key, QUICK_TIMEOUT) as client:
+                await client.system_info()
+        except JellyfinError as chyba:
+            log.info("verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s",
+                     chyba)
 
     _flash(request, "Připojení uloženo.", "success")
     return RedirectResponse("/settings?section=jellyfin", status_code=303)

@@ -56,9 +56,9 @@ def _prechod(slot: int, jmeno: str, sila: float = 0.34,
     barva = barva or f"var(--series-{slot})"
     return (
         f'<linearGradient id="{jmeno}" x1="0" y1="0" x2="0" y2="1">'
-        f'<stop offset="0%" stop-color="{barva}" '
+        f'<stop offset="0%" stop-color="{_barva(barva)}" '
         f'stop-opacity="{sila:.2f}" />'
-        f'<stop offset="100%" stop-color="{barva}" '
+        f'<stop offset="100%" stop-color="{_barva(barva)}" '
         f'stop-opacity="0.015" />'
         f"</linearGradient>"
     )
@@ -139,6 +139,29 @@ def _cesta(body: Sequence[tuple[float, float]]) -> str:
     return " ".join(casti)
 
 
+# Co smí projít do atributu jako barva: proměnná motivu, hex, jméno
+# barvy nebo funkce rgb()/hsl(). Schválně úzké - barvy si určuje
+# aplikace, ne data.
+_BARVA = re.compile(
+    r"^(?:var\(--[a-z0-9-]{1,40}\)|#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}"
+    r"|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/-]{1,40}\))$")
+
+# Když barva neprojde, kreslí se tímhle. Nespadne to a je vidět, že něco
+# nesedí - lepší než prázdné místo nebo rozbitý graf.
+NAHRADNI_BARVA = "var(--text-muted)"
+
+
+def _barva(hodnota: Any) -> str:
+    """Barva do atributu `style` nebo `stop-color`.
+
+    Do atributu se nikdy nevkládá text tak, jak přišel: `" onmouseover="`
+    by z něj vyskočil a stal se z něj spustitelný kód. Projde jen to, co
+    barvou doopravdy je; ostatní se nahradí.
+    """
+    text = str(hodnota or "").strip()
+    return text if _BARVA.match(text) else NAHRADNI_BARVA
+
+
 def _e(value: Any) -> str:
     """Escapovani textu do HTML.
 
@@ -195,11 +218,9 @@ def _udaj(value: float, unit: str = "") -> str:
     if unit == "h" and formatting.presny_cas():
         return formatting.hodiny_hhmm(value)
     if unit in VELKE_JEDNOTKY:
-        # Tytez desetinna mista jako `formatting.bytes_human`, aby graf
-        # a dlazdice vedle nej rekly totez.
-        cislo = (f"{value:,.0f}".replace(",", " ") if value >= 100
-                 else f"{value:.1f}".replace(".", ","))
-        return f"{cislo} {unit}".strip()
+        # Tataz funkce, jakou pouziva dlazdice - jinak se ta dve cisla
+        # o tomtez rozejdou. Viz formatting.cislo_v_jednotce().
+        return f"{formatting.cislo_v_jednotce(value)} {unit}".strip()
     return f"{_fmt(value)} {unit}".strip()
 
 
@@ -308,7 +329,7 @@ def hbar_chart(
             f'<div class="hbar-label">{popisek}</div>'
             f'<div class="hbar-track">'
             f'<div class="hbar-fill" style="width: {percent:.2f}%; '
-            f'background: {vypln}"></div>'
+            f'background: {_barva(vypln)}"></div>'
             f"</div>"
             f'<div class="hbar-value">{_e(_udaj(value, unit))}</div>'
             f"</div>"
@@ -380,7 +401,8 @@ def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
         inner = f"{share:.0f} %" if share >= 9 else ""
         parts.append(
             f'<div class="stack-seg" style="flex-grow: {share:.4f}; '
-            f'background: {_barva_segmentu(segment, index)}" data-tip="{_e(title)}">'
+            f'background: {_barva(_barva_segmentu(segment, index))}"'
+            f' data-tip="{_e(title)}">'
             f'<span>{inner}</span></div>'
         )
     parts.append("</div>")
@@ -494,7 +516,7 @@ def legend(items: Sequence[dict[str, Any]]) -> str:
         barva = item.get("barva") or _barva_segmentu(item, index)
         parts.append(
             f'<li{atribut}><span class="legend-swatch" '
-            f'style="background: {barva}">'
+            f'style="background: {_barva(barva)}">'
             f'</span>{_e(item.get("label", ""))}</li>'
         )
     parts.append("</ul>")
@@ -533,7 +555,11 @@ def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
     parts.append("</div>")
 
     for day_index, row in enumerate(grid):
-        parts.append(f'<div class="heatmap-day">{_t(DAY_NAMES[day_index])}</div>')
+        # Prelozeny text jde do stranky jen pres _e(): preklady pisou
+        # lide zvenku (viz TRANSLATING.md) a znacka v nich by jinak
+        # skoncila jako spustitelny kod - graf se vklada pres | safe.
+        parts.append(
+            f'<div class="heatmap-day">{_e(_t(DAY_NAMES[day_index]))}</div>')
         parts.append('<div class="heatmap-cells">')
         for hour, value in enumerate(row):
             if value <= 0:
@@ -544,7 +570,8 @@ def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
                 colour = HEAT_STEPS[bucket]
             title = f"{_t(DAY_NAMES[day_index])} {hour}:00 - {_udaj(value, unit)}"
             parts.append(
-                f'<i style="background: {colour}" data-tip="{_e(title)}"></i>'
+                f'<i style="background: {_barva(colour)}"'
+                f' data-tip="{_e(title)}"></i>'
             )
         parts.append("</div>")
 
@@ -666,7 +693,10 @@ def area_chart_multi(
              for entry in series if entry.get("barva")}
 
     def barva_serie(slot: int) -> str:
-        return barvy.get(slot) or f"var(--series-{slot})"
+        # Barvu urcuje ten, kdo graf vola, ale do atributu jde jen pres
+        # _barva() - jedno misto pro vsechna jeji pouziti (cara, tecka,
+        # prechod, legenda), aby na zadne nesla zapomenout.
+        return _barva(barvy.get(slot) or f"var(--series-{slot})")
 
     # Vyber tazenim: graf rekne, kde na ose lezi jaky okamzik, a zbytek
     # uz zvladne prohlizec. Souradnice jsou ve viewBoxu, ne v pixelech -

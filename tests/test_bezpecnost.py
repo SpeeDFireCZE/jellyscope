@@ -368,5 +368,192 @@ check(soubor.precteno <= strop + 2 * 1024 * 1024,
 
 
 print()
+print("--- překlad od cizího člověka nesmí nic spustit ---")
+# Od chvile, kdy jde prekladat pres Weblate (viz TRANSLATING.md), pisou
+# texty rozhrani cizi lide. Grafy se do stranky vkladaji pres `| safe`,
+# takze prelozena veta v nich je HTML - a znacka v prekladu by byla
+# spustitelny kod. Presne tohle se v heatmape stalo: zkratka dne se
+# vkladala bez escapovani.
+from jellyscope import charts, i18n, updates  # noqa: E402
+
+UTOK = "</div><script>alert(1)</script>"
+puvodni = {}
+for klic in [charts.DAY_NAMES[0], "Zatím žádná data", "Tažením v grafu vybereš rozmezí."]:
+    puvodni[klic] = i18n.TRANSLATIONS["en"].get(klic)
+    i18n.TRANSLATIONS["en"][klic] = UTOK
+
+puvodni_jazyk = db.get_setting("ui_language", "cs")
+db.set_setting("ui_language", "en")
+db.forget_settings()
+try:
+    vykresleno = {
+        "heatmapa": charts.heatmap([[1] * 24 for _ in range(7)]),
+        "prázdný graf": charts.hbar_chart([], "label", "value"),
+        "plošný graf": charts.area_chart_multi(
+            [{"den": "2026-09-01", "gb": 1}, {"den": "2026-09-02", "gb": 2}],
+            "den", [{"key": "gb", "label": "GB"}], vyber=True),
+    }
+    for jmeno, html in vykresleno.items():
+        check("<script>" not in html, f"{jmeno}: značka z překladu se nespustí")
+        check("&lt;script&gt;" in html or UTOK not in html,
+              f"{jmeno}: text se ukáže jako text")
+finally:
+    for klic, hodnota in puvodni.items():
+        if hodnota is None:
+            i18n.TRANSLATIONS["en"].pop(klic, None)
+        else:
+            i18n.TRANSLATIONS["en"][klic] = hodnota
+    db.set_setting("ui_language", puvodni_jazyk)
+    db.forget_settings()
+
+# Past: kdyby se escapovani nekde vytratilo, tenhle utok projde. Zkouska,
+# ze test umi selhat - nebezpecny retezec je opravdu nebezpecny.
+check("<script>" in UTOK, "a útočný řetězec je doopravdy spustitelný kód")
+
+print()
+print("--- útok do všech textů, které jdou do stránky bez escapování ---")
+# Predchozi oddil hlida jedno misto, o kterem uz vime. Tenhle se pta
+# obracene: kdyz se spustitelny kod vlozi do **kazdeho** textu, ktery do
+# grafu vstupuje, vyleze z nej nekde kod?
+#
+# Texty chodi ze tri stran a ani jedna neni nase: preklady pisou lide pres
+# Weblate, nazvy a jmena posila Jellyfin, poznamky k vydani prijdou
+# z GitHubu. Vsechny konci v grafu, ktery se do sablony vklada pres
+# `| safe` - tedy bez zachranne site, kterou Jinja jinak drzi.
+from html.parser import HTMLParser  # noqa: E402
+
+
+class _Rozbor(HTMLParser):
+    """Prohlížeč na půl úvazku: co je značka a co jsou její atributy.
+
+    Hledat útok v HTML jako řetězec nestačí. `" onmouseover="alert(1)`
+    zůstane po zaescapování v textu vidět (`&quot; onmouseover=&quot;…`),
+    jenže tam je to neškodná věta, ne obsluha události. Rozdíl pozná až
+    ten, kdo si HTML rozebere na značky - tak to uděláme taky.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.nalezy: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "iframe", "object", "embed"):
+            self.nalezy.append(f"<{tag}>")
+        for jmeno, hodnota in attrs:
+            jmeno = (jmeno or "").lower()
+            hodnota = (hodnota or "").strip().lower()
+            if jmeno.startswith("on"):      # obsluha udalosti = kod
+                self.nalezy.append(f"<{tag} {jmeno}=>")
+            if jmeno in ("href", "src", "xlink:href", "action", "formaction"):
+                cista = hodnota.replace("\t", "").replace("\n", "")
+                if cista.startswith(("javascript:", "data:text/html",
+                                     "vbscript:")):
+                    self.nalezy.append(f"<{tag} {jmeno}={cista[:24]}>")
+
+    handle_startendtag = handle_starttag
+
+
+def _spustitelne(html: str) -> list[str]:
+    """Místa, kde se z textu stal kód. Prázdný seznam = čisté."""
+    rozbor = _Rozbor()
+    rozbor.feed(f"<div>{html}</div>")
+    rozbor.close()
+    return rozbor.nalezy
+
+
+# Ctyri podoby utoku. Kazda mari jinou obranu: znacka projde tam, kde se
+# neescapuje; uvozovka utece z atributu; `javascript:` ceka na odkaz;
+# a zavirajici znacky rozbijeji SVG, kde plati jina pravidla nez v HTML.
+_UTOKY = {
+    "značka": "<script>alert(1)</script>",
+    "výskok z atributu": '" onmouseover="alert(1)',
+    "adresa se skriptem": "javascript:alert(1)",
+    "rozbití SVG": "</text></svg><script>alert(1)</script>",
+}
+
+# Preklady, ktere se v grafech opravdu pouzivaji.
+_PREKLADY = [charts.DAY_NAMES[0], "Zatím žádná data",
+             "Tažením v grafu vybereš rozmezí.", "dnů", "Podíl žánrů",
+             "Odkud se dívají"]
+
+
+def _grafy(utok: str) -> dict[str, str]:
+    """Každý graf s útokem ve všech textech, které přijímá.
+
+    Nejen v popisku - taky v id (jde do odkazu), v kodu zeme, ve jmenu
+    mista a **v barve**. Barva konci v atributu `style`, takze uvozovka
+    v ni je stejna dira jako znacka v popisku.
+    """
+    radky = [{"label": utok, "value": 5, "item_count": 5, "hours": 5,
+              "id": utok, "user_id": utok, "percent": 50, "gb": 5,
+              "code": utok, "slot": 1, "barva": utok},
+             {"label": "druhý", "value": 3, "item_count": 3, "hours": 3,
+              "id": "x", "user_id": "x", "percent": 50, "gb": 3,
+              "code": "cs", "slot": 2, "barva": "var(--accent)"}]
+    body = [{"lat": 50.0, "lon": 14.4, "sekund": 60, "plays": 1, "lidi": 1,
+             "misto": utok, "zeme": utok, "mesto": utok}]
+    return {
+        "hbar_chart": charts.hbar_chart(radky, "label", "value"),
+        "hbar_chart s odkazem": charts.hbar_chart(
+            radky, "label", "value", link_prefix="/users/",
+            link_key="user_id"),
+        "legend": charts.legend(radky),
+        "stacked_bar": charts.stacked_bar(radky),
+        "donut_chart": charts.donut_chart(radky),
+        "heatmap": charts.heatmap([[1] * 24 for _ in range(7)]),
+        "sparkline": charts.sparkline([{"day": utok, "hours": 1},
+                                       {"day": "x", "hours": 2}]),
+        "area_chart_multi": charts.area_chart_multi(
+            [{"den": utok, "gb": 1}, {"den": "x", "gb": 2}], "den",
+            [{"key": "gb", "label": utok, "barva": utok}], vyber=True),
+        "mapa_sveta": charts.mapa_sveta(body),
+        "poznámky k vydání": updates.poznamky_html(utok),
+    }
+
+
+def _projdi_utoky() -> list[str]:
+    """Vykreslí všechno se vším a vrátí seznam míst, kde vylezl kód."""
+    nalezy: list[str] = []
+    zaloha = {k: i18n.TRANSLATIONS["en"].get(k) for k in _PREKLADY}
+    jazyk = db.get_setting("ui_language", "cs")
+    try:
+        for popis, utok in _UTOKY.items():
+            for klic in _PREKLADY:
+                i18n.TRANSLATIONS["en"][klic] = utok
+            db.set_setting("ui_language", "en")
+            db.forget_settings()
+            for jmeno, html in _grafy(utok).items():
+                for misto in _spustitelne(html):
+                    nalezy.append(f"{jmeno} / {popis}: {misto}")
+    finally:
+        for klic, hodnota in zaloha.items():
+            if hodnota is None:
+                i18n.TRANSLATIONS["en"].pop(klic, None)
+            else:
+                i18n.TRANSLATIONS["en"][klic] = hodnota
+        db.set_setting("ui_language", jazyk)
+        db.forget_settings()
+    return nalezy
+
+
+nalezy = _projdi_utoky()
+for nalez in nalezy:
+    print("       ", nalez)
+check(not nalezy, f"ze {len(_UTOKY)} útoků × 10 grafů nevyleze kód")
+
+# A umi ten test vubec selhat? Nula nalezu znamena bud cistou aplikaci,
+# nebo slepy test - rozeznat je jde jedine tak, ze se obrana na chvili
+# vypne. Kdyz test nezaskuci ani na diru, kterou jsme do nej sami udelali,
+# jeho ticho neznamena nic.
+_e_zaloha, _barva_zaloha = charts._e, charts._barva
+try:
+    charts._e = lambda hodnota: str(hodnota or "")
+    charts._barva = lambda hodnota: str(hodnota or "")
+    slepy = _projdi_utoky()
+finally:
+    charts._e, charts._barva = _e_zaloha, _barva_zaloha
+check(len(slepy) > 10, "a bez escapování kód vyleze (test umí selhat)")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

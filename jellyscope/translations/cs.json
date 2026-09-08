@@ -1174,5 +1174,14 @@
     "Odpovědi nemají hlavičky CORS, takže je nepřečte cizí stránka v prohlížeči. API je pro nástroje na serveru.": "Odpovědi nemají hlavičky CORS, takže je nepřečte cizí stránka v prohlížeči. API je pro nástroje na serveru.",
     "Klíč „{jmeno}“ vznikl.": "Klíč „{jmeno}“ vznikl.",
     "Klíč „{jmeno}“ už neplatí.": "Klíč „{jmeno}“ už neplatí.",
-    "Takový klíč tu není.": "Takový klíč tu není."
+    "Takový klíč tu není.": "Takový klíč tu není.",
+    "Generace serveru": "Generace serveru",
+    "Zjistit ze serveru": "Zjistit ze serveru",
+    "Jellyfin 12 a novější": "Jellyfin 12 a novější",
+    "Jellyfin 10.x": "Jellyfin 10.x",
+    "Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné – mění se jen to, jak se posílají dotazy.": "Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné – mění se jen to, jak se posílají dotazy.",
+    "Server naposledy hlásil verzi": "Server naposledy hlásil verzi",
+    "server hlásí jinou generaci, než jaká je zvolená": "server hlásí jinou generaci, než jaká je zvolená",
+    "Platí ruční volba – od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.": "Platí ruční volba – od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.",
+    "Po přepnutí se verze zjistí znovu – hned při uložení, nebo při testu spojení.": "Po přepnutí se verze zjistí znovu – hned při uložení, nebo při testu spojení."
 }

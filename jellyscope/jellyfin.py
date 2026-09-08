@@ -41,6 +41,100 @@ class JellyfinError(RuntimeError):
     """Cokoliv, co se pokazi pri komunikaci s Jellyfinem."""
 
 
+# Verze serveru, kterou jsme naposledy videli. Pamatuje se v nastaveni,
+# aby se podle ni dalo rozhodovat uz pri sestavovani prvniho dotazu -
+# ptat se pokazde napred na /System/Info by byl dotaz navic ke kazdemu
+# volani.
+VERZE_KLIC = "jellyfin_version"
+
+# Od teto verze Jellyfin **neparsuje** stare autorizacni hlavicky
+# (X-Emby-Token, X-Emby-Authorization, X-MediaBrowser-Token) ani cesty
+# /emby/ a /mediabrowser/. Platny zustava `Authorization: MediaBrowser
+# Token="..."`, coz je to, cim se Jellyscope prokazuje odjakziva.
+PRVNI_BEZ_LEGACY = 12
+
+
+def verze_serveru(text: Any) -> tuple[int, int]:
+    """"12.0.1" -> (12, 0). Co nedava smysl, je (0, 0) = neznamo.
+
+    Neznama verze zamerne znamena "chovej se jako u stareho serveru":
+    posli i starou hlavicku a zkus i zalozni cestu. Na novem serveru to
+    nevadi (prebytecnou hlavicku ignoruje), kdezto opacna volba by na
+    starem serveru znamenala odmitnuty klic.
+    """
+    kusy = str(text or "").strip().split(".")
+    try:
+        hlavni = int(kusy[0])
+    except (ValueError, IndexError):
+        return (0, 0)
+    try:
+        vedlejsi = int(kusy[1]) if len(kusy) > 1 else 0
+    except ValueError:
+        vedlejsi = 0
+    return (hlavni, vedlejsi)
+
+
+def stary_server(verze: Any) -> bool:
+    """Je to server, ktery jeste zna zrusene zpusoby prihlaseni?
+
+    Neznama verze se pocita jako stara - viz `verze_serveru`.
+    """
+    hlavni = verze_serveru(verze)[0]
+    return hlavni == 0 or hlavni < PRVNI_BEZ_LEGACY
+
+
+def hlavicky(api_key: str, verze: Any = "") -> dict[str, str]:
+    """Hlavicky pro vsechny dotazy.
+
+    `Authorization: MediaBrowser Token="..."` je jediny zpusob, ktery
+    Jellyfin 12 uznava - a zaroven ho umi kazda starsi verze, takze se
+    posila vzdycky. Klic patri do hlavicky, ne do adresy: adresa se
+    loguje v proxy i v historii prohlizece.
+
+    `X-Emby-Token` je stara hlavicka. Od dvanactky se neparsuje, takze
+    by byla jen zbytecnym opakovanim klice v kazdem dotazu; starsim
+    serverum se posila dal, protoze u nekterych to byl jediny zpusob,
+    ktery jim sedel.
+    """
+    vysledek = {
+        "Authorization": f'MediaBrowser Token="{api_key}"',
+        "Accept": "application/json",
+    }
+    if stary_server(verze):
+        vysledek["X-Emby-Token"] = api_key
+    return vysledek
+
+
+# Rucne zvolena generace serveru. "auto" = poznat podle /System/Info.
+GENERACE_KLIC = "jellyfin_generation"
+
+# Co ktera volba znamena v cislech verze. Rucni volba tim prochazi
+# stejnou cestou jako zjistena verze - jedno rozhodovani, ne dvoje.
+GENERACE = {
+    "12": "12.0",
+    "10": "10.10",
+}
+
+
+def _zapamatovana_verze() -> str:
+    """Verze, podle ktere se rozhoduje: rucni volba, jinak zjistena.
+
+    Rucni volba ma prednost, protoze ji clovek zadal proti tomu, co se
+    zjistilo - typicky kdyz se server chova jinak, nez rika (za proxy,
+    v testovaci verzi). Prazdno znamena "nevim", a to se chova jako
+    stary server; viz `verze_serveru`.
+
+    Bez databaze (testy, start pred jejim otevrenim) se proste nevi.
+    """
+    try:
+        from . import db
+
+        volba = db.get_setting(GENERACE_KLIC, "auto")
+        return GENERACE.get(volba) or db.get_setting(VERZE_KLIC, "")
+    except Exception:      # noqa: BLE001 - bez databaze se proste nevi
+        return ""
+
+
 # Jedno cislo pro vsechny faze spojeni bylo malo. Navazani spojeni ma byt
 # rychle - kdyz server neodpovida, nema smysl cekat pul minuty. Ale
 # ODPOVED na dotaz o tri sta polozkach si Jellyfin u velke knihovny
@@ -72,21 +166,18 @@ class JellyfinClient:
     """
 
     def __init__(self, base_url: str, api_key: str,
-                 timeout: httpx.Timeout | float | None = None) -> None:
+                 timeout: httpx.Timeout | float | None = None,
+                 verze: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        # Verze serveru: bud predana (testy), nebo ta zapamatovana.
+        # Podle ni se rozhoduje, co se posila a co se zkousi - viz
+        # `hlavicky()` a `stary_server()`.
+        self.verze = _zapamatovana_verze() if verze is None else verze
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
-            headers={
-                # Moderni zpusob autentizace. Klic se posila v hlavicce,
-                # ne v URL - do URL nepatri, protoze se loguje v proxy,
-                # v historii prohlizece a jinde, kde ho nechces mit.
-                "Authorization": f'MediaBrowser Token="{api_key}"',
-                # Starsi Jellyfiny znaji tuhle. Poslat obe nic nestoji.
-                "X-Emby-Token": api_key,
-                "Accept": "application/json",
-            },
+            headers=hlavicky(api_key, self.verze),
         )
 
     async def __aenter__(self) -> "JellyfinClient":
@@ -142,8 +233,29 @@ class JellyfinClient:
     # -----------------------------------------------------------------
 
     async def system_info(self) -> dict[str, Any]:
-        """Zakladni info o serveru. Slouzi hlavne jako test spojeni."""
-        return await self._get("/System/Info") or {}
+        """Zakladni info o serveru. Slouzi hlavne jako test spojeni.
+
+        Zaroven si **zapamatuje verzi**. Podle ni se pak rozhoduje, co
+        ma smysl posilat a co uz ne (viz `hlavicky`, `stary_server`) -
+        a dalsi klient ji uz zna, aniz by se musel ptat.
+        """
+        from . import db
+
+        info = await self._get("/System/Info") or {}
+        verze = str(info.get("Version") or "").strip()
+        # Zapisuje se vzdycky, i pri rucni volbe. Je to pozorovani
+        # serveru, ne nastaveni: kdyz si clovek zvoli dvanactku a server
+        # hlasi desitku, ma to byt videt, ne prepsane. Chovani ridi
+        # ta volba - viz `_zapamatovana_verze`.
+        if verze and verze != db.get_setting(VERZE_KLIC, ""):
+            try:
+                db.set_setting(VERZE_KLIC, verze)
+                log.info("Jellyfin hlasi verzi %s", verze)
+            except Exception:   # noqa: BLE001 - bez databaze se nic nedeje
+                pass
+            # Podle ceho se rozhoduje dal: rucni volba, jinak tahle verze.
+            self.verze = _zapamatovana_verze() or verze
+        return info
 
     async def users(self) -> list[dict[str, Any]]:
         return await self._get("/Users") or []
@@ -276,7 +388,12 @@ class JellyfinClient:
             except JellyfinError:
                 # Nektere starsi verze Jellyfinu neumi /Items bez uzivatele.
                 # Zkusime to jeste jednou pod uctem prvniho administratora.
-                if user_id is not None:
+                #
+                # Od dvanactky uz ne: `/Items` je tam ta spravna cesta
+                # a `/Users/{id}/Items` je pozustatek. Kdyz selze prvni,
+                # neni to verzi - je to neco jineho a zalozni pokus by tu
+                # skutecnou chybu jen prekryl jinou.
+                if user_id is not None or not stary_server(self.verze):
                     raise
                 user_id = await self._first_admin_id()
                 if user_id is None:
@@ -319,7 +436,9 @@ class JellyfinClient:
                     start, stranka, item_types, user_id, parent_id,
                     sort_by="DateCreated", sort_order="Descending")
             except JellyfinError:
-                if user_id is not None:
+                # Totez co v `iter_items` - zalozni cesta jen u starych
+                # serveru.
+                if user_id is not None or not stary_server(self.verze):
                     raise
                 user_id = await self._first_admin_id()
                 if user_id is None:

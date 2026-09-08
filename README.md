@@ -6,6 +6,15 @@
 [![translate: Weblate](https://img.shields.io/badge/translate-weblate-2eccaa.svg)](https://translate.jellyscope.cz/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
+> [!NOTE]
+> **Jellyfin 12 is supported**, and so is 10.x. Version 12 stopped
+> accepting the old authentication headers and dropped the `/emby/` paths;
+> Jellyscope has always used `Authorization: MediaBrowser Token="..."`,
+> which is the method 12 accepts and every older version understands.
+> The server version is detected on its own — and *Settings → Jellyfin*
+> can be told outright, for a server that behaves differently from what it
+> reports.
+
 Jellyfin statistics that **connect what people watch with the technical
 state of the library**.
 
