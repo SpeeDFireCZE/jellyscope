@@ -555,5 +555,42 @@ finally:
 check(len(slepy) > 10, "a bez escapování kód vyleze (test umí selhat)")
 
 print()
+print("--- z ukázky se nedá odejít na cizí server ---")
+# Ukazkovy rezim vraci cloveka tam, odkud prisel - podle hlavicky
+# `referer`. Ta je od navstevnika, takze se ji neda verit: kdyz se z ni
+# vezme cela adresa, je z aplikace otevreny presmerovavac. Odkaz vypada,
+# ze vede na jellyscope.cz, a skonci jinde - presne s tim se sbiraji
+# hesla.
+#
+# Kontrola tu drive byla, ale delala se predponou ("zacina nasi
+# adresou"), a tou projde i `jellyscope.cz.utocnik.cz`.
+from jellyscope.web import _cesta_odkud_prisel  # noqa: E402
+
+CIZI = [
+    "http://jellyscope.cz.utocnik.cz/past",   # nase jmeno jako predpona
+    "https://utocnik.cz/",
+    "//utocnik.cz/past",                      # prohlizec to cte jako adresu
+    "https://utocnik.cz/?x=http://jellyscope.cz",
+    "javascript:alert(1)",
+    "http://utocnik.cz",
+]
+for adresa in CIZI:
+    kam = _cesta_odkud_prisel(adresa)
+    check(kam.startswith("/") and not kam.startswith("//"),
+          f"{adresa[:36]!r} -> {kam!r} zůstane u nás")
+    check("utocnik.cz" not in kam.split("?")[0],
+          f"{adresa[:36]!r} neodvede jinam")
+
+# A porad vraci cloveka tam, kde byl - jinak by pojistka byla k nicemu.
+for adresa, ceka in (("http://jellyscope.cz/settings?section=api",
+                      "/settings?section=api"),
+                     ("http://jellyscope.cz/library", "/library"),
+                     ("http://jellyscope.cz/", "/"),
+                     (None, "/"),
+                     ("", "/")):
+    check(_cesta_odkud_prisel(adresa) == ceka,
+          f"{str(adresa)[:38]!r} -> {ceka!r}")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

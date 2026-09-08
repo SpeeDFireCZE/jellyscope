@@ -9,6 +9,32 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.4
+
+### Security
+
+- **The demo could be turned into an open redirect.** When a button is
+  pressed in the demo, the application answers with a notice and sends
+  the visitor back where they came from, taking the address from the
+  `Referer` header. That header comes from outside, and the check on it
+  asked whether it *starts with* our own address - which
+  `https://jellyscope.cz.example.org/` does. A link that looked like it
+  led to the demo could land somewhere else entirely, which is how
+  passwords get collected.
+
+  Only an installation running in demo mode (`JELLYSCOPE_DEMO=1`) ever
+  reached that code, so an ordinary install was never exposed.
+
+  The host is no longer compared at all. Only the **path** is taken from
+  the header, so the redirect stays on the same server whatever the
+  header says - and it does not break behind a proxy, where the scheme
+  and port differ from what the application sees. `//example.org/x`,
+  which a browser reads as another server despite looking like a path, is
+  refused as well.
+
+  Found by reading the code, not by the scanner: CodeQL passed over it,
+  presumably satisfied by the check that was there.
+
 ## 1.6.3
 
 ### Fixed

@@ -27,6 +27,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 
+from urllib.parse import urlsplit
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
@@ -172,6 +174,25 @@ async def lifespan(app: FastAPI):
 config = load_config()
 
 app = FastAPI(title="Jellyscope", lifespan=lifespan, docs_url=None, redoc_url=None)
+def _cesta_odkud_prisel(referer: str | None) -> str:
+    """Cesta z `referer`, nebo domů. Nikdy adresa na cizí server.
+
+    Vrací se schválně jen cesta - bez schématu a hostitele. Takový odkaz
+    je vždycky na tomtéž serveru, takže se nedá zneužít k odvedení
+    člověka jinam, a přitom ho vrátí přesně tam, kde byl.
+
+    `//zlo.cz/x` vypadá jako cesta, ale prohlížeč ho čte jako adresu na
+    cizí server, takže neprojde.
+    """
+    adresa = urlsplit(referer or "")
+    kam = adresa.path or "/"
+    if adresa.query:
+        kam = f"{kam}?{adresa.query}"
+    if not kam.startswith("/") or kam.startswith("//"):
+        return "/"
+    return kam
+
+
 @app.middleware("http")
 async def ukazkovy_rezim(request: Request, call_next):
     """V ukázce se nic nemění - místo akce se objeví hláška.
@@ -196,12 +217,17 @@ async def ukazkovy_rezim(request: Request, call_next):
         # na úvodní stránku je trest za zvědavost.
         #
         # `referer` posílá prohlížeč u formuláře odeslaného ze stránky
-        # vždycky. Když by přišel odjinud (nebo vůbec), je domů jediné
-        # bezpečné místo - přesměrovat na cizí adresu z hlavičky by z toho
-        # udělalo otevřený přesměrovávač.
-        kam = request.headers.get("referer") or "/"
-        if not kam.startswith(str(request.base_url).rstrip("/")):
-            kam = "/"
+        # vždycky - jenže je to hlavička od návštěvníka, tedy údaj zvenku.
+        # Přesměrovat podle ní na celou adresu by z ukázky udělalo
+        # otevřený přesměrovávač.
+        #
+        # Bere se proto jen **cesta**. Hostitel se neporovnává vůbec:
+        # kontrola "začíná naší adresou" tu jednou byla a pouštěla
+        # `https://jellyscope.cz.utocnik.cz/`, protože naší adresou
+        # opravdu začíná. Relativní cesta nikam odejít nemůže, ať referer
+        # přijde odkudkoliv, a nerozbije se za proxy, kde se liší schéma
+        # i port.
+        kam = _cesta_odkud_prisel(request.headers.get("referer"))
         return RedirectResponse(kam, status_code=303)
     return await call_next(request)
 
