@@ -151,6 +151,20 @@ _BARVA = re.compile(
 NAHRADNI_BARVA = "var(--text-muted)"
 
 
+def _vypln_pruhu(barva: Any) -> str:
+    """Přechod po délce sloupce, složený z ověřené barvy.
+
+    Skládá se tady, ne v grafu, aby bylo na jednom místě vidět obojí:
+    že barva je ověřená, a že hotový přechod už ověřovat nemá smysl -
+    `linear-gradient(...)` žádná barva není a `_barva()` by ho zahodila.
+    Přesně tím kdysi všechny pruhy zešedly.
+    """
+    barva = _barva(barva)
+    return (f"linear-gradient(90deg, "
+            f"color-mix(in oklab, {barva} 62%, var(--surface-1)), "
+            f"{barva})")
+
+
 def _barva(hodnota: Any) -> str:
     """Barva do atributu `style` nebo `stop-color`.
 
@@ -316,10 +330,7 @@ def hbar_chart(
         # (jina barva by pletla identitu); u jednobarevneho grafu jde
         # rovnou fialova -> modra, tedy prechod znacky.
         if vlastni_slot:
-            barva = f"var(--series-{slot})"
-            vypln = (f"linear-gradient(90deg, "
-                     f"color-mix(in oklab, {barva} 62%, var(--surface-1)), "
-                     f"{barva})")
+            vypln = _vypln_pruhu(f"var(--series-{slot})")
         else:
             vypln = "linear-gradient(90deg, var(--accent-2), var(--accent))"
         cislo = (f'<div class="hbar-rank">{index + 1}</div>') if poradi else ""
@@ -329,7 +340,7 @@ def hbar_chart(
             f'<div class="hbar-label">{popisek}</div>'
             f'<div class="hbar-track">'
             f'<div class="hbar-fill" style="width: {percent:.2f}%; '
-            f'background: {_barva(vypln)}"></div>'
+            f'background: {vypln}"></div>'
             f"</div>"
             f'<div class="hbar-value">{_e(_udaj(value, unit))}</div>'
             f"</div>"

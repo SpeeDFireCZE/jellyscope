@@ -9,6 +9,30 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.3
+
+### Fixed
+
+- **The bars in every chart had turned grey.** Codecs, dynamic range,
+  watch time by user - all of them drew in the muted fallback colour
+  instead of their own. It arrived with 1.6.2: colours started being
+  checked before they were written into an attribute, and the check was
+  handed the finished `linear-gradient(...)` that a bar is filled with.
+  A gradient is not a colour, so it failed the check and fell back to
+  grey - every bar in the application at once.
+
+  The colour is now checked where it comes in, and the gradient is built
+  from the checked value afterwards, which is the right way round: what
+  the application composes for itself was never the part worth
+  distrusting. The guard against a colour becoming code is untouched and
+  still tested.
+
+  There is a new test for the other half of the question. The security
+  tests prove no chart emits anything executable; nothing proved a chart
+  emits the colour it was supposed to, which is why this shipped. That
+  test now exists, across every chart, and it was checked against the
+  bug itself - with the fault put back, it fails.
+
 ## 1.6.2
 
 ### Added
