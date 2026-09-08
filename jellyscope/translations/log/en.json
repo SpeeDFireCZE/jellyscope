@@ -94,5 +94,18 @@
     "Vyroben API token %s": "API token %s created",
     "Zrusen API token %s": "API token %s revoked",
     "Jellyfin hlasi verzi %s": "Jellyfin reports version %s",
-    "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s": "the Jellyfin version could not be detected while saving: %s"
+    "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s": "the Jellyfin version could not be detected while saving: %s",
+    "zalozen ucet %s (%s)": "account %s created (%s)",
+    "zmeneno heslo uctu %s": "password changed for account %s",
+    "ucet %s je nove %s": "account %s is now %s",
+    "smazan ucet %s": "account %s deleted",
+    "zrusena blokace adresy %s": "block lifted for address %s",
+    "adresa %s zablokovana natrvalo": "address %s blocked permanently",
+    "nastaveni %s zmeneno": "setting %s changed",
+    "nastaveni %s: %s -> %s": "setting %s: %s -> %s",
+    "vybrana databaze %s (%s)": "database selected: %s (%s)",
+    "smazana polozka %s (%s prehravani)": "item %s deleted (%s plays)",
+    "restart aplikace vyzadan uctem %s": "restart requested by account %s",
+    "databaze preskladana, po smazanych radcich nezustala stopa": "database rewritten, no trace left of the deleted rows",
+    "databazi se nepodarilo preskladat: %s": "the database could not be rewritten: %s"
 }

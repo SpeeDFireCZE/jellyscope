@@ -2940,6 +2940,7 @@ async def settings_restart(request: Request, account: dict[str, Any] = Depends(r
     Restart delame tak, ze proces nahradi sam sebe (`os.execv`). Az odpoved
     dorazi do prohlizece, aplikace se zvedne znovu.
     """
+    log.info("restart aplikace vyzadan uctem %s", account["username"])
     _flash(request, "Aplikace se restartuje. Stránka se obnoví sama, jakmile bude nahoře.", "info")
     _naplanuj_restart()
     # `wait=restart`: stranka si sama pocka, az se zvedne novy proces,
@@ -2991,11 +2992,11 @@ def historie_zapomen(request: Request, user_id: str = Form(""),
         _flash(request, "Nebylo co zapomenout - k tomu divákovi nic nemáme.",
                "info")
     else:
-        log.info("Zapomenut divak %s: smazano %s prehravani",
-                 vysledek["jmeno"] or user_id, vysledek["smazano"])
+        # Log uz zapsalo `odklizeni.zapomen_uzivatele()`. Druhy radek
+        # o teze akci by v logu jen prekazel.
         _flash(request,
-               f"Historie diváka {vysledek['jmeno'] or user_id} smazána "
-               f"({vysledek['smazano']} přehrávání).", "success")
+               "Historie diváka {jmeno} smazána ({n} přehrávání).", "success",
+               jmeno=vysledek["jmeno"] or user_id, n=vysledek["smazano"])
     return RedirectResponse("/settings?section=tasks", status_code=303)
 
 

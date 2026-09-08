@@ -14,6 +14,7 @@ na hodinach na zdi, ne v Greenwichi.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -21,6 +22,8 @@ from typing import Any
 
 from . import db, formatting
 from .i18n import translate as _t
+
+log = logging.getLogger(__name__)
 
 # Prevod vysky obrazu na skupinu rozliseni. Pouziva se na vic mistech,
 # takze je to konstanta, ne kopie na peti radcich.
@@ -2734,6 +2737,7 @@ def delete_item(item_id: str) -> dict[str, Any]:
         conn.execute("DELETE FROM item_streams WHERE item_id = ?", (item_id,))
         conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
 
+    log.info("smazana polozka %s (%s prehravani)", row["name"], plays)
     return {
         "status": "ok",
         "name": row["name"],

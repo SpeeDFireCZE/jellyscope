@@ -9,6 +9,90 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.5
+
+### Added
+
+- **What changes the installation now leaves a line in the log.** Accounts
+  could be created, deleted, promoted and have their password reset
+  without a trace: `accounts.py` did not log at all. Neither did picking
+  a database, deleting an item, or blocking an address by hand. When
+  somebody later asks who deleted that account, there has to be somewhere
+  to look.
+
+  Settings are logged in one place — `db.set_setting()` — rather than in
+  the twenty routes that write them, because the one route somebody
+  forgets is the one they will need. Three rules keep it readable instead
+  of noisy: a value that did not change is not logged, a secret is logged
+  by name only (`setting notify_smtp_heslo changed`, never the value),
+  and bookkeeping keys are skipped — the detected Jellyfin version is
+  rewritten on every call to the server.
+
+  The logging sits in the function that makes the change, not in the
+  route. `create()` is also called by first-run setup and by the tests;
+  a log line in the route would leave those paths silent.
+
+- **Clearing out the history has its own section.** It used to be a
+  subheading inside *Scheduled tasks*, a card that was doing three jobs
+  at once. Deleting history is the only one of them that destroys data,
+  so it stands on its own, with its own save button. Tasks and backups
+  stay together — a backup *is* a task.
+
+- **Forgetting a viewer asks in a window of its own.** The browser's
+  `confirm()` can only show a bare sentence, so it had to ask twice - the
+  second question existed only to name the viewer. A window of our own
+  shows the name and the number of records at once, so one question says
+  more than those two did.
+
+  The button that opens it cannot submit anything: it is a plain button
+  belonging to no form, and only the confirmation inside the window sends
+  it. That is the part worth keeping. The confirmation used to be a named
+  function that shared its name with the `<select>` beside it - an element
+  with an `id` is a property of `window` and shadowed the function, so
+  the call failed, the browser skipped the handler and did the default
+  thing instead: it submitted. A viewer's history went without a single
+  question. A broken guard that behaves like no guard is worse than none;
+  now a broken script means nothing happens at all.
+
+- **Data collection and Interface are split into cards too.** Both were
+  one card with several subheadings — several different decisions under
+  a single title. Each subheading is a card now, with its own save
+  button, and the umbrella heading *Appearance, long lists and the map*
+  is gone: after the split the cards name themselves.
+
+### Fixed
+
+- **Deleted history stayed readable in the database file.** SQLite's
+  `DELETE` only drops the row from the page index; the bytes lie there
+  until something overwrites them. "Forgotten" history could be read
+  straight out of the file — which is how one viewer's history was
+  recovered after being deleted by accident, and a hole every other day
+  of the year. Both paths that delete on purpose now rewrite the
+  database afterwards, and the test checks the file itself rather than
+  asking the application: the name went from 236 occurrences to one, and
+  that one is the account in Jellyfin's user list, which stays on
+  purpose.
+
+- **A day count of zero would have deleted everything.** Writing the
+  test that deletion removes only what it should turned this up:
+  `smaz_stare(dnu)` took its argument as given, so `0` put the boundary
+  at *now* and took everything except the session in progress, a
+  negative number put it in the future and took that too, and a large
+  enough number crashed. Only the scheduled task calls it, and without
+  an argument, so it could not happen — but that is luck, not a guard.
+  The limit now sits where the number becomes a boundary, and it guards
+  the dangerous values rather than the small ones: a five-day boundary
+  written in code still works, because whoever wrote it meant it.
+
+- **One action, two identical log lines.** Forgetting a viewer was logged
+  by `odklizeni` and again by the route.
+
+- **A message that could not be translated.** The confirmation after
+  forgetting a viewer was assembled with an f-string, so it appeared in
+  Czech in an English interface. The test that guards against exactly
+  this could not see it: it read only plain string literals and stepped
+  over f-strings without a word. It now reports them.
+
 ## 1.6.4
 
 ### Security

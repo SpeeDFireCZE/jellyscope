@@ -36,10 +36,13 @@ a `INSERT OR REPLACE` (píšeme `ON CONFLICT`, kterému rozumí obojí).
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
+
+log = logging.getLogger(__name__)
 
 SQLITE = "sqlite"
 POSTGRES = "postgres"
@@ -142,6 +145,11 @@ def save_config(base_dir: Path, config: DatabaseConfig) -> None:
     path.write_text(
         json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    # Heslo v logu pochopitelne neni - jen to, na kterou databazi se
+    # aplikace po restartu prepne.
+    log.info("vybrana databaze %s (%s)", config.kind,
+             f"{config.host}:{config.port}/{config.database}"
+             if config.is_postgres else config.path)
     try:
         path.chmod(0o600)
     except OSError:

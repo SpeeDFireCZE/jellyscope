@@ -177,6 +177,8 @@
 {# ================================================================== #}
 {% elif section == 'data' %}
 {# ================================================================== #}
+{# Formulář obepíná všechny karty sekce - ukládají se jedním
+   odesláním, jen jsou rozdělené podle toho, čeho se týkají. #}
 <form method="post" action="/settings">
 <div class="card">
     <div class="card-head">
@@ -224,7 +226,17 @@
         </label>
     </div>
 
-    <h3 class="skupina">{{ _("Analýza souborů") }}</h3>
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Analýza souborů") }}</h2>
+        <p class="card-note">{{ _("kdy sáhnout na soubory a kolik naráz") }}</p>
+    </div>
     <div class="field" style="margin-top:18px">
         <label for="ffprobe_path">{{ _("Cesta k ffprobe") }}</label>
         <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ settings.ffprobe_path }}"
@@ -258,8 +270,17 @@
        cizí disk. Proto se nejdřív ptáme Jellyfinu, který u těch souborů
        sedí. A když knihovna leží v cloudu, nepozná velikost ani on -
        tehdy platí tohle číslo. #}
-    <h3 class="skupina">{{ _("Úložiště knihovny") }}</h3>
-    <p class="skupina-popis">{{ _("odkud se bere volné místo pro odhad růstu") }}</p>
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Úložiště knihovny") }}</h2>
+        <p class="card-note">{{ _("odkud se bere volné místo pro odhad růstu") }}</p>
+    </div>
     <div class="field">
         <label for="library_capacity_gb">{{ _("Kapacita úložiště knihovny") }}</label>
         {# Číslo a jednotka vedle sebe: u dvacetiterabajtového pole je
@@ -284,7 +305,17 @@
         </p>
     </div>
 
-    <h3 class="skupina">{{ _("Sběr přehrávání") }}</h3>
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Sběr přehrávání") }}</h2>
+        <p class="card-note">{{ _("jak často se sběrač ptá, co se právě hraje") }}</p>
+    </div>
     <div class="field">
         <label for="poll_interval">{{ _("Jak často se ptát, co se hraje (sekundy)") }}</label>
         <input type="number" id="poll_interval" name="poll_interval"
@@ -295,7 +326,7 @@
     </div>
 
     <div class="btn-row">
-        <button class="btn primary" type="submit">{{ _("Uložit nastavení") }}</button>
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
     </div>
 </div>
 </form>
@@ -327,8 +358,11 @@
     </p>
     {% endif %}
 
+    {# Oba formuláře jsou prázdné a pole se k nim hlásí přes `form=`.
+       Bez toho by musely obepnout obě karty - a uvnitř by pak byly další
+       formuláře („Spustit hned", obnova zálohy), což prohlížeč neumí. #}
     <form method="post" action="/settings/historie/zapomen" id="zapomenut"></form>
-    <form method="post" action="/settings/tasks">
+    <form method="post" action="/settings/tasks" id="ulohy"></form>
     <div class="table-wrap">
         <table>
             <thead>
@@ -349,7 +383,7 @@
                     {# Zaškrtávátko = zapnuto/vypnuto. Když je vypnuté,
                        úloha se sama nikdy nespustí - jen ručně. #}
                     <label style="display:flex; align-items:center; gap:7px; cursor:pointer">
-                        <input type="checkbox" name="enabled_{{ row.task.key }}" value="1"
+                        <input type="checkbox" name="enabled_{{ row.task.key }}" form="ulohy" value="1"
                                {{ 'checked' if row.enabled }}>
                         <span>{{ _("zapnuto") if row.enabled else _("vypnuto") }}</span>
                     </label>
@@ -369,11 +403,11 @@
                 <td class="num">
                     {% if row.daily %}
                     <div class="time-picker">
-                        <input type="number" name="time_{{ row.task.key }}_h"
+                        <input type="number" name="time_{{ row.task.key }}_h" form="ulohy"
                                value="{{ row.hodina }}" min="0" max="23"
                                aria-label="{{ _('Hodina') }}">
                         <span aria-hidden="true">:</span>
-                        <input type="number" name="time_{{ row.task.key }}_m"
+                        <input type="number" name="time_{{ row.task.key }}_m" form="ulohy"
                                value="{{ row.minuta }}" min="0" max="59"
                                aria-label="{{ _('Minuta') }}">
                     </div>
@@ -381,7 +415,7 @@
                     {% else %}
                     {# Stejná šířka jako pole s časem, ať mají všechny
                        řádky stejně široký sloupec a lícují u sebe. #}
-                    <input type="number" name="minutes_{{ row.task.key }}"
+                    <input type="number" name="minutes_{{ row.task.key }}" form="ulohy"
                            value="{{ row.minutes }}" min="0" max="10080"
                            style="width:110px" aria-label="{{ _('Interval') }}">
                     <div class="card-note">{{ _("minut") }}</div>
@@ -426,62 +460,12 @@
         </table>
     </div>
 
-    <h3 class="skupina" style="margin-top:22px">{{ _("Odklízení historie") }}</h3>
-    <p class="skupina-popis">{{ _("jak dlouhá historie přehrávání se nechává") }}</p>
+    <h3 class="skupina" style="margin-top:22px">{{ _("Zálohy") }}</h3>
+    <p class="skupina-popis">{{ _("kam se ukládají a kolik jich zůstává") }}</p>
 
     <div class="field">
-        <label for="history_retention_days">{{ _("Historie se nechává (dní)") }}</label>
-        <input type="number" id="history_retention_days" name="history_retention_days"
-               value="{{ retence_dnu }}" min="{{ retence_min }}" max="{{ retence_max }}"
-               style="width:120px">
-        <p class="hint">
-            {{ _("Platí, teprve když je úloha „Odklízení historie“ výš zapnutá – bez ní se nemaže nic. Právě běžící přehrávání se nemaže nikdy.") }}
-            <br>
-            {% if odklid.celkem %}
-                {{ _("V historii je") }} <strong>{{ odklid.celkem | number }}</strong>
-                {{ _("přehrávání") }}{% if odklid.nejstarsi %}, {{ _("nejstarší z") }}
-                {{ odklid.nejstarsi[:10] | cesky_datum }}{% endif %}.
-                {% if odklid.odejde %}
-                    <br><span class="badge warning"><span class="dot"></span>{{ _("při tomhle nastavení by odešlo") }}
-                    {{ odklid.odejde | number }} {{ _("přehrávání") }}</span>
-                {% else %}
-                    <br><span class="badge good"><span class="dot"></span>{{ _("při tomhle nastavení by teď neodešlo nic") }}</span>
-                {% endif %}
-            {% else %}
-                {{ _("Historie je zatím prázdná.") }}
-            {% endif %}
-        </p>
-    </div>
-
-    {# Zapomenutí diváka je jednorázový zásah, ne nastavení - proto má
-       vlastní formulář a neukládá se spolu s úlohami. #}
-    <div class="field">
-        <label for="zapomenout_divaka">{{ _("Zapomenout jednoho diváka") }}</label>
-        <div class="pole-s-jednotkou">
-            <select id="zapomenout_divaka" name="user_id" form="zapomenut"
-                    {{ 'disabled' if not divaci }}>
-                {% for divak in divaci %}
-                    <option value="{{ divak.user_id }}">
-                        {{ divak.jmeno or divak.user_id }} ({{ divak.relaci | number }})
-                    </option>
-                {% else %}
-                    <option value="">{{ _("nikdo tu není") }}</option>
-                {% endfor %}
-            </select>
-            <button class="btn danger" type="submit" form="zapomenut"
-                    {{ 'disabled' if not divaci }}
-                    onclick="return confirm('{{ _("Smazat celou historii tohoto diváka? Zpět to nejde.") }}')">
-                {{ _("Zapomenout") }}
-            </button>
-        </div>
-        <p class="hint">
-            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie.") }}
-        </p>
-    </div>
-
-    <div class="field" style="margin-top:18px">
         <label for="backup_path">{{ _("Složka pro zálohy databáze") }}</label>
-        <input type="text" id="backup_path" name="backup_path"
+        <input type="text" id="backup_path" name="backup_path" form="ulohy"
                value="{{ settings.backup_path }}" placeholder="/var/backups/jellyscope">
         <p class="hint">
             {{ _("Nech prázdné, dokud zálohy nechceš. Složka se v případě potřeby vytvoří.") }}
@@ -491,7 +475,7 @@
 
     <div class="field">
         <label for="backup_keep">{{ _("Kolik záloh nechat") }}</label>
-        <input type="number" id="backup_keep" name="backup_keep"
+        <input type="number" id="backup_keep" name="backup_keep" form="ulohy"
                value="{{ settings.backup_keep }}" min="1" max="365">
         <p class="hint">{{ _("Starší se při každé záloze smažou, aby složka nerostla donekonečna.") }}</p>
     </div>
@@ -501,7 +485,7 @@
     {% if pg_server %}
     <div class="field">
         <label for="pg_dump_path">{{ _("Cesta k pg_dump") }}</label>
-        <input type="text" id="pg_dump_path" name="pg_dump_path"
+        <input type="text" id="pg_dump_path" name="pg_dump_path" form="ulohy"
                value="{{ settings.pg_dump_path }}"
                placeholder="/usr/lib/postgresql/{{ pg_server }}/bin/pg_dump">
         <p class="hint">
@@ -528,9 +512,8 @@
     {% endif %}
 
     <div class="btn-row">
-        <button class="btn primary" type="submit">{{ _("Uložit úlohy") }}</button>
+        <button class="btn primary" type="submit" form="ulohy">{{ _("Uložit úlohy a zálohy") }}</button>
     </div>
-    </form>
 
     <div class="btn-row" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)">
         <span class="card-note">{{ _("Spustit hned") }}:</span>
@@ -583,6 +566,119 @@
         </table>
     </div>
     {% endif %}
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Odklízení historie") }}</h2>
+        <p class="card-note">{{ _("jak dlouho se historie nechává, a jak zapomenout jednoho diváka") }}</p>
+    </div>
+
+    <div class="field">
+        <label for="history_retention_days">{{ _("Historie se nechává (dní)") }}</label>
+        <input type="number" id="history_retention_days" name="history_retention_days" form="ulohy"
+               value="{{ retence_dnu }}" min="{{ retence_min }}" max="{{ retence_max }}"
+               style="width:120px">
+        <p class="hint">
+            {{ _("Platí, teprve když je úloha „Odklízení historie“ výš zapnutá – bez ní se nemaže nic. Právě běžící přehrávání se nemaže nikdy.") }}
+            <br>
+            {% if odklid.celkem %}
+                {{ _("V historii je") }} <strong>{{ odklid.celkem | number }}</strong>
+                {{ _("přehrávání") }}{% if odklid.nejstarsi %}, {{ _("nejstarší z") }}
+                {{ odklid.nejstarsi[:10] | cesky_datum }}{% endif %}.
+                {% if odklid.odejde %}
+                    <br><span class="badge warning"><span class="dot"></span>{{ _("při tomhle nastavení by odešlo") }}
+                    {{ odklid.odejde | number }} {{ _("přehrávání") }}</span>
+                {% else %}
+                    <br><span class="badge good"><span class="dot"></span>{{ _("při tomhle nastavení by teď neodešlo nic") }}</span>
+                {% endif %}
+            {% else %}
+                {{ _("Historie je zatím prázdná.") }}
+            {% endif %}
+        </p>
+    </div>
+
+    {# Zapomenutí diváka je jednorázový zásah, ne nastavení - proto má
+       vlastní formulář a neukládá se spolu s úlohami. #}
+    <div class="field">
+        <label for="zapomenout_divaka">{{ _("Zapomenout jednoho diváka") }}</label>
+        <div class="pole-s-jednotkou">
+            <select id="zapomenout_divaka" name="user_id" form="zapomenut"
+                    {{ 'disabled' if not divaci }}>
+                {% for divak in divaci %}
+                    <option value="{{ divak.user_id }}">
+                        {{ divak.jmeno or divak.user_id }} ({{ divak.relaci | number }})
+                    </option>
+                {% else %}
+                    <option value="">{{ _("nikdo tu není") }}</option>
+                {% endfor %}
+            </select>
+            {# `type="button"` je tu schválně a je to pojistka, ne detail.
+               Tohle tlačítko **neumí odeslat formulář** - jen otevře okno
+               s dotazem. Když se na skriptu cokoliv pokazí, nestane se
+               nic; nemůže se stát, že se mlčky smaže historie. Odeslat
+               umí jedině potvrzení uvnitř toho okna.
+
+               Proč to takhle: obsluha tu dřív volala pojmenovanou funkci,
+               která se jmenovala stejně jako <select> nad ní. Prvek s `id`
+               je vlastnost `window` a funkci přebil, volání spadlo na
+               „is not a function", prohlížeč `onclick` přeskočil - a udělal
+               výchozí akci, tedy odeslal formulář. Historie diváka tak
+               zmizela bez jediné otázky. Rozbitá pojistka se nechovala
+               jako rozbitá, chovala se, jako by tam nebyla. #}
+            <button class="btn danger" type="button"
+                    {{ 'disabled' if not divaci }}
+                    onclick="var v = document.getElementById('zapomenout_divaka');
+                             if (!v || !v.value) { return; }
+                             document.getElementById('koho-zapomenout').textContent = v.options[v.selectedIndex].text.trim();
+                             document.getElementById('okno-zapomenut').showModal();">
+                {{ _("Zapomenout") }}
+            </button>
+        </div>
+        <p class="hint">
+            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie.") }}
+        </p>
+    </div>
+
+    {# Vlastní tlačítko: karta bez něj vypadá, že se neukládá. Ukládá týž
+       formulář jako karta nad ním - podstatné je, že u každé karty
+       tlačítko je. #}
+    <div class="btn-row">
+        <button class="btn primary" type="submit" form="ulohy">{{ _("Uložit odklízení") }}</button>
+    </div>
+
+    {# Vlastní okno místo `confirm()` z prohlížeče. Důvod není vzhled:
+       `confirm()` umí jen holou větu, takže se muselo ptát dvakrát, aby
+       druhá otázka stihla říct, koho se to týká. Tady je jméno diváka
+       i počet záznamů rovnou vidět, takže jedna otázka stačí - a je
+       konkrétnější než ty dvě předtím dohromady.
+
+       Značka <dialog> je vestavěná: sama ztmaví pozadí, zavře se Escapem
+       a pohlídá fokus. Žádná knihovna, žádná obsluha klávesnice. #}
+    <dialog id="okno-zapomenut" class="dialog">
+        <h2>{{ _("Zapomenout diváka") }}</h2>
+
+        <p class="dialog-label">{{ _("Koho se to týká") }}</p>
+        <p><strong id="koho-zapomenout"></strong></p>
+
+        <p>{{ _("Smaže se všechno, co je o tom divákovi zaznamenané. Zpátky to nejde – jediná cesta zpět je záloha databáze.") }}</p>
+
+        <p class="card-note">
+            {{ _("Účet zůstává v Jellyfinu, takže ho příští synchronizace zase uvidí – jen už bez historie.") }}
+        </p>
+
+        <div class="btn-row">
+            {# Zrušit je první, tedy i to, na čem stojí fokus po otevření.
+               Enter ze zvyku tak nic nesmaže. #}
+            <form method="dialog">
+                <button class="btn" type="submit" autofocus>{{ _("Zrušit") }}</button>
+            </form>
+            <button class="btn danger" type="submit" form="zapomenut">
+                {{ _("Ano, zapomenout") }}
+            </button>
+        </div>
+    </dialog>
 </div>
 
 
@@ -789,7 +885,7 @@
         </table>
     </div>
 
-    <h3>{{ _("Playback Reporting (plugin Jellyfinu)") }}</h3>
+    <h3 class="skupina">{{ _("Playback Reporting (plugin Jellyfinu)") }}</h3>
     <p class="card-note" style="margin-bottom:12px">
         {{ _("Data se berou přímo přes Jellyfin, takže nemusíš nikam nahrávat žádný soubor. Plugin najdeš v Jellyfinu: Ovládací panel → Pluginy → Katalog.") }}
     </p>
@@ -1844,19 +1940,14 @@
 {# ------------------------------------------------------------------ #}
 {# Rozhraní - kolik toho karty ukážou rovnou                           #}
 {# ------------------------------------------------------------------ #}
+{# Formulář obepíná všechny karty sekce - ukládají se jedním
+   odesláním, jen jsou rozdělené podle toho, čeho se týkají. #}
+<form method="post" action="/settings/interface">
 <div class="card" id="rozhrani">
     <div class="card-head">
-        <h2>{{ _("Vzhled, dlouhé seznamy a mapa") }}</h2>
-        <p class="card-note">{{ _("jak aplikace vypadá, co karta ukáže rovnou a jak se ovládá mapa") }}</p>
+        <h2>{{ _("Vzhled aplikace") }}</h2>
+        <p class="card-note">{{ _("barvy, karty a jak se píše čas") }}</p>
     </div>
-
-    <p class="card-note" style="margin-bottom:14px">
-        {{ _("Každý další stream (nebo další divák) posouvá zbytek stránky dolů. Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, a ne natvrdo v kódu.") }}
-    </p>
-
-    <form method="post" action="/settings/interface">
-        <h3 class="skupina">{{ _("Vzhled aplikace") }}</h3>
-        <p class="skupina-popis">{{ _("barvy, karty a jak se píše čas") }}</p>
         <div class="field">
             <label>{{ _("Vzhled") }}</label>
             <div class="radio-set" style="margin-top:6px">
@@ -1914,8 +2005,17 @@
             <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
         </div>
 
-        <h3 class="skupina">{{ _("Vlastní přehled") }}</h3>
-        <p class="skupina-popis">{{ _("záložka, kterou si člověk poskládá sám") }}</p>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Vlastní přehled") }}</h2>
+        <p class="card-note">{{ _("záložka, kterou si člověk poskládá sám") }}</p>
+    </div>
         <div class="field">
             <label>{{ _("Vlastní přehled") }}</label>
             <div class="radio-set" style="margin-top:6px">
@@ -1944,8 +2044,21 @@
             <p class="hint">{{ _("Sestavuje ho správce a platí pro celý server – stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.") }}</p>
         </div>
 
-        <h3 class="skupina">{{ _("Dlouhé seznamy") }}</h3>
-        <p class="skupina-popis">{{ _("kolik toho karta ukáže rovnou, než se zbytek schová do okna") }}</p>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Dlouhé seznamy") }}</h2>
+        <p class="card-note">{{ _("kolik toho karta ukáže rovnou, než se zbytek schová do okna") }}</p>
+    </div>
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Každý další stream (nebo další divák) posouvá zbytek stránky dolů. Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, a ne natvrdo v kódu.") }}
+    </p>
+
         <div class="field">
             <label for="ui_max_streams">{{ _("Přehrávání na Přehledu") }}</label>
             <input type="number" id="ui_max_streams" name="ui_max_streams"
@@ -1982,7 +2095,17 @@
             </p>
         </div>
 
-        <h3 class="skupina">{{ _("Mapa na stránce Síť") }}</h3>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Mapa na stránce Síť") }}</h2>
+        <p class="card-note">{{ _("jak daleko jde přiblížit a kde začíná") }}</p>
+    </div>
         <div class="field">
             <label>{{ _("Přibližování mapy") }}</label>
             <div class="radio-set" style="margin-top:6px">
@@ -2013,8 +2136,8 @@
         <div class="btn-row">
             <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
         </div>
-    </form>
 </div>
+</form>
 {# ================================================================== #}
 {% elif section == 'general' %}
 {# ================================================================== #}

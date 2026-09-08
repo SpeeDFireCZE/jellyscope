@@ -107,6 +107,7 @@ print()
 print("--- každá hláška má anglický protějšek ---")
 strom = ast.parse((PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8"))
 sablony: set[str] = set()
+fretezce: list[int] = []
 for uzel in ast.walk(strom):
     if not (isinstance(uzel, ast.Call)
             and getattr(uzel.func, "id", "") in ("_flash", "_t")):
@@ -117,6 +118,15 @@ for uzel in ast.walk(strom):
         arg = uzel.args[0] if uzel.args else None
     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
         sablony.add(arg.value)
+    elif isinstance(arg, ast.JoinedStr):
+        # f-retezec: hotova veta i s dosazenymi hodnotami. Ta se prelozit
+        # neda a ve slovniku nikdy nebude - presne ta chyba, kvuli ktere
+        # tenhle test vznikl. Drive se takovy uzel tise preskocil, takze
+        # test mlcel prave o tom, co ma hlidat.
+        fretezce.append(uzel.lineno)
+
+check(not fretezce,
+      f"žádná hláška není f-řetězec; řádky {fretezce}")
 
 chybi = sorted(s for s in sablony if s not in i18n.EN)
 check(len(sablony) > 40, f"kontrola opravdu prošla hlášky ({len(sablony)})")

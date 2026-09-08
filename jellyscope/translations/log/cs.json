@@ -94,5 +94,18 @@
     "Vyroben API token %s": "Vyroben API token %s",
     "Zrusen API token %s": "Zrusen API token %s",
     "Jellyfin hlasi verzi %s": "Jellyfin hlasi verzi %s",
-    "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s": "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s"
+    "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s": "verzi Jellyfinu se pri ulozeni nepodarilo zjistit: %s",
+    "zalozen ucet %s (%s)": "zalozen ucet %s (%s)",
+    "zmeneno heslo uctu %s": "zmeneno heslo uctu %s",
+    "ucet %s je nove %s": "ucet %s je nove %s",
+    "smazan ucet %s": "smazan ucet %s",
+    "zrusena blokace adresy %s": "zrusena blokace adresy %s",
+    "adresa %s zablokovana natrvalo": "adresa %s zablokovana natrvalo",
+    "nastaveni %s zmeneno": "nastaveni %s zmeneno",
+    "nastaveni %s: %s -> %s": "nastaveni %s: %s -> %s",
+    "vybrana databaze %s (%s)": "vybrana databaze %s (%s)",
+    "smazana polozka %s (%s prehravani)": "smazana polozka %s (%s prehravani)",
+    "restart aplikace vyzadan uctem %s": "restart aplikace vyzadan uctem %s",
+    "databaze preskladana, po smazanych radcich nezustala stopa": "databaze preskladana, po smazanych radcich nezustala stopa",
+    "databazi se nepodarilo preskladat: %s": "databazi se nepodarilo preskladat: %s"
 }

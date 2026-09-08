@@ -588,6 +588,57 @@ def connect(config: dialect.DatabaseConfig | None = None) -> Iterator[Connection
         connection.close()
 
 
+def preskladat() -> bool:
+    """Přepíše databázi tak, aby po smazaných řádcích nezůstala stopa.
+
+    Bez tohohle je „smazáno" jen záznam v seznamu: řádek se přestane
+    hledat, ale jeho bajty leží v souboru dál, dokud je něco nepřepíše.
+    Kdo má přístup k souboru, přečte si je.
+
+    Trvá to úměrně velikosti databáze, protože se soubor opravdu přepisuje.
+    Pouští se proto jen po zásazích, které mažou schválně - ne po každém
+    zápisu.
+
+    U SQLite je potřeba obojí: `VACUUM` přepíše databázi a `wal_checkpoint`
+    zahodí i deník vedle ní, kde by jinak stopa zůstala taky. U PostgreSQL
+    to umí `VACUUM FULL`, jenže tabulku na tu dobu zamkne - proto jen tu
+    jednu, ne celou databázi.
+
+    Vrací, jestli se to povedlo. Když ne, data jsou stejně smazaná; jen
+    po nich v souboru něco zbylo, a to se pozná z logu.
+    """
+    config = database_config()
+    try:
+        if config.is_postgres:
+            with connect(config) as conn:
+                # VACUUM nesmi bezet v transakci, a psycopg jednu otevira
+                # samo. Proto autocommit - a na konci zpatky, at si dalsi
+                # vypujcka ze zasobniku nesahne na zmenene spojeni.
+                syrove = conn._raw
+                puvodni = syrove.autocommit
+                syrove.rollback()
+                syrove.autocommit = True
+                try:
+                    with syrove.cursor() as kurzor:
+                        kurzor.execute("VACUUM (FULL, ANALYZE) playback")
+                finally:
+                    syrove.autocommit = puvodni
+        else:
+            spojeni = _open_raw(config)
+            try:
+                # `isolation_level = None` znamena "zadna transakce".
+                spojeni.isolation_level = None
+                spojeni.execute("VACUUM")
+                spojeni.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            finally:
+                spojeni.close()
+    except Exception as chyba:      # noqa: BLE001 - uklid nesmi shodit akci
+        log.warning("databazi se nepodarilo preskladat: %s", chyba)
+        return False
+    log.info("databaze preskladana, po smazanych radcich nezustala stopa")
+    return True
+
+
 def _lze_importovat(jmeno: str) -> bool:
     """Je knihovna nainstalovaná?
 
@@ -1012,7 +1063,34 @@ def get_public_settings() -> dict[str, str]:
     return values
 
 
+# Co se do logu píše jen jménem. Heslo, token ani klíč tam nemají co
+# delat - staci vedet, ze se zmenily.
+TAJNE_CASTI = ("heslo", "password", "token", "webhook", "api_key", "secret")
+
+# Provozni zaznamy, ne nastaveni: prepisuji se samy a v logu by po nich
+# nezustalo nic nez sum.
+NELOGOVANE = ("jellyfin_version", "notify_state_")
+
+
+def _je_tajne(key: str) -> bool:
+    return any(cast in key for cast in TAJNE_CASTI)
+
+
+def _zaloguj_zmenu(key: str, stara: str, nova: str) -> None:
+    """Řádek do logu o změně nastavení. Beze změny mlčí."""
+    if stara == nova or any(key.startswith(p) or key == p for p in NELOGOVANE):
+        return
+    if _je_tajne(key):
+        log.info("nastaveni %s zmeneno", key)
+    else:
+        log.info("nastaveni %s: %s -> %s", key, stara or "(prazdne)",
+                 nova or "(prazdne)")
+
+
 def set_setting(key: str, value: str) -> None:
+    # Stara hodnota se cte pred zapisem - jinak uz neni s cim porovnavat
+    # a log by hlasil zmenu i tam, kde se nic nezmenilo.
+    stara = get_setting(key, "")
     with connect() as conn:
         conn.execute(
             """
@@ -1022,6 +1100,7 @@ def set_setting(key: str, value: str) -> None:
             (key, value),
         )
     forget_settings()
+    _zaloguj_zmenu(key, str(stara or ""), str(value or ""))
 
 
 def seed_from_env() -> None:

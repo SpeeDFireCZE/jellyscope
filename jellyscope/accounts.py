@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import time
@@ -42,6 +43,8 @@ from typing import Any
 
 from . import db
 from .i18n import translate
+
+log = logging.getLogger(__name__)
 
 # Cim vic opakovani, tim pomalejsi zkouseni hesel - ale taky tim pomalejsi
 # prihlaseni. 600 000 je doporuceni OWASP pro PBKDF2 se SHA-256.
@@ -227,7 +230,10 @@ def odblokuj(ip: str) -> bool:
     with db.connect() as conn:
         cursor = conn.execute("DELETE FROM login_blocks WHERE ip = ?", (ip,))
     _pokusy.pop(ip, None)
-    return bool(cursor.rowcount)
+    zrusena = bool(cursor.rowcount)
+    if zrusena:
+        log.info("zrusena blokace adresy %s", ip)
+    return zrusena
 
 
 def zablokuj_natrvalo(ip: str) -> None:
@@ -244,6 +250,7 @@ def zablokuj_natrvalo(ip: str) -> None:
             """,
             (ip, len(STUPNE_BLOKACE) + 1, db.utcnow()),
         )
+    log.info("adresa %s zablokovana natrvalo", ip)
 
 
 def uklid_blokaci() -> int:
@@ -360,11 +367,14 @@ def create(username: str, password: str, again: str | None = None, is_admin: boo
         raise AccountError("Účet '{jmeno}' už existuje.", jmeno=username)
 
     with db.connect() as conn:
-        return conn.insert_returning_id(
+        account_id = conn.insert_returning_id(
             "INSERT INTO accounts (username, password_hash, is_admin, created_at)"
             " VALUES (?,?,?,?)",
             (username, hash_password(password), 1 if is_admin else 0, db.utcnow()),
         )
+    log.info("zalozen ucet %s (%s)", username,
+             "spravce" if is_admin else "ctenar")
+    return account_id
 
 
 def authenticate(username: str, password: str) -> dict[str, Any] | None:
@@ -391,6 +401,9 @@ def set_password(account_id: int, password: str, again: str | None = None) -> No
     with db.connect() as conn:
         conn.execute("UPDATE accounts SET password_hash = ? WHERE id = ?",
                      (hash_password(password), account_id))
+    # Heslo samotne se do logu nedostane, jen to, ze se zmenilo a komu.
+    ucet = get(account_id) or {}
+    log.info("zmeneno heslo uctu %s", ucet.get("username") or account_id)
 
 
 def set_admin(account_id: int, is_admin: bool) -> None:
@@ -404,6 +417,8 @@ def set_admin(account_id: int, is_admin: bool) -> None:
     with db.connect() as conn:
         conn.execute("UPDATE accounts SET is_admin = ? WHERE id = ?",
                      (1 if is_admin else 0, account_id))
+    log.info("ucet %s je nove %s", account["username"],
+             "spravce" if is_admin else "ctenar")
 
 
 def delete(account_id: int) -> None:
@@ -416,3 +431,4 @@ def delete(account_id: int) -> None:
 
     with db.connect() as conn:
         conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+    log.info("smazan ucet %s", account["username"])

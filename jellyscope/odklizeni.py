@@ -54,9 +54,34 @@ def zapnuto() -> bool:
     return db.get_setting("task_purge_enabled", "0") == "1"
 
 
+def v_mezich(dnu: Any) -> int:
+    """Počet dní, se kterým se smí mazat.
+
+    Hlídá se to nebezpečné, ne to malé. Nula a záporné číslo posunou
+    hranici na „teď“ nebo do budoucnosti, takže by odešlo **všechno** -
+    to projít nesmí, stejně jako nesmysl místo čísla. Kratší hranici, než
+    dovolí nastavení, ale zakazovat nebudeme: kdo ji zadal rovnou v kódu,
+    ví, co dělá.
+
+    Rozmezí pro hodnotu z **nastavení** hlídá `retence_dnu()`. Tam jde
+    o to, co smí zadat člověk ve formuláři, a to je jiná otázka.
+    """
+    try:
+        dnu = int(dnu)
+    except (TypeError, ValueError):
+        return VYCHOZI_DNU
+    if dnu < 1:
+        return VYCHOZI_DNU
+    return min(dnu, MAX_DNU)
+
+
 def hranice(dnu: int | None = None) -> str:
-    """Datum, pod které se relace už nenechávají (UTC, tvar databáze)."""
-    dnu = retence_dnu() if dnu is None else dnu
+    """Datum, pod které se relace už nenechávají (UTC, tvar databáze).
+
+    Meze platí i pro předaný počet dní, ne jen pro ten z nastavení -
+    tady se z čísla stává hranice, takže tady se musí hlídat.
+    """
+    dnu = retence_dnu() if dnu is None else v_mezich(dnu)
     return (datetime.now(timezone.utc) - timedelta(days=dnu)).strftime(db.TIME_FORMAT)
 
 
@@ -92,7 +117,7 @@ def smaz_stare(dnu: int | None = None) -> dict[str, Any]:
     hraje, patří sběrači a smazat ji znamená ji za deset vteřin založit
     znovu, jen bez začátku.
     """
-    dnu = retence_dnu() if dnu is None else dnu
+    dnu = retence_dnu() if dnu is None else v_mezich(dnu)
     mez = hranice(dnu)
     with db.connect() as conn:
         pred = conn.execute(
@@ -107,6 +132,9 @@ def smaz_stare(dnu: int | None = None) -> dict[str, Any]:
 
     if kolik:
         log.info("Odklizeno %s prehravani starsich nez %s dni", kolik, dnu)
+        # Az tady jsou data opravdu pryc - viz db.preskladat(). Pousti se
+        # jen kdyz se neco smazalo: prepisuje cely soubor.
+        db.preskladat()
     return {"smazano": kolik, "hranice": mez, "dnu": dnu}
 
 
@@ -134,6 +162,11 @@ def zapomen_uzivatele(user_id: str) -> dict[str, Any]:
         conn.commit()
 
     log.info("Zapomenut divak %s: smazano %s prehravani", jmeno or user_id, kolik)
+    if kolik:
+        # „Zapomen toho divaka" ma znamenat, ze je pryc - ne ze se jen
+        # prestane hledat. Bez tohohle jeho zaznamy v souboru zustanou
+        # lezet, dokud je neco neprepise, a daji se z nej precist.
+        db.preskladat()
     return {"smazano": kolik, "jmeno": jmeno}
 
 
