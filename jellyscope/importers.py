@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import calendar
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -132,15 +133,43 @@ def _existing_keys(prefix: str) -> set[str]:
 # by vetsinu duplicit propasla. Prekryv je odolnejsi a pritom bezpecny - tentyz
 # film nemuze jeden clovek sledovat dvakrat zaroven.
 
-def _epocha(cas: str | None) -> float | None:
-    """Cas z databaze prevedeny na sekundy, aby se dal porovnavat."""
-    if not cas:
-        return None
+def _epocha_pomalu(cas: str | None) -> float | None:
+    """Poctivy prevod pres strptime. Zaloha pro cokoliv necekaneho."""
     try:
         return datetime.strptime(str(cas), db.TIME_FORMAT).replace(
             tzinfo=timezone.utc).timestamp()
     except (TypeError, ValueError):
         return None
+
+
+def _epocha(cas: str | None) -> float | None:
+    """Cas z databaze prevedeny na sekundy, aby se dal porovnavat.
+
+    Rychla cesta pro tvar, ktery v databazi opravdu je (`db.TIME_FORMAT`,
+    tedy "2026-09-09 10:20:30"): spocita se z pozic znaku. `strptime` je
+    pohodlny, ale rozebira formatovaci retezec znovu pri kazdem volani -
+    a tahle funkce se pri jednom otevreni Nastaveni vola 300 000×, coz
+    delalo 1,6 sekundy.
+
+    Cokoliv jineho jde starou cestou. Neni to opatrnost navic: kdyby
+    rychla cesta prijala neco, co strptime odmita (treba cas
+    s milisekundami), zmenilo by se tim, ktere radky se povazuji za
+    duplicitu - a to uz je zasah do dat, ne zrychleni.
+    """
+    if not cas:
+        return None
+    if (type(cas) is str and len(cas) == 19
+            and cas[4] == "-" and cas[7] == "-" and cas[10] == " "
+            and cas[13] == ":" and cas[16] == ":"):
+        try:
+            return float(calendar.timegm((
+                int(cas[0:4]), int(cas[5:7]), int(cas[8:10]),
+                int(cas[11:13]), int(cas[14:16]), int(cas[17:19]),
+                0, 0, 0)))
+        except ValueError:
+            # Napr. "2026-13-45 99:99:99" - tvar sedi, hodnoty ne.
+            return _epocha_pomalu(cas)
+    return _epocha_pomalu(cas)
 
 
 def _index_prehravani() -> dict[tuple[str, str], list[tuple[float, float]]]:
@@ -1505,8 +1534,26 @@ def _titul_pro_srovnani(radek: dict[str, Any]) -> str:
     return str(radek.get("nazev_polozky") or radek.get("item_name") or "").strip().lower()
 
 
+def _existuje_import() -> bool:
+    """Je v historii aspon jeden radek z importu?
+
+    Levna otazka misto drahe odpovedi. Skupina se totiz zapocita jen
+    tehdy, kdyz je v ni aspon jeden importovany zaznam - kdo nikdy nic
+    neimportoval, dostane vzdycky prazdny vysledek, jen az po pruchodu
+    celou historii.
+
+    Zmereno na 150 000 radcich: tenhle dotaz 100 ms, cely pruchod
+    2 943 ms. Kdo import ma, plati navic tech 100 ms a pocita se dal.
+    """
+    return bool(db.query_value(
+        "SELECT 1 FROM playback WHERE session_key LIKE 'import:%' LIMIT 1"))
+
+
 def import_duplicate_groups() -> list[list[dict[str, Any]]]:
     """Skupiny zaznamu, ktere popisuji tutez podivanou ve dvou zdrojich."""
+    if not _existuje_import():
+        return []
+
     radky = db.query_all(
         """
         SELECT p.id, p.user_id, p.item_id, p.item_name, p.device_name,

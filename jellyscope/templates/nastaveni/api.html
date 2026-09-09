@@ -1,0 +1,159 @@
+{# Sekce Nastavení: klíče pro nástroje a dokumentace čtecího API
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# Čtecí API pro nástroje. Vlastní sekce, protože je to jiná otázka než
+   účty: ne „kdo se sem přihlásí", ale „co si odsud smí odnést čísla".
+
+   Klíč se ukazuje **jednou**, hned po vyrobení. Uložený je jen otisk,
+   takže po odchodu ze stránky ho není odkud vzít - a stránka to říká
+   dřív, než ho někdo zavře. #}
+<div class="page-head" style="margin-bottom:14px">
+    <div>
+        <h1>{{ _("API pro nástroje") }}</h1>
+        <p class="subtitle">{{ _("Čísla pro Grafanu, Homepage a podobné – jen ke čtení.") }}</p>
+    </div>
+    <button class="btn" type="button" data-okno="okno-api-dokumentace">
+        {{ _("Jak se to používá") }}
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Klíče") }}</h2>
+        <p class="card-note">{{ _("celkem") }} {{ api_tokeny | length }}</p>
+    </div>
+
+    {% if novy_token %}
+    {# Jediná chvíle, kdy je klíč čitelný. Podruhé už se stránka nemá
+       kde dozvědět, jak zněl - v databázi je otisk. #}
+    <div class="hlaska success" style="margin-bottom:16px">
+        <strong>{{ _("Klíč vznikl a vidíš ho naposledy.") }}</strong>
+        <p class="card-note" style="margin:6px 0 10px">
+            {{ _("Ulož si ho teď. Jakmile ze stránky odejdeš, zůstane z něj jen prvních pár znaků – uložený je jen otisk, ne klíč sám.") }}
+        </p>
+        <pre style="margin:0; user-select:all; overflow-x:auto"><code>{{ novy_token }}</code></pre>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/settings/api/token" class="btn-row"
+          style="margin-bottom:16px">
+        <input type="text" name="name" maxlength="60"
+               placeholder="{{ _('K čemu bude – třeba Grafana') }}"
+               style="max-width:280px">
+        <button class="btn primary" type="submit">{{ _("Vyrobit klíč") }}</button>
+    </form>
+
+    {% if api_tokeny %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Název") }}</th>
+                <th>{{ _("Klíč") }}</th>
+                <th>{{ _("Vyrobeno") }}</th>
+                <th>{{ _("Naposledy použit") }}</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for token in api_tokeny %}
+            <tr>
+                <td class="strong">{{ token.name }}</td>
+                {# Prvních pár znaků a zbytek hvězdičkami. Není to
+                   schovávání před uživatelem - celý klíč tady prostě
+                   není, protože se neukládá. #}
+                <td class="muted nowrap"><code>{{ token.ukazka }}{{ '*' * 24 }}</code></td>
+                <td class="nowrap muted">{{ token.created_at | relative }}</td>
+                <td class="nowrap muted">
+                    {{ token.last_used_at | relative if token.last_used_at else _("nikdy") }}
+                </td>
+                <td>
+                    <form method="post" action="/settings/api/token/zrusit"
+                          onsubmit="return confirm('{{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.") }}')">
+                        <input type="hidden" name="token_id" value="{{ token.id }}">
+                        <button class="btn danger" type="submit">{{ _("Zneplatnit") }}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="card-note">{{ _("Zatím žádný klíč. Bez něj API neodpovídá nikomu.") }}</p>
+    {% endif %}
+</div>
+
+<dialog class="okno okno-siroke" id="okno-api-dokumentace">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("API pro nástroje") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    <div class="okno-obsah">
+        <p>
+            {{ _("API dává hotová čísla nástrojům, které si z nich staví přehledy – Grafaně, Homepage, vlastnímu skriptu. Čte se přes něj, nemění se jím nic: pod /api/ jsou samá GET a cokoliv jiného skončí chybou.") }}
+        </p>
+
+        <h3 class="skupina">{{ _("Přihlášení") }}</h3>
+        <p class="card-note">
+            {{ _("Klíč se posílá v hlavičce. Do adresy nepatří – ta se objeví v logu proxy, v historii prohlížeče i v odkazu, který někdo pošle dál.") }}
+        </p>
+        <pre><code>curl -H "Authorization: Bearer VÁŠ_KLÍČ" \
+     {{ request.base_url }}api/v1/summary</code></pre>
+
+        <h3 class="skupina">{{ _("Co se dá zjistit") }}</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Adresa") }}</th>
+                    <th>{{ _("Co vrátí") }}</th>
+                </tr></thead>
+                <tbody>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/</code></td>
+                    <td>{{ _("Rozcestník – verze a seznam adres.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/summary?days=30</code></td>
+                    <td>{{ _("Sledovanost za období: odsledované hodiny, počet přehrání, diváci, tituly, podíl přepočtů a kolik se hraje právě teď.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/now-playing</code></td>
+                    <td>{{ _("Právě běžící přehrávání – kdo, co, čím, jestli se přepočítává a jak daleko je.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/library</code></td>
+                    <td>{{ _("Velikost knihovny, počty položek, volné místo a růst za období.") }}</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3 class="skupina">{{ _("Ukázka odpovědi") }}</h3>
+        <pre><code>{
+  "days": 30,
+  "watched_hours": 647.0,
+  "plays": 1066,
+  "users": 11,
+  "titles": 36,
+  "transcode_share_percent": 29.6,
+  "active_now": 1
+}</code></pre>
+
+        <h3 class="skupina">{{ _("Na co si dát pozor") }}</h3>
+        <ul class="card-note" style="margin:0; padding-left:18px">
+            <li>{{ _("Klíč je vidět jen jednou, při vyrobení. Potom z něj zůstane prvních pár znaků – uložený je otisk, ne klíč.") }}</li>
+            <li>{{ _("Ztracený klíč se nedohledává, zneplatní se a vyrobí nový. Ostatních klíčů se to nedotkne.") }}</li>
+            <li>{{ _("Klíčů může být víc – jeden na nástroj. Podle sloupce „naposledy použit“ je pak vidět, který už nikdo nepoužívá.") }}</li>
+            <li>{{ _("Odpovědi nemají hlavičky CORS, takže je nepřečte cizí stránka v prohlížeči. API je pro nástroje na serveru.") }}</li>
+        </ul>
+    </div>
+</dialog>

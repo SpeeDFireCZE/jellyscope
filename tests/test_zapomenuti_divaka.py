@@ -105,8 +105,22 @@ check(db.query_value("SELECT COUNT(*) FROM playback") == 3,
 
 print()
 print("--- ptá se ve vlastním okně, a klik sám o sobě nic nesmaže ---")
-sablona = (PROJECT / "jellyscope" / "templates"
-           / "settings.html").read_text(encoding="utf-8")
+# Sekce Nastaveni jsou po rozdeleni v `templates/nastaveni/`, takze se
+# soubor nehleda jmenem - hleda se ten, ve kterem tlacitko opravdu je.
+# Test tim prezije presun textu do jineho souboru, ale necte pritom cizi
+# sablony.
+#
+# Slepit vsechny sablony do jednoho retezce by slo taky, ale je to
+# zbytecne riskantni: vyraz nize hleda cerveny button pred popiskem
+# "Zapomenout", a v jednom velkem retezci by mohl zacit u ciziho tlacitka
+# a precist jeho atributy. Jeden soubor tuhle moznost zavira.
+sablona = ""
+for _cesta in sorted((PROJECT / "jellyscope" / "templates").rglob("*.html")):
+    _text = _cesta.read_text(encoding="utf-8")
+    if '_("Zapomenout")' in _text:
+        sablona = _text
+        break
+check(bool(sablona), "šablona s tlačítkem „Zapomenout“ se našla")
 
 spoustec = re.search(
     r'<button class="btn danger"([^>]*?)onclick="(.*?)"\s*>\s*'

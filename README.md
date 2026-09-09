@@ -643,6 +643,8 @@ jellyscope/
     ├── porucha.py          the page shown when the database will not open
     ├── api.py              the read-only API and its keys
     ├── web.py              routes
+    ├── web_zaklad.py       what every page needs: context, flashes, guards
+    ├── web_nastaveni.py    the Settings routes, all thirty-six
     ├── demodata.py         generator of made-up data for the demo
     ├── templates/          HTML templates
     └── static/style.css    styling

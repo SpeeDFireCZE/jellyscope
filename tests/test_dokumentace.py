@@ -100,10 +100,15 @@ print("--- sekce Nastavení, na které se odkazuje ---")
 # z i18n, at se hlida i to, ze se sekce nepresune jinam.
 nazvy = {EN.get(nazev, nazev) for _klic, nazev, _spravce in web.SETTINGS_SECTIONS}
 # Nazvy karet uvnitr sekci - na ne se dokumentace odkazuje taky.
-sablona = (PROJECT / "jellyscope" / "templates" / "settings.html").read_text(
-    encoding="utf-8")
-for nalez in re.findall(r'<h2>\{\{ _\("([^"]+)"\) \}\}</h2>', sablona):
-    nazvy.add(EN.get(nalez, nalez))
+#
+# Sekce Nastaveni jsou rozdelene do `templates/nastaveni/`, takze se
+# hleda do hloubky. Cist jen `settings.html` by znamenalo, ze test po
+# rozdeleni sablony tise prestane karty videt a zacne hlasit, ze
+# dokumentace odkazuje nekam, kam ve skutecnosti odkazuje spravne.
+for sablona in (PROJECT / "jellyscope" / "templates").rglob("*.html"):
+    for nalez in re.findall(r'<h2>\{\{ _\("([^"]+)"\) \}\}</h2>',
+                            sablona.read_text(encoding="utf-8")):
+        nazvy.add(EN.get(nalez, nalez))
 
 spatne = []
 for jmeno, text in TEXTY.items():

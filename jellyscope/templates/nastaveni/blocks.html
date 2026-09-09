@@ -1,0 +1,92 @@
+{# Sekce Nastavení: zablokované adresy po neúspěšném přihlašování
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Blokované adresy") }}</h2>
+        <p class="card-note">{{ _("přihlašování, ne přístup k aplikaci") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Po") }} {{ block_attempts }}
+        {{ _("neúspěšných pokusech z jedné adresy se přihlašování z ní na chvíli zavře. Každá další blokace v řadě je delší:") }}
+        {% for sekund in block_levels %}{{ (sekund / 60) | round | int }} min{{ ", " if not loop.last }}{% endfor %},
+        {{ _("pak už trvale.") }}
+        {{ _("Když se adresa") }} {{ block_forget_hours }}
+        {{ _("hodin chová slušně, počítá se zase od začátku.") }}
+    </p>
+
+    {% if not blocks %}
+    <p class="chart-empty">{{ _("Zatím nikdo. To je dobře.") }}</p>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Adresa") }}</th>
+                <th>{{ _("Stav") }}</th>
+                <th class="num">{{ _("Blokací v řadě") }}</th>
+                <th class="num">{{ _("Pokusů") }}</th>
+                <th>{{ _("Naposledy") }}</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for radek in blocks %}
+            <tr>
+                <td class="strong nowrap">{{ radek.ip }}</td>
+                <td class="nowrap">
+                    {% if radek.permanent %}
+                        <span class="badge critical"><span class="dot"></span>{{ _("trvale") }}</span>
+                    {% elif radek.seconds_left > 0 %}
+                        <span class="badge warning"><span class="dot"></span>
+                            {{ _("ještě") }}
+                            {% if radek.seconds_left >= 60 %}
+                                {{ (radek.seconds_left / 60) | round | int }} min
+                            {% else %}
+                                {{ radek.seconds_left }} s
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("vypršelo") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ radek.level }}</td>
+                <td class="num">{{ radek.failures | number }}</td>
+                <td class="nowrap muted">{{ radek.last_failure | relative }}</td>
+                <td class="num nowrap">
+                    <div class="btn-row" style="justify-content:flex-end">
+                        {% if not radek.permanent %}
+                        <form method="post" action="/settings/blocks/permanent">
+                            <input type="hidden" name="ip" value="{{ radek.ip }}">
+                            <button class="btn danger" type="submit">{{ _("Zablokovat natrvalo") }}</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="/settings/blocks/unblock">
+                            <input type="hidden" name="ip" value="{{ radek.ip }}">
+                            <button class="btn" type="submit">{{ _("Odblokovat") }}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Adresa se bere z připojení. Běží-li před Jellyscope reverzní proxy, vyplň v .env FORWARDED_ALLOW_IPS – jinak tu bude pokaždé adresa té proxy a blokace by platila pro všechny naráz.") }}
+    </p>
+</div>
+
+
+{# ================================================================== #}

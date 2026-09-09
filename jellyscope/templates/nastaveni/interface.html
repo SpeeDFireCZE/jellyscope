@@ -1,0 +1,217 @@
+{# Sekce Nastavení: vzhled, dlouhé seznamy a mapa
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# Co si člověk nastavuje na vzhledu stránek. Vlastní sekce schválně:
+   takových voleb bude přibývat a v Obecném by se ztratily mezi věcmi,
+   které se vzhledem nemají společného nic. #}
+
+{# ------------------------------------------------------------------ #}
+{# Rozhraní - kolik toho karty ukážou rovnou                           #}
+{# ------------------------------------------------------------------ #}
+{# Formulář obepíná všechny karty sekce - ukládají se jedním
+   odesláním, jen jsou rozdělené podle toho, čeho se týkají. #}
+<form method="post" action="/settings/interface">
+<div class="card" id="rozhrani">
+    <div class="card-head">
+        <h2>{{ _("Vzhled aplikace") }}</h2>
+        <p class="card-note">{{ _("barvy, karty a jak se píše čas") }}</p>
+    </div>
+        <div class="field">
+            <label>{{ _("Vzhled") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_skin" value="novy"
+                           {{ 'checked' if ui_skin != 'klasicky' }}>
+                    <span>
+                        <span class="title">{{ _("Nový") }}</span>
+                        <span class="desc">
+                            {{ _("Barvy z loga Jellyfinu, karty s jemným přechodem, stav přehrávání barevně (zelená přímé, oranžová přepočet). Hlavní číslo stojí vedle křivky.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_skin" value="klasicky"
+                           {{ 'checked' if ui_skin == 'klasicky' }}>
+                    <span>
+                        <span class="title">{{ _("Klasický") }}</span>
+                        <span class="desc">
+                            {{ _("Původní podoba: modrá na neutrálním podkladu, ploché karty, odznaky s tečkou. Nic se neztratí, jen to vypadá jako dřív.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Změní se jen vzhled – žádná data, žádné výpočty. Přepnout jde kdykoliv zpátky.") }}</p>
+        </div>
+
+        <div class="field">
+            <label>{{ _("Čas v grafech") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_cas_presne" value="0"
+                           {{ 'checked' if not ui_cas_presne }}>
+                    <span>
+                        <span class="title">{{ _("Zaokrouhlený") }}</span>
+                        <span class="desc">
+                            {{ _("„12 h“, „4,4 h“. Kulatá čísla se čtou rychleji a na první pohled je jasné, o jaký řád jde.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_cas_presne" value="1"
+                           {{ 'checked' if ui_cas_presne }}>
+                    <span>
+                        <span class="title">{{ _("Přesný na minuty") }}</span>
+                        <span class="desc">
+                            {{ _("„12:24“, „4:22“. Nad deset hodin se totiž desetinná místa utínají, takže den se 34,52 hodinami se hlásí jako 35 – skoro půlhodina rozdílu.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté – tam je „40“ značka měřítka, ne údaj.") }}</p>
+            <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Vlastní přehled") }}</h2>
+        <p class="card-note">{{ _("záložka, kterou si člověk poskládá sám") }}</p>
+    </div>
+        <div class="field">
+            <label>{{ _("Vlastní přehled") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_dashboard" value="0"
+                           {{ 'checked' if not ui_dashboard }}>
+                    <span>
+                        <span class="title">{{ _("Vypnutý") }}</span>
+                        <span class="desc">
+                            {{ _("Po přihlášení se otevře Přehled, jako doteď.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_dashboard" value="1"
+                           {{ 'checked' if ui_dashboard }}>
+                    <span>
+                        <span class="title">{{ _("Zapnutý") }}</span>
+                        <span class="desc">
+                            {{ _("Přibude záložka, ve které si z existujících statistik poskládáš vlastní stránku. Po přihlášení se otevře ona.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Sestavuje ho správce a platí pro celý server – stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.") }}</p>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Dlouhé seznamy") }}</h2>
+        <p class="card-note">{{ _("kolik toho karta ukáže rovnou, než se zbytek schová do okna") }}</p>
+    </div>
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Každý další stream (nebo další divák) posouvá zbytek stránky dolů. Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, a ne natvrdo v kódu.") }}
+    </p>
+
+        <div class="field">
+            <label for="ui_max_streams">{{ _("Přehrávání na Přehledu") }}</label>
+            <input type="number" id="ui_max_streams" name="ui_max_streams"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_streamu }}" style="width:120px">
+            <p class="hint">{{ _("Nad tento počet se „Právě se hraje“ schová do okna.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_streams_mobile">{{ _("Přehrávání na Přehledu – mobil") }}</label>
+            <input type="number" id="ui_max_streams_mobile" name="ui_max_streams_mobile"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_streamu_mobil }}" style="width:120px">
+            <p class="hint">
+                {{ _("Na úzké obrazovce zabírá karta streamu celou šířku, takže se jich vejde míň. Zbytek se schová za tlačítko, které otevře tytéž streamy v okně.") }}
+            </p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_viewers">{{ _("Diváků v jazykových statistikách") }}</label>
+            <input type="number" id="ui_max_viewers" name="ui_max_viewers"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_lidi }}" style="width:120px">
+            <p class="hint">{{ _("Nad tento počet se pruhy „Kdo v jakém jazyce sleduje“ schovají do okna.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_viewers_mobile">{{ _("Diváků v jazykových statistikách – mobil") }}</label>
+            <input type="number" id="ui_max_viewers_mobile" name="ui_max_viewers_mobile"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_lidi_mobil }}" style="width:120px">
+            <p class="hint">
+                {{ _("Na úzké obrazovce je pruh přes celou šířku a pod diváky je ještě legenda a tabulka. Zbytek se schová za tlačítko, které otevře tytéž diváky v okně.") }}
+            </p>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Mapa na stránce Síť") }}</h2>
+        <p class="card-note">{{ _("jak daleko jde přiblížit a kde začíná") }}</p>
+    </div>
+        <div class="field">
+            <label>{{ _("Přibližování mapy") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_zoom" value="click"
+                           {{ 'checked' if mapa_zoom != 'wheel' }}>
+                    <span>
+                        <span class="title">{{ _("Klikáním") }}</span>
+                        <span class="desc">
+                            {{ _("Kliknutím do mapy se přiblíží na to místo, s Altem oddálí; nad mapou jsou i tlačítka + a −. Kolečko mapa vůbec nechytá, takže stránka roluje jako všude jinde.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_zoom" value="wheel"
+                           {{ 'checked' if mapa_zoom == 'wheel' }}>
+                    <span>
+                        <span class="title">{{ _("Kolečkem") }}</span>
+                        <span class="desc">
+                            {{ _("Pohodlnější, ale dokud je kurzor nad mapou, stránka se kolečkem neposune – rolování si mapa vezme pro sebe.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+</form>
+{# ================================================================== #}

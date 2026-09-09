@@ -176,6 +176,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from jellyscope import accounts  # noqa: E402
 from jellyscope.web import app  # noqa: E402
+from jellyscope import web_nastaveni  # noqa: E402
 
 db.set_setting("jellyfin_url", "http://jellyfin.doma:8096")
 db.set_setting("jellyfin_api_key", "TAJNY-KLIC")
@@ -252,8 +253,11 @@ class FalesnyKlient:
         return {"Version": "12.0.1", "ServerName": "falesny"}
 
 
-puvodni_klient = web.JellyfinClient
-web.JellyfinClient = FalesnyKlient
+# Routa /settings/connection bydli ve `web_nastaveni` a ma vlastni
+# jmeno `JellyfinClient`. Podstrcit klienta do `web` by nic neudelalo -
+# test by prosel, aniz by cokoliv zkousel.
+puvodni_klient = web_nastaveni.JellyfinClient
+web_nastaveni.JellyfinClient = FalesnyKlient
 try:
     db.set_setting(jellyfin.VERZE_KLIC, "")
     db.set_setting(jellyfin.GENERACE_KLIC, "auto")
@@ -273,7 +277,7 @@ try:
     check(FalesnyKlient.posledni_url == "http://jellyfin.doma:8096",
           "ptalo se to uložené adresy")
 finally:
-    web.JellyfinClient = puvodni_klient
+    web_nastaveni.JellyfinClient = puvodni_klient
 
 
 print()
@@ -305,13 +309,13 @@ print("--- nesoulad volby a serveru se pozná ---")
 db.set_setting(jellyfin.GENERACE_KLIC, "12")
 db.set_setting(jellyfin.VERZE_KLIC, "10.10.7")
 db.forget_settings()
-check(web._generace_nesedi() is True, "12 proti hlášené 10.10.7")
+check(web_nastaveni._generace_nesedi() is True, "12 proti hlášené 10.10.7")
 db.set_setting(jellyfin.VERZE_KLIC, "12.0.1")
 db.forget_settings()
-check(web._generace_nesedi() is False, "12 proti hlášené 12.0.1 sedí")
+check(web_nastaveni._generace_nesedi() is False, "12 proti hlášené 12.0.1 sedí")
 db.set_setting(jellyfin.GENERACE_KLIC, "auto")
 db.forget_settings()
-check(web._generace_nesedi() is False, "u zjišťování se nic neporovnává")
+check(web_nastaveni._generace_nesedi() is False, "u zjišťování se nic neporovnává")
 
 print()
 print("--- záložní cesta jen u starých serverů ---")

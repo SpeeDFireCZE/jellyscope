@@ -1,0 +1,182 @@
+{# Sekce Nastavení: SQLite nebo PostgreSQL a přenos mezi nimi
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Databáze") }}</h2>
+        <p class="card-note">{{ _("právě používaná") }}: {{ running_database.describe() }}</p>
+    </div>
+
+    {# Uložená a běžící konfigurace se do restartu liší. Bez tohohle
+       upozornění to vypadá, že se uložení nepovedlo - formulář ukazuje
+       PostgreSQL, ale nadpis pořád SQLite. #}
+    {% if draft_pending %}
+    <div class="flash info" style="margin-bottom:16px">
+        <span class="dot"></span>
+        <span>{{ _("Ve formuláři jsou rozepsané hodnoty, které ještě nejsou uložené. Heslo si pamatuju, takže ho znovu vyplňovat nemusíš – stačí kliknout na Uložit.") }}</span>
+    </div>
+    {% endif %}
+
+    {% if restart_pending %}
+    <div class="flash warning" style="margin-bottom:16px">
+        <span class="dot"></span>
+        <span>
+            {{ _("Uloženo je") }} <strong>{{ database.describe() }}</strong>,
+            {{ _("ale aplikace zatím běží na") }} <strong>{{ running_database.describe() }}</strong>.
+            {{ _("Přepne se až po restartu – tlačítko je nahoře vpravo.") }}
+        </span>
+    </div>
+    {% endif %}
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("SQLite je výchozí a nic se pro něj neinstaluje – celá databáze je jeden soubor. PostgreSQL má smysl, když ho už doma provozuješ. Změna se projeví až po restartu aplikace.") }}
+    </p>
+
+    {# Formulář zná svůj stav už ze serveru (třída is-sqlite / is-postgres),
+       takže se při načtení nic neprobleskne. JavaScript tu třídu jen
+       přepíná, když klikneš na jiný druh databáze - viz app.js. Bez
+       JavaScriptu zůstane vidět ta část, která opravdu platí. #}
+    <form method="post" action="/settings/database"
+          class="db-form {{ 'is-postgres' if database.kind == 'postgres' else 'is-sqlite' }}"
+          data-db-form>
+        <div class="radio-set">
+            <label class="radio-card">
+                <input type="radio" name="kind" value="sqlite"
+                       {{ 'checked' if database.kind == 'sqlite' }}>
+                <span>
+                    <span class="title">SQLite</span>
+                    <span class="desc">{{ _("Jeden soubor na disku. Nic se neinstaluje, nic neběží na pozadí. Pro jednu domácnost naprosto dostačuje.") }}</span>
+                </span>
+            </label>
+            <label class="radio-card">
+                <input type="radio" name="kind" value="postgres"
+                       {{ 'checked' if database.kind == 'postgres' }}>
+                <span>
+                    <span class="title">PostgreSQL</span>
+                    <span class="desc">
+                        {{ _("Samostatný databázový server. Má smysl, když ho už provozuješ – pro domácnost SQLite bohatě stačí.") }}
+                        {% if not psycopg_available %}
+                            {# Návod se ukazuje jen tehdy, když ovladač
+                               opravdu chybí. install.sh ho obvykle
+                               doinstaluje sám, takže tenhle odstavec
+                               většina lidí nikdy neuvidí. #}
+                            <br><span class="badge critical"><span class="dot"></span>{{ _("ovladač psycopg chybí") }}</span>
+                            <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code>
+                            <br>{{ _("Pak aplikaci restartuj.") }}
+                        {% endif %}
+                    </span>
+                </span>
+            </label>
+        </div>
+
+        {# --- jen pro SQLite -------------------------------------------- #}
+        <div class="db-part" data-for="sqlite">
+            <div class="field">
+                <label for="sqlite_path">{{ _("Soubor SQLite") }}</label>
+                <input type="text" id="sqlite_path" name="sqlite_path" value="{{ database.path }}">
+                <p class="hint">{{ _("Relativní cesta se počítá od složky projektu.") }}</p>
+            </div>
+        </div>
+
+        {# --- jen pro PostgreSQL ---------------------------------------- #}
+        <div class="db-part" data-for="postgres">
+            <div class="grid-2" style="gap:0 18px; margin-bottom:0">
+                <div class="field">
+                    <label for="pg_host">{{ _("Server") }}</label>
+                    <input type="text" id="pg_host" name="pg_host" value="{{ database.host }}">
+                </div>
+                <div class="field">
+                    <label for="pg_port">{{ _("Port") }}</label>
+                    <input type="number" id="pg_port" name="pg_port" value="{{ database.port }}"
+                           min="1" max="65535">
+                </div>
+                <div class="field">
+                    <label for="pg_database">{{ _("Název databáze") }}</label>
+                    <input type="text" id="pg_database" name="pg_database" value="{{ database.database }}">
+                </div>
+                <div class="field">
+                    <label for="pg_user">{{ _("Uživatel") }}</label>
+                    <input type="text" id="pg_user" name="pg_user" value="{{ database.user }}">
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="pg_password">{{ _("Heslo") }}</label>
+                <input type="password" id="pg_password" name="pg_password" autocomplete="off"
+                       placeholder="{{ '••••••••' if database.password else '' }}">
+                <p class="hint">{{ _("Nech prázdné, pokud heslo měnit nechceš.") }}</p>
+            </div>
+
+            {# Zásobník spojení jde vypnout. Není to jen výkonnostní přepínač:
+               potřebuje knihovnu navíc a ne všude ji jde doinstalovat. #}
+            <div class="radio-set">
+                <label class="radio-card">
+                    <input type="checkbox" name="pg_use_pool" value="1"
+                           {{ 'checked' if database.use_pool }}>
+                    <span>
+                        <span class="title">{{ _("Používat connection pool") }}</span>
+                        <span class="desc">
+                            {{ _("Drží pár spojení otevřených a půjčuje je, místo aby se ke každému dotazu navazovalo nové. Jedna stránka si o data řekne asi dvanáctkrát – po síti je ten rozdíl znát, na stejném stroji jen malý.") }}
+                            {% if not pool_available %}
+                                <br><span class="badge critical"><span class="dot"></span>{{ _("knihovna psycopg_pool chybí") }}</span>
+                                <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code><br>
+                            {% endif %}
+                            {{ _("Když ji doinstalovat nemůžeš, nech tohle vypnuté – aplikace pojede dál, jen si bude spojení navazovat po jednom.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            {# Tři tlačítka, jeden formulář: liší se hodnotou "action",
+               takže se nemusí opisovat všechna pole třikrát. #}
+            <button class="btn" type="submit" name="action" value="test">
+                {{ _("Otestovat spojení") }}
+            </button>
+            <button class="btn primary" type="submit" name="action" value="save">
+                {{ _("Uložit a použít po restartu") }}
+            </button>
+            <button class="btn" type="submit" name="action" value="migrate">
+                {{ _("Přenést data do vybrané databáze") }}
+            </button>
+        </div>
+
+        <div class="flash warning" style="margin-top:16px">
+            <span class="dot"></span>
+            <span>{{ _("Přenos dat cílovou databázi nejdřív vyprázdní a teprve pak do ní data zkopíruje. Ulož nastavení až potom, co přenos proběhl.") }}</span>
+        </div>
+
+        {# Nejčastější nedorozumění: člověk se chce jen připojit k databázi,
+           kterou už má, a stiskne Přenést data - čímž si ji vymaže. #}
+        <div class="flash info" style="margin-top:10px">
+            <span class="dot"></span>
+            <span>{{ _("Připojuješ se k databázi, ve které data už jsou (třeba po přeinstalování aplikace)? Pak přenos NEspouštěj – stačí Uložit nastavení a restartovat. Aplikace se na ni připojí a data v ní zůstanou.") }}</span>
+        </div>
+    </form>
+
+    {% if database_counts %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead><tr><th>{{ _("Tabulka") }}</th><th class="num">{{ _("Záznamů") }}</th></tr></thead>
+            <tbody>
+            {% for table, count in database_counts.items() %}
+                <tr><td><code style="font-size:12px">{{ table }}</code></td>
+                    <td class="num">{{ count | number }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+
+{# ================================================================== #}

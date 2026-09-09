@@ -55,6 +55,7 @@ accounts.create("spravce", "dlouheheslo", is_admin=True)
 from fastapi.testclient import TestClient  # noqa: E402
 
 from jellyscope import web  # noqa: E402
+from jellyscope import web_nastaveni  # noqa: E402
 
 client = TestClient(web.app)
 
@@ -71,7 +72,7 @@ check(prihlasene.get("version") == web.__version__,
 
 print()
 print("--- čekárna po aktualizaci ---")
-stranka = web._stranka_aktualizace()
+stranka = web_nastaveni._stranka_aktualizace()
 check(f"var puvodni = {int(web.STARTED_AT)};" in stranka,
       "start procesu je zapsaný ve stránce")
 check(f'var verze = "{web.__version__}";' in stranka, "a verze taky")

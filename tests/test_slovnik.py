@@ -122,7 +122,7 @@ print("--- žádné heslo navíc ---")
 # hlásil jako nepoužité skoro každou delší větu.
 zdroj_kodu = ""
 for cesta in (list((PROJECT / "jellyscope").glob("*.py"))
-              + list((PROJECT / "jellyscope" / "templates").glob("*.html"))
+              + list((PROJECT / "jellyscope" / "templates").rglob("*.html"))
               + [PROJECT / x for x in ("run.py", "manage.py", "demo.py")]):
     zdroj_kodu += cesta.read_text(encoding="utf-8") + "\n"
 
@@ -143,7 +143,7 @@ print("--- co šablony chtějí přeložit, to ve zdroji je ---")
 # doslovne klice: `_(promenna)` se staticky precist neda.
 zdroj = set(obsah.get("cs.json", {}))
 chybi = []
-for cesta in sorted((PROJECT / "jellyscope" / "templates").glob("*.html")):
+for cesta in sorted((PROJECT / "jellyscope" / "templates").rglob("*.html")):
     text = cesta.read_text(encoding="utf-8")
     for nalez in re.finditer(r'_\(\s*"([^"]{2,})"\s*\)', text):
         klic = nalez.group(1)

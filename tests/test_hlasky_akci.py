@@ -105,10 +105,14 @@ check("flash" in zadost.session, "překlep ve značce hlášku nezahodí")
 
 print()
 print("--- každá hláška má anglický protějšek ---")
-strom = ast.parse((PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8"))
+# Hlasky jsou ve vsech souborech webu, ne jen ve `web.py` - Nastaveni
+# ma vlastni modul. Cist jen jeden by znamenalo, ze test prestane videt
+# vetsinu hlasek a jeho ticho uz nic nerika.
+stromy = [ast.parse(p.read_text(encoding="utf-8"))
+          for p in sorted((PROJECT / "jellyscope").glob("web*.py"))]
 sablony: set[str] = set()
 fretezce: list[int] = []
-for uzel in ast.walk(strom):
+for uzel in [u for s in stromy for u in ast.walk(s)]:
     if not (isinstance(uzel, ast.Call)
             and getattr(uzel.func, "id", "") in ("_flash", "_t")):
         continue

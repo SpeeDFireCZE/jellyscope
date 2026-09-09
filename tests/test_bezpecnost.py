@@ -336,6 +336,7 @@ print("--- strop na nahraný soubor platí během čtení ---")
 import asyncio  # noqa: E402
 
 from jellyscope import web as _web  # noqa: E402
+from jellyscope import web_nastaveni  # noqa: E402
 
 
 class NekonecnySoubor:
@@ -359,12 +360,12 @@ class FalesnyRequest:
 
 
 soubor = NekonecnySoubor()
-vysledek = asyncio.run(_web._nacti_zalohu(FalesnyRequest(), soubor))
-strop = _web.MAX_UPLOAD_MB * 1024 * 1024
+vysledek = asyncio.run(web_nastaveni._nacti_zalohu(FalesnyRequest(), soubor))
+strop = web_nastaveni.MAX_UPLOAD_MB * 1024 * 1024
 check(vysledek is None, "moc velký soubor se odmítne")
 check(soubor.precteno <= strop + 2 * 1024 * 1024,
       f"a čtení skončilo hned za stropem ({soubor.precteno // 1024 // 1024} MB "
-      f"při stropu {_web.MAX_UPLOAD_MB} MB)")
+      f"při stropu {web_nastaveni.MAX_UPLOAD_MB} MB)")
 
 
 print()
@@ -590,6 +591,53 @@ for adresa, ceka in (("http://jellyscope.cz/settings?section=api",
                      ("", "/")):
     check(_cesta_odkud_prisel(adresa) == ceka,
           f"{str(adresa)[:38]!r} -> {ceka!r}")
+
+
+print()
+print("--- do logu se nedostane heslo ani cizí adresa ---")
+# Log se preposila, kdyz se neco pokazi - a tim se dostane k lidem, pro
+# ktere nebyl psany. Hodnota nastaveni se do nej proto pise jen tam, kde
+# je to bez rizika, a seznam je **obraceny**: povoluje se, nezakazuje.
+# Denylist by musel predem znat kazde tajemstvi, ktere kdy pribude, a to,
+# na ktere se zapomene, by se vypsalo cele.
+import io  # noqa: E402
+import logging  # noqa: E402
+
+CITLIVE = {
+    "jellyfin_api_key": "TAJNY-KLIC-123",
+    "notify_smtp_heslo": "tajneheslo",
+    "notify_telegram_token": "1234:ABCDEF",
+    "notify_discord_webhook": "https://discord.com/api/webhooks/1/tajne",
+    # Ne tajemstvi, ale cizi udaje: adresa i jmeno uctu.
+    "notify_smtp_komu": "petr@example.org",
+    "notify_smtp_uzivatel": "petr.novak",
+    "notify_smtp_odesilatel": "jellyscope@example.org",
+    # Nastaveni, ktere jeste neexistuje - musi mlcet taky.
+    "notify_pushover_klic": "budouci-tajemstvi",
+}
+
+zachyt = io.StringIO()
+posluchac = logging.StreamHandler(zachyt)
+posluchac.setFormatter(logging.Formatter("%(message)s"))
+logger = logging.getLogger("jellyscope.db")
+logger.addHandler(posluchac)
+puvodni_uroven = logger.level
+logger.setLevel(logging.INFO)
+try:
+    for klic, hodnota in CITLIVE.items():
+        db.set_setting(klic, hodnota)
+    # A neco neskodneho, at je videt, ze log neonemel uplne.
+    db.set_setting("poll_interval", "42")
+finally:
+    logger.removeHandler(posluchac)
+    logger.setLevel(puvodni_uroven)
+
+zapsano = zachyt.getvalue()
+for klic, hodnota in CITLIVE.items():
+    check(hodnota not in zapsano, f"{klic}: hodnota v logu není")
+    check(klic in zapsano, f"{klic}: ale změna zaznamenaná je")
+check("poll_interval: 10 -> 42" in zapsano,
+      "neškodné nastavení se vypíše i s hodnotou")
 
 print()
 print("HOTOVO - chyb:", failures)

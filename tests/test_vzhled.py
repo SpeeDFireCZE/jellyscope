@@ -83,15 +83,22 @@ print("--- klasický vzhled je jen CSS ---")
 # Kdyby se vzhled začal rozhodovat v šablonách nebo v grafech, přestal
 # by to být přepínač a stal se z něj druhý kód, který se musí udržovat.
 # Vzhled smi znat prave dve sablony: base.html ho dosadi do <html>
-# a settings.html nabizi prepinac. Kdyby se objevil jinde, znamenalo by
+# a sekce Rozhrani nabizi prepinac. Kdyby se objevil jinde, znamenalo by
 # to, ze nekde vznika druhá podoba stranky - a ta uz se musi udrzovat.
-sablony = {p.name: p.read_text(encoding="utf-8")
-           for p in (PROJECT / "jellyscope" / "templates").glob("*.html")}
+#
+# Sablony se hledaji do hloubky (`rglob`): Nastaveni je rozdelene po
+# sekcich do `templates/nastaveni/`, takze pohled jen na vrchol slozky by
+# prepinac nenasel - a test by mlcel prave o tom, co ma hlidat.
+KORIEN = PROJECT / "jellyscope" / "templates"
+sablony = {str(p.relative_to(KORIEN)).replace("\\", "/"):
+           p.read_text(encoding="utf-8") for p in KORIEN.rglob("*.html")}
+VZHLED_PATRI_DO = ("base.html", "nastaveni/interface.html")
 check(sablony["base.html"].count("ui_skin") == 1, "base.html vzhled jen dosadí")
-check(sablony["settings.html"].count("ui_skin") == 4,
-      f"settings.html ho nabízí k výběru ({sablony['settings.html'].count('ui_skin')}×)")
+check(sablony["nastaveni/interface.html"].count("ui_skin") == 4,
+      "sekce Rozhraní ho nabízí k výběru "
+      f"({sablony['nastaveni/interface.html'].count('ui_skin')}×)")
 jinde = {jmeno: text.count("ui_skin") for jmeno, text in sablony.items()
-         if jmeno not in ("base.html", "settings.html") and "ui_skin" in text}
+         if jmeno not in VZHLED_PATRI_DO and "ui_skin" in text}
 check(not jinde, f"a jinde se podle něj nic nerozhoduje ({jinde})")
 grafy = (PROJECT / "jellyscope" / "charts.py").read_text(encoding="utf-8")
 check("skin" not in grafy and "klasick" not in grafy, "grafy o vzhledu nevědí")

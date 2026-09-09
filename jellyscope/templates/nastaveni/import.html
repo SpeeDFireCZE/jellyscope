@@ -1,0 +1,107 @@
+{# Sekce Nastavení: převzetí historie z jiného nástroje
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Import historie") }}</h2>
+        <p class="card-note">{{ _("převzetí dat z jiného nástroje") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("Jellyscope zaznamenává přehrávání až od chvíle, kdy běží. Když už historii někde máš, dá se převzít. Import je možné spustit opakovaně – už naimportované záznamy se nezdvojí. Klidně použij oba zdroje i období, které už Jellyscope sám nasbíral: co v databázi je, se pozná podle uživatele, titulu a času a naimportuje se jen zbytek.") }}
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:20px">
+        <table>
+            <tbody>
+            <tr><td>{{ _("Vlastních záznamů") }}</td>
+                <td class="num strong">{{ import_stats.own | number }}</td></tr>
+            <tr><td>{{ _("Z Playback Reporting") }}</td>
+                <td class="num strong">{{ import_stats.playback_reporting | number }}</td></tr>
+            <tr><td>{{ _("Z Jellystatu") }}</td>
+                <td class="num strong">{{ import_stats.jellystat | number }}</td></tr>
+            <tr><td>{{ _("Nejstarší záznam") }}</td>
+                <td class="num muted">{{ import_stats.oldest | datetime }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="skupina">{{ _("Playback Reporting (plugin Jellyfinu)") }}</h3>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("Data se berou přímo přes Jellyfin, takže nemusíš nikam nahrávat žádný soubor. Plugin najdeš v Jellyfinu: Ovládací panel → Pluginy → Katalog.") }}
+    </p>
+    <form method="post" action="/settings/import/playback-reporting" class="btn-row">
+        <label class="card-note">{{ _("Ignorovat přehrávání kratší než") }}</label>
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <span class="card-note">{{ _("sekund") }}</span>
+        <button class="btn primary" type="submit">{{ _("Importovat") }}</button>
+    </form>
+    <form method="post" action="/settings/import/detect" style="margin-top:8px">
+        <button class="btn" type="submit">{{ _("Zjistit, jestli je plugin dostupný") }}</button>
+    </form>
+
+    {# Záloha pro případ, kdy plugin přes API nefunguje. Stává se to
+       u nesouladu verzí: plugin přeložený proti staršímu Jellyfinu spadne
+       dřív, než se dostane ke svým datům, a vrátí jen chybu 500. Data má
+       přitom v obyčejném souboru, který se dá zkopírovat. #}
+    {# Rozbalovátko je záměrně odlišené od okolních poznámek - je to
+       nabídka další cesty, ne vysvětlivka k té první. V šedi poznámek
+       splývalo a nikdo si ho nevšiml. #}
+    <details class="fallback" style="margin-top:14px">
+        <summary>
+            {{ _("Nefunguje import přes API? Nahraj zálohu z pluginu") }}
+        </summary>
+        <p class="card-note" style="margin:10px 0">
+            {{ _("Plugin si umí zálohu vyrobit sám a uloží ji jako soubor TSV. V Jellyfinu jdi na:") }}
+        </p>
+        <p class="card-note" style="margin-bottom:10px">
+            <code>{{ _("Ovládací panel → Playback Reporting → Backup → Save backup") }}</code>
+        </p>
+        <p class="card-note" style="margin-bottom:10px">
+            {{ _("Soubor pak nahraj sem – obejde to rozbité API a do Jellyfinu se přitom vůbec nesahá, čte se jen tvoje kopie.") }}
+        </p>
+        <form method="post" action="/settings/import/playback-reporting-file"
+              enctype="multipart/form-data" class="btn-row">
+            {{ file_picker("backup", ".tsv,.txt,text/tab-separated-values") }}
+            <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+            <span class="card-note">{{ _("sekund min.") }}</span>
+            <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
+        </form>
+    </details>
+
+    <h3 class="skupina">{{ _("Jellystat (záloha JSON)") }}</h3>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("V Jellystatu si vyexportuj zálohu do JSON a nahraj ji sem.") }}
+    </p>
+    {# enctype je u nahrávání souboru povinné - bez něj dorazí jen název. #}
+    <form method="post" action="/settings/import/jellystat"
+          enctype="multipart/form-data" class="btn-row">
+        {{ file_picker("backup", ".json,application/json") }}
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <span class="card-note">{{ _("sekund min.") }}</span>
+        <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
+    </form>
+
+    {% if last_import %}
+    <p class="card-note" style="margin-top:16px">
+        {{ _("Poslední import") }}: {{ last_import.started_at | relative }}
+        &middot; {{ last_import.status }}
+        {% if last_import.message %}<br>{{ last_import.message }}{% endif %}
+    </p>
+    {% endif %}
+
+    <div class="flash warning" style="margin-top:16px">
+        <span class="dot"></span>
+        <span>{{ _("Importovaná data nemusí obsahovat jazyk zvukové stopy ani důvod transcode. Playback Reporting jazyk občas pošle – takový záznam se do jazykových statistik počítá. Jellystat ho neposílá nikdy. Co v importu chybí, doplní se až u přehrávání, která zaznamená Jellyscope sám.") }}</span>
+    </div>
+</div>
+
+{# ================================================================== #}

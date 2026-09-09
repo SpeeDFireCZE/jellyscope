@@ -1072,19 +1072,48 @@ TAJNE_CASTI = ("heslo", "password", "token", "webhook", "api_key", "secret")
 NELOGOVANE = ("jellyfin_version", "notify_state_")
 
 
+# Konce jmen, u kterych se hodnota vypsat smi. Cisla, prepinace, adresa
+# serveru - nic z toho o nikom nic nerika.
+BEZPECNE_KONCE = ("enabled", "host", "port", "tls", "time", "interval",
+                  "minutes", "days", "keep", "concurrency", "zoom",
+                  "language", "skin", "source", "generation", "capacity",
+                  "unit", "path", "mappings", "timezone")
+
+
 def _je_tajne(key: str) -> bool:
     return any(cast in key for cast in TAJNE_CASTI)
+
+
+def _smi_do_logu_i_hodnota(key: str) -> bool:
+    """Smí se u tohohle nastavení vypsat i hodnota?
+
+    Seznam je schválně **obrácený**: povoluje se, ne zakazuje. Zakazovat
+    znamená muset předem znát každé tajemství, které kdy přibude, a to,
+    na které se zapomene, se do logu vypíše celé. Takhle nové nastavení
+    mlčí, dokud někdo vědomě neřekne, že se ukázat smí.
+
+    Nejde jen o hesla. `smtp_komu` je e-mailová adresa a `smtp_uzivatel`
+    jméno účtu - do logu, který se přeposílá, když se něco pokazí, nepatří
+    ani jedno.
+    """
+    if _je_tajne(key):
+        return False
+    if key in DEFAULT_SETTINGS:
+        return True
+    # Klice upozorneni vznikaji az za behu (notify_<kanal>_<pole>),
+    # takze se poznavaji podle konce jmena.
+    return key.rsplit("_", 1)[-1] in BEZPECNE_KONCE
 
 
 def _zaloguj_zmenu(key: str, stara: str, nova: str) -> None:
     """Řádek do logu o změně nastavení. Beze změny mlčí."""
     if stara == nova or any(key.startswith(p) or key == p for p in NELOGOVANE):
         return
-    if _je_tajne(key):
+    if not _smi_do_logu_i_hodnota(key):
         log.info("nastaveni %s zmeneno", key)
-    else:
-        log.info("nastaveni %s: %s -> %s", key, stara or "(prazdne)",
-                 nova or "(prazdne)")
+        return
+    log.info("nastaveni %s: %s -> %s", key, stara or "(prazdne)",
+             nova or "(prazdne)")
 
 
 def set_setting(key: str, value: str) -> None:

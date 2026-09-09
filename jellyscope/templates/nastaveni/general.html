@@ -1,0 +1,112 @@
+{# Sekce Nastavení: jazyk, čas a verze
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# Verze a hlídání nové                                                #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="verze">
+    <div class="card-head">
+        <h2>{{ _("Verze") }}</h2>
+        <p class="card-note">{{ _("běží") }} <strong>v{{ verze.verze }}</strong></p>
+    </div>
+
+    {% if verze.je_novejsi %}
+    <div class="flash warning">
+        <span class="dot"></span>
+        <span>
+            {{ _("Je k dispozici verze") }} <strong>{{ verze.nalezena }}</strong>.
+            <a href="{{ verze.adresa }}" target="_blank" rel="noopener">{{ _("Co je v ní nového") }}</a>.
+            {{ _("Aktualizuje se na serveru příkazem") }}
+            <code>bash deploy/update.sh</code>.
+        </span>
+    </div>
+    {% endif %}
+
+    {# Pravidelné hlídání je úloha jako každá jiná - zapíná se a plánuje
+       v Úlohách, ne tady. Dvě místa, kde se totéž zapíná, jsou past:
+       člověk vypne jedno a druhé mu běží dál. #}
+    <form method="post" action="/settings/updates">
+        <p class="card-note">
+            {{ _("Pravidelné hlídání zapneš a načasuješ v") }}
+            <a href="/settings?section=tasks">{{ _("Úlohách") }}</a>
+            {{ _("jako úlohu „Kontrola aktualizací“. Nic neinstaluje – jen to řekne. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu vypnutá.") }}
+        </p>
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn primary" type="submit">
+                {{ _("Zkontrolovat teď") }}
+            </button>
+        </div>
+    </form>
+
+    {% if verze.kontrolovano %}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Naposledy kontrolováno") }} {{ verze.kontrolovano | relative }}{% if verze.nalezena %},
+        {{ _("nejnovější vydání") }}: {{ verze.nalezena }}{% endif %}.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jazyk a čas") }}</h2>
+        <p class="card-note">{{ _("Volba platí pro celou aplikaci, ne jen pro tebe.") }}</p>
+    </div>
+    <form method="post" action="/settings/language">
+        <div class="field">
+            <label for="ui_language">{{ _("Rozhraní") }}</label>
+            <select id="ui_language" name="ui_language" style="width:auto">
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == ui_language }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Jazyk logu zvlášť: log čte často někdo jiný než ten, kdo se dívá
+           do rozhraní - a hlášky se pak snáz hledají na internetu. #}
+        <div class="field">
+            <label for="log_language">{{ _("Log aplikace") }}</label>
+            <select id="log_language" name="log_language" style="width:auto">
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == settings.log_language }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <p class="hint">
+                {{ _("Platí pro nově zapsané řádky; co už v souboru je, zůstává, jak bylo. Hlášku, která překlad nemá, log napíše česky.") }}
+            </p>
+        </div>
+
+        {# Časová zóna aplikace. Bez ní záleželo na tom, jakou má stroj -
+           a server běžící v UTC posouval večerní špičku v grafech
+           o dvě hodiny proti tomu, co člověk zažil. #}
+        <div class="field">
+            <label for="app_timezone">{{ _("Časová zóna") }}</label>
+            <input type="text" id="app_timezone" name="app_timezone" list="zony"
+                   value="{{ settings.app_timezone }}" placeholder="{{ _("podle systému") }}"
+                   style="width:260px">
+            <datalist id="zony">
+                {% for z in casove_zony %}<option value="{{ z }}">{% endfor %}
+            </datalist>
+            <p class="hint">
+                {{ _("Podle ní se vypisují všechny časy a dělí dny v grafech. Prázdné pole znamená „co říká server“. Změna se plně projeví po restartu aplikace – rozdělení na dny dělá databáze a tu je potřeba přenastavit při startu.") }}
+                {% if zona_ted %}<br>{{ _("Teď je") }} <strong>{{ zona_ted }}</strong>.{% endif %}
+            </p>
+        </div>
+
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-head"><h2>{{ _("Co zůstává v .env") }}</h2></div>
+    <p class="card-note">
+        {{ _("V souboru .env už zůstává jen tajný klíč pro podepisování přihlašovacích cookies a nastavení sítě (adresa a port). Připojení k Jellyfinu, hesla i všechno ostatní je v databázi a mění se tady.") }}
+    </p>
+</div>

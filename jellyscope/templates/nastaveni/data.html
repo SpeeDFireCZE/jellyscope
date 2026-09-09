@@ -1,0 +1,168 @@
+{# Sekce Nastavení: odkud brát technická data a jak často se ptát
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# Formulář obepíná všechny karty sekce - ukládají se jedním
+   odesláním, jen jsou rozdělené podle toho, čeho se týkají. #}
+<form method="post" action="/settings">
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Zdroj technických dat") }}</h2>
+        <p class="card-note">{{ _("odkud brát kodeky, bitrate a velikosti") }}</p>
+    </div>
+
+    {# Tohle není přepínač "Jellyfin nebo ffprobe" pro celou aplikaci -
+       týká se jen technických údajů o souborech. Statistiky přehrávání
+       chodí z Jellyfinu vždycky, jinou možnost ani nemají. Dřív to z názvů
+       voleb nebylo vidět a vypadalo to, že přepnutím na ffprobe o statistiky
+       přijdeš. #}
+    <div class="flash info" style="margin-bottom:14px">
+        <span class="dot"></span>
+        <span>{{ _("Volba se týká jen údajů o souborech (kodek, rozlišení, velikost). Kdo se na co dívá, se čte z Jellyfinu vždycky – na tom tahle volba nic nemění.") }}</span>
+    </div>
+
+    <div class="radio-set">
+        <label class="radio-card">
+            <input type="radio" name="tech_source" value="jellyfin"
+                   {{ 'checked' if settings.tech_source == 'jellyfin' }}>
+            <span>
+                <span class="title">{{ _("Jen Jellyfin API") }}</span>
+                <span class="desc">
+                    {{ _("Údaje o souborech přebíráme od Jellyfinu. Funguje vždy a hned, nepotřebuje přístup k souborům ani ffmpeg. Některé údaje ale Jellyfin nehlásí vůbec, nebo jen odhadem.") }}
+                </span>
+            </span>
+        </label>
+
+        <label class="radio-card">
+            <input type="radio" name="tech_source" value="ffprobe"
+                   {{ 'checked' if settings.tech_source == 'ffprobe' }}>
+            <span>
+                <span class="title">{{ _("ffprobe + Jellyfin") }}</span>
+                <span class="desc">
+                    {{ _("Soubory čteme přímo z disku přes ffprobe – přesné údaje včetně skutečné velikosti, HDR a počtu zvukových kanálů. Seznam titulů, uživatelé a statistiky přehrávání jdou dál z Jellyfinu. Potřebuje nainstalovaný ffmpeg a přístup k souborům.") }}
+                    {% if ffprobe_found %}
+                        <br><span class="badge good"><span class="dot"></span>{{ _("ffprobe nalezen") }}</span>
+                        <code style="font-size:12px">{{ ffprobe_found }}</code>
+                    {% else %}
+                        <br><span class="badge critical"><span class="dot"></span>{{ _("ffprobe nenalezen") }}</span>
+                    {% endif %}
+                </span>
+            </span>
+        </label>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Analýza souborů") }}</h2>
+        <p class="card-note">{{ _("kdy sáhnout na soubory a kolik naráz") }}</p>
+    </div>
+    <div class="field" style="margin-top:18px">
+        <label for="ffprobe_path">{{ _("Cesta k ffprobe") }}</label>
+        <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ settings.ffprobe_path }}"
+               placeholder="/usr/bin/ffprobe">
+        <p class="hint">{{ _("Nech prázdné, pokud je ffprobe dostupný v systémové PATH.") }}</p>
+    </div>
+
+    <div class="field">
+        <label for="ffprobe_concurrency">{{ _("Kolik souborů analyzovat naráz") }}</label>
+        <input type="number" id="ffprobe_concurrency" name="ffprobe_concurrency"
+               value="{{ settings.ffprobe_concurrency }}" min="1" max="16">
+        <p class="hint">
+            {{ _("Vyšší číslo = rychlejší scan, ale větší zátěž disku. Při síťovém úložišti nech nízko (2–3).") }}
+        </p>
+    </div>
+
+    <div class="field">
+        <label for="path_mappings">{{ _("Přepis cest") }}</label>
+        <textarea id="path_mappings" name="path_mappings">{{ settings.path_mappings }}</textarea>
+        <p class="hint">
+            {{ _("Potřebné jen tehdy, když Jellyfin vidí soubory na jiné cestě než Jellyscope (typicky při běhu v Dockeru). Formát JSON, například:") }}<br>
+            <code>[{"from": "/media", "to": "/mnt/media"}]</code><br>
+            {{ _("Když obě aplikace běží na stejném stroji, nech") }} <code>[]</code>.
+        </p>
+    </div>
+
+    {# Kapacita úložiště.
+
+       `shutil.disk_usage` měří disk, na kterém běží JELLYSCOPE - jenže
+       data bývají jinde (NAS, jiný stroj, jiný kontejner) a pak se měří
+       cizí disk. Proto se nejdřív ptáme Jellyfinu, který u těch souborů
+       sedí. A když knihovna leží v cloudu, nepozná velikost ani on -
+       tehdy platí tohle číslo. #}
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Úložiště knihovny") }}</h2>
+        <p class="card-note">{{ _("odkud se bere volné místo pro odhad růstu") }}</p>
+    </div>
+    <div class="field">
+        <label for="library_capacity_gb">{{ _("Kapacita úložiště knihovny") }}</label>
+        {# Číslo a jednotka vedle sebe: u dvacetiterabajtového pole je
+           „30000 GB" zbytečně dlouhé číslo, u půlterabajtového disku
+           zase „0,5 TB" nepohodlné. Ať si člověk vybere. #}
+        <div class="pole-s-jednotkou">
+            <input type="number" id="library_capacity_gb" name="library_capacity_gb"
+                   value="{{ kapacita_cislo }}" min="0" step="1">
+            <select name="library_capacity_unit" aria-label="{{ _('Jednotka') }}">
+                <option value="GB" {{ 'selected' if kapacita_jednotka == 'GB' }}>GB</option>
+                <option value="TB" {{ 'selected' if kapacita_jednotka == 'TB' }}>TB</option>
+            </select>
+        </div>
+        <p class="hint">
+            {{ _("Zadané číslo přebije všechno ostatní. Volné místo se z něj počítá jako kapacita minus velikost knihovny, takže předpokládá, že na tom úložišti nic jiného neleží. Nech 0 a zjistí se to samo.") }}
+            {% if misto_zdroj %}
+                <br><span class="badge {{ 'good' if misto_zdroj != 'rucne' else 'info' }}">
+                    <span class="dot"></span>{{ zdroj_popis }}</span>
+            {% else %}
+                <br><span class="badge warning"><span class="dot"></span>{{ _("volné místo se zatím nepodařilo zjistit") }}</span>
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Sběr přehrávání") }}</h2>
+        <p class="card-note">{{ _("jak často se sběrač ptá, co se právě hraje") }}</p>
+    </div>
+    <div class="field">
+        <label for="poll_interval">{{ _("Jak často se ptát, co se hraje (sekundy)") }}</label>
+        <input type="number" id="poll_interval" name="poll_interval"
+               value="{{ settings.poll_interval }}" min="2" max="300">
+        <p class="hint">
+            {{ _("Nižší číslo = přesnější měření délky přehrávání, víc dotazů na server. Deset sekund je dobrý kompromis.") }}
+        </p>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+    </div>
+</div>
+</form>
+
+
+
+{# ================================================================== #}

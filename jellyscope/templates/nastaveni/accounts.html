@@ -1,0 +1,210 @@
+{# Sekce Nastavení: účty do Jellyscope, hesla a role
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# Akce nad účty. Formuláře byly dřív pořád otevřené pod sebou a stránka
+   kvůli nim byla nekonečná - přitom se každý z nich použije jednou za
+   půl roku. Teď jsou v oknech (<dialog>), která umí Esc i klik mimo. #}
+<div class="btn-row" style="margin-bottom:16px">
+    <button class="btn primary" type="button" data-okno="okno-vlastni-heslo">
+        {{ _("Změnit své heslo") }}
+    </button>
+    {% if account.is_admin %}
+    <button class="btn" type="button" data-okno="okno-pridat">
+        {{ _("Přidat uživatele") }}
+    </button>
+    <button class="btn" type="button" data-okno="okno-cizi-heslo">
+        {{ _("Změnit heslo jinému účtu") }}
+    </button>
+    {% endif %}
+</div>
+
+{% if account.is_admin %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Účty do Jellyscope") }}</h2>
+        <p class="card-note">{{ _("celkem") }} {{ all_accounts | length }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("Tohle nejsou uživatelé Jellyfinu – to jsou účty, kterými se někdo přihlašuje sem. Když někomu založíš účet tady, do Jellyfinu se tím nedostane.") }}
+    </p>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Jméno") }}</th><th>{{ _("Oprávnění") }}</th>
+                <th class="num">{{ _("Vytvořen") }}</th>
+                <th class="num">{{ _("Naposledy přihlášen") }}</th><th>{{ _("Akce") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in all_accounts %}
+            <tr>
+                <td class="strong">
+                    {{ row.username }}
+                    {% if row.id == account.id %}<span class="muted">({{ _("ty") }})</span>{% endif %}
+                </td>
+                <td>
+                    {% if row.is_admin %}
+                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+                    {% else %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("čtenář") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num muted">{{ row.created_at | datetime }}</td>
+                <td class="num muted">{{ row.last_login | relative }}</td>
+                <td>
+                    <div class="btn-row">
+                    {# Na vlastní účet se nesahá: role ani smazání. Kdyby si
+                       poslední správce odebral práva nebo se smazal, do
+                       Jellyscope by se už nikdo nedostal.
+
+                       Místo prázdné buňky ale řekneme proč - jinak to
+                       vypadá jako chybějící tlačítko. #}
+                    {% if row.id == account.id %}
+                        {% if admin_count <= 1 %}
+                            <span class="card-note">
+                                {{ _("poslední správce – nelze smazat ani si odebrat práva") }}
+                            </span>
+                        {% else %}
+                            <span class="card-note">{{ _("vlastní účet") }}</span>
+                        {% endif %}
+                    {% else %}
+                        <form method="post" action="/settings/accounts/role">
+                            <input type="hidden" name="account_id" value="{{ row.id }}">
+                            {% if not row.is_admin %}
+                                <input type="hidden" name="is_admin" value="1">
+                                <button class="btn" type="submit">{{ _("Udělat správcem") }}</button>
+                            {% else %}
+                                <button class="btn" type="submit">{{ _("Odebrat práva") }}</button>
+                            {% endif %}
+                        </form>
+                        {# Mazání je nevratné, proto červeně a s pořádnou
+                           otázkou - "jmeno?" nikomu neřekne, co se stane.
+                           Skutečnou pojistkou zůstává accounts.delete(). #}
+                        <form method="post" action="/settings/accounts/delete"
+                              onsubmit="return confirm('{{ _("Opravdu smazat účet") }} {{ row.username }}? {{ _("Tenhle krok nejde vzít zpět. Nasbíraná data zůstanou, mizí jen přihlášení do Jellyscope.") }}')">
+                            <input type="hidden" name="account_id" value="{{ row.id }}">
+                            <button class="btn danger" type="submit">{{ _("Smazat") }}</button>
+                        </form>
+                    {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<dialog class="okno" id="okno-vlastni-heslo">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Změnit své heslo") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/password">
+        <input type="hidden" name="account_id" value="{{ account.id }}">
+        <div class="field">
+            <label for="own_password">{{ _("Nové heslo") }}</label>
+            <input type="password" id="own_password" name="password"
+                   autocomplete="new-password" required>
+            <p class="hint">{{ _("Alespoň 8 znaků.") }}</p>
+        </div>
+        <div class="field">
+            <label for="own_password_again">{{ _("Nové heslo znovu") }}</label>
+            <input type="password" id="own_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Změnit heslo") }}</button>
+        </div>
+    </form>
+</dialog>
+
+{% if account.is_admin %}
+<dialog class="okno" id="okno-pridat">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Přidat uživatele") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/create">
+        <div class="field">
+            <label for="new_username">{{ _("Uživatelské jméno") }}</label>
+            <input type="text" id="new_username" name="username" required autocomplete="off">
+            <p class="hint">{{ _("3 až 32 znaků: písmena bez diakritiky, číslice, tečka, pomlčka, podtržítko.") }}</p>
+        </div>
+        <div class="field">
+            <label for="new_password">{{ _("Heslo") }}</label>
+            <input type="password" id="new_password" name="password"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label for="new_password_again">{{ _("Heslo znovu") }}</label>
+            <input type="password" id="new_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="is_admin" value="1">
+                <span>
+                    <span class="title">{{ _("Správce") }}</span>
+                    <span class="desc">
+                        {{ _("Smí měnit nastavení, spouštět analýzy a spravovat účty. Bez toho vidí jen statistiky – a to je pro většinu lidí správně.") }}
+                    </span>
+                </span>
+            </label>
+        </div>
+        <div class="btn-row">
+            <button class="btn primary" type="submit">{{ _("Vytvořit účet") }}</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="okno" id="okno-cizi-heslo">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Změnit heslo jinému účtu") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/password">
+        <div class="field">
+            <label for="target_account">{{ _("Účet") }}</label>
+            <select id="target_account" name="account_id">
+                {% for row in all_accounts %}
+                    <option value="{{ row.id }}">{{ row.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="other_password">{{ _("Nové heslo") }}</label>
+            <input type="password" id="other_password" name="password"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label for="other_password_again">{{ _("Nové heslo znovu") }}</label>
+            <input type="password" id="other_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button class="btn" type="submit">{{ _("Nastavit heslo") }}</button>
+        </div>
+    </form>
+</dialog>
+
+
+{% endif %}
+
+
+{# ================================================================== #}

@@ -244,7 +244,7 @@ async def aktualizuj() -> dict[str, Any]:
     """Stahne novou verzi a doinstaluje zavislosti. Nerestartuje.
 
     Deleji se presne dva kroky z `deploy/update.sh` - `git pull` a
-    `pip install`. Restart si rika volajici sam (viz web._naplanuj_restart),
+    `pip install`. Restart si rika volajici sam (viz web_nastaveni._naplanuj_restart),
     protoze aplikace umi nahradit svuj proces a nepotrebuje k tomu
     spravce sluzby.
 

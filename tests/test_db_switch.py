@@ -98,16 +98,17 @@ print("--- rozepsané nastavení přežije test spojení ---")
 # hodnot by se formulář po každém testu vrátil k uloženému nastavení
 # a uživatel by server, port, uživatele i heslo vyplňoval znovu.
 from jellyscope import web  # noqa: E402
+from jellyscope import web_nastaveni  # noqa: E402
 
 ucet = {"id": 1, "username": "test", "is_admin": 1}
-web._draft_clear(ucet, "database")
-check(web._draft_read(ucet, "database") is None, "bez rozepsaného se nic nevrací")
+web_nastaveni._draft_clear(ucet, "database")
+check(web_nastaveni._draft_read(ucet, "database") is None, "bez rozepsaného se nic nevrací")
 
 rozepsane = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="muj-server",
                                    port=5433, database="js", user="tomas",
                                    password="tajne")
-web._draft_save(ucet, "database", rozepsane)
-nacteno = web._draft_read(ucet, "database")
+web_nastaveni._draft_save(ucet, "database", rozepsane)
+nacteno = web_nastaveni._draft_read(ucet, "database")
 check(nacteno is not None, "rozepsané se vrátí")
 check(nacteno.host == "muj-server" and nacteno.port == 5433,
       "včetně serveru a portu")
@@ -115,28 +116,30 @@ check(nacteno.password == "tajne", "a hesla, aby se nemuselo psát znovu")
 
 # Heslo nesmí skončit v session - ta je u nás podepsaná cookie, kterou
 # si prohlížeč nese s sebou.
-check("_DB_DRAFT" in (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8"),
+check("_DB_DRAFT" in "\n".join(p.read_text(encoding="utf-8")
+         for p in sorted((PROJECT / "jellyscope").glob("web*.py"))),
       "rozepsané se drží v paměti procesu")
 check("request.session[\"db_draft\"]" not in
-      (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8"),
+      "\n".join(p.read_text(encoding="utf-8")
+         for p in sorted((PROJECT / "jellyscope").glob("web*.py"))),
       "rozepsané NEJDE do session (byla by to cookie s heslem)")
 
 # Po druhém účtu se nesmí míchat.
 jiny = {"id": 2, "username": "jiny", "is_admin": 1}
-check(web._draft_read(jiny, "database") is None, "cizí účet cizí rozepsané nevidí")
+check(web_nastaveni._draft_read(jiny, "database") is None, "cizí účet cizí rozepsané nevidí")
 
 # Sekce se navzájem nepletou - Jellyfin a databáze mají vlastní zásuvku.
-web._draft_save(ucet, "jellyfin", {"url": "http://x", "api_key": "k"})
-check(web._draft_read(ucet, "database") is not None,
+web_nastaveni._draft_save(ucet, "jellyfin", {"url": "http://x", "api_key": "k"})
+check(web_nastaveni._draft_read(ucet, "database") is not None,
       "uložení pro Jellyfin nepřepsalo rozepsanou databázi")
-check(web._draft_read(ucet, "jellyfin")["url"] == "http://x",
+check(web_nastaveni._draft_read(ucet, "jellyfin")["url"] == "http://x",
       "a Jellyfin má svoje")
 
-web._draft_clear(ucet, "database")
-check(web._draft_read(ucet, "database") is None, "po uložení se rozepsané zahodí")
-check(web._draft_read(ucet, "jellyfin") is not None,
+web_nastaveni._draft_clear(ucet, "database")
+check(web_nastaveni._draft_read(ucet, "database") is None, "po uložení se rozepsané zahodí")
+check(web_nastaveni._draft_read(ucet, "jellyfin") is not None,
       "zahození databáze se nedotklo Jellyfinu")
-web._draft_clear(ucet, "jellyfin")
+web_nastaveni._draft_clear(ucet, "jellyfin")
 
 
 print()

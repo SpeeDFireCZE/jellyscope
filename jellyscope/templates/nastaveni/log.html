@@ -1,0 +1,113 @@
+{# Sekce Nastavení: log aplikace a kde ho hledat
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Log aplikace") }}</h2>
+        <p class="card-note">{{ log.path }}</p>
+    </div>
+
+    {% if not log.files %}
+        <p class="chart-empty">
+            {{ _("Ve složce s logy zatím nic není. Soubor vznikne při prvním startu aplikace – zkus ji restartovat.") }}
+        </p>
+    {% else %}
+
+    {# Volby jsou v adrese, ne v nastavení: je to pohled, ne volba serveru.
+       Dva správci se tak můžou dívat každý na něco jiného. #}
+    <form method="get" action="/settings" class="log-controls">
+        <input type="hidden" name="section" value="log">
+
+        <label>
+            {{ _("Soubor") }}
+            <select name="log_file" onchange="this.form.submit()">
+                {% for soubor in log.files %}
+                <option value="{{ soubor.name }}"
+                        {% if soubor.name == log.name %}selected{% endif %}>
+                    {{ soubor.name }}{% if soubor.label %} – {{ _(soubor.label) }}{% endif %}
+                    ({{ soubor.size_bytes | bytes }})
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Řádků") }}
+            <select name="log_lines" onchange="this.form.submit()">
+                {% for pocet in [100, 200, 500, 1000, 2000] %}
+                <option value="{{ pocet }}" {% if pocet == log_lines %}selected{% endif %}>
+                    {{ pocet }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Úroveň") }}
+            <select name="log_level" onchange="this.form.submit()">
+                <option value="">{{ _("vše") }}</option>
+                {% for uroven in log_levels %}
+                <option value="{{ uroven }}" {% if uroven == log_level %}selected{% endif %}>
+                    {{ uroven }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <button class="btn" type="submit">{{ _("Načíst znovu") }}</button>
+    </form>
+
+    {% if not log.lines %}
+        <p class="chart-empty" style="margin-top:14px">
+            {% if log_level %}
+                {{ _("Na téhle úrovni v posledních řádcích nic není.") }}
+            {% else %}
+                {{ _("Soubor je zatím prázdný.") }}
+            {% endif %}
+        </p>
+    {% else %}
+    {# Nejnovější řádek je dole, jako v každém logu. Okno se po načtení
+       odroluje na konec - viz skript níž. #}
+    <div class="log-view" id="log-view">
+        {% for radek in log.lines %}
+        <div class="log-line {{ radek.level | lower }}">{{ radek.text }}</div>
+        {% endfor %}
+    </div>
+    <script>
+        // Odrolovat na konec: nejnovější řádek je ten, kvůli kterému se sem
+        // člověk dívá. Bez tohohle by po otevření koukal na nejstarší.
+        (function () {
+            var box = document.getElementById("log-view");
+            if (box) { box.scrollTop = box.scrollHeight; }
+        })();
+    </script>
+    {% endif %}
+
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Zobrazuje se konec souboru. API klíč a hesla se ve výpisu nahrazují hvězdičkami, i kdyby je do logu zanesla hláška o chybě.") }}
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Kde jinde log hledat") }}</h2>
+    </div>
+    <p class="card-note">
+        {{ _("Když aplikaci spouští systemd, posílá její výstup do journalu a do složky výše nic nepíše. Celý výpis včetně startu serveru vypíše:") }}
+    </p>
+    <pre class="code-block">journalctl -u jellyscope -n 200 --no-pager</pre>
+    <p class="card-note">
+        {{ _("U supervisordu je totéž ve výše nabízených souborech out.log a err.log.") }}
+    </p>
+</div>
+
+{# ================================================================== #}

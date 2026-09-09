@@ -1,0 +1,114 @@
+{# Sekce Nastavení: připojení k serveru a generace
+
+   Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
+   kontext - proměnné se nepředávají, jsou prostě k dispozici.
+
+   Makra se importují tady, ne v rodiči: záviset na tom, že se
+   `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
+   a funguje jen náhodou. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Připojení k Jellyfinu") }}</h2>
+    </div>
+
+    <form method="post" action="/settings/connection">
+        <div class="field">
+            <label for="jellyfin_url">{{ _("Adresa serveru") }}</label>
+            <input type="text" id="jellyfin_url" name="jellyfin_url"
+                   value="{{ jellyfin_url }}" placeholder="http://localhost:8096">
+        </div>
+
+        <div class="field">
+            <label for="jellyfin_api_key">{{ _("API klíč") }}</label>
+            {# Klíč se do stránky nikdy nevypisuje - jen se pozná, jestli
+               nějaký je. Prázdné pole znamená "nech ten stávající". #}
+            <input type="password" id="jellyfin_api_key" name="jellyfin_api_key"
+                   autocomplete="off"
+                   placeholder="{{ '••••••••••••' if has_api_key else '' }}">
+            <p class="hint">
+                {{ _("Jellyfin → Ovládací panel → Rozšířené → Klíče API → \"+\"") }}<br>
+                {% if has_api_key %}{{ _("Nech prázdné, pokud klíč měnit nechceš.") }}{% endif %}
+            </p>
+        </div>
+
+        {# Generace serveru. Jellyfin 12 přestal přijímat staré
+           přihlašovací hlavičky a zrušil pár cest; Jellyscope umí obojí
+           a podle téhle volby ví, co má posílat. Výchozí „zjistit"
+           si přečte verzi z /System/Info při testu spojení
+           a synchronizaci - ruční volba je pro případ, kdy se server
+           hlásí jinak, než se chová (za proxy, vlastní sestavení). #}
+        <div class="field">
+            <label for="jellyfin_generation">{{ _("Generace serveru") }}</label>
+            <select id="jellyfin_generation" name="jellyfin_generation"
+                    style="width:auto">
+                <option value="auto" {{ 'selected' if generace == 'auto' }}>
+                    {{ _("Zjistit ze serveru") }}
+                </option>
+                <option value="12" {{ 'selected' if generace == '12' }}>
+                    {{ _("Jellyfin 12 a novější") }}
+                </option>
+                <option value="10" {{ 'selected' if generace == '10' }}>
+                    {{ _("Jellyfin 10.x") }}
+                </option>
+            </select>
+            <p class="hint">
+                {{ _("Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné – mění se jen to, jak se posílají dotazy.") }}
+                {{ _("Po přepnutí se verze zjistí znovu – hned při uložení, nebo při testu spojení.") }}
+                {% if zjistena_verze %}<br>{{ _("Server naposledy hlásil verzi") }}
+                    <strong>{{ zjistena_verze }}</strong>.{% endif %}
+            </p>
+            {% if generace_nesedi %}
+            <p class="hint">
+                <span class="badge warning"><span class="dot"></span>{{ _("server hlásí jinou generaci, než jaká je zvolená") }}</span>
+                <br>{{ _("Platí ruční volba – od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.") }}
+            </p>
+            {% endif %}
+        </div>
+
+        {# Obě tlačítka patří do TOHOTO formuláře, aby pracovala s tím,
+           co je vyplněné. Test byl dřív samostatný formulář vedle - nic
+           neposílal, takže testoval uložené nastavení místo vyplněného
+           a odesláním navíc zahodil, co jsi napsal. #}
+        <div class="btn-row">
+            <button class="btn primary" type="submit" name="action" value="save">
+                {{ _("Uložit připojení") }}
+            </button>
+            <button class="btn" type="submit" name="action" value="test">
+                {{ _("Otestovat spojení") }}
+            </button>
+        </div>
+    </form>
+
+    <div class="btn-row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+        {# Synchronizace pracuje s uloženým nastavením, ne s formulářem -
+           proto zůstává zvlášť. #}
+        <form method="post" action="/settings/sync">
+            <button class="btn" type="submit" {{ 'disabled' if scan_running }}>
+                {{ _("Synchronizovat knihovnu") }}
+            </button>
+        </form>
+    </div>
+
+    {% if jellyfin_draft %}
+    <div class="flash info" style="margin-top:14px">
+        <span class="dot"></span>
+        <span>{{ _("Vyplněné údaje ještě nejsou uložené. API klíč si pamatuju, takže stačí kliknout na Uložit připojení.") }}</span>
+    </div>
+    {% endif %}
+
+    {% if last_library_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Poslední synchronizace") }}: {{ last_library_scan.started_at | relative }}
+        &middot; {{ _("stav") }}: {{ last_library_scan.status }}
+        {% if last_library_scan.message %}<br>{{ last_library_scan.message }}{% endif %}
+    </p>
+    {% endif %}
+
+    {{ running_task(scan_running, stop_pending, 'jellyfin') }}
+</div>
+
+
+{# ================================================================== #}

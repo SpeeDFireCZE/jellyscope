@@ -142,8 +142,9 @@ print("--- čekárna po aktualizaci ---")
 # Odpověď na aktualizaci je proto stránka složená v Pythonu: žádná
 # šablona, žádný kontext, nic, co by se s verzí mohlo rozejít.
 from jellyscope import web  # noqa: E402
+from jellyscope import web_nastaveni  # noqa: E402
 
-cekarna = web._stranka_aktualizace()
+cekarna = web_nastaveni._stranka_aktualizace()
 check("<!doctype html>" in cekarna.lower(), "je to celá stránka")
 check("{{" not in cekarna and "{%" not in cekarna,
       "žádná šablona - nic, co by starý kód nedokázal vykreslit")
@@ -151,7 +152,8 @@ check("/health" in cekarna and "started_at" in cekarna,
       "čeká na nový proces podle /health")
 check("location.href" in cekarna, "a pak pustí člověka dál")
 
-zdroj = (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8")
+zdroj = "\n".join(p.read_text(encoding="utf-8")
+         for p in sorted((PROJECT / "jellyscope").glob("web*.py")))
 routa = zdroj[zdroj.index("async def settings_update"):]
 routa = routa[:routa.index("def _stranka_aktualizace")]
 check("wait=restart" not in routa,

@@ -9,6 +9,64 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.6
+
+Housekeeping: the same application, in fewer lines and with less waiting.
+Nothing here changes what Jellyscope does.
+
+### Changed
+
+- **Settings opens in a fraction of the time.** On a history of 150 000
+  plays the page took nearly seven seconds, while every other page took
+  well under one. The six counts behind *Data tidy-up* were doing most of
+  it, and the reason was duller than expected: the helper that turns a
+  timestamp from the database into a number is called twice per row -
+  three hundred thousand times per page - and it went through
+  `datetime.strptime`, which re-reads the format string on every call.
+  The format is fixed, so the value is computed from character positions
+  instead: 4.8× faster.
+
+  Cross-source duplicates are also no longer searched for when there is
+  nothing to cross with. A group only counts if at least one of its rows
+  came from an import, so an installation that never imported anything
+  always got an empty answer - it just used to walk the whole history
+  first.
+
+  Measured back to back on one machine: `duplicate_playback_count`
+  7 329 → 1 627 ms, `import_duplicate_count` 7 685 → 63 ms.
+
+  The numbers stay live. Computing them nightly and showing a stored
+  value was considered and turned down: they decide what somebody
+  deletes, and a figure from yesterday is worse than a moment of waiting.
+
+- **The Settings template is twelve files instead of one.** It was 2 246
+  lines and twelve sections deep; finding a card meant scrolling past
+  eleven that were not it. It is 98 lines of routing now, plus a file per
+  section named after what it holds.
+
+- **The routes are three modules instead of one.** `web.py` was 3 637
+  lines. What every page needs - templates, context, flashes, the login
+  guards - moved to `web_zaklad.py`, and the thirty-six Settings routes,
+  a third of the file and sharing nothing with the pages that draw
+  graphs, moved to `web_nastaveni.py`. `web.py` is 1 908 lines.
+
+  Both splits are pure moves, and both were checked as such rather than
+  read as such: the rendered HTML of all twelve sections, the route table
+  and the responses of forty routes were captured before and after and
+  compared. Nothing differs but the order in which `/openapi.json`
+  describes the paths.
+
+### Fixed
+
+- **A setting's value reaches the log only where that is harmless.** The
+  value used to be written unless the key name looked like a secret -
+  which covered today's secrets and nothing else, so `notify_smtp_komu`
+  and `notify_smtp_uzivatel` went in whole: an e-mail address and an
+  account name, in a log whose purpose is to be forwarded when something
+  breaks. The list is inverted now. A value is written only for settings
+  known to be harmless, and anything else is recorded by name alone, so a
+  new setting stays quiet until somebody decides it may be shown.
+
 ## 1.6.5
 
 ### Added
