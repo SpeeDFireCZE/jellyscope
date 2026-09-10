@@ -9,6 +9,61 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.7
+
+### Added
+
+- **A database backup before anything is deleted.** Both paths that
+  delete on purpose - the nightly history clean-up and *Forget a viewer*
+  in Settings - now begin with a backup, and if the backup fails nothing
+  is deleted; the task log or the flash says why. A wrong retention
+  limit or a click on the wrong name has a way back. With no backup
+  folder set the copy goes to `data/zalohy` next to the database, and
+  nothing is backed up when nothing would be deleted. The file is named
+  `jellyscope-<time>-pred-mazanim.db`, so it is told apart from the
+  nightly ones while pruning and restore treat it like any other.
+
+  On PostgreSQL a backup means `pg_dump`. Where it is missing or too old
+  for the server, the clean-up now stops instead of deleting - that is
+  the point of the safeguard, but it is a change for anyone who had the
+  clean-up on and never set the `pg_dump` path.
+
+- **Translations merged on GitHub are noticed.** Weblate merges land on
+  `main` without a release, so a version check never saw them. The
+  update check now also asks GitHub what changed under
+  `jellyscope/translations/` since the running commit, and reports it
+  as *New translations* in the footer and in Settings. An unknown commit
+  (no git, a detached copy) means "don't know", not zero.
+
+- **One *Check for updates* button in Settings.** The Version card had
+  a link to GitHub and the advice to run a script. It has one button now;
+  the reply says what was found - a new release, new translations, both,
+  or nothing - and one row below it opens the same window as the footer,
+  with the release notes and the one-click update.
+
+### Changed
+
+- **Forgetting a viewer no longer freezes the application.** After the
+  rows are deleted the database file is rewritten so no trace of them
+  remains (see 1.6.5). That rewrite locks SQLite for roughly a minute
+  per 5 GB, and it used to run the moment the button was clicked. The
+  click now only deletes; the rewrite is noted and done at the time set
+  for the history clean-up task - the first occurrence after the
+  request, whether or not that task is switched on. A nightly clean-up
+  that rewrites anyway clears the note. Until then a trace of the deleted
+  rows stays in the file, and the page and the flash say so.
+
+### Fixed
+
+- **A phone could neither log out nor update.** Below 860 px the whole
+  sidebar footer was hidden - version, licence, collector status, the
+  signed-in account and *Log out* - and nothing stood in for it. The
+  footer now sits at the bottom of the open menu.
+
+- **Two backups within one second overwrote each other.** The name
+  carries a timestamp to the second; a second backup in the same second
+  now gets `-2`, `-3` appended instead of replacing the first.
+
 ## 1.6.6
 
 Housekeeping: the same application, in fewer lines and with less waiting.

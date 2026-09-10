@@ -18,21 +18,10 @@
         <p class="card-note">{{ _("běží") }} <strong>v{{ verze.verze }}</strong></p>
     </div>
 
-    {% if verze.je_novejsi %}
-    <div class="flash warning">
-        <span class="dot"></span>
-        <span>
-            {{ _("Je k dispozici verze") }} <strong>{{ verze.nalezena }}</strong>.
-            <a href="{{ verze.adresa }}" target="_blank" rel="noopener">{{ _("Co je v ní nového") }}</a>.
-            {{ _("Aktualizuje se na serveru příkazem") }}
-            <code>bash deploy/update.sh</code>.
-        </span>
-    </div>
-    {% endif %}
-
-    {# Pravidelné hlídání je úloha jako každá jiná - zapíná se a plánuje
-       v Úlohách, ne tady. Dvě místa, kde se totéž zapíná, jsou past:
-       člověk vypne jedno a druhé mu běží dál. #}
+    {# Jedno tlačítko. Kontrola je akce; co našla, je informace - a ta se
+       ukazuje jako řádek pod tlačítkem, ne jako druhé tlačítko. Řádek
+       otevírá totéž okno jako patička: poznámky k vydání a aktualizace
+       na jedno kliknutí. #}
     <form method="post" action="/settings/updates">
         <p class="card-note">
             {{ _("Pravidelné hlídání zapneš a načasuješ v") }}
@@ -41,10 +30,30 @@
         </p>
         <div class="btn-row" style="margin-top:14px">
             <button class="btn primary" type="submit">
-                {{ _("Zkontrolovat teď") }}
+                {{ _("Kontrola aktualizací") }}
             </button>
         </div>
     </form>
+
+    {% if verze.je_novejsi or verze.nove_preklady %}
+    <button class="verze-nova{{ ' verze-preklady' if not verze.je_novejsi }}"
+            type="button" data-okno="okno-aktualizace" style="margin-top:14px">
+        <span class="dot"></span>
+        <span>
+            {% if verze.je_novejsi and verze.nove_preklady %}
+                <strong>{{ _("Nová verze") }} {{ verze.nalezena }} {{ _("a nové překlady") }}</strong><br>
+                <span class="verze-nova-note">{{ _("máš") }} v{{ verze.verze }} &middot; {{ _("co je nového") }}</span>
+            {% elif verze.je_novejsi %}
+                <strong>{{ _("Nová verze") }} {{ verze.nalezena }}</strong><br>
+                <span class="verze-nova-note">{{ _("máš") }} v{{ verze.verze }} &middot; {{ _("co je nového") }}</span>
+            {% else %}
+                <strong>{{ _("Nové překlady") }}</strong><br>
+                <span class="verze-nova-note">{{ verze.nove_preklady }} {{ _("souborů na GitHubu") }} &middot; {{ _("stáhnout") }}</span>
+            {% endif %}
+        </span>
+    </button>
+    {% endif %}
+
 
     {% if verze.kontrolovano %}
     <p class="card-note" style="margin-top:10px">

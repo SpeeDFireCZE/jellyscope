@@ -43,6 +43,14 @@ MIN_DNU = 30
 MAX_DNU = 3650
 VYCHOZI_DNU = 365
 
+# Prepsani souboru po mazani (db.preskladat) trva umerne velikosti
+# databaze - odhadem minutu na 5 GB - a SQLite na tu dobu drzi zamek na
+# vsechno. Po nocnim odklizeni to nikomu nevadi; po kliknuti na "Ano,
+# zapomenout" by se ale cela aplikace na tu minutu zasekla. Rucni
+# zapomenuti proto jen smaze a prepis souboru si poznamena na noc.
+# Hodnota je cas zadosti (UTC); prazdno = nic neceka.
+ODLOZENE_KLIC = "db_compaction_pending"
+
 
 def retence_dnu() -> int:
     """Kolik dní historie se nechává."""
@@ -133,17 +141,24 @@ def smaz_stare(dnu: int | None = None) -> dict[str, Any]:
     if kolik:
         log.info("Odklizeno %s prehravani starsich nez %s dni", kolik, dnu)
         # Az tady jsou data opravdu pryc - viz db.preskladat(). Pousti se
-        # jen kdyz se neco smazalo: prepisuje cely soubor.
-        db.preskladat()
+        # jen kdyz se neco smazalo: prepisuje cely soubor. Prepis pokryje
+        # i to, co ceka z rucniho zapomenuti - druhy by byl zbytecny.
+        if db.preskladat():
+            db.set_setting(ODLOZENE_KLIC, "")
     return {"smazano": kolik, "hranice": mez, "dnu": dnu}
 
 
-def zapomen_uzivatele(user_id: str) -> dict[str, Any]:
+def zapomen_uzivatele(user_id: str, hned: bool = True) -> dict[str, Any]:
     """Smaže všechno, co je o jednom divákovi zaznamenané.
 
     Účet samotný je v Jellyfinu - ten odsud smazat nejde a nemá se o to
     ani pokoušet. Příští synchronizace ho tedy zase uvidí; historie,
     kterou jsme o něm měli, se ale nevrátí.
+
+    `hned` říká, kdy se přepíše soubor databáze, aby po smazaných řádcích
+    nezůstala stopa. `True` to udělá teď a volající počká; `False` jen
+    smaže a přepis nechá na noc (viz ODLOZENE_KLIC) - to je pro kliknutí
+    z Nastavení, kde by minuta zámku zastavila celou aplikaci.
     """
     user_id = (user_id or "").strip()
     if not user_id:
@@ -162,12 +177,48 @@ def zapomen_uzivatele(user_id: str) -> dict[str, Any]:
         conn.commit()
 
     log.info("Zapomenut divak %s: smazano %s prehravani", jmeno or user_id, kolik)
-    if kolik:
+    if kolik and hned:
         # „Zapomen toho divaka" ma znamenat, ze je pryc - ne ze se jen
         # prestane hledat. Bez tohohle jeho zaznamy v souboru zustanou
         # lezet, dokud je neco neprepise, a daji se z nej precist.
         db.preskladat()
+    elif kolik:
+        odloz_preskladani()
     return {"smazano": kolik, "jmeno": jmeno}
+
+
+def odloz_preskladani() -> None:
+    """Poznamená, že soubor databáze čeká na přepis (v noci)."""
+    db.set_setting(ODLOZENE_KLIC, db.utcnow())
+    log.info("Preskladani databaze odlozeno na nocni cas")
+
+
+def preskladani_ceka() -> str:
+    """Kdy někdo o odložený přepis požádal (UTC text), nebo prázdno."""
+    return db.get_setting(ODLOZENE_KLIC, "") or ""
+
+
+def dokonci_odlozene_preskladani() -> bool:
+    """Udělá odložený přepis souboru. Vrací, jestli se povedl.
+
+    Když ne, žádost zůstane - jen s novým časem, takže se zkusí zase
+    příští noc, a ne každou minutu.
+    """
+    if db.preskladat():
+        db.set_setting(ODLOZENE_KLIC, "")
+        return True
+    db.set_setting(ODLOZENE_KLIC, db.utcnow())
+    return False
+
+
+def pocet_relaci(user_id: str) -> int:
+    """Kolik přehrávání o divákovi máme. Nula = není co zapomínat."""
+    user_id = (user_id or "").strip()
+    if not user_id:
+        return 0
+    return int(db.query_value(
+        "SELECT COUNT(*) FROM playback WHERE user_id = ?", (user_id,),
+        default=0) or 0)
 
 
 def divaci() -> list[dict[str, Any]]:

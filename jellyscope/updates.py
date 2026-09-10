@@ -51,6 +51,15 @@ NALEZENA_ADRESA = "update_latest_url"
 # kliknutim na ukazatel nove verze - clovek ma videt, co si instaluje,
 # driv nez na to klikne.
 NALEZENE_POZNAMKY = "update_latest_notes"
+# Kolik prekladovych souboru se na `main` zmenilo od commitu, ktery bezi.
+# Preklady z Weblate prichazeji slucovanim, ne vydanim, takze je kontrola
+# podle cisla verze nikdy nezachyti - hlida se to zvlast.
+NOVE_PREKLADY = "update_translations_pending"
+
+# Porovnani commitu na GitHubu: co je na `main` a u nas jeste ne.
+POROVNANI = ("https://api.github.com/repos/SpeeDFireCZE/jellyscope"
+             "/compare/{zaklad}...main")
+SLOZKA_PREKLADU = "jellyscope/translations/"
 
 # Delsi popis uz stejne nikdo necte a do nastaveni patri hodnota, ne
 # clanek. Orizneme.
@@ -129,7 +138,58 @@ async def zkontroluj(vynuceno: bool = False) -> dict[str, Any]:
 
     if je_novejsi(verze, __version__):
         log.info("je k dispozici nova verze %s (bezi %s)", verze, __version__)
+
+    # Preklady zvlast: nemaji cislo verze, kterym by se daly poznat.
+    # Kdyz se to nepovede, zustane, co bylo - lepsi nez zahodit
+    # posledni znamy stav kvuli jednomu vypadku site.
+    pocet = await _novych_prekladu(client_factory=httpx.AsyncClient)
+    if pocet is not None:
+        db.set_setting(NOVE_PREKLADY, str(pocet) if pocet else "")
+        if pocet:
+            log.info("na GitHubu pribylo prekladu: %s souboru", pocet)
     return {**stav(), "status": "ok"}
+
+
+async def _muj_commit() -> str:
+    """Commit, ze ktereho aplikace bezi. Prazdno, kdyz to neni git."""
+    if not (KOREN / ".git").is_dir():
+        return ""
+    vysledek = await _git("rev-parse", "HEAD")
+    if vysledek["kod"] != 0:
+        return ""
+    return vysledek["vystup"].strip()
+
+
+async def _novych_prekladu(client_factory: Any) -> int | None:
+    """Kolik prekladovych souboru se na `main` zmenilo od naseho commitu.
+
+    None znamena "nevim" - neni to git, commit GitHub nezna (treba vlastni
+    vetev) nebo sit nefunguje. To se od nuly lisi: nula rika "nic noveho",
+    None rika "neptej se me".
+
+    Pocitaji se jen soubory ve slozce s preklady. Commit do dokumentace
+    nebo do kodu tu nema co hlasit - na ten je vydani.
+    """
+    if duvod_bez_aktualizace():
+        return None
+    commit = await _muj_commit()
+    if not commit:
+        return None
+    try:
+        async with client_factory(timeout=20) as client:
+            odpoved = await client.get(
+                POROVNANI.format(zaklad=commit),
+                headers={"Accept": "application/vnd.github+json"})
+            if odpoved.status_code == 404:
+                # Nas commit GitHub nezna - vlastni vetev, lokalni prace.
+                return None
+            odpoved.raise_for_status()
+            data = odpoved.json()
+    except Exception as chyba:  # noqa: BLE001 - sit selhava mnoha zpusoby
+        log.warning("porovnani s GitHubem se nepodarilo: %s", chyba)
+        return None
+    return sum(1 for soubor in data.get("files") or []
+               if str(soubor.get("filename") or "").startswith(SLOZKA_PREKLADU))
 
 
 def stav() -> dict[str, Any]:
@@ -144,6 +204,9 @@ def stav() -> dict[str, Any]:
         "adresa": db.get_setting(NALEZENA_ADRESA, "") or STRANKA,
         "kontrolovano": db.get_setting(POSLEDNI_KONTROLA, ""),
         "je_novejsi": bool(nalezena) and je_novejsi(nalezena, __version__),
+        # Preklady, ktere na `main` pribyly od naseho commitu. Ukazuji se
+        # jen kdyz neni k dispozici nove vydani - to je zahrnuje.
+        "nove_preklady": int(db.get_setting(NOVE_PREKLADY, "") or 0),
         "poznamky": poznamky_html(db.get_setting(NALEZENE_POZNAMKY, "")),
         # Aktualizovat z prohlizece jde jen tam, kde je z ceho a kde to
         # dava smysl. Kdyz ne, misto tlacitka se rekne proc - viz
@@ -275,6 +338,9 @@ async def aktualizuj() -> dict[str, Any]:
         return {"status": "error", "message": pip["vystup"][-400:]}
 
     log.info("aktualizace stazena: %s", pull["vystup"].strip().splitlines()[-1:])
+    # Co se prave stahlo, uz neni "nove". Bez tohohle by hlaska o nových
+    # prekladech visela az do dalsi kontroly, i kdyz uz jsou v aplikaci.
+    db.set_setting(NOVE_PREKLADY, "")
     return {"status": "ok", "vystup": pull["vystup"]}
 
 

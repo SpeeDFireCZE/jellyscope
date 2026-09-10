@@ -141,7 +141,8 @@
         <input type="text" id="backup_path" name="backup_path" form="ulohy"
                value="{{ settings.backup_path }}" placeholder="/var/backups/jellyscope">
         <p class="hint">
-            {{ _("Nech prázdné, dokud zálohy nechceš. Složka se v případě potřeby vytvoří.") }}
+            {{ _("Nech prázdné, dokud pravidelné zálohy nechceš. Složka se v případě potřeby vytvoří.") }}
+            {{ _("Před každým mazáním (odklízení historie, zapomenutí diváka) se záloha dělá vždy – bez nastavené složky do") }} <code>data/zalohy</code>.
             {% if backup_free %}{{ _("Volné místo") }}: {{ backup_free | bytes }}.{% endif %}
         </p>
     </div>
@@ -269,6 +270,15 @@
             {% else %}
                 {{ _("Historie je zatím prázdná.") }}
             {% endif %}
+            {% if preskladani_v %}
+                {# Po ručním zapomenutí: smazáno je, ale bajty v souboru
+                   leží, dokud se nepřepíše - a to se dělá v noci, ať to
+                   nezasekne aplikaci. Člověk má vědět, že to ještě není
+                   úplně pryč. #}
+                <br><span class="badge info"><span class="dot"></span>{{ _("soubor databáze se přepíše") }}
+                {{ preskladani_v.strftime("%d.%m. %H:%M") }}</span>
+                {{ _("do té doby po smazaných řádcích zůstává v souboru stopa") }}
+            {% endif %}
         </p>
     </div>
 
@@ -311,6 +321,7 @@
         </div>
         <p class="hint">
             {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie.") }}
+            {{ _("Před smazáním se udělá záloha databáze.") }}
         </p>
     </div>
 
@@ -335,7 +346,7 @@
         <p class="dialog-label">{{ _("Koho se to týká") }}</p>
         <p><strong id="koho-zapomenout"></strong></p>
 
-        <p>{{ _("Smaže se všechno, co je o tom divákovi zaznamenané. Zpátky to nejde – jediná cesta zpět je záloha databáze.") }}</p>
+        <p>{{ _("Smaže se všechno, co je o tom divákovi zaznamenané. Těsně před tím se udělá záloha databáze – to je jediná cesta zpět.") }}</p>
 
         <p class="card-note">
             {{ _("Účet zůstává v Jellyfinu, takže ho příští synchronizace zase uvidí – jen už bez historie.") }}

@@ -107,5 +107,10 @@
     "smazana polozka %s (%s prehravani)": "smazana polozka %s (%s prehravani)",
     "restart aplikace vyzadan uctem %s": "restart aplikace vyzadan uctem %s",
     "databaze preskladana, po smazanych radcich nezustala stopa": "databaze preskladana, po smazanych radcich nezustala stopa",
-    "databazi se nepodarilo preskladat: %s": "databazi se nepodarilo preskladat: %s"
+    "databazi se nepodarilo preskladat: %s": "databazi se nepodarilo preskladat: %s",
+    "na GitHubu pribylo prekladu: %s souboru": "na GitHubu pribylo prekladu: %s souboru",
+    "porovnani s GitHubem se nepodarilo: %s": "porovnani s GitHubem se nepodarilo: %s",
+    "Preskladani databaze odlozeno na nocni cas": "Preskladani databaze odlozeno na nocni cas",
+    "odlozene preskladani databaze: startuji": "odlozene preskladani databaze: startuji",
+    "odklizeni zastaveno: %s": "odklizeni zastaveno: %s"
 }

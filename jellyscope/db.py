@@ -1069,7 +1069,7 @@ TAJNE_CASTI = ("heslo", "password", "token", "webhook", "api_key", "secret")
 
 # Provozni zaznamy, ne nastaveni: prepisuji se samy a v logu by po nich
 # nezustalo nic nez sum.
-NELOGOVANE = ("jellyfin_version", "notify_state_")
+NELOGOVANE = ("jellyfin_version", "notify_state_", "db_compaction_pending")
 
 
 # Konce jmen, u kterych se hodnota vypsat smi. Cisla, prepinace, adresa

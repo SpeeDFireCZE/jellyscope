@@ -165,6 +165,17 @@ async def _run_purge() -> dict[str, Any]:
                                 message="Odklízení je vypnuté, nic se nemazalo.")
         return {"status": "ok", "smazano": 0}
 
+    # Zaloha jen kdyz se bude mazat: kopirovat 5 GB kazdou noc kvuli
+    # nule smazanych radku by byla prace, ktera nikoho nechrani.
+    if odklizeni.prehled()["odejde"]:
+        zaloha = await zaloha_pred_mazanim()
+        if zaloha.get("status") != "ok":
+            zprava = ("Bez zálohy se nemaže: "
+                      + str(zaloha.get("message") or "záloha se nepovedla"))
+            log.warning("odklizeni zastaveno: %s", zaloha.get("message"))
+            scanner.finish_task_log(scan_id, "error", message=zprava)
+            return {"status": "error", "smazano": 0, "message": zprava}
+
     try:
         vysledek = await asyncio.to_thread(odklizeni.smaz_stare)
     except Exception as exc:  # noqa: BLE001 - do logu patri i necekana chyba
@@ -317,7 +328,8 @@ TASKS: dict[str, Task] = {
                 "Smaže přehrávání starší než nastavená hranice. Ve výchozím "
                 "stavu je vypnuté a zapnout se musí ručně - spolu s tím, jak "
                 "dlouhá historie se nechává. Právě běžící přehrávání se "
-                "nemaže, ať sběrač nepřijde o rozdělanou relaci."
+                "nemaže, ať sběrač nepřijde o rozdělanou relaci. Před "
+                "smazáním se udělá záloha databáze; bez ní se nemaže."
             ),
             time_setting="task_purge_time",
             default_time="04:45",
@@ -341,14 +353,47 @@ TASKS: dict[str, Task] = {
 # Zaloha databaze
 # ---------------------------------------------------------------------------
 
-async def backup_database() -> dict[str, Any]:
+# Pripona v nazvu zalohy, ktera vznikla pred mazanim - at se ve slozce
+# pozna od tech nocnich. Zustava mezi "jellyscope-" a ".db", takze ji
+# uklid i obnova berou jako kazdou jinou.
+ZALOHA_PRED_MAZANIM = "pred-mazanim"
+
+
+def slozka_zaloh(duvod: str = "") -> str:
+    """Kam se zálohuje. Prázdno = nikam (a to je u běžné zálohy chyba).
+
+    Záloha před mazáním má náhradní složku vedle databáze: mazání nesmí
+    záviset na tom, jestli si někdo vyplnil cestu - buď se udělá záloha,
+    nebo se nemaže.
+    """
+    target = db.get_setting("backup_path", "").strip()
+    if not target and duvod:
+        target = str(BASE_DIR / "data" / "zalohy")
+    return target
+
+
+async def zaloha_pred_mazanim() -> dict[str, Any]:
+    """Záloha, bez které se nemaže.
+
+    Volá se před nočním odklízením i před ručním zapomenutím diváka.
+    Kdo si nastavil hranici špatně nebo klikl na špatné jméno, má odkud
+    se vrátit. Volající se má podívat na `status`: jiný než "ok" znamená
+    nemazat a říct proč.
+    """
+    return await backup_database(duvod=ZALOHA_PRED_MAZANIM)
+
+
+async def backup_database(duvod: str = "") -> dict[str, Any]:
     """Ulozi kopii databaze do slozky z nastaveni.
 
     Kazda databaze se zalohuje vlastnim nastrojem - SQLite vestavenou
     funkci `backup()`, PostgreSQL programem `pg_dump`. Obojí resi
     konzistentni snimek za behu, coz obycejne kopirovani souboru neumi.
+
+    `duvod` se pripoji k nazvu souboru (zaloha pred mazanim) a dovoli
+    nahradni slozku, kdyz zadna neni nastavena - viz slozka_zaloh().
     """
-    target = db.get_setting("backup_path", "").strip()
+    target = slozka_zaloh(duvod)
     if not target:
         return {"status": "error", "message": "Není nastavená cesta pro zálohy."}
 
@@ -366,11 +411,15 @@ async def backup_database() -> dict[str, Any]:
 
     # Kazda databaze se zalohuje po svem. SQLite ma zalohovani vestavene,
     # PostgreSQL na to ma vlastni nastroj pg_dump.
+    jmeno = f"jellyscope-{stamp}" + (f"-{duvod}" if duvod else "")
+    pripona = ".sql" if database.is_postgres else ".db"
+    # Razitko ma sekundy. Dve zalohy v teze sekunde (dvakrat po sobe
+    # "zapomenout") by se jinak prepsaly - a ta prvni je presne ta, ke
+    # ktere se clovek bude chtit vratit.
+    destination = _volny_nazev(target_dir, jmeno, pripona)
     if database.is_postgres:
-        destination = target_dir / f"jellyscope-{stamp}.sql"
         runner = lambda: _dump_postgres(database, destination)  # noqa: E731
     else:
-        destination = target_dir / f"jellyscope-{stamp}.db"
         runner = lambda: _backup_sqlite(database, destination)  # noqa: E731
 
     try:
@@ -396,6 +445,16 @@ async def backup_database() -> dict[str, Any]:
                 + (f", smazáno starších: {removed}" if removed else ""),
     )
     return {"status": "ok", "file": str(destination), "size": size, "removed": removed}
+
+
+def _volny_nazev(slozka: Path, jmeno: str, pripona: str) -> Path:
+    """První neobsazený název: jmeno, jmeno-2, jmeno-3…"""
+    cil = slozka / f"{jmeno}{pripona}"
+    poradi = 2
+    while cil.exists():
+        cil = slozka / f"{jmeno}-{poradi}{pripona}"
+        poradi += 1
+    return cil
 
 
 def _backup_sqlite(config: Any, destination: Path) -> int:
@@ -1115,6 +1174,37 @@ async def run_now(key: str) -> dict[str, Any]:
     return await task.runner()
 
 
+def kdy_odlozene_preskladani(ted: datetime | None = None) -> datetime | None:
+    """Kdy se udělá odložený přepis databáze (místní čas). None = nic nečeká.
+
+    „V noci" znamená čas úlohy Odklízení historie - i když je vypnutá,
+    čas u ní nastavený je; ve výchozím stavu 04:45. Bere se první takový
+    termín **po** žádosti: kdo klikne v 04:50, nedostane přepis za pět
+    minut, ale zítra.
+    """
+    text = odklizeni.preskladani_ceka()
+    if not text:
+        return None
+    ted = ted or datetime.now()
+    zadost = _mistni_cas(text)
+    if zadost is None:
+        # Necitelna hodnota - lepsi to dodelat hned nez nechat viset navzdy.
+        return ted
+    cil = _dnesni_cil(TASKS["purge"], zadost)
+    if zadost >= cil:
+        cil += timedelta(days=1)
+    return cil
+
+
+async def _dodelej_odlozene_preskladani() -> None:
+    ted = datetime.now()
+    cil = kdy_odlozene_preskladani(ted)
+    if cil is None or ted < cil:
+        return
+    log.info("odlozene preskladani databaze: startuji")
+    await asyncio.to_thread(odklizeni.dokonci_odlozene_preskladani)
+
+
 async def run_scheduler() -> None:
     """Smycka na pozadi. Jednou za minutu zkontroluje, co uz dozralo.
 
@@ -1147,6 +1237,10 @@ async def run_scheduler() -> None:
                         _poznamenej_automaticky_beh(task)
                     result = await task.runner()
                     log.info("uloha %s skoncila: %s", task.key, result.get("status"))
+
+            # Neni to uloha - nema zapinani ani rozvrh, jen dluh po rucnim
+            # zapomenuti divaka, ktery se splaci v noci.
+            await _dodelej_odlozene_preskladani()
 
         except asyncio.CancelledError:
             raise

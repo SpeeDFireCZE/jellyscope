@@ -338,6 +338,7 @@ def settings_page(
             retence_max=odklizeni.MAX_DNU,
             odklid=odklizeni.prehled(),
             divaci=odklizeni.divaci(),
+            preskladani_v=tasks.kdy_odlozene_preskladani(),
         )
     elif section == "api":
         context.update(
@@ -914,14 +915,28 @@ async def settings_updates(request: Request,
     to, jestli je úloha zapnutá: to je akce, ne rozvrh.
     """
     vysledek = await updates.zkontroluj(vynuceno=True)
+    nove_vydani = bool(vysledek.get("je_novejsi"))
+    preklady = int(vysledek.get("nove_preklady") or 0)
+    # Ctyri odpovedi, kazda jina - clovek ma z hlasky poznat, co ho ceka,
+    # driv nez cokoliv otevre. "Neco je nove" bez upresneni by ho poslalo
+    # hledat.
     if vysledek.get("status") == "error":
         _flash(request, "Kontrolu se nepovedlo provést: {duvod}", "error",
                duvod=vysledek.get("message", "?"))
-    elif vysledek.get("je_novejsi"):
+    elif nove_vydani and preklady:
+        _flash(request,
+               "Je k dispozici verze {verze} a k tomu nové překlady "
+               "({n} souborů). Obojí se stáhne najednou.", "success",
+               verze=vysledek.get("nalezena", "?"), n=preklady)
+    elif nove_vydani:
         _flash(request, "Je k dispozici verze {verze}.", "success",
                verze=vysledek.get("nalezena", "?"))
+    elif preklady:
+        _flash(request,
+               "Vydání je aktuální, ale na GitHubu přibyly překlady "
+               "({n} souborů).", "success", n=preklady)
     else:
-        _flash(request, "Máš nejnovější verzi.", "success")
+        _flash(request, "Máš nejnovější verzi i překlady.", "success")
 
     return RedirectResponse("/settings?section=general#verze", status_code=303)
 
@@ -1142,24 +1157,45 @@ def _naplanuj_restart() -> None:
 
 
 @router.post("/settings/historie/zapomen")
-def historie_zapomen(request: Request, user_id: str = Form(""),
-                     account: dict[str, Any] = Depends(require_admin)):
+async def historie_zapomen(request: Request, user_id: str = Form(""),
+                           account: dict[str, Any] = Depends(require_admin)):
     """Smaže historii jednoho diváka. Účet zůstává v Jellyfinu.
 
     Vlastní routa, ne součást formuláře úloh: je to jednorázový zásah do
     dat, ne nastavení, a nemá se stát mimochodem při ukládání něčeho
     jiného.
+
+    Pořadí je pevné: nejdřív záloha, pak mazání. Když se záloha nepovede,
+    nemaže se - kdo klikl na špatné jméno, má odkud se vrátit.
     """
-    vysledek = odklizeni.zapomen_uzivatele(user_id)
-    if not vysledek["smazano"]:
+    user_id = (user_id or "").strip()
+    if not odklizeni.pocet_relaci(user_id):
         _flash(request, "Nebylo co zapomenout - k tomu divákovi nic nemáme.",
                "info")
-    else:
-        # Log uz zapsalo `odklizeni.zapomen_uzivatele()`. Druhy radek
-        # o teze akci by v logu jen prekazel.
+        return RedirectResponse("/settings?section=tasks", status_code=303)
+
+    zaloha = await tasks.zaloha_pred_mazanim()
+    if zaloha.get("status") != "ok":
         _flash(request,
-               "Historie diváka {jmeno} smazána ({n} přehrávání).", "success",
-               jmeno=vysledek["jmeno"] or user_id, n=vysledek["smazano"])
+               "Historie se nesmazala - nejdřív se nepovedla záloha: {duvod}",
+               "error", duvod=zaloha.get("message") or "?")
+        return RedirectResponse("/settings?section=tasks", status_code=303)
+
+    # `hned=False`: smaze se ted, prepis souboru (ktery by na velke
+    # databazi na minutu zastavil vsechno) se necha na noc. Mazani bezi
+    # ve vlakne, at velka historie nezastavi obsluhu ostatnich stranek.
+    vysledek = await asyncio.to_thread(odklizeni.zapomen_uzivatele,
+                                       user_id, hned=False)
+    # Log uz zapsalo `odklizeni.zapomen_uzivatele()`. Druhy radek
+    # o teze akci by v logu jen prekazel.
+    kdy = tasks.kdy_odlozene_preskladani()
+    _flash(request,
+           "Historie diváka {jmeno} smazána ({n} přehrávání). "
+           "Záloha před smazáním: {soubor}. "
+           "Místo v souboru databáze se uvolní {kdy}.", "success",
+           jmeno=vysledek["jmeno"] or user_id, n=vysledek["smazano"],
+           soubor=Path(str(zaloha.get("file") or "")).name or "?",
+           kdy=kdy.strftime("%d.%m. %H:%M") if kdy else "?")
     return RedirectResponse("/settings?section=tasks", status_code=303)
 
 

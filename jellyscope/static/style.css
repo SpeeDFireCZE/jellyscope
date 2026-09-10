@@ -2126,7 +2126,17 @@ details.fallback[open] > summary { margin-bottom: 4px; }
        visel mimo obrazovku - patří k položce samotné. */
     .nav a.active::before { left: 0; border-radius: 3px; }
 
+    /* Patička se schová jen se zavřeným menu. S otevřeným patří pod
+       odkazy - je v ní stav sběrače, odhlášení, verze s aktualizací
+       a licence. Dřív byla na mobilu schovaná pořád, takže se z telefonu
+       nedalo odhlásit ani aktualizovat a verze nebyla nikde vidět. */
     .sidebar-foot { display: none; }
+    .menu-prepinac:checked ~ .sidebar-foot {
+        display: block;
+        width: 100%;
+        padding: 12px 12px 6px;
+        border-top: 1px solid var(--border);
+    }
     .main { padding: 18px 16px 48px; }
 
     /* Dlaždice po jedné na řádek dělaly ze stránky nekonečné rolování.
@@ -2640,6 +2650,15 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     padding: 8px 10px;
     cursor: pointer;
 }
+
+/* Nové překlady: totéž tlačítko, jen klidnější. Nová verze je varovná
+   oranžová, protože se má něco stát; překlady jen říkají, že se dá mít
+   víc jazyků - nic se nerozbilo a nic nehoří. */
+.verze-nova.verze-preklady {
+    background: color-mix(in oklab, var(--series-1) 12%, var(--surface-1));
+    border-color: color-mix(in oklab, var(--series-1) 40%, transparent);
+}
+.verze-nova.verze-preklady .dot { background: var(--series-1); animation: none; }
 
 .verze-nova:hover {
     background: color-mix(in oklab, var(--warning) 26%, var(--surface-1));

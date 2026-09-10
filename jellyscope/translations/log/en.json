@@ -107,5 +107,10 @@
     "smazana polozka %s (%s prehravani)": "item %s deleted (%s plays)",
     "restart aplikace vyzadan uctem %s": "restart requested by account %s",
     "databaze preskladana, po smazanych radcich nezustala stopa": "database rewritten, no trace left of the deleted rows",
-    "databazi se nepodarilo preskladat: %s": "the database could not be rewritten: %s"
+    "databazi se nepodarilo preskladat: %s": "the database could not be rewritten: %s",
+    "na GitHubu pribylo prekladu: %s souboru": "new translations on GitHub: %s files",
+    "porovnani s GitHubem se nepodarilo: %s": "the comparison with GitHub failed: %s",
+    "Preskladani databaze odlozeno na nocni cas": "Database rewrite deferred to the night-time slot",
+    "odlozene preskladani databaze: startuji": "deferred database rewrite: starting",
+    "odklizeni zastaveno: %s": "clean-up stopped: %s"
 }
