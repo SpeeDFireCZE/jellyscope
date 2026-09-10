@@ -161,6 +161,10 @@ for jmeno, data in obsah.items():
         else re.compile(r"\{(\w+)\}")
     spatne = []
     for klic, preklad in data.items():
+        # Prazdny preklad = nepreloženo (tak to zapisuje Weblate); ten se
+        # nenacita a propada na anglictinu, takze neni co porovnavat.
+        if not preklad.strip():
+            continue
         if sorted(vzor.findall(klic)) != sorted(vzor.findall(preklad)):
             spatne.append(f"{klic[:35]!r}")
     check(not spatne, f"{jmeno}: {len(spatne)} nesedících {spatne[:3]}")
@@ -218,6 +222,17 @@ try:
 finally:
     i18n.TRANSLATIONS.pop("zkouska", None)
     i18n.LOG_TRANSLATIONS.pop("zkouska", None)
+
+# Weblate zapisuje nepreložené klíče jako prázdný řetězec. Ten se nesmí
+# načíst jako překlad - stránka by ukázala nic místo angličtiny.
+import tempfile as _tf  # noqa: E402
+
+_slozka = Path(_tf.mkdtemp())
+(_slozka / "xx.json").write_text(
+    '{"Knihovna": "", "Přehled": "   ", "Nastavení": "Ajustes"}', encoding="utf-8")
+nacteno = i18n._nacti(_slozka / "xx.json")
+check(nacteno == {"Nastavení": "Ajustes"},
+      f"prázdný překlad z Weblate se nenačte, jen ten skutečný ({nacteno})")
 
 print()
 # Zkouska prekladu pres verejne rozhrani.

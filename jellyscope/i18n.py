@@ -109,8 +109,14 @@ def _nacti(cesta: Path) -> dict[str, str]:
         return {}
     # Do slovníku patří jen text za text. Cokoliv jiného (číslo, seznam,
     # vnořený objekt) by se dřív nebo později dostalo do šablony.
+    #
+    # Prázdný text není překlad, ale **chybějící překlad**: Weblate
+    # zapisuje nepřeložené klíče jako `"věta": ""`. Kdyby se prázdno
+    # vzalo jako platná hodnota, stránka by místo záložní angličtiny
+    # ukázala nic - a v logu by zůstal prázdný řádek.
     return {klic: hodnota for klic, hodnota in data.items()
-            if isinstance(klic, str) and isinstance(hodnota, str)}
+            if isinstance(klic, str) and isinstance(hodnota, str)
+            and hodnota.strip()}
 
 
 def _nacti_slozku(slozka: Path) -> dict[str, dict[str, str]]:
