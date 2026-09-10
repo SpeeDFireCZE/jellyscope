@@ -188,8 +188,26 @@ async def _novych_prekladu(client_factory: Any) -> int | None:
     except Exception as chyba:  # noqa: BLE001 - sit selhava mnoha zpusoby
         log.warning("porovnani s GitHubem se nepodarilo: %s", chyba)
         return None
-    return sum(1 for soubor in data.get("files") or []
-               if str(soubor.get("filename") or "").startswith(SLOZKA_PREKLADU))
+    return _pocet_jen_prekladu(
+        [str(soubor.get("filename") or "") for soubor in data.get("files") or []])
+
+
+def _pocet_jen_prekladu(soubory: list[str]) -> int:
+    """Kolik z nich je překladů - ale jen když tam nic jiného není.
+
+    Aktualizace je `git pull` celého `main`. Kdyby tam vedle překladů
+    ležel i kód (vydání, které ještě nevyšlo - tag je, CI spadlo, Release
+    nevznikl), hlásili bychom „nové překlady" a kliknutí by stáhlo i ten
+    kód. Takže: cokoliv mimo složku s překlady znamená „počkej na
+    vydání" a překlady se nehlásí vůbec.
+    """
+    preklady = [s for s in soubory if s.startswith(SLOZKA_PREKLADU)]
+    if len(preklady) != len(soubory):
+        if preklady:
+            log.info("na main je vedle prekladu i kod - preklady se nehlasi, "
+                     "prijdou s vydanim")
+        return 0
+    return len(preklady)
 
 
 def stav() -> dict[str, Any]:
@@ -328,6 +346,22 @@ async def aktualizuj() -> dict[str, Any]:
                 "message": "Ve složce aplikace jsou vlastní úpravy. "
                            "Aktualizace by o ně přišla, tak jsem ji nespustil."}
 
+    # Bez vydaneho noveho vydani se smi stahnout jen preklady. Kontrola
+    # to hlidala uz pri porovnani, ale mezi kontrolou (rano) a kliknutim
+    # (vecer) se main mohl pohnout - tak se to overi znovu, na tom, co by
+    # `git pull` doopravdy prinesl.
+    if not stav()["je_novejsi"]:
+        navic = await _co_prijde_mimo_preklady()
+        if navic is None:
+            return {"status": "error",
+                    "message": "Nepodařilo se zjistit, co by aktualizace "
+                               "stáhla - zkus to za chvíli."}
+        if navic:
+            return {"status": "error",
+                    "message": "Na GitHubu je od tvé verze víc než překlady "
+                               "(kód, který ještě nevyšel jako vydání). "
+                               "Aktualizace počká, až vyjde."}
+
     pull = await _git("pull", "--ff-only")
     if pull["kod"] != 0:
         return {"status": "error", "message": pull["vystup"][-400:]}
@@ -342,6 +376,18 @@ async def aktualizuj() -> dict[str, Any]:
     # prekladech visela az do dalsi kontroly, i kdyz uz jsou v aplikaci.
     db.set_setting(NOVE_PREKLADY, "")
     return {"status": "ok", "vystup": pull["vystup"]}
+
+
+async def _co_prijde_mimo_preklady() -> list[str] | None:
+    """Soubory, které by `git pull` změnil a nejsou překlady. None = nevím."""
+    fetch = await _git("fetch", "--quiet")
+    if fetch["kod"] != 0:
+        return None
+    rozdil = await _git("diff", "--name-only", "HEAD", "@{u}")
+    if rozdil["kod"] != 0:
+        return None
+    return [radek.strip() for radek in rozdil["vystup"].splitlines()
+            if radek.strip() and not radek.strip().startswith(SLOZKA_PREKLADU)]
 
 
 async def _git(*argumenty: str) -> dict[str, Any]:

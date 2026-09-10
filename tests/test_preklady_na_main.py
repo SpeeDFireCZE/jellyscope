@@ -7,8 +7,9 @@ zvlášť: co se od mého commitu na `main` změnilo **ve složce s překlady**?
 
 Tři odpovědi a každá znamená něco jiného:
 
-* soubory ve složce s překlady  -> „nové překlady", tlačítko stáhnout,
-* soubory jinde (kód, dokumentace) -> nic; na to je vydání,
+* jen soubory ve složce s překlady -> „nové překlady", tlačítko stáhnout,
+* cokoliv jinde (kód, dokumentace) -> nic; `git pull` by to stáhl taky,
+  a na to je vydání,
 * GitHub commit nezná (404)     -> „nevím", zůstane, co bylo.
 
 GitHub se podstrkuje přes `httpx.MockTransport`, takže test běží bez
@@ -84,11 +85,20 @@ def spocitej(soubory, stav=200):
 
 print("--- co se počítá ---")
 check(spocitej(["jellyscope/translations/es.json",
+                "jellyscope/translations/log/es.json"]) == 2,
+      "dva překladové soubory a nic jiného = 2")
+check(spocitej(["jellyscope/translations/es.json",
                 "jellyscope/translations/log/es.json",
-                "README.md"]) == 2,
-      "dva překladové soubory ze tří změněných = 2")
+                "README.md"]) == 0,
+      "překlady + cokoliv mimo složku = 0 (pull by stáhl i to ostatní)")
 check(spocitej(["jellyscope/web.py", "CHANGELOG.md", "README.md"]) == 0,
       "kód a dokumentace = 0 (na to je vydání)")
+# Tag pushnuty, CI spadlo, Release nevznikl: na main je kod i preklady.
+# `git pull` by stahl obojí, tak se preklady nehlasi - prijdou s vydanim.
+check(spocitej(["jellyscope/translations/cs.json",
+                "jellyscope/translations/en.json",
+                "jellyscope/web.py", "CHANGELOG.md"]) == 0,
+      "překlady vedle kódu = 0 (rozdělané vydání, pull by stáhl i kód)")
 check(spocitej([]) == 0, "nic změněného = 0")
 check(spocitej(None, stav=404) is None,
       "neznámý commit = None (ne nula: „nevím“ není „nic“)")
@@ -112,6 +122,49 @@ check(stav["je_novejsi"] is False, "a bez nového vydání je_novejsi=False")
 db.set_setting(updates.NOVE_PREKLADY, "")
 db.forget_settings()
 check(updates.stav()["nove_preklady"] == 0, "prázdno = 0")
+
+print()
+print("--- aktualizace bez vydání stáhne jen překlady ---")
+# git se podstrci: co by pull prinesl, rika podvrzeny `diff --name-only`.
+VOLANI: list[tuple] = []
+
+
+def podvrzeny_git(*argumenty):
+    async def beh():
+        VOLANI.append(argumenty)
+        if argumenty[0] == "diff" and "--name-only" in argumenty:
+            return {"kod": 0, "vystup": chr(10).join(NA_DALCE)}
+        return {"kod": 0, "vystup": "Already up to date."}
+    return beh()
+
+
+updates._git = podvrzeny_git
+updates._spust = lambda *a: podvrzeny_git("pip")
+db.set_setting(updates.NALEZENA_VERZE, "")          # zadne vydane nove vydani
+db.forget_settings()
+
+NA_DALCE = ["jellyscope/translations/es.json", "jellyscope/translations/log/es.json"]
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "ok", f"jen překlady na dálce -> pull proběhl ({vysledek['status']})")
+check(any(v[0] == "fetch" for v in VOLANI), "před tím se udělal fetch")
+check(any(v[0] == "pull" for v in VOLANI), "a pak pull")
+
+NA_DALCE = ["jellyscope/translations/es.json", "jellyscope/web.py"]
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "error", "překlady + kód bez vydání -> nestáhne se nic")
+check("víc než překlady" in vysledek.get("message", ""), "a hláška říká proč")
+check(not any(v[0] == "pull" for v in VOLANI), "pull se nevolal")
+
+db.set_setting(updates.NALEZENA_VERZE, "99.0.0")     # vydani je venku
+db.forget_settings()
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "ok" and any(v[0] == "pull" for v in VOLANI),
+      "s vydaným vydáním se stáhne všechno (to je vydání)")
+db.set_setting(updates.NALEZENA_VERZE, "")
+db.forget_settings()
 
 print()
 print("--- v šabloně má překlad přednost jen bez vydání ---")

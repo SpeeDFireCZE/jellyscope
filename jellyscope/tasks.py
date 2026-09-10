@@ -583,8 +583,16 @@ def _vyber_pg_dump(config: Any) -> str:
 # Tabulky, ze kterych se sklada zaloha. Poradi neni nahodne: `item_streams`
 # se odkazuje na `items` cizim klicem, takze pri obnove musi byt polozky
 # uz na svem miste.
+# Vsechny tabulky ze schematu, v poradi, ve kterem se daji zalozit
+# i naplnit: `item_streams` odkazuje na `items`, `dashboard_layout` na
+# `accounts`. Obnova je maze v obracenem poradi.
+#
+# Seznam se hlida testem proti schema_postgres.sql - kdyz pribude tabulka
+# a sem se nezapise, zaloha by ji tise vynechala.
 ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_streams",
-                      "accounts", "settings", "scan_log", "playback")
+                      "accounts", "dashboard_layout", "library_snapshot",
+                      "settings", "scan_log", "api_tokens", "login_blocks",
+                      "playback")
 
 
 def _sql_hodnota(hodnota: Any) -> str:
@@ -640,11 +648,25 @@ def _dump_vlastni(destination: Path) -> int:
             "BEGIN;\n\n"
         )
 
-        # Schema bereme z tehoz souboru, ze ktereho se databaze zaklada,
-        # takze se zaloha nemuze rozejit se skutecnym tvarem tabulek.
-        schema = _db.SCHEMA_SQLITE.read_text(encoding="utf-8")
-        soubor.write(dialect.translate(schema, dialect.POSTGRES))
+        # Schema bereme z tehoz souboru, ze ktereho se databaze na
+        # PostgreSQL zaklada, takze se zaloha nemuze rozejit se skutecnym
+        # tvarem tabulek. Doslova, bez prekladu: `dialect.translate()` je
+        # pro dotazy s parametry (otazniky, procenta), ne pro soubor, ktery
+        # ma precist psql.
+        #
+        # Driv se tu bral schema.sql pro SQLite a prekladal - jenze
+        # `AUTOINCREMENT` PostgreSQL nezna, takze se zaloha nedala obnovit
+        # vubec. Zjistilo se to az obnovou na skutecnem serveru.
+        soubor.write(_db.SCHEMA_POSTGRES.read_text(encoding="utf-8"))
         soubor.write("\n\n")
+        # Sloupce, ktere pribyly az migraci (db.MIGRATIONS): schema je
+        # nezna a bez nich by INSERTy nize do ciste databaze nesly.
+        # `IF NOT EXISTS`, aby obnova do bezici databaze nic nerozbila.
+        for tabulka, sloupce in _db.MIGRATIONS.items():
+            for sloupec, typ in sloupce.items():
+                soubor.write(f"ALTER TABLE {tabulka} ADD COLUMN IF NOT EXISTS "
+                             f"{sloupec} {typ};\n")
+        soubor.write("\n")
 
         for tabulka in ZALOHOVANE_TABULKY:
             radky = _db.query_all(f"SELECT * FROM {tabulka}")
@@ -918,7 +940,13 @@ def _obnov_postgres(config: Any, zdroj: Path) -> None:
         with db.connect() as conn:
             for tabulka in reversed(ZALOHOVANE_TABULKY):
                 conn.execute(f"DELETE FROM {tabulka}")
-            conn.execute(obsah)
+            # Primo pres ovladac, ne pres nas obal: ten kazdy dotaz
+            # preklada (otazniky na %s, procenta zdvojuje) a v datech
+            # zalohy je oboji - nazvy titulu s otaznikem, texty s procenty.
+            # Soubor je hotove SQL bez parametru; ma se spustit, jak je.
+            with conn._raw.cursor() as kurzor:
+                kurzor.execute(obsah)
+            conn.commit()
         db.close_pool()
         return
 

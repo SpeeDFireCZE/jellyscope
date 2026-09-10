@@ -112,5 +112,6 @@
     "porovnani s GitHubem se nepodarilo: %s": "the comparison with GitHub failed: %s",
     "Preskladani databaze odlozeno na nocni cas": "Database rewrite deferred to the night-time slot",
     "odlozene preskladani databaze: startuji": "deferred database rewrite: starting",
-    "odklizeni zastaveno: %s": "clean-up stopped: %s"
+    "odklizeni zastaveno: %s": "clean-up stopped: %s",
+    "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "main carries code alongside the translations - not reporting them, they come with the release"
 }

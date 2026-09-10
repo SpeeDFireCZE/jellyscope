@@ -23,10 +23,11 @@ The database migrates itself on start — upgrading is `git pull` and a restart.
   `jellyscope-<time>-pred-mazanim.db`, so it is told apart from the
   nightly ones while pruning and restore treat it like any other.
 
-  On PostgreSQL a backup means `pg_dump`. Where it is missing or too old
-  for the server, the clean-up now stops instead of deleting - that is
-  the point of the safeguard, but it is a change for anyone who had the
-  clean-up on and never set the `pg_dump` path.
+  On PostgreSQL the backup is `pg_dump`, or Jellyscope's own export
+  where `pg_dump` is missing or too old for the server - the same two
+  paths the nightly backup task already had. Verified against a real
+  PostgreSQL 16: backup, deletion, the deferred `VACUUM FULL`, and a
+  restore of both backup kinds into a clean database.
 
 - **Translations merged on GitHub are noticed.** Weblate merges land on
   `main` without a release, so a version check never saw them. The
@@ -54,6 +55,28 @@ The database migrates itself on start — upgrading is `git pull` and a restart.
   rows stays in the file, and the page and the flash say so.
 
 ### Fixed
+
+- **The PostgreSQL fallback backup could not be restored.** The export
+  Jellyscope writes when `pg_dump` is unavailable carried the SQLite
+  schema (`AUTOINCREMENT`), which PostgreSQL rejects - so neither the
+  in-app restore nor `psql -f` could read it - and it covered 8 tables
+  of 12, leaving out library snapshots, API keys, login blocks and the
+  dashboard layout. It now writes the PostgreSQL schema plus every
+  column added by migration, backs up all tables, and the in-app
+  restore runs the file straight through the driver instead of the
+  query wrapper that rewrites question marks and percent signs in the
+  data. Found by restoring on a real server; a test now keeps the table
+  list in step with the schema.
+
+- **"New translations" could have pulled unreleased code.** The update
+  is a `git pull` of `main`. If `main` held a release whose CI had
+  failed - tag pushed, no GitHub Release - the translation check still
+  saw changed translation files and offered them, and the click would
+  have pulled the rejected code with them. Translations are now
+  reported only when `main` differs from the running commit in nothing
+  but the translations folder, and the update itself re-checks after
+  `git fetch` and refuses when more than translations would come down
+  without a published release.
 
 - **A phone could neither log out nor update.** Below 860 px the whole
   sidebar footer was hidden - version, licence, collector status, the

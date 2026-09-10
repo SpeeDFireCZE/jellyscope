@@ -46,6 +46,21 @@ from jellyscope import db, odklizeni, tasks  # noqa: E402
 
 failures = 0
 
+# "Prepis nebyl" se pozna z toho, ze se db.preskladat() nezavolalo - ne
+# z bajtu v souboru. Linuxove distribuce prekladaji SQLite se
+# SECURE_DELETE, ktere smazane radky vynuluje uz pri DELETE, takze by
+# tam stopa chybela i bez prepisu a test by na Linuxu lhal.
+PREPISU = {"pocet": 0}
+_puvodni_preskladat = db.preskladat
+
+
+def _pocitane_preskladat() -> bool:
+    PREPISU["pocet"] += 1
+    return _puvodni_preskladat()
+
+
+db.preskladat = _pocitane_preskladat
+
 
 def check(condition: bool, label: str) -> None:
     global failures
@@ -93,8 +108,7 @@ vysledek = odklizeni.zapomen_uzivatele("u-mirek", hned=False)
 check(vysledek["smazano"] == 200, f"smazalo se 200 řádků ({vysledek['smazano']})")
 check(db.query_value("SELECT COUNT(*) FROM playback WHERE user_id = ?",
                      ("u-mirek",)) == 0, "z databáze jsou pryč hned")
-zbylo = stopy(ZNAMKA)
-check(zbylo > 100, f"ale v souboru stopa zatím zůstala ({zbylo}x) - přepis nebyl")
+check(PREPISU["pocet"] == 0, "ale soubor se nepřepsal (preskladat se nevolalo)")
 check(odklizeni.preskladani_ceka() != "", "a dluh je zapsaný")
 
 print()
@@ -135,7 +149,7 @@ print("--- plánovač splácí až v termínu ---")
 odklizeni.odloz_preskladani()
 asyncio.run(tasks._dodelej_odlozene_preskladani())
 check(odklizeni.preskladani_ceka() != "", "před termínem dluh zůstává")
-check(stopy(ZNAMKA) > 100, "a soubor se nepřepsal")
+check(PREPISU["pocet"] == 0, "a soubor se nepřepsal")
 
 # Zadost "z predevcirem": termin davno minul.
 stara = (datetime.now().astimezone().astimezone(
@@ -144,6 +158,7 @@ db.set_setting(odklizeni.ODLOZENE_KLIC, stara.strftime(db.TIME_FORMAT))
 db.forget_settings()
 asyncio.run(tasks._dodelej_odlozene_preskladani())
 check(odklizeni.preskladani_ceka() == "", "po termínu je dluh splacený")
+check(PREPISU["pocet"] == 1, "přepis proběhl právě jednou")
 po = stopy(ZNAMKA)
 check(po <= 1, f"a stopa v souboru je pryč ({po}, jedna je účet v users)")
 
@@ -167,14 +182,13 @@ check(odklizeni.preskladani_ceka() == "", "a žádný dluh nevznikl")
 
 print()
 print("--- neúspěšný přepis dluh nechá ---")
-puvodni = db.preskladat
 db.preskladat = lambda: False
 try:
     odklizeni.odloz_preskladani()
     check(odklizeni.dokonci_odlozene_preskladani() is False, "hlásí neúspěch")
     check(odklizeni.preskladani_ceka() != "", "a dluh zůstal na další noc")
 finally:
-    db.preskladat = puvodni
+    db.preskladat = _pocitane_preskladat
 odklizeni.dokonci_odlozene_preskladani()
 check(odklizeni.preskladani_ceka() == "", "napodruhé splaceno")
 
@@ -188,6 +202,7 @@ accounts.create("spravce", "dlouheheslo", is_admin=True)
 klient = TestClient(web.app)
 klient.post("/login", data={"username": "spravce", "password": "dlouheheslo"})
 naplnit("u-eva", "EvaNeobvykleJmeno", 20)
+pred_klikem = PREPISU["pocet"]
 odpoved = klient.post("/settings/historie/zapomen", data={"user_id": "u-eva"},
                       follow_redirects=True)
 text = re.sub(r"<[^>]+>", " ", odpoved.text)
@@ -197,7 +212,7 @@ check("Místo v souboru databáze se uvolní" in text,
       "a že místo v souboru se uvolní až později")
 check("soubor databáze se přepíše" in text,
       "karta Odklízení ukazuje čekající přepis")
-check(stopy("EvaNeobvykleJmeno") > 10, "kliknutí soubor nepřepsalo")
+check(PREPISU["pocet"] == pred_klikem, "kliknutí soubor nepřepsalo")
 
 print()
 print("HOTOVO - chyb:", failures)

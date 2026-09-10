@@ -112,5 +112,6 @@
     "porovnani s GitHubem se nepodarilo: %s": "porovnani s GitHubem se nepodarilo: %s",
     "Preskladani databaze odlozeno na nocni cas": "Preskladani databaze odlozeno na nocni cas",
     "odlozene preskladani databaze: startuji": "odlozene preskladani databaze: startuji",
-    "odklizeni zastaveno: %s": "odklizeni zastaveno: %s"
+    "odklizeni zastaveno: %s": "odklizeni zastaveno: %s",
+    "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim"
 }

@@ -1203,5 +1203,7 @@
     "Nech prázdné, dokud pravidelné zálohy nechceš. Složka se v případě potřeby vytvoří.": "Nech prázdné, dokud pravidelné zálohy nechceš. Složka se v případě potřeby vytvoří.",
     "Před každým mazáním (odklízení historie, zapomenutí diváka) se záloha dělá vždy – bez nastavené složky do": "Před každým mazáním (odklízení historie, zapomenutí diváka) se záloha dělá vždy – bez nastavené složky do",
     "Smaže se všechno, co je o tom divákovi zaznamenané. Těsně před tím se udělá záloha databáze – to je jediná cesta zpět.": "Smaže se všechno, co je o tom divákovi zaznamenané. Těsně před tím se udělá záloha databáze – to je jediná cesta zpět.",
-    "Před smazáním se udělá záloha databáze.": "Před smazáním se udělá záloha databáze."
+    "Před smazáním se udělá záloha databáze.": "Před smazáním se udělá záloha databáze.",
+    "Nepodařilo se zjistit, co by aktualizace stáhla - zkus to za chvíli.": "Nepodařilo se zjistit, co by aktualizace stáhla - zkus to za chvíli.",
+    "Na GitHubu je od tvé verze víc než překlady (kód, který ještě nevyšel jako vydání). Aktualizace počká, až vyjde.": "Na GitHubu je od tvé verze víc než překlady (kód, který ještě nevyšel jako vydání). Aktualizace počká, až vyjde."
 }
