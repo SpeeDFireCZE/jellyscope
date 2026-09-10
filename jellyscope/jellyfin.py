@@ -338,6 +338,13 @@ class JellyfinClient:
             "EnableTotalRecordCount": "true",
             "SortBy": sort_by,
             "SortOrder": sort_order,
+            # Jellyfin 12 filmy, ktere jsou v kolekci, **schova za tu
+            # kolekci**: misto tri filmu posle jednu polozku typu BoxSet -
+            # a to i pres filtr IncludeItemTypes. Filmy z kolekci pak
+            # v knihovne chybely a misto nich v ni stala kolekce. Tohle
+            # rika "chci polozky, ne jejich obaly"; na 10.x je to bez
+            # ucinku. Overeno na 12.0.0.
+            "CollapseBoxSetItems": "false",
         }
         if parent_id:
             params["ParentId"] = parent_id
@@ -364,6 +371,7 @@ class JellyfinClient:
                 "Ids": ",".join(davka),
                 "Fields": ITEM_FIELDS,
                 "Recursive": "true",
+                "CollapseBoxSetItems": "false",
             }) or {}
             found.extend(data.get("Items") or [])
         return found

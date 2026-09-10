@@ -39,7 +39,6 @@
     "dohledani v Jellyfinu se nepovedlo: %s": "dohledani v Jellyfinu se nepovedlo: %s",
     "serial %s: navazano %s dilu, u %s zbylo jen jmeno serialu": "serial %s: navazano %s dilu, u %s zbylo jen jmeno serialu",
     "hlasku %r se nepodarilo doplnit hodnotami %r": "hlasku %r se nepodarilo doplnit hodnotami %r",
-    "uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)": "uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)",
     "z knihovny odstraneno %s polozek, ktere do ni nepatri": "z knihovny odstraneno %s polozek, ktere do ni nepatri",
     "dohledani podle tmdb se nepovedlo: %s": "dohledani podle tmdb se nepovedlo: %s",
     "rucne prirazeno: %s -> %s (%s radku)": "rucne prirazeno: %s -> %s (%s radku)",
@@ -113,5 +112,7 @@
     "Preskladani databaze odlozeno na nocni cas": "Preskladani databaze odlozeno na nocni cas",
     "odlozene preskladani databaze: startuji": "odlozene preskladani databaze: startuji",
     "odklizeni zastaveno: %s": "odklizeni zastaveno: %s",
-    "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim"
+    "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim",
+    "knihovna %s: Jellyfin poslal %s polozek jineho druhu nez film nebo dil (kolekce?) - preskoceny": "knihovna %s: Jellyfin poslal %s polozek jineho druhu nez film nebo dil (kolekce?) - preskoceny",
+    "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)"
 }

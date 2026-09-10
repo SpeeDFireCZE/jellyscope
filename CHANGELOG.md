@@ -9,6 +9,27 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.8
+
+### Fixed
+
+- **On Jellyfin 12, movies in a collection went missing and the
+  collection took their place.** Jellyfin 12 answers the library query
+  (`Recursive` with `IncludeItemTypes=Movie,Episode`) by hiding movies
+  behind their collection: instead of three films it returns one item of
+  type `BoxSet` - despite the type filter. Jellyscope stored that item,
+  so the movie library showed a collection and the films in it, with
+  their watch history, were gone. Reproduced on Jellyfin 12.0.0 and
+  fixed on three levels: every item query now sends
+  `CollapseBoxSetItems=false` (verified: five films, no collection; no
+  effect on 10.x); the sync never writes a container - collection,
+  series, season, folder, playlist - whatever the server sends; and the
+  clean-up of such rows runs after every full sync, so collections that
+  already got into the database disappear on the first sync after
+  updating, no restart needed. A freshly added file that Jellyfin still
+  reports as `Video` is stored as before and corrects itself once
+  Jellyfin sorts it.
+
 ## 1.6.7
 
 ### Added

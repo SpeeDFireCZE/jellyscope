@@ -39,7 +39,6 @@
     "dohledani v Jellyfinu se nepovedlo: %s": "the Jellyfin lookup failed: %s",
     "serial %s: navazano %s dilu, u %s zbylo jen jmeno serialu": "series %s: %s episodes linked, %s left with just the series name",
     "hlasku %r se nepodarilo doplnit hodnotami %r": "could not fill message %r with values %r",
-    "uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)": "removed %s items that do not belong in the library (series and seasons)",
     "z knihovny odstraneno %s polozek, ktere do ni nepatri": "removed %s items from the library that do not belong there",
     "dohledani podle tmdb se nepovedlo: %s": "lookup by tmdb failed: %s",
     "rucne prirazeno: %s -> %s (%s radku)": "manually assigned: %s -> %s (%s rows)",
@@ -113,5 +112,7 @@
     "Preskladani databaze odlozeno na nocni cas": "Database rewrite deferred to the night-time slot",
     "odlozene preskladani databaze: startuji": "deferred database rewrite: starting",
     "odklizeni zastaveno: %s": "clean-up stopped: %s",
-    "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "main carries code alongside the translations - not reporting them, they come with the release"
+    "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "main carries code alongside the translations - not reporting them, they come with the release",
+    "knihovna %s: Jellyfin poslal %s polozek jineho druhu nez film nebo dil (kolekce?) - preskoceny": "library %s: Jellyfin sent %s items that are neither movies nor episodes (collections?) - skipped",
+    "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "removed %s items that do not belong in the library (collections, series, seasons)"
 }

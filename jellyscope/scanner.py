@@ -43,6 +43,21 @@ log = logging.getLogger("jellyscope.scanner")
 # "archivovany" serial, ktery nikdo nesmazal a ktery v Jellyfinu je.
 SPRAVOVANE_TYPY = ("Movie", "Episode")
 
+# Obaly, ktere Jellyfin umi poslat misto polozek v nich - kolekce (od
+# dvanactky i pres filtr typu, viz CollapseBoxSetItems v jellyfin.py),
+# serial, rada, slozka, playlist. Ty se nezapisuji nikdy. Schvalne
+# **ne** obracene ("jen Movie a Episode"): cerstve pridany soubor posila
+# Jellyfin chvili jako `Video`, nez ho zaradi, a ten se ulozit MA - pri
+# dalsim behu se sam opravi na film nebo dil (viz sync_recent).
+OBALY = ("BoxSet", "Series", "Season", "Folder", "CollectionFolder",
+         "Playlist", "UserView")
+
+
+def je_obal(item: dict) -> bool:
+    """Je to kontejner, ne titul? Podle typu, nebo podle IsFolder."""
+    return (str(item.get("Type") or "") in OBALY
+            or bool(item.get("IsFolder")))
+
 # Zamek, ktery zajisti, ze nebezi dva scany naraz. Bez nej by dve soucasne
 # spustene analyzy zbytecne zatezovaly disk a prepisovaly si vysledky.
 _scan_lock = asyncio.Lock()
@@ -585,6 +600,10 @@ async def sync_library() -> dict[str, Any]:
                 # synchronizace radeji nezmeni nic, nez aby lhala.
                 if not zastaveno:
                     _mark_missing(started_at)
+                    # Polozky druhu, ktery sem nepatri (kolekce z Jellyfinu
+                    # 12 pred opravou), at zmizi hned - ne az po restartu,
+                    # kdy bezi uklid_fantomu() ze startu.
+                    await asyncio.to_thread(uklid_fantomu)
 
                 # Kolik zbyva mista - podle SAMOTNEHO Jellyfinu. Ptame se
                 # tady, dokud je klient otevreny: snimek se pise az potom
@@ -1096,6 +1115,9 @@ async def _uloz_nove_polozky(polozky: list[dict[str, Any]], library_id: Any,
     smysl: prave tim se opravi zaznam, ktery Jellyfin pri prvnim pruchodu
     jeste nemel zaradeny do knihovny.
     """
+    # Stejna pojistka jako v plne synchronizaci: co neni film ani dil
+    # (kolekce z Jellyfinu 12), se nezapisuje.
+    polozky = [i for i in polozky if not je_obal(i)]
     if not polozky:
         return []
 
@@ -1155,7 +1177,16 @@ async def _sync_items_of_library(
     # Dvojice (tmdb_id, nove ItemId) pro slucovani prekodovanych souboru.
     seen_tmdb: list[tuple[tuple[str, int, int], str]] = []
 
+    preskoceno = 0
     async for item in client.iter_items(parent_id=library["id"]):
+        # Pojistka na druh polozky. Server se pta jen na filmy a dily,
+        # jenze Jellyfin 12 umi poslat kolekci misto filmu v ni (viz
+        # CollapseBoxSetItems v jellyfin.py). Co neni film ani dil, se
+        # nezapisuje - jinak by to `_mark_missing()` kazdou noc posilalo
+        # do archivu a v knihovne by strasila "archivovana" kolekce.
+        if je_obal(item):
+            preskoceno += 1
+            continue
         tech = extract_tech_from_item(item) if use_jellyfin_tech else {}
         if use_jellyfin_tech:
             streams = extract_streams(item)
@@ -1197,6 +1228,10 @@ async def _sync_items_of_library(
         )
         _add_progress(len(batch))
 
+    if preskoceno:
+        log.warning("knihovna %s: Jellyfin poslal %s polozek jineho druhu "
+                    "nez film nebo dil (kolekce?) - preskoceny",
+                    library.get("name"), preskoceno)
     return count
 
 
@@ -1757,11 +1792,15 @@ def uklid_fantomu() -> int:
     Vola se pri startu. Je to levny dotaz na indexovany sloupec a bezna
     databaze nema co uklizet, takze se nic nezdrzi.
     """
-    otazniky = ",".join("?" for _ in SPRAVOVANE_TYPY)
+    # Maze se podle seznamu obalu, ne "vsechno mimo film a dil": cerstve
+    # pridany soubor je chvili `Video` a ten tu ma zustat, dokud ho
+    # Jellyfin nezaradi (viz OBALY). Od 1.6.8 se tenhle uklid vola i po
+    # kazde plne synchronizaci, tak nesmi mazat, co ona prave ulozila.
+    otazniky = ",".join("?" for _ in OBALY)
     with db.connect() as conn:
         fantomy = [str(r["id"]) for r in conn.execute(
-            f"SELECT id FROM items WHERE type NOT IN ({otazniky})",
-            tuple(SPRAVOVANE_TYPY)).fetchall()]
+            f"SELECT id FROM items WHERE type IN ({otazniky})",
+            tuple(OBALY)).fetchall()]
         if not fantomy:
             return 0
         for zacatek in range(0, len(fantomy), 200):
@@ -1771,7 +1810,7 @@ def uklid_fantomu() -> int:
                 f"DELETE FROM item_streams WHERE item_id IN ({znaky})", tuple(davka))
             conn.execute(f"DELETE FROM items WHERE id IN ({znaky})", tuple(davka))
 
-    log.info("uklizeno %s polozek, ktere do knihovny nepatri (serialy a rady)",
+    log.info("uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)",
              len(fantomy))
     return len(fantomy)
 
