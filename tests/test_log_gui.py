@@ -159,7 +159,7 @@ with TestClient(app) as client:
     client.post("/logout")
     client.post("/login", data={"username": "ctenar", "password": "ctenarheslo1"})
     odpoved = client.get("/settings?section=log")
-    check(odpoved.status_code == 200, "stránka se čtenáři neuzavře celá")
+    check(odpoved.status_code == 403, "čtenář se do Nastavení nedostane")
     check("Log aplikace" not in odpoved.text,
           "ale sekci Log nevidí ani přímou adresou")
     check("chyba pri synchronizaci" not in odpoved.text, "a žádné řádky logu")

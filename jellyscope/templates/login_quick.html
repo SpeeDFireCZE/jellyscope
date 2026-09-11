@@ -1,0 +1,76 @@
+{%- from "_macros.html" import hlava -%}
+<!doctype html>
+{# Přihlášení kódem (Quick Connect).
+
+   Na stránce je jen kód. Tajemství, kterým se přihlášení dokončí, leží
+   v relaci na serveru - do prohlížeče se nedostane, takže se nedá ukrást
+   ani z otevřené stránky. Kód sám o sobě nikoho nikam nepustí: dokud ho
+   člověk nepotvrdí ve svém Jellyfinu, je to šest číslic.
+
+   Stránka se sama ptá, jestli už potvrzení přišlo. Když skript
+   neproběhne, je tu tlačítko „Zkusit hned" - jen se musí kliknout. #}
+<html lang="{{ ui_language | default('cs') }}">
+<head>
+    {{ hlava(_("Přihlášení kódem")) }}
+</head>
+<body>
+<div class="login-page">
+    <div class="login-box">
+        <div class="brand" style="margin-bottom:20px; padding:0">
+            <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
+            <span>Jellyscope</span>
+        </div>
+
+        <h2 style="margin:0 0 6px; font-size:17px">{{ _("Přihlášení kódem") }}</h2>
+        <p class="hint" style="margin-top:0">
+            {{ _("Otevři si Jellyfin, kde už jsi přihlášený, a v nastavení účtu zadej tenhle kód – v Jellyfinu se tomu říká Quick Connect.") }}
+        </p>
+
+        <div class="quick-kod">{{ kod }}</div>
+
+        <p class="hint" id="quick-stav" style="text-align:center">
+            {{ _("Čekám na potvrzení…") }}
+        </p>
+
+        <div class="btn-row" style="margin-top:12px">
+            <a class="btn" href="/login">{{ _("Zpátky na přihlášení") }}</a>
+            <button class="btn primary" type="button" id="quick-ted">
+                {{ _("Zkusit hned") }}
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var stav = document.getElementById("quick-stav");
+    var bezi = true;
+
+    function zeptej_se() {
+        if (!bezi) { return; }
+        fetch("/login/quick/stav", { credentials: "same-origin",
+                                     cache: "no-store" })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (!data) { return; }
+                if (data.hotovo) {
+                    bezi = false;
+                    window.location.href = "/";
+                    return;
+                }
+                if (data.konec) {
+                    bezi = false;
+                    stav.textContent = "{{ _("Kód už neplatí. Zkus to znovu.") }}";
+                }
+            })
+            .catch(function () { /* vypadek site neni duvod prestat */ });
+    }
+
+    document.getElementById("quick-ted").addEventListener("click", zeptej_se);
+    /* Po vterinach, ne po desetinach: potvrzuje to clovek v jine
+       aplikaci, takze rychlejsi ptani jen zatezuje Jellyfin. */
+    setInterval(zeptej_se, 2000);
+})();
+</script>
+</body>
+</html>

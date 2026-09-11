@@ -361,6 +361,49 @@ Two roles:
 Passwords are stored as a hash (PBKDF2-SHA256, 600 000 iterations, salted),
 never in readable form.
 
+#### Signing in with a Jellyfin account
+
+Anybody with an account in Jellyfin can be let into Jellyscope with the
+same username and password — switch it on in **Settings → Jellyfin →
+Allow Jellyfin sign-in**. It is off until you do; opening the
+household's statistics is a decision, not something an update makes for
+you.
+
+The password is never stored here, only passed to Jellyfin to check, and
+the access token that check produces is revoked straight away. Whoever
+is an administrator in Jellyfin is an administrator here too, and rights
+removed there stop working here at the next sign-in.
+
+Beside the switch is a tree of what a viewer sees. Their own statistics
+and their own history are always visible — that is what they signed in
+for — and everything else is a tick box: insights and title charts, the
+library, the server overview, period comparison, now playing, languages,
+the viewer list, the network page. One server is a family's and hides
+nothing; another is for people who should not see each other. Local
+reader accounts have the same tree, each set on its own.
+
+**Anonymising** goes with it: on the pages you do open, somebody else's
+name reads `Viewer 3` and an IP address a dash. The number is stable, so
+rows can still be compared — it just does not lead to a person. Nobody
+is ever anonymised to themselves.
+
+What a viewer cannot open answers with a short page saying why, and the
+rule is an allow-list: a page nobody thought about is closed, not open.
+
+#### Signing in with a code (Quick Connect)
+
+Under the Jellyfin button is a second one: **Sign in with a code**. It
+turns the password around — Jellyscope shows a six-digit code, you
+approve it in a Jellyfin you are already signed in to, and no password
+is typed here at all. It needs Quick Connect switched on in the Jellyfin
+Dashboard; when it is off, the page says so instead of failing quietly.
+
+The code alone lets nobody in. What finishes the sign-in is a secret
+that stays in the session on the server and never reaches the browser,
+so a code read over somebody's shoulder is worth nothing without the
+approval. The token Jellyfin issues at the end is revoked straight away,
+same as with the password.
+
 ---
 
 ## Try it without Jellyfin
@@ -626,6 +669,7 @@ jellyscope/
     ├── scanner.py          library sync + file analysis
     ├── tasks.py            scheduler and backups
     ├── odklizeni.py        clearing out the history, forgetting a viewer
+    ├── pristup.py          what a viewer signed in from Jellyfin sees
     ├── notifikace.py       SMTP, Discord, Telegram
     ├── updates.py          asking GitHub about a newer release
     ├── importers.py        history import and its repairs

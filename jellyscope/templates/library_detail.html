@@ -211,6 +211,8 @@
     </div>
 </div>
 
+{# Poslední přehrávání jsou cizí jména - jen pro správce. #}
+{% if not muj_divak %}
 <div class="card">
     <div class="card-head"><h2>{{ _("Poslední přehrávání") }}</h2></div>
     <div class="table-wrap">
@@ -225,7 +227,10 @@
             {% for row in activity.recent %}
             <tr>
                 <td class="nowrap muted">{{ row.started_at | datetime }}</td>
-                <td><a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a></td>
+                <td>
+                    {%- if muj_divak %}{{ row.user_name or '?' }}
+                    {%- else %}<a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>{% endif %}
+                </td>
                 <td class="truncate">
                     <a href="/item/{{ row.item_id }}">
                         {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
@@ -243,6 +248,7 @@
         <p class="chart-empty">{{ _("Z této knihovny se zatím nic nepřehrávalo.") }}</p>
     {% endif %}
 </div>
+{% endif %}
 
 {% endif %}
 {% endblock %}

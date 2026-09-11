@@ -117,5 +117,15 @@
     "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "removed %s items that do not belong in the library (collections, series, seasons)",
     "kos: doplnen sloupec %s": "bin: column %s added",
     "Vraceno z kose: %s, %s prehravani": "Brought back from the bin: %s, %s playbacks",
-    "Kos vysypan: %s prehravani je nadobro pryc": "Bin emptied: %s playbacks are gone for good"
+    "Kos vysypan: %s prehravani je nadobro pryc": "Bin emptied: %s playbacks are gone for good",
+    "prihlaseni pres Jellyfin se nepodarilo overit: %s": "could not verify the Jellyfin sign-in: %s",
+    "ucet %s je v Jellyfinu vypnuty - dovnitr nesmi": "account %s is disabled in Jellyfin - not letting it in",
+    "ucet %s: prava prevzata z Jellyfinu (%s)": "account %s: rights taken from Jellyfin (%s)",
+    "zalozen ucet z Jellyfinu: %s (%s)": "account created from Jellyfin: %s (%s)",
+    "prihlasovaci token se nepodarilo zrusit: %s": "could not revoke the sign-in token: %s",
+    "po novych titulech: %s nahrazenych souboru slo do archivu": "after the new titles: %s replaced files went to the archive",
+    "nahrazeny soubor: historie %s -> %s (%s zaznamu)": "replaced file: history %s -> %s (%s rows)",
+    "quick connect se nepodarilo zahajit: %s": "could not start quick connect: %s",
+    "quick connect: dotaz na stav selhal: %s": "quick connect: the status request failed: %s",
+    "prihlaseni pres Quick Connect: %s": "signed in through Quick Connect: %s"
 }

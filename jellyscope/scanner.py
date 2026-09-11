@@ -26,6 +26,7 @@ from . import db, formatting, languages, probe, stats
 from .i18n import translate as _t
 from .config import load_config
 from .jellyfin import (JellyfinClient, JellyfinError, extract_streams,
+                       extract_verze,
                        extract_tech_from_item, video_range_of)
 
 log = logging.getLogger("jellyscope.scanner")
@@ -501,6 +502,7 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
         scan_id = start_task_log("recent")
         videno = 0
         nova_id: list[str] = []
+        srovnani: dict[str, Any] = {}
 
         try:
             async with JellyfinClient(*db.jellyfin_connection()) as client:
@@ -514,6 +516,16 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
                     videno += len(polozky)
                     nova_id.extend(await _uloz_nove_polozky(
                         polozky, knihovna["id"], use_jellyfin_tech, client))
+
+                # Nove tituly casto nejsou nove tituly, ale nove SOUBORY
+                # tehoz titulu. Srovnat se to musi hned - jinak v
+                # knihovne stoji tentyz film dvakrat az do plne
+                # synchronizace, a to je pres noc.
+                #
+                # Uvnitr `async with`: potrebuje se Jellyfinu zeptat,
+                # jestli stary ItemId jeste zna.
+                if nova_id:
+                    srovnani = await srovnej_po_novych(client, nova_id)
 
         except JellyfinError as exc:
             _clear_progress()
@@ -532,11 +544,20 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
         elif pridano:
             zprava = _t("{n} nových titulů (zkontrolováno {celkem})").format(
                 n=pridano, celkem=videno)
+            # Kdyz slo o vymenene soubory, ma to byt videt v logu ulohy -
+            # jinak je "3 nove tituly" matouci: nove nejsou, jen jinak
+            # velke.
+            if srovnani.get("archivovano"):
+                zprava += ". " + _t(
+                    "{n} z nich nahradilo starší soubor – ty jsou v archivu"
+                    " a historie je připojená.").format(
+                        n=srovnani["archivovano"])
         else:
             # Nula je uplne bezny vysledek - uloha bezi kazdych par minut.
             # Musi se tak i tvarit, jinak clovek marne hleda, co pribylo.
             zprava = _t("Nic nového (zkontrolováno {celkem})").format(celkem=videno)
         finish_task_log(scan_id, "done", total=videno, ok=pridano, message=zprava)
+
 
     # Az za zamkem: technicka analyza si ho bere sama.
     #
@@ -1139,6 +1160,7 @@ async def _uloz_nove_polozky(polozky: list[dict[str, Any]], library_id: Any,
 
     radky: list[tuple[Any, ...]] = []
     stopy: list[tuple[str, list[dict[str, Any]]]] = []
+    verze: list[tuple[str, list[dict[str, Any]]]] = []
     tmdb_dvojice: list[tuple[tuple[str, int, int], str]] = []
 
     for item in polozky:
@@ -1147,6 +1169,7 @@ async def _uloz_nove_polozky(polozky: list[dict[str, Any]], library_id: Any,
             streams = extract_streams(item)
             if streams:
                 stopy.append((item.get("Id"), streams))
+        verze.append((str(item.get("Id") or ""), extract_verze(item)))
 
         identita = identita_polozky(item)
         if identita and item.get("Id"):
@@ -1172,6 +1195,8 @@ async def _uloz_nove_polozky(polozky: list[dict[str, Any]], library_id: Any,
 
     await asyncio.to_thread(_write_batch, radky, stopy, tmdb_dvojice,
                             not use_jellyfin_tech, None, chranena)
+    # Az po polozkach: verze se na ne odkazuji cizim klicem.
+    await asyncio.to_thread(zapis_verze, verze)
     return nova_id
 
 
@@ -1185,6 +1210,7 @@ async def _sync_items_of_library(
     count = 0
     batch: list[tuple[Any, ...]] = []
     stream_batch: list[tuple[str, list[dict[str, Any]]]] = []
+    verze_batch: list[tuple[str, list[dict[str, Any]]]] = []
     # Dvojice (tmdb_id, nove ItemId) pro slucovani prekodovanych souboru.
     seen_tmdb: list[tuple[tuple[str, int, int], str]] = []
 
@@ -1203,6 +1229,10 @@ async def _sync_items_of_library(
             streams = extract_streams(item)
             if streams:
                 stream_batch.append((item.get("Id"), streams))
+        # Verze se sbiraji vzdycky, i pri zdroji "ffprobe": jsou to
+        # soubory, ne zmerene udaje - a to, ze titul lezi na disku
+        # dvakrat, rekne jen Jellyfin.
+        verze_batch.append((str(item.get("Id") or ""), extract_verze(item)))
 
         identita = identita_polozky(item)
         if identita and item.get("Id"):
@@ -1220,9 +1250,11 @@ async def _sync_items_of_library(
                 _write_batch, list(batch), list(stream_batch),
                 list(seen_tmdb), not use_jellyfin_tech, now
             )
+            await asyncio.to_thread(zapis_verze, list(verze_batch))
             _add_progress(len(batch))
             batch.clear()
             stream_batch.clear()
+            verze_batch.clear()
             seen_tmdb.clear()
 
         # Zastavujeme az tady - rozdelana polozka je hotova a zapsana.
@@ -1237,6 +1269,7 @@ async def _sync_items_of_library(
             _write_batch, list(batch), list(stream_batch),
             list(seen_tmdb), not use_jellyfin_tech, now
         )
+        await asyncio.to_thread(zapis_verze, list(verze_batch))
         _add_progress(len(batch))
 
     if preskoceno:
@@ -1343,7 +1376,11 @@ def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
                 "SELECT 1 FROM items WHERE id = ?", (new_id,)
             ).fetchone()
 
+            # Stopy i verze popisuji STARY soubor - ten uz na disku neni,
+            # jinak by se neslucovalo. Musi pryc driv, nez se polozka
+            # smaze nebo prejmenuje: odkazuji se na ni cizim klicem.
             conn.execute("DELETE FROM item_streams WHERE item_id = ?", (old_id,))
+            conn.execute("DELETE FROM item_versions WHERE item_id = ?", (old_id,))
             conn.execute(
                 "UPDATE playback SET item_id = ? WHERE item_id = ?", (new_id, old_id)
             )
@@ -1385,6 +1422,245 @@ def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
             merged += 1
 
     return merged
+
+
+def dvojnici_novych(nova_id: list[str]) -> dict[str, list[str]]:
+    """Ke každé novince starší položky, které vypadají jako tentýž titul.
+
+    **Rozhoduje TMDB id**, protože přežije překódování, přejmenování
+    souboru i to, že si Jellyfin doplní jiný název. Teprve když ho titul
+    nemá - a to je přesně ten případ, který tudy propadával - hledá se
+    podle názvu a roku, u dílu podle seriálu a čísel řady a dílu.
+
+    U epizody **tmdb id samo nestačí**: Jellyfin u dílu hlásí id celého
+    SERIÁLU, takže by se podle něj slily všechny díly do jednoho. Proto
+    se k němu vždycky přidávají čísla řady a dílu.
+
+    Vrací {nové id: [starší id]}. Že je to opravdu náhrada a ne druhá
+    kopie, se rozhodne až podle Jellyfinu - viz `srovnej_po_novych`.
+    """
+    if not nova_id:
+        return {}
+
+    nalezeno: dict[str, list[str]] = {}
+    with db.connect() as conn:
+        for id_novy in nova_id:
+            radek = conn.execute(
+                "SELECT type, name, series_id, index_number,"
+                " parent_index_number, production_year, tmdb_id"
+                " FROM items WHERE id = ?", (id_novy,)).fetchone()
+            if radek is None:
+                continue
+            novy = dict(radek)
+
+            kandidati = _podle_tmdb(conn, id_novy, novy)
+            if not kandidati:
+                kandidati = _podle_nazvu(conn, id_novy, novy)
+            if kandidati:
+                nalezeno[id_novy] = kandidati
+    return nalezeno
+
+
+def _podle_tmdb(conn: Any, id_novy: str,
+                novy: dict[str, Any]) -> list[str]:
+    """Dvojníci podle TMDB id. Prázdný seznam = nemá ho, nebo nikdo nesedí."""
+    tmdb = str(novy.get("tmdb_id") or "").strip()
+    if not tmdb:
+        return []
+
+    podminky = ["tmdb_id = ?", "type = ?"]
+    parametry: list[Any] = [id_novy, tmdb, novy.get("type")]
+    if novy.get("type") == "Episode":
+        # Serial ma tmdb id spolecne pro vsechny dily - bez cisel by se
+        # slila cela rada do jednoho.
+        _rovno_nebo_nic(podminky, parametry, "index_number",
+                        novy.get("index_number"))
+        _rovno_nebo_nic(podminky, parametry, "parent_index_number",
+                        novy.get("parent_index_number"))
+        if novy.get("index_number") is None:
+            # Dil bez cisla nejde podle tmdb rozlisit od ostatnich -
+            # radsi nic nez slit cely serial.
+            return []
+    return _vyber(conn, podminky, parametry)
+
+
+def _podle_nazvu(conn: Any, id_novy: str,
+                 novy: dict[str, Any]) -> list[str]:
+    """Záloha pro tituly bez TMDB id: název a rok, u dílu seriál a čísla."""
+    if novy.get("type") == "Episode" and novy.get("series_id"):
+        podminky = ["type = 'Episode'", "series_id = ?"]
+        parametry: list[Any] = [id_novy, novy["series_id"]]
+        _rovno_nebo_nic(podminky, parametry, "index_number",
+                        novy.get("index_number"))
+        _rovno_nebo_nic(podminky, parametry, "parent_index_number",
+                        novy.get("parent_index_number"))
+    else:
+        podminky = ["type = ?", "name = ?"]
+        parametry = [id_novy, novy.get("type"), novy.get("name")]
+        _rovno_nebo_nic(podminky, parametry, "production_year",
+                        novy.get("production_year"))
+    return _vyber(conn, podminky, parametry)
+
+
+def _vyber(conn: Any, podminky: list[str], parametry: list[Any]) -> list[str]:
+    radky = conn.execute(
+        "SELECT id FROM items WHERE id <> ? AND is_missing = 0 AND "
+        + " AND ".join(podminky), tuple(parametry)).fetchall()
+    return [str(dict(r)["id"]) for r in radky]
+
+
+def prenes_historii(dvojice: dict[str, str]) -> int:
+    """Historie nahrazeného souboru patří tomu novému. {starý: nový}.
+
+    Položka zůstává v archivu - v Jellyfinu doopravdy není a tvářit se,
+    že je, by byla lež. Přesouvá se jen historie: „kolikrát jsem to
+    viděl" má být o filmu, ne o souboru, který se mezitím překódoval.
+
+    Technická data se starým souborem odcházejí taky. Popisovala ho, ne
+    ten nový, a kdyby zůstala, analýza je už nikdy nepřepíše - bere jen
+    položky, které žádná nemají.
+    """
+    if not dvojice:
+        return 0
+    preneseno = 0
+    with db.connect() as conn:
+        for stary, novy in dvojice.items():
+            radek = conn.execute(
+                "SELECT COUNT(*) AS pocet FROM playback WHERE item_id = ?",
+                (stary,)).fetchone()
+            kolik = int(dict(radek or {}).get("pocet") or 0)
+            if not kolik:
+                continue
+            conn.execute("UPDATE playback SET item_id = ? WHERE item_id = ?",
+                         (novy, stary))
+            conn.execute("DELETE FROM item_streams WHERE item_id = ?", (stary,))
+            conn.execute("DELETE FROM item_versions WHERE item_id = ?", (stary,))
+            preneseno += kolik
+            log.info("nahrazeny soubor: historie %s -> %s (%s zaznamu)",
+                     stary, novy, kolik)
+        conn.commit()
+    return preneseno
+
+
+def _rovno_nebo_nic(podminky: list[str], parametry: list[Any],
+                    sloupec: str, hodnota: Any) -> None:
+    """Podmínka „sloupec se rovná", která umí i prázdnou hodnotu.
+
+    `sloupec IS ?` je zkratka, kterou zná jen SQLite - PostgreSQL za
+    `IS` parametr nepustí a skončí syntaktickou chybou. A `= NULL` se
+    v SQL nikdy nerovná ničemu, takže prázdný rok nebo chybějící číslo
+    dílu by tiše nenašly nic. Proto se podmínka skládá podle hodnoty.
+    """
+    if hodnota is None:
+        podminky.append(f"{sloupec} IS NULL")
+    else:
+        podminky.append(f"{sloupec} = ?")
+        parametry.append(hodnota)
+
+
+def do_archivu(ids: list[str]) -> int:
+    """Označí položky za zmizelé. Nic nemaže - historie na ně odkazuje."""
+    if not ids:
+        return 0
+    with db.connect() as conn:
+        for zacatek in range(0, len(ids), 200):
+            davka = ids[zacatek:zacatek + 200]
+            otazniky = ",".join("?" for _ in davka)
+            conn.execute(
+                f"UPDATE items SET is_missing = 1 WHERE id IN ({otazniky})",
+                tuple(davka))
+        conn.commit()
+    return len(ids)
+
+
+async def srovnej_po_novych(client: JellyfinClient,
+                            nova_id: list[str]) -> dict[str, Any]:
+    """Po nových titulech srovná knihovnu, ať v ní nestojí dvojníci.
+
+    Tři kroky a každý je tu z jiného důvodu:
+
+    1. **najít dvojníky** - starší položky, které vypadají jako totéž,
+    2. **zeptat se Jellyfinu**, jestli je ještě zná. Tohle je celé
+       rozhodnutí: co Jellyfin zná, je druhá kopie (4K vedle 1080p) a
+       slučovat se nesmí; co nezná, je nahrazený soubor,
+    3. **narovnat data** - připojit historii archivované položky k té
+       živé. Na to už je hotová úloha, tak se zavolá, ne opíše.
+
+    Bez kroku 2 by se z „mám film ve dvou kvalitách" stal jeden film
+    a půlka historie by zmizela.
+    """
+    from . import importers          # az tady: importers sahaji na scanner
+
+    podezrele = await asyncio.to_thread(dvojnici_novych, nova_id)
+    if not podezrele:
+        return {"dvojniku": 0, "archivovano": 0, "narovnano": None}
+
+    kandidati = sorted({stary for seznam in podezrele.values()
+                        for stary in seznam})
+    zive = await client.items_by_ids(kandidati)
+    zname = {str(i["Id"]) for i in zive if i.get("Id")}
+    nahrazene = [stary for stary in kandidati if stary not in zname]
+
+    archivovano = await asyncio.to_thread(do_archivu, nahrazene)
+    if archivovano:
+        log.info("po novych titulech: %s nahrazenych souboru slo do archivu",
+                 archivovano)
+
+    # Historii prenaset musime sami: narovnani dat umi pripojit dil
+    # serialu z archivu (podle cisla rady a dilu), ale u filmu bez
+    # tmdb id nema podle ceho poznat, ze jde o tentyz titul. My to vime -
+    # prave jsme se Jellyfinu zeptali.
+    par = {stary: novy for novy, seznam in podezrele.items()
+           for stary in seznam if stary in set(nahrazene)}
+    preneseno = await asyncio.to_thread(prenes_historii, par)
+
+    # A pak uz bezne narovnani: dily serialu, osirele zaznamy, duplicity.
+    narovnano = await importers.narovnej_data() if archivovano else None
+    return {"dvojniku": len(kandidati), "archivovano": archivovano,
+            "historie": preneseno, "narovnano": narovnano}
+
+
+def zapis_verze(verze: list[tuple[str, list[dict[str, Any]]]]) -> int:
+    """Uloží verze titulů. Co u titulu nepřišlo, se smaže.
+
+    Mazání je schválně: když se jedna ze dvou verzí z disku odstraní,
+    Jellyfin ji přestane posílat a v detailu by po ní zůstal řádek
+    slibující soubor, který tam není.
+    """
+    if not verze:
+        return 0
+    ted = db.utcnow()
+    zapsano = 0
+    with db.connect() as conn:
+        for item_id, seznam in verze:
+            if not item_id or not seznam:
+                # Prazdny seznam neznamena "soubory zmizely", ale
+                # "Jellyfin je v teto odpovedi neposlal" - treba dotaz
+                # bez `MediaSources` ve `Fields`. Smazat podle toho, co
+                # nikdo netvrdil, by v detailu vymazalo verze, ktere na
+                # disku dal jsou.
+                continue
+            conn.execute("DELETE FROM item_versions WHERE item_id = ?",
+                         (item_id,))
+            for v in seznam:
+                conn.execute(
+                    "INSERT INTO item_versions (item_id, source_id, poradi,"
+                    " nazev, path, container, video_codec, audio_codec,"
+                    " audio_channels, width, height, bitrate, size_bytes,"
+                    " video_range, runtime_ticks, audio_languages,"
+                    " subtitle_languages, synced_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (item_id, v.get("source_id"), v.get("poradi") or 0,
+                     v.get("nazev"), v.get("path"), v.get("container"),
+                     v.get("video_codec"), v.get("audio_codec"),
+                     v.get("audio_channels"), v.get("width"), v.get("height"),
+                     v.get("bitrate"), v.get("size_bytes"),
+                     v.get("video_range"), v.get("runtime_ticks"),
+                     v.get("audio_languages"), v.get("subtitle_languages"),
+                     ted))
+                zapsano += 1
+        conn.commit()
+    return zapsano
 
 
 def _write_batch(
@@ -1775,6 +2051,7 @@ def slouc_archiv_do_zivych() -> int:
             # Poradi je dane cizim klicem: stopy odkazuji na polozku,
             # takze musi pryc driv, nez se polozka smaze.
             conn.execute("DELETE FROM item_streams WHERE item_id = ?", (stare,))
+            conn.execute("DELETE FROM item_versions WHERE item_id = ?", (stare,))
             conn.execute("UPDATE playback SET item_id = ? WHERE item_id = ?",
                          (nove, stare))
             conn.execute("DELETE FROM items WHERE id = ?", (stare,))
@@ -1820,6 +2097,9 @@ def uklid_fantomu() -> int:
             znaky = ",".join("?" for _ in davka)
             conn.execute(
                 f"DELETE FROM item_streams WHERE item_id IN ({znaky})", tuple(davka))
+            conn.execute(
+                f"DELETE FROM item_versions WHERE item_id IN ({znaky})",
+                tuple(davka))
             conn.execute(f"DELETE FROM items WHERE id IN ({znaky})", tuple(davka))
 
     log.info("uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)",

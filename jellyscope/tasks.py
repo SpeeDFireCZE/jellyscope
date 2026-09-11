@@ -589,7 +589,8 @@ def _vyber_pg_dump(config: Any) -> str:
 #
 # Seznam se hlida testem proti schema_postgres.sql - kdyz pribude tabulka
 # a sem se nezapise, zaloha by ji tise vynechala.
-ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_streams",
+ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_versions",
+                      "item_streams",
                       "accounts", "dashboard_layout", "library_snapshot",
                       "settings", "scan_log", "api_tokens", "login_blocks",
                       "zapomenuti", "playback")

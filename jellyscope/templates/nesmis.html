@@ -1,0 +1,21 @@
+{# Stránka pro „tohle ti nepatří".
+
+   Ne holé 403 od serveru: kdo se dostane sem, nedělá nic zlého - obvykle
+   si jen uložil odkaz z doby, kdy byl správcem, nebo mu ho někdo poslal.
+   Má se dozvědět, co se stalo a kudy zpátky, ne dostat hlášku z prohlížeče. #}
+{% extends "base.html" %}
+{% block title %}{{ _("Sem nemáš přístup") }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+    <div class="card-head">
+        <h2>{{ _("Sem nemáš přístup") }}</h2>
+        <p class="card-note">{{ _("tahle stránka je o ostatních divácích nebo o nastavení serveru") }}</p>
+    </div>
+    <p>
+        {{ _("Přihlášen jsi jako divák, takže vidíš svoje přehrávání a žebříčky titulů. Co sledují ostatní, kdo se odkud připojuje a nastavení serveru patří správci.") }}
+    </p>
+    <div class="btn-row" style="margin-top:14px">
+        <a class="btn primary" href="/">{{ _("Zpátky na moje statistiky") }}</a>
+    </div>
+</div>
+{% endblock %}

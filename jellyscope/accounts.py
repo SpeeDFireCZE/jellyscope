@@ -396,6 +396,67 @@ def authenticate(username: str, password: str) -> dict[str, Any] | None:
     return account
 
 
+def podle_jellyfin_id(jellyfin_id: str) -> dict[str, Any] | None:
+    return db.query_one("SELECT * FROM accounts WHERE jellyfin_user_id = ?",
+                        (str(jellyfin_id or ""),)) if jellyfin_id else None
+
+
+def z_jellyfinu(udaje: dict[str, Any]) -> dict[str, Any]:
+    """Účet pro diváka, který se přihlásil svým jellyfinovým heslem.
+
+    Když ještě žádný nemá, založí se; když má, srovná se podle toho, co
+    Jellyfin právě řekl - jméno i práva. Práva se schválně přebírají při
+    **každém** přihlášení: komu je v Jellyfinu vezmou, nemá je mít ani
+    tady, a to hned, ne až si toho někdo všimne.
+
+    Heslo se sem neukládá žádné. Takový účet se dá otevřít jedině přes
+    Jellyfin - `prazdny_otisk()` nesedí na nic.
+    """
+    jellyfin_id = str(udaje["id"])
+    ucet = podle_jellyfin_id(jellyfin_id)
+    ted = db.utcnow()
+
+    if ucet is None:
+        # Jmeno uz muze patrit mistnimu uctu. Prepsat ho nesmime, tak se
+        # divakovi zalozi jmeno s odlisenim - prihlasuje se stejne podle
+        # toho, co ma v Jellyfinu.
+        jmeno = _volne_jmeno(udaje["jmeno"])
+        with db.connect() as conn:
+            conn.execute(
+                "INSERT INTO accounts (username, password_hash, is_admin,"
+                " created_at, last_login, jellyfin_user_id)"
+                " VALUES (?,?,?,?,?,?)",
+                (jmeno, "", 1 if udaje["spravce"] else 0, ted, ted,
+                 jellyfin_id))
+            conn.commit()
+        log.info("zalozen ucet z Jellyfinu: %s (%s)", jmeno,
+                 "spravce" if udaje["spravce"] else "divak")
+        return podle_jellyfin_id(jellyfin_id) or {}
+
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE accounts SET is_admin = ?, last_login = ? WHERE id = ?",
+            (1 if udaje["spravce"] else 0, ted, ucet["id"]))
+        conn.commit()
+    if bool(ucet["is_admin"]) != bool(udaje["spravce"]):
+        log.info("ucet %s: prava prevzata z Jellyfinu (%s)", ucet["username"],
+                 "spravce" if udaje["spravce"] else "divak")
+    return db.query_one("SELECT * FROM accounts WHERE id = ?",
+                        (ucet["id"],)) or {}
+
+
+def _volne_jmeno(zaklad: str) -> str:
+    """Jméno, které ještě nikdo nemá. K obsazenému přidá číslo."""
+    zaklad = (zaklad or "jellyfin").strip() or "jellyfin"
+    if get_by_name(zaklad) is None:
+        return zaklad
+    for poradi in range(2, 100):
+        navrh = f"{zaklad} ({poradi})"
+        if get_by_name(navrh) is None:
+            return navrh
+    return f"{zaklad} ({db.utcnow()})"
+
+
 def set_password(account_id: int, password: str, again: str | None = None) -> None:
     password = validate_password(password, again)
     with db.connect() as conn:

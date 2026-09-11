@@ -54,6 +54,16 @@
            jinak by svítil pořád). #}
         {% set path = request.url.path %}
         {% set polozky = [] %}
+        {# Divák přihlášený svým jellyfinovým účtem má v menu jen to, co
+           smí otevřít (hlídá to `rozsah_divaka` ve web.py). Nabízet mu
+           odkazy, za kterými dostane „sem nemáš přístup", by bylo
+           laciné. Vlastní stránka je první - je to jeho přehled. #}
+        {% if muj_divak %}
+            {% set zahod = polozky.append(("/users/" ~ muj_divak, _("Moje statistiky"), ("/users",))) %}
+            {% set zahod = polozky.append(("/history", _("Moje historie"), ("/history",))) %}
+            {% set zahod = polozky.append(("/insights", _("Zjištění"), ("/insights",))) %}
+            {% set zahod = polozky.append(("/library", _("Knihovna"), ("/library", "/item", "/series"))) %}
+        {% else %}
         {# Vlastní přehled stojí nad Přehledem - je to první, co člověk
            po přihlášení uvidí. V menu je jen tehdy, když je zapnutý
            A něco v něm je: zapnutá prázdná záložka by byla horší než
@@ -71,6 +81,7 @@
         {% set zahod = polozky.append(("/users", _("Uživatelé"), ("/users",))) %}
         {% set zahod = polozky.append(("/history", _("Historie"), ("/history",))) %}
         {% set zahod = polozky.append(("/settings", _("Nastavení"), ("/settings",))) %}
+        {% endif %}
 
         {% set otevrena = namespace(nazev=_("Menu")) %}
         {% for adresa, nazev, predpony in polozky %}

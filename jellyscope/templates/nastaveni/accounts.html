@@ -208,3 +208,49 @@
 
 
 {# ================================================================== #}
+
+
+{# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# Co uvidí čtenářské účty                                             #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="ctenari">
+    <div class="card-head">
+        <h2>{{ _("Co uvidí čtenářské účty") }}</h2>
+        <p class="card-note">{{ _("platí pro účty bez práv správce, které zakládáš výš") }}</p>
+    </div>
+
+    <form method="post" action="/settings/ctenari" id="ctenari-form"></form>
+
+    <p class="hint" style="margin-top:0">
+        {{ _("Ve výchozím stavu vidí čtenář statistiky celé – tak se tyhle účty odjakživa zakládaly. Co mu ukázat nechceš, odškrtni.") }}
+    </p>
+
+    <div class="strom">
+        {% for oblast in ctenar_strom %}
+        <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
+            <input type="checkbox" name="vidi_{{ oblast.klic }}" form="ctenari-form"
+                   {{ 'checked' if oblast.zapnuto }}>
+            <span>
+                {{ _(oblast.nazev) }}
+                <span class="hint">{{ _(oblast.popis) }}</span>
+            </span>
+        </label>
+        {% endfor %}
+    </div>
+
+    <label class="prepinac" style="margin-top:14px">
+        <input type="checkbox" name="anonymizace" form="ctenari-form"
+               {{ 'checked' if ctenar_anonymizace }}>
+        <span>{{ _("Skrýt jména a adresy diváků") }}</span>
+    </label>
+    <p class="hint">
+        {{ _("Místo jmen bude „Divák 3“ a místo IP adresy pomlčka. Čtenářský účet nepatří žádnému divákovi, takže se skryjí všechna jména.") }}
+    </p>
+
+    <div class="btn-row" style="margin-top:16px">
+        <button data-keep-scroll class="btn primary" type="submit" form="ctenari-form">
+            {{ _("Uložit přístup čtenářů") }}
+        </button>
+    </div>
+</div>

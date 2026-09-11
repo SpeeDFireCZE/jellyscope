@@ -52,9 +52,40 @@
             </div>
         </div>
 
-        <button class="btn primary" type="submit" style="width:100%; justify-content:center">
+        {# Dvě tlačítka, ne jedno chytré: člověk ví, jaké heslo píše, a
+           aplikace se pak nemusí ptát dvou serverů. Heslo k místnímu účtu
+           tím pádem nikdy neodejde do Jellyfinu a naopak.
+
+           Jellyfinové tlačítko se objeví, teprve když správce přihlašování
+           jellyfinovými účty zapne - jinak by nabízelo cestu, která
+           stejně skončí odmítnutím. #}
+        <button class="btn primary" type="submit" name="zpusob" value="mistni"
+                style="width:100%; justify-content:center">
             {{ _("Přihlásit") }}
         </button>
+
+        {% if jellyfin_login %}
+        <div class="login-nebo"><span>{{ _("nebo") }}</span></div>
+        <button class="btn" type="submit" name="zpusob" value="jellyfin"
+                style="width:100%; justify-content:center">
+            {{ _("Přihlásit přes Jellyfin") }}
+        </button>
+        {# Quick Connect: heslo se nikam nepíše. Jellyscope si řekne
+           o kód, člověk ho potvrdí ve svém už přihlášeném Jellyfinu -
+           takže nám heslo neprojde ani rukama. #}
+        {# `formnovalidate`: tohle tlacitko zadne heslo nepotrebuje, takze
+           by ho prohlizec nemel nutit vyplnit. Bez nej se na prazdny
+           formular vubec neodesle a clovek jen kouka, proc se nic
+           nedeje. #}
+        <button class="btn" type="submit" formaction="/login/quick"
+                formnovalidate
+                style="width:100%; justify-content:center; margin-top:10px">
+            {{ _("Přihlásit kódem (Quick Connect)") }}
+        </button>
+        <p class="hint" style="margin-top:10px; text-align:center">
+            {{ _("Heslem z Jellyfinu, nebo kódem, který potvrdíš v už přihlášeném Jellyfinu. Uvidíš svoje přehrávání; kdo je správce Jellyfinu, uvidí všechno.") }}
+        </p>
+        {% endif %}
     </form>
 </div>
 

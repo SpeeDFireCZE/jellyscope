@@ -9,6 +9,98 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.0
+
+People with a Jellyfin account can sign in and see their own statistics,
+the admin decides what that means, and a title that lies on the disk
+twice finally shows both files.
+
+### Added
+
+- **Signing in with a Jellyfin account.** Anybody with an account on the
+  server can be let in - **only when the admin switches it on**
+  (Settings -> Jellyfin -> Allow Jellyfin sign-in). It is off until then;
+  opening the household's statistics is a decision, not something an
+  update makes for you. The password is never stored here, only passed
+  to Jellyfin to check, and the access token that check produces is
+  revoked straight away. Whoever is an administrator in Jellyfin is an
+  administrator here, and rights taken away there stop working here at
+  the next sign-in.
+
+- **Signing in with a code (Quick Connect).** The same thing from the
+  other side: instead of typing a Jellyfin password into our page,
+  Jellyscope shows a six-digit code and you approve it in a Jellyfin you
+  are already signed in to - no password passes through this application
+  at all. The browser gets the code, which on its own lets nobody in;
+  what finishes the sign-in stays on the server. It needs Quick Connect
+  enabled in the Jellyfin Dashboard, and when it is off the page says so
+  instead of failing quietly.
+
+- **A tree of what a viewer sees.** Their own statistics and their own
+  history are always there - that is what they signed in for - and
+  everything else is a tick box: insights and title charts, the library,
+  the server overview, period comparison, now playing, languages, the
+  viewer list, the network page. One server is a family's and hides
+  nothing; another is for people who should not see each other. Local
+  reader accounts have the same tree, each set on its own.
+
+- **Anonymising.** On the pages that are open, somebody else's name
+  reads `Viewer 3` and an IP address a dash. The number is stable, so
+  rows can still be compared - it just does not lead to a person. Nobody
+  is ever anonymised to themselves.
+
+- **Every file of a title.** Two files of one film (4K next to 1080p)
+  are one item in Jellyfin, and only the first one used to be kept: the
+  library said 1080p while 4K lay beside it, and nothing in the detail
+  admitted the second file existed. All of them are stored now and the
+  detail switches between them. The numbers of the item itself stay with
+  the one Jellyfin treats as the main file, so the library is not
+  counted twice.
+
+### Changed
+
+- **A replaced file settles itself.** Re-encoding a film gives it a new
+  id in Jellyfin, and the quick sync used to add it as a second title
+  with an empty history while the old one stayed behind as a phantom.
+  New items are now matched against what we already have - by tmdb id
+  first, by name and year (or series and numbers) second - and when
+  Jellyfin no longer knows the old id, the history moves over and the
+  old row is archived. A genuine second copy is left alone.
+
+- **Settings is for administrators only.** A reader account used to open
+  it and could reach the API keys and the Jellyfin key through it. Until
+  the account page exists, a reader's password is changed by an admin
+  (Settings -> Accounts) or from the command line
+  (`manage.py heslo <name>`).
+
+- **Tidying tasks keep the versions.** Merging, archiving and the
+  clean-up of foreign types delete or rename items; versions hang off an
+  item by a foreign key and now go with it. An empty list of versions
+  means "Jellyfin did not send any this time", not "the files are gone",
+  so it no longer wipes anything.
+
+- **Checkboxes and radios are round, filled with the same gradient as
+  the buttons, and the cursor over them is a hand.** They were the
+  browser's default ones - the only place in the app that still looked
+  borrowed.
+
+- **Two buttons on the sign-in page** instead of one clever one: you
+  know which password you are typing, and a password to a local account
+  never travels to Jellyfin. The Jellyfin buttons appear only when the
+  admin has switched that sign-in on.
+
+- **A warning when the connection to Jellyfin is in the clear.** Plain
+  `http` to another machine is named in Settings; `https` and
+  `localhost` say nothing, because there is nothing to warn about.
+
+### Fixed
+
+- **Switching the title charts stopped reloading the whole page.** With
+  your own dates the small request behind the filter failed every time,
+  and the page quietly fell back to loading itself again - so the filter
+  worked, just slowly and with a jump to the top, which is exactly what
+  that request exists to avoid.
+
 ## 1.6.9
 
 Forgetting a viewer can be taken back, and Settings stops jumping to the

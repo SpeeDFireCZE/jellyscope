@@ -41,7 +41,7 @@ from . import (accounts, api, applog, charts, collector, db, dbmigrate, dialect,
                formatting, geoip,
                updates,
                i18n, importers, insights, jellyfin, langstats, languages,
-               odklizeni,
+               odklizeni, pristup,
                scanner, sekce,
                stats, tasks)
 # Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
@@ -89,6 +89,7 @@ from .web_zaklad import (  # noqa: F401 - dal se pouzivaji i zvenku
     config,
     current_account,
     log,
+    muj_divak,
     require_admin,
     require_login,
     templates,
@@ -264,6 +265,55 @@ async def ukazkovy_rezim(request: Request, call_next):
         kam = _cesta_odkud_prisel(request.headers.get("referer"))
         return RedirectResponse(kam, status_code=303)
     return await call_next(request)
+
+
+@app.middleware("http")
+async def rozsah_divaka(request: Request, call_next):
+    """Kdo není správce, vidí jen to, co mu správce zaškrtl.
+
+    Hlídá se to **na jednom místě**, ne v každé routě: kdyby se na jednu
+    zapomnělo, neprojeví se to jako chyba, ale jako cizí historie na
+    obrazovce někoho, komu do ní nic není. Proto povolující seznam a
+    zamčené dveře - co v něm není, končí tady.
+
+    Skupiny jsou dvě a liší se v tom, co znamená „moje":
+
+    * **divák z Jellyfinu** má svůj účet u konkrétního člověka, takže mu
+      vlastní čísla patří vždycky. Přehled ho pošle na jeho stránku,
+      cizí stránka diváka je zavřená a nic nemění - jen čte.
+    * **místní čtenářský účet** nikomu konkrétnímu nepatří (zakládá ho
+      správce), takže „moje historie" u něj nedává smysl. Platí pro něj
+      jen zaškrtnuté oblasti.
+    """
+    ucet = current_account(request)
+    kdo = pristup.role(ucet)
+    if kdo in ("", pristup.SPRAVCE):
+        return await call_next(request)
+
+    divak = muj_divak(ucet)
+    cesta = request.url.path
+
+    if divak:
+        if cesta == "/" and not pristup.vidi(kdo, "prehled"):
+            return RedirectResponse(f"/users/{divak}", status_code=303)
+        if cesta.startswith("/users/"):
+            if cesta.rstrip("/") != f"/users/{divak}":
+                return _nesmis(request)
+            return await call_next(request)
+        if request.method != "GET" and cesta != "/logout":
+            return _nesmis(request)
+
+    if not pristup.smi_cestu(kdo, cesta):
+        return _nesmis(request)
+
+    return await call_next(request)
+
+
+def _nesmis(request: Request):
+    """Odpověď na „tohle ti nepatří". Stránka, ne holé 403."""
+    ucet = current_account(request)
+    return templates.TemplateResponse(
+        request, "nesmis.html", _context(request, ucet), status_code=403)
 
 
 app.add_middleware(
@@ -524,12 +574,50 @@ def login_form(request: Request):
         return RedirectResponse("/setup", status_code=303)
     if current_account(request) is not None:
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+    return templates.TemplateResponse(
+        request, "login.html",
+        {"error": None, "jellyfin_login": pristup.login_zapnuty()})
+
+
+async def _prihlas_pres_jellyfin(jmeno: str, heslo: str) -> dict[str, Any] | None:
+    """Zkusí jméno a heslo proti Jellyfinu. None = nepřihlášen.
+
+    Druhá cesta dovnitř, ne náhrada: místní účty zůstávají, protože když
+    je Jellyfin vypnutý nebo se mu změnila adresa, musí se dovnitř dát
+    dostat i tak. Proto se zkouší až po nich.
+
+    Chyba spojení se **nerozlišuje od špatného hesla**. Odpověď „server
+    neodpovídá" by cizímu člověku prozradila, že tu nějaký Jellyfin je,
+    a hlavně by z přihlašovací stránky udělala nástroj, kterým se dá
+    zkoušet dostupnost cizí sítě. Do logu se to zapíše.
+    """
+    if not pristup.login_zapnuty():
+        return None
+
+    url, klic = db.jellyfin_connection()
+    if not url or not klic:
+        return None
+
+    try:
+        async with JellyfinClient(url, klic, timeout=QUICK_TIMEOUT) as jf:
+            udaje = await jf.over_prihlaseni(jmeno, heslo)
+    except JellyfinError as chyba:
+        log.warning("prihlaseni pres Jellyfin se nepodarilo overit: %s", chyba)
+        return None
+
+    if udaje is None:
+        return None
+    if udaje["vypnuty"]:
+        log.warning("ucet %s je v Jellyfinu vypnuty - dovnitr nesmi",
+                    udaje["jmeno"])
+        return None
+    return accounts.z_jellyfinu(udaje)
 
 
 @app.post("/login")
-def login_submit(
-    request: Request, username: str = Form(""), password: str = Form("")
+async def login_submit(
+    request: Request, username: str = Form(""), password: str = Form(""),
+    zpusob: str = Form("mistni"),
 ):
     # Brzda proti hádání hesel. Klíčem je adresa, ze které pokus přišel -
     # ne uživatelské jméno: podle jména by šlo cizí účet snadno zamknout
@@ -539,11 +627,18 @@ def login_submit(
     if zbyva:
         return templates.TemplateResponse(
             request, "login.html",
-            {"error": _blokace_hlaska(zbyva), "username": username},
+            {"error": _blokace_hlaska(zbyva), "username": username,
+             "jellyfin_login": pristup.login_zapnuty()},
             status_code=429,
         )
 
-    account = accounts.authenticate(username, password)
+    # Ktere dvere clovek zvolil, tam se klepe. Heslo k mistnimu uctu
+    # tak nikdy neodejde do Jellyfinu a heslo z Jellyfinu se neporovnava
+    # s mistnimi otisky.
+    if zpusob == "jellyfin":
+        account = await _prihlas_pres_jellyfin(username, password)
+    else:
+        account = accounts.authenticate(username, password)
     if account is None:
         blokace = accounts.zapocitej_neuspech(klic)
         if blokace:
@@ -554,7 +649,8 @@ def login_submit(
                 request, "login.html",
                 {"error": _blokace_hlaska(-1 if blokace["permanent"]
                                           else blokace["seconds"]),
-                 "username": username},
+                 "username": username,
+                 "jellyfin_login": pristup.login_zapnuty()},
                 status_code=429,
             )
         # Zamerne nerikame, jestli bylo spatne jmeno nebo heslo. Kdybychom
@@ -562,7 +658,8 @@ def login_submit(
         return templates.TemplateResponse(
             request, "login.html",
             {"error": i18n.translate("Špatné jméno nebo heslo."),
-             "username": username},
+             "username": username,
+             "jellyfin_login": pristup.login_zapnuty()},
             status_code=401,
         )
 
@@ -577,6 +674,89 @@ def login_submit(
     # Prázdný ale ne: to by byl horší začátek než Přehled.
     kam = "/dashboard" if (sekce.je_zapnuty() and sekce.nacti_rozvrzeni()) else "/"
     return RedirectResponse(kam, status_code=303)
+
+
+@app.post("/login/quick")
+async def login_quick(request: Request):
+    """Zahájí přihlášení kódem. Heslo se přitom nikde nezadává.
+
+    Tajemství, kterým se přihlášení dokončí, zůstává **v relaci na
+    serveru**. Do prohlížeče jde jen šestimístný kód, a ten sám o sobě
+    nikoho nikam nepustí - dokud ho člověk nepotvrdí ve svém už
+    přihlášeném Jellyfinu, není to jen číslo.
+    """
+    if current_account(request) is not None:
+        return RedirectResponse("/", status_code=303)
+    if not pristup.login_zapnuty():
+        return _login_chyba(request, "Přihlášení přes Jellyfin není zapnuté.")
+
+    url, klic = db.jellyfin_connection()
+    if not url or not klic:
+        return _login_chyba(request, "Jellyfin není nastavený.")
+
+    try:
+        async with JellyfinClient(url, klic, timeout=QUICK_TIMEOUT) as jf:
+            if not await jf.quick_connect_zapnuty():
+                return _login_chyba(
+                    request,
+                    "Quick Connect je na serveru Jellyfin vypnutý. "
+                    "Zapne se v jeho Ovládacím panelu.")
+            zahajeni = await jf.quick_connect_zahaj()
+    except JellyfinError as chyba:
+        log.warning("quick connect se nepodarilo zahajit: %s", chyba)
+        return _login_chyba(request, "Jellyfin se neozval. Zkus to za chvíli.")
+
+    if not zahajeni:
+        return _login_chyba(request, "Quick Connect se nepodařilo zahájit.")
+
+    # Tajemstvi do relace, ne do stranky: kdo ho ma, prihlasi se s nim.
+    request.session["quick_secret"] = zahajeni["tajemstvi"]
+    return templates.TemplateResponse(
+        request, "login_quick.html", {"kod": zahajeni["kod"]})
+
+
+@app.get("/login/quick/stav")
+async def login_quick_stav(request: Request):
+    """Ptá se Jellyfinu, jestli už kód někdo potvrdil.
+
+    Stránka se sem ptá po vteřinách. Odpověď je schválně chudá - jen
+    „ještě ne" nebo „hotovo": víc by z ní šlo vyčíst o tom, jaké účty
+    na serveru jsou.
+    """
+    tajemstvi = str(request.session.get("quick_secret") or "")
+    if not tajemstvi or not pristup.login_zapnuty():
+        return {"hotovo": False, "konec": True}
+
+    url, klic = db.jellyfin_connection()
+    try:
+        async with JellyfinClient(url, klic, timeout=QUICK_TIMEOUT) as jf:
+            if not await jf.quick_connect_potvrzeno(tajemstvi):
+                return {"hotovo": False}
+            udaje = await jf.quick_connect_dokonci(tajemstvi)
+    except JellyfinError as chyba:
+        log.warning("quick connect: dotaz na stav selhal: %s", chyba)
+        return {"hotovo": False}
+
+    if not udaje or udaje.get("vypnuty"):
+        request.session.pop("quick_secret", None)
+        return {"hotovo": False, "konec": True}
+
+    ucet = accounts.z_jellyfinu(udaje)
+    # Stara relace pryc i tady - stejny duvod jako u hesla.
+    request.session.clear()
+    request.session["account_id"] = ucet["id"]
+    accounts.zapomen_neuspechy(_adresa_klienta(request))
+    log.info("prihlaseni pres Quick Connect: %s", udaje.get("jmeno"))
+    return {"hotovo": True}
+
+
+def _login_chyba(request: Request, hlaska: str):
+    """Přihlašovací stránka s vysvětlením, proč to nešlo."""
+    return templates.TemplateResponse(
+        request, "login.html",
+        {"error": i18n.translate(hlaska),
+         "jellyfin_login": pristup.login_zapnuty()},
+        status_code=400)
 
 
 @app.post("/logout")
@@ -923,6 +1103,13 @@ def top_items_partial(
     request: Request,
     kind: Optional[str] = None,
     days: Optional[int] = None,
+    # `od` a `do` tu chybely, prestoze se s nimi v tele pocitalo: volani
+    # koncilo na NameError, tedy chybou 500. Nikdo si toho nevsiml,
+    # protoze stranka po neuspechu nacte celou sebe (viz `.catch`
+    # v base.html) - filtr fungoval dal, jen pomalu a se skokem nahoru,
+    # tedy presne tim, cemu se timhle vyrezem predchazelo.
+    od: Optional[str] = None,
+    do: Optional[str] = None,
     account: dict[str, Any] = Depends(require_login),
 ):
     """Jen karta "Nejsledovanější tituly".
@@ -1144,7 +1331,8 @@ def series_detail(
 
 @app.get("/item/{item_id}", response_class=HTMLResponse)
 def item_detail(
-    request: Request, item_id: str, account: dict[str, Any] = Depends(require_login)
+    request: Request, item_id: str, verze: Optional[str] = None,
+    account: dict[str, Any] = Depends(require_login)
 ):
     """Detail jedne polozky - vcetne vsech zvukovych stop a titulku."""
     item_row = stats.item(item_id)
@@ -1157,6 +1345,11 @@ def item_detail(
         # Rozsah slucuje zmereny udaj s tim, co hlasi Jellyfin - viz
         # stats.ROZSAH_CASE. Sablona nema kde to spocitat.
         rozsah=stats.rozsah_polozky(item_row),
+        # Verze titulu (4K vedle 1080p). `vybrana` je ta, jejíž údaje
+        # se kreslí; bez parametru je to ta, kterou Jellyfin považuje za
+        # hlavní - tedy tatáž, ze které se počítají statistiky.
+        verze=stats.verze_polozky(item_id),
+        vybrana_verze=verze,
         streams=stats.item_streams(item_id),
         playback=stats.item_playback(item_id),
         summary=stats.item_playback_summary(item_id),
@@ -1480,6 +1673,14 @@ def history(
     """
     page = max(1, page)
     per_page = 50
+
+    # Divák přihlášený svým jellyfinovým účtem vidí jen svou historii -
+    # a nezáleží na tom, co si napíše do adresy. Filtr se mu proto vnutí
+    # tady, ne až v šabloně: šablona rozhoduje o tom, co je vidět, ne
+    # o tom, co se načte.
+    divak = muj_divak(account)
+    if divak:
+        user_id = divak
 
     # Den přijde proklikem z tabulky na Přehledu; do SQL ho pustíme jen
     # ve tvaru RRRR-MM-DD. Jde tam jako parametr, takže i tak by byl

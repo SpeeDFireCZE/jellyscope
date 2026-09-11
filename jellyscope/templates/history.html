@@ -82,8 +82,10 @@
                    kterou najdeš přes Uživatele - jen se k ní dá dostat
                    rovnou odsud. #}
                 <td class="strong">
-                    {% if row.user_id %}
+                    {% if row.user_id and not muj_divak %}
                         <a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>
+                    {% elif row.user_id %}
+                        {{ row.user_name or '?' }}
                     {% else %}
                         {{ row.user_name or '?' }}
                     {% endif %}
@@ -152,6 +154,10 @@
     </form>
 
     <form method="get" action="/history" class="filtr">
+        {# Divák má ve filtru sám sebe, ať si do adresy napíše cokoliv
+           (vnucuje to routa). Nabízet mu seznam ostatních by znamenalo
+           ukázat jména lidí, o kterých se nemá dozvědět nic. #}
+        {% if not muj_divak %}
         <div class="filtr-pole">
             <label for="f-user">{{ _("Uživatel") }}</label>
             <select id="f-user" name="user_id">
@@ -161,6 +167,7 @@
                 {% endfor %}
             </select>
         </div>
+        {% endif %}
 
         <div class="filtr-pole">
             <label for="f-kind">{{ _("Druh") }}</label>

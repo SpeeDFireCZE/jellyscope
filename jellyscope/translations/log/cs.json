@@ -117,5 +117,15 @@
     "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)",
     "kos: doplnen sloupec %s": "kos: doplnen sloupec %s",
     "Vraceno z kose: %s, %s prehravani": "Vraceno z kose: %s, %s prehravani",
-    "Kos vysypan: %s prehravani je nadobro pryc": "Kos vysypan: %s prehravani je nadobro pryc"
+    "Kos vysypan: %s prehravani je nadobro pryc": "Kos vysypan: %s prehravani je nadobro pryc",
+    "prihlaseni pres Jellyfin se nepodarilo overit: %s": "prihlaseni pres Jellyfin se nepodarilo overit: %s",
+    "ucet %s je v Jellyfinu vypnuty - dovnitr nesmi": "ucet %s je v Jellyfinu vypnuty - dovnitr nesmi",
+    "ucet %s: prava prevzata z Jellyfinu (%s)": "ucet %s: prava prevzata z Jellyfinu (%s)",
+    "zalozen ucet z Jellyfinu: %s (%s)": "zalozen ucet z Jellyfinu: %s (%s)",
+    "prihlasovaci token se nepodarilo zrusit: %s": "prihlasovaci token se nepodarilo zrusit: %s",
+    "po novych titulech: %s nahrazenych souboru slo do archivu": "po novych titulech: %s nahrazenych souboru slo do archivu",
+    "nahrazeny soubor: historie %s -> %s (%s zaznamu)": "nahrazeny soubor: historie %s -> %s (%s zaznamu)",
+    "quick connect se nepodarilo zahajit: %s": "quick connect se nepodarilo zahajit: %s",
+    "quick connect: dotaz na stav selhal: %s": "quick connect: dotaz na stav selhal: %s",
+    "prihlaseni pres Quick Connect: %s": "prihlaseni pres Quick Connect: %s"
 }

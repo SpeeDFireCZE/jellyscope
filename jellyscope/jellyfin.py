@@ -74,6 +74,27 @@ def verze_serveru(text: Any) -> tuple[int, int]:
     return (hlavni, vedlejsi)
 
 
+MISTNI_ADRESY = ("localhost", "127.0.0.1", "::1", "[::1]")
+
+
+def po_siti_nesifrovane(url: str) -> bool:
+    """Jde spojení s Jellyfinem po síti a bez šifrování?
+
+    Klíč jde v hlavičce a heslo diváka v těle požadavku - obojí jako
+    čitelný text, protože tak to Jellyfin přijímá (a tak to dělá i jeho
+    vlastní webový přehrávač). Zašifrovat to za něj nejde: šifrování
+    dělá `https`, ne aplikace nad ním.
+
+    Na `localhost` se přitom nic po síti neposílá - požadavek nikdy
+    neopustí stroj -, takže tam varovat není před čím.
+    """
+    adresa = str(url or "").strip().lower()
+    if not adresa.startswith("http://"):
+        return False
+    hostitel = adresa[len("http://"):].split("/")[0].split(":")[0]
+    return hostitel not in MISTNI_ADRESY
+
+
 def stary_server(verze: Any) -> bool:
     """Je to server, ktery jeste zna zrusene zpusoby prihlaseni?
 
@@ -314,6 +335,159 @@ class JellyfinClient:
             return None
         return response.content, response.headers.get("content-type", "image/jpeg")
 
+    async def over_prihlaseni(self, jmeno: str, heslo: str) -> dict[str, Any] | None:
+        """Ověří jméno a heslo proti Jellyfinu. None = nesedí.
+
+        Tohle je jediné místo, kde se cizí heslo posílá dál - a jde na
+        tentýž server, na kterém ten účet žije, takže nikam jinam, než
+        kam by ho člověk zadal sám. Neukládá se: z odpovědi si bereme
+        jen identitu a práva.
+
+        Jellyfin odpovídá 401, když jméno nebo heslo nesedí; to není
+        chyba spojení, tak se nepřevádí na výjimku.
+        """
+        # Jellyfin chce u prihlasovani vedet, kdo se pta - bez teto
+        # hlavicky odpovi 400. `DeviceId` je schvalne pevne: kazde
+        # prihlaseni si jinak zalozi vlastni zaznam v Zarizenich a po
+        # tydnu je jich tam padesat.
+        hlavicka = self._prihlasovaci_hlavicka()
+        telo = {"Username": jmeno, "Pw": heslo}
+        try:
+            odpoved = await self._client.post(
+                "/Users/AuthenticateByName", json=telo,
+                headers={"Content-Type": "application/json",
+                         "Authorization": hlavicka})
+        except httpx.RequestError as chyba:
+            raise JellyfinError(
+                f"Nepodarilo se spojit s Jellyfinem: {chyba}") from chyba
+
+        if odpoved.status_code in (400, 401, 403):
+            return None
+        if odpoved.status_code >= 400:
+            raise JellyfinError(
+                f"Jellyfin odpovedel {odpoved.status_code}")
+
+        data = odpoved.json() or {}
+        uzivatel = data.get("User") or {}
+        if not uzivatel.get("Id"):
+            return None
+
+        # Prihlasenim vznikl v Jellyfinu pristupovy token. K nicemu ho
+        # nepotrebujeme - chteli jsme jen vedet, jestli heslo sedi - a
+        # nechat ho tam by znamenalo, ze Jellyscope po sobe necha viset
+        # platny klic k cizimu uctu. Rusime ho hned.
+        await self._zrus_token(str(data.get("AccessToken") or ""))
+        politika = uzivatel.get("Policy") or {}
+        return {
+            "id": str(uzivatel["Id"]),
+            "jmeno": str(uzivatel.get("Name") or jmeno),
+            "spravce": bool(politika.get("IsAdministrator")),
+            "vypnuty": bool(politika.get("IsDisabled")),
+        }
+
+    def _prihlasovaci_hlavicka(self) -> str:
+        """Kdo se ptá. Bez ní Jellyfin přihlašovací volání odmítne.
+
+        `DeviceId` je pevné a **musí být stejné** při zahájení i při
+        dokončení Quick Connectu - Jellyfin podle něj páruje žádost
+        s potvrzením.
+        """
+        from . import __version__
+
+        return ('MediaBrowser Client="Jellyscope", Device="Jellyscope",'
+                f' DeviceId="jellyscope-login", Version="{__version__}",'
+                f' Token="{self.api_key}"')
+
+    async def quick_connect_zapnuty(self) -> bool:
+        """Má server Quick Connect vůbec zapnutý?"""
+        try:
+            odpoved = await self._client.get(
+                "/QuickConnect/Enabled",
+                headers={"Authorization": self._prihlasovaci_hlavicka()})
+        except httpx.RequestError:
+            return False
+        if odpoved.status_code != 200:
+            return False
+        return str(odpoved.text).strip().lower() == "true"
+
+    async def quick_connect_zahaj(self) -> dict[str, Any] | None:
+        """Vyžádá kód. Vrací {"kod", "tajemstvi"}, nebo None.
+
+        `tajemstvi` je to, čím se přihlášení dokončí - patří na server
+        a do prohlížeče se nikdy nedostane. Do okna se ukazuje jen `kod`,
+        a ten sám o sobě nikoho nikam nepustí: bez potvrzení v Jellyfinu
+        je to jen šest číslic.
+        """
+        try:
+            odpoved = await self._client.post(
+                "/QuickConnect/Initiate",
+                headers={"Authorization": self._prihlasovaci_hlavicka()})
+        except httpx.RequestError as chyba:
+            raise JellyfinError(
+                f"Nepodarilo se spojit s Jellyfinem: {chyba}") from chyba
+        if odpoved.status_code != 200:
+            return None
+        data = odpoved.json() or {}
+        if not data.get("Secret") or not data.get("Code"):
+            return None
+        return {"kod": str(data["Code"]), "tajemstvi": str(data["Secret"])}
+
+    async def quick_connect_potvrzeno(self, tajemstvi: str) -> bool:
+        """Potvrdil to člověk už ve svém Jellyfinu?"""
+        try:
+            odpoved = await self._client.get(
+                "/QuickConnect/Connect", params={"secret": tajemstvi},
+                headers={"Authorization": self._prihlasovaci_hlavicka()})
+        except httpx.RequestError:
+            return False
+        if odpoved.status_code != 200:
+            return False
+        return bool((odpoved.json() or {}).get("Authenticated"))
+
+    async def quick_connect_dokonci(
+            self, tajemstvi: str) -> dict[str, Any] | None:
+        """Vymění potvrzené tajemství za identitu. Token hned zruší."""
+        try:
+            odpoved = await self._client.post(
+                "/Users/AuthenticateWithQuickConnect",
+                json={"Secret": tajemstvi},
+                headers={"Content-Type": "application/json",
+                         "Authorization": self._prihlasovaci_hlavicka()})
+        except httpx.RequestError as chyba:
+            raise JellyfinError(
+                f"Nepodarilo se spojit s Jellyfinem: {chyba}") from chyba
+        if odpoved.status_code != 200:
+            return None
+
+        data = odpoved.json() or {}
+        uzivatel = data.get("User") or {}
+        if not uzivatel.get("Id"):
+            return None
+        await self._zrus_token(str(data.get("AccessToken") or ""))
+        politika = uzivatel.get("Policy") or {}
+        return {
+            "id": str(uzivatel["Id"]),
+            "jmeno": str(uzivatel.get("Name") or ""),
+            "spravce": bool(politika.get("IsAdministrator")),
+            "vypnuty": bool(politika.get("IsDisabled")),
+        }
+
+    async def _zrus_token(self, token: str) -> None:
+        """Zahodí přístupový token, který vznikl ověřením hesla.
+
+        Kdyby se nezrušil, zůstal by v Jellyfinu platný klíč k cizímu
+        účtu - za každé přihlášení jeden. Když se zrušit nepovede, není
+        to důvod nepustit člověka dovnitř; jen se to zapíše.
+        """
+        if not token:
+            return
+        try:
+            await self._client.post(
+                "/Sessions/Logout",
+                headers={"Authorization": f'MediaBrowser Token="{token}"'})
+        except httpx.RequestError as chyba:
+            log.warning("prihlasovaci token se nepodarilo zrusit: %s", chyba)
+
     async def items_page(
         self,
         start_index: int,
@@ -545,8 +719,17 @@ def extract_tech_from_item(item: dict[str, Any]) -> dict[str, Any]:
     sources = item.get("MediaSources") or []
     if not sources:
         return {}
+    return tech_ze_zdroje(sources[0])
 
-    source = sources[0]
+
+def tech_ze_zdroje(source: dict[str, Any]) -> dict[str, Any]:
+    """Technické údaje jednoho souboru (jedné verze titulu).
+
+    Oddělené od `extract_tech_from_item`, protože titul může mít souborů
+    víc - 4K vedle 1080p. Položka si drží údaje té první (podle ní se
+    počítají statistiky), ostatní se ukládají zvlášť a v detailu se dají
+    přepnout.
+    """
     streams = source.get("MediaStreams") or []
 
     video = next((s for s in streams if s.get("Type") == "Video"), None)
@@ -585,6 +768,31 @@ def extract_tech_from_item(item: dict[str, Any]) -> dict[str, Any]:
         })
 
     return tech
+
+
+def extract_verze(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Všechny verze titulu i s jejich technickými údaji.
+
+    Jellyfin dva soubory téhož filmu ve složce nespojí do dvou položek -
+    udělá jednu s dvěma `MediaSources`. Bez tohohle by se ta druhá
+    ztratila: v knihovně by stálo 1080p, i když vedle leží 4K.
+
+    Pořadí necháváme tak, jak ho posílá Jellyfin - první je ta, kterou
+    sám považuje za hlavní, a stejnou drží i položka.
+    """
+    verze: list[dict[str, Any]] = []
+    for poradi, source in enumerate(item.get("MediaSources") or []):
+        udaje = tech_ze_zdroje(source)
+        udaje.update({
+            "source_id": str(source.get("Id") or "") or None,
+            "nazev": source.get("Name") or None,
+            "path": source.get("Path") or None,
+            "runtime_ticks": source.get("RunTimeTicks"),
+            "poradi": poradi,
+        })
+        if udaje["source_id"]:
+            verze.append(udaje)
+    return verze
 
 
 def video_range_of(item: dict[str, Any]) -> str | None:

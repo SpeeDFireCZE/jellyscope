@@ -112,3 +112,76 @@
 
 
 {# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# Přihlášení diváků jellyfinovým heslem                               #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="divaci">
+    <div class="card-head">
+        <h2>{{ _("Přihlášení diváků") }}</h2>
+        <p class="card-note">{{ _("kdo z Jellyfinu smí dovnitř a co uvidí") }}</p>
+    </div>
+
+    <form method="post" action="/settings/divaci" id="divaci-form"></form>
+
+    {% if nesifrovane %}
+    {# Heslo diváka jde do Jellyfinu v těle požadavku a klíč v hlavičce -
+       obojí čitelně, protože tak to Jellyfin přijímá. Po síti to chrání
+       jedině https. Na localhostu se nic po síti neposílá, tam se
+       tohle neukazuje. #}
+    <div class="flash warning" style="margin-bottom:14px">
+        <span class="dot"></span>
+        <span>
+            {{ _("Adresa Jellyfinu začíná http://, takže spojení není šifrované. API klíč i hesla, která sem diváci zadají, jdou po síti čitelně – kdokoliv na cestě (router, Wi-Fi, proxy) si je může přečíst. Na https:// to neplatí.") }}
+        </span>
+    </div>
+    {% endif %}
+
+    <label class="prepinac">
+        <input type="checkbox" name="jellyfin_login" form="divaci-form"
+               {{ 'checked' if divak_login }}>
+        <span>{{ _("Povolit Jellyfin login") }}</span>
+    </label>
+    <p class="hint">
+        {{ _("Kdo má účet v Jellyfinu, přihlásí se sem stejným jménem a heslem. Heslo se tady neukládá – jen se pošle Jellyfinu k ověření. Kdo je správcem Jellyfinu, je správcem i tady; ostatní vidí to, co je zaškrtnuté níž.") }}
+    </p>
+
+    {# Strom: co je odsazené, platí jen se svým nadřazeným. Proto se
+       pod-oblast nedá zapnout samostatně - vypnutá knihovna znamená
+       vypnuté i „kdo to sledoval". #}
+    <div class="field" style="margin-top:18px">
+        <label>{{ _("Co divák uvidí") }}</label>
+        <p class="hint" style="margin-top:0">
+            {{ _("Vlastní statistiky a vlastní historii vidí vždycky – bez toho by přihlášení nemělo smysl.") }}
+        </p>
+        <div class="strom">
+            {% for oblast in divak_strom %}
+            <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
+                <input type="checkbox" name="vidi_{{ oblast.klic }}" form="divaci-form"
+                       {{ 'checked' if oblast.zapnuto }}>
+                <span>
+                    {{ _(oblast.nazev) }}
+                    <span class="hint">{{ _(oblast.popis) }}</span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <label class="prepinac" style="margin-top:14px">
+        <input type="checkbox" name="anonymizace" form="divaci-form"
+               {{ 'checked' if divak_anonymizace }}>
+        <span>{{ _("Skrýt jména a adresy ostatních diváků") }}</span>
+    </label>
+    <p class="hint">
+        {{ _("Na stránkách, kam diváka pustíš, se místo cizích jmen ukáže „Divák 3“ a místo IP adresy pomlčka. Číslo je stálé, takže se dá porovnávat – jen nejde poznat, komu patří. Sebe vidí divák pod svým jménem.") }}
+    </p>
+
+    <div class="btn-row" style="margin-top:16px">
+        <button data-keep-scroll class="btn primary" type="submit" form="divaci-form">
+            {{ _("Uložit přístup diváků") }}
+        </button>
+    </div>
+</div>
+
+
+{# ================================================================== #}

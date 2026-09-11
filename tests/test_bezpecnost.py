@@ -235,7 +235,9 @@ print("--- ovládání blokací je jen pro správce ---")
 odpoved = klient.post("/settings/blocks/unblock", data={"ip": "1.2.3.4"},
                       follow_redirects=False)
 check(odpoved.status_code == 403, f"čtenář odblokovat nesmí ({odpoved.status_code})")
-check(klient.get("/settings?section=blocks").status_code in (200, 303),
+# Cele Nastaveni je pro spravce, takze se ctenar k sekci s blokacemi
+# nedostane uz na dverich - neuvidi ani seznam adres.
+check(klient.get("/settings?section=blocks").status_code == 403,
       "a sekci ani nedostane")
 
 

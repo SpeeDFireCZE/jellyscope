@@ -84,12 +84,24 @@
         </div>
     </div>
 
+    {# Titul může ležet na disku víckrát - 4K vedle 1080p. Jellyfin
+       z toho dělá jednu položku s víc soubory, takže se tady dají
+       přepnout. `zobrazena` je buď vybraná verze, nebo údaje samotné
+       položky (ta drží tu, kterou Jellyfin považuje za hlavní). #}
+    {% set zobrazena = namespace(data=item) %}
+    {% if verze and verze | length > 1 %}
+        {% for v in verze %}
+            {% if v.source_id == vybrana_verze %}
+                {% set zobrazena.data = v %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
     <div>
         <div class="kpi-row" style="margin-bottom:16px">
             {{ tile(_("Délka"), item.runtime_ticks | ticks | seconds) }}
-            {{ tile(_("Velikost"), item.size_bytes | bytes) }}
-            {{ tile(_("Rozlišení"), item.height | resolution(item.width)) }}
-            {{ tile("Bitrate", item.bitrate | bitrate) }}
+            {{ tile(_("Velikost"), zobrazena.data.size_bytes | bytes) }}
+            {{ tile(_("Rozlišení"), zobrazena.data.height | resolution(zobrazena.data.width)) }}
+            {{ tile("Bitrate", zobrazena.data.bitrate | bitrate) }}
             {{ tile(_("Přehrání"), summary.plays | number,
                     note=_("Naposledy") ~ ' ' ~ (summary.last_played | relative)) }}
         </div>
@@ -98,24 +110,45 @@
         {# Soubor                                                     #}
         {# --------------------------------------------------------- #}
         <div class="card">
-            <div class="card-head"><h2>{{ _("Soubor") }}</h2></div>
+            <div class="card-head">
+                <h2>{{ _("Soubor") }}</h2>
+                {% if verze and verze | length > 1 %}
+                <p class="card-note">
+                    {{ _("tenhle titul je na disku") }} {{ verze | length }}&times; &ndash;
+                    {{ _("přepni si, který soubor chceš vidět") }}
+                </p>
+                {% endif %}
+            </div>
+
+            {% if verze and verze | length > 1 %}
+            <div class="filtr-chipy" style="margin-bottom:14px">
+                {% for v in verze %}
+                <a class="chip {{ 'active' if (v.source_id == vybrana_verze) or (not vybrana_verze and loop.first) }}"
+                   data-keep-scroll
+                   href="/item/{{ item.id }}?verze={{ v.source_id }}">
+                    {{ v.nazev or (v.height | resolution(v.width)) }}
+                    <span class="hint">{{ v.size_bytes | bytes }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
             <div class="table-wrap">
                 <table class="facts">
                     <tbody>
-                    <tr><th>{{ _("Kontejner") }}</th><td>{{ (item.container or '-') | upper }}</td></tr>
+                    <tr><th>{{ _("Kontejner") }}</th><td>{{ (zobrazena.data.container or '-') | upper }}</td></tr>
                     {# Délku hlásí Jellyfin i ffprobe; je to první údaj,
                        podle kterého se pozná, že se soubor spároval
                        se špatným titulem. #}
                     <tr><th>{{ _("Délka") }}</th><td>{{ item.runtime_ticks | ticks | timecode }}</td></tr>
-                    <tr><th>{{ _("Velikost") }}</th><td>{{ item.size_bytes | bytes }}</td></tr>
-                    <tr><th>{{ _("Celkový bitrate") }}</th><td>{{ item.bitrate | bitrate }}</td></tr>
+                    <tr><th>{{ _("Velikost") }}</th><td>{{ zobrazena.data.size_bytes | bytes }}</td></tr>
+                    <tr><th>{{ _("Celkový bitrate") }}</th><td>{{ zobrazena.data.bitrate | bitrate }}</td></tr>
                     <tr><th>{{ _("Dynamický rozsah") }}</th><td>{{ rozsah | video_range if rozsah else '-' }}</td></tr>
                     <tr><th>{{ _("Knihovna") }}</th><td>{{ item.library_name or '-' }}</td></tr>
                     <tr><th>{{ _("Přidáno") }}</th><td>{{ item.date_created | datetime }}</td></tr>
                     <tr><th>{{ _("Data změřena") }}</th><td>{{ item.tech_updated_at | relative }}</td></tr>
                     <tr>
                         <th>{{ _("Cesta") }}</th>
-                        <td><code style="font-size:12px; word-break:break-all">{{ item.path or '-' }}</code></td>
+                        <td><code style="font-size:12px; word-break:break-all">{{ zobrazena.data.path or item.path or '-' }}</code></td>
                     </tr>
                     </tbody>
                 </table>
@@ -278,6 +311,9 @@
         {# --------------------------------------------------------- #}
         {# Historie přehrávání této položky                           #}
         {# --------------------------------------------------------- #}
+        {# Kdo titul sledoval, je o jiných lidech - divákovi se to
+           neukazuje. Jeho vlastní přehrávání najde ve svojí historii. #}
+        {% if not muj_divak %}
         <div class="card">
             <div class="card-head">
                 <h2>{{ _("Historie přehrávání") }}</h2>
@@ -298,7 +334,10 @@
                     {% for row in playback %}
                     <tr>
                         <td class="nowrap muted">{{ row.started_at | datetime }}</td>
-                        <td><a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a></td>
+                        <td>
+                            {%- if muj_divak %}{{ row.user_name or '?' }}
+                            {%- else %}<a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>{% endif %}
+                        </td>
                         <td>
                             {{ lang.display(row.audio_language) if row.audio_language else '-' }}
                             {% if row.subtitle_language %}
@@ -317,6 +356,7 @@
                 <p class="chart-empty">{{ _("Tenhle titul zatím nikdo nepřehrál.") }}</p>
             {% endif %}
         </div>
+        {% endif %}
 
         {% if siblings %}
         <div class="card">

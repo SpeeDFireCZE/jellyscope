@@ -140,7 +140,10 @@ with TestClient(app) as client:
 
     print("--- opravneni ctenare ---")
     check(client.get("/").status_code == 200, "ctenar vidi statistiky")
-    check(client.get("/settings").status_code == 200, "ctenar vidi nastaveni (jen ke cteni)")
+    # Nastaveni je od ted jen pro spravce - viz `pristup`. Ctenar si
+    # v nem drive menil vlastni heslo; nez na to bude vlastni stranka
+    # (TODO), prehodi mu ho spravce nebo `manage.py heslo`.
+    check(client.get("/settings").status_code == 403, "ctenar nastaveni nevidi")
 
     for route, data in [
         ("/settings", {"tech_source": "ffprobe", "poll_interval": "5",
@@ -156,13 +159,15 @@ with TestClient(app) as client:
 
     check(accounts.count() == 2, "ctenar zadny ucet nezalozil")
 
-    # Vlastni heslo si ale zmenit smi.
+    # Ani vlastni heslo si ted nezmeni - cela sekce Nastaveni je pro
+    # spravce. Az bude "moje nastaveni", patri zmena hesla tam.
     jana = accounts.get_by_name("jana")
     response = client.post("/settings/accounts/password", data={
         "account_id": jana["id"], "password": "noveheslo1", "password_again": "noveheslo1",
     }, follow_redirects=False)
-    check(response.status_code == 303, "ctenar si zmenil vlastni heslo")
-    check(accounts.authenticate("jana", "noveheslo1") is not None, "nove heslo funguje")
+    check(response.status_code == 403, "ctenar si heslo nezmeni (Nastaveni je zavrene)")
+    check(accounts.authenticate("jana", "jineheslo1") is not None,
+          "puvodni heslo plati dal")
 
     # Cizi uz ne.
     petr = accounts.get_by_name("petr")

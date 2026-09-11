@@ -20,7 +20,7 @@ from typing import Any, Optional
 from fastapi import Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 
-from . import (accounts, collector, db, formatting, i18n, scanner,
+from . import (accounts, collector, db, formatting, i18n, pristup, scanner,
                sekce, stats, updates)
 from .config import BASE_DIR, load_config
 from .i18n import translate as _t
@@ -69,6 +69,20 @@ def require_login(request: Request) -> dict[str, Any]:
     if account is None:
         raise HTTPException(status_code=307, headers={"Location": "/login"})
     return account
+
+
+def muj_divak(account: Optional[dict[str, Any]]) -> str:
+    """Id diváka, na kterého je účet omezený. Prázdno = vidí všechno.
+
+    Omezený je jen ten, kdo se přihlásil **svým jellyfinovým účtem**:
+    tam víme, komu patří která přehrávání, a nic dalšího mu do toho není.
+    Správce vidí všechno, ať je odkudkoliv. Místní čtenářský účet zakládá
+    správce ručně a odjakživa vidí celé statistiky - měnit mu to pod
+    rukama by znamenalo, že po aktualizaci najednou nevidí, co včera.
+    """
+    if not account or account.get("is_admin"):
+        return ""
+    return str(account.get("jellyfin_user_id") or "")
 
 
 def require_admin(request: Request) -> dict[str, Any]:
@@ -341,6 +355,22 @@ def _flash(request: Request, message: str, level: str = "info",
     request.session["flash"] = {"message": text, "level": level}
 
 
+def _anonymizuj_pro_divaka(data: dict[str, Any],
+                           account: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Divákovi schová jména a adresy ostatních, když si to správce přeje.
+
+    Jedno místo pro všechny stránky. Kdyby se to řešilo v šablonách,
+    stačilo by zapomenout na jednu - a zrovna ta by pak byla ta, kterou
+    někdo otevře.
+    """
+    kdo = pristup.role(account)
+    if kdo in ("", pristup.SPRAVCE) or not pristup.anonymizace_zapnuta(kdo):
+        return data
+    # Cteci ucet nepatri zadnemu divakovi, takze se mu schova uplne
+    # kazde jmeno - neni ke komu delat vyjimku.
+    return pristup.anonymizuj(data, muj_divak(account))
+
+
 def _context(request: Request, account: Optional[dict[str, Any]] = None,
              **extra: Any) -> dict[str, Any]:
     """Spolecna data pro kazdou stranku (stav sberace, hlasky, kdo je prihlaseny)."""
@@ -357,6 +387,11 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         "flash": request.session.pop("flash", None),
         "active_count": stats.active_session_count(),
         "account": account,
+        # Podle tohohle se v sablonach schovava to, co je o jinych lidech.
+        # `je_spravce` je jen zkratka - rozhoduje `muj_divak`, tedy jestli
+        # je ucet privazany k jednomu divakovi.
+        "muj_divak": muj_divak(account),
+        "je_spravce": bool(account and account.get("is_admin")),
         "ui_language": i18n.current_language(),
         # Dnesek pro pole s datem - dal do budoucnosti nema smysl
         # chodit, statistika by byla prazdna.
@@ -410,7 +445,9 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
             sekce.nacti_rozvrzeni() or (account or {}).get("is_admin")),
     }
     base.update(extra)
-    return base
+    # Az uplne nakonec: co se schova, se schova ve VSEM, co jde do
+    # sablony - vcetne toho, co pridala routa pres `extra`.
+    return _anonymizuj_pro_divaka(base, account)
 
 
 def _cesky_datum(iso: Optional[str]) -> str:

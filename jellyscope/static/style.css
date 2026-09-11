@@ -1706,8 +1706,75 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     border-color: var(--series-1);
 }
 
-/* Zaskrtavatka a prepinace maji barvu znacky, at nesplyvaji s pozadim. */
-input[type="checkbox"], input[type="radio"] { accent-color: var(--series-1); }
+/* Zaskrtavatka a prepinace.
+ *
+ * Kreslime si je sami, protoze systemove vypadaji na kazdem stroji jinak
+ * a v tmavem rezimu obvykle jako skvrna. Tvar je kulaty a barva tataz
+ * jako u hlavniho tlacitka - zaskrtnuti je rozhodnuti, stejne jako
+ * kliknuti na Ulozit, tak ma vypadat stejne.
+ *
+ * `accent-color` zustava jako zaloha: kdyz prohlizec `appearance: none`
+ * neumi (starsi Safari), vykresli aspon sve vlastni v nasi barve.
+ */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+
+input[type="checkbox"]:not([hidden]), input[type="radio"]:not([hidden]) {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    margin: 0;
+    border: 2px solid var(--border-strong, var(--border));
+    border-radius: 50%;          /* kulate i u zaskrtavatka - zamerne */
+    background: var(--surface-1);
+    cursor: pointer;             /* ruka: je to ovladaci prvek, ne text */
+    display: inline-grid;
+    place-content: center;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+/* Znacka uvnitr. U zaskrtavatka fajfka, u prepinace tecka - aby se dalo
+   na prvni pohled poznat "jedno z", ne "libovolne z". */
+input[type="checkbox"]:not([hidden])::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    transform: scale(0);
+    transition: transform 120ms ease;
+    background: var(--accent-ink);
+    clip-path: polygon(14% 44%, 0 60%, 40% 100%, 100% 18%, 84% 0, 38% 66%);
+}
+input[type="radio"]:not([hidden])::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transform: scale(0);
+    transition: transform 120ms ease;
+    background: var(--accent-ink);
+}
+
+input[type="checkbox"]:checked, input[type="radio"]:checked {
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    border-color: transparent;
+}
+input[type="checkbox"]:checked::before,
+input[type="radio"]:checked::before { transform: scale(1); }
+
+input[type="checkbox"]:hover:not(:disabled),
+input[type="radio"]:hover:not(:disabled) { border-color: var(--accent); }
+
+input[type="checkbox"]:disabled, input[type="radio"]:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+}
+
+/* Popisek k zaskrtavatku je soucast toho ovladaciho prvku - klik na nej
+   ho prepne -, takze ma mit tentyz kurzor. Bez toho to vypada, ze se
+   trefit musis presne do ctverecku. */
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]) { cursor: pointer; }
 
 /* Stejny odstup pod skupinou jako pod .field - at je jedno, jestli za
    ni nasleduje dalsi pole, nebo rada tlacitek. */
@@ -3216,3 +3283,56 @@ table.zapomenuti td:last-child { text-align: left; }
 table.zapomenuti td.akce { text-align: right; white-space: nowrap; width: 1%; }
 table.zapomenuti .hint { display: block; margin: 2px 0 0; }
 table.zapomenuti form { display: inline; }
+
+/* Zaškrtávátko s popiskem pod ním. Dosud se to psalo inline u každého
+   pole zvlášť; se stromem oblastí v Nastavení jich je najednou devět,
+   takže má smysl to pojmenovat. */
+.prepinac {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+.prepinac input { margin-top: 3px; flex: none; }
+.prepinac .hint { display: block; margin: 2px 0 0; }
+
+/* Strom oblastí: svislá linka drží pohromadě to, co spolu souvisí,
+   a odsazení říká „platí jen s tím nad sebou". */
+.strom { border-left: 2px solid var(--border); padding-left: 14px; margin-top: 10px; }
+.prepinac.strom-pod { margin-left: 24px; }
+
+/* Oddělovač mezi dvěma způsoby přihlášení. Čára s „nebo" uprostřed říká
+   „dvě cesty, ne dva kroky" - dvě tlačítka pod sebou bez ní vypadají
+   jako postup. */
+.login-nebo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0;
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
+.login-nebo::before, .login-nebo::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* Kód pro Quick Connect. Čte se z obrazovky a přepisuje do jiné
+   aplikace, takže velký, jednoznačný a s mezerami mezi znaky - aby se
+   nepletla nula s písmenem O. */
+.quick-kod {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: 6px;
+    text-align: center;
+    padding: 16px 10px;
+    margin: 6px 0 10px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-1);
+    color: var(--text-primary);
+}

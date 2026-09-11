@@ -2646,6 +2646,21 @@ def item(item_id: str) -> dict[str, Any] | None:
     )
 
 
+def verze_polozky(item_id: str) -> list[dict[str, Any]]:
+    """Všechny soubory jednoho titulu - 4K vedle 1080p.
+
+    Prázdný seznam znamená „jeden soubor" (nebo knihovnu, která se od
+    zavedení verzí ještě nesynchronizovala). Detail se pak chová jako
+    dřív a nic nepřepíná - jedna verze není z čeho vybírat.
+    """
+    return db.query_all(
+        "SELECT source_id, poradi, nazev, path, container, video_codec,"
+        " audio_codec, audio_channels, width, height, bitrate, size_bytes,"
+        " video_range, runtime_ticks, audio_languages, subtitle_languages"
+        " FROM item_versions WHERE item_id = ? ORDER BY poradi",
+        (item_id,))
+
+
 def item_streams(item_id: str) -> dict[str, list[dict[str, Any]]]:
     """Stopy polozky rozdelene na video, zvuk a titulky."""
     rows = db.query_all(

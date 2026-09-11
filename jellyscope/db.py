@@ -752,6 +752,13 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # "jellyfin" = soubor ho neuvadel a doplnil se z knihovny.
         "language_source": "TEXT",
     },
+    "accounts": {
+        # Ke kteremu divakovi v Jellyfinu ucet patri. Prazdne = mistni
+        # ucet, ktery s Jellyfinem nema nic spolecneho. Podle tohohle id
+        # se pozna, ktera prehravani jsou "moje" - je to totez id jako
+        # v tabulce `users`.
+        "jellyfin_user_id": "TEXT",
+    },
     "playback": {
         "audio_language": "TEXT",
         "subtitle_language": "TEXT",

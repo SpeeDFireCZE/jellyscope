@@ -35,7 +35,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from . import __version__
 from . import (accounts, api, applog, collector, db, dbmigrate, dialect,
                formatting, geoip, i18n, importers, jellyfin, notifikace,
-               odklizeni, scanner, sekce, stats, tasks, updates)
+               odklizeni, pristup, scanner, sekce, stats, tasks, updates)
 from .config import BASE_DIR as PROJECT_DIR
 from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
 from .config import BASE_DIR, load_config
@@ -269,6 +269,16 @@ def settings_page(
             last_library_scan=scanner.last_scan("library"),
             scan_running=scanner.is_scan_running(),
             stop_pending=scanner.stop_requested(),
+            # Prihlaseni divaku jellyfinovym heslem patri sem: je to
+            # o Jellyfinu a jeho uctech, ne o uctech Jellyscope.
+            # Klic i hesla divaku jdou na Jellyfin citelne - sifruje az
+            # https. Kdyz adresa zacina http:// a nevede na tenhle stroj,
+            # ma to byt videt.
+            nesifrovane=jellyfin.po_siti_nesifrovane(
+                rozepsane_jf.get("url") or db.get_setting("jellyfin_url", "")),
+            divak_login=pristup.login_zapnuty(),
+            divak_strom=pristup.strom(pristup.DIVAK),
+            divak_anonymizace=pristup.anonymizace_zapnuta(pristup.DIVAK),
         )
     elif section == "notifications":
         from . import notifikace
@@ -398,6 +408,10 @@ def settings_page(
             pool_available=db.pool_available(),
         )
     elif section == "accounts":
+        context.update(
+            ctenar_strom=pristup.strom(pristup.CTENAR),
+            ctenar_anonymizace=pristup.anonymizace_zapnuta(pristup.CTENAR),
+        )
         context.update(
             all_accounts=accounts.all_accounts(),
             # Kolik je správců - podle toho se u posledního z nich
@@ -562,6 +576,58 @@ async def settings_scan(
         return RedirectResponse(f"{zpet}{oddelovac}wait=task", status_code=303)
 
     return RedirectResponse(zpet, status_code=303)
+
+
+def _uloz_strom(formular: Any, kdo: str) -> None:
+    """Uloží zaškrtnutý strom jedné skupiny.
+
+    Čte se z formuláře přímo, ne přes pojmenované parametry: oblastí
+    přibývá a podepsat se pod každou zvlášť znamená, že se na jednu
+    zapomene - a ta pak půjde jen vypnout, ne zapnout.
+    """
+    db.set_setting(f"{kdo}_anonymizace",
+                   "1" if formular.get("anonymizace") else "0")
+    for oblast in pristup.OBLASTI:
+        db.set_setting(pristup.klic_oblasti(kdo, oblast),
+                       "1" if formular.get(f"vidi_{oblast.klic}") else "0")
+
+
+@router.post("/settings/ctenari")
+async def settings_ctenari(request: Request,
+                           account: dict[str, Any] = Depends(require_admin)):
+    """Co uvidí místní čtenářské účty."""
+    formular = await request.form()
+    _uloz_strom(formular, pristup.CTENAR)
+    db.forget_settings()
+    _flash(request, "Uloženo. Takhle uvidí statistiky čtenářské účty.",
+           "success")
+    return RedirectResponse("/settings?section=accounts#ctenari",
+                            status_code=303)
+
+
+@router.post("/settings/divaci")
+async def settings_divaci(request: Request,
+                          account: dict[str, Any] = Depends(require_admin)):
+    """Uloží, kdo z Jellyfinu smí dovnitř a co uvidí.
+
+    Zaškrtávátka se čtou z formuláře přímo, ne přes pojmenované
+    parametry: oblastí přibývá a podepsat se pod každou zvlášť znamená,
+    že se na jednu zapomene - a ta pak půjde jen vypnout, ne zapnout.
+    """
+    formular = await request.form()
+    db.set_setting(pristup.LOGIN_KLIC,
+                   "1" if formular.get("jellyfin_login") else "0")
+    _uloz_strom(formular, pristup.DIVAK)
+    db.forget_settings()
+
+    if not pristup.login_zapnuty():
+        _flash(request, "Uloženo. Jellyfinové účty dovnitř nesmí – "
+                        "dovnitř se chodí jen místními účty.", "success")
+    else:
+        _flash(request, "Uloženo. Diváci z Jellyfinu se přihlásí svým heslem.",
+               "success")
+    return RedirectResponse("/settings?section=jellyfin#divaci",
+                            status_code=303)
 
 
 @router.post("/settings/connection")

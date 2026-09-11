@@ -45,11 +45,17 @@ def kod(nazev: str) -> str:
     )
 
 
-print("--- klient umí jen GET ---")
+print("--- klient umí jen GET (krom přihlašování) ---")
 klient = kod("jellyfin.py")
-for metoda in ("post", "put", "delete", "patch"):
+for metoda in ("put", "delete", "patch"):
     check(f"_client.{metoda}(" not in klient,
           f"jellyfin.py nevolá _client.{metoda}()")
+# POST je jen v prihlasovani: overeni hesla, zaloha kodu pro Quick
+# Connect, vymena potvrzeneho kodu za identitu a zruseni tokenu, ktery
+# tim vznikl. Nic jineho se timhle klientem nemeni - viz nize.
+check(klient.count("_client.post(") == 4,
+      f"POST je jen čtyřikrát, všechny kvůli přihlášení "
+      f"({klient.count('_client.post(')}x)")
 check(klient.count("async def _get") == 1, "existuje jediná odesílací funkce")
 check("await self._client.get(" in klient, "stahování obrázků jde taky přes GET")
 
@@ -74,6 +80,18 @@ CTECI_ADRESY = {
     # Dotazovací rozhraní pluginu Playback Reporting. Jediné místo, kde se
     # posílá POST - SQL jde v těle požadavku a hlídá ho jen_cteni().
     "/user_usage_stats/submit_custom_query",
+    # Prihlaseni jellyfinovym heslem - a hned uklid po nem. Vysvetleni
+    # je u MENICI_ADRESY nize.
+    "/Users/AuthenticateByName",
+    "/Sessions/Logout",
+    # Prihlaseni kodem (Quick Connect). Jellyscope si rekne o kod,
+    # potvrdi ho clovek ve svem vlastnim Jellyfinu - heslo se sem
+    # nedostane vubec. Token, ktery z toho padne, se rusi stejne jako
+    # u hesla.
+    "/QuickConnect/Enabled",
+    "/QuickConnect/Initiate",
+    "/QuickConnect/Connect",
+    "/Users/AuthenticateWithQuickConnect",
 }
 
 nalezene: set[str] = set()
@@ -90,12 +108,46 @@ print(f"       nalezené adresy: {sorted(nalezene)}")
 MENICI_ADRESY = (
     "/Playing", "/Library/Refresh", "/ScheduledTasks/Running",
     "/System/Restart", "/System/Shutdown", "/Users/New",
-    "/Plugins/", "/Packages/", "/Items/Delete", "/Sessions/Logout",
-    "/Users/AuthenticateByName", "/Startup/",
+    "/Plugins/", "/Packages/", "/Items/Delete", "/Startup/",
 )
 vsechen_kod = "\n".join(kod(soubor) for soubor in SOUBORY)
 for adresa in MENICI_ADRESY:
     check(adresa not in vsechen_kod, f"nikde se neobjevuje {adresa}")
+
+# Sest vyjimek, vsechny jen kvuli prihlasovani jellyfinovym uctem.
+#
+# `AuthenticateByName` neni zasah do knihovny ani do nastaveni - je to
+# dotaz "sedi tohle heslo?", polozeny za cloveka ve chvili, kdy ho sam
+# napsal do naseho prihlasovaciho okna. Jellyfin za nej ale vyda
+# pristupovy token, a ten uz zasah je: platny klic k cizimu uctu, ktery
+# by po nas zustal viset. Proto se hned rusi pres `/Sessions/Logout`.
+# Overeno na 10.11.11 i 12.0.0: po prihlaseni nepribyde zadne zarizeni
+# ani klic.
+#
+# Obe adresy smi byt **jen v te jedne funkci** - jinde uz to neni
+# prihlasovani a tahle uvaha na ne neplati.
+zacatek = klient.index("async def over_prihlaseni")
+konec = klient.index("async def items_page")
+prihlasovani = klient[zacatek:konec]
+#
+# Quick Connect je na tom stejne, jen obraceny smer: Jellyscope si
+# vyzada kod, clovek ho potvrdi ve svem uz prihlasenem Jellyfinu a
+# teprve pak se vymeni za identitu. `Enabled` a `Connect` se jen ptaji,
+# `Initiate` zaklada kod a `AuthenticateWithQuickConnect` vraci token -
+# ten se rusi hned, jako u hesla. Do knihovny ani do nastaveni
+# nesahne ani jedna z nich.
+for adresa in ("/Users/AuthenticateByName", "/Sessions/Logout",
+               "/QuickConnect/Enabled", "/QuickConnect/Initiate",
+               "/QuickConnect/Connect",
+               "/Users/AuthenticateWithQuickConnect"):
+    check(vsechen_kod.count(adresa) == 1,
+          f"{adresa} je v kódu jen jednou ({vsechen_kod.count(adresa)}x)")
+    check(adresa in prihlasovani, f"{adresa} je jen v přihlašování")
+check("_zrus_token" in prihlasovani, "a token po ověření hesla hned mizí")
+# A hlavne: vsechny POSTy klienta lezi prave v tomhle useku. Kdyby
+# nekdy pribyl jinde, uz to neni prihlasovani a tahle uvaha neplati.
+check(prihlasovani.count("_client.post(") == klient.count("_client.post("),
+      "žádný POST klienta neleží mimo přihlašování")
 
 
 print()

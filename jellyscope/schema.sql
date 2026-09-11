@@ -103,6 +103,36 @@ CREATE INDEX IF NOT EXISTS idx_items_series  ON items (series_id);
 CREATE INDEX IF NOT EXISTS idx_items_tmdb    ON items (tmdb_id);
 
 
+-- Verze titulu: 4K vedle 1080p, remux vedle prekodovaneho.
+--
+-- Jellyfin dva soubory tehoz filmu ve slozce nespoji do dvou polozek -
+-- udela jednu s dvema `MediaSources`. Polozka si drzi udaje te prvni
+-- (podle ni se pocitaji statistiky, at se cisla nezdvojnasobi), ostatni
+-- lezi tady. Bez toho by v knihovne stalo 1080p, i kdyz vedle je 4K.
+CREATE TABLE IF NOT EXISTS item_versions (
+    item_id         TEXT NOT NULL,
+    source_id       TEXT NOT NULL,      -- MediaSources[].Id z Jellyfinu
+    poradi          INTEGER NOT NULL DEFAULT 0,
+    nazev           TEXT,               -- "2160p", "1080p" - jak to rika Jellyfin
+    path            TEXT,
+    container       TEXT,
+    video_codec     TEXT,
+    audio_codec     TEXT,
+    audio_channels  INTEGER,
+    width           INTEGER,
+    height          INTEGER,
+    bitrate         BIGINT,
+    size_bytes      BIGINT,
+    video_range     TEXT,
+    runtime_ticks   BIGINT,
+    audio_languages    TEXT,
+    subtitle_languages TEXT,
+    synced_at       TEXT,
+    PRIMARY KEY (item_id, source_id),
+    FOREIGN KEY (item_id) REFERENCES items (id) ON DELETE CASCADE
+);
+
+
 -- Zaznamy o prehravani.
 --
 -- Tohle je srdce cele aplikace. Jellyfin si historii sledovani nepamatuje,

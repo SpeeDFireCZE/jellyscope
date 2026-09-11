@@ -191,10 +191,10 @@ accounts.create("ctenar", "dlouheheslo", is_admin=False)
 with TestClient(app) as ctenar:
     ctenar.post("/login", data={"username": "ctenar", "password": "dlouheheslo"},
                 follow_redirects=False)
-    # Ctenari se sekce, na kterou nema, tise vymeni za tu jeho - tak se
-    # to v Nastaveni chova u vsech. Podstatne je, ze API nevidi.
+    # Nastaveni je jen pro spravce, takze se ctenar nedostane ani
+    # k sekci API - a o klicich se nedozvi nic.
     stranka = ctenar.get("/settings?section=api")
-    check(stranka.status_code == 200, "čtenář dostane svou sekci")
+    check(stranka.status_code == 403, "čtenář se do Nastavení nedostane")
     check("okno-api-dokumentace" not in stranka.text,
           "a sekci API nevidí")
     check("Vyrobit klíč" not in stranka.text, "ani tlačítko na výrobu klíče")
