@@ -151,7 +151,7 @@
         <label for="backup_keep">{{ _("Kolik záloh nechat") }}</label>
         <input type="number" id="backup_keep" name="backup_keep" form="ulohy"
                value="{{ settings.backup_keep }}" min="1" max="365">
-        <p class="hint">{{ _("Starší se při každé záloze smažou, aby složka nerostla donekonečna.") }}</p>
+        <p class="hint">{{ _("Starší se při každé záloze smažou, aby složka nerostla donekonečna. Platí zvlášť pro pravidelné zálohy a zvlášť pro ty před mazáním – jinak by pár zapomenutých diváků za den vytlačilo všechny noční zálohy.") }}</p>
     </div>
 
     {# Jen u PostgreSQL - SQLite se zálohuje vestavěnou funkcí a žádný
@@ -186,7 +186,7 @@
     {% endif %}
 
     <div class="btn-row">
-        <button class="btn primary" type="submit" form="ulohy">{{ _("Uložit úlohy a zálohy") }}</button>
+        <button data-keep-scroll class="btn primary" type="submit" form="ulohy">{{ _("Uložit úlohy a zálohy") }}</button>
     </div>
 
     <div class="btn-row" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)">
@@ -194,7 +194,7 @@
         {% for row in task_list %}
         <form method="post" action="/settings/tasks/run">
             <input type="hidden" name="key" value="{{ row.task.key }}">
-            <button class="btn" type="submit">{{ _(row.task.name) }}</button>
+            <button data-keep-scroll class="btn" type="submit">{{ _(row.task.name) }}</button>
         </form>
         {% endfor %}
     </div>
@@ -223,14 +223,14 @@
                         <form method="post" action="/settings/backup/restore"
                               onsubmit="return confirm('{{ _("Obnovit databázi ze zálohy") }} {{ row.name }}?\n\n{{ _("Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje.") }}')">
                             <input type="hidden" name="name" value="{{ row.name }}">
-                            <button class="btn" type="submit">{{ _("Obnovit") }}</button>
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Obnovit") }}</button>
                         </form>
                         {# Potvrzení je tu schválně: smazaná záloha se nedá
                            vrátit a řádky jsou si na pohled podobné. #}
                         <form method="post" action="/settings/backup/delete"
                               onsubmit="return confirm('{{ _("Opravdu smazat zálohu") }} {{ row.name }}?')">
                             <input type="hidden" name="name" value="{{ row.name }}">
-                            <button class="btn" type="submit">{{ _("Smazat") }}</button>
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Smazat") }}</button>
                         </form>
                     </div>
                 </td>
@@ -243,7 +243,11 @@
 </div>
 
 
-<div class="card">
+{# `id` není ozdoba: po zapomenutí i po vrácení se sem stránka vrací
+   (viz `#odklizeni` v redirectu), aby člověk zůstal u toho, co dělal,
+   místo aby ho to vyhodilo na začátek stránky. Hlášku tím nemine -
+   je to plovoucí okénko nahoře, ne kus stránky. #}
+<div class="card" id="odklizeni">
     <div class="card-head">
         <h2>{{ _("Odklízení historie") }}</h2>
         <p class="card-note">{{ _("jak dlouho se historie nechává, a jak zapomenout jednoho diváka") }}</p>
@@ -269,15 +273,6 @@
                 {% endif %}
             {% else %}
                 {{ _("Historie je zatím prázdná.") }}
-            {% endif %}
-            {% if preskladani_v %}
-                {# Po ručním zapomenutí: smazáno je, ale bajty v souboru
-                   leží, dokud se nepřepíše - a to se dělá v noci, ať to
-                   nezasekne aplikaci. Člověk má vědět, že to ještě není
-                   úplně pryč. #}
-                <br><span class="badge info"><span class="dot"></span>{{ _("soubor databáze se přepíše") }}
-                {{ preskladani_v.strftime("%d.%m. %H:%M") }}</span>
-                {{ _("do té doby po smazaných řádcích zůstává v souboru stopa") }}
             {% endif %}
         </p>
     </div>
@@ -318,10 +313,18 @@
                              document.getElementById('okno-zapomenut').showModal();">
                 {{ _("Zapomenout") }}
             </button>
+            {# Objeví se, teprve když je co obnovovat - dokud nikdo
+               zapomenutý není, nemá co nabízet. `type="button"` ze
+               stejného důvodu jako u tlačítka vedle: ať se kliknutím
+               nemůže odeslat žádný formulář. #}
+            {% if zapomenuti %}
+            <button class="btn primary" type="button" data-okno="okno-obnovit">
+                {{ _("Obnovit") }}
+            </button>
+            {% endif %}
         </div>
         <p class="hint">
-            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie.") }}
-            {{ _("Před smazáním se udělá záloha databáze.") }}
+            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie. Před smazáním se udělá záloha databáze. Do noci jde zásah vzít zpět.") }}
         </p>
     </div>
 
@@ -329,7 +332,7 @@
        formulář jako karta nad ním - podstatné je, že u každé karty
        tlačítko je. #}
     <div class="btn-row">
-        <button class="btn primary" type="submit" form="ulohy">{{ _("Uložit odklízení") }}</button>
+        <button data-keep-scroll class="btn primary" type="submit" form="ulohy">{{ _("Uložit odklízení") }}</button>
     </div>
 
     {# Vlastní okno místo `confirm()` z prohlížeče. Důvod není vzhled:
@@ -340,13 +343,67 @@
 
        Značka <dialog> je vestavěná: sama ztmaví pozadí, zavře se Escapem
        a pohlídá fokus. Žádná knihovna, žádná obsluha klávesnice. #}
+    {# Kdo je zapomenutý a co se s tím ještě dá dělat.
+
+       V kartě to bylo pořád na očích, přestože jde o výjimečný stav -
+       a překáželo to tomu, co se v ní dělá běžně. Za tlačítkem to
+       neuteče: tlačítko se objeví jen tehdy, když je co obnovovat. #}
+    <dialog id="okno-obnovit" class="dialog">
+        <h2>{{ _("Zapomenutí diváci") }}</h2>
+
+        <p>
+            {{ _("Zapomenutí se dá vzít zpět, dokud ho v noci nesmaže úklid.") }}
+            {% if preskladani_v %}<strong>{{ _("Nejbližší úklid") }}: {{ preskladani_v.strftime("%d.%m. %H:%M") }}.</strong>{% endif %}
+            {{ _("Potom zůstává jen záloha, která se udělala těsně před ním.") }}
+        </p>
+
+        <table class="zapomenuti">
+            {% for z in zapomenuti %}
+            <tr>
+                <td>
+                    <strong>{{ z.jmeno }}</strong>
+                    <span class="hint">{{ z.relaci | number }} {{ _("přehrávání") }},
+                    {{ z.zapomenuto_v | relative }}</span>
+                </td>
+                <td class="{{ 'akce' if z.v_kosi }}">
+                    {% if z.v_kosi %}
+                        <form method="post" action="/settings/historie/vrat">
+                            <input type="hidden" name="udalost" value="{{ z.id }}">
+                            <button class="btn primary" type="submit"
+                                    data-keep-scroll>{{ _("Vrátit zpět") }}</button>
+                        </form>
+                    {% else %}
+                        {# Uklid uz probehl. Jedina cesta zpet je záloha -
+                           a je jmenovaná, aby se nemusela hledat mezi
+                           ostatními. #}
+                        <span class="hint">
+                            {{ _("data tohoto diváka jde ještě obnovit ze zálohy") }}
+                            <code>{{ z.zaloha_soubor }}</code>
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <p class="card-note">
+            {{ _("Zálohu nahraješ v Nastavení → Databáze. Mizí stejně jako ostatní zálohy – podle toho, kolik jich necháváš; s poslední zálohou zmizí divák i z tohohle seznamu.") }}
+        </p>
+
+        <div class="btn-row">
+            <form method="dialog">
+                <button class="btn" type="submit" autofocus>{{ _("Zavřít") }}</button>
+            </form>
+        </div>
+    </dialog>
+
     <dialog id="okno-zapomenut" class="dialog">
         <h2>{{ _("Zapomenout diváka") }}</h2>
 
         <p class="dialog-label">{{ _("Koho se to týká") }}</p>
         <p><strong id="koho-zapomenout"></strong></p>
 
-        <p>{{ _("Smaže se všechno, co je o tom divákovi zaznamenané. Těsně před tím se udělá záloha databáze – to je jediná cesta zpět.") }}</p>
+        <p>{{ _("Smaže se všechno, co je o tom divákovi zaznamenané. Těsně před tím se udělá záloha databáze, a do dnešní noci jde zásah vzít zpět jedním tlačítkem.") }}</p>
 
         <p class="card-note">
             {{ _("Účet zůstává v Jellyfinu, takže ho příští synchronizace zase uvidí – jen už bez historie.") }}
@@ -358,7 +415,13 @@
             <form method="dialog">
                 <button class="btn" type="submit" autofocus>{{ _("Zrušit") }}</button>
             </form>
-            <button class="btn danger" type="submit" form="zapomenut">
+            {# `data-keep-scroll`: po akci se stránka načte znovu a bez
+               tohohle by začínala od začátku. Skript v base.html si při
+               kliknutí zapamatuje polohu a po načtení ji vrátí - člověk
+               zůstane přesně tam, kde byl. Kotva `#odklizeni` v adrese
+               je jen záchrana pro případ, že skript nedoběhne. #}
+            <button class="btn danger" type="submit" form="zapomenut"
+                    data-keep-scroll>
                 {{ _("Ano, zapomenout") }}
             </button>
         </div>
@@ -390,14 +453,14 @@
     <div class="btn-row" style="margin-top:12px">
         <form method="post" action="/settings/scan">
             <input type="hidden" name="mode" value="missing">
-            <button class="btn primary" type="submit"
+            <button data-keep-scroll class="btn primary" type="submit"
                     {{ 'disabled' if scan_running or settings.tech_source != 'ffprobe' }}>
                 {{ _("Analyzovat chybějící") }}
             </button>
         </form>
         <form method="post" action="/settings/scan">
             <input type="hidden" name="mode" value="all">
-            <button class="btn" type="submit"
+            <button data-keep-scroll class="btn" type="submit"
                     {{ 'disabled' if scan_running or settings.tech_source != 'ffprobe' }}>
                 {{ _("Analyzovat vše znovu") }}
             </button>
@@ -519,7 +582,7 @@
         {# Jedno tlačítko, jedna akce. Dohledání v Jellyfinu je její první
            krok - když Jellyfin neodpoví, zbytek proběhne bez něj. #}
         <form method="post" action="/settings/history/tidy">
-            <button class="btn primary" type="submit">{{ _("Narovnat data") }}</button>
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Narovnat data") }}</button>
         </form>
         {# Seznam toho, co zustalo - i s duvodem. Nepocita se pri uklidu
            a neuklada se: kdyby se ulozil, ukazoval by stav po poslednim

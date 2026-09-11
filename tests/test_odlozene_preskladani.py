@@ -14,9 +14,10 @@ Co se tu ověřuje:
 * termín je první čas Odklízení **po** žádosti - kdo klikne pět minut
   po něm, čeká do zítřka; kdo klikne před ním, dočká se dnes,
 * plánovač dluh splatí, až termín nastane - ne dřív,
-* noční odklízení, které samo přepisuje, dluh smaže také,
+* noční odklízení, které samo přepisuje, dluh smaže - ale jen když
+  v koši nic nečeká,
 * po neúspěšném přepisu dluh zůstane (zkusí se zase další noc),
-* stránka a hláška o čekajícím přepisu říkají.
+* hláška i okno Obnovit říkají, do kdy jde zásah vzít zpět.
 
 Spuštění:
     .\.venv\Scripts\python.exe tests\test_odlozene_preskladani.py
@@ -104,7 +105,7 @@ naplnit("u-mirek", ZNAMKA, 200)
 
 print("--- ruční zapomenutí jen maže, přepis zapíše jako dluh ---")
 check(odklizeni.preskladani_ceka() == "", "na začátku nic nečeká")
-vysledek = odklizeni.zapomen_uzivatele("u-mirek", hned=False)
+vysledek = odklizeni.zapomen_uzivatele("u-mirek", do_kose=True)
 check(vysledek["smazano"] == 200, f"smazalo se 200 řádků ({vysledek['smazano']})")
 check(db.query_value("SELECT COUNT(*) FROM playback WHERE user_id = ?",
                      ("u-mirek",)) == 0, "z databáze jsou pryč hned")
@@ -160,21 +161,30 @@ asyncio.run(tasks._dodelej_odlozene_preskladani())
 check(odklizeni.preskladani_ceka() == "", "po termínu je dluh splacený")
 check(PREPISU["pocet"] == 1, "přepis proběhl právě jednou")
 po = stopy(ZNAMKA)
-check(po <= 1, f"a stopa v souboru je pryč ({po}, jedna je účet v users)")
+# Dve stopy smi zustat a obe jsou zamerne: ucet v `users` (ten je
+# v Jellyfinu, odsud se nemaze) a radek v `zapomenuti`, podle ktereho
+# stranka nabizi obnovu ze zalohy. Zmizi s ni.
+check(po <= 2, f"a stopa po přehráváních je pryč ({po}: účet a záznam o zapomenutí)")
 
 print()
 print("--- noční odklízení přepisuje samo, dluh tím mizí ---")
 naplnit("u-jana", "JanaNeobvykleJmeno", 50)
-odklizeni.zapomen_uzivatele("u-jana", hned=False)
+odklizeni.zapomen_uzivatele("u-jana", do_kose=True)
 check(odklizeni.preskladani_ceka() != "", "po zapomenutí dluh je")
 naplnit("u-karel", "KarelNeobvykleJmeno", 30)          # rok 2020 = stare
 odklid = odklizeni.smaz_stare(odklizeni.MIN_DNU)
 check(odklid["smazano"] == 30, f"odklízení smazalo 30 starých ({odklid['smazano']})")
-check(odklizeni.preskladani_ceka() == "", "a dluh smazalo s sebou")
-check(stopy("JanaNeobvykleJmeno") <= 1, "po Janě v souboru nic nezbylo")
+check(odklizeni.preskladani_ceka() != "", "dluh zůstal (v koši je Jana)")
+# Jana je v kosi, takze odklizeni jeji radky smazat nesmi - a objednavku
+# na prepis nesmi zrusit, jinak by kos neměl kdy zmizet.
+check(odklizeni.kos_ma_radky(), "Jana zůstává v koši")
+check(odklizeni.preskladani_ceka() != "",
+      "a objednávka na přepis zůstala - koš se musí mít kdy vysypat")
 
 print()
-print("--- hned=True se chová jako dřív ---")
+print("--- mimo koš (do_kose=False) se maže rovnou ---")
+odklizeni.vysyp_kos()                      # at uklidime po Jane
+odklizeni.dokonci_odlozene_preskladani()
 naplnit("u-petr", "PetrNeobvykleJmeno", 40)
 odklizeni.zapomen_uzivatele("u-petr")
 check(stopy("PetrNeobvykleJmeno") <= 1, "stopa zmizela hned")
@@ -207,11 +217,11 @@ odpoved = klient.post("/settings/historie/zapomen", data={"user_id": "u-eva"},
                       follow_redirects=True)
 text = re.sub(r"<[^>]+>", " ", odpoved.text)
 text = re.sub(r"\s+", " ", text)
-check("smazána (20 přehrávání)" in text, "hláška říká, kolik se smazalo")
-check("Místo v souboru databáze se uvolní" in text,
-      "a že místo v souboru se uvolní až později")
-check("soubor databáze se přepíše" in text,
-      "karta Odklízení ukazuje čekající přepis")
+check("(20 přehrávání)" in text, "hláška říká, kolik odešlo")
+check("jde vrátit zpět" in text,
+      "a že to jde do noci vzít zpět")
+check("Nejbližší úklid" in text,
+      "okno Obnovit říká, do kdy to jde vzít zpět")
 check(PREPISU["pocet"] == pred_klikem, "kliknutí soubor nepřepsalo")
 
 print()

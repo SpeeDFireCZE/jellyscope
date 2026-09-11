@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from . import db
@@ -141,24 +142,28 @@ def smaz_stare(dnu: int | None = None) -> dict[str, Any]:
     if kolik:
         log.info("Odklizeno %s prehravani starsich nez %s dni", kolik, dnu)
         # Az tady jsou data opravdu pryc - viz db.preskladat(). Pousti se
-        # jen kdyz se neco smazalo: prepisuje cely soubor. Prepis pokryje
-        # i to, co ceka z rucniho zapomenuti - druhy by byl zbytecny.
-        if db.preskladat():
+        # jen kdyz se neco smazalo: prepisuje cely soubor.
+        if db.preskladat() and not kos_ma_radky():
+            # Objednavka na prepis se ruzi jen tehdy, kdyz uz nema co
+            # pokryvat. Kdyz v kosi neco je, musi zustat: podle ni se
+            # pozna, kdy kos vysypat, a bez ni by v nem radky uvizly.
             db.set_setting(ODLOZENE_KLIC, "")
     return {"smazano": kolik, "hranice": mez, "dnu": dnu}
 
 
-def zapomen_uzivatele(user_id: str, hned: bool = True) -> dict[str, Any]:
+def zapomen_uzivatele(user_id: str, do_kose: bool = False,
+                      zaloha: str = "") -> dict[str, Any]:
     """Smaže všechno, co je o jednom divákovi zaznamenané.
 
     Účet samotný je v Jellyfinu - ten odsud smazat nejde a nemá se o to
     ani pokoušet. Příští synchronizace ho tedy zase uvidí; historie,
     kterou jsme o něm měli, se ale nevrátí.
 
-    `hned` říká, kdy se přepíše soubor databáze, aby po smazaných řádcích
-    nezůstala stopa. `True` to udělá teď a volající počká; `False` jen
-    smaže a přepis nechá na noc (viz ODLOZENE_KLIC) - to je pro kliknutí
-    z Nastavení, kde by minuta zámku zastavila celou aplikaci.
+    `do_kose` rozhoduje o tom, jestli jde zásah do noci vzít zpět.
+    `True` (tak to dělá tlačítko v Nastavení) řádky **přesune do koše**:
+    ze statistik zmizí okamžitě, ale dají se vrátit, dokud je v noci
+    nevysype `vysyp_kos()`. `False` je smaže rovnou a hned přepíše soubor
+    databáze - to je cesta pro toho, kdo ví, co dělá, a nechce čekat.
     """
     user_id = (user_id or "").strip()
     if not user_id:
@@ -168,23 +173,166 @@ def zapomen_uzivatele(user_id: str, hned: bool = True) -> dict[str, Any]:
         "SELECT name FROM users WHERE id = ?", (user_id,)) or {}
     jmeno = radek.get("name") or ""
 
+    udalost = 0
     with db.connect() as conn:
         pocet = conn.execute(
             "SELECT COUNT(*) AS pocet FROM playback WHERE user_id = ?",
             (user_id,)).fetchone()
         kolik = int((pocet or {"pocet": 0})["pocet"] or 0)
+        if kolik and do_kose:
+            udalost = _zaloz_udalost(conn, user_id, jmeno, kolik, zaloha)
+            spolecne = [s for s in db.sloupce(conn, "playback")
+                        if s in set(db.sloupce(conn, db.KOS)) and s != "id"]
+            vypis = ", ".join(spolecne)
+            # Nejdriv kopie, teprve pak mazani - kdyby se cestou neco
+            # pokazilo, at radky zustanou v playbacku, ne nikde.
+            conn.execute(
+                f"INSERT INTO {db.KOS} (udalost, {vypis})"
+                f" SELECT ?, {vypis} FROM playback WHERE user_id = ?",
+                (udalost, user_id))
         conn.execute("DELETE FROM playback WHERE user_id = ?", (user_id,))
         conn.commit()
 
     log.info("Zapomenut divak %s: smazano %s prehravani", jmeno or user_id, kolik)
-    if kolik and hned:
+    if kolik and do_kose:
+        # V kosi radky jeste jsou, takze prepis souboru ted nema smysl -
+        # udela se v noci, az se kos vysype.
+        odloz_preskladani()
+    elif kolik:
         # „Zapomen toho divaka" ma znamenat, ze je pryc - ne ze se jen
         # prestane hledat. Bez tohohle jeho zaznamy v souboru zustanou
         # lezet, dokud je neco neprepise, a daji se z nej precist.
         db.preskladat()
-    elif kolik:
-        odloz_preskladani()
-    return {"smazano": kolik, "jmeno": jmeno}
+    return {"smazano": kolik, "jmeno": jmeno, "udalost": udalost}
+
+
+# ---------------------------------------------------------------------------
+# Koš: dokud se nevysype, dá se zapomenutí vzít zpět
+# ---------------------------------------------------------------------------
+
+V_KOSI = "kos"
+JEN_ZALOHA = "zaloha"
+
+
+def _zaloz_udalost(conn: Any, user_id: str, jmeno: str, kolik: int,
+                   zaloha: str) -> int:
+    """Zapíše jedno zapomenutí a vrátí jeho číslo."""
+    conn.execute(
+        "INSERT INTO zapomenuti (user_id, jmeno, relaci, zapomenuto_v,"
+        " zaloha, stav) VALUES (?,?,?,?,?,?)",
+        (user_id, jmeno or user_id, kolik, db.utcnow(), zaloha, V_KOSI))
+    radek = conn.execute(
+        "SELECT MAX(id) AS id FROM zapomenuti WHERE user_id = ?",
+        (user_id,)).fetchone()
+    return int(dict(radek or {}).get("id") or 0)
+
+
+def vrat_z_kose(udalost: Any) -> dict[str, Any]:
+    """Vrátí do historie to, co jedno zapomenutí odklidilo do koše.
+
+    Vrací se celá skupina najednou - divák je buď zapomenutý, nebo není.
+    Sloupec `id` se nekopíruje: nová čísla si přidělí databáze sama
+    a nikdo se na ně neodkazuje.
+    """
+    try:
+        cislo = int(udalost)
+    except (TypeError, ValueError):
+        return {"vraceno": 0, "jmeno": ""}
+
+    with db.connect() as conn:
+        radek = conn.execute(
+            "SELECT jmeno, stav FROM zapomenuti WHERE id = ?",
+            (cislo,)).fetchone()
+        udaje = dict(radek or {})
+        if not udaje or str(udaje.get("stav")) != V_KOSI:
+            return {"vraceno": 0, "jmeno": str(udaje.get("jmeno") or "")}
+
+        spolecne = [s for s in db.sloupce(conn, "playback")
+                    if s in set(db.sloupce(conn, db.KOS)) and s != "id"]
+        vypis = ", ".join(spolecne)
+        pocet = conn.execute(
+            f"SELECT COUNT(*) AS pocet FROM {db.KOS} WHERE udalost = ?",
+            (cislo,)).fetchone()
+        kolik = int(dict(pocet or {}).get("pocet") or 0)
+        conn.execute(
+            f"INSERT INTO playback ({vypis})"
+            f" SELECT {vypis} FROM {db.KOS} WHERE udalost = ?", (cislo,))
+        conn.execute(f"DELETE FROM {db.KOS} WHERE udalost = ?", (cislo,))
+        conn.execute("DELETE FROM zapomenuti WHERE id = ?", (cislo,))
+        zbyva = conn.execute(
+            f"SELECT COUNT(*) AS pocet FROM {db.KOS}").fetchone()
+        prazdno = int(dict(zbyva or {}).get("pocet") or 0) == 0
+        conn.commit()
+
+    jmeno = str(udaje.get("jmeno") or "")
+    log.info("Vraceno z kose: %s, %s prehravani", jmeno, kolik)
+    if prazdno:
+        # Prepis souboru byl objednany kvuli mazani, ktere se prave
+        # nekonalo. Na velke databazi je to minuta zamku - nema za co.
+        db.set_setting(ODLOZENE_KLIC, "")
+    return {"vraceno": kolik, "jmeno": jmeno}
+
+
+def kos_ma_radky() -> bool:
+    """Čeká v koši něco na vysypání?"""
+    return bool(db.query_value(f"SELECT COUNT(*) FROM {db.KOS}", default=0))
+
+
+def vysyp_kos() -> int:
+    """Smaže, co je v koši. Vrací kolik řádků odešlo.
+
+    Tohle je ta chvíle, kdy je zapomenutí opravdu zapomenutím. Volá se
+    v noci, hned před přepsáním souboru - viz tasks.
+    """
+    with db.connect() as conn:
+        pocet = conn.execute(
+            f"SELECT COUNT(*) AS pocet FROM {db.KOS}").fetchone()
+        kolik = int(dict(pocet or {}).get("pocet") or 0)
+        conn.execute(f"DELETE FROM {db.KOS}")
+        conn.execute(
+            "UPDATE zapomenuti SET stav = ? WHERE stav = ?",
+            (JEN_ZALOHA, V_KOSI))
+        conn.commit()
+    if kolik:
+        log.info("Kos vysypan: %s prehravani je nadobro pryc", kolik)
+    return kolik
+
+
+def zapomenuti(zapomen_starsi_bez_zalohy: bool = True) -> list[dict[str, Any]]:
+    """Co se zapomnělo a co se s tím ještě dá dělat.
+
+    Tři stavy, a je mezi nimi rozdíl, který má člověk vidět:
+
+    * **v koši** - jde vrátit jedním tlačítkem,
+    * **jen v záloze** - koš se vysypal, ale soubor zálohy ještě je;
+      vrátit se to dá, jen ručně, a stránka řekne jak,
+    * **pryč** - záloha se mezitím smazala úklidem starších záloh.
+      Nabízet návod k souboru, který neexistuje, by byl výsměch, tak
+      takový řádek ze seznamu zmizí.
+    """
+    radky = db.query_all(
+        "SELECT id, user_id, jmeno, relaci, zapomenuto_v, zaloha, stav"
+        " FROM zapomenuti ORDER BY id DESC")
+    vysledek: list[dict[str, Any]] = []
+    zahodit: list[Any] = []
+    for radek in radky:
+        udaje = dict(radek)
+        soubor = str(udaje.get("zaloha") or "")
+        ma_zalohu = bool(soubor) and Path(soubor).exists()
+        if str(udaje.get("stav")) != V_KOSI and not ma_zalohu:
+            zahodit.append(udaje["id"])
+            continue
+        udaje["zaloha_soubor"] = Path(soubor).name if soubor else ""
+        udaje["ma_zalohu"] = ma_zalohu
+        udaje["v_kosi"] = str(udaje.get("stav")) == V_KOSI
+        vysledek.append(udaje)
+
+    if zahodit and zapomen_starsi_bez_zalohy:
+        with db.connect() as conn:
+            for cislo in zahodit:
+                conn.execute("DELETE FROM zapomenuti WHERE id = ?", (cislo,))
+            conn.commit()
+    return vysledek
 
 
 def odloz_preskladani() -> None:

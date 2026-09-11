@@ -2571,12 +2571,19 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    skládá pod sebe, což u dvojice „3 | TB" nedává smysl - jednotka
    patří k číslu i na mobilu. */
 .pole-s-jednotkou {
-    display: grid;
-    grid-template-columns: 1fr auto;
+    /* Pole a k nemu jedno az dve tlacitka (nebo jednotka). Flex, ne
+       mrizka o dvou sloupcich: do te se treti prvek nevesel a spadl na
+       vlastni radek pres celou sirku, takze tlacitko Obnovit vypadalo
+       jako hlavni akce karty - cimz rozhodne neni. */
+    display: flex;
     gap: 10px;
     align-items: center;
 }
+/* Roste jen pole vlevo; jednotka i tlacitka si drzi svou sirku. */
+.pole-s-jednotkou > :first-child { flex: 1 1 auto; min-width: 0; }
+.pole-s-jednotkou > :not(:first-child) { flex: 0 0 auto; width: auto; }
 .pole-s-jednotkou input { width: 100%; }
+.pole-s-jednotkou > .btn { white-space: nowrap; }
 
 .obdobi-pole {
     display: grid;
@@ -3198,3 +3205,14 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     .jen-desktop { display: none; }
     .jen-mobil { display: flex; }
 }
+
+/* Seznam zapomenutých diváků v kartě Odklízení historie. Není to
+   přehledová tabulka, ale dvojice "kdo" a "co se s tím dá dělat", tak
+   nemá hlavičku ani linky - jen dost místa, aby tlačítko nelepilo
+   na jméno. */
+table.zapomenuti { width: 100%; border-collapse: collapse; margin-top: 6px; }
+table.zapomenuti td { padding: 6px 0; vertical-align: top; border: 0; }
+table.zapomenuti td:last-child { text-align: left; }
+table.zapomenuti td.akce { text-align: right; white-space: nowrap; width: 1%; }
+table.zapomenuti .hint { display: block; margin: 2px 0 0; }
+table.zapomenuti form { display: inline; }

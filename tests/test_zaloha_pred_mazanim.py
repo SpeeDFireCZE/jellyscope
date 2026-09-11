@@ -109,8 +109,12 @@ check(soubory and tasks.ZALOHA_PRED_MAZANIM in soubory[0].name,
 check(soubory and v_zaloze(soubory[0], "u-mirek") == 120,
       "záloha obsahuje všech 120 řádků, které se vzápětí smazaly")
 check(odklizeni.pocet_relaci("u-mirek") == 0, "a z databáze jsou pryč")
-check("Záloha před smazáním:" in text and "pred-mazanim" in text,
-      "hláška jmenuje soubor zálohy")
+# Jmeno souboru uz v hlasce neni - je v seznamu zapomenutych na karte,
+# a to az ve chvili, kdy je potreba (po vysypani kose). V hlasce je to,
+# co clovek potrebuje hned: ze to jde vzit zpet.
+check("jde vrátit zpět" in text, "hláška říká, že zásah jde vrátit")
+check(odklizeni.zapomenuti()[0]["zaloha_soubor"] == soubory[0].name,
+      "a seznam zapomenutých zná soubor zálohy")
 
 print()
 print("--- zapomenutí: nastavená složka má přednost ---")
@@ -197,6 +201,26 @@ check(len(zalohy(VLASTNI)) == 1, f"úklid nechal jednu ({smazano} smazal)")
 zbyla = zalohy(VLASTNI)[0]
 check(zbyla.name.startswith("jellyscope-") and zbyla.name.endswith(".db"),
       f"název sedí na vzor obnovy ({zbyla.name})")
+
+print()
+print("--- zálohy před mazáním mají vlastní frontu ---")
+# Spolecna fronta by znamenala, ze tri zapomenuti za den vytlaci nocni
+# zalohy - tedy prave to, kvuli cemu se zalohuje.
+import time  # noqa: E402
+
+db.set_setting("backup_keep", "2")
+db.forget_settings()
+for poradi in range(4):
+    (VLASTNI / f"jellyscope-2026010{poradi}-000000.db").write_text("nocni", encoding="utf-8")
+    (VLASTNI / f"jellyscope-2026010{poradi}-000000-{tasks.ZALOHA_PRED_MAZANIM}.db").write_text("pred mazanim", encoding="utf-8")
+    time.sleep(0.02)
+tasks._prune_backups(VLASTNI)
+nocni = [p for p in zalohy(VLASTNI) if tasks.ZALOHA_PRED_MAZANIM not in p.name]
+mazaci = [p for p in zalohy(VLASTNI) if tasks.ZALOHA_PRED_MAZANIM in p.name]
+check(len(nocni) == 2, f"pravidelných zůstaly dvě ({len(nocni)})")
+check(len(mazaci) == 2, f"a před mazáním taky dvě ({len(mazaci)})")
+check(all("20260103" in p.name or "20260102" in p.name for p in nocni + mazaci),
+      f"a jsou to ty nejnovější ({sorted(p.name for p in nocni + mazaci)})")
 
 print()
 print("HOTOVO - chyb:", failures)

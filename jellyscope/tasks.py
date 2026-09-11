@@ -592,7 +592,7 @@ def _vyber_pg_dump(config: Any) -> str:
 ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_streams",
                       "accounts", "dashboard_layout", "library_snapshot",
                       "settings", "scan_log", "api_tokens", "login_blocks",
-                      "playback")
+                      "zapomenuti", "playback")
 
 
 def _sql_hodnota(hodnota: Any) -> str:
@@ -752,28 +752,36 @@ def _dump_postgres(config: Any, destination: Path) -> int:
 
 
 def _prune_backups(directory: Path) -> int:
-    """Necha jen posledních N zaloh, starsi smaze.
+    """Necha jen posledních N záloh **od každého druhu**, starší smaže.
 
     Bez tohohle by slozka se zalohami rostla donekonecna, az by zaplnila
     disk - a zaloha, ktera zaplni disk, nadela vic skody nez uzitku.
+
+    Druhy jsou dva a maji vlastni frontu: pravidelne (nocni uloha) a ty
+    pred mazanim. Spolecna fronta byla chyba: kdo zapomene tri divaky za
+    den, vyrobi tri zalohy navic - a ty by pri "nechat 7" vytlacily
+    nocni zalohy, tedy prave ty, kvuli kterym se zalohuje. Kazdy druh
+    chrani pred necim jinym, takze si ani nema co brat misto.
     """
     keep = db.get_int_setting("backup_keep", 1, 365, 7)
     try:
-        files = sorted(
-            list(directory.glob("jellyscope-*.db")) + list(directory.glob("jellyscope-*.sql")),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        )
+        vsechny = (list(directory.glob("jellyscope-*.db"))
+                   + list(directory.glob("jellyscope-*.sql")))
+        fronty: dict[bool, list[Path]] = {True: [], False: []}
+        for soubor in vsechny:
+            fronty[ZALOHA_PRED_MAZANIM in soubor.name].append(soubor)
     except OSError:
         return 0
 
     removed = 0
-    for stale in files[keep:]:
-        try:
-            stale.unlink()
-            removed += 1
-        except OSError:
-            pass
+    for soubory in fronty.values():
+        soubory.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        for stale in soubory[keep:]:
+            try:
+                stale.unlink()
+                removed += 1
+            except OSError:
+                pass
     return removed
 
 
@@ -1225,11 +1233,19 @@ def kdy_odlozene_preskladani(ted: datetime | None = None) -> datetime | None:
 
 
 async def _dodelej_odlozene_preskladani() -> None:
+    """V termínu vysype koš a přepíše soubor databáze.
+
+    Pořadí je celý smysl té dvojice: dokud jsou řádky v koši, jsou
+    v databázi a `VACUUM` by je jen přerovnal. Teprve tady zapomenutí
+    doopravdy platí - a přepis hned potom zařídí, že po nich v souboru
+    nezůstane ani stopa.
+    """
     ted = datetime.now()
     cil = kdy_odlozene_preskladani(ted)
     if cil is None or ted < cil:
         return
     log.info("odlozene preskladani databaze: startuji")
+    await asyncio.to_thread(odklizeni.vysyp_kos)
     await asyncio.to_thread(odklizeni.dokonci_odlozene_preskladani)
 
 

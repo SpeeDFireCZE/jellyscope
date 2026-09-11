@@ -48,7 +48,7 @@
         <input type="text" name="name" maxlength="60"
                placeholder="{{ _('K čemu bude – třeba Grafana') }}"
                style="max-width:280px">
-        <button class="btn primary" type="submit">{{ _("Vyrobit klíč") }}</button>
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Vyrobit klíč") }}</button>
     </form>
 
     {% if api_tokeny %}
@@ -77,7 +77,7 @@
                     <form method="post" action="/settings/api/token/zrusit"
                           onsubmit="return confirm('{{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.") }}')">
                         <input type="hidden" name="token_id" value="{{ token.id }}">
-                        <button class="btn danger" type="submit">{{ _("Zneplatnit") }}</button>
+                        <button data-keep-scroll class="btn danger" type="submit">{{ _("Zneplatnit") }}</button>
                     </form>
                 </td>
             </tr>

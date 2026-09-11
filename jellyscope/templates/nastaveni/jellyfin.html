@@ -73,10 +73,10 @@
            neposílal, takže testoval uložené nastavení místo vyplněného
            a odesláním navíc zahodil, co jsi napsal. #}
         <div class="btn-row">
-            <button class="btn primary" type="submit" name="action" value="save">
+            <button data-keep-scroll class="btn primary" type="submit" name="action" value="save">
                 {{ _("Uložit připojení") }}
             </button>
-            <button class="btn" type="submit" name="action" value="test">
+            <button data-keep-scroll class="btn" type="submit" name="action" value="test">
                 {{ _("Otestovat spojení") }}
             </button>
         </div>
@@ -86,7 +86,7 @@
         {# Synchronizace pracuje s uloženým nastavením, ne s formulářem -
            proto zůstává zvlášť. #}
         <form method="post" action="/settings/sync">
-            <button class="btn" type="submit" {{ 'disabled' if scan_running }}>
+            <button data-keep-scroll class="btn" type="submit" {{ 'disabled' if scan_running }}>
                 {{ _("Synchronizovat knihovnu") }}
             </button>
         </form>

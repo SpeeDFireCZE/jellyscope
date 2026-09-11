@@ -693,16 +693,37 @@
         if (!window.sessionStorage) { return; }
         var klic = "scroll:" + window.location.pathname;
 
+        // Polohu si ukládá i kód, který stránku načte sám (čekání na
+        // úlohu, obnovení po jejím doběhnutí) - proto je to funkce, ne
+        // jen tělo posluchače. Bez toho by ruční spuštění úlohy skončilo
+        // na začátku stránky, i když kliknutí polohu zapamatovalo:
+        // stránku načetl skript, ne člověk.
+        window.zapamatujPolohu = function () {
+            try {
+                sessionStorage.setItem(klic, window.scrollY + ":" + Date.now());
+            } catch (e) { /* privátní okno, zakázaná úložiště */ }
+        };
+
         document.addEventListener("click", function (event) {
-            var odkaz = event.target.closest("[data-keep-scroll]");
-            if (odkaz) {
-                sessionStorage.setItem(klic, String(window.scrollY));
+            if (event.target.closest("[data-keep-scroll]")) {
+                window.zapamatujPolohu();
             }
         }, { passive: true });
 
         var ulozeno = sessionStorage.getItem(klic);
         if (ulozeno === null) { return; }
         sessionStorage.removeItem(klic);
+
+        // Poloha platí jen chvíli. Ne každé kliknutí stránku načte znovu
+        // (stažení souboru, akce, která odpoví jinou stránkou) - a bez
+        // téhle lhůty by se zapamatovaná poloha použila až při nějakém
+        // pozdějším otevření stejné stránky, což by vypadalo jako
+        // samovolný skok bůhvíodkud.
+        var casti = String(ulozeno).split(":");
+        if (casti.length === 2 && Date.now() - parseInt(casti[1], 10) > 10000) {
+            return;
+        }
+        ulozeno = casti[0];
 
         // Až po dokreslení, jinak stránka ještě nemá svou výšku a skok
         // by skončil na konci obsahu místo na správném místě.
@@ -930,6 +951,7 @@
                 okno.querySelectorAll(".dash-zavrit"), function (tlacitko) {
                     tlacitko.addEventListener("click", function () {
                         okno.close();
+                        if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
                         window.location.reload();
                     });
                 });
@@ -1064,6 +1086,10 @@
                 adresa.searchParams.set("od_ts", cas(svg, od));
                 adresa.searchParams.set("do_ts", cas(svg, doKam));
             }
+            // Totéž co u přepínače období: nové období překreslí celou
+            // stránku a bez tohohle by začala od začátku, i když se tahalo
+            // po grafu někde dole.
+            if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
             window.location.href = adresa.toString();
         });
 
@@ -1223,6 +1249,7 @@
                     if (dobehla) { znameUlohy = String(data.tasks_version); }
 
                     if (dobehla && obnovitStranku) {
+                        if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
                         window.location.reload();
                         return null;
                     }
@@ -1327,6 +1354,7 @@
             // `replace`, ne `reload`: zároveň se z adresy zahodí ?wait=...,
             // jinak by se čekání spustilo znovu a stránka by se točila
             // dokola. A zpětné tlačítko nevede na mezistav.
+            if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
             var url = new URL(window.location.href);
             url.searchParams.delete("wait");
             window.location.replace(url.toString());
@@ -1422,6 +1450,9 @@
                     .catch(function () {
                         // Když se to nepovede, uděláme to postaru - celou
                         // stránkou. Uživatel nesmí zůstat s mrtvým tlačítkem.
+                        // Polohu si zapamatujeme znovu: od kliknutí mohla
+                        // uplynout doba, po které už zapamatovaná neplatí.
+                        if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
                         window.location.href = link.href;
                     })
                     .finally(function () {

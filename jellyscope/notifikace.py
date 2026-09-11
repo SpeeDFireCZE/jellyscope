@@ -41,6 +41,11 @@ log = logging.getLogger(__name__)
 # Kanaly, kterymi se da poslat. Poradi je poradi v nastaveni.
 KANALY: tuple[str, ...] = ("smtp", "discord", "telegram")
 
+# Jak se kanalum rika v hlaskach. "smtp" je nazev protokolu, ne neco,
+# co by clovek hledal v nastaveni - tam je to "E-mail".
+NAZVY: dict[str, str] = {"smtp": "E-mail", "discord": "Discord",
+                         "telegram": "Telegram"}
+
 # Udalosti, na ktere se da upozornit. Kazda se da zvlast vypnout.
 UDALOSTI: tuple[str, ...] = ("sberac", "misto", "souhrn")
 

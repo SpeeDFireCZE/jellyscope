@@ -312,6 +312,22 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 
 
+-- Zapomenuti divaci: jeden radek na jedno kliknuti "Ano, zapomenout".
+--
+-- Drzi se kvuli vraceni: dokud jsou radky v kosi, da se zasah vzit zpet
+-- jednim tlacitkem; potom uz jen ze zalohy, ktera se pred mazanim
+-- povinne dela. Az zmizi i ta, nema se co nabizet a radek se zahodi.
+CREATE TABLE IF NOT EXISTS zapomenuti (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       TEXT    NOT NULL,
+    jmeno         TEXT    NOT NULL,
+    relaci        INTEGER NOT NULL,       -- kolik prehravani slo pryc
+    zapomenuto_v  TEXT    NOT NULL,       -- UTC
+    zaloha        TEXT    NOT NULL DEFAULT '',   -- soubor zalohy pred mazanim
+    stav          TEXT    NOT NULL DEFAULT 'kos' -- kos | zaloha | vraceno
+);
+
+
 CREATE TABLE IF NOT EXISTS login_blocks (
     ip            TEXT PRIMARY KEY,
     level         INTEGER NOT NULL DEFAULT 0,  -- kolikata blokace v rade

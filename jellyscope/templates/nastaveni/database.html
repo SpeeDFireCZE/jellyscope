@@ -139,13 +139,13 @@
         <div class="btn-row">
             {# Tři tlačítka, jeden formulář: liší se hodnotou "action",
                takže se nemusí opisovat všechna pole třikrát. #}
-            <button class="btn" type="submit" name="action" value="test">
+            <button data-keep-scroll class="btn" type="submit" name="action" value="test">
                 {{ _("Otestovat spojení") }}
             </button>
-            <button class="btn primary" type="submit" name="action" value="save">
+            <button data-keep-scroll class="btn primary" type="submit" name="action" value="save">
                 {{ _("Uložit a použít po restartu") }}
             </button>
-            <button class="btn" type="submit" name="action" value="migrate">
+            <button data-keep-scroll class="btn" type="submit" name="action" value="migrate">
                 {{ _("Přenést data do vybrané databáze") }}
             </button>
         </div>

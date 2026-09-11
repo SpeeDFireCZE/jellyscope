@@ -9,6 +9,68 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.6.9
+
+Forgetting a viewer can be taken back, and Settings stops jumping to the
+top after every click.
+
+### Added
+
+- **A forgotten viewer goes to a bin.** Deleting a viewer's history was
+  final the moment the button was clicked, and that button sits right
+  next to a dropdown - one wrong pick and the history was gone. The rows
+  move to a bin instead: the viewer disappears from the statistics
+  immediately, which is the point of forgetting, but a **Restore**
+  button beside *Forget* brings the history back until the nightly
+  clean-up empties the bin for good and rewrites the file. After that
+  the same dialog names the backup taken just before the deletion, so
+  nobody has to guess which file to restore from; when that backup is
+  pruned, the entry disappears with it.
+
+  The bin is built from the shape of the history table and missing
+  columns are added at every start, so a column added later cannot make
+  it silently lose part of a restored row.
+
+- **A warning when a notification channel is switched on but empty.** It
+  used to save without a word, so somebody could wait for alerts that
+  had no way out. Saving now names the channels that are on and unfilled.
+
+### Changed
+
+- **Backups taken before a deletion have their own queue.** "Keep N
+  backups" counted both kinds together, so forgetting three viewers in a
+  day produced three extra backups that pushed out the nightly ones -
+  the very backups the setting exists to keep. Each kind is now pruned
+  on its own.
+
+- **Settings stays where you are.** The page is long and every action
+  reloads it, so each save ended with hunting for the place you were
+  reading. All 44 buttons that reload the page now keep the scroll
+  position, and so do the four places where a script loads the page -
+  including a manually started task, which reloads itself minutes after
+  the click.
+
+### Fixed
+
+- **The notification cards popped up an empty box.** Saving either card
+  showed a message with no words in it, which read as an error nobody
+  explained: those messages were written into the session as plain text,
+  while the page reads a message and a level off a dict. They go through
+  the usual helper now, and a test forbids the shortcut that caused it.
+
+- **An untranslated string from Weblate showed as nothing.** Weblate
+  writes untranslated keys as an empty string, and the loader took that
+  for a translation - so a page in that language would have shown blanks
+  where it should fall back to English. Empty values are skipped at load
+  time, for every language file.
+
+- **The clean-up of rows that do not belong in the library was too
+  narrow.** 1.6.8 limited it to a list of container types, so a row of
+  some other foreign type - a music video or trailer from an old import
+  - would have stayed for good, archived afresh every night. It removes
+  anything the sync cannot write again, with the one exception it must
+  keep: a freshly added file Jellyfin still reports as `Video`.
+
 ## 1.6.8
 
 ### Fixed

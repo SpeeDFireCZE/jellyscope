@@ -42,10 +42,10 @@
         <label class="card-note">{{ _("Ignorovat přehrávání kratší než") }}</label>
         <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
         <span class="card-note">{{ _("sekund") }}</span>
-        <button class="btn primary" type="submit">{{ _("Importovat") }}</button>
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Importovat") }}</button>
     </form>
     <form method="post" action="/settings/import/detect" style="margin-top:8px">
-        <button class="btn" type="submit">{{ _("Zjistit, jestli je plugin dostupný") }}</button>
+        <button data-keep-scroll class="btn" type="submit">{{ _("Zjistit, jestli je plugin dostupný") }}</button>
     </form>
 
     {# Záloha pro případ, kdy plugin přes API nefunguje. Stává se to
@@ -73,7 +73,7 @@
             {{ file_picker("backup", ".tsv,.txt,text/tab-separated-values") }}
             <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
             <span class="card-note">{{ _("sekund min.") }}</span>
-            <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
         </form>
     </details>
 
@@ -87,7 +87,7 @@
         {{ file_picker("backup", ".json,application/json") }}
         <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
         <span class="card-note">{{ _("sekund min.") }}</span>
-        <button class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Nahrát a importovat") }}</button>
     </form>
 
     {% if last_import %}

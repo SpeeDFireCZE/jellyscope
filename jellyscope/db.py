@@ -904,6 +904,7 @@ def _init_db(config: dialect.DatabaseConfig, tabulky: str,
     with connect(config) as conn:
         conn.executescript(tabulky)
         added = _migrate(conn)
+        _zajisti_kos(conn)
         if indexy.strip():
             conn.executescript(indexy)
         for key, value in DEFAULT_SETTINGS.items():
@@ -945,6 +946,66 @@ def _init_db(config: dialect.DatabaseConfig, tabulky: str,
     if config is database_config():
         seed_from_env()
     return added
+
+
+# Koš na zapomenuté diváky. Řádky se při zapomenutí **přesunou** sem,
+# takže je do noci jde vrátit; v noci se vysypou doopravdy.
+KOS = "playback_kos"
+
+
+def sloupce(conn: Any, tabulka: str) -> list[str]:
+    """Názvy sloupců tabulky. Prázdný seznam = tabulka není."""
+    if conn.kind == dialect.POSTGRES:
+        radky = conn.execute(
+            "SELECT column_name FROM information_schema.columns"
+            " WHERE table_name = ? ORDER BY ordinal_position",
+            (tabulka,)).fetchall()
+        return [str(dict(r)["column_name"]) for r in radky]
+    radky = conn.execute(f"PRAGMA table_info({tabulka})").fetchall()
+    return [str(dict(r)["name"]) for r in radky]
+
+
+def _typy_sloupcu(conn: Any, tabulka: str) -> dict[str, str]:
+    if conn.kind == dialect.POSTGRES:
+        radky = conn.execute(
+            "SELECT column_name, data_type FROM information_schema.columns"
+            " WHERE table_name = ?", (tabulka,)).fetchall()
+        return {str(dict(r)["column_name"]): str(dict(r)["data_type"])
+                for r in radky}
+    radky = conn.execute(f"PRAGMA table_info({tabulka})").fetchall()
+    return {str(dict(r)["name"]): str(dict(r)["type"] or "TEXT")
+            for r in radky}
+
+
+def _zajisti_kos(conn: Any) -> None:
+    """Založí koš a dorovná jeho sloupce podle `playback`.
+
+    Koš schválně **není** v schema.sql: kdyby se psal ručně, po přidání
+    sloupce do `playback` by tiše ztrácel část dat - a poznalo by se to
+    až ve chvíli, kdy by někdo chtěl vrátit zapomenutého diváka, tedy
+    přesně tehdy, kdy na tom záleží. Takhle vzniká z jeho tvaru.
+
+    `udalost` navíc: podle ní se pozná, ke kterému zapomenutí řádek
+    patří, a vrací se celá skupina najednou.
+    """
+    if not sloupce(conn, KOS):
+        # Tvar se bere z prazdneho vyberu, ne z `CREATE TABLE (LIKE ...)`:
+        # tohle umi obe databaze stejne - a hlavne tudy neprojde slovo
+        # LIKE, ktere nas prekladac dialektu zmeni na ILIKE (viz
+        # dialect.translate) a PostgreSQL pak DDL odmitne.
+        conn.execute(f"CREATE TABLE IF NOT EXISTS {KOS} AS"
+                     " SELECT * FROM playback WHERE 1=0")
+        conn.execute(f"ALTER TABLE {KOS} ADD COLUMN udalost INTEGER")
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_kos_udalost"
+                     f" ON {KOS} (udalost)")
+
+    # Sloupce, ktere v `playback` pribyly az po zalozeni kose.
+    typy = _typy_sloupcu(conn, "playback")
+    ma = set(sloupce(conn, KOS))
+    for jmeno, typ in typy.items():
+        if jmeno not in ma:
+            conn.execute(f"ALTER TABLE {KOS} ADD COLUMN {jmeno} {typ}")
+            log.info("kos: doplnen sloupec %s", jmeno)
 
 
 # ---------------------------------------------------------------------------

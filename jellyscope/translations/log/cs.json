@@ -114,5 +114,8 @@
     "odklizeni zastaveno: %s": "odklizeni zastaveno: %s",
     "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim",
     "knihovna %s: Jellyfin poslal %s polozek jineho druhu nez film nebo dil (kolekce?) - preskoceny": "knihovna %s: Jellyfin poslal %s polozek jineho druhu nez film nebo dil (kolekce?) - preskoceny",
-    "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)"
+    "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)",
+    "kos: doplnen sloupec %s": "kos: doplnen sloupec %s",
+    "Vraceno z kose: %s, %s prehravani": "Vraceno z kose: %s, %s prehravani",
+    "Kos vysypan: %s prehravani je nadobro pryc": "Kos vysypan: %s prehravani je nadobro pryc"
 }

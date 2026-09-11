@@ -138,6 +138,17 @@ check(uklizeno == 1 and db.query_value(
     f"úklid odstranil kolekci ({uklizeno})")
 check(db.query_value("SELECT COUNT(*) FROM items WHERE type = 'Video'") == 1,
       "a nezařazený soubor nechal být")
+# Cizi druh, na ktery se v seznamu obalu nemyslelo (davny import), ma
+# taky zmizet - jinak by ho `_mark_missing` kazdou noc znovu archivoval.
+with db.connect() as conn:
+    conn.execute("INSERT INTO items (id, name, type, library_id, synced_at)"
+                 " VALUES ('mv1', 'Klip', 'MusicVideo', 'lib1', ?)", (db.utcnow(),))
+    conn.commit()
+check(scanner.uklid_fantomu() == 1 and db.query_value(
+    "SELECT COUNT(*) FROM items WHERE type = 'MusicVideo'") == 0,
+    "úklid se zbaví i druhu, na který se nemyslelo")
+check(db.query_value("SELECT COUNT(*) FROM items WHERE type = 'Video'") == 1,
+      "a `Video` pořád nechává být")
 zdroj = (PROJECT / "jellyscope" / "scanner.py").read_text(encoding="utf-8")
 telo = zdroj[zdroj.index("async def sync_library"):zdroj.index("async def _sync_users")]
 check("uklid_fantomu" in telo, "a úklid běží i na konci plné synchronizace, ne jen při startu")

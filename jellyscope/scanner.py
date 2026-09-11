@@ -52,9 +52,20 @@ SPRAVOVANE_TYPY = ("Movie", "Episode")
 OBALY = ("BoxSet", "Series", "Season", "Folder", "CollectionFolder",
          "Playlist", "UserView")
 
+# Druh, ktery synchronizace zapsat SMI, i kdyz to neni film ani dil:
+# cerstve pridany soubor, ktery Jellyfin jeste nezaradil. Pri dalsim behu
+# se sam opravi (viz sync_recent), takze se ho nesmi zbavit ani uklid.
+ZATIM_NEZARAZENY = "Video"
+ZAPISOVANE_TYPY = SPRAVOVANE_TYPY + (ZATIM_NEZARAZENY,)
+
 
 def je_obal(item: dict) -> bool:
-    """Je to kontejner, ne titul? Podle typu, nebo podle IsFolder."""
+    """Je to kontejner, ne titul? Podle typu, nebo podle IsFolder.
+
+    `IsFolder` je tu jako pojistka pro druh, ktery zatim neznáme. Filmu
+    ripnutemu jako slozka (BluRay, DVD) to neublizi: Jellyfin u nich
+    hlasi `IsFolder: false` a druh `Movie` - overeno na 10.10.7 i 12.0.0.
+    """
     return (str(item.get("Type") or "") in OBALY
             or bool(item.get("IsFolder")))
 
@@ -1792,15 +1803,16 @@ def uklid_fantomu() -> int:
     Vola se pri startu. Je to levny dotaz na indexovany sloupec a bezna
     databaze nema co uklizet, takze se nic nezdrzi.
     """
-    # Maze se podle seznamu obalu, ne "vsechno mimo film a dil": cerstve
-    # pridany soubor je chvili `Video` a ten tu ma zustat, dokud ho
-    # Jellyfin nezaradi (viz OBALY). Od 1.6.8 se tenhle uklid vola i po
-    # kazde plne synchronizaci, tak nesmi mazat, co ona prave ulozila.
-    otazniky = ",".join("?" for _ in OBALY)
+    # Maze se vsechno, co synchronizace zapsat nemuze - tedy i druh, na
+    # ktery se tu nemyslelo (hudebni klip, upoutavka z davneho importu).
+    # Vyjimka je `Video`: cerstve pridany soubor je chvili prave ten a ma
+    # tu zustat, dokud ho Jellyfin nezaradi. Od 1.6.8 se uklid vola i po
+    # kazde plne synchronizaci, tak nesmi mazat, co prave ulozila.
+    otazniky = ",".join("?" for _ in ZAPISOVANE_TYPY)
     with db.connect() as conn:
         fantomy = [str(r["id"]) for r in conn.execute(
-            f"SELECT id FROM items WHERE type IN ({otazniky})",
-            tuple(OBALY)).fetchall()]
+            f"SELECT id FROM items WHERE type NOT IN ({otazniky})",
+            tuple(ZAPISOVANE_TYPY)).fetchall()]
         if not fantomy:
             return 0
         for zacatek in range(0, len(fantomy), 200):

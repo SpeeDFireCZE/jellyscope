@@ -339,6 +339,7 @@ def settings_page(
             odklid=odklizeni.prehled(),
             divaci=odklizeni.divaci(),
             preskladani_v=tasks.kdy_odlozene_preskladani(),
+            zapomenuti=odklizeni.zapomenuti(),
         )
     elif section == "api":
         context.update(
@@ -793,7 +794,19 @@ def settings_notifications(
     db.set_setting(notifikace.klic("telegram", "chat"), telegram_chat.strip())
 
     db.forget_settings()
-    request.session["flash"] = _t("Kanály uloženy.")
+    # Zapnuty kanal s nevyplnenymi udaji je tichá past: nastaveni se ulozi,
+    # nic nehlasi chybu - a clovek se spolehne na upozorneni, ktera nikdy
+    # neprijdou. Rekneme to hned, ne az pri prvnim poplachu.
+    nedodelane = [k for k in notifikace.KANALY
+                  if notifikace.kanal_zapnuty(k)
+                  and not notifikace.kanal_nastaveny(k)]
+    if nedodelane:
+        _flash(request,
+               "Kanály uloženy, ale tohle je zapnuté a nevyplněné: {kanaly}. "
+               "Dokud to nedoplníš, nic se přes ně neodešle.", "warning",
+               kanaly=", ".join(notifikace.NAZVY.get(k, k) for k in nedodelane))
+    else:
+        _flash(request, "Kanály uloženy.", "success")
     return RedirectResponse("/settings?section=notifications", status_code=303)
 
 
@@ -830,7 +843,7 @@ def settings_notification_events(
     db.set_setting("notify_souhrn_cas", tasks.platny_cas(cas, "09:00"))
 
     db.forget_settings()
-    request.session["flash"] = _t("Uloženo.")
+    _flash(request, "Uloženo.", "success")
     return RedirectResponse("/settings?section=notifications", status_code=303)
 
 
@@ -848,15 +861,15 @@ async def settings_notification_test(
     from . import notifikace
 
     if kanal not in notifikace.KANALY:
-        request.session["flash"] = _t("Neznámý kanál.")
+        _flash(request, "Neznámý kanál.", "error")
         return RedirectResponse("/settings?section=notifications", status_code=303)
 
     vysledek = await notifikace.posli_zkusebni(kanal)
     if vysledek.get("ok"):
-        request.session["flash"] = _t("Zkušební zpráva odeslána.")
+        _flash(request, "Zkušební zpráva odeslána.", "success")
     else:
-        request.session["flash"] = _t("Nepodařilo se odeslat: {chyba}").format(
-            chyba=vysledek.get("chyba") or "?")
+        _flash(request, "Nepodařilo se odeslat: {chyba}", "error",
+               chyba=vysledek.get("chyba") or "?")
     return RedirectResponse("/settings?section=notifications", status_code=303)
 
 
@@ -1172,31 +1185,52 @@ async def historie_zapomen(request: Request, user_id: str = Form(""),
     if not odklizeni.pocet_relaci(user_id):
         _flash(request, "Nebylo co zapomenout - k tomu divákovi nic nemáme.",
                "info")
-        return RedirectResponse("/settings?section=tasks", status_code=303)
+        return RedirectResponse("/settings?section=tasks#odklizeni",
+                            status_code=303)
 
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
         _flash(request,
                "Historie se nesmazala - nejdřív se nepovedla záloha: {duvod}",
                "error", duvod=zaloha.get("message") or "?")
-        return RedirectResponse("/settings?section=tasks", status_code=303)
+        return RedirectResponse("/settings?section=tasks#odklizeni",
+                            status_code=303)
 
-    # `hned=False`: smaze se ted, prepis souboru (ktery by na velke
-    # databazi na minutu zastavil vsechno) se necha na noc. Mazani bezi
+    # Do kose, ne rovnou pryc: ze statistik je divak hned, ale do noci
+    # se da zasah vzit zpet - viz odklizeni.vrat_z_kose(). Presun bezi
     # ve vlakne, at velka historie nezastavi obsluhu ostatnich stranek.
-    vysledek = await asyncio.to_thread(odklizeni.zapomen_uzivatele,
-                                       user_id, hned=False)
+    vysledek = await asyncio.to_thread(
+        odklizeni.zapomen_uzivatele, user_id, True, str(zaloha.get("file") or ""))
     # Log uz zapsalo `odklizeni.zapomen_uzivatele()`. Druhy radek
     # o teze akci by v logu jen prekazel.
     kdy = tasks.kdy_odlozene_preskladani()
     _flash(request,
-           "Historie diváka {jmeno} smazána ({n} přehrávání). "
-           "Záloha před smazáním: {soubor}. "
-           "Místo v souboru databáze se uvolní {kdy}.", "success",
+           "Historie diváka {jmeno} je pryč ({n} přehrávání) – ze statistik "
+           "hned. Do {kdy} ji jde vrátit zpět, potom bude smazaná nadobro.",
+           "success",
            jmeno=vysledek["jmeno"] or user_id, n=vysledek["smazano"],
-           soubor=Path(str(zaloha.get("file") or "")).name or "?",
            kdy=kdy.strftime("%d.%m. %H:%M") if kdy else "?")
-    return RedirectResponse("/settings?section=tasks", status_code=303)
+    return RedirectResponse("/settings?section=tasks#odklizeni",
+                            status_code=303)
+
+
+@router.post("/settings/historie/vrat")
+async def historie_vrat(request: Request, udalost: str = Form(""),
+                        account: dict[str, Any] = Depends(require_admin)):
+    """Vrátí do historie diváka, který je v koši.
+
+    Není to nebezpečná akce - nic se nemaže, jen se vrací, co se před
+    chvílí odklidilo - takže se na nic neptá a nemá vlastní okno.
+    """
+    vysledek = await asyncio.to_thread(odklizeni.vrat_z_kose, udalost)
+    if not vysledek["vraceno"]:
+        _flash(request,
+               "Vrátit se nepodařilo - v koši už nic takového není.", "error")
+    else:
+        _flash(request, "Historie diváka {jmeno} je zpátky ({n} přehrávání).",
+               "success", jmeno=vysledek["jmeno"], n=vysledek["vraceno"])
+    return RedirectResponse("/settings?section=tasks#odklizeni",
+                            status_code=303)
 
 
 @router.post("/settings/tasks")

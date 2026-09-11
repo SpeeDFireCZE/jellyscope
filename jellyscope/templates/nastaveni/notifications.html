@@ -153,7 +153,7 @@
         </div>
 
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
         </div>
     </form>
 
@@ -163,7 +163,7 @@
         {% for kanal in notifikace.kanaly %}
         <form method="post" action="/settings/notifications/test" style="display:inline">
             <input type="hidden" name="kanal" value="{{ kanal.klic }}">
-            <button class="btn" type="submit" {{ 'disabled' if not kanal.nastaveny }}>
+            <button data-keep-scroll class="btn" type="submit" {{ 'disabled' if not kanal.nastaveny }}>
                 {{ _("Zkusit") }} {{ nazvy_kanalu[kanal.klic] }}
             </button>
         </form>
@@ -261,7 +261,7 @@
         </div>
 
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn primary" type="submit">{{ _("Uložit") }}</button>
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
         </div>
     </form>
 

@@ -67,12 +67,12 @@
                         {% if not radek.permanent %}
                         <form method="post" action="/settings/blocks/permanent">
                             <input type="hidden" name="ip" value="{{ radek.ip }}">
-                            <button class="btn danger" type="submit">{{ _("Zablokovat natrvalo") }}</button>
+                            <button data-keep-scroll class="btn danger" type="submit">{{ _("Zablokovat natrvalo") }}</button>
                         </form>
                         {% endif %}
                         <form method="post" action="/settings/blocks/unblock">
                             <input type="hidden" name="ip" value="{{ radek.ip }}">
-                            <button class="btn" type="submit">{{ _("Odblokovat") }}</button>
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Odblokovat") }}</button>
                         </form>
                     </div>
                 </td>

@@ -114,5 +114,8 @@
     "odklizeni zastaveno: %s": "clean-up stopped: %s",
     "na main je vedle prekladu i kod - preklady se nehlasi, prijdou s vydanim": "main carries code alongside the translations - not reporting them, they come with the release",
     "knihovna %s: Jellyfin poslal %s polozek jineho druhu nez film nebo dil (kolekce?) - preskoceny": "library %s: Jellyfin sent %s items that are neither movies nor episodes (collections?) - skipped",
-    "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "removed %s items that do not belong in the library (collections, series, seasons)"
+    "uklizeno %s polozek, ktere do knihovny nepatri (kolekce, serialy, rady)": "removed %s items that do not belong in the library (collections, series, seasons)",
+    "kos: doplnen sloupec %s": "bin: column %s added",
+    "Vraceno z kose: %s, %s prehravani": "Brought back from the bin: %s, %s playbacks",
+    "Kos vysypan: %s prehravani je nadobro pryc": "Bin emptied: %s playbacks are gone for good"
 }
