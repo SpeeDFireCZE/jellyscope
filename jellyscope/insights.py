@@ -96,6 +96,63 @@ def dead_storage(limit: int = 25, days: int = 365) -> dict[str, Any]:
     }
 
 
+# Dva souhrny pro `least_played()`, kazdy zvlast: spusteni za obdobi
+# (dva otazniky pro meze) a posledni prehrani za celou historii.
+_HRANE_ZA_OBDOBI = f"""
+    SELECT item_id, COUNT(*) AS plays, SUM(watched_seconds) AS seconds
+      FROM playback
+     WHERE watched_seconds >= {MIN_PLAY_SECONDS}
+       AND started_at >= ? AND started_at < ?
+     GROUP BY item_id
+"""
+_NAPOSLEDY_HRANE = f"""
+    SELECT item_id, MAX(started_at) AS last_played
+      FROM playback
+     WHERE watched_seconds >= {MIN_PLAY_SECONDS}
+     GROUP BY item_id
+"""
+
+
+def least_played(days: int = 365, limit: int = 25,
+                 min_size_bytes: int = 0) -> list[dict[str, Any]]:
+    """Tituly seřazené od nejméně hraných - nuly napřed, pak podle místa.
+
+    Vedle `dead_storage()` (co se **vůbec** nehrálo) odpovídá na širší
+    otázku: co se hraje nejmíň? Film spuštěný jednou za rok zabírá
+    stejné místo jako ten, co se hraje týdně, a tenhle seznam je řadí
+    vedle sebe.
+
+    Počet spuštění se bere jen za zvolené období a jen ze spuštění, která
+    se počítají (viz `MIN_PLAY_SECONDS`); poslední přehrání je ale za
+    celou historii - u nuly v období je právě to ta zajímavá informace.
+
+    Souhrn přes `LEFT JOIN` na předpočítanou tabulku, ne poddotaz na
+    každý řádek: řadí se **celá** knihovna a poddotaz by se spočítal
+    pro každou položku zvlášť, i pro ty, které se do `limit` nevejdou.
+    """
+    od, do = _meze(days)
+    return db.query_all(
+        f"""
+        SELECT i.id, i.name, i.type, i.series_name, i.production_year,
+               i.size_bytes, i.height, i.width, i.video_codec,
+               i.date_created, l.name AS library_name,
+               COALESCE(s.plays, 0)         AS plays,
+               COALESCE(s.seconds, 0)       AS watched_seconds,
+               v.last_played
+        FROM items i
+        LEFT JOIN libraries l ON l.id = i.library_id
+        LEFT JOIN ({_HRANE_ZA_OBDOBI}) s ON s.item_id = i.id
+        LEFT JOIN ({_NAPOSLEDY_HRANE}) v ON v.item_id = i.id
+        WHERE i.is_missing = 0
+          AND i.type IN ('Movie', 'Episode')
+          AND COALESCE(i.size_bytes, 0) >= ?
+        ORDER BY plays ASC, COALESCE(i.size_bytes, 0) DESC, i.name
+        LIMIT ?
+        """,
+        (od, do, int(min_size_bytes), int(limit)),
+    )
+
+
 def transcode_offenders(days: int, limit: int = 15) -> list[dict[str, Any]]:
     """Soubory, ktere server nejcasteji prepocitava.
 

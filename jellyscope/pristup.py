@@ -19,6 +19,11 @@ Tři věci, a každá se dá vypnout:
   aby někdo viděl celé statistiky - ten proto ve výchozím stavu vidí
   všechno jako dosud, a kdo chce, ubere.
 
+  A **jeden účet může skupinu přebít**: v Nastavení → Účty se mu dají
+  zaškrtnout vlastní oblasti a vlastní anonymizace. Dokud to správce
+  neudělá, platí skupina; jakmile to udělá, platí jen to, co je
+  u účtu - skupina se pro něj přestane číst úplně.
+
 * **anonymizace** - když správce pustí diváky na stránku, kde jsou
   vypsaní lidé, nemusí je tam vidět jmény. Místo jména je „Divák 3",
   místo adresy pomlčka. Vlastní jméno divák vidí dál - o sobě přece ví.
@@ -29,6 +34,7 @@ kterou se při psaní zapomene, tak nikomu nic neprozradí.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Iterable
 
 from . import db
@@ -138,43 +144,100 @@ def _vychozi(kdo: str, oblast: "Oblast") -> bool:
     return True if kdo == CTENAR else oblast.vychozi
 
 
-def anonymizace_zapnuta(kdo: str = DIVAK) -> bool:
-    """Skrývají se téhle skupině cizí jména a adresy?
+# ---------------------------------------------------------------------------
+# Vlastní práva jednoho účtu
+# ---------------------------------------------------------------------------
+#
+# Skupina je výchozí, účet ji může přebít. Uloženo je to u účtu jako
+# JSON ve sloupci `accounts.pristup`: NULL znamená „podle skupiny", cokoliv
+# jiného je úplný seznam - co v něm není zaškrtnuté, je vypnuté. Není to
+# rozdíl proti skupině (jen změny), protože pak by změna skupiny potichu
+# měnila i účty, u kterých správce věřil, že je nastavil ručně.
+
+PRISTUP = "pristup"
+
+
+def vlastni_prava(account: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Vlastní práva účtu, nebo None = platí skupina.
+
+    Rozbitý JSON se bere jako „žádná vlastní práva". Zavřít člověku
+    všechno kvůli překlepu v databázi by bylo horší než spadnout na
+    skupinu, která je nastavená vědomě.
+    """
+    if not account:
+        return None
+    surove = account.get(PRISTUP)
+    if not surove:
+        return None
+    try:
+        data = json.loads(surove) if isinstance(surove, str) else surove
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {
+        "oblasti": {str(k) for k in (data.get("oblasti") or [])},
+        "anonymizace": bool(data.get("anonymizace")),
+    }
+
+
+def zabal_prava(zapnute: Iterable[str], anonymizace: bool) -> str:
+    """Vlastní práva do podoby, v jaké se ukládají k účtu."""
+    return json.dumps({
+        "oblasti": sorted(k for k in zapnute if k in PODLE_KLICE),
+        "anonymizace": bool(anonymizace),
+    })
+
+
+def anonymizace_zapnuta(kdo: str = DIVAK,
+                        account: dict[str, Any] | None = None) -> bool:
+    """Skrývají se tomuhle člověku cizí jména a adresy?
 
     U diváka z Jellyfinu ano - přišel sám a o ostatních mu nic není.
     U čtenářského účtu ne: ten dosud jména viděl a správce ho zakládal
-    s tím, že je uvidí. Kdo chce jinak, přepne to.
+    s tím, že je uvidí. Kdo chce jinak, přepne to - u skupiny, nebo
+    u jednoho účtu.
     """
+    vlastni = vlastni_prava(account)
+    if vlastni is not None:
+        return vlastni["anonymizace"]
     return db.get_setting(f"{kdo}_anonymizace",
                           "1" if kdo == DIVAK else "0") == "1"
 
 
-def vidi(kdo: str, klic: str) -> bool:
+def vidi(kdo: str, klic: str, account: dict[str, Any] | None = None) -> bool:
     if kdo == SPRAVCE:
         return True
     oblast = PODLE_KLICE.get(klic)
     if oblast is None:
         return False
-    vychozi = "1" if _vychozi(kdo, oblast) else "0"
-    if db.get_setting(klic_oblasti(kdo, oblast), vychozi) != "1":
+    vlastni = vlastni_prava(account)
+    if vlastni is not None:
+        zapnuto = oblast.klic in vlastni["oblasti"]
+    else:
+        vychozi = "1" if _vychozi(kdo, oblast) else "0"
+        zapnuto = db.get_setting(klic_oblasti(kdo, oblast), vychozi) == "1"
+    if not zapnuto:
         return False
     # Pod-oblast platí jen tehdy, když je zapnutá i ta nad ní. Jinak by
     # „…včetně kdo to sledoval" pouštělo jména na stránce, kterou dotyčný
     # stejně nesmí otevřít - a po zapnutí knihovny by se to objevilo,
     # aniž by o tom někdo rozhodl.
-    return vidi(kdo, oblast.pod) if oblast.pod else True
+    return vidi(kdo, oblast.pod, account) if oblast.pod else True
 
 
-def povolene_cesty(kdo: str) -> tuple[str, ...]:
-    """Adresy, které tahle skupina smí otevřít."""
+def povolene_cesty(kdo: str,
+                   account: dict[str, Any] | None = None) -> tuple[str, ...]:
+    """Adresy, které tenhle člověk smí otevřít."""
     cesty: list[str] = list(VZDY)
     for oblast in OBLASTI:
-        if oblast.cesty and vidi(kdo, oblast.klic):
+        if oblast.cesty and vidi(kdo, oblast.klic, account):
             cesty.extend(oblast.cesty)
     return tuple(cesty)
 
 
-def domovska(kdo: str, muj_divak: str = "") -> str:
+def domovska(kdo: str, muj_divak: str = "",
+             account: dict[str, Any] | None = None) -> str:
     """Kam po přihlášení, když Přehled není povolený.
 
     Přistát na stránce s „sem nemáš přístup" hned po zadání hesla je
@@ -182,17 +245,18 @@ def domovska(kdo: str, muj_divak: str = "") -> str:
     """
     if muj_divak:
         return f"/users/{muj_divak}"
-    if vidi(kdo, "prehled"):
+    if vidi(kdo, "prehled", account):
         return "/"
     for cesta in ("/insights", "/library", "/languages", "/users",
                   "/network"):
-        if smi_cestu(kdo, cesta):
+        if smi_cestu(kdo, cesta, account):
             return cesta
     return "/history"
 
 
-def smi_cestu(kdo: str, cesta: str) -> bool:
-    """Smí tahle skupina otevřít tuhle adresu?
+def smi_cestu(kdo: str, cesta: str,
+              account: dict[str, Any] | None = None) -> bool:
+    """Smí tenhle člověk otevřít tuhle adresu?
 
     Kořen `/` se porovnává **přesně**. Jako předpona by odpovídal každé
     adrese na světě, takže by zapnutý Přehled potichu otevřel i Nastavení
@@ -200,7 +264,7 @@ def smi_cestu(kdo: str, cesta: str) -> bool:
     """
     if kdo == SPRAVCE:
         return True
-    for povolena in povolene_cesty(kdo):
+    for povolena in povolene_cesty(kdo, account):
         if povolena == "/":
             if cesta == "/":
                 return True
@@ -214,21 +278,32 @@ def smi_cestu(kdo: str, cesta: str) -> bool:
     return False
 
 
-def strom(kdo: str) -> list[dict[str, Any]]:
-    """Oblasti pro stránku Nastavení - i se stavem a odsazením."""
-    return [
-        {
+def strom(kdo: str, account: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Oblasti pro stránku Nastavení - i se stavem a odsazením.
+
+    S účtem se kreslí jeho vlastní práva; když žádná nemá, stav skupiny -
+    to je to, co by pro něj platilo, a od čeho správce začíná upravovat.
+    Stav je tu **holý** (bez pravidla o nadřazené oblasti), protože
+    zaškrtávátko má ukázat, co je uložené, ne co z toho vyplývá.
+    """
+    vlastni = vlastni_prava(account)
+    radky = []
+    for oblast in OBLASTI:
+        if vlastni is not None:
+            zapnuto = oblast.klic in vlastni["oblasti"]
+        else:
+            zapnuto = db.get_setting(
+                klic_oblasti(kdo, oblast),
+                "1" if _vychozi(kdo, oblast) else "0") == "1"
+        radky.append({
             "klic": oblast.klic,
             "nastaveni": klic_oblasti(kdo, oblast),
             "nazev": oblast.nazev,
             "popis": oblast.popis,
             "pod": oblast.pod,
-            "zapnuto": db.get_setting(
-                klic_oblasti(kdo, oblast),
-                "1" if _vychozi(kdo, oblast) else "0") == "1",
-        }
-        for oblast in OBLASTI
-    ]
+            "zapnuto": zapnuto,
+        })
+    return radky
 
 
 # ---------------------------------------------------------------------------

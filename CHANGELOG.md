@@ -9,6 +9,61 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.1
+
+Rights can be set on a single account, a viewer removed from Jellyfin
+is removed here, the API answers twelve more questions, and the free
+space comes from where the library lies - checked against Jellyfin 12.1.
+
+### Added
+
+- **Rights of one account.** The trees in Settings apply to a whole
+  group - Jellyfin viewers, local reader accounts. A **Rights** button
+  next to an account in *Settings -> Accounts* switches that one account
+  to rights of its own: the same tree and the same anonymising switch,
+  saved on the account. From then on the group settings are not read
+  for it at all; switching back to *as the group* drops its own tree.
+  An account with its own rights carries a badge in the list, and the
+  list now also tells a Jellyfin viewer from a local reader.
+
+- **Twelve more addresses in the API.** Every library on its own, the
+  top titles, the **least played files** (never played first, the
+  largest of those on top, with the last time each was played), what
+  nobody watched and how much space it takes, the viewers, recent
+  playbacks, what came in last, play methods and clients, the Insights
+  page in numbers, the bandwidth picture, and one title with its
+  versions. Every answer is a fixed shape built from the functions the
+  pages use; row counts are capped, and the history and bandwidth
+  answers carry no IP addresses. The list is in *Settings -> API* and
+  in the README.
+
+### Changed
+
+- **A viewer removed from Jellyfin is removed here.** The account
+  created at their first sign-in disappears at the next sync - the
+  quick one runs every few minutes and now refreshes users too - and an
+  open session ends with it. Only the sign-in goes: the viewer's history
+  and every statistic stay exactly as they were. An empty answer from
+  Jellyfin deletes nothing, and the last administrator always stays.
+
+- **The menu shows only what the person can open.** It used to be a
+  fixed list, so a reader saw links that ended in "you may not".
+
+- **Free space is read from where Jellyfin 12 reports it.** The app
+  asked `/System/Storage`, which answers 404 on every version, so the
+  figure silently came from the disk Jellyscope runs on - not the one
+  the library lies on. Jellyfin 12.1 has it at `/System/Info/Storage`
+  with the space of every library folder; that is read now, and older
+  servers fall back to measuring the disk exactly as before. Everything
+  else - sign-in with a password or a code, collections, every file of
+  a title, the users list - was checked against 12.1.0 and needed no
+  change.
+
+- **The time-zone database ships with the installation.** Linux has one
+  of its own; Windows and minimal container images have none, and
+  without it every zone name was unknown - Settings refused a valid
+  zone and the charts fell back to the system clock.
+
 ## 1.7.0
 
 People with a Jellyfin account can sign in and see their own statistics,

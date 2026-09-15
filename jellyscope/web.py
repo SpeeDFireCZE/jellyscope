@@ -293,8 +293,10 @@ async def rozsah_divaka(request: Request, call_next):
     divak = muj_divak(ucet)
     cesta = request.url.path
 
+    # `ucet` jde s kazdym dotazem dal: ucet muze mit vlastni prava, ktera
+    # skupinu prebiji (Nastaveni -> Ucty -> Prava).
     if divak:
-        if cesta == "/" and not pristup.vidi(kdo, "prehled"):
+        if cesta == "/" and not pristup.vidi(kdo, "prehled", ucet):
             return RedirectResponse(f"/users/{divak}", status_code=303)
         if cesta.startswith("/users/"):
             if cesta.rstrip("/") != f"/users/{divak}":
@@ -303,7 +305,7 @@ async def rozsah_divaka(request: Request, call_next):
         if request.method != "GET" and cesta != "/logout":
             return _nesmis(request)
 
-    if not pristup.smi_cestu(kdo, cesta):
+    if not pristup.smi_cestu(kdo, cesta, ucet):
         return _nesmis(request)
 
     return await call_next(request)

@@ -102,6 +102,11 @@ class FalesnyKlient:
         # ví, kam nově přidaný titul patří.
         return [{"ItemId": "lib", "Name": "Filmy", "CollectionType": "movies"}]
 
+    async def users(self) -> list[dict[str, Any]]:
+        # Rychlá synchronizace si od 1.7.1 bere i uživatele - kvůli
+        # účtům lidí, které správce v Jellyfinu odebral. Tady nikdo.
+        return []
+
     # Testujeme skutečnou logiku okna, ne její kopii.
     recent_items = JellyfinClient.recent_items
 

@@ -364,11 +364,25 @@ def _anonymizuj_pro_divaka(data: dict[str, Any],
     někdo otevře.
     """
     kdo = pristup.role(account)
-    if kdo in ("", pristup.SPRAVCE) or not pristup.anonymizace_zapnuta(kdo):
+    if kdo in ("", pristup.SPRAVCE) \
+            or not pristup.anonymizace_zapnuta(kdo, account):
         return data
     # Cteci ucet nepatri zadnemu divakovi, takze se mu schova uplne
     # kazde jmeno - neni ke komu delat vyjimku.
     return pristup.anonymizuj(data, muj_divak(account))
+
+
+def _smi_pro(account: Optional[dict[str, Any]]):
+    """Funkce pro šablonu: smí tenhle účet otevřít tuhle adresu?
+
+    Správce smí všechno; nepřihlášený taky, protože pro něj se menu
+    stejně nekreslí a záporná odpověď by jen schovala odkazy na
+    přihlašovací stránce.
+    """
+    kdo = pristup.role(account)
+    if kdo in ("", pristup.SPRAVCE):
+        return lambda cesta: True
+    return lambda cesta: pristup.smi_cestu(kdo, cesta, account)
 
 
 def _context(request: Request, account: Optional[dict[str, Any]] = None,
@@ -392,6 +406,11 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # je ucet privazany k jednomu divakovi.
         "muj_divak": muj_divak(account),
         "je_spravce": bool(account and account.get("is_admin")),
+        # Menu se kresli jen z toho, co clovek smi otevrit - tataz
+        # otazka, kterou si klade `rozsah_divaka` ve web.py, i s pravy
+        # jednoho uctu. Odkaz, za kterym ceka "sem nemas pristup", je
+        # horsi nez zadny.
+        "smi": _smi_pro(account),
         "ui_language": i18n.current_language(),
         # Dnesek pro pole s datem - dal do budoucnosti nema smysl
         # chodit, statistika by byla prazdna.

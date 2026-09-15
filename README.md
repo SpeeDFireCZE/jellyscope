@@ -292,6 +292,23 @@ curl -H "Authorization: Bearer js_your_key" http://localhost:8097/api/v1/summary
 | `GET /api/v1/summary?days=30` | Hours watched, plays, viewers, titles, transcode share, and how much is playing right now. |
 | `GET /api/v1/now-playing` | What is playing: who, what, on what, transcoded or not, how far in. |
 | `GET /api/v1/library` | Size of the library, item counts, free space, growth over a period. |
+| `GET /api/v1/libraries` | Every library on its own: items, size, hours of content. |
+| `GET /api/v1/top-items?days=30&limit=10&kind=both` | Most watched titles; episodes of a series add up. `kind` is `both`, `movies` or `series`. |
+| `GET /api/v1/least-played?days=365&limit=25&min_size_mb=0` | Files from the least played up: never played first, largest of those on top, with the last time each was played. |
+| `GET /api/v1/unwatched?days=365&limit=25` | What nobody watched over the period and how much space it takes - as a share of the library too. |
+| `GET /api/v1/users?days=30` | Viewers and their watching over the period: hours, plays, titles, transcoded hours. |
+| `GET /api/v1/history?days=30&limit=50&user=&kind=both` | Recent playbacks, newest first. No IP addresses - the API never hands those out. |
+| `GET /api/v1/recently-added?limit=18` | What came into the library last. |
+| `GET /api/v1/play-methods?days=30` | Direct play against transcoding, and the clients people watch with. |
+| `GET /api/v1/insights?days=30&limit=15` | The Insights page in numbers: transcode offenders, upgrade candidates, oversized and rarely watched, never finished. |
+| `GET /api/v1/bandwidth?days=30` | Data sent out, the peak, transcode share, home against internet, and by country. Without addresses. |
+| `GET /api/v1/item/<id>` | One title: the file, its versions and who watched it. |
+
+Every answer is a fixed shape built from the same functions the pages use,
+so a dashboard and the page it mirrors cannot drift apart. Row counts are
+capped (500 at most, less where a page shows less) - a tool asking every
+few seconds must not be able to make the server serialise the whole
+library each time.
 
 ```json
 {
@@ -389,6 +406,25 @@ is ever anonymised to themselves.
 
 What a viewer cannot open answers with a short page saying why, and the
 rule is an allow-list: a page nobody thought about is closed, not open.
+The menu shows only what the person can open.
+
+**One account can override its group.** The trees in Settings apply to
+a whole group - Jellyfin viewers, local reader accounts. The **Rights**
+button next to an account in *Settings -> Accounts* switches that one
+account to rights of its own: the same tree and the same anonymising
+switch, saved on the account. From then on the group settings are not
+read for it at all; switching back to *as the group* drops the account's
+own tree. An account with its own rights carries a badge in the list, so
+nobody wonders why a group change did not reach it.
+
+**A viewer removed from Jellyfin is removed here.** The account created
+at their first sign-in disappears at the next sync (the quick one runs
+every few minutes), and an open session ends with it. Only the sign-in
+goes: the viewer's history and every statistic stay exactly as they were
+- forgetting a viewer's data is a separate, deliberate action in
+*Settings -> Tasks*. An empty answer from Jellyfin deletes nothing (that
+is a connection problem, not an empty server), and the last
+administrator always stays.
 
 #### Signing in with a code (Quick Connect)
 

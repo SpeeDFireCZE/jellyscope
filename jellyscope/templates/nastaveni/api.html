@@ -133,6 +133,50 @@
                     <td class="nowrap"><code>GET /api/v1/library</code></td>
                     <td>{{ _("Velikost knihovny, počty položek, volné místo a růst za období.") }}</td>
                 </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/libraries</code></td>
+                    <td>{{ _("Každá knihovna zvlášť: položky, velikost, délka obsahu.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/top-items?days=30&amp;limit=10&amp;kind=both</code></td>
+                    <td>{{ _("Nejsledovanější tituly; díly seriálu se sčítají. kind = both / movies / series.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/least-played?days=365&amp;limit=25&amp;min_size_mb=0</code></td>
+                    <td>{{ _("Soubory od nejméně hraných – nikdy nehrané napřed, v nich největší první. S posledním přehráním za celou historii.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/unwatched?days=365&amp;limit=25</code></td>
+                    <td>{{ _("Co se za období vůbec nehrálo a kolik místa to zabírá – i jako podíl knihovny.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/users?days=30</code></td>
+                    <td>{{ _("Diváci a jejich sledovanost za období: hodiny, spuštění, tituly, přepočty.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/history?days=30&amp;limit=50&amp;user=&amp;kind=both</code></td>
+                    <td>{{ _("Poslední přehrávání, nejnovější první. Bez IP adres – ty API nevydává.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/recently-added?limit=18</code></td>
+                    <td>{{ _("Co do knihovny přišlo naposledy.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/play-methods?days=30</code></td>
+                    <td>{{ _("Přímé přehrávání proti přepočtům a čím se lidé dívají.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/insights?days=30&amp;limit=15</code></td>
+                    <td>{{ _("Stránka Zjištění v číslech: co se nejvíc přepočítává, co si zaslouží lepší kvalitu, velké a málo sledované, nedokoukané.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/bandwidth?days=30</code></td>
+                    <td>{{ _("Kolik dat odešlo, špička, podíl přepočtů, doma proti internetu a po zemích. Bez adres.") }}</td>
+                </tr>
+                <tr>
+                    <td class="nowrap"><code>GET /api/v1/item/&lt;id&gt;</code></td>
+                    <td>{{ _("Jeden titul: soubor, jeho verze a kdo se na něj díval.") }}</td>
+                </tr>
                 </tbody>
             </table>
         </div>

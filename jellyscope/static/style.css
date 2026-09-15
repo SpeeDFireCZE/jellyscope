@@ -3301,6 +3301,10 @@ table.zapomenuti form { display: inline; }
    a odsazení říká „platí jen s tím nad sebou". */
 .strom { border-left: 2px solid var(--border); padding-left: 14px; margin-top: 10px; }
 .prepinac.strom-pod { margin-left: 24px; }
+/* Strom práv jednoho účtu, dokud platí skupina: je vidět, co pro účet
+   platí, ale je jasné, že se to tady nemění. */
+.prava-strom.zamceno { opacity: .55; }
+.prava-strom.zamceno .prepinac { cursor: default; }
 
 /* Oddělovač mezi dvěma způsoby přihlášení. Čára s „nebo" uprostřed říká
    „dvě cesty, ne dva kroky" - dvě tlačítka pod sebou bez ní vypadají

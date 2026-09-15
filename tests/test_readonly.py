@@ -73,6 +73,7 @@ CTECI_ADRESY = {
     # Kolik zbývá místa tam, kde data OPRAVDU leží. `disk_usage` měří
     # disk pod Jellyscope, jenže knihovna bývá jinde. Starší Jellyfin
     # endpoint nemá a vrátí 404 - to se bere jako "nevím", ne jako chyba.
+    "/System/Info/Storage",             # jmeno od Jellyfinu 12 (overeno 12.1.0)
     "/System/Storage",
     "/Items",                           # položky knihovny
     "/Users/{user_id}/Items",           # položky očima jednoho uživatele

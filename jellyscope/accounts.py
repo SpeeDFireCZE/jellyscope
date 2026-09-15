@@ -345,10 +345,26 @@ def get(account_id: int) -> dict[str, Any] | None:
 
 
 def all_accounts() -> list[dict[str, Any]]:
-    return db.query_all(
-        "SELECT id, username, is_admin, created_at, last_login"
+    # `jellyfin_user_id` a `pristup` jsou tu kvuli Nastaveni: podle
+    # prvniho se pozna divak z Jellyfinu, podle druheho vlastni prava.
+    return [dict(r) for r in db.query_all(
+        "SELECT id, username, is_admin, created_at, last_login,"
+        " jellyfin_user_id, pristup"
         " FROM accounts ORDER BY is_admin DESC, LOWER(username)"
-    )
+    )]
+
+
+def uloz_prava(account_id: int, prava: str | None) -> None:
+    """Vlastní práva účtu; None = zpátky na skupinu."""
+    ucet = get(account_id)
+    if ucet is None:
+        raise AccountError("Účet neexistuje.")
+    with db.connect() as conn:
+        conn.execute("UPDATE accounts SET pristup = ? WHERE id = ?",
+                     (prava, account_id))
+        conn.commit()
+    log.info("ucet %s: prava %s", ucet["username"],
+             "vlastni" if prava else "podle skupiny")
 
 
 def admin_count() -> int:
@@ -443,6 +459,61 @@ def z_jellyfinu(udaje: dict[str, Any]) -> dict[str, Any]:
                  "spravce" if udaje["spravce"] else "divak")
     return db.query_one("SELECT * FROM accounts WHERE id = ?",
                         (ucet["id"],)) or {}
+
+
+def odeber_bez_jellyfinu(ziva_id: set[str] | list[str]) -> list[str]:
+    """Smaže přihlašovací účty diváků, které už Jellyfin nezná.
+
+    Účet z Jellyfinu vzniká sám při prvním přihlášení - a stejně sám má
+    zmizet, když správce toho člověka v Jellyfinu odebere. Jinak zůstane
+    v Nastavení → Účty řádek, který nikam nevede, a hůř: kdyby se ten
+    člověk do Jellyfinu vrátil pod stejným id, zdědil by starý účet
+    i s právy, která mezitím nikdo neřešil.
+
+    Maže se **jen účet**, tedy jen přihlášení. Řádek v `users`, historie
+    i statistiky zůstávají: kdo co sledoval, se odebráním účtu nemění a
+    na to je koš a zapomenutí, ne tohle.
+
+    Dvě pojistky:
+
+    * Prázdný seznam z Jellyfinu se **nebere jako „nikdo"**. Odpověď bez
+      jediného uživatele je skoro jistě chyba (špatný klíč, jiný server),
+      a smazat podle ní všechny účty by byla chyba na druhou.
+    * Poslední správce zůstává, ať říká Jellyfin cokoli - jinak by se do
+      Nastavení už nikdo nedostal.
+    """
+    ziva = {_hole_id(jid) for jid in ziva_id if jid}
+    if not ziva:
+        return []
+
+    smazane: list[str] = []
+    for ucet in db.query_all(
+            "SELECT id, username, is_admin, jellyfin_user_id FROM accounts"
+            " WHERE jellyfin_user_id IS NOT NULL AND jellyfin_user_id <> ''"):
+        ucet = dict(ucet)
+        if _hole_id(str(ucet["jellyfin_user_id"])) in ziva:
+            continue
+        if ucet["is_admin"] and admin_count() <= 1:
+            log.warning("ucet %s uz v Jellyfinu neni, ale je posledni"
+                        " spravce - zustava", ucet["username"])
+            continue
+        with db.connect() as conn:
+            conn.execute("DELETE FROM accounts WHERE id = ?", (ucet["id"],))
+            conn.commit()
+        log.info("smazan ucet %s: uzivatel uz v Jellyfinu neni",
+                 ucet["username"])
+        smazane.append(str(ucet["username"]))
+    return smazane
+
+
+def _hole_id(jellyfin_id: str) -> str:
+    """Id bez pomlček a malými písmeny.
+
+    Jellyfin posílá totéž id jednou s pomlčkami, jednou bez - podle
+    toho, který endpoint odpovídá. Porovnávat se musí očištěné, jinak
+    by tenhle úklid smazal účet, jehož člověk v Jellyfinu klidně je.
+    """
+    return jellyfin_id.replace("-", "").strip().lower()
 
 
 def _volne_jmeno(zaklad: str) -> str:

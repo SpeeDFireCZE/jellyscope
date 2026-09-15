@@ -758,6 +758,9 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # se pozna, ktera prehravani jsou "moje" - je to totez id jako
         # v tabulce `users`.
         "jellyfin_user_id": "TEXT",
+        # Vlastni prava uctu jako JSON, nebo NULL = plati nastaveni
+        # skupiny (ctenari / divaci). Viz pristup.vlastni_prava().
+        "pristup": "TEXT",
     },
     "playback": {
         "audio_language": "TEXT",

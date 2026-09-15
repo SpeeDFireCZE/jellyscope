@@ -302,16 +302,24 @@ class JellyfinClient:
         v jinem kontejneru - a pak merime uplne cizi disk. Jellyfin sedi
         u tech souboru, takze se ptame jeho.
 
-        Endpoint pribyl az v novejsim Jellyfinu. Na starsim vrati 404
-        a to NENI chyba: vratime prazdno a volajici sahne po zaloznim
-        zpusobu. Shodit kvuli tomu synchronizaci by bylo neumerne.
+        Endpoint pribyl az v novejsim Jellyfinu a jmenuje se
+        `/System/Info/Storage` (overeno na 12.1.0: slozky serveru
+        a `Libraries` se slozkami knihoven, kazda s FreeSpace a UsedSpace).
+        Drivejsi jmeno `/System/Storage` se zkousi jako druhe - kdyby ho
+        nejaka verze mela. Na starsim serveru vrati oboji 404 a to NENI
+        chyba: vratime prazdno a volajici sahne po zaloznim zpusobu.
+        Shodit kvuli tomu synchronizaci by bylo neumerne.
         """
-        try:
-            return await self._get("/System/Storage") or {}
-        except JellyfinError as chyba:
-            log.info("Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak",
-                     chyba)
-            return {}
+        for cesta in ("/System/Info/Storage", "/System/Storage"):
+            try:
+                odpoved = await self._get(cesta)
+            except JellyfinError as chyba:
+                log.info("Jellyfin nezna %s (%s)", cesta, chyba)
+                continue
+            if odpoved:
+                return odpoved
+        log.info("Jellyfin misto na disku nehlasi - zjisti se jinak")
+        return {}
 
     async def image_bytes(
         self, item_id: str, kind: str = "Primary", max_width: int = 400

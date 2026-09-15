@@ -506,6 +506,10 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
 
         try:
             async with JellyfinClient(*db.jellyfin_connection()) as client:
+                # Uzivatele taky - je to jedno volani a diky nemu zmizi
+                # ucet odebraneho cloveka do par minut, ne az po nocni
+                # plne synchronizaci.
+                await _sync_users(client)
                 knihovny = await _sync_libraries(client)
                 use_jellyfin_tech = db.get_setting("tech_source") == "jellyfin"
                 _start_progress("recent", 0)
@@ -740,12 +744,24 @@ def misto_z_jellyfinu(odpoved: Any, cesta: str = "") -> dict[str, int]:
     if not isinstance(odpoved, dict):
         return {}
 
+    # Jellyfin 12 (`/System/Info/Storage`, overeno na 12.1.0) posila
+    # slovnik pojmenovanych slozek serveru (ProgramDataFolder, LogFolder,
+    # ...) a k tomu `Libraries`: seznam knihoven, kazda se svym seznamem
+    # `Folders`. Slozky knihoven jsou ty, o ktere jde - na nich lezi
+    # filmy. Slozky serveru se berou az jako zaloha: kdyz knihovna lezi
+    # na jinem disku nez server, cislo ze serverove slozky by lhalo.
     slozky: list[dict[str, Any]] = []
+    for knihovna in odpoved.get("Libraries") or []:
+        if isinstance(knihovna, dict):
+            slozky.extend(s for s in knihovna.get("Folders") or []
+                          if isinstance(s, dict))
     for klic in ("Folders", "folders", "StorageFolders", "Items"):
         hodnota = odpoved.get(klic)
         if isinstance(hodnota, list):
-            slozky = [s for s in hodnota if isinstance(s, dict)]
-            break
+            slozky.extend(s for s in hodnota if isinstance(s, dict))
+    if not slozky:
+        slozky = [v for v in odpoved.values()
+                  if isinstance(v, dict) and "Path" in v]
     if not slozky:
         # Nekdy prijde rovnou jedna slozka, ne seznam.
         slozky = [odpoved]
@@ -761,6 +777,12 @@ def misto_z_jellyfinu(odpoved: Any, cesta: str = "") -> dict[str, int]:
     for slozka in slozky:
         volne = pole(slozka, "FreeSpace", "freeSpace", "FreeSpaceBytes")
         celkem = pole(slozka, "TotalSpace", "totalSpace", "TotalSpaceBytes")
+        # Dvanactka celkove misto neposila - jen volne a obsazene.
+        # Soucet je totez cislo; -1 znamena "neumim zmerit" a `_cislo`
+        # ho zahodi.
+        obsazene = pole(slozka, "UsedSpace", "usedSpace")
+        if celkem is None and volne is not None and obsazene is not None:
+            celkem = volne + obsazene
         if volne is None and celkem is None:
             continue
         zmerene.append({
@@ -949,6 +971,17 @@ async def _sync_users(client: JellyfinClient) -> int:
                     now,
                 ),
             )
+
+    # Radky v `users` se nemazou - historie smazaneho cloveka ma dal
+    # komu patrit. Co se maze, je jeho PRIHLASOVACI ucet do Jellyscope:
+    # koho spravce v Jellyfinu odebral, nema tady mit dvere.
+    from . import accounts  # az tady, at nevznikne kruh pri importu
+
+    smazane = accounts.odeber_bez_jellyfinu(
+        {str(user.get("Id") or "") for user in users})
+    if smazane:
+        log.info("ucty bez uzivatele v Jellyfinu odebrany: %s",
+                 ", ".join(smazane))
     return len(users)
 
 

@@ -1,7 +1,6 @@
 {
     "Odklizeno %s prehravani starsich nez %s dni": "Cleared out %s playbacks older than %s days",
     "Zapomenut divak %s: smazano %s prehravani": "Viewer %s forgotten: %s playbacks deleted",
-    "Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak": "Jellyfin does not know /System/Storage (%s) - free space will be determined some other way",
     "misto z Jellyfinu se nepodarilo zjistit: %s": "could not get the free space from Jellyfin: %s",
     "upozorneni pres %s se nepodarilo poslat: %s: %s": "could not send a notification through %s: %s: %s",
     "casova zona aplikace: %s": "application time zone: %s",
@@ -127,5 +126,11 @@
     "nahrazeny soubor: historie %s -> %s (%s zaznamu)": "replaced file: history %s -> %s (%s rows)",
     "quick connect se nepodarilo zahajit: %s": "could not start quick connect: %s",
     "quick connect: dotaz na stav selhal: %s": "quick connect: the status request failed: %s",
-    "prihlaseni pres Quick Connect: %s": "signed in through Quick Connect: %s"
+    "prihlaseni pres Quick Connect: %s": "signed in through Quick Connect: %s",
+    "Jellyfin misto na disku nehlasi - zjisti se jinak": "Jellyfin does not report disk space - it will be measured another way",
+    "Jellyfin nezna %s (%s)": "Jellyfin does not know %s (%s)",
+    "smazan ucet %s: uzivatel uz v Jellyfinu neni": "account %s deleted: the user no longer exists in Jellyfin",
+    "ucet %s uz v Jellyfinu neni, ale je posledni spravce - zustava": "account %s no longer exists in Jellyfin, but it is the last administrator - it stays",
+    "ucet %s: prava %s": "account %s: rights %s",
+    "ucty bez uzivatele v Jellyfinu odebrany: %s": "accounts without a user in Jellyfin removed: %s"
 }

@@ -412,11 +412,25 @@ def settings_page(
             ctenar_strom=pristup.strom(pristup.CTENAR),
             ctenar_anonymizace=pristup.anonymizace_zapnuta(pristup.CTENAR),
         )
+        vsechny = accounts.all_accounts()
         context.update(
-            all_accounts=accounts.all_accounts(),
+            all_accounts=vsechny,
             # Kolik je správců - podle toho se u posledního z nich
             # neukáže tlačítko Smazat. Viz accounts.delete().
             admin_count=accounts.admin_count(),
+            # Vlastní práva každého účtu bez práv správce: strom tak,
+            # jak pro něj platí (vlastní, nebo zděděný od skupiny), a
+            # jestli je vlastní. Správce žádný strom nemá - vidí všechno.
+            prava_uctu={
+                ucet["id"]: {
+                    "vlastni": pristup.vlastni_prava(ucet) is not None,
+                    "skupina": pristup.role(ucet),
+                    "strom": pristup.strom(pristup.role(ucet), ucet),
+                    "anonymizace": pristup.anonymizace_zapnuta(
+                        pristup.role(ucet), ucet),
+                }
+                for ucet in vsechny if not ucet.get("is_admin")
+            },
         )
     elif section == "log":
         # Vstup z adresy nikdy nedůvěřuj - ani vlastnímu odkazu. Jméno
@@ -590,6 +604,40 @@ def _uloz_strom(formular: Any, kdo: str) -> None:
     for oblast in pristup.OBLASTI:
         db.set_setting(pristup.klic_oblasti(kdo, oblast),
                        "1" if formular.get(f"vidi_{oblast.klic}") else "0")
+
+
+@router.post("/settings/accounts/prava")
+async def settings_prava_uctu(request: Request,
+                              account: dict[str, Any] = Depends(require_admin)):
+    """Vlastní práva jednoho účtu - nebo návrat ke skupině.
+
+    Zaškrtávátka se čtou z formuláře přímo, ze stejného důvodu jako
+    u skupin (viz `_uloz_strom`). Účet správce vlastní práva nemá:
+    správce vidí všechno a strom by u něj jen mátl.
+    """
+    formular = await request.form()
+    try:
+        account_id = int(str(formular.get("account_id") or 0))
+    except ValueError:
+        account_id = 0
+    cil = accounts.get(account_id)
+    if cil is None or cil.get("is_admin"):
+        _flash(request, "Tenhle účet vlastní práva nemá.", "error")
+        return RedirectResponse("/settings?section=accounts", status_code=303)
+
+    if str(formular.get("rezim") or "") == "vlastni":
+        prava = pristup.zabal_prava(
+            (oblast.klic for oblast in pristup.OBLASTI
+             if formular.get(f"vidi_{oblast.klic}")),
+            bool(formular.get("anonymizace")))
+        accounts.uloz_prava(account_id, prava)
+        _flash(request, "Uloženo. Účet {jmeno} má vlastní práva – nastavení skupiny se ho už netýká.",
+               "success", jmeno=cil["username"])
+    else:
+        accounts.uloz_prava(account_id, None)
+        _flash(request, "Uloženo. Účet {jmeno} se zase řídí nastavením své skupiny.",
+               "success", jmeno=cil["username"])
+    return RedirectResponse("/settings?section=accounts", status_code=303)
 
 
 @router.post("/settings/ctenari")

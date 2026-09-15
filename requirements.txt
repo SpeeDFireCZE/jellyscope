@@ -19,6 +19,13 @@ jinja2==3.1.6              # templating - turns HTML templates into pages
                            #  run templates in a sandbox, so it was a formality)
 itsdangerous==2.2.0        # signs the login cookie
 python-multipart==0.0.32   # reads HTML form data (POST)
+tzdata==2026.4             # time-zone database for the "Time zone" setting.
+                           # Linux has one of its own and Python uses that
+                           # first; Windows and minimal container images
+                           # (Alpine) have none, and without it every zone
+                           # is "unknown": Settings refuses a valid name and
+                           # the charts silently fall back to the system
+                           # clock. Small, pure Python, no build step.
 maxminddb==3.1.1           # reads the GeoLite2 file for the map on the
                            # Network page. Small and offline - it opens a
                            # local file, it never asks the network. Used to

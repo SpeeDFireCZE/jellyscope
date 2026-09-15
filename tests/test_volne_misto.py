@@ -74,6 +74,36 @@ check(misto.get("volne") == 42 * GB, f"lomítka ani velikost písmen nevadí ({m
 
 # Co neni cislo, se nebere. Hadat hodnotu, ze ktere se pocita "dojde za
 # X dnu", by bylo horsi nez priznat, ze ji nezname.
+# Tvar z Jellyfinu 12 (`/System/Info/Storage`, opsano z 12.1.0): slozky
+# serveru jako pojmenovane klice a `Libraries` se slozkami knihoven.
+# Celkove misto se neposila - je to soucet volneho a obsazeneho; -1 je
+# "neumim zmerit" a nesmi se pocitat.
+dvanactka = {
+    "ProgramDataFolder": {"Path": "C:\\jellyfin", "FreeSpace": 10 * GB,
+                          "UsedSpace": 90 * GB, "StorageType": "Fixed"},
+    "ImageCacheFolder": {"Path": "C:\\jellyfin\\cache\\images",
+                         "FreeSpace": -1, "UsedSpace": -1},
+    "Libraries": [
+        {"Id": "a", "Name": "Filmy", "Folders": [
+            {"Path": "D:\\media\\Filmy", "FreeSpace": 700 * GB,
+             "UsedSpace": 3300 * GB, "StorageType": "Fixed"}]},
+        {"Id": "b", "Name": "Serialy", "Folders": [
+            {"Path": "E:\\media\\Serialy", "FreeSpace": 100 * GB,
+             "UsedSpace": 400 * GB, "StorageType": "Fixed"}]},
+    ],
+}
+misto = scanner.misto_z_jellyfinu(dvanactka, "D:/media/Filmy/Duna/Duna.mkv")
+check(misto.get("volne") == 700 * GB and misto.get("celkem") == 4000 * GB,
+      f"Jellyfin 12: složka knihovny, celkem = volné + obsazené ({misto})")
+misto = scanner.misto_z_jellyfinu(dvanactka, "/jinde/film.mkv")
+check(misto.get("volne") == 100 * GB,
+      f"Jellyfin 12: bez shody nejtěsnější knihovna, ne složka serveru ({misto})")
+misto = scanner.misto_z_jellyfinu({"ProgramDataFolder": dvanactka["ProgramDataFolder"],
+                                   "ImageCacheFolder": dvanactka["ImageCacheFolder"]},
+                                  "/jinde/film.mkv")
+check(misto.get("volne") == 10 * GB and misto.get("celkem") == 100 * GB,
+      f"Jellyfin 12 bez knihoven: složka serveru, -1 se přeskočí ({misto})")
+
 for nesmysl in ({}, None, {"Folders": []}, {"Folders": [{"Path": "/x"}]},
                 {"Folders": [{"Path": "/x", "FreeSpace": "hodně"}]},
                 {"Folders": [{"Path": "/x", "FreeSpace": 0}]}):

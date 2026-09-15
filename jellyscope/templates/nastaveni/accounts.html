@@ -56,8 +56,16 @@
                 <td>
                     {% if row.is_admin %}
                         <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+                    {% elif row.jellyfin_user_id %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("divák z Jellyfinu") }}</span>
                     {% else %}
                         <span class="badge neutral"><span class="dot"></span>{{ _("čtenář") }}</span>
+                    {% endif %}
+                    {# Účet s vlastními právy je poznat na první pohled -
+                       jinak by správce hledal, proč se ho změna skupiny
+                       netýká. #}
+                    {% if row.id in prava_uctu and prava_uctu[row.id].vlastni %}
+                        <span class="badge good"><span class="dot"></span>{{ _("vlastní práva") }}</span>
                     {% endif %}
                 </td>
                 <td class="num muted">{{ row.created_at | datetime }}</td>
@@ -79,6 +87,13 @@
                             <span class="card-note">{{ _("vlastní účet") }}</span>
                         {% endif %}
                     {% else %}
+                        {# Vlastní práva má jen účet bez práv správce:
+                           správce vidí všechno a strom by u něj mátl. #}
+                        {% if row.id in prava_uctu %}
+                        <button class="btn" type="button" data-okno="okno-prava-{{ row.id }}">
+                            {{ _("Práva") }}
+                        </button>
+                        {% endif %}
                         <form method="post" action="/settings/accounts/role">
                             <input type="hidden" name="account_id" value="{{ row.id }}">
                             {% if not row.is_admin %}
@@ -203,6 +218,96 @@
     </form>
 </dialog>
 
+{# ------------------------------------------------------------------ #}
+{# Práva jednoho účtu                                                  #}
+{#                                                                     #}
+{# Skupina (čtenáři / diváci z Jellyfinu) je výchozí; tady ji jde pro  #}
+{# jeden účet přebít. Strom je tentýž jako u skupiny, jen se ukládá    #}
+{# k účtu. Po přepnutí na „vlastní" už se nastavení skupiny tohohle    #}
+{# účtu netýká - a naopak, návrat ke skupině vlastní strom zahodí.     #}
+{# ------------------------------------------------------------------ #}
+{% for row in all_accounts if row.id in prava_uctu %}
+{% set prava = prava_uctu[row.id] %}
+<dialog class="okno" id="okno-prava-{{ row.id }}">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Práva účtu") }} {{ row.username }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/prava" class="prava-uctu">
+        <input type="hidden" name="account_id" value="{{ row.id }}">
+
+        <div class="field">
+            <label class="prepinac">
+                <input type="radio" name="rezim" value="skupina"
+                       {{ 'checked' if not prava.vlastni }}>
+                <span>
+                    {% if prava.skupina == 'divak' %}
+                        {{ _("Podle skupiny „diváci z Jellyfinu“") }}
+                    {% else %}
+                        {{ _("Podle skupiny „čtenářské účty“") }}
+                    {% endif %}
+                    <span class="hint">{{ _("Co se změní u skupiny, změní se i tomuhle účtu.") }}</span>
+                </span>
+            </label>
+            <label class="prepinac" style="margin-top:8px">
+                <input type="radio" name="rezim" value="vlastni"
+                       {{ 'checked' if prava.vlastni }}>
+                <span>
+                    {{ _("Vlastní") }}
+                    <span class="hint">{{ _("Platí jen to, co je zaškrtnuté tady. Skupina se pro tenhle účet přestane číst.") }}</span>
+                </span>
+            </label>
+        </div>
+
+        {# Strom je vidět vždycky - i u „podle skupiny" ukazuje, co pro
+           účet zrovna platí. Zaškrtnutí se uloží jen v režimu „vlastní";
+           skript ho po přepnutí odemkne, bez skriptu je odemčený pořád
+           a rozhoduje přepínač nahoře. #}
+        <div class="strom prava-strom">
+            {% for oblast in prava.strom %}
+            <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
+                <input type="checkbox" name="vidi_{{ oblast.klic }}"
+                       {{ 'checked' if oblast.zapnuto }}>
+                <span>
+                    {{ _(oblast.nazev) }}
+                    <span class="hint">{{ _(oblast.popis) }}</span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <label class="prepinac" style="margin-top:14px">
+            <input type="checkbox" name="anonymizace" {{ 'checked' if prava.anonymizace }}>
+            <span>{{ _("Skrýt jména a adresy diváků") }}</span>
+        </label>
+
+        <div class="btn-row" style="margin-top:16px">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit práva") }}</button>
+        </div>
+    </form>
+</dialog>
+{% endfor %}
+
+<script>
+/* Strom se zamkne, dokud je zvolená skupina - zaškrtávat něco, co se
+   neuloží, by mátlo. Bez skriptu zůstane odemčený a rozhoduje přepínač. */
+document.querySelectorAll("form.prava-uctu").forEach(function (form) {
+    var strom = form.querySelector(".prava-strom");
+    var anonym = form.querySelector('input[name="anonymizace"]');
+    function prepni() {
+        var vlastni = form.querySelector('input[name="rezim"]:checked');
+        var zamceno = !(vlastni && vlastni.value === "vlastni");
+        strom.classList.toggle("zamceno", zamceno);
+        strom.querySelectorAll("input").forEach(function (i) { i.disabled = zamceno; });
+        anonym.disabled = zamceno;
+    }
+    form.querySelectorAll('input[name="rezim"]').forEach(function (r) {
+        r.addEventListener("change", prepni);
+    });
+    prepni();
+});
+</script>
 
 {% endif %}
 
@@ -224,6 +329,7 @@
 
     <p class="hint" style="margin-top:0">
         {{ _("Ve výchozím stavu vidí čtenář statistiky celé – tak se tyhle účty odjakživa zakládaly. Co mu ukázat nechceš, odškrtni.") }}
+        {{ _("Jeden účet může mít práva vlastní – tlačítko Práva u účtu výš; skupina se ho pak netýká.") }}
     </p>
 
     <div class="strom">

@@ -1,7 +1,6 @@
 {
     "Odklizeno %s prehravani starsich nez %s dni": "Odklizeno %s prehravani starsich nez %s dni",
     "Zapomenut divak %s: smazano %s prehravani": "Zapomenut divak %s: smazano %s prehravani",
-    "Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak": "Jellyfin nezna /System/Storage (%s) - misto se zjisti jinak",
     "misto z Jellyfinu se nepodarilo zjistit: %s": "misto z Jellyfinu se nepodarilo zjistit: %s",
     "upozorneni pres %s se nepodarilo poslat: %s: %s": "upozorneni pres %s se nepodarilo poslat: %s: %s",
     "casova zona aplikace: %s": "casova zona aplikace: %s",
@@ -127,5 +126,11 @@
     "nahrazeny soubor: historie %s -> %s (%s zaznamu)": "nahrazeny soubor: historie %s -> %s (%s zaznamu)",
     "quick connect se nepodarilo zahajit: %s": "quick connect se nepodarilo zahajit: %s",
     "quick connect: dotaz na stav selhal: %s": "quick connect: dotaz na stav selhal: %s",
-    "prihlaseni pres Quick Connect: %s": "prihlaseni pres Quick Connect: %s"
+    "prihlaseni pres Quick Connect: %s": "prihlaseni pres Quick Connect: %s",
+    "Jellyfin misto na disku nehlasi - zjisti se jinak": "Jellyfin misto na disku nehlasi - zjisti se jinak",
+    "Jellyfin nezna %s (%s)": "Jellyfin nezna %s (%s)",
+    "smazan ucet %s: uzivatel uz v Jellyfinu neni": "smazan ucet %s: uzivatel uz v Jellyfinu neni",
+    "ucet %s uz v Jellyfinu neni, ale je posledni spravce - zustava": "ucet %s uz v Jellyfinu neni, ale je posledni spravce - zustava",
+    "ucet %s: prava %s": "ucet %s: prava %s",
+    "ucty bez uzivatele v Jellyfinu odebrany: %s": "ucty bez uzivatele v Jellyfinu odebrany: %s"
 }
