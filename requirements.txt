@@ -26,7 +26,7 @@ tzdata==2026.4             # time-zone database for the "Time zone" setting.
                            # is "unknown": Settings refuses a valid name and
                            # the charts silently fall back to the system
                            # clock. Small, pure Python, no build step.
-maxminddb==3.1.1           # reads the GeoLite2 file for the map on the
+maxminddb==3.2.0           # reads the GeoLite2 file for the map on the
                            # Network page. Small and offline - it opens a
                            # local file, it never asks the network. Used to
                            # be optional, which meant the map stayed empty
