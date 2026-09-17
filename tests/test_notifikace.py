@@ -150,12 +150,42 @@ posledni_dotaz(1)
 odeslane.clear()
 asyncio.run(notifikace.zkontroluj())
 check(len(odeslane) == 2, "a když se to spraví, přijde zpráva o tom")
-check("běží" in odeslane[0][1] or "running" in odeslane[0][1],
-      f"která to říká ({odeslane[0][1]!r})")
+check("zase sbírá" in odeslane[0][1] or "collecting again" in odeslane[0][1],
+      f"která to říká v předmětu ({odeslane[0][1]!r})")
+# Tohle byla ta chyba: v textu zpravy o obnove stalo "sberac nesbira"
+# a clovek to cetl jako dalsi poplach.
+check("nesbírá" not in odeslane[0][2] and "not collecting" not in odeslane[0][2],
+      f"a text netvrdí, že je pořád porucha ({odeslane[0][2]!r})")
 
 odeslane.clear()
 asyncio.run(notifikace.zkontroluj())
 check(not odeslane, "a dál už je zase ticho")
+
+print()
+print("--- vlastní znění zpráv ---")
+db.set_setting(notifikace.klic_textu("sberac_porucha", "predmet"), "POZOR na serveru")
+db.set_setting(notifikace.klic_textu("sberac_porucha", "text"),
+               "Koukni na Jellyfin: {detail} {neznamy}")
+db.set_setting(notifikace.klic_textu("sberac_obnova", "text"), "")   # prazdne = vychozi
+db.forget_settings()
+posledni_dotaz(120)
+odeslane.clear()
+asyncio.run(notifikace.zkontroluj())
+check(odeslane and odeslane[0][1] == "POZOR na serveru",
+      f"vlastní předmět ({odeslane[0][1]!r})")
+check(odeslane and odeslane[0][2].startswith("Koukni na Jellyfin: ")
+      and ("120" in odeslane[0][2] or "119" in odeslane[0][2]),
+      f"vlastní text s dosazeným {{detail}} ({odeslane[0][2]!r})")
+check(odeslane and "{neznamy}" in odeslane[0][2],
+      "neznámá složená závorka zůstane, jak je - neshodí odeslání")
+posledni_dotaz(1)
+odeslane.clear()
+asyncio.run(notifikace.zkontroluj())
+check(odeslane and odeslane[0][2] == notifikace.text_zpravy("sberac_obnova")[1]
+      and odeslane[0][2], f"prázdné pole = výchozí text ({odeslane[0][2]!r})")
+db.set_setting(notifikace.klic_textu("sberac_porucha", "predmet"), "")
+db.set_setting(notifikace.klic_textu("sberac_porucha", "text"), "")
+db.forget_settings()
 
 print()
 print("--- vypnutá událost se neřeší ---")

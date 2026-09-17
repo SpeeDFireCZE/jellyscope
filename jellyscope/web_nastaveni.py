@@ -961,6 +961,35 @@ def settings_notification_events(
     return RedirectResponse("/settings?section=notifications", status_code=303)
 
 
+@router.post("/settings/notifications/texts")
+async def settings_notification_texts(
+    request: Request,
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Vlastní znění zpráv. Prázdné pole = výchozí text.
+
+    Čte se z formuláře přímo, protože zpráv přibývá a každá má dvě
+    pole; podepsat se pod všechna zvlášť znamená na jedno zapomenout.
+    Text shodný s výchozím se ukládá jako prázdný - jinak by po změně
+    jazyka aplikace zůstal ten starý, i když ho nikdo nepřepsal.
+    """
+    formular = await request.form()
+    for zprava in notifikace.ZPRAVY:
+        for cast, vychozi in (("predmet", zprava.predmet), ("text", zprava.text)):
+            if cast == "text" and not zprava.text:
+                continue
+            hodnota = str(formular.get(f"text_{zprava.klic}_{cast}") or "").strip()
+            hodnota = hodnota[:notifikace.MAX_DELKA_TEXTU]
+            if hodnota in (vychozi, i18n.translate(vychozi)):
+                hodnota = ""
+            db.set_setting(notifikace.klic_textu(zprava.klic, cast), hodnota)
+
+    db.forget_settings()
+    _flash(request, "Texty zpráv uloženy. Prázdné pole znamená výchozí znění.",
+           "success")
+    return RedirectResponse("/settings?section=notifications#texty", status_code=303)
+
+
 @router.post("/settings/notifications/test")
 async def settings_notification_test(
     request: Request,

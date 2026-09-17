@@ -9,6 +9,33 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.2
+
+A recovery notification no longer reads like another alarm, every
+notification can be reworded, and the whole ranking of most watched
+titles is one click away.
+
+### Fixed
+
+- **The "it is running again" notification said the opposite.** It
+  carried the name of the problem as its text, so after Jellyfin came
+  back the message read "the collector is not collecting" - and looked
+  like the fault was still there. A problem and its end are now two
+  messages, each with its own subject and text.
+
+### Added
+
+- **Wording of notifications.** Every subject and text can be
+  rewritten in *Settings -> Notifications*; the default is shown in
+  grey and an empty field keeps it. `{detail}` in a text is replaced by
+  the reason (how long the collector has been silent, in how many days
+  the disk fills up).
+
+- **The whole ranking of most watched titles.** The chart on the
+  overview shows ten; a link under it opens a dialog with every title
+  over the period - rank, hours, plays, a link to the detail. Without
+  JavaScript the same link opens a page with the same table.
+
 ## 1.7.1
 
 Rights can be set on a single account, a viewer removed from Jellyfin

@@ -269,3 +269,48 @@
         {{ _("Kontrolu pouští úloha „Upozornění“ – jak často, se nastavuje v Úlohách a zálohách.") }}
     </p>
 </div>
+
+{# ------------------------------------------------------------------ #}
+{# Texty zpráv                                                         #}
+{#                                                                     #}
+{# Výchozí znění je v poli jako nápověda (placeholder): je vidět, co   #}
+{# by přišlo, a prázdné pole ho nechává platit. Kdo chce jinak, napíše #}
+{# svoje. Porucha a její konec jsou dvě zprávy - „zase to běží" s      #}
+{# názvem poruchy pod tím se četlo jako další poplach.                 #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="texty">
+    <div class="card-head">
+        <h2>{{ _("Znění zpráv") }}</h2>
+        <p class="card-note">{{ _("prázdné pole = výchozí znění, které je v něm šedě") }}</p>
+    </div>
+
+    <form method="post" action="/settings/notifications/texts">
+        {% for zprava in notifikace.zpravy %}
+        <div class="field" style="max-width:100%; margin-bottom:14px">
+            <label for="text-{{ zprava.klic }}-predmet"><strong>{{ _(zprava.nazev) }}</strong></label>
+            <input type="text" id="text-{{ zprava.klic }}-predmet"
+                   name="text_{{ zprava.klic }}_predmet" maxlength="500"
+                   value="{{ zprava.predmet }}" placeholder="{{ zprava.predmet_vychozi }}"
+                   aria-label="{{ _('Předmět') }}">
+            {% if zprava.ma_text %}
+            <textarea id="text-{{ zprava.klic }}-text" name="text_{{ zprava.klic }}_text"
+                      rows="2" maxlength="500" style="margin-top:6px; min-height:58px"
+                      placeholder="{{ zprava.text_vychozi }}"
+                      aria-label="{{ _('Text') }}">{{ zprava.text }}</textarea>
+            {% endif %}
+            {% if zprava.zastupne %}
+            <p class="hint">
+                {{ _("Do textu se dosadí") }} <code>{{ zprava.zastupne }}</code>
+                – {{ _("proč se to stalo (kolik minut sběrač mlčí, za kolik dnů dojde místo).") }}
+            </p>
+            {% elif not zprava.ma_text %}
+            <p class="hint">{{ _("Souhrn má jen předmět – obsah se skládá z čísel za týden.") }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit znění") }}</button>
+        </div>
+    </form>
+</div>

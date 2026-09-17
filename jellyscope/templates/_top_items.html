@@ -31,6 +31,23 @@
 {{ charts.hbar_chart(top_items, 'label', 'hours',
              link_prefix='', link_key='detail_url') | safe }}
 
+{# Graf ukazuje deset. Celý žebříček je za odkazem: s JavaScriptem se
+   načte do okna, bez něj se otevře jako stránka - routa umí obojí. #}
+{% if top_items %}
+<p class="card-note" style="margin-top:10px">
+    <a href="/top-items?kind={{ top_kind }}" data-okno-nacist="okno-top-vse">
+        {{ _("Celý žebříček") }} &rarr;
+    </a>
+</p>
+<dialog class="okno okno-siroke" id="okno-top-vse">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Nejsledovanější tituly") }} &ndash; {{ _("celý žebříček") }}</h2>
+        <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <div class="okno-obsah"></div>
+</dialog>
+{% endif %}
+
 {# Skrývání se nikdy neděje potichu. Odsledovaný čas se nikde neztrácí,
    Historie ho ukazuje dál - jen tady by řádek, který nejde prokliknout
    a tváří se jako neexistující film, nic neřekl. #}

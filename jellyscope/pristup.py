@@ -79,7 +79,7 @@ class Oblast:
 OBLASTI: tuple[Oblast, ...] = (
     Oblast("zebricky", "Zjištění a žebříčky titulů",
            "Co se na serveru hraje nejvíc, co leží ladem. O titulech, ne o lidech.",
-           ("/insights", "/partials/top-items"), vychozi=True),
+           ("/insights", "/partials/top-items", "/top-items"), vychozi=True),
     Oblast("knihovna", "Knihovna",
            "Kolik je čeho, kodeky, rozlišení, chybějící data.",
            ("/library", "/item/", "/series/", "/partials/recently-added"),

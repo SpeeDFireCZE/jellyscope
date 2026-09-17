@@ -60,6 +60,94 @@ VYCHOZI_MISTO_DNU = 14
 CAS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
+# ---------------------------------------------------------------------------
+# Texty zprav
+# ---------------------------------------------------------------------------
+#
+# Kazda zprava ma predmet a text. Oboje ma vychozi podobu a spravce si ji
+# muze v Nastaveni prepsat - prazdne pole znamena vychozi. Vychozi texty
+# prochazeji prekladem az ve chvili odeslani, ne pri ulozeni: kdo si je
+# neprepsal, dostava je v jazyce, ktery ma aplikace zrovna nastaveny.
+#
+# Porucha a jeji konec jsou DVE ruzne zpravy. Drive se pri obnove poslalo
+# "zase to bezi" s nazvem poruchy jako textem - clovek dostal
+# "Jellyscope: zase to bezi / sberac nesbira" a cetl to jako dalsi
+# poplach.
+
+class Zprava:
+    def __init__(self, klic: str, nazev: str, predmet: str, text: str,
+                 zastupne: str = "") -> None:
+        self.klic = klic            # napr. "sberac_porucha"
+        self.nazev = nazev          # popisek v Nastaveni
+        self.predmet = predmet      # vychozi predmet (cesky, preklada se)
+        self.text = text            # vychozi text
+        self.zastupne = zastupne    # co jde do textu dosadit
+
+
+ZPRAVY: tuple[Zprava, ...] = (
+    Zprava("sberac_porucha", "Sběrač nesbírá",
+           "Jellyscope: sběrač nesbírá",
+           "Sběrač běží, ale od Jellyfinu nic nedostává: {detail}",
+           "{detail}"),
+    Zprava("sberac_obnova", "Sběrač zase sbírá",
+           "Jellyscope: sběrač zase sbírá",
+           "Sběrač se ozval, historie se zase zapisuje."),
+    Zprava("misto_porucha", "Dochází místo",
+           "Jellyscope: dochází místo",
+           "{detail}",
+           "{detail}"),
+    Zprava("misto_obnova", "Místa je zase dost",
+           "Jellyscope: místa je zase dost",
+           "Předpověď zaplnění disku se vrátila nad nastavenou hranici."),
+    Zprava("souhrn", "Týdenní souhrn",
+           "Jellyscope: týdenní souhrn",
+           ""),
+)
+
+ZPRAVY_PODLE_KLICE = {z.klic: z for z in ZPRAVY}
+
+# Strop delky vlastniho textu. Zprava je oznameni, ne dopis.
+MAX_DELKA_TEXTU = 500
+
+
+def klic_textu(zprava: str, cast: str) -> str:
+    """Nazev nastaveni s vlastnim predmetem / textem jedne zpravy."""
+    return f"notify_text_{zprava}_{cast}"
+
+
+def text_zpravy(zprava_klic: str, **hodnoty: Any) -> tuple[str, str]:
+    """Predmet a text zpravy - vlastni, nebo vychozi - s dosazenymi hodnotami.
+
+    Dosazuje se jen to, co zprava zna (`{detail}`). Kdyby si spravce do
+    textu napsal slozene zavorky kvuli necemu jinemu, `str.format` by
+    spadl - a to na odeslani poplachu, tedy v nejhorsi chvili. Proto se
+    nahrazuje po jednom a cokoliv nezname zustane, jak je.
+    """
+    zprava = ZPRAVY_PODLE_KLICE[zprava_klic]
+    predmet = db.get_setting(klic_textu(zprava_klic, "predmet"), "").strip() \
+        or _t(zprava.predmet)
+    text = db.get_setting(klic_textu(zprava_klic, "text"), "").strip() \
+        or (_t(zprava.text) if zprava.text else "")
+    for jmeno, hodnota in hodnoty.items():
+        predmet = predmet.replace("{" + jmeno + "}", str(hodnota))
+        text = text.replace("{" + jmeno + "}", str(hodnota))
+    return predmet, text
+
+
+def texty_pro_nastaveni() -> list[dict[str, Any]]:
+    """Zpravy pro stranku Nastaveni: co je vlastni a co by platilo."""
+    return [{
+        "klic": z.klic,
+        "nazev": z.nazev,
+        "predmet": db.get_setting(klic_textu(z.klic, "predmet"), ""),
+        "text": db.get_setting(klic_textu(z.klic, "text"), ""),
+        "predmet_vychozi": _t(z.predmet),
+        "text_vychozi": _t(z.text) if z.text else "",
+        "ma_text": bool(z.text),
+        "zastupne": z.zastupne,
+    } for z in ZPRAVY]
+
+
 def klic(kanal: str, jmeno: str) -> str:
     """Nazev nastaveni jednoho pole kanalu."""
     return f"notify_{kanal}_{jmeno}"
@@ -322,12 +410,16 @@ def _tydenni_souhrn() -> str:
     return "\n".join(radky)
 
 
-async def _resi_poruchu(udalost: str, nadpis: str,
-                        spatne: bool, proc: str) -> bool:
+async def _resi_poruchu(udalost: str, spatne: bool, proc: str) -> bool:
     """Posle zpravu jen tehdy, kdyz se stav ZMENIL.
 
     Bez toho by pri kazdem behu ulohy chodila tataz veta, clovek by si
     upozorneni vypnul a bylo by to k nicemu.
+
+    Ze se to spravilo, je stejna informace jako ze se to pokazilo - bez
+    ni clovek nevi, jestli ma jit neco resit. Je to ale JINA zprava
+    s vlastnim predmetem i textem (viz ZPRAVY), ne "zase to bezi"
+    s nazvem poruchy pod tim - to se cetlo jako dalsi poplach.
     """
     minule = db.get_setting(_stav_klic(udalost), "ok")
     ted = "spatne" if spatne else "ok"
@@ -335,12 +427,9 @@ async def _resi_poruchu(udalost: str, nadpis: str,
         return False
 
     db.set_setting(_stav_klic(udalost), ted)
-    if spatne:
-        await posli(f"Jellyscope: {nadpis}", proc)
-    else:
-        # Ze se to spravilo, je stejna informace jako ze se to pokazilo -
-        # bez ni clovek neví, jestli ma jit neco resit.
-        await posli(f"Jellyscope: {_t('zase to běží')}", nadpis)
+    predmet, text = text_zpravy(f"{udalost}_{'porucha' if spatne else 'obnova'}",
+                                detail=proc)
+    await posli(predmet, text)
     return True
 
 
@@ -373,17 +462,18 @@ async def zkontroluj(ted: datetime | None = None) -> dict[str, Any]:
 
     if udalost_zapnuta("sberac"):
         spatne, proc = _sberac_nesbira()
-        if await _resi_poruchu("sberac", _t("sběrač nesbírá"), spatne, proc):
+        if await _resi_poruchu("sberac", spatne, proc):
             odeslano.append("sberac")
 
     if udalost_zapnuta("misto"):
         spatne, proc = _dochazi_misto()
-        if await _resi_poruchu("misto", _t("dochází místo"), spatne, proc):
+        if await _resi_poruchu("misto", spatne, proc):
             odeslano.append("misto")
 
     if udalost_zapnuta("souhrn") and _je_cas_na_souhrn(ted):
         db.set_setting("notify_souhrn_odeslan", ted.date().isoformat())
-        await posli(f"Jellyscope: {_t('týdenní souhrn')}", _tydenni_souhrn())
+        predmet, _text = text_zpravy("souhrn")
+        await posli(predmet, _tydenni_souhrn())
         odeslano.append("souhrn")
 
     if not odeslano:
@@ -421,4 +511,5 @@ def stav() -> dict[str, Any]:
                                         VYCHOZI_MISTO_DNU),
         "souhrn_den": db.get_int_setting("notify_souhrn_den", 0, 6, 0),
         "souhrn_cas": db.get_setting("notify_souhrn_cas", "09:00") or "09:00",
+        "zpravy": texty_pro_nastaveni(),
     }

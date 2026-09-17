@@ -202,7 +202,11 @@ events that can be switched on and off separately:
 - **a weekly summary** — on a day and at a time you choose
 
 A message is only sent **on change**, including "it works again". A watch
-that keeps repeating itself is a watch people stop reading.
+that keeps repeating itself is a watch people stop reading. A problem and
+its end are two messages with their own wording, and every subject and
+text can be rewritten on the same page — an empty field keeps the
+default, which is shown in grey; `{detail}` in a text is replaced by the
+reason.
 
 One limit the page states itself: nobody can tell you that Jellyscope is
 not running — there would be nobody to send it. That belongs to an uptime

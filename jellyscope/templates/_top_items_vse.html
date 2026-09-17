@@ -1,0 +1,40 @@
+{# Celý žebříček nejsledovanějších titulů - tabulka, ne graf.
+
+   Kreslí se do okna (výřez) i jako samostatná stránka; oba případy
+   používají tuhle jednu šablonu, aby se seznam v okně nemohl lišit od
+   toho na stránce. Řádek bez odkazu je titul, ke kterému už v knihovně
+   nic nevede. #}
+{% if not top_items %}
+<p class="hint">{{ _("Za tohle období se nic nehrálo.") }}</p>
+{% else %}
+<p class="card-note" style="margin-top:0">
+    {{ top_items | length }} {{ _("titulů") }} &middot;
+    {% if top_kind == 'movies' %}{{ _("jen filmy") }}{% elif top_kind == 'series' %}{{ _("jen seriály") }}{% else %}{{ _("filmy i seriály") }}{% endif %}
+    &middot; {{ _("seriály jsou sečteny dohromady") }}
+</p>
+<div class="table-wrap">
+    <table>
+        <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>{{ _("Titul") }}</th>
+            <th class="num">{{ _("Odsledováno") }}</th>
+            <th class="num">{{ _("Spuštění") }}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for t in top_items %}
+        <tr>
+            <td class="num muted">{{ loop.index }}</td>
+            <td class="strong">
+                {% if t.detail_url %}<a href="{{ t.detail_url }}">{{ t.label }}</a>{% else %}{{ t.label }}{% endif %}
+                {% if t.is_series %}<span class="muted"> &middot; {{ _("seriál") }}</span>{% endif %}
+            </td>
+            <td class="num">{{ t.hours | hours }}</td>
+            <td class="num">{{ t.plays | number }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

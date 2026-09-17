@@ -1128,6 +1128,37 @@ def top_items_partial(
     ))
 
 
+@app.get("/top-items", response_class=HTMLResponse)
+def top_items_vse(
+    request: Request,
+    kind: Optional[str] = None,
+    days: Optional[int] = None,
+    od: Optional[str] = None,
+    do: Optional[str] = None,
+    account: dict[str, Any] = Depends(require_login),
+):
+    """Celý žebříček nejsledovanějších - graf na Přehledu ukazuje deset.
+
+    Jedna routa, dvě podoby: pro `fetch` z okna nad Přehledem vrací jen
+    výřez (tabulku), pro obyčejné otevření celou stránku. Bez
+    JavaScriptu tak o seznam nikdo nepřijde a obsah je v obou případech
+    z téže šablony.
+
+    Strop tisíc řádků není omezení, ale pojistka: seriály se sčítají,
+    takže tisíc řádků znamená tisíc různých titulů za období.
+    """
+    druh = _kind(request, kind, TOP_KIND_SESSION_KEY)
+    context = _context(
+        request, account,
+        top_kind=druh,
+        top_items=stats.top_items(_days(request, days, od, do), limit=1000,
+                                  kind=druh),
+    )
+    if request.headers.get("x-requested-with") == "fetch":
+        return templates.TemplateResponse(request, "_top_items_vse.html", context)
+    return templates.TemplateResponse(request, "top_items_vse.html", context)
+
+
 @app.get("/partials/recently-added", response_class=HTMLResponse)
 def recently_added_partial(
     request: Request, account: dict[str, Any] = Depends(require_login)
