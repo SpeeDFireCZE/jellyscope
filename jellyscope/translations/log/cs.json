@@ -132,5 +132,7 @@
     "smazan ucet %s: uzivatel uz v Jellyfinu neni": "smazan ucet %s: uzivatel uz v Jellyfinu neni",
     "ucet %s uz v Jellyfinu neni, ale je posledni spravce - zustava": "ucet %s uz v Jellyfinu neni, ale je posledni spravce - zustava",
     "ucet %s: prava %s": "ucet %s: prava %s",
-    "ucty bez uzivatele v Jellyfinu odebrany: %s": "ucty bez uzivatele v Jellyfinu odebrany: %s"
+    "ucty bez uzivatele v Jellyfinu odebrany: %s": "ucty bez uzivatele v Jellyfinu odebrany: %s",
+    "ukazkova data vyrobena znovu: %s titulu, %s prehravani": "ukazkova data vyrobena znovu: %s titulu, %s prehravani",
+    "obnova ukazkovych dat selhala": "obnova ukazkovych dat selhala"
 }

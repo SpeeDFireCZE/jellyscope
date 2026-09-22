@@ -132,5 +132,7 @@
     "smazan ucet %s: uzivatel uz v Jellyfinu neni": "account %s deleted: the user no longer exists in Jellyfin",
     "ucet %s uz v Jellyfinu neni, ale je posledni spravce - zustava": "account %s no longer exists in Jellyfin, but it is the last administrator - it stays",
     "ucet %s: prava %s": "account %s: rights %s",
-    "ucty bez uzivatele v Jellyfinu odebrany: %s": "accounts without a user in Jellyfin removed: %s"
+    "ucty bez uzivatele v Jellyfinu odebrany: %s": "accounts without a user in Jellyfin removed: %s",
+    "ukazkova data vyrobena znovu: %s titulu, %s prehravani": "demo data generated again: %s titles, %s playbacks",
+    "obnova ukazkovych dat selhala": "refreshing the demo data failed"
 }

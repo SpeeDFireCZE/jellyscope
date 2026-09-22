@@ -186,6 +186,14 @@ async def lifespan(app: FastAPI):
         # byt na Prehledu videt.
         db.set_setting(collector.STATUS_KEY, "demo")
         log.info("ukazkovy rezim - sberac se nespousti")
+        # Vymyslena data starnou: jsou vyrobena k okamziku seedu a verejna
+        # ukazka bezi tydny. Jednou za den se vyrobi znovu, posunuta
+        # k dnesku - jinak z grafu "poslednich 30 dnu" zbyde cara.
+        from . import demodata
+
+        background.append(
+            asyncio.create_task(demodata.obnovuj(), name="demo-obnova")
+        )
     else:
         background.append(
             asyncio.create_task(collector.run_forever(), name="collector")

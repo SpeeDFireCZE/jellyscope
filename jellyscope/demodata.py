@@ -10,10 +10,14 @@ databaze (data/demo.db), takze tvoje skutecna data nemuze nijak ovlivnit.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import random
 from datetime import datetime, timedelta, timezone
 
 from . import accounts, db, languages
+
+log = logging.getLogger(__name__)
 
 # Ucet, kterym se do ukazky prihlasis.
 DEMO_USERNAME = "demo"
@@ -135,8 +139,85 @@ def ensure_demo_account() -> None:
     db.set_setting("log_language", "en")
 
 
+# ---------------------------------------------------------------------------
+# Obnova: vymyslena data starnou
+# ---------------------------------------------------------------------------
+#
+# Data se generuji vzhledem k okamziku, kdy se ukazka nachystala. Verejna
+# ukazka pak bezi tydny - a "poslednich 30 dnu" se den po dni vyprazdnuje,
+# az z grafu zbyde cara. Proto se pamatuje, KDY se seed udelal, a po dni
+# se data vyrobi znovu: stejne cislo v `random.seed`, stejny tvar, jen
+# posunuty k dnesku. Clovek, ktery ukazku otevre za mesic, vidi totez,
+# co ten, ktery ji otevrel prvni den.
+
+SEED_KLIC = "demo_seeded_at"
+OBNOVA_PO_HODINACH = 24
+
+# Tabulky, ktere seed plni - v poradi, ve kterem se daji smazat (cizi
+# klice: napred to, co odkazuje, pak to, na co se odkazuje). Ucty a
+# nastaveni zustavaji: ty nejsou vymyslena data, ale ukazka sama.
+VYMYSLENE_TABULKY = ("playback_kos", "zapomenuti", "playback", "item_streams",
+                     "item_versions", "items", "library_snapshot", "users",
+                     "libraries")
+
+
+def stari_hodin() -> float | None:
+    """Kolik hodin je od posledniho seedu. None = nevi se (stara ukazka)."""
+    kdy = db.get_setting(SEED_KLIC, "").strip()
+    if not kdy:
+        return None
+    try:
+        okamzik = datetime.strptime(kdy, db.TIME_FORMAT).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return (datetime.now(timezone.utc) - okamzik).total_seconds() / 3600
+
+
+def je_zastarale() -> bool:
+    """Jsou data stara vic nez den, nebo se nevi, jak jsou stara?"""
+    stari = stari_hodin()
+    return stari is None or stari >= OBNOVA_PO_HODINACH
+
+
+def vymaz() -> None:
+    """Smaze vymyslena data - jen ta, ucty a nastaveni zustavaji."""
+    with db.connect() as conn:
+        for tabulka in VYMYSLENE_TABULKY:
+            # Kos vznika az s prvnim zapomenutim, takze nemusi byt. Ptat
+            # se predem, ne chytat chybu: na PostgreSQL by chybny prikaz
+            # shodil celou transakci i se vsim, co se uz smazalo.
+            if db.sloupce(conn, tabulka):
+                conn.execute(f"DELETE FROM {tabulka}")
+        conn.commit()
+
+
+def obnov() -> dict[str, int]:
+    """Vyrobi data znovu, posunuta k dnesku. Vraci pocty jako seed()."""
+    vymaz()
+    pocty = seed()
+    log.info("ukazkova data vyrobena znovu: %s titulu, %s prehravani",
+             pocty["items"], pocty["plays"])
+    return pocty
+
+
+async def obnovuj() -> None:
+    """Uloha na pozadi ukazky: jednou za den data posune k dnesku.
+
+    Ukazka nema planovac (neni co synchronizovat), takze si tohle hlida
+    sama. Kontrola je levna a bezi kazdou hodinu; samotna obnova se
+    pousti ve vlakne, at po tu dobu neztuhne server.
+    """
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            if je_zastarale():
+                await asyncio.to_thread(obnov)
+        except Exception:                          # noqa: BLE001
+            log.exception("obnova ukazkovych dat selhala")
+
+
 def pripravit(tichy: bool = False) -> dict[str, int]:
-    """Nachysta ukazku, pokud jeste nachystana neni.
+    """Nachysta ukazku, pokud jeste nachystana neni - nebo je stara.
 
     Vola se ze dvou mist: z `demo.py` (ukazka na svem stroji) a ze
     `run.py`, kdyz je zapnuty ukazkovy rezim (ukazka v kontejneru -
@@ -147,9 +228,16 @@ def pripravit(tichy: bool = False) -> dict[str, int]:
     `tichy` jen zavre pusu - run.py si vypisuje svoje.
     """
     hotovo = already_seeded()
-    if not hotovo and not tichy:
-        print("Pripravuji vymyslena data...")
-    pocty = {"items": 0, "plays": 0, "users": 0} if hotovo else seed()
+    if not hotovo:
+        if not tichy:
+            print("Pripravuji vymyslena data...")
+        pocty = seed()
+    elif je_zastarale():
+        if not tichy:
+            print("Vymyslena data zestarla, vyrabim je znovu...")
+        pocty = obnov()
+    else:
+        pocty = {"items": 0, "plays": 0, "users": 0}
     ensure_demo_account()
     return pocty
 
@@ -570,5 +658,9 @@ def seed() -> dict[str, int]:
     from . import scanner
 
     scanner.doplnit_jazyky_z_nazvu(["demo-movie-nazev"])
+
+    # Odkdy data plati - podle toho se pozna, ze zestarla (viz obnov()).
+    db.set_setting(SEED_KLIC, _ts(now))
+    db.forget_settings()
 
     return {"items": len(items), "plays": len(plays) + 1, "users": len(USERS)}
