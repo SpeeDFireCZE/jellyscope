@@ -43,7 +43,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import db, languages, scanner
-from .config import load_config
 from .jellyfin import (JellyfinClient, JellyfinError,
                        extract_streams as jellyfin_streams,
                        extract_tech_from_item as jellyfin_tech)
@@ -777,7 +776,6 @@ def jen_cteni(sql: str) -> str:
 
 async def playback_reporting_available() -> tuple[bool, str]:
     """Zjisti, jestli je plugin nainstalovany a odpovida."""
-    config = load_config()
     try:
         async with JellyfinClient(*db.jellyfin_connection()) as client:
             response = await client._client.post(
@@ -808,7 +806,6 @@ async def playback_reporting_available() -> tuple[bool, str]:
 
 async def import_playback_reporting(min_seconds: int = 60) -> dict[str, Any]:
     """Prevezme historii z pluginu Playback Reporting."""
-    config = load_config()
     scan_id = scanner.start_task_log("import")
 
     try:

@@ -9,6 +9,60 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.3
+
+A series added during a scan stays together in Recently added, the
+transcode tooltip says how fast the conversion runs, and a security
+pass closed three gaps.
+
+### Fixed
+
+- **Episodes of a new series no longer split up in Recently added.**
+  While Jellyfin scans, the quick sync could store an episode before
+  Jellyfin attached it to its series, or Jellyfin then created it again
+  under a new id. The quick sync only looked five minutes back, so it
+  never returned to such an episode: part of the batch sat in the series
+  card, the rest stood alone, until a full library sync. It now looks a
+  day back and writes those episodes again; whatever it stored within
+  that day and Jellyfin no longer knows goes to the archive, and its
+  history moves to the live item with the same file. Nothing older than
+  a day is touched.
+
+- **The demo no longer turns into a flat line.** Its made-up data was
+  generated once and slid out of "the last 30 days" day by day. It is
+  now generated again every day with the same shape, moved to today.
+
+### Added
+
+- **How fast a transcode runs.** The tooltip of the transcode badge has
+  a line between audio and hardware: the conversion speed in frames per
+  second - now for a live playback, the average in history - beside the
+  frame rate of the video itself, and a warning when the conversion
+  falls behind and the picture may stutter. The tooltip is now also on
+  the playback lists in the title and library detail.
+
+### Security
+
+- **Sign-in with a code goes through the same throttle as the
+  password.** An address blocked for guessing passwords could use it
+  freely, and anybody could make Jellyfin create codes in a loop.
+
+- **The custom PostgreSQL backup cannot be broken by a title.** The
+  export now sets `standard_conforming_strings` itself; restored into a
+  server with that setting off, a title ending in a backslash could
+  break out of its string. Checked by restoring such a title.
+
+- **A notification subject is always one line**, so the error text in
+  `{detail}` can no longer stop an e-mail alarm from going out.
+
+- **`update.sh` and the Docker image update pip** before installing, as
+  the installer already did.
+
+### Changed
+
+- Dependencies: starlette 1.7.0, uvicorn 0.54.0. Unused imports and a
+  few leftovers removed.
+
 ## 1.7.2
 
 A recovery notification no longer reads like another alarm, every

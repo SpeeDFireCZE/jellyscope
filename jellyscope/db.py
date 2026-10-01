@@ -795,6 +795,14 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         "transcode_video_direct": "INTEGER",
         "transcode_audio_direct": "INTEGER",
         "transcode_hw": "TEXT",
+        # Jak rychle prevod bezi - ted, a prumer pres soucet a pocet
+        # vzorku (cela cisla: na otazku "stiha?" desetiny nemaji vliv).
+        # `video_fps` je snimkovani samotneho videa, se kterym se
+        # rychlost prevodu porovnava. Viz collector._describe_stream().
+        "transcode_fps": "INTEGER",
+        "transcode_fps_soucet": "INTEGER NOT NULL DEFAULT 0",
+        "transcode_fps_vzorku": "INTEGER NOT NULL DEFAULT 0",
+        "video_fps": "INTEGER",
     },
 }
 

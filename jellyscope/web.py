@@ -16,32 +16,26 @@ jinam.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import re
 import sys
 import time
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
-from pathlib import Path
+from datetime import date, timedelta
 from typing import Any, Optional
 
 
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import (HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import (accounts, api, applog, charts, collector, db, dbmigrate, dialect,
-               formatting, geoip,
-               updates,
-               i18n, importers, insights, jellyfin, langstats, languages,
-               odklizeni, pristup,
+from . import (accounts, api, applog, charts, collector, db, formatting, geoip,
+               i18n, insights, langstats, languages,
+               pristup,
                scanner, sekce,
                stats, tasks)
 # Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
@@ -52,8 +46,6 @@ from . import __version__
 # PROJECT_DIR je kořen projektu (tam, kde je run.py a složka data),
 # PACKAGE_DIR je tenhle balíček. Nejsou totéž a plete se to snadno -
 # proto mají různá jména místo jednoho BASE_DIR.
-from .config import BASE_DIR as PROJECT_DIR
-from .config import load_config
 from .i18n import translate as _t
 
 # Zaklad webu bydli vedle - potrebuji ho vsechny casti rout, takze
@@ -699,6 +691,31 @@ async def login_quick(request: Request):
         return RedirectResponse("/", status_code=303)
     if not pristup.login_zapnuty():
         return _login_chyba(request, "Přihlášení přes Jellyfin není zapnuté.")
+
+    # Tataz brzda jako u hesla. Bez ni by adresa zablokovana za hadani
+    # hesel prosla touhle druhou branou - a kdokoli by mohl v kuse
+    # zakladat kody v Jellyfinu. Kazde zahajeni se pocita jako pokus:
+    # kod, ktery nikdo nepotvrdi, je nedokonceny pokus. Uspesne
+    # prihlaseni pocitadlo smaze (viz login_quick_stav). Osm kodu za
+    # minutu z jedne adresy nedela clovek, ktery se chce prihlasit.
+    adresa = _adresa_klienta(request)
+    zbyva = accounts.blokace_zbyva(adresa)
+    if zbyva:
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": _blokace_hlaska(zbyva),
+             "jellyfin_login": pristup.login_zapnuty()},
+            status_code=429)
+    blokace = accounts.zapocitej_neuspech(adresa)
+    if blokace:
+        log.warning("prihlaseni kodem z %s zablokovano (%s. stupen)",
+                    adresa, blokace["level"])
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": _blokace_hlaska(-1 if blokace["permanent"]
+                                      else blokace["seconds"]),
+             "jellyfin_login": pristup.login_zapnuty()},
+            status_code=429)
 
     url, klic = db.jellyfin_connection()
     if not url or not klic:

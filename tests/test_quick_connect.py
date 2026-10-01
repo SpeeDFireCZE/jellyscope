@@ -196,5 +196,29 @@ check(vypnuty.get("/login/quick/stav").json()
       "a rozdělaný kód skončí ve chvíli, kdy správce login vypne")
 
 print()
+print("--- brzda: kódy se nedají zakládat donekonečna ---")
+db.set_setting(pristup.LOGIN_KLIC, "1")
+db.forget_settings()
+stav["zapnuto"] = True
+from jellyscope import accounts as _ucty  # noqa: E402
+
+_ucty._pokusy.clear()
+zahajeni_pred = len([z for z in ZADOSTI if z.url.path == "/QuickConnect/Initiate"])
+hadac = TestClient(web.app)
+kody = [hadac.post("/login/quick").status_code for _ in range(12)]
+check(kody[:7] == [200] * 7, f"pár kódů projde ({kody[:7]})")
+check(429 in kody, f"pak brzda ({kody})")
+zahajeno = len([z for z in ZADOSTI if z.url.path == "/QuickConnect/Initiate"]) - zahajeni_pred
+check(zahajeno < 12, f"a do Jellyfinu už další nechodí ({zahajeno} z 12)")
+check(hadac.post("/login", data={"username": "spravce", "password": "dlouheheslo",
+                                 "zpusob": "mistni"},
+                 follow_redirects=False).status_code == 429,
+      "blokace platí i pro heslo - je to jedna adresa")
+with db.connect() as conn:
+    conn.execute("DELETE FROM login_blocks")
+    conn.commit()
+_ucty._pokusy.clear()
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

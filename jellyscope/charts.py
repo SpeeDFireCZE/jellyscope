@@ -454,7 +454,7 @@ def donut_chart(
     stred = size / 2
 
     parts = [
-        f'<div class="donut-wrap">',
+        '<div class="donut-wrap">',
         f'<svg class="donut" viewBox="0 0 {size} {size}" width="{size}" height="{size}" '
         f'role="img" aria-label="{_e(_t("Podíl žánrů"))}">',
     ]

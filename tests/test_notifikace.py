@@ -183,6 +183,13 @@ odeslane.clear()
 asyncio.run(notifikace.zkontroluj())
 check(odeslane and odeslane[0][2] == notifikace.text_zpravy("sberac_obnova")[1]
       and odeslane[0][2], f"prázdné pole = výchozí text ({odeslane[0][2]!r})")
+db.set_setting(notifikace.klic_textu("sberac_porucha", "predmet"),
+               "Porucha: {detail}")
+db.forget_settings()
+predmet, _ = notifikace.text_zpravy("sberac_porucha",
+                                    detail="Jellyfin odmítl klíč\r\nBcc: cizi@example.com")
+check("\n" not in predmet and "\r" not in predmet,
+      f"předmět je vždy jeden řádek - jinak by e-mail poplach neodeslal ({predmet!r})")
 db.set_setting(notifikace.klic_textu("sberac_porucha", "predmet"), "")
 db.set_setting(notifikace.klic_textu("sberac_porucha", "text"), "")
 db.forget_settings()

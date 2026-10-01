@@ -13,16 +13,16 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from fastapi.templating import Jinja2Templates
 
 from . import (accounts, collector, db, formatting, i18n, pristup, scanner,
                sekce, stats, updates)
-from .config import BASE_DIR, load_config
+from .config import load_config
 from .i18n import translate as _t
 
 

@@ -54,7 +54,10 @@ WORKDIR /app
 # Závislosti zvlášť a jako první vrstva: dokud se requirements.txt
 # nezmění, další build je nepřeinstalovává znovu.
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir -r requirements.txt
+# Nejdřív pip sám: v základním obrazu bývá ten, se kterým obraz vyšel,
+# a pip má vlastní bezpečnostní opravy (rozbalování archivů).
+RUN python -m pip install --no-cache-dir --upgrade pip \
+ && python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 

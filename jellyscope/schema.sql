@@ -197,6 +197,14 @@ CREATE TABLE IF NOT EXISTS playback (
     transcode_video_direct INTEGER,   -- 1 = obraz jde beze zmeny
     transcode_audio_direct INTEGER,   -- 1 = zvuk jde beze zmeny
     transcode_hw           TEXT,      -- qsv, nvenc, ... nebo prazdne = procesor
+    -- Jak rychle prevod bezi (snimku za vterinu, zaokrouhleno). Ted -
+    -- a prumer za cele prehravani jako soucet a pocet vzorku. Vedle toho
+    -- snimkovani samotneho videa: prevod pomalejsi nez video znamena,
+    -- ze obraz seka.
+    transcode_fps          INTEGER,
+    transcode_fps_soucet   INTEGER NOT NULL DEFAULT 0,
+    transcode_fps_vzorku   INTEGER NOT NULL DEFAULT 0,
+    video_fps              INTEGER,
     video_width      INTEGER,
     video_height     INTEGER,
     is_active        INTEGER NOT NULL DEFAULT 1

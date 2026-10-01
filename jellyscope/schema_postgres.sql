@@ -200,6 +200,12 @@ CREATE TABLE IF NOT EXISTS playback (
     transcode_video_direct INTEGER,   -- 1 = obraz jde beze zmeny
     transcode_audio_direct INTEGER,   -- 1 = zvuk jde beze zmeny
     transcode_hw           TEXT,      -- qsv, nvenc, ... nebo prazdne = procesor
+    -- Rychlost prevodu (snimku/s) ted a jako soucet + pocet vzorku pro
+    -- prumer; vedle snimkovani videa. Viz schema.sql.
+    transcode_fps          INTEGER,
+    transcode_fps_soucet   INTEGER NOT NULL DEFAULT 0,
+    transcode_fps_vzorku   INTEGER NOT NULL DEFAULT 0,
+    video_fps              INTEGER,
     video_width      INTEGER,
     video_height     INTEGER,
     is_active        INTEGER NOT NULL DEFAULT 1

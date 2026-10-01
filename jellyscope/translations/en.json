@@ -1319,5 +1319,10 @@
     "Jellyscope: dochází místo": "Jellyscope: running out of space",
     "Jellyscope: místa je zase dost": "Jellyscope: enough space again",
     "Předpověď zaplnění disku se vrátila nad nastavenou hranici.": "The disk-full forecast is back above the threshold you set.",
-    "Jellyscope: týdenní souhrn": "Jellyscope: weekly summary"
+    "Jellyscope: týdenní souhrn": "Jellyscope: weekly summary",
+    "Převod": "Conversion",
+    "v průměru": "on average",
+    "video má": "the video has",
+    "nestíhá, obraz může sekat": "falling behind, the picture may stutter",
+    "{n} dříve uložených položek Jellyfin mezitím založil znovu – staré jsou v archivu.": "{n} items stored earlier were created again by Jellyfin in the meantime - the old ones are in the archive."
 }

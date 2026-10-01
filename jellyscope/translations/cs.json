@@ -1319,5 +1319,10 @@
     "Jellyscope: dochází místo": "Jellyscope: dochází místo",
     "Jellyscope: místa je zase dost": "Jellyscope: místa je zase dost",
     "Předpověď zaplnění disku se vrátila nad nastavenou hranici.": "Předpověď zaplnění disku se vrátila nad nastavenou hranici.",
-    "Jellyscope: týdenní souhrn": "Jellyscope: týdenní souhrn"
+    "Jellyscope: týdenní souhrn": "Jellyscope: týdenní souhrn",
+    "Převod": "Převod",
+    "v průměru": "v průměru",
+    "video má": "video má",
+    "nestíhá, obraz může sekat": "nestíhá, obraz může sekat",
+    "{n} dříve uložených položek Jellyfin mezitím založil znovu – staré jsou v archivu.": "{n} dříve uložených položek Jellyfin mezitím založil znovu – staré jsou v archivu."
 }

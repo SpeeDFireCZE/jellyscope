@@ -131,6 +131,11 @@ def text_zpravy(zprava_klic: str, **hodnoty: Any) -> tuple[str, str]:
     for jmeno, hodnota in hodnoty.items():
         predmet = predmet.replace("{" + jmeno + "}", str(hodnota))
         text = text.replace("{" + jmeno + "}", str(hodnota))
+    # Predmet je jeden radek. E-mail hlavicku s odradkovanim odmitne
+    # (a poplach by se neodeslal), a `{detail}` - text chyby sberace - ho
+    # klidne obsahuje. Vic radku by navic bylo prilezitosti podstrcit do
+    # zpravy dalsi hlavicku.
+    predmet = " ".join(predmet.split())
     return predmet, text
 
 

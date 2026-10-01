@@ -276,6 +276,9 @@ def _audio_tracks(random_source) -> tuple[str, str, str]:
 def seed() -> dict[str, int]:
     """Naplni databazi vymyslenym provozem za posledni rok."""
     random.seed(42)          # stejne cislo = stejna data pri kazdem spusteni
+    # Rychlost prevodu se losuje zvlast - pridala se pozdeji a nesmi
+    # posunout nic z toho, co uz se losuje z `random` (viz nize).
+    fps_random = random.Random(7)
     now = datetime.now(timezone.utc)
 
     items: list[tuple] = []
@@ -570,6 +573,19 @@ def seed() -> dict[str, int]:
             video_codec = item[14] if video_direct != 0 else "h264"
             audio_codec = item[15] if audio_direct != 0 else "aac"
 
+            # Rychlost prevodu - jen kdyz se prevadi obraz. Vlastni
+            # generator, ne `random`: kazde volani navic by posunulo
+            # vsechno, co se losuje po nem, a ukazka by vypadala jinak.
+            # Hardware jede nasobne rychleji nez video; procesor obcas
+            # nestiha, at bublina ukaze i varovani.
+            video_fps = 24 if item[2] == "Movie" else 25
+            fps_soucet = fps_vzorku = 0
+            if video_direct == 0:
+                fps_vzorku = max(1, watched // 10)
+                rychlost = (fps_random.randint(90, 240) if hw
+                            else fps_random.choice([18, 21, 32, 45, 60, 75]))
+                fps_soucet = rychlost * fps_vzorku
+
             # Jazyk vybirame jen z toho, co titul opravdu ma - stejne jako
             # skutecny divak. Kdyz je na vyber cestina i original, kazdy
             # clen domacnosti se rozhoduje jinak: Petr casteji original,
@@ -605,6 +621,7 @@ def seed() -> dict[str, int]:
                 item[0], item[1], item[2], item[5], item[3],
                 client, device, f"demo-dev-{user[0]}", _adresa(device),
                 method, reasons, video_direct, audio_direct, hw,
+                fps_soucet, fps_vzorku, video_fps,
                 video_codec, audio_codec, item[19],
                 audio_language, subtitle_language,
                 _ts(started), _ts(started + timedelta(seconds=watched)),
@@ -618,11 +635,12 @@ def seed() -> dict[str, int]:
                 item_type, series_name, library_id, client, device_name, device_id,
                 remote_address, play_method, transcode_reasons,
                 transcode_video_direct, transcode_audio_direct, transcode_hw,
+                transcode_fps_soucet, transcode_fps_vzorku, video_fps,
                 video_codec, audio_codec,
                 bitrate, audio_language, subtitle_language,
                 started_at, last_seen_at, ended_at, watched_seconds,
                 paused_seconds, position_ticks, is_active)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             plays,
         )
 
@@ -636,7 +654,9 @@ def seed() -> dict[str, int]:
             """INSERT INTO playback (session_key, user_id, user_name, item_id, item_name,
                 item_type, series_name, library_id, client, device_name, play_method,
                 transcode_reasons, transcode_video_direct, transcode_audio_direct,
-                transcode_hw, video_codec, audio_codec, bitrate,
+                transcode_hw, transcode_fps, transcode_fps_soucet,
+                transcode_fps_vzorku, video_fps,
+                video_codec, audio_codec, bitrate,
                 video_width, video_height,
                 audio_language, subtitle_language,
                 current_audio_language, current_subtitle_language,
@@ -644,7 +664,8 @@ def seed() -> dict[str, int]:
                 watched_seconds, paused_seconds, position_ticks, is_active)
                VALUES ('demo-live','demo-u2','Jana','demo-movie-0','Duna','Movie',NULL,
                        'demo-movies','Jellyfin Web','Chrome na notebooku','Transcode',
-                       'VideoCodecNotSupported',0,1,'qsv','h264','eac3',8600000,
+                       'VideoCodecNotSupported',0,1,'qsv',148,39600,264,24,
+                       'h264','eac3',8600000,
                        1280,720,
                        'cs','cs','cs','en',
                        ?,?,2640,0,26400000000,1)""",

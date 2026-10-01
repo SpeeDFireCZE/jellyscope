@@ -76,7 +76,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import db, dialect, odklizeni, scanner
+from . import db, odklizeni, scanner
 from .i18n import translate as _t
 from .config import BASE_DIR
 
@@ -576,7 +576,7 @@ def _vyber_pg_dump(config: Any) -> str:
         f"(potřebuje repozitář PGDG: https://www.postgresql.org/download/)\n"
         f"Nainstalované verze: "
         + ", ".join(f"{v} ({c})" for v, c in kandidati)
-        + f". Cestu ke správnému pg_dump jde vyplnit i v Nastavení → Úlohy."
+        + ". Cestu ke správnému pg_dump jde vyplnit i v Nastavení → Úlohy."
     )
 
 
@@ -646,6 +646,14 @@ def _dump_vlastni(destination: Path) -> int:
             "--\n"
             "-- Obsahuje schéma a data tabulek Jellyscope. Cizí tabulky,\n"
             "-- pohledy ani oprávnění v něm nejsou - na to je pg_dump.\n\n"
+            # Bez tohohle by zalezelo na nastaveni serveru, do ktereho se
+            # obnovuje. Texty se escapuji zdvojenim apostrofu (viz
+            # _sql_hodnota) a to plati, jen kdyz zpetne lomitko je
+            # obycejny znak. S `standard_conforming_strings = off` by
+            # nazev titulu `\'; DROP TABLE ...` z Jellyfinu ukoncil retezec
+            # a zbytek by psql provedl jako prikaz. Vychozi je to od 9.1
+            # zapnute - tady se to ale nechava na nas, ne na serveru.
+            "SET standard_conforming_strings = on;\n"
             "BEGIN;\n\n"
         )
 

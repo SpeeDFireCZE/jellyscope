@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, tech_badge, method_badge %}
+{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis %}
 {% block title %}{{ item.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -345,7 +345,7 @@
                             {% endif %}
                         </td>
                         <td class="muted">{{ row.device_name or '?' }}</td>
-                        <td>{{ method_badge(row.play_method) }}</td>
+                        <td>{{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}</td>
                         <td class="num">{{ row.watched_seconds | seconds }}</td>
                     </tr>
                     {% endfor %}

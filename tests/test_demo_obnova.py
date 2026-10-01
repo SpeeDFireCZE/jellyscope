@@ -75,9 +75,13 @@ db.set_setting(demodata.SEED_KLIC,
                (datetime.now(timezone.utc) - timedelta(days=3)).strftime(db.TIME_FORMAT))
 db.forget_settings()
 # Predstirame, ze cas ubehl: posuneme vsechna prehravani o tri dny zpet -
-# presne to, co s nimi udela skutecne plynouci cas.
+# presne to, co s nimi udela skutecne plynouci cas. V Pythonu, ne funkci
+# databaze: SQLite a PostgreSQL pocitaji s datem kazdy jinak.
+posun = [((datetime.strptime(str(r["started_at"]), db.TIME_FORMAT)
+           - timedelta(days=3)).strftime(db.TIME_FORMAT), r["id"])
+         for r in db.query_all("SELECT id, started_at FROM playback")]
 with db.connect() as conn:
-    conn.execute("UPDATE playback SET started_at = datetime(started_at, '-3 days')")
+    conn.executemany("UPDATE playback SET started_at = ? WHERE id = ?", posun)
     conn.commit()
 pred = nejnovejsi_prehravani()
 check(demodata.je_zastarale(), "po třech dnech je to zastaralé")

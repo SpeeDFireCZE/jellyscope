@@ -16,14 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
-import re
-import shutil
 import sys
 import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import datetime
 from typing import Any
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -33,18 +29,17 @@ from fastapi import (APIRouter, Depends, File, Form, HTTPException,
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from . import __version__
-from . import (accounts, api, applog, collector, db, dbmigrate, dialect,
-               formatting, geoip, i18n, importers, jellyfin, notifikace,
+from . import (accounts, api, applog, db, dbmigrate, dialect,
+               formatting, i18n, importers, jellyfin, notifikace,
                odklizeni, pristup, scanner, sekce, stats, tasks, updates)
 from .config import BASE_DIR as PROJECT_DIR
 from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
-from .config import BASE_DIR, load_config
 from .i18n import translate as _t
 from .web_zaklad import (
     KAPACITA_JEDNOTKY, STROP_MAX, STROP_MIN, VZHLEDY, ZOOM_REZIMY,
     SETTINGS_SECTIONS, STARTED_AT, ZPET_NA_IMPORT, _clamp, _context,
     _flash, _hlaska_importu, config,
-    current_account, log, require_admin, require_login, templates,
+    log, require_admin, require_login, templates,
 )
 
 router = APIRouter()
@@ -488,7 +483,6 @@ def settings_save(
     db.set_setting("ffprobe_concurrency", _clamp(ffprobe_concurrency, 1, 16, 3))
     db.set_setting("ffprobe_path", ffprobe_path.strip())
 
-    import json
     try:
         parsed = json.loads(path_mappings or "[]")
         if not isinstance(parsed, list):

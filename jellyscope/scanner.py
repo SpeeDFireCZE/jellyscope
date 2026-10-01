@@ -24,7 +24,6 @@ from typing import Any
 # od `tasks`, ktere se proto importuje az uvnitr funkce.
 from . import db, formatting, languages, probe, stats
 from .i18n import translate as _t
-from .config import load_config
 from .jellyfin import (JellyfinClient, JellyfinError, extract_streams,
                        extract_verze,
                        extract_tech_from_item, video_range_of)
@@ -139,8 +138,18 @@ def stop_requested() -> bool:
 # ktery po skonceni nikoho nezajima. Zapisovat ho po kazde davce do databaze
 # by znamenalo zapis navic bez uzitku.
 # O kolik minut se pri rychle synchronizaci vratime pred posledni znamy
-# titul. Pojistka proti tomu, aby na hranici nekdo nepropadl.
-RECENT_OVERLAP_MINUTES = 5
+# titul. Puvodne pet minut - pojistka proti propadnuti na hranici. Den je
+# tu kvuli tomu, co Jellyfin dela behem skenu: dil, ktery uz jsme ulozili,
+# muze jeste zaradit k serialu nebo ho zalozit znovu pod novym id - se
+# stejnym datem pridani. S peti minutami se k nemu rychla synchronizace
+# uz nikdy nevratila a v Nedavno pridanych stal mimo svuj serial, dokud
+# ho neprepsala plna synchronizace. Viz `_reviduj_nedavne()`.
+RECENT_OVERLAP_MINUTES = 24 * 60
+
+# Kolik nedavnych polozek se v jednom behu nanejvys overuje podle id
+# (ty, ktere Jellyfin v tomhle behu neposlal). Strop proti dni, kdy se do
+# knihovny naleje cela nova sbirka.
+REVIZE_STROP = 500
 
 _progress: dict[str, Any] = {"kind": None, "done": 0, "total": 0}
 
@@ -321,9 +330,10 @@ def _posledni_pridano() -> str | None:
     Vraci None, kdyz je knihovna prazdna - pak se vezmou proste nejnovejsi
     polozky, kolik se jich vejde do stropu.
 
-    Odecitame par minut navic. Neni to pro parádu: kdyz Jellyfin prida vic
-    souboru behem jedne vteriny, hranice by mohla nekterý z nich preskocit.
-    Projit tentyz titul podruhe nic nestoji - zapisuje se pres ON CONFLICT.
+    Odecita se den (`RECENT_OVERLAP_MINUTES`). Projit tentyz titul
+    podruhe nic nestoji - zapisuje se pres ON CONFLICT - a prave tim se
+    opravi dil, ktery Jellyfin pri prvnim pruchodu jeste nemel zarazeny
+    k serialu.
     """
     nejnovejsi = db.query_value(
         "SELECT MAX(date_created) FROM items WHERE date_created IS NOT NULL")
@@ -502,7 +512,9 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
         scan_id = start_task_log("recent")
         videno = 0
         nova_id: list[str] = []
+        poslane: set[str] = set()
         srovnani: dict[str, Any] = {}
+        revize: dict[str, int] = {}
 
         try:
             async with JellyfinClient(*db.jellyfin_connection()) as client:
@@ -518,8 +530,16 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
                     polozky = await client.recent_items(
                         od, strop=max_items, parent_id=knihovna["id"])
                     videno += len(polozky)
+                    poslane.update(str(i["Id"]) for i in polozky if i.get("Id"))
                     nova_id.extend(await _uloz_nove_polozky(
                         polozky, knihovna["id"], use_jellyfin_tech, client))
+
+                # Co jsme za ten den ulozili a Jellyfin ted neposlal, se
+                # overi podle id - jinak by tam visel dil z doby, kdy ho
+                # Jellyfin jeste nemel zarazeny k serialu.
+                if od:
+                    revize = await _reviduj_nedavne(client, od, poslane,
+                                                    use_jellyfin_tech)
 
                 # Nove tituly casto nejsou nove tituly, ale nove SOUBORY
                 # tehoz titulu. Srovnat se to musi hned - jinak v
@@ -530,6 +550,15 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
                 # jestli stary ItemId jeste zna.
                 if nova_id:
                     srovnani = await srovnej_po_novych(client, nova_id)
+
+                # Archivovane revizi, ke kterym se nenasel naslednik se
+                # stejnou cestou, mohly mit historii. Narovnani ji zkusi
+                # pripojit podle serialu a cisla dilu - pokud uz ho
+                # nespustilo srovnani o par radku vys.
+                if revize.get("bez_naslednika") and not srovnani.get("narovnano"):
+                    from . import importers   # az tady: importers sahaji na scanner
+
+                    await importers.narovnej_data()
 
         except JellyfinError as exc:
             _clear_progress()
@@ -560,6 +589,10 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
             # Nula je uplne bezny vysledek - uloha bezi kazdych par minut.
             # Musi se tak i tvarit, jinak clovek marne hleda, co pribylo.
             zprava = _t("Nic nového (zkontrolováno {celkem})").format(celkem=videno)
+        if revize.get("archivovano"):
+            zprava += ". " + _t(
+                "{n} dříve uložených položek Jellyfin mezitím založil znovu"
+                " – staré jsou v archivu.").format(n=revize["archivovano"])
         finish_task_log(scan_id, "done", total=videno, ok=pridano, message=zprava)
 
 
@@ -588,7 +621,6 @@ async def sync_library() -> dict[str, Any]:
     async with _scan_lock:
         _clear_stop()
         scan_id = start_task_log("library")
-        config = load_config()
         started_at = db.utcnow()
         counts = {"users": 0, "libraries": 0, "items": 0}
         zastaveno = False
@@ -1604,6 +1636,89 @@ def do_archivu(ids: list[str]) -> int:
                 tuple(davka))
         conn.commit()
     return len(ids)
+
+
+async def _reviduj_nedavne(client: JellyfinClient, od: str, poslane: set[str],
+                           use_jellyfin_tech: bool) -> dict[str, int]:
+    """Nedávno uložené položky, které Jellyfin v tomhle běhu neposlal.
+
+    Rychla synchronizace vidi jen to, co Jellyfin posle - a behem skenu
+    se polozky meni pod rukama. Dil se nejdriv objevi jeste nezarazeny
+    k serialu, nebo ho Jellyfin pri zarazeni zalozi znovu pod novym id.
+    Ten prvni zaznam pak u nas zustal: v Nedavno pridanych stal jako
+    samostatny dil vedle serialu, do ktereho patri, a uklidila ho az
+    plna synchronizace (ta archivuje vsechno, co nevidela).
+
+    Tady se dela totez, jen pro posledni den: kazda polozka pridana od
+    `od`, ktera v tomhle behu neprisla, se overi podle id.
+
+    * Jellyfin ji nezna -> do archivu. Presne to by s ni udelala plna
+      synchronizace; historie se pak pripoji k zivemu dilu narovnanim.
+    * Jellyfin ji zna (jen ji neposlal, treba kvuli stropu) -> zapise
+      se znovu, se vsim, co o ni ted vi.
+
+    Nic se tu nemaze a nic se neslucuje podle odhadu - rozhoduje jen to,
+    co rekne Jellyfin o konkretnim id.
+    """
+    radky = await asyncio.to_thread(
+        db.query_all,
+        "SELECT id, library_id FROM items"
+        " WHERE is_missing = 0 AND date_created IS NOT NULL"
+        "   AND REPLACE(date_created, 'T', ' ') >= ?"
+        " ORDER BY date_created DESC",
+        (od,))
+    kandidati = {str(r["id"]): r["library_id"] for r in radky
+                 if str(r["id"]) not in poslane}
+    if not kandidati:
+        return {"overeno": 0, "archivovano": 0, "obnoveno": 0}
+    ids = list(kandidati)[:REVIZE_STROP]
+
+    zname = {str(i["Id"]): i for i in await client.items_by_ids(ids) if i.get("Id")}
+
+    # Zname se zapisou znovu po knihovnach - `library_id` Jellyfin
+    # v odpovedi nenese, bere se ten ulozeny.
+    podle_knihovny: dict[Any, list[dict[str, Any]]] = {}
+    for item_id, item in zname.items():
+        podle_knihovny.setdefault(kandidati[item_id], []).append(item)
+    for library_id, polozky in podle_knihovny.items():
+        await _uloz_nove_polozky(polozky, library_id, use_jellyfin_tech, client)
+
+    nezname = [i for i in ids if i not in zname]
+    archivovano = await asyncio.to_thread(do_archivu, nezname)
+    par = await asyncio.to_thread(_naslednici_podle_cesty, nezname)
+    preneseno = await asyncio.to_thread(prenes_historii, par)
+
+    if archivovano:
+        log.info("rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna"
+                 " - jsou v archivu", archivovano)
+    return {"overeno": len(ids), "archivovano": archivovano,
+            "obnoveno": len(zname), "historie": preneseno,
+            "bez_naslednika": len(nezname) - len(par)}
+
+
+def _naslednici_podle_cesty(stara_id: list[str]) -> dict[str, str]:
+    """Živá položka se stejnou cestou k souboru - {staré id: nové id}.
+
+    Kdyz Jellyfin dil zalozi znovu, stary zaznam casto nema vyplneny
+    serial (proto ho zakladal znovu), takze narovnani podle "serial +
+    cislo dilu" ho nespáruje. Cesta je ale stejna - je to porad tentyz
+    soubor - a na tu je spoleh: dva ruzne tituly v jednom souboru
+    nelezi.
+    """
+    if not stara_id:
+        return {}
+    par: dict[str, str] = {}
+    for stare in stara_id:
+        radek = db.query_one(
+            "SELECT n.id FROM items s JOIN items n"
+            "  ON n.path = s.path AND n.id <> s.id AND n.is_missing = 0"
+            " WHERE s.id = ? AND s.path IS NOT NULL AND s.path <> ''"
+            # COALESCE: PostgreSQL by NULL pri DESC dal na zacatek, SQLite
+            # na konec - a LIMIT 1 by vybral pokazde jiny radek.
+            " ORDER BY COALESCE(n.date_created, '') DESC LIMIT 1", (stare,))
+        if radek:
+            par[stare] = str(radek["id"])
+    return par
 
 
 async def srovnej_po_novych(client: JellyfinClient,

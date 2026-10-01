@@ -208,6 +208,14 @@ fi
 
 # `python -m pip`, not the .venv/bin/pip launcher - it may not exist and
 # it carries a hard-coded path that breaks when the folder moves.
+#
+# pip itself first. A .venv keeps the pip it was created with for years,
+# and pip has had its own security fixes (unpacking archives, following
+# links). install.sh updates it; an update has to as well, or a server
+# installed long ago never gets them. A failure here is not a reason to
+# stop - the old pip still installs the requirements.
+"$VENV/bin/python" -m pip install --quiet --upgrade pip \
+    || warn "pip could not be updated - carrying on with the one there is"
 "$VENV/bin/python" -m pip install --quiet -r "$APP_DIR/requirements.txt"
 ok "up to date"
 

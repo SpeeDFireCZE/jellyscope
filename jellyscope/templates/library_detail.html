@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, pager, method_badge %}
+{% from "_macros.html" import tile, pager, method_badge, transcode_popis %}
 {% block title %}{{ library.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -237,7 +237,7 @@
                         {{ row.item_name }}
                     </a>
                 </td>
-                <td>{{ method_badge(row.play_method) }}</td>
+                <td>{{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}</td>
                 <td class="num">{{ row.watched_seconds | seconds }}</td>
             </tr>
             {% endfor %}

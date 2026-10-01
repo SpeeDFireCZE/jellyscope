@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import db
-from .config import load_config
 from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
 from .jellyfin import media_streams as jellyfin_streams
 from .jellyfin import selected_languages as jellyfin_languages
@@ -219,6 +218,29 @@ def _bit(hodnota: Any) -> int | None:
     return 1 if hodnota else 0
 
 
+def _fps(hodnota: Any) -> int | None:
+    """Snimku za vterinu jako cele cislo. None u nesmyslu a u nuly.
+
+    Zaokrouhluje se: na otazku "stiha prevod video?" desetiny vliv
+    nemaji a 23,976 se lidem stejne cte jako 24. Nula znamena "Jellyfin
+    to jeste nevi" (prvni vteriny prevodu, pauza), ne "nula snimku" -
+    do prumeru nepatri. Strop chrani prumer pred jednim ulitlym cislem.
+    """
+    try:
+        cislo = float(hodnota)
+    except (TypeError, ValueError):
+        return None
+    if not 0.5 <= cislo <= 2000:
+        return None
+    return int(round(cislo))
+
+
+def _snimkovani_videa(item: dict[str, Any]) -> int | None:
+    """Snimkovani zdrojoveho videa - to, s cim se rychlost prevodu meri."""
+    video = next((s for s in jellyfin_streams(item) if s.get("Type") == "Video"), {})
+    return _fps(video.get("RealFrameRate")) or _fps(video.get("AverageFrameRate"))
+
+
 def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
     """Co konkretne tece k prehravaci - kodeky a bitrate.
 
@@ -232,6 +254,7 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
     # Delku bereme z relace, ne z knihovny: u epizody, kterou jsme jeste
     # nesynchronizovali, by se ukazatel postupu nemel z ceho spocitat.
     delka = item.get("RunTimeTicks")
+    video_fps = _snimkovani_videa(item)
 
     transcoding = session.get("TranscodingInfo") or {}
     if transcoding:
@@ -251,6 +274,12 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
             "video_direct": _bit(transcoding.get("IsVideoDirect")),
             "audio_direct": _bit(transcoding.get("IsAudioDirect")),
             "hw": transcoding.get("HardwareAccelerationType") or None,
+            # Rychlost prevodu, jak ji hlasi ffmpeg (snimku za vterinu).
+            # Pomalejsi nez video samo = prevod nestiha a obraz seka.
+            # U prevodu jen zvuku ji Jellyfin neposila - a neni ani co
+            # merit.
+            "fps": _fps(transcoding.get("Framerate")),
+            "video_fps": video_fps,
             "video_width": sirka,
             "video_height": vyska,
             "runtime_ticks": delka,
@@ -268,6 +297,8 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
         "video_direct": None,
         "audio_direct": None,
         "hw": None,
+        "fps": None,
+        "video_fps": video_fps,
         "video_width": sirka,
         "video_height": vyska,
         "runtime_ticks": delka,
@@ -326,6 +357,10 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
             is_paused = bool(play_state.get("IsPaused"))
             stream = _describe_stream(session, item)
             chosen = jellyfin_languages(session, item)
+            # Vzorek do prumeru rychlosti prevodu - jen kdyz se doopravdy
+            # prevadi a nestoji to. Behem pauzy ffmpeg zpomali nebo stoji
+            # a prumer by tvrdil, ze server nestihal.
+            vzorek_fps = stream["fps"] if stream["fps"] and not is_paused else None
 
             existing = conn.execute(
                 "SELECT id, last_seen_at, watched_seconds,"
@@ -359,13 +394,15 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                         client, device_name, device_id, remote_address,
                         play_method, transcode_reasons, video_codec, audio_codec, bitrate,
                         transcode_video_direct, transcode_audio_direct, transcode_hw,
+                        transcode_fps, transcode_fps_soucet, transcode_fps_vzorku,
+                        video_fps,
                         audio_language, subtitle_language,
                         current_audio_language, current_subtitle_language,
                         language_since, language_confirmed,
                         media_runtime_ticks, video_width, video_height,
                         started_at, last_seen_at, watched_seconds, paused_seconds,
                         position_ticks, is_paused, is_active
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,1)
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,1)
                     """,
                     (
                         key,
@@ -388,6 +425,10 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                         stream["video_direct"],
                         stream["audio_direct"],
                         stream["hw"],
+                        vzorek_fps,
+                        vzorek_fps or 0,
+                        1 if vzorek_fps else 0,
+                        stream["video_fps"],
                         # Do statistik zatim nic - jazyk se zapocita az po
                         # MIN_LANGUAGE_SECONDS, viz vyse. Prvni vteriny
                         # casto hraje stopa, kterou si divak hned prepne.
@@ -486,6 +527,13 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                        transcode_video_direct = ?,
                        transcode_audio_direct = ?,
                        transcode_hw           = ?,
+                       -- Rychlost prevodu ted (bez COALESCE ze stejneho
+                       -- duvodu jako o radek vys) a do prumeru vzorek -
+                       -- jen kdyz nejaky je.
+                       transcode_fps          = ?,
+                       transcode_fps_soucet   = transcode_fps_soucet + ?,
+                       transcode_fps_vzorku   = transcode_fps_vzorku + ?,
+                       video_fps              = COALESCE(video_fps, ?),
                        -- Dve dvojice sloupcu, protoze jsou to dve ruzne
                        -- otazky a jedna hodnota by na obe odpovedet nemohla:
                        --
@@ -531,6 +579,10 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
                     stream["video_direct"],
                     stream["audio_direct"],
                     stream["hw"],
+                    vzorek_fps,
+                    vzorek_fps or 0,
+                    1 if vzorek_fps else 0,
+                    stream["video_fps"],
                     zapsany_zvuk,
                     zapsane_titulky,
                     jazyk_od,
@@ -572,7 +624,6 @@ async def run_forever() -> None:
     Nesmi nikdy spadnout. Kdyz Jellyfin vypadne, zapiseme chybu, pockame
     a zkusime to znovu - aplikace jako celek bezi dal.
     """
-    config = load_config()
     close_orphans()
 
     backoff = 0  # kolik sekund navic cekat po chybe

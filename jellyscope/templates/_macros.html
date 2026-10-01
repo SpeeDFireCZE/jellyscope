@@ -351,6 +351,19 @@
                 _(fakt.co) ~ ": " ~ (fakt.z | upper ~ " → " if fakt.z else "")
                 ~ (fakt.na or "?") | upper ~ " – " ~ _("přepočítává se")) -%}
         {%- endif -%}
+    {%- elif fakt.fps -%}
+        {#- Rychlost převodu. U historie průměr za celé přehrávání, u běžícího
+            stav teď. Vedle snímkování videa, protože samotné číslo nic
+            neříká: 30 fps je u filmu (24) dost, u sportu (50) málo. -#}
+        {%- set radek = _("Převod") ~ ": " ~ (_("v průměru") ~ " " if fakt.prumer else "")
+                        ~ fakt.fps ~ " fps" -%}
+        {%- if fakt.video_fps -%}
+            {%- set radek = radek ~ " (" ~ _("video má") ~ " " ~ fakt.video_fps ~ ")" -%}
+        {%- endif -%}
+        {%- if fakt.nestiha -%}
+            {%- set radek = radek ~ " – " ~ _("nestíhá, obraz může sekat") -%}
+        {%- endif -%}
+        {%- set _ = casti.append(radek) -%}
     {%- elif fakt.vypaluji -%}
         {%- set _ = casti.append(_("Titulky se vypalují do obrazu")) -%}
     {%- elif fakt.text -%}

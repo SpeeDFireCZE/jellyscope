@@ -550,6 +550,33 @@ def active_session_count() -> int:
         "SELECT COUNT(*) FROM playback WHERE is_active = 1", default=0) or 0)
 
 
+def rychlost_prevodu(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Kolik snimku za vterinu prevod zvladal - a jestli to stacilo.
+
+    U bezicho prehravani je zajimavy stav TED (prave seka?), u historie
+    prumer za cele prehravani - jedno cislo z posledniho snimku by bylo
+    nahodne. Kdyz jedno chybi, vezme se druhe.
+
+    `nestiha` je pravda jen tehdy, kdyz je rychlost znatelne pod
+    snimkovanim videa: prevod, ktery jede presne tempem videa, je
+    v poradku, a vterinova odchylka je sum mereni.
+    """
+    vzorku = int(row.get("transcode_fps_vzorku") or 0)
+    prumer = (round(int(row.get("transcode_fps_soucet") or 0) / vzorku)
+              if vzorku else None)
+    ted = row.get("transcode_fps")
+    if row.get("is_active"):
+        fps, je_prumer = (ted, False) if ted else (prumer, True)
+    else:
+        fps, je_prumer = (prumer, True) if prumer else (ted, False)
+    if not fps:
+        return None
+    video = row.get("video_fps") or None
+    return {"co": "Snímky", "fps": int(fps), "prumer": je_prumer,
+            "video_fps": video,
+            "nestiha": bool(video and int(fps) < int(video) - 1)}
+
+
 def popis_prepoctu(row: dict[str, Any]) -> list[dict[str, Any]]:
     """Co presne server u tohohle prehravani prepocitava.
 
@@ -562,6 +589,7 @@ def popis_prepoctu(row: dict[str, Any]) -> list[dict[str, Any]]:
     je jazyk prihlaseneho cloveka. Kazdy fakt je slovnik:
 
         {"co": "Obraz", "primo": False, "z": "hevc", "na": "h264"}
+        {"co": "Snímky", "fps": 96, "prumer": True, "video_fps": 24, ...}
         {"co": "Titulky", "vypaluji": True}
         {"co": "Hardware", "text": "qsv"}
 
@@ -585,6 +613,10 @@ def popis_prepoctu(row: dict[str, Any]) -> list[dict[str, Any]]:
                 continue   # nemame co rict, radeji mlcime
             primo = str(zdroj).lower() == str(cil).lower()
         fakta.append({"co": co, "primo": bool(primo), "z": zdroj, "na": cil})
+
+    rychlost = rychlost_prevodu(row)
+    if rychlost:
+        fakta.append(rychlost)
 
     # Titulky se do obrazu vypaluji - tedy prepocet obrazu, i kdyz je
     # kodek podporovany. Jellyfin to rekne jedine timhle duvodem.
@@ -2582,6 +2614,19 @@ def library_overview(library_id: str) -> dict[str, Any]:
 
 def library_activity(library_id: str, days: int = 90) -> dict[str, Any]:
     """Co se v teto knihovne sledovalo."""
+    nedavne = db.query_all(
+        """
+        SELECT p.*, i.height, i.video_codec AS source_codec,
+               i.audio_codec AS source_audio_codec
+        FROM playback p
+        LEFT JOIN items i ON i.id = p.item_id
+        WHERE p.library_id = ? AND p.watched_seconds > 0
+        ORDER BY p.started_at DESC LIMIT 25
+        """,
+        (library_id,),
+    )
+    for row in nedavne:
+        row["prepocet"] = popis_prepoctu(row)
     return {
         "totals": db.query_one(
             """
@@ -2617,16 +2662,7 @@ def library_activity(library_id: str, days: int = 90) -> dict[str, Any]:
             """,
             (library_id, *_meze(days)),
         ),
-        "recent": db.query_all(
-            """
-            SELECT p.*, i.height
-            FROM playback p
-            LEFT JOIN items i ON i.id = p.item_id
-            WHERE p.library_id = ? AND p.watched_seconds > 0
-            ORDER BY p.started_at DESC LIMIT 25
-            """,
-            (library_id,),
-        ),
+        "recent": nedavne,
     }
 
 
@@ -2674,14 +2710,22 @@ def item_streams(item_id: str) -> dict[str, list[dict[str, Any]]]:
 
 
 def item_playback(item_id: str, limit: int = 25) -> list[dict[str, Any]]:
-    return db.query_all(
+    # Kodeky souboru kvuli bubline u znacky transcode - stejne jako
+    # v Historii (viz popis_prepoctu).
+    rows = db.query_all(
         """
-        SELECT * FROM playback
-        WHERE item_id = ? AND watched_seconds > 0
-        ORDER BY started_at DESC LIMIT ?
+        SELECT p.*, i.video_codec AS source_codec,
+               i.audio_codec AS source_audio_codec
+        FROM playback p
+        LEFT JOIN items i ON i.id = p.item_id
+        WHERE p.item_id = ? AND p.watched_seconds > 0
+        ORDER BY p.started_at DESC LIMIT ?
         """,
         (item_id, limit),
     )
+    for row in rows:
+        row["prepocet"] = popis_prepoctu(row)
+    return rows
 
 
 def item_playback_summary(item_id: str) -> dict[str, Any]:

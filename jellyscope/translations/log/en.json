@@ -134,5 +134,7 @@
     "ucet %s: prava %s": "account %s: rights %s",
     "ucty bez uzivatele v Jellyfinu odebrany: %s": "accounts without a user in Jellyfin removed: %s",
     "ukazkova data vyrobena znovu: %s titulu, %s prehravani": "demo data generated again: %s titles, %s playbacks",
-    "obnova ukazkovych dat selhala": "refreshing the demo data failed"
+    "obnova ukazkovych dat selhala": "refreshing the demo data failed",
+    "prihlaseni kodem z %s zablokovano (%s. stupen)": "sign-in with a code from %s blocked (level %s)",
+    "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu": "quick sync: Jellyfin no longer knows %s recent items - they are in the archive"
 }
