@@ -153,6 +153,68 @@ def least_played(days: int = 365, limit: int = 25,
     )
 
 
+def rychlost_prevodu(days: int) -> dict[str, Any]:
+    """Jak rychle server převádí: průměr, nejpomalejší, nejrychlejší.
+
+    Za jednotku se bere **jedno přehrávání** a jeho průměrná rychlost
+    (sběrač ji drží jako součet a počet vzorků). Okamžité hodnoty nemáme
+    a ani by nepomohly: ffmpeg na začátku převodu chvíli rozjíždí a
+    nejnižší okamžitá hodnota by byla skoro vždycky tahle chvíle, ne
+    skutečný problém.
+
+    Celkový průměr je vážený počtem vzorků, tedy časem převodu - dlouhý
+    film má říct víc než upoutávka, kterou někdo pustil na deset vteřin.
+
+    „Nestíhalo" = průměr převodu pod snímkováním videa. Takové přehrávání
+    sekalo, ať se na to Jellyfin tvářil jakkoli.
+
+    Přehrávání z doby před sledováním rychlosti (a importovaná historie)
+    vzorky nemají a do čísel se nepočítají vůbec - nula by tvrdila, že
+    server stál.
+    """
+    radky = db.query_all(
+        """
+        SELECT p.id, p.item_id, p.started_at, p.transcode_hw, p.video_fps,
+               p.transcode_fps_soucet AS soucet, p.transcode_fps_vzorku AS vzorku,
+               COALESCE(p.series_name, p.item_name) AS label,
+               p.series_name, p.item_name
+        FROM playback p
+        WHERE p.started_at >= ? AND p.started_at < ?
+          AND p.transcode_fps_vzorku > 0
+        """,
+        (*_meze(days),),
+    )
+
+    def souhrn(skupina: list[dict[str, Any]]) -> dict[str, Any]:
+        vzorku = sum(int(r["vzorku"]) for r in skupina)
+        nestiha = [r for r in skupina if r["video_fps"]
+                   and r["fps"] < int(r["video_fps"]) - 1]
+        return {
+            "prehravani": len(skupina),
+            "prumer": round(sum(int(r["soucet"]) for r in skupina) / vzorku) if vzorku else None,
+            "nejmin": min(skupina, key=lambda r: r["fps"]),
+            "nejvic": max(skupina, key=lambda r: r["fps"]),
+            "nestiha": len(nestiha),
+            "nestiha_podil": len(nestiha) / len(skupina) * 100 if skupina else 0.0,
+        }
+
+    prehrani = []
+    for r in radky:
+        r = dict(r)
+        r["fps"] = round(int(r["soucet"]) / int(r["vzorku"]))
+        prehrani.append(r)
+    if not prehrani:
+        return {"prehravani": 0, "podle_hw": []}
+
+    podle_hw: dict[str, list[dict[str, Any]]] = {}
+    for r in prehrani:
+        # Prazdne = Jellyfin zadnou akceleraci nehlasil, tedy procesor.
+        podle_hw.setdefault(str(r["transcode_hw"] or "").lower(), []).append(r)
+    skupiny = [{"hw": hw, **souhrn(seznam)} for hw, seznam in podle_hw.items()]
+    skupiny.sort(key=lambda s: s["prehravani"], reverse=True)
+    return {**souhrn(prehrani), "podle_hw": skupiny}
+
+
 def transcode_offenders(days: int, limit: int = 15) -> list[dict[str, Any]]:
     """Soubory, ktere server nejcasteji prepocitava.
 

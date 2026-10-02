@@ -183,7 +183,7 @@ def rozcestnik(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
             "/api/v1/history": "recent playbacks (?days=30&limit=50&user=<id>&kind=both|movies|series)",
             "/api/v1/recently-added": "what came into the library last (?limit=18)",
             "/api/v1/play-methods": "direct play vs. transcode, and the clients used (?days=30)",
-            "/api/v1/insights": "transcode offenders, upgrade candidates, oversized and never finished titles (?days=30&limit=15)",
+            "/api/v1/insights": "transcode offenders, upgrade candidates, oversized and never finished titles, conversion speed in fps (?days=30&limit=15)",
             "/api/v1/bandwidth": "how much data went out and where to (?days=30)",
             "/api/v1/item/{id}": "one title: file, versions and who watched it",
         },
@@ -446,7 +446,27 @@ def zjisteni(days: Any = 30, limit: Any = 15,
             "best_percent": round(float(r.get("best_percent") or 0), 1),
             "runtime_minutes": round(float(r.get("runtime_minutes") or 0)),
         } for r in insights.never_finished(dny, kolik)],
+        "transcode_speed": _rychlost(insights.rychlost_prevodu(dny)),
     }
+
+
+def _rychlost(r: dict[str, Any]) -> dict[str, Any]:
+    """Rychlost převodu do API - stejná čísla jako karta na Zjištění."""
+    def souhrn(s: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "playbacks": s["prehravani"],
+            "average_fps": s["prumer"],
+            "slowest_fps": s["nejmin"]["fps"],
+            "slowest_title": s["nejmin"]["label"],
+            "fastest_fps": s["nejvic"]["fps"],
+            "fastest_title": s["nejvic"]["label"],
+            "fell_behind": s["nestiha"],
+        }
+    if not r.get("prehravani"):
+        return {"playbacks": 0, "by_hardware": []}
+    return {**souhrn(r),
+            "by_hardware": [{"hardware": s["hw"] or "cpu", **souhrn(s)}
+                            for s in r["podle_hw"]]}
 
 
 def _rozliseni(row: dict[str, Any]) -> str | None:

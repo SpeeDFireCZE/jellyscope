@@ -304,7 +304,7 @@ curl -H "Authorization: Bearer js_your_key" http://localhost:8097/api/v1/summary
 | `GET /api/v1/history?days=30&limit=50&user=&kind=both` | Recent playbacks, newest first. No IP addresses - the API never hands those out. |
 | `GET /api/v1/recently-added?limit=18` | What came into the library last. |
 | `GET /api/v1/play-methods?days=30` | Direct play against transcoding, and the clients people watch with. |
-| `GET /api/v1/insights?days=30&limit=15` | The Insights page in numbers: transcode offenders, upgrade candidates, oversized and rarely watched, never finished. |
+| `GET /api/v1/insights?days=30&limit=15` | The Insights page in numbers: transcode offenders, upgrade candidates, oversized and rarely watched, never finished, and the conversion speed in fps (average, slowest, fastest, by hardware). |
 | `GET /api/v1/bandwidth?days=30` | Data sent out, the peak, transcode share, home against internet, and by country. Without addresses. |
 | `GET /api/v1/item/<id>` | One title: the file, its versions and who watched it. |
 

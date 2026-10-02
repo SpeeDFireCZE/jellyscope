@@ -9,6 +9,27 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.4
+
+How fast the server converts video, as numbers you can compare.
+
+### Added
+
+- **Conversion speed on the Insights page.** A new card next to the
+  transcode cards: the average speed in frames per second, the slowest
+  and the fastest conversion with the title each belonged to, and how
+  many playbacks fell behind the video's frame rate - the ones that
+  stuttered. Below it the same numbers split by what does the
+  converting (the processor, QSV, NVENC, VAAPI...), which shows at a
+  glance whether hardware acceleration pays off.
+
+  Each playback counts with its own average speed; the overall average
+  is weighted by how long the conversion ran, so a whole film says more
+  than a trailer started for ten seconds. Playbacks from before 1.7.3,
+  when the speed started to be recorded, are left out rather than
+  counted as zero. The same numbers are in `/api/v1/insights` as
+  `transcode_speed`.
+
 ## 1.7.3
 
 A series added during a scan stays together in Recently added, the

@@ -128,6 +128,64 @@
     </div>
 </div>
 
+{# Rychlost převodu. Jednotkou je jedno přehrávání a jeho průměrná
+   rychlost - okamžité hodnoty by ukazovaly hlavně rozjezd ffmpegu.
+   Nejpomalejší a nejrychlejší mají u sebe titul, ať je vidět, u čeho
+   to bylo. Rozpad podle hardwaru odpovídá na otázku „vyplatí se mi
+   akcelerace?" - procesor proti QSV nebo NVENC vedle sebe. #}
+<div class="card" id="rychlost-prevodu">
+    <div class="card-head">
+        <h2>{{ _("Rychlost převodu") }}</h2>
+        <p class="card-note">{{ _("snímků za vteřinu, průměr každého přehrávání") }}</p>
+    </div>
+    {% if rychlost.prehravani %}
+    <div class="kpi-row">
+        {{ tile(_("Průměr"), rychlost.prumer ~ " fps",
+                note=rychlost.prehravani | number ~ " " ~ _("přehrávání s převodem obrazu")) }}
+        {{ tile(_("Nejpomalejší"), rychlost.nejmin.fps ~ " fps",
+                note=rychlost.nejmin.label) }}
+        {{ tile(_("Nejrychlejší"), rychlost.nejvic.fps ~ " fps",
+                note=rychlost.nejvic.label) }}
+        {{ tile(_("Nestíhalo"), rychlost.nestiha | number,
+                note=(rychlost.nestiha_podil | percent(0)) ~ " " ~ _("přehrávání bylo pomalejší než video")) }}
+    </div>
+
+    {% if rychlost.podle_hw | length > 1 or (rychlost.podle_hw and rychlost.podle_hw[0].hw) %}
+    <div class="table-wrap" style="margin-top:16px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Čím se převádí") }}</th>
+                <th class="num">{{ _("Přehrání") }}</th>
+                <th class="num">{{ _("Průměr") }}</th>
+                <th class="num">{{ _("Nejméně") }}</th>
+                <th class="num">{{ _("Nejvíc") }}</th>
+                <th class="num">{{ _("Nestíhalo") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for s in rychlost.podle_hw %}
+            <tr>
+                <td class="strong">{{ s.hw | upper if s.hw else _("procesor") }}</td>
+                <td class="num">{{ s.prehravani | number }}</td>
+                <td class="num strong">{{ s.prumer }} fps</td>
+                <td class="num" title="{{ s.nejmin.label }}">{{ s.nejmin.fps }} fps</td>
+                <td class="num" title="{{ s.nejvic.label }}">{{ s.nejvic.fps }} fps</td>
+                <td class="num">{{ s.nestiha | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Převod pomalejší než snímkování videa znamená, že obraz seká. Video má obvykle 24 až 30 snímků, sport a záznamy z mobilu 50 až 60.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("Zatím žádný převod obrazu se změřenou rychlostí – Jellyscope ji zapisuje od verze 1.7.3.") }}</p>
+    {% endif %}
+</div>
+
 {# ------------------------------------------------------------------ #}
 {# 3. Kvalita versus sledovanost                                       #}
 {# ------------------------------------------------------------------ #}
