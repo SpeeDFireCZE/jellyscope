@@ -181,6 +181,10 @@ def rychlost_prevodu(days: int) -> dict[str, Any]:
         FROM playback p
         WHERE p.started_at >= ? AND p.started_at < ?
           AND p.transcode_fps_vzorku > 0
+          -- Obraz se kopiroval, prevadel se jen zvuk: "rychlost" je tu
+          -- rychlost kopirovani, ne prevodu. Sberac ji od 1.7.5 vubec
+          -- nezapisuje, tohle chrani data ulozena predtim.
+          AND COALESCE(p.transcode_video_direct, 0) = 0
         """,
         (*_meze(days),),
     )

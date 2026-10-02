@@ -276,9 +276,12 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
             "hw": transcoding.get("HardwareAccelerationType") or None,
             # Rychlost prevodu, jak ji hlasi ffmpeg (snimku za vterinu).
             # Pomalejsi nez video samo = prevod nestiha a obraz seka.
-            # U prevodu jen zvuku ji Jellyfin neposila - a neni ani co
-            # merit.
-            "fps": _fps(transcoding.get("Framerate")),
+            # Jen kdyz se obraz opravdu prevadi: pri prevodu jen zvuku
+            # se obraz kopiruje a ffmpeg hlasi rychlost kopirovani -
+            # klidne stovky snimku, ktere by se ve statistice tvarily
+            # jako "nejrychlejsi prevod".
+            "fps": (None if transcoding.get("IsVideoDirect") is True
+                    else _fps(transcoding.get("Framerate"))),
             "video_fps": video_fps,
             "video_width": sirka,
             "video_height": vyska,

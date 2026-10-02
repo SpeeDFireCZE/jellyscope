@@ -50,15 +50,15 @@ kdy = (datetime.now(timezone.utc) - timedelta(days=2)).strftime(db.TIME_FORMAT)
 
 
 def prevod(klic: str, nazev: str, hw: str | None, fps: int, vzorku: int,
-           video: int | None = 24) -> None:
+           video: int | None = 24, obraz_primo: int = 0) -> None:
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO playback (session_key, user_id, user_name, item_id, item_name,"
             " item_type, started_at, last_seen_at, watched_seconds, is_active,"
             " play_method, transcode_hw, transcode_fps_soucet, transcode_fps_vzorku,"
-            " video_fps) VALUES (?, 'u1', 'Jana', ?, ?, 'Movie', ?, ?, 600, 0,"
-            " 'Transcode', ?, ?, ?, ?)",
-            (klic, klic, nazev, kdy, kdy, hw, fps * vzorku, vzorku, video))
+            " video_fps, transcode_video_direct) VALUES (?, 'u1', 'Jana', ?, ?, 'Movie',"
+            " ?, ?, 600, 0, 'Transcode', ?, ?, ?, ?, ?)",
+            (klic, klic, nazev, kdy, kdy, hw, fps * vzorku, vzorku, video, obraz_primo))
         conn.commit()
 
 
@@ -70,6 +70,9 @@ prevod("c", "Matrix", "qsv", 150, 50)
 prevod("d", "Kolja", "qsv", 210, 40)
 # Stare prehravani bez mereni - nesmi nic ovlivnit.
 prevod("e", "Starý film", None, 0, 0)
+# Prevod jen zvuku s "rychlosti" kopirovani obrazu, ulozeny jeste pred
+# opravou sberace - nesmi se stat nejrychlejsim prevodem.
+prevod("f", "Jen zvuk", None, 640, 30, obraz_primo=1)
 
 print("--- čísla ---")
 r = insights.rychlost_prevodu(30)

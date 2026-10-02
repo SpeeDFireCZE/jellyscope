@@ -147,6 +147,25 @@ for adresa, kde in (("/history", "Historie"), ("/item/film", "detail titulu"),
     check("Převod: v průměru 78 fps (video má 24)" in html, f"{kde} ukazuje průměr")
 
 print()
+print("--- převod jen zvuku: obraz se kopíruje, rychlost se nezapisuje ---")
+s_kopii = relace(640)
+s_kopii["Id"] = "s2"
+s_kopii["DeviceId"] = "d2"
+# Jiny divak: u tehoz diváka a filmu by sberac spravne navazal na
+# predchozi prehravani (pokracovani po pauze) a novy radek by nevznikl.
+s_kopii["UserId"] = "u2"
+s_kopii["TranscodingInfo"]["IsVideoDirect"] = True
+s_kopii["TranscodingInfo"]["TranscodeReasons"] = ["AudioCodecNotSupported"]
+collector._store_sessions([s_kopii], 30)
+kopie = dict(db.query_one("SELECT * FROM playback WHERE device_id = 'd2'"))
+check(kopie["transcode_fps"] is None and kopie["transcode_fps_vzorku"] == 0,
+      "640 fps kopírování obrazu se nezapsalo jako rychlost převodu")
+check(stats.rychlost_prevodu({**kopie, "transcode_fps_soucet": 640,
+                              "transcode_fps_vzorku": 1}) is None,
+      "a bublina ho neukáže ani u dat uložených dřív")
+collector._store_sessions([], 30)
+
+print()
 print("--- bez převodu obrazu nic ---")
 check(stats.rychlost_prevodu({"is_active": 0, "transcode_fps_vzorku": 0}) is None,
       "bez vzorků žádný řádek")

@@ -9,6 +9,21 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.5
+
+The conversion speed counts only conversions of the picture.
+
+### Fixed
+
+- **A transcode that converts only the audio no longer counts as a
+  conversion speed.** The picture is copied in that case, and the speed
+  ffmpeg reports is how fast it copies frames - easily hundreds per
+  second, which would have shown up as the fastest conversion on the
+  Insights page. Such a speed is no longer recorded, and the statistics
+  and the tooltip ignore playbacks where the picture went direct, so
+  data stored by 1.7.3 and 1.7.4 is covered too. Direct play and direct
+  stream never had a speed and still do not.
+
 ## 1.7.4
 
 How fast the server converts video, as numbers you can compare.

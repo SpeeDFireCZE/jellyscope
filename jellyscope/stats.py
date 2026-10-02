@@ -561,6 +561,9 @@ def rychlost_prevodu(row: dict[str, Any]) -> dict[str, Any] | None:
     snimkovanim videa: prevod, ktery jede presne tempem videa, je
     v poradku, a vterinova odchylka je sum mereni.
     """
+    # Obraz se jen kopiroval - zadny prevod, jehoz rychlost by mela smysl.
+    if row.get("transcode_video_direct") == 1:
+        return None
     vzorku = int(row.get("transcode_fps_vzorku") or 0)
     prumer = (round(int(row.get("transcode_fps_soucet") or 0) / vzorku)
               if vzorku else None)
