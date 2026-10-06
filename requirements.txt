@@ -5,7 +5,7 @@
 
 # Needs Python 3.10 or newer - that is FastAPI's own floor since 0.116.
 
-fastapi==0.141.1           # web framework - routing, validation, async
+fastapi==0.142.2           # web framework - routing, validation, async
 starlette==1.7.0           # what FastAPI is built on: routing, sessions,
                            # static files, multipart. Pinned explicitly even
                            # though FastAPI pulls it in, because the security
