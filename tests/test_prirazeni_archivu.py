@@ -12,7 +12,8 @@ ho založil znovu - a nesedí název, tmdb ani id. Automatika nemá podle
 
 Jde to z detailu položky (jedna) i z archivu knihovny (hromadně - co nemá
 vybraný cíl, zůstává). Mazání z archivu se potvrzuje vlastním oknem a taky
-se před ním zálohuje.
+se před ním zálohuje. Z archivu knihovny jde mazat i hromadně - zaškrtnuté
+položky, nikdy titul, který v knihovně je, ani archiv jiné knihovny.
 
 Spuštění:
     .\.venv\Scripts\python.exe tests\test_prirazeni_archivu.py
@@ -140,8 +141,10 @@ check('id="okno-priradit"' in detail and 'id="okno-smazat"' in detail,
       "archivovaná položka má okno přiřazení i potvrzení smazání")
 check("confirm(" not in detail, "prohlížečový confirm() už tam není")
 okno = detail[detail.index('id="okno-priradit"'):detail.index("</dialog>", detail.index('id="okno-priradit"'))]
-check('class="plakatek"><img src="/image/bts?kind=Primary&amp;w=80' in okno,
-      "v okně je plakátek archivované položky")
+# Obrazek polozky z archivu uz v Jellyfinu neni - zbylo by prazdne policko.
+check("/image/bts" not in okno and 'class="plakatek"><img' not in okno,
+      "archivovaná položka v okně plakátek nemá")
+check("data-vyber-cile" in okno, "plakát má jen vybraný cíl (výběr je v okně)")
 check('id="okno-priradit"' not in ctenar.get("/item/bts").text, "čtenář je nevidí")
 check('id="okno-priradit"' not in spravce.get("/item/duna").text,
       "živá položka okno přiřazení nemá")
@@ -180,16 +183,16 @@ print("--- hromadně z archivu ---")
 archiv = spravce.get("/library/serialy?tab=media&archived=1").text
 check('id="okno-prirazeni"' in archiv and "Mikeš S01E01 – Pilot (2)" in archiv,
       "archiv knihovny má okno s archivovanými díly jednotlivě")
-check('class="plakatek"><img src="/image/s-Mike' in archiv,
-      "řádek má plakátek (u dílu plakát seriálu)")
+check('class="plakatek"><img' not in archiv and "data-nahled" not in archiv,
+      "řádky archivu plakátek nemají")
 check('id="okno-prirazeni"' not in ctenar.get("/library/serialy?tab=media&archived=1").text,
       "čtenář ho nevidí")
 check('id="okno-prirazeni"' not in spravce.get("/library/serialy?tab=media").text,
       "v živé knihovně okno není")
 okno = archiv.split('id="okno-prirazeni"', 1)[1].split("</dialog>", 1)[0]
-check('data-krok="rekapitulace" hidden' in okno and "data-rekap-seznam" in okno,
+check('data-krok="potvrzeni" hidden' in okno and "data-rekap-seznam" in okno,
       "okno má krok s rekapitulací, na začátku skrytý")
-formular = okno.split('class="prirazeni-form"', 1)[1]
+formular = okno.split('class="okno-kroky"', 1)[1]
 check(formular.count('type="submit"') == 1
       and 'type="submit" name="potvrzeno" value="1" data-rekap-potvrdit' in formular,
       "odesílá jen potvrzení rekapitulace (první tlačítko jen přepne krok)")
@@ -239,6 +242,75 @@ check(stats.item("zbytek") is None
       and db.query_value("SELECT COUNT(*) FROM playback WHERE item_id = 'zbytek'") == 0,
       "titul i historie jsou smazané")
 check(len(list(ZALOHY.glob("jellyscope-*"))) == zaloh_pred + 1, "a předtím se zálohovalo")
+
+check(stats.item("amelie") is not None
+      and spravce.post("/item/amelie/delete", follow_redirects=False).status_code == 303
+      and stats.item("amelie") is not None, "titul, který v knihovně je, smazat nejde")
+check(len(list(ZALOHY.glob("jellyscope-*"))) == zaloh_pred + 1, "a kvůli tomu se nezálohuje")
+
+print()
+print("--- hromadné mazání z archivu ---")
+polozka("smaz-1", "Starý film", archiv=1)
+prehrani("smaz-1", "Starý film", 2)
+prehrani("smaz-1", "Starý film", 1, tabulka=db.KOS)
+polozka("smaz-2", "Druhý starý", archiv=1)
+prehrani("smaz-2", "Druhý starý", 1)
+polozka("cizi-archiv", "Díl odjinud", typ="Episode", archiv=1, series="Jiný", rada=1, dil=1,
+        lib="serialy")
+prehrani("cizi-archiv", "Díl odjinud", 1, typ="Episode")
+
+archiv = spravce.get("/library/filmy?tab=media&archived=1").text
+check('id="okno-mazani"' in archiv and "data-vybrat-vse" in archiv,
+      "archiv má okno mazání s „Vybrat vše\"")
+okno = archiv.split('id="okno-mazani"', 1)[1].split("</dialog>", 1)[0]
+radek = okno.split('value="smaz-1"', 1)[1].split("</li>", 1)[0]
+check("Starý film" in radek and "2 přehrávání" in radek,
+      "řádek má zaškrtávátko, název a počet přehrávání")
+check('value="amelie"' not in okno and 'value="cizi-archiv"' not in okno,
+      "nabízí jen archiv téhle knihovny")
+check(okno.split('class="okno-kroky"', 1)[1].count('type="submit"') == 1
+      and 'type="submit" name="potvrzeno" value="1"' in okno,
+      "maže jen tlačítko potvrzení")
+check('id="okno-mazani"' not in ctenar.get("/library/filmy?tab=media&archived=1").text,
+      "čtenář okno nevidí")
+check('id="okno-mazani"' not in spravce.get("/library/filmy?tab=media").text,
+      "v živé knihovně okno není")
+
+zaloh_pred = len(list(ZALOHY.glob("jellyscope-*")))
+spravce.post("/library/filmy/archiv/smazat", data={"smazat": ["smaz-1", "smaz-2"]})
+check(stats.item("smaz-1") is not None and stats.item("smaz-2") is not None,
+      "bez potvrzení se nic nesmaže")
+spravce.post("/library/filmy/archiv/smazat",
+             data={"potvrzeno": "1", "smazat": ["amelie", "cizi-archiv", "neexistuje"]})
+check(stats.item("amelie") is not None and stats.item("cizi-archiv") is not None,
+      "živý titul ani archiv jiné knihovny nesmaže")
+check(len(list(ZALOHY.glob("jellyscope-*"))) == zaloh_pred,
+      "a když není co mazat, nezálohuje se")
+check(ctenar.post("/library/filmy/archiv/smazat",
+                  data={"potvrzeno": "1", "smazat": ["smaz-1"]},
+                  follow_redirects=False).status_code == 403
+      and stats.item("smaz-1") is not None, "čtenář mazat nesmí")
+# „Vybrat vše" u plného okna pošle tisíc polí; Starlette jich bez
+# zvednutí limitu pustí jen 1000 a odpoví chybou 400.
+odpoved = spravce.post("/library/filmy/archiv/smazat", follow_redirects=False, data={
+    "potvrzeno": "1", "smazat": [f"x{i}" for i in range(web.STROP_MAZANI_ARCHIVU)]})
+check(odpoved.status_code == 303, f"projde i plný seznam ({odpoved.status_code})")
+
+odpoved = spravce.post("/library/filmy/archiv/smazat", follow_redirects=False, data={
+    "potvrzeno": "1",
+    "smazat": ["smaz-1", "smaz-2", "smaz-1", "amelie", "cizi-archiv", "neexistuje"]})
+check(odpoved.status_code == 303, f"smazáno ({odpoved.status_code})")
+check(stats.item("smaz-1") is None and stats.item("smaz-2") is None,
+      "zaškrtnuté položky z archivu jsou pryč")
+check(db.query_value("SELECT COUNT(*) FROM playback WHERE item_id IN ('smaz-1', 'smaz-2')") == 0,
+      "i s historií")
+check(db.query_value(f"SELECT COUNT(*) FROM {db.KOS} WHERE item_id = 'smaz-1'") == 0,
+      "i v koši zapomenutých diváků")
+check(stats.item("amelie") is not None and stats.item("cizi-archiv") is not None
+      and db.query_value("SELECT COUNT(*) FROM playback WHERE item_id = 'cizi-archiv'") == 1,
+      "živý titul a archiv jiné knihovny zůstaly i s historií")
+check(stats.item("jiny-archiv") is not None, "nezaškrtnutá položka zůstala")
+check(len(list(ZALOHY.glob("jellyscope-*"))) == zaloh_pred + 1, "jedna záloha na celou dávku")
 
 print()
 print("HOTOVO - chyb:", failures)

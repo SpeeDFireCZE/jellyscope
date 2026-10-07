@@ -1373,5 +1373,17 @@
     "Položek, které zůstanou v archivu beze změny: {z}.": "Položek, které zůstanou v archivu beze změny: {z}.",
     "Zpět k výběru": "Zpět k výběru",
     "Ano, přiřadit": "Ano, přiřadit",
-    "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.": "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace."
+    "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.": "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.",
+    "Smazat z archivu": "Smazat z archivu",
+    "Zaškrtni, co se má smazat. Smaže se titul i celá jeho historie přehrávání. Těsně před tím se udělá záloha databáze.": "Zaškrtni, co se má smazat. Smaže se titul i celá jeho historie přehrávání. Těsně před tím se udělá záloha databáze.",
+    "Vybrat vše": "Vybrat vše",
+    "Ukazuje se prvních {n} položek s nejvíc přehráními. Po smazání se ukážou další.": "Ukazuje se prvních {n} položek s nejvíc přehráními. Po smazání se ukážou další.",
+    "Smazat vybrané": "Smazat vybrané",
+    "Titulů ke smazání: {t} · záznamů v historii: {n}": "Titulů ke smazání: {t} · záznamů v historii: {n}",
+    "Tituly i jejich historie přehrávání zmizí ze statistik. Vrátit je půjde jen obnovením zálohy, která se udělá těsně před smazáním.": "Tituly i jejich historie přehrávání zmizí ze statistik. Vrátit je půjde jen obnovením zálohy, která se udělá těsně před smazáním.",
+    "Nic se nesmazalo - smazání se provede až po potvrzení.": "Nic se nesmazalo - smazání se provede až po potvrzení.",
+    "Nic se nesmazalo - nebyla vybraná žádná položka z archivu.": "Nic se nesmazalo - nebyla vybraná žádná položka z archivu.",
+    "Smazáno z archivu - titulů: {t}, záznamů v historii: {n}.": "Smazáno z archivu - titulů: {t}, záznamů v historii: {n}.",
+    "Smazat jde jen titul z archivu.": "Smazat jde jen titul z archivu.",
+    "Položka neexistuje.": "Položka neexistuje."
 }

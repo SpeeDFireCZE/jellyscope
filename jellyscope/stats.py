@@ -2787,18 +2787,7 @@ def delete_item(item_id: str) -> dict[str, Any]:
         ).fetchone()
         if row is None:
             return {"status": "error", "message": "Položka neexistuje."}
-
-        plays = int(conn.execute(
-            "SELECT COUNT(*) AS c FROM playback WHERE item_id = ?", (item_id,)
-        ).fetchone()["c"])
-
-        # Stopy zmizi samy pres ON DELETE CASCADE, historii mazeme rucne -
-        # cizi klic tam schvalne neni, aby vypadek Jellyfinu nikdy
-        # nemohl smazat statistiky.
-        conn.execute("DELETE FROM playback WHERE item_id = ?", (item_id,))
-        conn.execute("DELETE FROM item_streams WHERE item_id = ?", (item_id,))
-        conn.execute("DELETE FROM item_versions WHERE item_id = ?", (item_id,))
-        conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        plays = _smaz_polozku(conn, item_id)
 
     log.info("smazana polozka %s (%s prehravani)", row["name"], plays)
     return {
@@ -2809,8 +2798,63 @@ def delete_item(item_id: str) -> dict[str, Any]:
     }
 
 
+def _smaz_polozku(conn: Any, item_id: str) -> int:
+    """Smaže položku, její historii, stopy a verze. Vrací počet přehrání.
+
+    Historie se maže ručně - cizí klíč tam schválně není, aby výpadek
+    Jellyfinu nikdy nemohl smazat statistiky. Maže se i z koše
+    zapomenutých diváků: kdyby se divák do noci vrátil, jeho přehrání
+    smazaného titulu by se vrátila jako záznamy bez titulu.
+    """
+    plays = int(conn.execute(
+        "SELECT COUNT(*) AS c FROM playback WHERE item_id = ?", (item_id,)
+    ).fetchone()["c"])
+    conn.execute("DELETE FROM playback WHERE item_id = ?", (item_id,))
+    if db.sloupce(conn, db.KOS):           # koš vzniká až s prvním zapomenutím
+        conn.execute(f"DELETE FROM {db.KOS} WHERE item_id = ?", (item_id,))
+    conn.execute("DELETE FROM item_streams WHERE item_id = ?", (item_id,))
+    conn.execute("DELETE FROM item_versions WHERE item_id = ?", (item_id,))
+    conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+    return plays
+
+
+def jen_z_archivu(item_ids: list[str], library_id: str) -> list[str]:
+    """Z vybraných id nechá jen položky z archivu téhle knihovny.
+
+    Hromadné mazání nesmí sáhnout na titul, který v knihovně je (přišel
+    by o historii a příští synchronizace by ho založila znovu prázdný),
+    ani na archiv jiné knihovny. Pořadí zůstává, opakovaná id jednou.
+    """
+    jedinecne = list(dict.fromkeys(i for i in item_ids if i))
+    if not jedinecne:
+        return []
+    otazniky = ", ".join("?" for _ in jedinecne)
+    platne = {r["id"] for r in db.query_all(
+        f"SELECT id FROM items WHERE id IN ({otazniky})"
+        " AND is_missing = 1 AND library_id = ?",
+        (*jedinecne, library_id))}
+    return [i for i in jedinecne if i in platne]
+
+
+def smaz_z_archivu(item_ids: list[str], library_id: str) -> dict[str, int]:
+    """Hromadně smaže položky z archivu knihovny i s jejich historií.
+
+    Projde jen to, co pustí `jen_z_archivu`. Všechno v jedné transakci:
+    když se cokoliv pokazí, nesmaže se nic.
+    """
+    platne = jen_z_archivu(item_ids, library_id)
+    prehravani = 0
+    with db.connect() as conn:
+        for item_id in platne:
+            prehravani += _smaz_polozku(conn, item_id)
+    log.info("z archivu smazano %s polozek (%s prehravani)", len(platne), prehravani)
+    return {"titulu": len(platne), "prehravani": prehravani}
+
+
 def nahled_polozky(row: dict[str, Any], sirka: int = 80) -> str:
-    """Adresa malého plakátu pro nabídky přiřazení.
+    """Adresa malého plakátu cílového titulu v nabídkách přiřazení.
+
+    Jen pro živé položky - položka z archivu už v Jellyfinu obrázek nemá.
 
     U dílu plakát seriálu, ne snímek z dílu: ten je na šířku a vedle
     názvu v řádku by vypadal jinak než plakáty filmů. Který díl to je,
@@ -2857,7 +2901,6 @@ def archivovane_polozky(library_id: str | None, limit: int = 500) -> list[dict[s
         f"""
         SELECT i.id, i.name, i.type, i.series_name, i.parent_index_number,
                i.index_number, i.production_year, i.path,
-               i.series_id, i.image_tag, i.series_image_tag,
                COALESCE(p.plays, 0) AS plays
         FROM items i
         LEFT JOIN ({_VSECHNA_PREHRANI}) p ON p.item_id = i.id
@@ -2867,9 +2910,9 @@ def archivovane_polozky(library_id: str | None, limit: int = 500) -> list[dict[s
         """,
         tuple(parametry),
     )
+    # Bez plakátku: obrázek položky z archivu už v Jellyfinu není.
     for radek in radky:
         radek["popis"] = popis_polozky(radek)
-        radek["nahled"] = nahled_polozky(radek)
     return radky
 
 

@@ -1762,6 +1762,20 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 input[type="checkbox"]:checked::before,
 input[type="radio"]:checked::before { transform: scale(1); }
 
+/* Napul zaskrtnute - "Vybrat vse", kdyz je vybrana jen cast. Misto
+   fajfky vodorovna carka. Stav nastavuje jen skript (indeterminate),
+   do formulare se nijak neposila. */
+input[type="checkbox"]:indeterminate {
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    border-color: transparent;
+}
+input[type="checkbox"]:not([hidden]):indeterminate::before {
+    height: 2px;
+    border-radius: 1px;
+    clip-path: none;
+    transform: scale(1);
+}
+
 input[type="checkbox"]:hover:not(:disabled),
 input[type="radio"]:hover:not(:disabled) { border-color: var(--accent); }
 
@@ -3395,7 +3409,6 @@ table.zapomenuti form { display: inline; }
     background: var(--surface-2);
 }
 .plakatek img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.prirazeni-radek > div:first-child { display: flex; gap: 12px; align-items: flex-start; }
 
 /* Hromadné přiřazení: řádek = archivovaná položka a vedle výběr cíle. */
 .prirazeni-radky { display: grid; gap: 14px; }
@@ -3411,12 +3424,12 @@ table.zapomenuti form { display: inline; }
     .prirazeni-radek { grid-template-columns: 1fr; }
 }
 
-/* Hromadné přiřazení má dva kroky v jednom formuláři: výběr a
-   rekapitulaci. Formulář i viditelný krok se natahují na výšku okna, aby
-   posouval jen seznam a patička s tlačítky zůstala dole. `display` jen
+/* Okna archivu (přiřazení, mazání) mají dva kroky v jednom formuláři:
+   výběr a potvrzení. Formulář i viditelný krok se natahují na výšku okna,
+   aby posouval jen seznam a patička s tlačítky zůstala dole. `display` jen
    na krok bez `hidden` - jinak by přebilo skrytí prohlížeče. */
-.prirazeni-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.prirazeni-krok:not([hidden]) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.okno-kroky { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.okno-krok:not([hidden]) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 /* Rekapitulace: archivovaná položka → vybraný cíl, obojí s plakátem. */
 .rekapitulace { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
@@ -3437,3 +3450,27 @@ table.zapomenuti form { display: inline; }
     .rekapitulace li { grid-template-columns: 1fr; gap: 6px; }
     .rekap-sipka { transform: rotate(90deg); justify-self: start; margin-left: 8px; }
 }
+
+/* Mazání z archivu: celý řádek je popisek zaškrtávátka, takže se dá
+   kliknout kamkoliv. „Vybrat vše" je oddělené čarou nad seznamem. */
+.mazani-vse {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 0 8px 12px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    cursor: pointer;
+}
+.mazani-radky { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mazani-radek {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.mazani-radek:hover { background: var(--surface-2); }
+.mazani-seznam { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }

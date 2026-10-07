@@ -242,9 +242,15 @@ to match on. An archived item can then be **assigned to another title** by
 hand — its history and statistics move to the chosen title and the
 archived item is removed. One item from its detail, or many at once from
 the archive view, each with a search in the live library and a small
-poster beside every title. The bulk dialog shows a summary of what will
-move first, and changes nothing until that summary is confirmed. A backup
-is taken before the change, as before deleting from the archive.
+poster beside every target. The bulk dialog shows a summary of what will
+move first, and changes nothing until that summary is confirmed.
+
+What is not worth keeping can be **deleted** with its history — one title
+from its detail, or many at once from the archive view: tick the items
+(each shows how many times it was played) or *Select all*, check the
+summary, confirm. Only archived items of that library can go this way,
+never a title that is still in the library. A database backup is taken
+before every assignment or deletion.
 
 ### On a phone
 

@@ -9,6 +9,40 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.7
+
+The archive can be emptied in one go, and title pages show the version
+again.
+
+### Added
+
+- **Delete many archived items at once.** The library's archive view
+  has *Delete from the archive* beside *Assign to other titles*: every
+  archived item (episodes one by one, up to 1000, most played first)
+  with a checkbox, its play count and file, and *Select all* above
+  them. *Delete selected* only shows what will go - the titles and how
+  many history records - and nothing is deleted until *Yes, delete*
+  confirms it. One database backup is taken for the whole batch. Only
+  items in that library's archive are deleted, never a title that is
+  in the library.
+
+### Fixed
+
+- **The footer of a title page showed a bare "v" instead of the
+  version**, and a new release was not announced there. The page's list
+  of file versions had the same name as the app version and replaced
+  it.
+
+- **No empty poster beside an archived item.** Its image is gone from
+  Jellyfin, so the reassignment dialogs showed a grey box; the archived
+  side now shows only the name and the file, and the chosen target
+  keeps its poster.
+
+- **Deleting a title also clears it from the bin of forgotten
+  viewers**, so restoring a viewer cannot bring back history of a
+  deleted title as nameless records. Deleting a single title refuses
+  one that is still in the library.
+
 ## 1.7.6
 
 History of a wrongly identified title can be moved to the right one by

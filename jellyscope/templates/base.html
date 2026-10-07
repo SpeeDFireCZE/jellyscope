@@ -1655,50 +1655,75 @@
             srovnej();
         });
 
-        /* Rekapitulace hromadného přiřazení. „Přiřadit (N)" nic
-           neodesílá - jen ukáže, co se stane: každou dvojici archiv →
-           cíl s plakáty, kolik přehrávání se přesune a kolik položek
-           zůstane. Odesílá až „Ano, přiřadit" (nese potvrzeno=1).
-           Fokus dostane „Zpět": Enter ze zvyku nic neprovede. */
-        document.querySelectorAll("form[data-rekapitulace]").forEach(function (form) {
-            var krokVyber = form.querySelector('[data-krok="vyber"]');
-            var krokRekap = form.querySelector('[data-krok="rekapitulace"]');
-            var seznam = krokRekap.querySelector("[data-rekap-seznam]");
-            var souhrn = krokRekap.querySelector("[data-rekap-souhrn]");
-            var zbytek = krokRekap.querySelector("[data-rekap-zbytek]");
-            var zpet = krokRekap.querySelector("[data-krok-zpet]");
-            var jazyk = document.documentElement.lang || "cs";
+        /* Okna archivu se dvěma kroky - výběr a potvrzení (přiřazení
+           i mazání). Tohle je jejich společná část: přepnutí kroku,
+           „Zpět k výběru" a návrat na výběr po zavření okna. Vrací
+           funkci, která přepne na potvrzení (true) nebo zpět (false).
+           Fokus na potvrzení dostane „Zpět": Enter ze zvyku nic
+           neprovede. */
+        function dvaKroky(form) {
+            var vyber = form.querySelector('[data-krok="vyber"]');
+            var potvrzeni = form.querySelector('[data-krok="potvrzeni"]');
+            var zpet = potvrzeni.querySelector("[data-krok-zpet]");
+            function ukaz(naPotvrzeni) {
+                vyber.hidden = naPotvrzeni;
+                potvrzeni.hidden = !naPotvrzeni;
+                if (naPotvrzeni) { zpet.focus(); }
+            }
+            zpet.addEventListener("click", function () { ukaz(false); });
+            var okno = form.closest("dialog");
+            if (okno) { okno.addEventListener("close", function () { ukaz(false); }); }
+            return ukaz;
+        }
 
-            function polozka(nahled, popis, poznamka) {
-                var obal = document.createElement("span");
-                obal.className = "rekap-polozka";
+        /* Jedna položka v potvrzení: (plakátek), název, pod ním poznámka.
+           Bez adresy náhledu - položka z archivu, jejíž obrázek už
+           v Jellyfinu není - se plakátek nekreslí. Text jen přes
+           textContent, nikdy jako HTML. */
+        function rekapPolozka(nahled, popis, poznamka) {
+            var obal = document.createElement("span");
+            obal.className = "rekap-polozka";
+            if (nahled) {
                 var plakat = document.createElement("span");
                 plakat.className = "plakatek";
-                if (nahled) {
-                    var img = document.createElement("img");
-                    img.alt = "";
-                    img.onerror = function () { img.remove(); };
-                    img.src = nahled;
-                    plakat.appendChild(img);
-                }
-                var text = document.createElement("span");
-                text.className = "vyber-cile-text";
-                var nazev = document.createElement("strong");
-                nazev.textContent = popis || "?";
-                text.appendChild(nazev);
-                if (poznamka) {
-                    var pozn = document.createElement("small");
-                    pozn.textContent = poznamka;
-                    text.appendChild(pozn);
-                }
+                var img = document.createElement("img");
+                img.alt = "";
+                img.onerror = function () { img.remove(); };
+                img.src = nahled;
+                plakat.appendChild(img);
                 obal.appendChild(plakat);
-                obal.appendChild(text);
-                return obal;
             }
-            function ukazKrok(rekapitulace) {
-                krokVyber.hidden = rekapitulace;
-                krokRekap.hidden = !rekapitulace;
+            var text = document.createElement("span");
+            text.className = "vyber-cile-text";
+            var nazev = document.createElement("strong");
+            nazev.textContent = popis || "?";
+            text.appendChild(nazev);
+            if (poznamka) {
+                var pozn = document.createElement("small");
+                pozn.textContent = poznamka;
+                text.appendChild(pozn);
             }
+            obal.appendChild(text);
+            return obal;
+        }
+
+        /* Poznámka pod názvem v řádku výběru (přehrávání · soubor) bez
+           zalomení a mezer ze šablony. */
+        function poznamkaRadku(radek) {
+            var small = radek.querySelector("small");
+            return small ? small.textContent.replace(/\s+/g, " ").trim() : "";
+        }
+
+        /* Rekapitulace hromadného přiřazení. „Přiřadit (N)" nic
+           neodesílá - jen ukáže, co se stane: každou dvojici archiv →
+           cíl (s plakátem), kolik přehrávání se přesune a kolik položek
+           zůstane. Odesílá až „Ano, přiřadit" (nese potvrzeno=1). */
+        document.querySelectorAll("form[data-rekapitulace]").forEach(function (form) {
+            var ukazKrok = dvaKroky(form);
+            var seznam = form.querySelector("[data-rekap-seznam]");
+            var souhrn = form.querySelector("[data-rekap-souhrn]");
+            var zbytek = form.querySelector("[data-rekap-zbytek]");
+            var jazyk = document.documentElement.lang || "cs";
 
             form.querySelector("[data-krok-dal]").addEventListener("click", function () {
                 seznam.textContent = "";
@@ -1713,18 +1738,16 @@
                     }
                     titulu += 1;
                     prehravani += parseInt(radek.dataset.plays || "0", 10) || 0;
-                    /* Poznámka vlevo je ta z řádku výběru (přehrávání ·
-                       soubor), vpravo knihovna a soubor cíle. */
-                    var poznamka = radek.querySelector("small");
+                    /* Vlevo položka z archivu (přehrávání · soubor),
+                       vpravo cíl s knihovnou a souborem. */
                     var li = document.createElement("li");
-                    li.appendChild(polozka(radek.dataset.nahled, radek.dataset.popis,
-                        poznamka ? poznamka.textContent.replace(/\s+/g, " ").trim() : ""));
+                    li.appendChild(rekapPolozka("", radek.dataset.popis, poznamkaRadku(radek)));
                     var sipka = document.createElement("span");
                     sipka.className = "rekap-sipka";
                     sipka.setAttribute("aria-hidden", "true");
                     sipka.textContent = "→";
                     li.appendChild(sipka);
-                    li.appendChild(polozka(box.dataset.cilNahled, box.dataset.cilPopis,
+                    li.appendChild(rekapPolozka(box.dataset.cilNahled, box.dataset.cilPopis,
                         box.dataset.cilKde));
                     seznam.appendChild(li);
                 });
@@ -1735,12 +1758,62 @@
                 zbytek.textContent = bez
                     ? zbytek.dataset.sablona.replace("{z}", bez.toLocaleString(jazyk)) : "";
                 ukazKrok(true);
-                zpet.focus();
             });
-            zpet.addEventListener("click", function () { ukazKrok(false); });
-            /* Zavřené okno se příště otevře zase na výběru. */
-            var okno = form.closest("dialog");
-            if (okno) { okno.addEventListener("close", function () { ukazKrok(false); }); }
+        });
+
+        /* Mazání z archivu. Zaškrtávátka u řádků, „Vybrat vše" nahoře
+           (napůl zaškrtnuté, když je vybraná jen část) a tlačítko, které
+           ukazuje, kolik je vybráno. „Smazat vybrané" jen ukáže, co
+           zmizí - maže až „Ano, smazat" (nese potvrzeno=1). */
+        document.querySelectorAll("form[data-mazani-archivu]").forEach(function (form) {
+            var ukazKrok = dvaKroky(form);
+            var vse = form.querySelector("[data-vybrat-vse]");
+            var policka = Array.prototype.slice.call(
+                form.querySelectorAll('.mazani-radek input[type="checkbox"]'));
+            var dal = form.querySelector("[data-krok-dal]");
+            var pocet = form.querySelector("[data-mazani-pocet]");
+            var seznam = form.querySelector("[data-mazani-seznam]");
+            var souhrn = form.querySelector("[data-mazani-souhrn]");
+            var jazyk = document.documentElement.lang || "cs";
+
+            function vybrane() {
+                return policka.filter(function (p) { return p.checked; });
+            }
+            function srovnej() {
+                var n = vybrane().length;
+                pocet.textContent = n.toLocaleString(jazyk);
+                dal.disabled = n === 0;
+                vse.checked = n > 0 && n === policka.length;
+                vse.indeterminate = n > 0 && n < policka.length;
+            }
+            form.addEventListener("change", function (udalost) {
+                if (udalost.target === vse) {
+                    policka.forEach(function (p) { p.checked = vse.checked; });
+                }
+                srovnej();
+            });
+
+            dal.addEventListener("click", function () {
+                var zvolene = vybrane();
+                if (!zvolene.length) { return; }
+                seznam.textContent = "";
+                var prehravani = 0;
+                zvolene.forEach(function (policko) {
+                    prehravani += parseInt(policko.dataset.plays || "0", 10) || 0;
+                    var radek = policko.closest(".mazani-radek");
+                    var li = document.createElement("li");
+                    li.appendChild(rekapPolozka("", radek.querySelector("strong").textContent,
+                        poznamkaRadku(radek)));
+                    seznam.appendChild(li);
+                });
+                souhrn.textContent = souhrn.dataset.sablona
+                    .replace("{t}", zvolene.length.toLocaleString(jazyk))
+                    .replace("{n}", prehravani.toLocaleString(jazyk));
+                ukazKrok(true);
+            });
+            /* Prohlížeč umí po návratu na stránku obnovit zaškrtnutí -
+               počet na tlačítku musí sedět hned. */
+            srovnej();
         });
 
         /* Klik na ztmavené pozadí zavírá. Prohlížeč hlásí kliknutí na

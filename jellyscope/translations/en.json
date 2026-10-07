@@ -1373,5 +1373,17 @@
     "Položek, které zůstanou v archivu beze změny: {z}.": "Items that stay in the archive unchanged: {z}.",
     "Zpět k výběru": "Back to the selection",
     "Ano, přiřadit": "Yes, assign",
-    "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.": "Nothing changed - the assignment happens only after the summary is confirmed."
+    "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.": "Nothing changed - the assignment happens only after the summary is confirmed.",
+    "Smazat z archivu": "Delete from the archive",
+    "Zaškrtni, co se má smazat. Smaže se titul i celá jeho historie přehrávání. Těsně před tím se udělá záloha databáze.": "Tick what should be deleted. A title goes together with its whole playback history. A database backup is made right before that.",
+    "Vybrat vše": "Select all",
+    "Ukazuje se prvních {n} položek s nejvíc přehráními. Po smazání se ukážou další.": "Showing the first {n} items with the most playbacks. More appear after deleting.",
+    "Smazat vybrané": "Delete selected",
+    "Titulů ke smazání: {t} · záznamů v historii: {n}": "Titles to delete: {t} · history records: {n}",
+    "Tituly i jejich historie přehrávání zmizí ze statistik. Vrátit je půjde jen obnovením zálohy, která se udělá těsně před smazáním.": "The titles and their playback history disappear from the statistics. Only restoring the backup made right before the deletion brings them back.",
+    "Nic se nesmazalo - smazání se provede až po potvrzení.": "Nothing was deleted - the deletion happens only after it is confirmed.",
+    "Nic se nesmazalo - nebyla vybraná žádná položka z archivu.": "Nothing was deleted - no archived item was selected.",
+    "Smazáno z archivu - titulů: {t}, záznamů v historii: {n}.": "Deleted from the archive - titles: {t}, history records: {n}.",
+    "Smazat jde jen titul z archivu.": "Only a title from the archive can be deleted.",
+    "Položka neexistuje.": "The item does not exist."
 }

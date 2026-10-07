@@ -143,6 +143,12 @@ check(velikost(vychozi) != velikost(prepnuto),
 check("film-1080.mkv" in cesta(prepnuto),
       f"a cesta ukazuje na ten druhý soubor ({cesta(prepnuto)})")
 check("film-4k.mkv" in cesta(vychozi), "bez přepnutí je to hlavní soubor")
+# Seznam verzi souboru se dřív jmenoval `verze` - stejně jako verze
+# aplikace, kterou base.html ukazuje v patičce. Na detailu titulu ji
+# přepsal a patička ukazovala jen "v" (a nová verze se tam nehlásila).
+from jellyscope import __version__  # noqa: E402
+
+check(f"v{__version__}" in vychozi, f"patička detailu ukazuje verzi aplikace (v{__version__})")
 
 print()
 print("--- jeden soubor: nepřepíná se nic ---")

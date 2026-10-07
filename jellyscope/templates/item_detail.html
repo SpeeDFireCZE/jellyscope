@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis, vyber_cile, plakatek %}
+{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis, vyber_cile %}
 {% block title %}{{ item.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -83,13 +83,12 @@
     </form>
     <form method="post" action="/item/{{ item.id }}/priradit" data-prirazeni>
         <p class="dialog-label">{{ _("Z archivu") }}</p>
-        <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:14px">
-            {{ plakatek(nahled_archivu) }}
-            <span class="vyber-cile-text">
-                <strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong>
-                {% if item.path %}<small style="word-break:break-all">{{ item.path }}</small>{% endif %}
-            </span>
-        </div>
+        {# Bez plakátku: obrázek položky z archivu už v Jellyfinu není,
+           zbylo by jen prázdné políčko. Plakáty mají jen živé tituly. #}
+        <span class="vyber-cile-text" style="margin-bottom:14px">
+            <strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong>
+            {% if item.path %}<small style="word-break:break-all">{{ item.path }}</small>{% endif %}
+        </span>
         <p class="dialog-label">{{ _("Na titul") }}</p>
         {{ vyber_cile('cil') }}
         <p class="card-note" style="margin-top:14px">
@@ -148,8 +147,8 @@
        přepnout. `zobrazena` je buď vybraná verze, nebo údaje samotné
        položky (ta drží tu, kterou Jellyfin považuje za hlavní). #}
     {% set zobrazena = namespace(data=item) %}
-    {% if verze and verze | length > 1 %}
-        {% for v in verze %}
+    {% if verze_souboru and verze_souboru | length > 1 %}
+        {% for v in verze_souboru %}
             {% if v.source_id == vybrana_verze %}
                 {% set zobrazena.data = v %}
             {% endif %}
@@ -171,17 +170,17 @@
         <div class="card">
             <div class="card-head">
                 <h2>{{ _("Soubor") }}</h2>
-                {% if verze and verze | length > 1 %}
+                {% if verze_souboru and verze_souboru | length > 1 %}
                 <p class="card-note">
-                    {{ _("tenhle titul je na disku") }} {{ verze | length }}&times; &ndash;
+                    {{ _("tenhle titul je na disku") }} {{ verze_souboru | length }}&times; &ndash;
                     {{ _("přepni si, který soubor chceš vidět") }}
                 </p>
                 {% endif %}
             </div>
 
-            {% if verze and verze | length > 1 %}
+            {% if verze_souboru and verze_souboru | length > 1 %}
             <div class="filtr-chipy" style="margin-bottom:14px">
-                {% for v in verze %}
+                {% for v in verze_souboru %}
                 <a class="chip {{ 'active' if (v.source_id == vybrana_verze) or (not vybrana_verze and loop.first) }}"
                    data-keep-scroll
                    href="/item/{{ item.id }}?verze={{ v.source_id }}">

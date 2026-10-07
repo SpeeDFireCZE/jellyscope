@@ -102,6 +102,12 @@ DAY_LABELS = {7: "7 dnů", 30: "30 dnů", 90: "90 dnů", 365: "rok"}
 DEFAULT_DAYS = 30
 DAYS_SESSION_KEY = "days"
 
+# Kolik archivovanych polozek ukazuji okna archivu (nejvic prehravane
+# napred). U prirazeni ma kazdy radek vlastni hledani, proto mene; po
+# smazani nebo prirazeni se ukazou dalsi.
+STROP_PRIRAZENI_ARCHIVU = 500
+STROP_MAZANI_ARCHIVU = 1000
+
 # Tvar data pro filtr v historii (proklik z tabulky na Prehledu).
 _VALID_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -1358,10 +1364,15 @@ def library_detail(
             page=page,
             pages=max(1, (total + per_page - 1) // per_page),
         )
-        # Okno „přiřadit k jiným titulům" - jen v archivu a jen správci.
-        # Položky jednotlivě, díly zvlášť: přiřazuje se po souborech.
+        # Okna „přiřadit k jiným titulům" a „smazat z archivu" - jen
+        # v archivu a jen správci. Položky jednotlivě, díly zvlášť:
+        # přiřazuje i maže se po souborech. Mazání má delší seznam - řádek
+        # je jen zaškrtávátko, kdežto u přiřazení je v každém hledání.
         if show_archived and account.get("is_admin"):
-            context["k_prirazeni"] = stats.archivovane_polozky(library_id)
+            archiv = stats.archivovane_polozky(library_id, limit=STROP_MAZANI_ARCHIVU)
+            context["k_mazani"] = archiv
+            context["strop_mazani"] = STROP_MAZANI_ARCHIVU
+            context["k_prirazeni"] = archiv[:STROP_PRIRAZENI_ARCHIVU]
     else:
         context.update(activity=stats.library_activity(library_id))
 
@@ -1410,11 +1421,11 @@ def item_detail(
         # Verze titulu (4K vedle 1080p). `vybrana` je ta, jejíž údaje
         # se kreslí; bez parametru je to ta, kterou Jellyfin považuje za
         # hlavní - tedy tatáž, ze které se počítají statistiky.
-        verze=stats.verze_polozky(item_id),
+        # Ne `verze`: tak se v base.html jmenuje verze aplikace v patičce
+        # a seznam souborů by ji přepsal - patička by ukázala jen "v".
+        verze_souboru=stats.verze_polozky(item_id),
         vybrana_verze=verze,
         streams=stats.item_streams(item_id),
-        # Plakátek archivované položky v okně přiřazení.
-        nahled_archivu=stats.nahled_polozky(item_row) if item_row.get("is_missing") else "",
         playback=stats.item_playback(item_id),
         summary=stats.item_playback_summary(item_id),
         siblings=stats.sibling_episodes(item_row),
@@ -1487,6 +1498,14 @@ async def item_delete(
     na spatny titul, ma odkud se vratit. Kdyz se zaloha nepovede,
     nemaze se.
     """
+    # Jen titul z archivu. Titul, který v knihovně je, by přišel
+    # o historii a příští synchronizace by ho založila znovu prázdný.
+    polozka = stats.item(item_id)
+    if polozka is None or not polozka.get("is_missing"):
+        _flash(request, "Položka neexistuje." if polozka is None
+               else "Smazat jde jen titul z archivu.", "error")
+        return RedirectResponse(f"/item/{item_id}", status_code=303)
+
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
         _flash(request, "Nic se nesmazalo - nejdřív se nepovedla záloha: {duvod}",
@@ -1611,6 +1630,45 @@ async def archiv_priradit(
         prehravani += vysledek["prehravani"]
     _flash(request, "Přiřazeno titulů: {t}, přesunuto přehrávání: {n}. Položky z archivu jsou smazané.",
            "success" if not chyby else "warning", t=titulu, n=prehravani)
+    return RedirectResponse(zpet, status_code=303)
+
+
+@app.post("/library/{library_id}/archiv/smazat")
+async def archiv_smazat(
+    request: Request,
+    library_id: str,
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Hromadné smazání z okna archivu - tituly i jejich historie.
+
+    Formulář nese pole `smazat` s id každé zaškrtnuté položky. Smaže se
+    jen to, co je opravdu v archivu téhle knihovny (viz
+    `stats.jen_z_archivu`). Jedna záloha na celou dávku, a jen když je
+    co mazat.
+    """
+    # Zaškrtnout jde až STROP_MAZANI_ARCHIVU položek; Starlette jinak
+    # pustí nejvýš 1000 polí a s „Vybrat vše" by formulář neprošel.
+    formular = await request.form(max_fields=STROP_MAZANI_ARCHIVU + 10)
+    zpet = f"/library/{library_id}?tab=media&archived=1"
+    # Maže se až po potvrzení. Tlačítko „Ano, smazat" je jediné, které
+    # tohle pole posílá.
+    if formular.get("potvrzeno") != "1":
+        _flash(request, "Nic se nesmazalo - smazání se provede až po potvrzení.", "info")
+        return RedirectResponse(zpet, status_code=303)
+    vybrane = [str(h) for h in formular.getlist("smazat")]
+    if not stats.jen_z_archivu(vybrane, library_id):
+        _flash(request, "Nic se nesmazalo - nebyla vybraná žádná položka z archivu.", "info")
+        return RedirectResponse(zpet, status_code=303)
+
+    zaloha = await tasks.zaloha_pred_mazanim()
+    if zaloha.get("status") != "ok":
+        _flash(request, "Nic se nesmazalo - nejdřív se nepovedla záloha: {duvod}",
+               "error", duvod=zaloha.get("message") or "?")
+        return RedirectResponse(zpet, status_code=303)
+
+    vysledek = await asyncio.to_thread(stats.smaz_z_archivu, vybrane, library_id)
+    _flash(request, "Smazáno z archivu - titulů: {t}, záznamů v historii: {n}.", "success",
+           t=vysledek["titulu"], n=vysledek["prehravani"])
     return RedirectResponse(zpet, status_code=303)
 
 
