@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, pager, method_badge, transcode_popis %}
+{% from "_macros.html" import tile, pager, method_badge, transcode_popis, vyber_cile, plakatek %}
 {% block title %}{{ library.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -134,8 +134,84 @@
     <p class="card-note" style="margin-top:10px">
         {{ _("Tyhle tituly už v Jellyfinu nejsou. Jellyscope je nemaže sám – historie přehrávání na ně odkazuje a bez nich by ve statistikách zůstaly bezejmenné záznamy. Když se soubor vrátí (i s jiným ItemId), Jellyscope ho podle tmdb ID zase spáruje a historie naváže.") }}
     </p>
+    {% if k_prirazeni %}
+    <div class="btn-row" style="margin-top:10px">
+        <button class="btn primary" type="button" data-okno="okno-prirazeni">
+            {{ _("Přiřadit k jiným titulům") }}
+        </button>
+        <span class="card-note">{{ _("když automatika nepozná, ke kterému titulu historie patří") }}</span>
+    </div>
+    {% endif %}
     {% endif %}
 </div>
+
+{% if k_prirazeni %}
+{# Hromadné přiřazení. Řádek = archivovaná položka (díly zvlášť), vedle
+   výběr cíle s hledáním v živé knihovně. Co nemá vybraný cíl, se nechává
+   být. Jedna záloha na celou dávku. #}
+<dialog class="okno okno-rozvrzeni" id="okno-prirazeni">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Přiřadit archiv k jiným titulům") }}</h2>
+        <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    {# Dva kroky v jednom formuláři: výběr a rekapitulace. První tlačítko
+       jen ukáže rekapitulaci (skládá ji skript v base.html z vybraných
+       řádků) - odesílá až „Ano, přiřadit", které nese potvrzeno=1.
+       Server bez toho nic nezmění. #}
+    <form method="post" action="/library/{{ library.id }}/archiv/priradit"
+          data-prirazeni data-rekapitulace class="prirazeni-form">
+        <div class="prirazeni-krok" data-krok="vyber">
+            <p class="card-note" style="margin:0 0 14px">
+                {{ _("U titulu, ke kterému historie patří, vyber cíl. Po uložení přejde historie a statistiky na vybraný titul a položka z archivu se smaže. U řádků bez cíle se nic nestane. Před uložením se udělá záloha databáze.") }}
+            </p>
+            <div class="okno-obsah" style="flex:1; min-height:0">
+                <div class="prirazeni-radky">
+                    {% for p in k_prirazeni %}
+                    <div class="prirazeni-radek" data-popis="{{ p.popis }}"
+                         data-plays="{{ p.plays }}" data-nahled="{{ p.nahled }}">
+                        <div>
+                            {{ plakatek(p.nahled) }}
+                            <span class="vyber-cile-text">
+                                <strong>{{ p.popis }}</strong>
+                                <small>
+                                    {{ p.plays | number }} {{ _("přehrávání") }}{% if p.path %} &middot; {{ p.path.replace('\\', '/').split('/')[-1] }}{% endif %}
+                                </small>
+                            </span>
+                        </div>
+                        {{ vyber_cile('cil_' ~ p.id) }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if k_prirazeni | length >= 500 %}
+                <p class="card-note">{{ _("Ukazuje se prvních 500 položek s nejvíc přehráními.") }}</p>
+                {% endif %}
+            </div>
+            <div class="okno-pata">
+                <button class="btn" type="button" onclick="this.closest('dialog').close()">{{ _("Zrušit") }}</button>
+                <button class="btn primary" type="button" data-prirazeni-potvrdit data-krok-dal disabled>
+                    <span>{{ _("Přiřadit") }} (<span data-prirazeni-pocet>0</span>)</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="prirazeni-krok" data-krok="rekapitulace" hidden>
+            <p style="margin:0 0 6px"><strong data-rekap-souhrn
+               data-sablona="{{ _('Titulů k přiřazení: {t} · přehrávání k přesunu: {n}') }}"></strong></p>
+            <p class="card-note" style="margin:0 0 14px">
+                {{ _("Historie a statistiky přejdou na vybrané tituly a položky z archivu se smažou. Těsně před tím se udělá záloha databáze.") }}
+                <span data-rekap-zbytek data-sablona="{{ _('Položek, které zůstanou v archivu beze změny: {z}.') }}"></span>
+            </p>
+            <div class="okno-obsah" style="flex:1; min-height:0">
+                <ul class="rekapitulace" data-rekap-seznam></ul>
+            </div>
+            <div class="okno-pata">
+                <button class="btn" type="button" data-krok-zpet>{{ _("Zpět k výběru") }}</button>
+                <button class="btn primary" type="submit" name="potvrzeno" value="1" data-rekap-potvrdit>{{ _("Ano, přiřadit") }}</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+{% endif %}
 
 {% if items %}
 <div class="media-grid">

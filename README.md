@@ -229,6 +229,23 @@ The same section can **forget one viewer**: everything recorded about them
 goes, and nobody else is touched. The account itself lives in Jellyfin, so
 the next synchronisation sees it again — without the history.
 
+### The archive
+
+Titles that disappear from Jellyfin are not deleted — they go to the
+library's **archive**, so their history does not turn into nameless rows.
+When a file comes back under a new id, Jellyscope finds it by its tmdb id
+and the history follows on its own.
+
+That fails when Jellyfin identified a title wrongly (say as *Behind the
+scenes*) and created it again after the fix: a new name, a new id, nothing
+to match on. An archived item can then be **assigned to another title** by
+hand — its history and statistics move to the chosen title and the
+archived item is removed. One item from its detail, or many at once from
+the archive view, each with a search in the live library and a small
+poster beside every title. The bulk dialog shows a summary of what will
+move first, and changes nothing until that summary is confirmed. A backup
+is taken before the change, as before deleting from the archive.
+
 ### On a phone
 
 Every page was measured at 320, 360 and 390 px, and none of them scrolls

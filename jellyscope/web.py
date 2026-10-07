@@ -1358,6 +1358,10 @@ def library_detail(
             page=page,
             pages=max(1, (total + per_page - 1) // per_page),
         )
+        # Okno „přiřadit k jiným titulům" - jen v archivu a jen správci.
+        # Položky jednotlivě, díly zvlášť: přiřazuje se po souborech.
+        if show_archived and account.get("is_admin"):
+            context["k_prirazeni"] = stats.archivovane_polozky(library_id)
     else:
         context.update(activity=stats.library_activity(library_id))
 
@@ -1409,6 +1413,8 @@ def item_detail(
         verze=stats.verze_polozky(item_id),
         vybrana_verze=verze,
         streams=stats.item_streams(item_id),
+        # Plakátek archivované položky v okně přiřazení.
+        nahled_archivu=stats.nahled_polozky(item_row) if item_row.get("is_missing") else "",
         playback=stats.item_playback(item_id),
         summary=stats.item_playback_summary(item_id),
         siblings=stats.sibling_episodes(item_row),
@@ -1466,7 +1472,7 @@ async def item_refresh(
 
 
 @app.post("/item/{item_id}/delete")
-def item_delete(
+async def item_delete(
     request: Request,
     item_id: str,
     account: dict[str, Any] = Depends(require_admin),
@@ -1476,7 +1482,17 @@ def item_delete(
     Jen pro spravce a jen rucne. Automaticky se nemaze nikdy - polozka,
     ktera v Jellyfinu zmizi, se jen archivuje. Kdyz Jellyfin na chvili
     vypadne, prijdes jinak o historii kvuli docasnemu vypadku.
+
+    Pred smazanim zaloha, stejne jako u zapomenuti divaka: kdo klikl
+    na spatny titul, ma odkud se vratit. Kdyz se zaloha nepovede,
+    nemaze se.
     """
+    zaloha = await tasks.zaloha_pred_mazanim()
+    if zaloha.get("status") != "ok":
+        _flash(request, "Nic se nesmazalo - nejdřív se nepovedla záloha: {duvod}",
+               "error", duvod=zaloha.get("message") or "?")
+        return RedirectResponse(f"/item/{item_id}", status_code=303)
+
     result = stats.delete_item(item_id)
     if result.get("status") != "ok":
         _flash(request, result.get("message", "Smazání selhalo."), "error")
@@ -1492,6 +1508,122 @@ def item_delete(
         nazev=nazev, n=result["plays"],
     )
     return RedirectResponse("/library", status_code=303)
+
+
+@app.get("/archiv/hledat")
+def archiv_hledat(q: str = "", account: dict[str, Any] = Depends(require_admin)):
+    """Živé tituly pro výběr cíle přiřazení - JSON pro okno v prohlížeči.
+
+    Jen pro správce, stejně jako přiřazení samo. Vrací se jen to, co
+    okno ukáže: id, popis, knihovna a jméno souboru (ne celá cesta -
+    ta o disku serveru prozradí víc, než výběr potřebuje).
+    """
+    return JSONResponse({"polozky": stats.hledej_existujici(q)})
+
+
+@app.post("/item/{item_id}/priradit")
+async def item_priradit(
+    request: Request,
+    item_id: str,
+    cil: str = Form(""),
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Historie archivované položky přejde na vybraný titul, položka zmizí."""
+    try:
+        _over_prirazeni(item_id, cil)
+    except stats.PrirazeniError as chyba:
+        _flash(request, str(chyba), "error")
+        return RedirectResponse(f"/item/{item_id}", status_code=303)
+
+    zaloha = await tasks.zaloha_pred_mazanim()
+    if zaloha.get("status") != "ok":
+        _flash(request, "Nic se nepřesunulo - nejdřív se nepovedla záloha: {duvod}",
+               "error", duvod=zaloha.get("message") or "?")
+        return RedirectResponse(f"/item/{item_id}", status_code=303)
+
+    try:
+        vysledek = await asyncio.to_thread(stats.prirad_k_jinemu, item_id, cil)
+    except stats.PrirazeniError as chyba:
+        _flash(request, str(chyba), "error")
+        return RedirectResponse(f"/item/{item_id}", status_code=303)
+    _flash(request, "Přiřazeno: {z} → {na} ({n} přehrávání). Položka z archivu je smazaná.",
+           "success", z=vysledek["z"], na=vysledek["na"], n=vysledek["prehravani"])
+    return RedirectResponse(f"/item/{vysledek['novy_id']}", status_code=303)
+
+
+@app.post("/library/{library_id}/archiv/priradit")
+async def archiv_priradit(
+    request: Request,
+    library_id: str,
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Hromadné přiřazení z okna archivu.
+
+    Formulář nese pole `cil_<id archivované položky>`. Prázdné pole =
+    ta položka se nechává být. Jedna záloha na celou dávku, ne na každý
+    řádek - a před ní kontrola všech dvojic, ať se kvůli překlepu
+    v jedné neudělá záloha zbytečně.
+    """
+    formular = await request.form()
+    dvojice: list[tuple[str, str]] = []
+    for klic, hodnota in formular.multi_items():
+        if not klic.startswith("cil_") or not str(hodnota).strip():
+            continue
+        dvojice.append((klic[len("cil_"):], str(hodnota).strip()))
+    zpet = f"/library/{library_id}?tab=media&archived=1"
+    # Meni se az po potvrzeni rekapitulace. Tlacitko "Ano, priradit" je
+    # jedine, ktere tohle pole posila - odeslani jinou cestou (Enter ve
+    # formulari, stranka bez skriptu) nezmeni nic.
+    if formular.get("potvrzeno") != "1":
+        _flash(request, "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.",
+               "info")
+        return RedirectResponse(zpet, status_code=303)
+    if not dvojice:
+        _flash(request, "Žádné přiřazení - u žádného titulu nebyl vybraný cíl.", "info")
+        return RedirectResponse(zpet, status_code=303)
+
+    chyby: list[str] = []
+    platne: list[tuple[str, str]] = []
+    for stary, novy in dvojice:
+        try:
+            _over_prirazeni(stary, novy)
+            platne.append((stary, novy))
+        except stats.PrirazeniError as chyba:
+            chyby.append(str(chyba))
+    if not platne:
+        _flash(request, "Nic se nepřiřadilo: {duvod}", "error", duvod=chyby[0])
+        return RedirectResponse(zpet, status_code=303)
+
+    zaloha = await tasks.zaloha_pred_mazanim()
+    if zaloha.get("status") != "ok":
+        _flash(request, "Nic se nepřesunulo - nejdřív se nepovedla záloha: {duvod}",
+               "error", duvod=zaloha.get("message") or "?")
+        return RedirectResponse(zpet, status_code=303)
+
+    titulu = prehravani = 0
+    for stary, novy in platne:
+        try:
+            vysledek = await asyncio.to_thread(stats.prirad_k_jinemu, stary, novy)
+        except stats.PrirazeniError as chyba:
+            chyby.append(str(chyba))
+            continue
+        titulu += 1
+        prehravani += vysledek["prehravani"]
+    _flash(request, "Přiřazeno titulů: {t}, přesunuto přehrávání: {n}. Položky z archivu jsou smazané.",
+           "success" if not chyby else "warning", t=titulu, n=prehravani)
+    return RedirectResponse(zpet, status_code=303)
+
+
+def _over_prirazeni(stary_id: str, novy_id: str) -> None:
+    """Kontrola dvojice ještě před zálohou - stejná pravidla jako přesun sám."""
+    if not stary_id or not novy_id or stary_id == novy_id:
+        raise stats.PrirazeniError("Vyber jiný titul, než je ten v archivu.")
+    stary = stats.item(stary_id)
+    if stary is None or not stary.get("is_missing"):
+        raise stats.PrirazeniError("Přiřazovat jde jen položku z archivu.")
+    novy = stats.item(novy_id)
+    if novy is None or novy.get("is_missing"):
+        raise stats.PrirazeniError("Cíl musí být titul, který v knihovně je.")
 
 
 @app.get("/image/{item_id}")

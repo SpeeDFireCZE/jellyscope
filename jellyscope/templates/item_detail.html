@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis %}
+{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis, vyber_cile, plakatek %}
 {% block title %}{{ item.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -55,21 +55,80 @@
     </span>
 </div>
 {% if account.is_admin %}
+{# Dvě cesty z archivu. Přiřazení je první a výraznější: když historie
+   patří jinému titulu (Jellyfin ho určil špatně a po opravě založil
+   znovu), nic se neztratí. Smazání je až druhé. #}
 <div class="card" style="margin-bottom:18px">
     <div class="card-head">
-        <h2>{{ _("Smazat natrvalo") }}</h2>
+        <h2>{{ _("Co s tímhle titulem") }}</h2>
     </div>
     <p class="card-note" style="margin-bottom:12px">
-        {{ _("Odstraní titul i všechna jeho přehrání z databáze. Statistiky se o ten čas sníží. Vrátit to nejde.") }}
+        {{ _("Patří-li historie jinému titulu – Jellyfin ho třeba určil špatně a po opravě ho založil znovu pod jiným názvem –, přiřaď ji k němu. Jinak jde titul s historií smazat.") }}
     </p>
-    <form method="post" action="/item/{{ item.id }}/delete"
-          onsubmit="return confirm('{{ _("Opravdu smazat i s historií přehrávání? Vrátit to nejde.") }}')">
-        <button class="btn danger" type="submit">
+    <div class="btn-row">
+        <button class="btn primary" type="button" data-okno="okno-priradit">
+            {{ _("Přiřadit k jinému titulu") }}
+        </button>
+        <button class="btn danger" type="button" data-okno="okno-smazat">
             {{ _("Smazat titul i historii") }}
             {% if summary.plays %}({{ summary.plays }}&times;){% endif %}
         </button>
-    </form>
+    </div>
 </div>
+
+<dialog class="okno okno-siroke" id="okno-priradit">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Přiřadit k jinému titulu") }}</h2>
+        <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/item/{{ item.id }}/priradit" data-prirazeni>
+        <p class="dialog-label">{{ _("Z archivu") }}</p>
+        <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:14px">
+            {{ plakatek(nahled_archivu) }}
+            <span class="vyber-cile-text">
+                <strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong>
+                {% if item.path %}<small style="word-break:break-all">{{ item.path }}</small>{% endif %}
+            </span>
+        </div>
+        <p class="dialog-label">{{ _("Na titul") }}</p>
+        {{ vyber_cile('cil') }}
+        <p class="card-note" style="margin-top:14px">
+            {{ _("Historie přehrávání a statistiky přejdou na vybraný titul a položka z archivu se smaže. Těsně před tím se udělá záloha databáze.") }}
+            {% if summary.plays %}{{ _("Přesune se") }} {{ summary.plays | number }} {{ _("přehrávání.") }}{% endif %}
+        </p>
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn" type="button" onclick="this.closest('dialog').close()">{{ _("Zrušit") }}</button>
+            <button class="btn primary" type="submit" data-prirazeni-potvrdit disabled>
+                {{ _("Přiřadit a smazat z archivu") }}
+            </button>
+        </div>
+    </form>
+</dialog>
+
+{# Potvrzení smazání. Vlastní okno místo confirm() prohlížeče: řekne,
+   co se přesně smaže, a Zrušit má fokus - Enter ze zvyku nic nesmaže. #}
+<form method="post" action="/item/{{ item.id }}/delete" id="smazat-titul"></form>
+<dialog id="okno-smazat" class="dialog">
+    <h2>{{ _("Smazat titul natrvalo") }}</h2>
+
+    <p class="dialog-label">{{ _("Co se smaže") }}</p>
+    <p><strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong></p>
+
+    <p>
+        {{ _("Titul i celá jeho historie přehrávání") }}{% if summary.plays %} ({{ summary.plays | number }} {{ _("záznamů") }}){% endif %}.
+        {{ _("Statistiky se o ten čas sníží. Těsně před tím se udělá záloha databáze – jinak to vrátit nejde.") }}
+    </p>
+    <p class="card-note">
+        {{ _("Patří-li ta historie jinému titulu, použij raději Přiřadit k jinému titulu – nic se tím neztratí.") }}
+    </p>
+
+    <div class="btn-row">
+        <form method="dialog">
+            <button class="btn" type="submit" autofocus>{{ _("Zrušit") }}</button>
+        </form>
+        <button class="btn danger" type="submit" form="smazat-titul">{{ _("Ano, smazat") }}</button>
+    </div>
+</dialog>
 {% endif %}
 {% endif %}
 

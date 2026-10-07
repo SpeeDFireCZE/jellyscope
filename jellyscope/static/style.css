@@ -3340,3 +3340,100 @@ table.zapomenuti form { display: inline; }
     background: var(--surface-1);
     color: var(--text-primary);
 }
+
+/* Výběr cílového titulu - přiřazení historie z archivu k živému titulu.
+   Výsledky jsou pod polem v toku stránky, ne vyskakovací vrstva: v okně
+   (<dialog>) s posuvníkem by se plovoucí nabídka ořízla. */
+.vyber-cile input[type="search"] { width: 100%; }
+.vyber-cile-nalezy {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-1);
+}
+.vyber-cile-nalezy li + li { border-top: 1px solid var(--border); }
+.vyber-cile-nalezy button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    background: none;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.vyber-cile-nalezy button:hover,
+.vyber-cile-nalezy button:focus-visible { background: var(--surface-2); }
+.vyber-cile-nalezy small { color: var(--text-muted); font-size: 12px; }
+.vyber-cile-nalezy .prazdno { padding: 8px 12px; color: var(--text-muted); }
+.vyber-cile-vybrano {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 12px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+}
+.vyber-cile-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.vyber-cile-text small { color: var(--text-muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+
+/* Malý plakát vedle názvu v nabídkách přiřazení. Pevný rozměr a šedé
+   pozadí: když obrázek chybí, políčko zůstane a řádky se nerozjedou. */
+.plakatek {
+    flex: none;
+    width: 34px;
+    height: 51px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface-2);
+}
+.plakatek img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.prirazeni-radek > div:first-child { display: flex; gap: 12px; align-items: flex-start; }
+
+/* Hromadné přiřazení: řádek = archivovaná položka a vedle výběr cíle. */
+.prirazeni-radky { display: grid; gap: 14px; }
+.prirazeni-radek {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: start;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+@media (max-width: 700px) {
+    .prirazeni-radek { grid-template-columns: 1fr; }
+}
+
+/* Hromadné přiřazení má dva kroky v jednom formuláři: výběr a
+   rekapitulaci. Formulář i viditelný krok se natahují na výšku okna, aby
+   posouval jen seznam a patička s tlačítky zůstala dole. `display` jen
+   na krok bez `hidden` - jinak by přebilo skrytí prohlížeče. */
+.prirazeni-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.prirazeni-krok:not([hidden]) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+/* Rekapitulace: archivovaná položka → vybraný cíl, obojí s plakátem. */
+.rekapitulace { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.rekapitulace li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+/* Pod posledním řádkem už je čára patičky - druhá by byla navíc. */
+.prirazeni-radek:last-child,
+.rekapitulace li:last-child { border-bottom: 0; padding-bottom: 0; }
+.rekap-polozka { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.rekap-sipka { color: var(--text-muted); font-size: 18px; }
+@media (max-width: 700px) {
+    .rekapitulace li { grid-template-columns: 1fr; gap: 6px; }
+    .rekap-sipka { transform: rotate(90deg); justify-self: start; margin-left: 8px; }
+}

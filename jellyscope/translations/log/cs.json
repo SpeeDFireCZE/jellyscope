@@ -136,5 +136,6 @@
     "ukazkova data vyrobena znovu: %s titulu, %s prehravani": "ukazkova data vyrobena znovu: %s titulu, %s prehravani",
     "obnova ukazkovych dat selhala": "obnova ukazkovych dat selhala",
     "prihlaseni kodem z %s zablokovano (%s. stupen)": "prihlaseni kodem z %s zablokovano (%s. stupen)",
-    "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu": "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu"
+    "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu": "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu",
+    "archivovana polozka %s prirazena k %s (%s prehravani)": "archivovana polozka %s prirazena k %s (%s prehravani)"
 }

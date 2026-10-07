@@ -1526,6 +1526,223 @@
                 });
         });
 
+        /* Výběr cílového titulu (přiřazení z archivu) - viz makro
+           vyber_cile. Hledá se až od dvou znaků a s malou prodlevou, ať
+           se při psaní neposílá dotaz na každé písmeno. Starší odpověď,
+           která dorazí po novější, se zahodí. */
+        document.querySelectorAll("[data-vyber-cile]").forEach(function (box) {
+            var pole = box.querySelector('input[type="search"]');
+            var skryte = box.querySelector('input[type="hidden"]');
+            var seznam = box.querySelector(".vyber-cile-nalezy");
+            var vybrano = box.querySelector(".vyber-cile-vybrano");
+            var casovac = null;
+            var posledni = "";
+
+            function oznam() {
+                box.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            /* Plakátek - stejný tvar jako makro `plakatek`. Když se
+               obrázek nenačte, zůstane prázdné šedé políčko. */
+            function plakatek(obal, adresa) {
+                obal.textContent = "";
+                if (!adresa) { return; }
+                var img = document.createElement("img");
+                img.alt = "";
+                img.loading = "lazy";
+                img.onerror = function () { img.remove(); };
+                img.src = adresa;
+                obal.appendChild(img);
+            }
+            function kde(p) {
+                return [p.knihovna, p.soubor].filter(Boolean).join(" · ");
+            }
+            function vyber(polozka) {
+                skryte.value = polozka.id;
+                /* Pro rekapitulaci hromadného přiřazení. */
+                box.dataset.cilPopis = polozka.popis;
+                box.dataset.cilNahled = polozka.nahled || "";
+                box.dataset.cilKde = kde(polozka);
+                plakatek(vybrano.querySelector(".plakatek"), polozka.nahled);
+                vybrano.querySelector("strong").textContent = polozka.popis;
+                vybrano.querySelector("small").textContent = kde(polozka);
+                vybrano.hidden = false;
+                pole.hidden = true;
+                seznam.hidden = true;
+                oznam();
+            }
+            function vykresli(polozky) {
+                seznam.textContent = "";
+                polozky.forEach(function (p) {
+                    var li = document.createElement("li");
+                    var tlacitko = document.createElement("button");
+                    tlacitko.type = "button";
+                    var obal = document.createElement("span");
+                    obal.className = "plakatek";
+                    plakatek(obal, p.nahled);
+                    var text = document.createElement("span");
+                    text.className = "vyber-cile-text";
+                    var nazev = document.createElement("span");
+                    nazev.textContent = p.popis;
+                    var misto = document.createElement("small");
+                    misto.textContent = kde(p);
+                    text.appendChild(nazev);
+                    text.appendChild(misto);
+                    tlacitko.appendChild(obal);
+                    tlacitko.appendChild(text);
+                    tlacitko.addEventListener("click", function () { vyber(p); });
+                    li.appendChild(tlacitko);
+                    seznam.appendChild(li);
+                });
+                if (!polozky.length) {
+                    var nic = document.createElement("li");
+                    nic.className = "prazdno";
+                    nic.textContent = box.dataset.prazdno || "";
+                    seznam.appendChild(nic);
+                }
+                seznam.hidden = false;
+            }
+            function hledej(dotaz) {
+                posledni = dotaz;
+                fetch("/archiv/hledat?q=" + encodeURIComponent(dotaz),
+                      { credentials: "same-origin" })
+                    .then(function (r) { return r.ok ? r.json() : { polozky: [] }; })
+                    .then(function (data) {
+                        if (dotaz === posledni) { vykresli(data.polozky || []); }
+                    })
+                    .catch(function () { /* vypadek site: nabidka zustane, jak byla */ });
+            }
+            pole.addEventListener("input", function () {
+                clearTimeout(casovac);
+                var dotaz = pole.value.trim();
+                if (dotaz.length < 2) {
+                    posledni = "";
+                    seznam.hidden = true;
+                    return;
+                }
+                casovac = setTimeout(function () { hledej(dotaz); }, 250);
+            });
+            /* Enter v hledání nemá odeslat formulář - ještě nic nevybral. */
+            pole.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") { event.preventDefault(); }
+            });
+            vybrano.querySelector("button").addEventListener("click", function () {
+                skryte.value = "";
+                delete box.dataset.cilPopis;
+                delete box.dataset.cilNahled;
+                delete box.dataset.cilKde;
+                vybrano.hidden = true;
+                pole.hidden = false;
+                pole.value = "";
+                pole.focus();
+                oznam();
+            });
+        });
+
+        /* Potvrzovací tlačítko přiřazení: dokud není co přiřadit, je
+           vypnuté, a v hromadném okně ukazuje, kolik titulů se přesune. */
+        document.querySelectorAll("form[data-prirazeni]").forEach(function (form) {
+            var potvrdit = form.querySelector("[data-prirazeni-potvrdit]");
+            var pocet = form.querySelector("[data-prirazeni-pocet]");
+            function srovnej() {
+                var vybrano = 0;
+                form.querySelectorAll('.vyber-cile input[type="hidden"]').forEach(function (i) {
+                    if (i.value) { vybrano += 1; }
+                });
+                potvrdit.disabled = vybrano === 0;
+                if (pocet) { pocet.textContent = vybrano; }
+            }
+            form.addEventListener("change", srovnej);
+            srovnej();
+        });
+
+        /* Rekapitulace hromadného přiřazení. „Přiřadit (N)" nic
+           neodesílá - jen ukáže, co se stane: každou dvojici archiv →
+           cíl s plakáty, kolik přehrávání se přesune a kolik položek
+           zůstane. Odesílá až „Ano, přiřadit" (nese potvrzeno=1).
+           Fokus dostane „Zpět": Enter ze zvyku nic neprovede. */
+        document.querySelectorAll("form[data-rekapitulace]").forEach(function (form) {
+            var krokVyber = form.querySelector('[data-krok="vyber"]');
+            var krokRekap = form.querySelector('[data-krok="rekapitulace"]');
+            var seznam = krokRekap.querySelector("[data-rekap-seznam]");
+            var souhrn = krokRekap.querySelector("[data-rekap-souhrn]");
+            var zbytek = krokRekap.querySelector("[data-rekap-zbytek]");
+            var zpet = krokRekap.querySelector("[data-krok-zpet]");
+            var jazyk = document.documentElement.lang || "cs";
+
+            function polozka(nahled, popis, poznamka) {
+                var obal = document.createElement("span");
+                obal.className = "rekap-polozka";
+                var plakat = document.createElement("span");
+                plakat.className = "plakatek";
+                if (nahled) {
+                    var img = document.createElement("img");
+                    img.alt = "";
+                    img.onerror = function () { img.remove(); };
+                    img.src = nahled;
+                    plakat.appendChild(img);
+                }
+                var text = document.createElement("span");
+                text.className = "vyber-cile-text";
+                var nazev = document.createElement("strong");
+                nazev.textContent = popis || "?";
+                text.appendChild(nazev);
+                if (poznamka) {
+                    var pozn = document.createElement("small");
+                    pozn.textContent = poznamka;
+                    text.appendChild(pozn);
+                }
+                obal.appendChild(plakat);
+                obal.appendChild(text);
+                return obal;
+            }
+            function ukazKrok(rekapitulace) {
+                krokVyber.hidden = rekapitulace;
+                krokRekap.hidden = !rekapitulace;
+            }
+
+            form.querySelector("[data-krok-dal]").addEventListener("click", function () {
+                seznam.textContent = "";
+                var titulu = 0;
+                var prehravani = 0;
+                var bez = 0;
+                form.querySelectorAll(".prirazeni-radek").forEach(function (radek) {
+                    var box = radek.querySelector("[data-vyber-cile]");
+                    if (!box.querySelector('input[type="hidden"]').value) {
+                        bez += 1;
+                        return;
+                    }
+                    titulu += 1;
+                    prehravani += parseInt(radek.dataset.plays || "0", 10) || 0;
+                    /* Poznámka vlevo je ta z řádku výběru (přehrávání ·
+                       soubor), vpravo knihovna a soubor cíle. */
+                    var poznamka = radek.querySelector("small");
+                    var li = document.createElement("li");
+                    li.appendChild(polozka(radek.dataset.nahled, radek.dataset.popis,
+                        poznamka ? poznamka.textContent.replace(/\s+/g, " ").trim() : ""));
+                    var sipka = document.createElement("span");
+                    sipka.className = "rekap-sipka";
+                    sipka.setAttribute("aria-hidden", "true");
+                    sipka.textContent = "→";
+                    li.appendChild(sipka);
+                    li.appendChild(polozka(box.dataset.cilNahled, box.dataset.cilPopis,
+                        box.dataset.cilKde));
+                    seznam.appendChild(li);
+                });
+                if (!titulu) { return; }
+                souhrn.textContent = souhrn.dataset.sablona
+                    .replace("{t}", titulu.toLocaleString(jazyk))
+                    .replace("{n}", prehravani.toLocaleString(jazyk));
+                zbytek.textContent = bez
+                    ? zbytek.dataset.sablona.replace("{z}", bez.toLocaleString(jazyk)) : "";
+                ukazKrok(true);
+                zpet.focus();
+            });
+            zpet.addEventListener("click", function () { ukazKrok(false); });
+            /* Zavřené okno se příště otevře zase na výběru. */
+            var okno = form.closest("dialog");
+            if (okno) { okno.addEventListener("close", function () { ukazKrok(false); }); }
+        });
+
         /* Klik na ztmavené pozadí zavírá. Prohlížeč hlásí kliknutí na
            samotný <dialog> i tehdy, když se trefíš vedle jeho obsahu -
            proto se porovnává cíl kliknutí. */

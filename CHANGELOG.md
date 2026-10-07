@@ -9,6 +9,44 @@ growing, rather than a new one arriving.
 
 The database migrates itself on start — upgrading is `git pull` and a restart.
 
+## 1.7.6
+
+History of a wrongly identified title can be moved to the right one by
+hand.
+
+### Added
+
+- **Assign an archived item to another title.** When Jellyfin
+  identifies a title wrongly (say as "Behind the scenes") and creates it
+  again after the fix, nothing matches any more - not the name, not the
+  tmdb id, not the item id - so the automatic matching cannot join them
+  and the history stays on the archived item. An archived item now has
+  *Assign to another title*: a dialog with a search in the live library
+  by title, series or file name. On confirming, its playbacks - also
+  those in the bin of forgotten viewers - move to the chosen title with
+  its name, type, series and library, and the archived item is deleted
+  with its streams and versions. Only an archived item can be assigned,
+  and only to a title that is in the library.
+
+- **The same for many items at once.** The library's archive view has
+  *Assign to other titles*: one row per archived item, a target for
+  each, and rows without a target are left alone. The first button only
+  shows a summary - every archived item beside its target, how many
+  playbacks will move and how many items stay - and nothing changes
+  until *Yes, assign* confirms it. One backup is taken for the whole
+  batch.
+
+- **Small posters in these dialogs**, beside every title and its file.
+  An episode shows its series' poster, so the rows line up; a title
+  without an image keeps a grey box of the same size.
+
+### Changed
+
+- **Deleting from the archive is confirmed in the app's own dialog**
+  instead of the browser's, with Cancel focused, and a database backup
+  is taken first, as when forgetting a viewer. The item's versions are
+  deleted with it.
+
 ## 1.7.5
 
 The conversion speed counts only conversions of the picture.

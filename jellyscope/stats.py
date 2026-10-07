@@ -2797,6 +2797,7 @@ def delete_item(item_id: str) -> dict[str, Any]:
         # nemohl smazat statistiky.
         conn.execute("DELETE FROM playback WHERE item_id = ?", (item_id,))
         conn.execute("DELETE FROM item_streams WHERE item_id = ?", (item_id,))
+        conn.execute("DELETE FROM item_versions WHERE item_id = ?", (item_id,))
         conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
 
     log.info("smazana polozka %s (%s prehravani)", row["name"], plays)
@@ -2806,6 +2807,169 @@ def delete_item(item_id: str) -> dict[str, Any]:
         "series_name": row["series_name"],
         "plays": plays,
     }
+
+
+def nahled_polozky(row: dict[str, Any], sirka: int = 80) -> str:
+    """Adresa malého plakátu pro nabídky přiřazení.
+
+    U dílu plakát seriálu, ne snímek z dílu: ten je na šířku a vedle
+    názvu v řádku by vypadal jinak než plakáty filmů. Který díl to je,
+    říká popis (S01E02). Otisk jde do adresy, ať prohlížeč nedrží starý
+    obrázek.
+    """
+    if row.get("series_id"):
+        kdo, otisk = row["series_id"], row.get("series_image_tag") or ""
+    else:
+        kdo, otisk = row["id"], row.get("image_tag") or ""
+    return f"/image/{kdo}?kind=Primary&w={sirka}" + (f"&tag={otisk}" if otisk else "")
+
+
+def popis_polozky(row: dict[str, Any]) -> str:
+    """Název titulu tak, jak se ukazuje v nabídkách: seriál, S01E02, díl."""
+    if row.get("series_name"):
+        cisla = ""
+        if row.get("parent_index_number") is not None and row.get("index_number") is not None:
+            cisla = f" S{int(row['parent_index_number']):02d}E{int(row['index_number']):02d}"
+        return f"{row['series_name']}{cisla} – {row.get('name') or '?'}"
+    rok = f" ({row['production_year']})" if row.get("production_year") else ""
+    return f"{row.get('name') or '?'}{rok}"
+
+
+# Pocet prehravani na polozku - vsechna, i kratka: pri prirazovani jde
+# o to, kolik historie se presune, ne kolik se "pocita".
+_VSECHNA_PREHRANI = "SELECT item_id, COUNT(*) AS plays FROM playback GROUP BY item_id"
+
+
+def archivovane_polozky(library_id: str | None, limit: int = 500) -> list[dict[str, Any]]:
+    """Archivované položky jednotlivě (díly zvlášť) - pro hromadné přiřazení.
+
+    V seznamu knihovny je seriál jedna dlaždice; tady se přiřazuje po
+    souborech, takže každý díl je řádek. Nejdřív ty s nejvíc přehráními:
+    právě u nich na přiřazení záleží.
+    """
+    podminky = ["i.is_missing = 1"]
+    parametry: list[Any] = []
+    if library_id:
+        podminky.append("i.library_id = ?")
+        parametry.append(library_id)
+    parametry.append(limit)
+    radky = db.query_all(
+        f"""
+        SELECT i.id, i.name, i.type, i.series_name, i.parent_index_number,
+               i.index_number, i.production_year, i.path,
+               i.series_id, i.image_tag, i.series_image_tag,
+               COALESCE(p.plays, 0) AS plays
+        FROM items i
+        LEFT JOIN ({_VSECHNA_PREHRANI}) p ON p.item_id = i.id
+        WHERE {' AND '.join(podminky)}
+        ORDER BY COALESCE(p.plays, 0) DESC, COALESCE(i.series_name, i.name), i.id
+        LIMIT ?
+        """,
+        tuple(parametry),
+    )
+    for radek in radky:
+        radek["popis"] = popis_polozky(radek)
+        radek["nahled"] = nahled_polozky(radek)
+    return radky
+
+
+def hledej_existujici(dotaz: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Živé položky pro výběr cíle - podle názvu, seriálu nebo cesty.
+
+    Cesta je tu schválně: když Jellyfin titul určil špatně a pak ho po
+    opravě založil znovu, nesedí název ani id, ale soubor je pořád
+    tentýž - a jeho jméno člověk zná.
+    """
+    dotaz = (dotaz or "").strip()[:100]
+    if len(dotaz) < 2:
+        return []
+    vzor = f"%{dotaz}%"
+    radky = db.query_all(
+        """
+        SELECT i.id, i.name, i.type, i.series_name, i.parent_index_number,
+               i.index_number, i.production_year, i.path,
+               i.series_id, i.image_tag, i.series_image_tag,
+               l.name AS library_name
+        FROM items i
+        LEFT JOIN libraries l ON l.id = i.library_id
+        WHERE i.is_missing = 0
+          AND (i.name LIKE ? OR i.series_name LIKE ? OR i.path LIKE ?)
+        ORDER BY COALESCE(i.series_name, i.name), i.parent_index_number,
+                 i.index_number, i.id
+        LIMIT ?
+        """,
+        (vzor, vzor, vzor, int(limit)),
+    )
+    return [{
+        "id": r["id"],
+        "popis": popis_polozky(r),
+        "typ": r["type"],
+        "knihovna": r["library_name"],
+        "soubor": str(r["path"] or "").replace("\\", "/").rsplit("/", 1)[-1],
+        "nahled": nahled_polozky(r),
+    } for r in radky]
+
+
+class PrirazeniError(ValueError):
+    """Přiřazení nejde provést - hláška je pro člověka."""
+
+
+def prirad_k_jinemu(stary_id: str, novy_id: str) -> dict[str, Any]:
+    """Historie a statistiky archivované položky přejdou na jinou, živou.
+
+    K čemu: Jellyfin titul určil špatně (třeba jako „Behind the scenes"),
+    po opravě ho založil znovu - a nesedí název, tmdb ani id, takže
+    automatické párování nemá podle čeho. Člověk ví, co k čemu patří.
+
+    Co se stane, v jedné transakci:
+
+    * přehrávání (i ta v koši zapomenutých diváků) dostanou nové id
+      **a s ním název, druh, seriál a knihovnu** - historie i žebříčky
+      pak ukazují opravený titul, ne ten špatně určený,
+    * archivovaná položka se smaže i se stopami a verzemi. Popisovala
+      soubor tak, jak ho Jellyfin špatně určil; živá položka ho popisuje
+      správně.
+
+    Jen archivovaná do živé: živou by smazání vzalo z knihovny, kde
+    doopravdy je, a archivovaná jako cíl by historii zahrabala.
+    """
+    if not stary_id or not novy_id or stary_id == novy_id:
+        raise PrirazeniError("Vyber jiný titul, než je ten v archivu.")
+    stary = db.query_one("SELECT id, name, series_name, is_missing FROM items WHERE id = ?",
+                         (stary_id,))
+    if stary is None or not stary["is_missing"]:
+        raise PrirazeniError("Přiřazovat jde jen položku z archivu.")
+    novy = db.query_one(
+        "SELECT id, name, type, series_name, library_id, parent_index_number,"
+        " index_number, production_year, is_missing FROM items WHERE id = ?",
+        (novy_id,))
+    if novy is None or novy["is_missing"]:
+        raise PrirazeniError("Cíl musí být titul, který v knihovně je.")
+
+    from .db import KOS                    # az tady: jen kvuli nazvu tabulky
+
+    with db.connect() as conn:
+        presunuto = 0
+        for tabulka in ("playback", KOS):
+            if not db.sloupce(conn, tabulka):
+                continue                   # kos vznika az s prvnim zapomenutim
+            kurzor = conn.execute(
+                f"UPDATE {tabulka} SET item_id = ?, item_name = ?, item_type = ?,"
+                " series_name = ?, library_id = ? WHERE item_id = ?",
+                (novy["id"], novy["name"], novy["type"], novy["series_name"],
+                 novy["library_id"], stary_id))
+            if tabulka == "playback":
+                presunuto = int(kurzor.rowcount or 0)
+        conn.execute("DELETE FROM item_streams WHERE item_id = ?", (stary_id,))
+        conn.execute("DELETE FROM item_versions WHERE item_id = ?", (stary_id,))
+        conn.execute("DELETE FROM items WHERE id = ?", (stary_id,))
+        conn.commit()
+
+    log.info("archivovana polozka %s prirazena k %s (%s prehravani)",
+             stary_id, novy_id, presunuto)
+    return {"status": "ok", "z": popis_polozky(dict(stary)),
+            "na": popis_polozky(dict(novy)), "prehravani": presunuto,
+            "novy_id": novy["id"]}
 
 # ---------------------------------------------------------------------------
 # Sit - kolik toho teklo k prehravacum

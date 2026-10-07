@@ -320,6 +320,37 @@
 {% endmacro %}
 
 
+{# Výběr cílového titulu pro přiřazení z archivu.
+
+   Hledá jen v živé knihovně (/archiv/hledat) - podle názvu, seriálu
+   i jména souboru. Vybrané id jde ve skrytém poli `nazev`; prázdné
+   pole = nic nevybráno. Výsledky se do stránky skládají přes
+   textContent, takže název titulu se značkou nic nerozbije. Obsluha je
+   v base.html (data-vyber-cile). #}
+{# Malý plakát vedle názvu v nabídkách přiřazení. Když obrázek není
+   (archivovaný titul, který Jellyfin už nemá a v mezipaměti nebyl),
+   zůstane šedé políčko stejné velikosti - řádky se nerozjedou. #}
+{% macro plakatek(adresa) -%}
+<span class="plakatek"><img src="{{ adresa }}" alt="" loading="lazy" onerror="this.remove()"></span>
+{%- endmacro %}
+
+
+{% macro vyber_cile(nazev) %}
+<div class="vyber-cile" data-vyber-cile data-prazdno="{{ _('Nic nenalezeno.') }}">
+    <input type="search" autocomplete="off"
+           placeholder="{{ _('Hledat titul, seriál nebo soubor…') }}"
+           aria-label="{{ _('Hledat titul, seriál nebo soubor…') }}">
+    <input type="hidden" name="{{ nazev }}" value="">
+    <div class="vyber-cile-vybrano" hidden>
+        <span class="plakatek"></span>
+        <span class="vyber-cile-text"><strong></strong><small></small></span>
+        <button class="btn" type="button" aria-label="{{ _('Zrušit výběr') }}">&times;</button>
+    </div>
+    <ul class="vyber-cile-nalezy" hidden></ul>
+</div>
+{% endmacro %}
+
+
 {# Značka zdroje technických dat. Uživatel má vidět, jak spolehlivý údaj je. #}
 {% macro tech_badge(source) %}
 {% if source == 'ffprobe' %}

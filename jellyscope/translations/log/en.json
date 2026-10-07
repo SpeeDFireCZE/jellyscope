@@ -136,5 +136,6 @@
     "ukazkova data vyrobena znovu: %s titulu, %s prehravani": "demo data generated again: %s titles, %s playbacks",
     "obnova ukazkovych dat selhala": "refreshing the demo data failed",
     "prihlaseni kodem z %s zablokovano (%s. stupen)": "sign-in with a code from %s blocked (level %s)",
-    "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu": "quick sync: Jellyfin no longer knows %s recent items - they are in the archive"
+    "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu": "quick sync: Jellyfin no longer knows %s recent items - they are in the archive",
+    "archivovana polozka %s prirazena k %s (%s prehravani)": "archived item %s assigned to %s (%s playbacks)"
 }
