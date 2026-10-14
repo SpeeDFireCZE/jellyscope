@@ -5,7 +5,7 @@
 
 # Needs Python 3.10 or newer - that is FastAPI's own floor since 0.116.
 
-fastapi==0.141.1           # web framework - routing, validation, async
+fastapi==0.143.0           # web framework - routing, validation, async
 starlette==1.7.0           # what FastAPI is built on: routing, sessions,
                            # static files, multipart. Pinned explicitly even
                            # though FastAPI pulls it in, because the security
@@ -19,7 +19,7 @@ jinja2==3.1.6              # templating - turns HTML templates into pages
                            #  run templates in a sandbox, so it was a formality)
 itsdangerous==2.2.0        # signs the login cookie
 python-multipart==0.0.32   # reads HTML form data (POST)
-tzdata==2026.4             # time-zone database for the "Time zone" setting.
+tzdata==2026.5             # time-zone database for the "Time zone" setting.
                            # Linux has one of its own and Python uses that
                            # first; Windows and minimal container images
                            # (Alpine) have none, and without it every zone
