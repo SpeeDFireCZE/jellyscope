@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile with context %}
+{% from "_macros.html" import period_filter with context %}
 {% block title %}{{ _("Jazyky") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -7,7 +7,7 @@
     <div>
         <h1>{{ _("Jazyky") }}</h1>
         <p class="subtitle">
-            {{ _("V jakém jazyce se u vás doopravdy dívá – a co k tomu knihovna nabízí.") }}
+            {{ _("V jakém jazyce se u vás doopravdy dívá a co k tomu knihovna nabízí.") }}
         </p>
     </div>
     {{ period_filter(obdobi, '/languages') }}
@@ -23,7 +23,7 @@
     <span class="dot"></span>
     <span>
         {{ imported_plays | number }} {{ _("přehrávání z importu se sem nepočítá.") }}
-        {{ _("Importy jazyk stopy často neobsahují, takže by čísla níže jen zředily na „Neuvedeno“. Platí proto to, co Jellyscope nasbíral sám, plus importy, u kterých jazyk uvedený byl. U titulků se import nepočítá vůbec – ten údaj v něm není nikdy.") }}
+        {{ _("Importy jazyk stopy často neobsahují, takže by čísla níže jen zředily na „Neuvedeno“. Platí proto to, co Jellyscope nasbíral sám, plus importy, u kterých jazyk uvedený byl. U titulků se import nepočítá vůbec, protože ten údaj v něm není nikdy.") }}
     </span>
 </div>
 {% endif %}
@@ -37,7 +37,7 @@
         {{ coverage.plays_with_language | number }} / {{ coverage.plays_total | number }}
         ({{ coverage.plays_percent | percent }}).
         {{ _("Když je pokrytí nízké, jsou i procenta výše jen o té části, kterou známe.") }}
-        {{ _("Jazyk se u přehrávání započítá, až když s ním divák vydrží aspoň minutu – a první čtyři minuty se přeskakují úplně, protože v nich hrají loga a znělky. Stopa, kterou divák hned na začátku přepne, se tak do statistik nedostane.") }}
+        {{ _("Jazyk se u přehrávání započítá, až když s ním divák vydrží aspoň minutu. První čtyři minuty se navíc přeskakují úplně, protože v nich hrají loga a znělky. Stopa, kterou divák hned na začátku přepne, se tak do statistik nedostane.") }}
     </span>
 </div>
 {% endif %}
@@ -117,130 +117,7 @@
 {# ------------------------------------------------------------------ #}
 {# Kdo jak                                                             #}
 {# ------------------------------------------------------------------ #}
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Kdo v jakém jazyce sleduje") }}</h2>
-        <p class="card-note">{{ _("každý pruh je jeden člověk, šířka = podíl jazyka") }}</p>
-    </div>
-
-    {# Jeden pruh se vypisuje dvakrat - v karte i v okne -, takze je z nej
-       makro. Dve kopie by se casem rozesly. #}
-    {% macro pruh(person) %}
-    <div style="margin-bottom:18px" data-uzivatel="{{ person.user_id or '' }}">
-        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px">
-            <strong>
-                <a href="/users/{{ person.user_id }}">{{ person.name }}</a>
-            </strong>
-            <span class="card-note">
-                {{ person.total | hours }}
-                {% if person.main %}
-                    &middot; {{ _("převážně") }} {{ person.main.label }}
-                    ({{ person.main.percent | percent }})
-                {% endif %}
-            </span>
-        </div>
-        {{ charts.stacked_bar(person.segments) | safe }}
-    </div>
-    {% endmacro %}
-
-    {# Do `strop_lidi` se pruhy vypisuji rovnou. Nad nim se schovaji do
-       okna: pri padesati divacich by karta nekoncila a vsechno pod ni
-       by bylo mimo obrazovku. #}
-    {# Dva stropy: jeden pro širokou obrazovku, druhý pro mobil. Server
-       neví, na čem se člověk dívá, tak pošle obojí a rozhodne CSS -
-       proto `jen-desktop` a `jen-mobil` místo dvou různých stránek.
-       Stejně jako u „Právě se hraje“, viz _now_playing.html. #}
-    {% set schovat_lidi = by_user | length > strop_lidi %}
-    {% set schovat_lidi_mobil = by_user | length > strop_lidi_mobil %}
-
-    {% if schovat_lidi %}
-        <div class="btn-row" style="margin-bottom:12px">
-            <button class="btn session-vice" type="button" data-okno="okno-jazyky">
-                <span>
-                    <strong>{{ _("Diváci jsou skrytí – je jich hodně") }}</strong><br>
-                    <span class="session-vice-note">
-                        {{ _("zobrazit všech") }} {{ by_user | length }}
-                    </span>
-                </span>
-            </button>
-        </div>
-    {% else %}
-        {# Pruhy nad mobilním stropem se na úzké obrazovce schovají -
-           na široké zůstávají všechny. #}
-        {% for person in by_user %}
-            {% if loop.index > strop_lidi_mobil %}
-                <div class="jen-desktop">{{ pruh(person) }}</div>
-            {% else %}
-                {{ pruh(person) }}
-            {% endif %}
-        {% endfor %}
-
-        {% if schovat_lidi_mobil %}
-        {# Na mobilu vede na tytéž diváky v okně jako u širokého stropu. #}
-        <div class="btn-row jen-mobil" style="margin-bottom:12px">
-            <button class="btn" type="button" data-okno="okno-jazyky">
-                {{ _("zobrazit všech") }} {{ by_user | length }}
-            </button>
-        </div>
-        {% endif %}
-    {% endif %}
-
-    {# Legenda je společná pro všechny pruhy - barvy jsou u všech stejné. #}
-    {{ charts.legend(watched.rows) | safe }}
-
-    {# Okno musí být na stránce i tehdy, když se schovává jen na mobilu -
-       tlačítko výš na něj míří. #}
-    {% if schovat_lidi or schovat_lidi_mobil %}
-    <dialog class="okno okno-siroke" id="okno-jazyky">
-        <form method="dialog" class="okno-hlava">
-            <h2>{{ _("Kdo v jakém jazyce sleduje") }} ({{ by_user | length }})</h2>
-            <button class="btn okno-zavrit" type="submit"
-                    aria-label="{{ _("Zavřít") }}">&times;</button>
-        </form>
-
-        {# Filtr platí jen tady v okně - je to způsob, jak se v dlouhém
-           seznamu dobrat jednoho člověka, ne uložené nastavení. #}
-        <div class="filtr-pole" style="margin-bottom:14px">
-            <label for="filtr-jazyku">{{ _("Uživatel") }}</label>
-            <select id="filtr-jazyku" data-filtr-okna="okno-jazyky">
-                <option value="">{{ _("všichni") }}</option>
-                {% for person in by_user %}
-                    <option value="{{ person.user_id }}">{{ person.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="okno-obsah">
-            {% for person in by_user %}{{ pruh(person) }}{% endfor %}
-            {{ charts.legend(watched.rows) | safe }}
-        </div>
-    </dialog>
-    {% endif %}
-
-    <details style="margin-top:14px">
-        <summary class="card-note" style="cursor:pointer">{{ _("Zobrazit jako tabulku") }}</summary>
-        <div class="table-wrap" style="margin-top:10px">
-            <table>
-                <thead><tr>
-                    <th>{{ _("Uživatel") }}</th><th>{{ _("Jazyk") }}</th>
-                    <th class="num">{{ _("Podíl") }}</th><th class="num">{{ _("Odsledováno") }}</th>
-                </tr></thead>
-                <tbody>
-                {% for person in by_user %}
-                    {% for segment in person.segments %}
-                    <tr>
-                        <td>{{ person.name if loop.first else '' }}</td>
-                        <td>{{ segment.label }}</td>
-                        <td class="num">{{ segment.percent | percent(1) }}</td>
-                        <td class="num">{{ segment.hours | hours }}</td>
-                    </tr>
-                    {% endfor %}
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </details>
-</div>
+{% include "_sekce_kdo_jazyk.html" %}
 
 {# ------------------------------------------------------------------ #}
 {# Dabing versus originál + titulky                                    #}
@@ -262,175 +139,20 @@
 {# ------------------------------------------------------------------ #}
 <h2 style="margin:28px 0 4px">{{ _("Stav knihovny") }}</h2>
 <p class="subtitle" style="margin-bottom:16px">
-    {{ _("Aktuální obsah knihovny – nezávisí na zvoleném období.") }}
+    {{ _("Aktuální obsah knihovny. Zvolené období na něj nemá vliv.") }}
 </p>
 
 <div class="grid-2">
     {% include "_sekce_jazyky_knihovny.html" %}
 
-    <div class="card">
-        <div class="card-head">
-            <h2>{{ _("Kombinace stop") }}</h2>
-            <p class="card-note">{{ _("čtyři nejčastější, zbytek shrnutý") }}</p>
-        </div>
-        {% if combinations %}
-        <div class="table-wrap">
-            <table>
-                <thead><tr>
-                    <th>{{ _("Kombinace") }}</th><th class="num">{{ _("Titulů") }}</th>
-                    <th class="num">{{ _("Podíl") }}</th>
-                    <th class="num">{{ _("Velikost") }}</th>
-                </tr></thead>
-                <tbody>
-                {% for row in combinations %}
-                <tr>
-                    <td class="strong">
-                        {% if row.combinations %}
-                            {# Řádek "Ostatní" je jinak slepý: říká, že se něco
-                               skrývá, a nedá to jak zobrazit. Tady se z něj
-                               stane tlačítko do okna s úplným seznamem. #}
-                            <button class="link-button" type="button" data-okno="okno-kombinace">
-                                {{ row.label }}
-                                <span class="muted">({{ row.combinations }} {{ _("dalších kombinací") }})</span>
-                            </button>
-                        {% else %}
-                            {{ row.label }}
-                        {% endif %}
-                    </td>
-                    <td class="num">{{ row.item_count | number }}</td>
-                    <td class="num strong">{{ row.percent | percent(1) }}</td>
-                    <td class="num muted">{{ row.size_bytes | bytes }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if undefined_items %}
-        <p class="card-note" style="margin-top:12px">
-            <a href="/languages/bez-jazyka">{{ undefined_items | number }} {{ _("souborů") }}</a> &ndash;
-            {{ _("u kterých jazyk stopy nikdo nevyplnil. To nevypovídá o skladbě knihovny, jen o chybějících metadatech.") }}
-        </p>
-        {% endif %}
-
-        {# Okno se vším. Kreslí se jen tehdy, když karta něco skrývá -
-           u knihovny se čtyřmi kombinacemi by bylo jen druhou kopií
-           téže tabulky. Pozná se to podle téhož znaku jako tlačítko:
-           souhrnný řádek na konci má `combinations`. #}
-        {% set souhrn = combinations | last %}
-        {% if souhrn.combinations %}
-        <dialog class="okno okno-siroke" id="okno-kombinace">
-            <form method="dialog" class="okno-hlava">
-                <h2>{{ _("Všechny kombinace stop") }} ({{ all_combinations | length }})</h2>
-                <button class="btn okno-zavrit" type="submit"
-                        aria-label="{{ _("Zavřít") }}">&times;</button>
-            </form>
-
-            <div class="okno-obsah">
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr>
-                            <th>{{ _("Kombinace") }}</th>
-                            <th class="num">{{ _("Titulů") }}</th>
-                            <th class="num">{{ _("Podíl") }}</th>
-                            <th class="num">{{ _("Velikost") }}</th>
-                        </tr></thead>
-                        <tbody>
-                        {% for row in all_combinations %}
-                        <tr>
-                            <td class="strong">{{ row.label }}</td>
-                            <td class="num">{{ row.item_count | number }}</td>
-                            <td class="num strong">{{ row.percent | percent(1) }}</td>
-                            <td class="num muted">{{ row.size_bytes | bytes }}</td>
-                        </tr>
-                        {% endfor %}
-                        </tbody>
-                        {# Součet je tu proto, že se v dlouhém seznamu ztrácí,
-                           z čeho se ta procenta vlastně počítají. #}
-                        <tfoot><tr>
-                            <td class="strong">{{ _("Celkem") }}</td>
-                            <td class="num strong">
-                                {{ all_combinations | sum(attribute='item_count') | number }}
-                            </td>
-                            <td class="num">100 %</td>
-                            <td class="num muted">
-                                {{ all_combinations | sum(attribute='size_bytes') | bytes }}
-                            </td>
-                        </tr></tfoot>
-                    </table>
-                </div>
-            </div>
-        </dialog>
-        {% endif %}
-        {% else %}
-            <p class="chart-empty">{{ _("Žádná jazyková data.") }}</p>
-        {% endif %}
-    </div>
+    {% include "_sekce_kombinace.html" %}
 </div>
 
 {# ------------------------------------------------------------------ #}
 {# Chybějící čeština                                                   #}
 {# ------------------------------------------------------------------ #}
 {% if missing_preferred.rows %}
-<div class="card">
-    <div class="card-head">
-        {# Název jazyka je v prvním pádě ("Angličtina"), takže věta musí být
-           postavená na něj. "Sledujete to, ale angličtina to není" česky
-           nedává smysl a skloňovat název jazyka obecně nejde - u každého
-           jazyka rozhraní jinak. Dvojtečka to řeší za nás. #}
-        <h2>
-            {{ _("Sledujete to, ale stopa chybí") }}: {{ missing_preferred.name }}
-        </h2>
-        <p class="card-note">
-            {{ _("celkem") }} {{ missing_preferred.total | number }} {{ _("titulů") }}
-        </p>
-    </div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-            <tr>
-                <th>{{ _("Titul") }}</th><th>{{ _("Dostupné stopy") }}</th>
-                <th>{{ _("Titulky") }} ({{ missing_preferred.name }})</th>
-                <th class="num">{{ _("Odsledováno") }}</th><th class="num">{{ _("Spuštění") }}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for row in missing_preferred.rows %}
-            <tr>
-                {# Proklik na detail: u seriálu na seriál, u dílu a filmu
-                   na soubor. Bez něj byl seznam slepá ulička - člověk se
-                   dozvěděl název a dál musel hledat sám.
-
-                   Řádek je buď celý seriál (stopa chybí všem jeho dílům),
-                   nebo jeden díl - pak je za názvem seriálu jeho označení
-                   a pod ním název dílu, ať je co shánět jasné. #}
-                <td class="truncate strong" title="{{ row.label }}">
-                    <a href="{{ row.detail_url }}">{{ row.label }}</a>
-                    {% if row.is_series %}
-                        <span class="badge neutral"><span class="dot"></span>{{ _("celý seriál") }}</span>
-                    {% elif row.episode_name %}
-                        <div class="card-note">{{ row.episode_name }}</div>
-                    {% endif %}
-                </td>
-                <td class="muted">{{ row.audio_label }}</td>
-                <td>
-                    {% if row.has_preferred_subtitles %}
-                        <span class="badge good"><span class="dot"></span>{{ _("ano") }}</span>
-                    {% else %}
-                        <span class="badge warning"><span class="dot"></span>{{ _("ne") }}</span>
-                    {% endif %}
-                </td>
-                <td class="num">{{ row.hours | hours }}</td>
-                <td class="num muted">{{ row.plays | number }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <p class="card-note" style="margin-top:12px">
-        {{ _("Kandidáti na sehnání jiné verze – díváte se na ně, ale zvuk v tomhle jazyce u nich Jellyfin nabídnout nemůže:") }}
-        {{ missing_preferred.name }}.
-    </p>
-</div>
+{% include "_sekce_chybi_stopa.html" %}
 {% endif %}
 
 {# ------------------------------------------------------------------ #}

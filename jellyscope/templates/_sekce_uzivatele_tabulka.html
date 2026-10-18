@@ -1,0 +1,40 @@
+{# Karta ze stránky Uživatelé (users.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč uzivatele_tabulka) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `rows (stats.user_table)`. #}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Uživatelé") if v_prehledu else _("Přehled") }}</h2></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Uživatel") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                <th class="num">{{ _("Spuštění") }}</th><th class="num">{{ _("Titulů") }}</th>
+                <th class="num">{{ _("Z toho transcode") }}</th><th class="num">{{ _("Naposledy") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="strong">
+                    <a href="/users/{{ row.id }}">{{ row.name }}</a>
+                    {% if row.is_administrator %}
+                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.plays | number }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num muted">{{ row.transcoded_hours | hours }}</td>
+                <td class="num muted">{{ row.last_seen | relative }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not rows %}
+        <p class="chart-empty">{{ _("Žádní uživatelé. Spusť synchronizaci knihovny v Nastavení.") }}</p>
+    {% endif %}
+</div>

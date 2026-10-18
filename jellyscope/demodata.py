@@ -216,6 +216,54 @@ async def obnovuj() -> None:
             log.exception("obnova ukazkovych dat selhala")
 
 
+# Vymyslene "prave ted bezici" prehravani - tentyz klic, se kterym ho
+# zaklada seed(). Karta Prave se hraje je prvni, co navstevnik ukazky
+# uvidi, tak v ni ma neco opravdu bezet.
+ZIVY_KLIC = "demo-live"
+# Jak casto ho uloha ukazky ozivuje - stejne casto, jako se ve vychozim
+# nastaveni pta sberac.
+ZIVY_INTERVAL = 10
+
+
+def udrz_zive(ted: datetime | None = None) -> None:
+    """Vymysleny stream drzi nazivu a posune ho o cas, ktery uplynul.
+
+    Seed ho zalozi jednou a pak by stal: pozice i "naposledy videno"
+    z okamziku seedu. A kdokoliv, kdo bezici prehravani uzavre (sberac
+    pri startu nad touz databazi), by ho z karty smazal uplne.
+
+    Pozice se pocita z hodin, ne pricitanim: jde po filmu dokola, takze
+    nikdy nepreleze jeho delku a nezalezi na tom, jak dlouho uloha stala.
+    Prvni a posledni minuta se vynechava, at ma ukazatel postupu co ukazat.
+    """
+    ted = ted or datetime.now(timezone.utc)
+    delka = db.query_value(
+        "SELECT i.runtime_ticks FROM playback p JOIN items i ON i.id = p.item_id"
+        " WHERE p.session_key = ?", (ZIVY_KLIC,))
+    delka_s = int(delka or 0) // 10_000_000
+    if delka_s <= 180:
+        return
+    pozice = 60 + int(ted.timestamp()) % (delka_s - 120)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE playback SET is_active = 1, ended_at = NULL, is_paused = 0,"
+            " started_at = ?, last_seen_at = ?, watched_seconds = ?,"
+            " paused_seconds = 0, position_ticks = ? WHERE session_key = ?",
+            (_ts(ted - timedelta(seconds=pozice)), _ts(ted), pozice,
+             pozice * 10_000_000, ZIVY_KLIC))
+        conn.commit()
+
+
+async def udrzuj_zive() -> None:
+    """Uloha na pozadi ukazky: vymysleny stream hraje porad (udrz_zive)."""
+    while True:
+        try:
+            await asyncio.to_thread(udrz_zive)
+        except Exception:                          # noqa: BLE001
+            log.exception("vymysleny stream ukazky se nepodarilo ozivit")
+        await asyncio.sleep(ZIVY_INTERVAL)
+
+
 def pripravit(tichy: bool = False) -> dict[str, int]:
     """Nachysta ukazku, pokud jeste nachystana neni - nebo je stara.
 
@@ -662,14 +710,14 @@ def seed() -> dict[str, int]:
                 current_audio_language, current_subtitle_language,
                 started_at, last_seen_at,
                 watched_seconds, paused_seconds, position_ticks, is_active)
-               VALUES ('demo-live','demo-u2','Jana','demo-movie-0','Duna','Movie',NULL,
+               VALUES (?,'demo-u2','Jana','demo-movie-0','Duna','Movie',NULL,
                        'demo-movies','Jellyfin Web','Chrome na notebooku','Transcode',
                        'VideoCodecNotSupported',0,1,'qsv',148,39600,264,24,
                        'h264','eac3',8600000,
                        1280,720,
                        'cs','cs','cs','en',
                        ?,?,2640,0,26400000000,1)""",
-            (_ts(now - timedelta(minutes=44)), _ts(now)),
+            (ZIVY_KLIC, _ts(now - timedelta(minutes=44)), _ts(now)),
         )
 
     # Az uplne nakonec, mimo blok se spojenim: detekce si otevira

@@ -250,7 +250,7 @@ def duvod_bez_aktualizace() -> str:
 
     config = load_config()
     if config.demo_mode:
-        return "Tohle je ukázka – aktualizovat se v ní nedá."
+        return "Tohle je ukázka, aktualizovat se v ní nedá."
 
     # Odmitame jen NAS obraz, ne kazdy kontejner.
     #
@@ -354,8 +354,8 @@ async def aktualizuj() -> dict[str, Any]:
         navic = await _co_prijde_mimo_preklady()
         if navic is None:
             return {"status": "error",
-                    "message": "Nepodařilo se zjistit, co by aktualizace "
-                               "stáhla - zkus to za chvíli."}
+                    "message": "Nepodařilo se zjistit, co by aktualizace stáhla. Zkus to za "
+                               "chvíli."}
         if navic:
             return {"status": "error",
                     "message": "Na GitHubu je od tvé verze víc než překlady "

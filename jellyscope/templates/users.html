@@ -7,52 +7,18 @@
     <div>
         <h1>{{ _("Uživatelé") }}</h1>
         <p class="subtitle">
-            {{ _("Kdo kolik sleduje za posledních") }} {{ _(day_labels[days]) }}.
+            {# Tři celé věty: u vlastního rozmezí popisek období není (zbyla
+               by „za posledních ."), u roku by vyšlo „za posledních rok". #}
+            {% if obdobi.vlastni %}{{ _("Kdo kolik sleduje ve vybraném období.") }}
+            {% elif days == 365 %}{{ _("Kdo kolik sleduje za poslední rok.") }}
+            {% else %}{{ _("Kdo kolik sleduje za posledních {obdobi}.").format(obdobi=_(day_labels[days])) }}
+            {% endif %}
         </p>
     </div>
     {{ period_filter(obdobi, '/users') }}
 </div>
 
-<div class="card">
-    <div class="card-head">
-        <h2>{{ _("Sledovanost podle uživatele") }}</h2>
-        <p class="card-note">{{ _("v hodinách") }}</p>
-    </div>
-    {{ charts.hbar_chart(rows | selectattr('hours') | list, 'name', 'hours') | safe }}
-</div>
+{% include "_sekce_uzivatele_graf.html" %}
 
-<div class="card">
-    <div class="card-head"><h2>{{ _("Přehled") }}</h2></div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-            <tr>
-                <th>{{ _("Uživatel") }}</th><th class="num">{{ _("Odsledováno") }}</th>
-                <th class="num">{{ _("Spuštění") }}</th><th class="num">{{ _("Titulů") }}</th>
-                <th class="num">{{ _("Z toho transcode") }}</th><th class="num">{{ _("Naposledy") }}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for row in rows %}
-            <tr>
-                <td class="strong">
-                    <a href="/users/{{ row.id }}">{{ row.name }}</a>
-                    {% if row.is_administrator %}
-                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
-                    {% endif %}
-                </td>
-                <td class="num strong">{{ row.hours | hours }}</td>
-                <td class="num">{{ row.plays | number }}</td>
-                <td class="num">{{ row.item_count | number }}</td>
-                <td class="num muted">{{ row.transcoded_hours | hours }}</td>
-                <td class="num muted">{{ row.last_seen | relative }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% if not rows %}
-        <p class="chart-empty">{{ _("Žádní uživatelé. Spusť synchronizaci knihovny v Nastavení.") }}</p>
-    {% endif %}
-</div>
+{% include "_sekce_uzivatele_tabulka.html" %}
 {% endblock %}

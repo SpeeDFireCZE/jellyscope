@@ -140,9 +140,8 @@ with TestClient(app) as client:
 
     print("--- opravneni ctenare ---")
     check(client.get("/").status_code == 200, "ctenar vidi statistiky")
-    # Nastaveni je od ted jen pro spravce - viz `pristup`. Ctenar si
-    # v nem drive menil vlastni heslo; nez na to bude vlastni stranka
-    # (TODO), prehodi mu ho spravce nebo `manage.py heslo`.
+    # Nastaveni je jen pro spravce - viz `pristup`. Vlastni heslo si
+    # ctenar meni na strance Muj ucet (/account), viz test_muj_ucet.py.
     check(client.get("/settings").status_code == 403, "ctenar nastaveni nevidi")
 
     for route, data in [
@@ -159,8 +158,8 @@ with TestClient(app) as client:
 
     check(accounts.count() == 2, "ctenar zadny ucet nezalozil")
 
-    # Ani vlastni heslo si ted nezmeni - cela sekce Nastaveni je pro
-    # spravce. Az bude "moje nastaveni", patri zmena hesla tam.
+    # Ani vlastni heslo si pres Nastaveni nezmeni - cela sekce je pro
+    # spravce. Vlastni heslo patri na Muj ucet (test_muj_ucet.py).
     jana = accounts.get_by_name("jana")
     response = client.post("/settings/accounts/password", data={
         "account_id": jana["id"], "password": "noveheslo1", "password_again": "noveheslo1",

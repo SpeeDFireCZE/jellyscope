@@ -70,6 +70,11 @@ def stav(k: TestClient, cesta: str) -> int:
     return k.get(cesta, follow_redirects=False).status_code
 
 
+# Kdo nesmí Přehled, toho / nepustí: pošle ho (303) na první stránku, kterou
+# smí, místo „sem nemáš přístup" - na / míří i přihlášení.
+ZAVRENY_PREHLED = 303
+
+
 def menu(k: TestClient) -> str:
     html = k.get("/insights").text
     zacatek = html.index('<nav class="nav">')
@@ -100,7 +105,7 @@ ucet = accounts.get(ctenar_id)
 check(pristup.vlastni_prava(ucet) is not None, "účet má vlastní práva")
 
 check(stav(ctenar, "/network") == 200, "síť teď otevře")
-check(stav(ctenar, "/") == 403, "přehled už ne - vlastní práva ho nemají")
+check(stav(ctenar, "/") == ZAVRENY_PREHLED, "přehled už ne - vlastní práva ho nemají")
 check('href="/network"' in menu(ctenar), "Síť se v menu objevila")
 check('href="/"' not in menu(ctenar), "Přehled z menu zmizel")
 seznam = ctenar.get("/users").text
@@ -112,11 +117,11 @@ print("--- změna skupiny se účtu s vlastními právy netýká ---")
 db.set_setting("ctenar_vidi_sit", "1")
 db.set_setting("ctenar_vidi_prehled", "0")
 db.forget_settings()
-check(stav(ctenar, "/network") == 200 and stav(ctenar, "/") == 403,
+check(stav(ctenar, "/network") == 200 and stav(ctenar, "/") == ZAVRENY_PREHLED,
       "účet se chová pořád podle svého")
 jiny = accounts.create("druhy", "dlouheheslo", is_admin=False)
 druhy = prihlas("druhy")
-check(stav(druhy, "/") == 403 and stav(druhy, "/network") == 200,
+check(stav(druhy, "/") == ZAVRENY_PREHLED and stav(druhy, "/network") == 200,
       "zatímco účet bez vlastních práv jde se skupinou")
 
 print()
@@ -127,7 +132,7 @@ spravce.post("/settings/accounts/prava", data={
 })
 check(pristup.vlastni_prava(accounts.get(ctenar_id)) is None,
       "vlastní práva jsou pryč")
-check(stav(ctenar, "/") == 403 and stav(ctenar, "/network") == 200,
+check(stav(ctenar, "/") == ZAVRENY_PREHLED and stav(ctenar, "/network") == 200,
       "a platí zase skupina (i její mezitím změněný stav)")
 
 print()
@@ -174,6 +179,37 @@ check(zaskrtnuto(okno, "vidi_jazyky"), "zaškrtnuté je to, co má účet vlastn
 check(not zaskrtnuto(okno, "vidi_sit"), "a nic z toho, co skupina má a účet ne")
 check(bool(re.search(r'<input[^>]*value="vlastni"[^>]*checked', okno)),
       "přepínač stojí na „vlastní“")
+
+
+# Strom s popisky je delší než obrazovka notebooku. Okno má kvůli
+# našeptávačům `overflow: visible`, takže bez vlastního posuvu obsah
+# vytekl pod okraj okna. Posouvá se jen obsah, tlačítko Uložit zůstane
+# dole vidět.
+zacatek_okna = stranka.rindex("<dialog", 0, zacatek)
+check("okno-posuvne" in stranka[zacatek_okna:zacatek],
+      "okno Práva má posuvný obsah (okno-posuvne)")
+obsah = re.search(r'<div class="okno-obsah">(.*?)<div class="okno-pata">', okno, re.S)
+check(bool(obsah) and 'name="vidi_jazyky"' in obsah.group(1)
+      and 'name="smi_klic"' in obsah.group(1),
+      "strom i volba klíče jsou v posuvné části")
+check(bool(re.search(r'<div class="okno-pata">\s*<button[^>]*type="submit"', okno)),
+      "tlačítko Uložit je v patě, mimo posuv")
+
+# Prava divaku z Jellyfinu se nastavuji u Jellyfinu (vedle prihlasovani),
+# ne tady - stranka Ucty to musi rict a odkazat tam.
+zacatek_karty = stranka.find('id="ctenari"')
+konec_karty = stranka.find('<div class="card"', zacatek_karty + 1)
+karta_ctenaru = stranka[zacatek_karty:konec_karty if konec_karty > 0 else len(stranka)]
+check('href="/settings?section=jellyfin#divaci"' in karta_ctenaru,
+      "karta skupiny v Účtech odkazuje na práva diváků v Nastavení → Jellyfin")
+# Informace nesmi zapadnout v textu: je v informacnim boxu a odkaz je
+# tlacitko.
+box = re.search(r'<div class="flash info[^"]*"[^>]*>(.*?)</div>', karta_ctenaru, re.S)
+check(bool(box) and re.search(r'<a class="btn"[^>]*href="/settings\?section=jellyfin#divaci"',
+                              box.group(1)) is not None,
+      "je v informačním boxu a odkaz je tlačítko")
+check('id="divaci"' in spravce.get("/settings?section=jellyfin").text,
+      "a cíl odkazu (karta #divaci v sekci Jellyfin) existuje")
 
 print()
 print("HOTOVO - chyb:", failures)

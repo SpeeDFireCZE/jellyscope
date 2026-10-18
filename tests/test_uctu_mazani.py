@@ -149,8 +149,16 @@ radek_ctenar = next(r for r in re.findall(r"<tr>.*?</tr>", html, re.S)
                     if "ctenar2" in r)
 check("/settings/accounts/delete" in radek_ctenar, "u čtenáře tlačítko je")
 check('class="btn danger"' in radek_ctenar, "a je červené (nevratná akce)")
-check("confirm(" in radek_ctenar and "nejde vzít zpět" in radek_ctenar,
-      "s otázkou, která říká, co se stane")
+# Text otazky jde do JS pres tojson (apostrof z prekladu by jinak dialog
+# rozbil), takze diakritika je v HTML jako í. Cte se proto tak, jak
+# ho uvidi prohlizec: atribut se odescapuje a argument confirm() je JSON.
+import html as _html  # noqa: E402
+import json as _json  # noqa: E402
+
+otazka = re.search(r"onsubmit='return confirm\((.*?)\)'", radek_ctenar, re.S)
+text_otazky = _json.loads(_html.unescape(otazka.group(1))) if otazka else ""
+check("ctenar2" in text_otazky and "nejde vzít zpět" in text_otazky,
+      f"s otázkou, která říká, co se stane ({text_otazky[:60]!r})")
 
 
 print()

@@ -11,13 +11,14 @@ je aplikace poskládaná, jinak by se nedal použít odjinud.
 """
 from __future__ import annotations
 
+import functools
 import logging
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from fastapi.templating import Jinja2Templates
 
 from . import (accounts, collector, db, formatting, i18n, pristup, scanner,
@@ -52,11 +53,41 @@ def current_account(request: Request) -> Optional[dict[str, Any]]:
     if not account_id:
         return None
 
+    # Jeden dotaz na pozadavek, ne tri. Ucet chce middleware s jazykem,
+    # rozsah_divaka i require_login - a obrazek nebo styl je taky pozadavek.
+    # Klicem je i otisk z relace: po zmene hesla v temze pozadavku se ucet
+    # nacte znovu.
+    klic = (account_id, request.session.get("otisk"))
+    ulozeny = getattr(request.state, "ucet_pozadavku", None)
+    if ulozeny is not None and ulozeny[0] == klic:
+        return ulozeny[1]
+
     account = accounts.get(int(account_id))
     if account is None:
         # Ucet byl mezitim smazan - cookie zahodime.
         request.session.clear()
+    elif request.session.get("otisk") != accounts.otisk_relace(account):
+        # Heslo se od prihlaseni zmenilo (sam, nebo spravce). Relace, ktera
+        # o tom nevi, konci - jinak by ukradena cookie platila dal a zmena
+        # hesla by nic neresila. Relace bez otisku (z doby pred touhle
+        # kontrolou) konci taky: po aktualizaci se kazdy jednou prihlasi.
+        request.session.clear()
+        account = None
+    request.state.ucet_pozadavku = (klic, account)
     return account
+
+
+def prihlas_do_relace(request: Request, account: dict[str, Any]) -> None:
+    """Zapíše přihlášení do relace - jedno místo pro heslo, kód i první účet.
+
+    Stará relace se zahodí: brání to útoku, při kterém ti někdo podstrčí
+    své ID relace ještě před přihlášením a pak se do ní „sveze". A otisk
+    hesla nesmí chybět - relaci bez něj current_account() hned ukončí,
+    takže cesta, která by na něj zapomněla, by člověka tiše odhlásila.
+    """
+    request.session.clear()
+    request.session["account_id"] = account["id"]
+    request.session["otisk"] = accounts.otisk_relace(account)
 
 
 def require_login(request: Request) -> dict[str, Any]:
@@ -71,18 +102,9 @@ def require_login(request: Request) -> dict[str, Any]:
     return account
 
 
-def muj_divak(account: Optional[dict[str, Any]]) -> str:
-    """Id diváka, na kterého je účet omezený. Prázdno = vidí všechno.
-
-    Omezený je jen ten, kdo se přihlásil **svým jellyfinovým účtem**:
-    tam víme, komu patří která přehrávání, a nic dalšího mu do toho není.
-    Správce vidí všechno, ať je odkudkoliv. Místní čtenářský účet zakládá
-    správce ručně a odjakživa vidí celé statistiky - měnit mu to pod
-    rukama by znamenalo, že po aktualizaci najednou nevidí, co včera.
-    """
-    if not account or account.get("is_admin"):
-        return ""
-    return str(account.get("jellyfin_user_id") or "")
+# Pravidlo žije v pristup.py, kde ho sdílí i API klíče; odtud se jen
+# vystavuje pod jménem, pod kterým ho bere web.py.
+muj_divak = pristup.muj_divak
 
 
 def require_admin(request: Request) -> dict[str, Any]:
@@ -223,6 +245,12 @@ def _stropy() -> dict[str, int]:
         "strop_lidi_mobil": db.get_int_setting(
             "ui_max_viewers_mobile", minimum=STROP_MIN, maximum=STROP_MAX,
             fallback=5),
+        # Tabulky na strance Zjisteni: kolik radku rovnou, zbytek v okne.
+        "strop_radku": db.get_int_setting(
+            "ui_max_rows", minimum=STROP_MIN, maximum=STROP_MAX, fallback=10),
+        "strop_radku_mobil": db.get_int_setting(
+            "ui_max_rows_mobile", minimum=STROP_MIN, maximum=STROP_MAX,
+            fallback=5),
     }
 
 
@@ -355,23 +383,6 @@ def _flash(request: Request, message: str, level: str = "info",
     request.session["flash"] = {"message": text, "level": level}
 
 
-def _anonymizuj_pro_divaka(data: dict[str, Any],
-                           account: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """Divákovi schová jména a adresy ostatních, když si to správce přeje.
-
-    Jedno místo pro všechny stránky. Kdyby se to řešilo v šablonách,
-    stačilo by zapomenout na jednu - a zrovna ta by pak byla ta, kterou
-    někdo otevře.
-    """
-    kdo = pristup.role(account)
-    if kdo in ("", pristup.SPRAVCE) \
-            or not pristup.anonymizace_zapnuta(kdo, account):
-        return data
-    # Cteci ucet nepatri zadnemu divakovi, takze se mu schova uplne
-    # kazde jmeno - neni ke komu delat vyjimku.
-    return pristup.anonymizuj(data, muj_divak(account))
-
-
 def _smi_pro(account: Optional[dict[str, Any]]):
     """Funkce pro šablonu: smí tenhle účet otevřít tuhle adresu?
 
@@ -383,6 +394,40 @@ def _smi_pro(account: Optional[dict[str, Any]]):
     if kdo in ("", pristup.SPRAVCE):
         return lambda cesta: True
     return lambda cesta: pristup.smi_cestu(kdo, cesta, account)
+
+
+def otisk_obrazku_uctu(account: Optional[dict[str, Any]]) -> str:
+    """Otisk profilového obrázku účtu z Jellyfinu, nebo prázdno.
+
+    Jen účet z Jellyfinu (místní žádný obrázek nemá) a jen když ho
+    synchronizace u diváka našla. Otisk je z Jellyfinu hex - ale do adresy
+    jde, tak se pro jistotu nechají jen písmena a číslice.
+    """
+    divak = str((account or {}).get("jellyfin_user_id") or "")
+    # Jellyfin posílá totéž id jednou s pomlčkami, jednou bez (viz
+    # accounts.hole_id) - porovnává se proto očištěné. Tabulka `users`
+    # je malá (jeden řádek na diváka), projít ji celou nic nestojí.
+    hole = accounts.hole_id(divak)
+    if not hole:
+        return ""
+    try:
+        radek = db.query_one(
+            "SELECT image_tag FROM users"
+            " WHERE REPLACE(LOWER(id), '-', '') = ? AND image_tag IS NOT NULL",
+            (hole,))
+    except Exception:  # noqa: BLE001 - obrázek je kosmetika, stránka kvůli němu nespadne
+        # Třeba obnovená stará záloha bez sloupce - do restartu (migrace)
+        # zůstane písmeno.
+        log.warning("otisk profiloveho obrazku nejde precist", exc_info=True)
+        return ""
+    otisk = str((radek or {}).get("image_tag") or "")
+    return "".join(c for c in otisk if c.isalnum())[:64]
+
+
+def adresa_obrazku_uctu(account: Optional[dict[str, Any]]) -> str:
+    """Adresa vlastního obrázku i s otiskem (nový obrázek = nová adresa)."""
+    otisk = otisk_obrazku_uctu(account)
+    return f"/account/obrazek?v={otisk}" if otisk else ""
 
 
 def _context(request: Request, account: Optional[dict[str, Any]] = None,
@@ -406,12 +451,22 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # je ucet privazany k jednomu divakovi.
         "muj_divak": muj_divak(account),
         "je_spravce": bool(account and account.get("is_admin")),
+        # Profilový obrázek z Jellyfinu v tlačítku Můj účet, nebo prázdno
+        # (písmeno). Viz web.muj_obrazek(). Funkce, ne hodnota: dotaz do
+        # databáze proběhne, jen když šablona tlačítko opravdu kreslí - ne
+        # u výřezů obnovovaných každých pár vteřin.
+        "obrazek_uctu": functools.cache(lambda: adresa_obrazku_uctu(account)),
         # Menu se kresli jen z toho, co clovek smi otevrit - tataz
         # otazka, kterou si klade `rozsah_divaka` ve web.py, i s pravy
         # jednoho uctu. Odkaz, za kterym ceka "sem nemas pristup", je
         # horsi nez zadny.
         "smi": _smi_pro(account),
+        # Jazyk, ve kterem se stranka kresli (vlastni volba uctu, jinak
+        # serveru), a zvlast jazyk serveru pro Nastaveni -> Obecne. Kdyby
+        # se vyber jazyka serveru predvyplnil tim prvnim, spravce s vlastni
+        # anglictinou by ji jednim ulozenim nastavil vsem.
         "ui_language": i18n.current_language(),
+        "jazyk_serveru": i18n.jazyk_serveru(),
         # Dnesek pro pole s datem - dal do budoucnosti nema smysl
         # chodit, statistika by byla prazdna.
         "dnes": date.today().isoformat(),
@@ -457,16 +512,27 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         "ui_cas_presne": _cas_presne(),
         # Zapnutý v nastavení? Tohle potřebuje přepínač v Rozhraní.
         "ui_dashboard": sekce.je_zapnuty(),
-        # Záložka v menu. Prázdný přehled se ostatním neukazuje - nemá
-        # jim co říct -, ale SPRÁVCE ho vidět musí: jinak by ho zapnul
-        # a neměl kudy dovnitř, aby si ho sestavil.
-        "vlastni_prehled": sekce.je_zapnuty() and bool(
-            sekce.nacti_rozvrzeni() or (account or {}).get("is_admin")),
+        # Záložka v menu (sekce.vidi_prehled). Prázdný přehled se ostatním
+        # neukazuje - nemá jim co říct -, ale SPRÁVCE ho vidět musí: jinak
+        # by ho zapnul a neměl kudy dovnitř, aby si ho sestavil. Funkce,
+        # ne hodnota: rozvržení se načte, jen když se kreslí menu - ne
+        # u každého výřezu, který se sám obnovuje.
+        "vlastni_prehled": functools.cache(lambda: bool(account) and (
+            sekce.vidi_prehled(account)
+            or (account.get("is_admin") and sekce.je_zapnuty()))),
+        # Název přehledu pro všechny (menu, strom práv, Nastavení).
+        "nazev_prehledu": sekce.nazev(),
+        # Má účet Můj přehled s aspoň jednou kartou? Funkce, ne hodnota:
+        # dotaz proběhne, jen když se kreslí menu nebo karta na Mém účtu.
+        "ma_muj_prehled": functools.cache(lambda: bool(
+            account and sekce.nacti_rozvrzeni(account["id"]))),
     }
     base.update(extra)
     # Az uplne nakonec: co se schova, se schova ve VSEM, co jde do
-    # sablony - vcetne toho, co pridala routa pres `extra`.
-    return _anonymizuj_pro_divaka(base, account)
+    # sablony - vcetne toho, co pridala routa pres `extra`. Jedno misto
+    # pro vsechny stranky: kdyby se to resilo v sablonach, stacilo by
+    # zapomenout na jednu - a zrovna ta by byla ta, kterou nekdo otevre.
+    return pristup.anonymizuj_pro(base, account)
 
 
 def _cesky_datum(iso: Optional[str]) -> str:
@@ -488,6 +554,39 @@ def _clamp(raw: str, minimum: int, maximum: int, fallback: int) -> str:
     except (TypeError, ValueError):
         value = fallback
     return str(max(minimum, min(maximum, value)))
+
+
+def _novy_klic(request: Request, klic: str) -> Optional[dict[str, Any]]:
+    """Čerstvě vyrobený API klíč z relace - jednou, a hned se zahodí.
+
+    V relaci je {"id", "token"}; podle id se klíč ukáže celý v řádku
+    svého klíče (makro bunka_klice). Cokoliv jiného - třeba relace z doby,
+    kdy tam byl jen text - se zahodí taky.
+    """
+    novy = request.session.pop(klic, None)
+    if isinstance(novy, dict) and novy.get("token") and novy.get("id"):
+        return novy
+    return None
+
+
+def _bez_mezipameti(odpoved: Response) -> Response:
+    """Stránka, kterou prohlížeč nesmí schovat - je v ní celý API klíč.
+
+    Bez toho by ji tlačítko Zpět vrátilo z mezipaměti (bfcache) i s
+    klíčem, třeba i po odhlášení na sdíleném počítači. Klíč se má ukázat
+    jen jednou.
+    """
+    odpoved.headers["Cache-Control"] = "no-store"
+    return odpoved
+
+
+def _cislo_z_formulare(text: Any) -> int:
+    """Kladné celé číslo z formuláře nebo adresy; nesmysl = 0."""
+    try:
+        cislo = int(str(text).strip())
+    except (TypeError, ValueError):
+        return 0
+    return cislo if cislo > 0 else 0
 
 
 # Kdy tenhle proces nastartoval. Po restartu je hodnota jina - a to je

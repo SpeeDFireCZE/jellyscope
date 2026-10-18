@@ -1,0 +1,16 @@
+{# Karta „Proč se transcoduje“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_duvody) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `reasons (insights.transcode_reasons)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Proč se transcoduje") }}</h2>
+        <p class="card-note">{{ _("důvod hlásí přímo Jellyfin") }}</p>
+    </div>
+    {% if reasons %}
+        {{ charts.hbar_chart(reasons, 'nazev', 'plays', unit='x', popisky_nad=True) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("Zatím žádný transcode k rozboru.") }}</p>
+    {% endif %}
+</div>

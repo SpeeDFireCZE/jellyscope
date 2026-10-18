@@ -65,7 +65,7 @@
     <div>
         <h1>{{ _("Srovnání období") }}</h1>
         <p class="subtitle">
-            {{ _("Dvě libovolná období vedle sebe – tytéž statistiky pod sebou.") }}
+            {{ _("Dvě libovolná období vedle sebe, tytéž statistiky pod sebou.") }}
         </p>
     </div>
 </div>
@@ -82,7 +82,7 @@
 <div class="flash warning">
     <span class="dot"></span>
     <span>
-        {{ _("Období se překrývají – část přehrávání se počítá do obou sloupců a rozdíl mezi nimi tak neměří změnu.") }}
+        {{ _("Období se překrývají: část přehrávání se počítá do obou sloupců a rozdíl mezi nimi tak neměří změnu.") }}
     </span>
 </div>
 {% endif %}
@@ -103,7 +103,7 @@
 <div class="card">
     <h2>{{ _("Za obě období nemáme co srovnávat") }}</h2>
     <p class="card-note" style="margin-top:10px">
-        {{ _("Ani v jednom z vybraných období není zaznamenané přehrávání. Zkus jiná období – historie se sbírá od chvíle, kdy Jellyscope běží.") }}
+        {{ _("Ani v jednom z vybraných období není zaznamenané přehrávání. Zkus jiná období. Historie se sbírá od chvíle, kdy Jellyscope běží.") }}
     </p>
 </div>
 {% else %}
@@ -157,7 +157,7 @@
 {# Dopočtená minulost není měření a nesmí se za něj vydávat. #}
 {% if srovnani.knihovna_zname and srovnani.knihovna_dopoctena %}
 <p class="card-note" style="margin:-8px 0 18px 4px">
-    {{ _("Část růstu knihovny je dopočítaná z data vzniku položek – popisuje minulost dnešními velikostmi, takže překódovaný film v ní byl odjakživa malý.") }}
+    {{ _("Část růstu knihovny je dopočítaná z data vzniku položek. Popisuje minulost dnešními velikostmi, takže překódovaný film v ní byl odjakživa malý.") }}
 </p>
 {% endif %}
 
@@ -170,7 +170,7 @@
         <h2>{{ _("Knihovna") }}</h2>
     </div>
     <p class="card-note">
-        {{ _("Růst knihovny se dá srovnat až od chvíle, kdy se zapisují denní snímky – aspoň dva v každém z obou období. Za starší období je zpětně vzít odkud.") }}
+        {{ _("Růst knihovny se dá srovnat až od chvíle, kdy se zapisují denní snímky, aspoň dva v každém z obou období. Za starší období je zpětně vzít odkud.") }}
     </p>
 </div>
 {% endif %}

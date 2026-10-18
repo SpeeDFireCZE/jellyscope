@@ -70,8 +70,15 @@
            po přihlášení uvidí. V menu je jen tehdy, když je zapnutý
            A něco v něm je: zapnutá prázdná záložka by byla horší než
            žádná. #}
-        {% if vlastni_prehled and smi("/dashboard") %}
-            {% set zahod = polozky.append(("/dashboard", _("Vlastní přehled"), ("/dashboard",))) %}
+        {% if vlastni_prehled is defined and vlastni_prehled() %}
+            {# Pod názvem, který mu dal správce; prázdný jen do restartu
+               po aktualizaci (pak ho doplní sekce.doplnit_nazev). #}
+            {% set zahod = polozky.append(("/dashboard", nazev_prehledu or _("Vlastní přehled"), ("/dashboard",))) %}
+        {% endif %}
+        {# Můj přehled - až v něm je aspoň jedna karta. Prázdný se skládá
+           z karty na stránce Můj účet. #}
+        {% if account and ma_muj_prehled is defined and ma_muj_prehled() %}
+            {% set zahod = polozky.append(("/account/prehled", _("Můj přehled"), ("/account/prehled",))) %}
         {% endif %}
         {% if smi("/") %}{% set zahod = polozky.append(("/", _("Přehled"), ())) %}{% endif %}
         {# Hned za Přehledem: je to tentýž pohled, jen za dvě období. #}
@@ -138,12 +145,33 @@
             </div>
 
             {% if account %}
-                <div style="margin-top:12px">
-                    {{ _("Přihlášen") }}: <strong>{{ account.username }}</strong>
-                    {% if account.is_admin %}
-                        <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
-                    {% endif %}
-                </div>
+                {# Můj účet (jazyk, heslo, API klíče) - stránku otevře každý
+                   přihlášený, i čtenář a divák z Jellyfinu. Je to tlačítko
+                   přes celou šířku: jméno a pod ním role. Dřív tu byl malý
+                   odkaz „Přihlášen: jméno" a odznak role byl větší než
+                   samo jméno, takže že jde kliknout, skoro nešlo poznat. #}
+                <a class="ucet-odkaz" href="/account" title="{{ _("Můj účet") }}: {{ account.username }}"{% if path == "/account" %} aria-current="page"{% endif %}>
+                    {# Profilový obrázek z Jellyfinu leží přes písmeno: když
+                       se nenačte (Jellyfin neběží), sám se odstraní a
+                       písmeno zůstane. Místní účet obrázek nemá. #}
+                    {% set obrazek = obrazek_uctu() if obrazek_uctu is defined else "" %}
+                    <span class="ucet-avatar" aria-hidden="true">{{ account.username[:1] | upper }}
+                        {%- if obrazek %}<img src="{{ obrazek }}" alt="" onerror="this.remove()">{% endif -%}
+                    </span>
+                    <span class="ucet-text">
+                        <strong>{{ account.username }}</strong>
+                        {# Role a „Můj účet" jsou každé v celku: když se
+                           nevejdou na řádek, zalomí se u tečky, ne v půlce. #}
+                        <span class="ucet-role">
+                            <span>
+                            {%- if account.is_admin %}{{ _("správce") }}
+                            {%- elif account.jellyfin_user_id %}{{ _("divák z Jellyfinu") }}
+                            {%- else %}{{ _("čtenář") }}{% endif %} &middot;</span>
+                            <span>{{ _("Můj účet") }}</span>
+                        </span>
+                    </span>
+                    <span class="ucet-sipka" aria-hidden="true">&rsaquo;</span>
+                </a>
                 <form method="post" action="/logout" style="margin-top:8px">
                     <button class="btn" type="submit">{{ _("Odhlásit") }}</button>
                 </form>
@@ -198,9 +226,9 @@
                 <span class="dot"></span>
                 <span id="wait-note">
                     {% if wait_for == 'restart' %}
-                        {{ _("Čekám, až se aplikace zvedne – stránka se pak obnoví sama.") }}
+                        {{ _("Čekám, až se aplikace zvedne. Stránka se pak obnoví sama.") }}
                     {% else %}
-                        {{ _("Čekám, až úloha doběhne – stránka se pak obnoví sama.") }}
+                        {{ _("Čekám, až úloha doběhne. Stránka se pak obnoví sama.") }}
                     {% endif %}
                 </span>
             </div>
@@ -266,12 +294,12 @@
                na GitHubu sloučila práce překladatelů. Číslo verze zůstane. #}
             <p>{{ _("Od verze, která běží, se na GitHubu změnilo") }}
                <strong>{{ verze.nove_preklady }}</strong>
-               {{ _("souborů s překlady – překladatelé sloučili svou práci.") }}
+               {{ _("souborů s překlady, překladatelé sloučili svou práci.") }}
                {{ _("Číslo verze se tím nemění; stáhne se jen to, co přibylo.") }}</p>
         {% elif verze.poznamky %}
             {{ verze.poznamky | safe }}
         {% else %}
-            <p class="card-note">{{ _("Popis změn se nepodařilo stáhnout - najdeš ho na stránce vydání.") }}</p>
+            <p class="card-note">{{ _("Popis změn se nepodařilo stáhnout. Najdeš ho na stránce vydání.") }}</p>
         {% endif %}
     </div>
 
@@ -356,7 +384,7 @@
 
             event.preventDefault();
             hlaska.textContent = form.dataset.demoNote
-                || {{ _("Tohle je ukázka – data se v ní nemění. Na vlastní instalaci tlačítko funguje.") | tojson }};
+                || {{ _("Tohle je ukázka, data se v ní nemění. Na vlastní instalaci tlačítko funguje.") | tojson }};
             hlaska.classList.add("vidi");
             clearTimeout(casovac);
             casovac = setTimeout(function () { hlaska.classList.remove("vidi"); }, 4500);
@@ -566,17 +594,27 @@
 
         function place(event) {
             var offset = 14;
+            var okraj = 8;
             var x = event.clientX + offset;
             var y = event.clientY + offset;
 
-            // Aby bublina nevylezla z okna ven.
+            // Aby bublina nevylezla z okna ven: když se nevejde vpravo
+            // (dolů), jde na druhou stranu kurzoru.
             var box = tip.getBoundingClientRect();
-            if (x + box.width > window.innerWidth - 8) {
+            if (x + box.width > window.innerWidth - okraj) {
                 x = event.clientX - box.width - offset;
             }
-            if (y + box.height > window.innerHeight - 8) {
+            if (y + box.height > window.innerHeight - okraj) {
                 y = event.clientY - box.height - offset;
             }
+            /* Na telefonu se často nevejde ani na jednu stranu - bublina
+               je skoro tak široká jako displej a klepnutí bývá uprostřed.
+               Překlopení ji pak poslalo do záporných souřadnic, půlka
+               textu zmizela za levým okrajem. Proto ji nakonec vždy
+               přisadíme dovnitř okna; radši překryje prst, než aby
+               useknula text. */
+            x = Math.max(okraj, Math.min(x, window.innerWidth - box.width - okraj));
+            y = Math.max(okraj, Math.min(y, window.innerHeight - box.height - okraj));
             tip.style.left = x + "px";
             tip.style.top = y + "px";
         }
@@ -1319,7 +1357,7 @@
                     if (p.percent === null || p.percent === undefined) {
                         pruh.style.width = "100%";
                         pruh.classList.add("neurcity");
-                        popis.textContent = "{{ _("hotovo") }} " + p.done;
+                        popis.textContent = {{ _("hotovo")|tojson }} + " " + p.done;
                     } else {
                         pruh.classList.remove("neurcity");
                         pruh.style.width = p.percent + "%";
@@ -1376,7 +1414,7 @@
 
         function zkus() {
             if (pokusu++ > MAX_POKUSU) {
-                ohlas("{{ _("Trvá to déle, než je zdrávo. Zkus stránku obnovit ručně.") }}");
+                ohlas({{ _("Trvá to déle, než je zdrávo. Zkus stránku obnovit ručně.")|tojson }});
                 return;
             }
             fetch("/health", { credentials: "same-origin", cache: "no-store" })
@@ -1491,6 +1529,87 @@
                 event.preventDefault();
                 okno.showModal();
             }
+        });
+
+        /* Kopírovat - čerstvě vyrobený API klíč (makro bunka_klice).
+           Schránka prohlížeče (navigator.clipboard) jde jen na HTTPS nebo
+           localhost, jenže Jellyscope často běží na obyčejném HTTP
+           v domácí síti. Tam se klíč aspoň označí a zkusí se starší
+           document.execCommand("copy"); když nejde ani to, hláška řekne,
+           ať si ho člověk zkopíruje sám (Ctrl+C). Výsledek jde do
+           role="status" vedle tlačítka - čtečka ho přečte, focus zůstane. */
+        document.addEventListener("click", function (event) {
+            var tlacitko = event.target.closest ?
+                event.target.closest("[data-kopirovat]") : null;
+            if (!tlacitko) { return; }
+            var zdroj = document.getElementById(tlacitko.dataset.kopirovat);
+            if (!zdroj) { return; }
+            var stav = tlacitko.parentNode.querySelector('[role="status"]');
+            function oznam(text) { if (stav) { stav.textContent = text; } }
+            function nahradni() {
+                var rozsah = document.createRange();
+                rozsah.selectNodeContents(zdroj);
+                var vyber = window.getSelection();
+                vyber.removeAllRanges();
+                vyber.addRange(rozsah);
+                var povedlo = false;
+                try { povedlo = document.execCommand("copy"); } catch (e) { povedlo = false; }
+                oznam(povedlo ? tlacitko.dataset.hotovo : tlacitko.dataset.oznaceno);
+            }
+            if (navigator.clipboard && window.isSecureContext) {
+                /* Prohlížeč se může ptát na oprávnění a slib pak visí -
+                   bez pojistky by člověk nedostal žádnou odezvu. Co se
+                   nevyřídí do vteřiny, dopadne jako na obyčejném HTTP. */
+                var vyrizeno = false;
+                var pojistka = setTimeout(function () {
+                    if (!vyrizeno) { vyrizeno = true; nahradni(); }
+                }, 1000);
+                navigator.clipboard.writeText(zdroj.textContent.trim()).then(function () {
+                    /* I pozdě (po pojistce): schránka klíč má, takže
+                       hláška „zkopíruj Ctrl+C“ by lhala. */
+                    vyrizeno = true;
+                    clearTimeout(pojistka);
+                    oznam(tlacitko.dataset.hotovo);
+                }, function () {
+                    if (vyrizeno) { return; }
+                    vyrizeno = true;
+                    clearTimeout(pojistka);
+                    nahradni();
+                });
+            } else {
+                nahradni();
+            }
+        });
+
+        /* Celá tabulka v okně (Zjištění). Karta ukáže jen prvních pár
+           řádků podle Nastavení → Rozhraní → Dlouhé seznamy; tlačítko
+           pod ní zkopíruje celou tabulku karty do společného okna
+           #okno-tabulka i s nadpisem karty. Kopie, ne přesun: karta
+           zůstane, jak byla, a jedno okno stačí pro všechny tabulky. */
+        document.addEventListener("click", function (event) {
+            var tlacitko = event.target.closest ?
+                event.target.closest("[data-okno-tabulka]") : null;
+            if (!tlacitko) { return; }
+            var okno = document.getElementById("okno-tabulka");
+            var karta = tlacitko.closest(".card");
+            var tabulka = karta ? karta.querySelector("table") : null;
+            if (!okno || !tabulka || typeof okno.showModal !== "function") { return; }
+            event.preventDefault();
+            var kopie = tabulka.cloneNode(true);
+            kopie.querySelectorAll(".radek-navic, .jen-desktop").forEach(function (radek) {
+                radek.classList.remove("radek-navic", "jen-desktop");
+            });
+            var nadpis = karta.querySelector(".card-head h2");
+            okno.querySelector(".okno-hlava h2").textContent = nadpis ? nadpis.textContent : "";
+            var obsah = okno.querySelector(".okno-obsah");
+            obsah.innerHTML = "";
+            obsah.appendChild(kopie);
+            // Okno je pro všechny tabulky jedno: bez vynulování by druhá
+            // tabulka začínala tam, kam se odrolovalo v té první - a první
+            // řádky, ty nejdůležitější, by nebyly vidět.
+            obsah.scrollTop = 0;
+            okno.scrollTop = 0;
+            okno.showModal();
         });
 
         /* Okno s obsahem, který se načte až po kliknutí. Odkaz nese

@@ -33,8 +33,20 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from . import db
+from . import db, i18n
 from .i18n import translate as _t
+
+
+def _ts(text: str) -> str:
+    """Překlad do jazyka serveru - pro všechno, co se odesílá nebo ukládá.
+
+    Upozornění dostávají lidé mimo aplikaci a jazyk jednoho účtu (Můj účet)
+    pro ně nic neznamená. Kdyby se zpráva skládala v jazyce toho, kdo zrovna
+    kliknul na „Zkusit", odešla by jinak než noční. Totéž náhled výchozího
+    znění v Nastavení: má ukazovat, co se opravdu pošle. V jazyce účtu
+    (`_t`) zůstává jen hláška, která se ukáže na stránce.
+    """
+    return i18n.translate(text, i18n.jazyk_serveru())
 
 log = logging.getLogger(__name__)
 
@@ -125,9 +137,9 @@ def text_zpravy(zprava_klic: str, **hodnoty: Any) -> tuple[str, str]:
     """
     zprava = ZPRAVY_PODLE_KLICE[zprava_klic]
     predmet = db.get_setting(klic_textu(zprava_klic, "predmet"), "").strip() \
-        or _t(zprava.predmet)
+        or _ts(zprava.predmet)
     text = db.get_setting(klic_textu(zprava_klic, "text"), "").strip() \
-        or (_t(zprava.text) if zprava.text else "")
+        or (_ts(zprava.text) if zprava.text else "")
     for jmeno, hodnota in hodnoty.items():
         predmet = predmet.replace("{" + jmeno + "}", str(hodnota))
         text = text.replace("{" + jmeno + "}", str(hodnota))
@@ -146,8 +158,8 @@ def texty_pro_nastaveni() -> list[dict[str, Any]]:
         "nazev": z.nazev,
         "predmet": db.get_setting(klic_textu(z.klic, "predmet"), ""),
         "text": db.get_setting(klic_textu(z.klic, "text"), ""),
-        "predmet_vychozi": _t(z.predmet),
-        "text_vychozi": _t(z.text) if z.text else "",
+        "predmet_vychozi": _ts(z.predmet),
+        "text_vychozi": _ts(z.text) if z.text else "",
         "ma_text": bool(z.text),
         "zastupne": z.zastupne,
     } for z in ZPRAVY]
@@ -365,7 +377,7 @@ def _sberac_nesbira() -> tuple[bool, str]:
         return False, ""
     minut = (datetime.now(timezone.utc).replace(tzinfo=None) - kdy).total_seconds() / 60
     if minut >= ticho:
-        return True, _t("poslední úspěšný dotaz na Jellyfin byl před {minut} minutami"
+        return True, _ts("poslední úspěšný dotaz na Jellyfin byl před {minut} minutami"
                         ).format(minut=int(minut))
     return False, ""
 
@@ -384,7 +396,7 @@ def _dochazi_misto() -> tuple[bool, str]:
     hranice = db.get_int_setting("notify_misto_dnu", 1, 365, VYCHOZI_MISTO_DNU)
     if int(zbyva) > hranice:
         return False, ""
-    return True, _t("při současném tempu dojde místo za {dnu} dnů").format(dnu=int(zbyva))
+    return True, _ts("při současném tempu dojde místo za {dnu} dnů").format(dnu=int(zbyva))
 
 
 def _tydenni_souhrn() -> str:
@@ -394,22 +406,22 @@ def _tydenni_souhrn() -> str:
     prehled = stats.overview(7)
     hodin = float(prehled.get("watched_seconds") or 0) / 3600.0
     radky = [
-        f"{_t('Odsledováno')}: {formatting.hours_human(hodin)}",
-        f"{_t('Spuštění')}: {formatting.number(prehled.get('plays') or 0)}",
-        f"{_t('Diváci')}: {formatting.number(prehled.get('users') or 0)}",
+        f"{_ts('Odsledováno')}: {formatting.hours_human(hodin)}",
+        f"{_ts('Spuštění')}: {formatting.number(prehled.get('plays') or 0)}",
+        f"{_ts('Diváci')}: {formatting.number(prehled.get('users') or 0)}",
     ]
 
     tituly = stats.top_items(7, limit=3)
     if tituly:
         radky.append("")
-        radky.append(_t("Nejsledovanější tituly") + ":")
+        radky.append(_ts("Nejsledovanější tituly") + ":")
         radky += [f"  {t['label']} - {formatting.hours_human(t['hours'])}"
                   for t in tituly]
 
     lide = stats.top_users(7, limit=3)
     if lide:
         radky.append("")
-        radky.append(_t("Nejaktivnější uživatelé") + ":")
+        radky.append(_ts("Nejaktivnější uživatelé") + ":")
         radky += [f"  {u['label']} - {formatting.hours_human(u['hours'])}"
                   for u in lide]
     return "\n".join(radky)
@@ -460,7 +472,7 @@ def _je_cas_na_souhrn(ted: datetime) -> bool:
 async def zkontroluj(ted: datetime | None = None) -> dict[str, Any]:
     """Projde hlidane veci a posle, co je potreba. Pousti to uloha."""
     if not zapnute_kanaly():
-        return {"status": "ok", "message": _t("Žádný kanál není nastavený.")}
+        return {"status": "ok", "message": _ts("Žádný kanál není nastavený.")}
 
     ted = ted or datetime.now()
     odeslano = []
@@ -482,9 +494,9 @@ async def zkontroluj(ted: datetime | None = None) -> dict[str, Any]:
         odeslano.append("souhrn")
 
     if not odeslano:
-        return {"status": "ok", "message": _t("Nic nového k hlášení.")}
+        return {"status": "ok", "message": _ts("Nic nového k hlášení.")}
     return {"status": "ok",
-            "message": _t("Odesláno: {co}").format(co=", ".join(odeslano))}
+            "message": _ts("Odesláno: {co}").format(co=", ".join(odeslano))}
 
 
 async def posli_zkusebni(kanal: str) -> dict[str, Any]:
@@ -496,8 +508,8 @@ async def posli_zkusebni(kanal: str) -> dict[str, Any]:
     if not kanal_nastaveny(kanal):
         return {"ok": False, "chyba": _t("Kanál není vyplněný.")}
     vysledky = await posli(
-        _t("Jellyscope: zkušební zpráva"),
-        _t("Když tohle čteš, upozornění fungují."), jen_kanal=kanal)
+        _ts("Jellyscope: zkušební zpráva"),
+        _ts("Když tohle čteš, upozornění fungují."), jen_kanal=kanal)
     return vysledky[0] if vysledky else {"ok": False, "chyba": "?"}
 
 

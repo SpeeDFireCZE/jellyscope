@@ -342,6 +342,54 @@ def _parse_any(text: str) -> datetime | None:
     return None
 
 
+# Proc Jellyfin prepocitava - jeho kody (TranscodeReason) a veta pro cloveka.
+#
+# Driv se kod vypisoval tak, jak prisel: "VideoCodecNotSupported,
+# AudioCodecNotSupported". V Historii se kvuli chybejici mezere ani
+# nezalomil a v grafu na Zjistenich se usekl na "AudioCodecNotSupp...".
+# Vety jsou kratke a zacinaji malym pismenem, aby se daly radit za sebe
+# ("nepodporovany kodek videa, nepodporovany kodek zvuku"); velke pismeno
+# dostane jen zacatek celeho textu. Kod, ktery tu neni (novejsi Jellyfin),
+# se ukaze, jak prisel - lepsi cizi kod nez prazdne misto.
+DUVODY_PREPOCTU: dict[str, str] = {
+    "ContainerNotSupported": "nepodporovaný kontejner",
+    "VideoCodecNotSupported": "nepodporovaný kodek videa",
+    "AudioCodecNotSupported": "nepodporovaný kodek zvuku",
+    "SubtitleCodecNotSupported": "nepodporovaný formát titulků",
+    "AudioIsExternal": "zvuk v samostatném souboru",
+    "SecondaryAudioNotSupported": "nepodporovaná další zvuková stopa",
+    "VideoProfileNotSupported": "nepodporovaný profil videa",
+    "VideoLevelNotSupported": "nepodporovaná úroveň videa",
+    "VideoResolutionNotSupported": "nepodporované rozlišení",
+    "VideoBitDepthNotSupported": "nepodporovaná bitová hloubka videa",
+    "VideoFramerateNotSupported": "nepodporovaná snímková frekvence",
+    "RefFramesNotSupported": "nepodporovaný počet referenčních snímků",
+    "AnamorphicVideoNotSupported": "nepodporované anamorfní video",
+    "InterlacedVideoNotSupported": "nepodporované prokládané video",
+    "AudioChannelsNotSupported": "nepodporovaný počet zvukových kanálů",
+    "AudioProfileNotSupported": "nepodporovaný profil zvuku",
+    "AudioSampleRateNotSupported": "nepodporovaná vzorkovací frekvence zvuku",
+    "AudioBitDepthNotSupported": "nepodporovaná bitová hloubka zvuku",
+    "ContainerBitrateExceedsLimit": "datový tok nad limitem",
+    "VideoBitrateNotSupported": "příliš vysoký datový tok videa",
+    "AudioBitrateNotSupported": "příliš vysoký datový tok zvuku",
+    "UnknownVideoStreamInfo": "chybí údaje o videu",
+    "UnknownAudioStreamInfo": "chybí údaje o zvuku",
+    "DirectPlayError": "chyba přímého přehrávání",
+    "VideoRangeTypeNotSupported": "nepodporovaný HDR formát",
+    "VideoCodecTagNotSupported": "nepodporovaná značka kodeku videa",
+    "StreamCountExceedsLimit": "příliš mnoho stop v souboru",
+}
+
+
+def duvody_prepoctu(text: Any) -> str:
+    """Kódy důvodů od Jellyfinu ("A,B" i "A, B") jako věta pro člověka."""
+    kody = [kod.strip() for kod in str(text or "").split(",") if kod.strip()]
+    vety = [_t(DUVODY_PREPOCTU[kod]) if kod in DUVODY_PREPOCTU else kod for kod in kody]
+    vysledek = ", ".join(vety)
+    return vysledek[:1].upper() + vysledek[1:]
+
+
 def register(env: Any) -> None:
     """Prida vsechny filtry do prostredi Jinja2."""
     env.filters.update({
@@ -361,4 +409,5 @@ def register(env: Any) -> None:
         "relative": relative_human,
         "usek": usek,
         "video_range": video_range_human,
+        "duvody": duvody_prepoctu,
     })

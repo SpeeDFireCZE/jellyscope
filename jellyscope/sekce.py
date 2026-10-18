@@ -19,11 +19,66 @@ Přidat sekci znamená doplnit jednu položku do `SEZNAM` - nic víc.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+import sys
+from contextvars import ContextVar
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
-from . import db, formatting, langstats, stats
+from . import db, formatting, geoip, i18n, insights, langstats, pristup, stats
 from .i18n import translate as _t
+
+# Paměť jednoho data_pro(): karty, které potřebují totéž (tabulka uživatelů
+# pro graf i tabulku, barvy jazyků pro čtyři jazykové karty), to spočítají
+# jednou. Kontextová proměnná, ne globální slovník: data_pro běží ve vláknech
+# souběžných požadavků a každý potřebuje svou.
+_pamet: ContextVar[dict[Any, Any] | None] = ContextVar("sekce_pamet", default=None)
+
+
+def _jednou(funkce: Callable[..., Any], *args: Any) -> Any:
+    """`funkce(*args)` - v rámci jednoho data_pro() spočítané jen jednou.
+
+    Výsledek se pak sdílí, takže se nesmí měnit na místě. Nemění se:
+    data_pro ho jen přisype do kontextu a anonymizace dělá kopie. Mimo
+    data_pro, nebo s argumentem, který nejde použít jako klíč, se funkce
+    prostě zavolá.
+    """
+    pamet = _pamet.get()
+    klic = (funkce, args)
+    try:
+        hash(klic)
+    except TypeError:
+        pamet = None
+    if pamet is None:
+        return funkce(*args)
+    if klic not in pamet:
+        pamet[klic] = funkce(*args)
+    return pamet[klic]
+
+
+def _barvy() -> dict[str, Any]:
+    """Barvy jazyků - stejné pro všechny jazykové karty."""
+    return _jednou(langstats.colour_map)
+
+
+def _sledovane_jazyky(obdobi: Any) -> Any:
+    return langstats.watched_languages(obdobi, _barvy())
+
+
+def stav_geoip() -> dict[str, Any]:
+    """Co mapa potřebuje a jestli to má - pro stránku Síť i kartu v přehledu.
+
+    Knihovna maxminddb (nepovinná), databáze GeoLite2 (stahuje se na
+    kliknutí), její velikost a stáří. A cesta k pythonu, kterým aplikace
+    běží: návod na doinstalování pak ukáže příkaz, který jde zkopírovat,
+    ne obecné "pip install", které by ve virtuálním prostředí minulo.
+    """
+    return {
+        "knihovna": geoip.knihovna_je(),
+        "databaze": geoip.je_k_dispozici(),
+        "bajtu": geoip.velikost_databaze(),
+        "stari": geoip.stari_databaze(),
+        "python": sys.executable,
+    }
 
 
 def data_rustu(obdobi: Any) -> dict[str, Any]:
@@ -100,7 +155,7 @@ def souhrn_obdobi(obdobi: Any) -> dict[str, Any]:
     poznamka = ""
     if not srovnatelne:
         odkdy = stats.prvni_zaznam()
-        poznamka = (_t("nemáme data za předchozí období – historie začíná {datum}")
+        poznamka = (_t("nemáme data za předchozí období, historie začíná {datum}")
                     .format(datum=formatting.cesky_datum(odkdy[:10])) if odkdy
                     else _t("zatím není co srovnávat"))
 
@@ -139,111 +194,243 @@ class Sekce:
     # sama; pár jich je psaných jako *vnitřek* karty, protože se na své
     # původní stránce vkládají do už otevřeného <div class="card">.
     obal_karta: bool = False
+    # Oblast stromu práv (pristup.OBLASTI), pod kterou karta patří - ta
+    # stránky, ze které pochází. Kdo oblast nevidí, kartu nedostane ani
+    # v přehledu (viz smi). Povinná a jen pojmenovaná: karta bez ní je
+    # chyba už při startu, ne tiše otevřená díra.
+    oblast: str = field(kw_only=True)
+    # Má karta tlačítko „zobrazit celou tabulku"? Pak přehled potřebuje
+    # společné okno okno_tabulka() (viz _macros.html), jako stránka Zjištění.
+    okno_tabulka: bool = field(default=False, kw_only=True)
 
 
 SEZNAM: tuple[Sekce, ...] = (
     Sekce("prave_se_hraje", "Právě se hraje",
-          "Kdo se zrovna dívá a na čem - stejná karta jako na Přehledu.",
+          "Kdo se zrovna dívá a na čem. Stejná karta jako na Přehledu.",
           "_now_playing.html", lambda o: {"active": stats.active_sessions()},
-          obdobi=False),
+          obdobi=False,
+          oblast="prave_hraje"),
     Sekce("nedavno_pridane", "Nedávno přidané",
           "Pás plakátů toho, co do knihovny přibylo naposledy.",
           "_recently_added.html", lambda o: {"recent": stats.recently_added()},
-          obdobi=False),
+          obdobi=False,
+          oblast="knihovna"),
     Sekce("souhrn", "Celkem odsledováno",
           "Hlavní číslo období, změna proti minulému a křivka vedle něj.",
           "_sekce_souhrn.html",
-          lambda o: dict(souhrn_obdobi(o), daily=stats.daily_activity_split(o))),
+          lambda o: dict(_jednou(souhrn_obdobi, o),
+                         daily=_jednou(stats.daily_activity_split, o)),
+          oblast="prehled"),
     Sekce("dlazdice", "Spuštění, uživatelé, tituly, transcode",
           "Řada dlaždic s hlavními čísly období.",
-          "_sekce_dlazdice.html", lambda o: souhrn_obdobi(o)),
+          "_sekce_dlazdice.html", lambda o: _jednou(souhrn_obdobi, o),
+          oblast="prehled"),
     Sekce("sledovanost_po_dnech", "Sledovanost po dnech",
           "Křivka filmů a seriálů den po dni, s tabulkou pod ní.",
           "_daily_card.html",
-          lambda o: {"daily": stats.daily_activity_split(o),
-                     "ostatni": stats.rozpad_ostatnich(o)}),
+          lambda o: {"daily": _jednou(stats.daily_activity_split, o),
+                     "ostatni": stats.rozpad_ostatnich(o)},
+          oblast="prehled"),
     Sekce("nejsledovanejsi", "Nejsledovanější tituly",
           "Žebříček filmů a seriálů za zvolené období.",
           "_top_items.html",
           lambda o: {"top_items": stats.top_items(o, kind="both"),
-                     "top_kind": "both"}, sirka="pul", obal_karta=True),
+                     "top_kind": "both"}, sirka="pul", obal_karta=True,
+          oblast="prehled"),
     Sekce("nejaktivnejsi_uzivatele", "Nejaktivnější uživatelé",
           "Kdo za zvolené období odsledoval nejvíc hodin.",
           "_sekce_uzivatele.html", lambda o: {"top_users": stats.top_users(o)},
-          sirka="pul"),
+          sirka="pul",
+          oblast="prehled"),
     Sekce("doruceni", "Jak server obsah doručuje",
-          "Přímé přehrávání, remux, transcode - a co to stojí server.",
+          "Přímé přehrávání, remux, transcode a co to stojí server.",
           "_sekce_doruceni.html",
-          lambda o: {"methods": stats.play_method_breakdown(o)}, sirka="pul"),
+          lambda o: {"methods": stats.play_method_breakdown(o)}, sirka="pul",
+          oblast="prehled"),
     Sekce("prehravace", "Přehrávače",
-          "Z čeho se lidé dívají - aplikace, prohlížeč, televize.",
+          "Z čeho se lidé dívají: aplikace, prohlížeč, televize.",
           "_sekce_prehravace.html",
-          lambda o: {"clients": stats.client_breakdown(o)}, sirka="pul"),
+          lambda o: {"clients": stats.client_breakdown(o)}, sirka="pul",
+          oblast="prehled"),
     Sekce("kdy_se_sleduje", "Kdy se sleduje",
-          "Mřížka dnů a hodin - kdy je server nejvytíženější.",
+          "Mřížka dnů a hodin: kdy je server nejvytíženější.",
           "_sekce_heatmapa.html",
-          lambda o: {"heatmap": stats.hourly_heatmap(o)}),
+          lambda o: {"heatmap": stats.hourly_heatmap(o)},
+          oblast="prehled"),
     Sekce("zivy_tok", "Právě teče",
           "Souběžný tok v čase, obnovuje se sám.",
           "_sit_zive.html",
-          lambda o: {"ted": stats.tok_ted(), "zive": stats.bandwidth_zive(o)}),
+          lambda o: {"ted": stats.tok_ted(), "zive": stats.bandwidth_zive(o)},
+          oblast="sit"),
     Sekce("spicky_po_dnech", "Špička po dnech",
           "Nejvyšší souběžný tok každého dne.",
           "_sekce_spicky.html",
-          lambda o: {"denni_spicky": stats.bandwidth_denni_spicky(o)}),
+          lambda o: {"denni_spicky": stats.bandwidth_denni_spicky(o)},
+          oblast="sit"),
     Sekce("kdo_streamoval", "Kdo nejvíc streamoval",
           "Přenesená data podle uživatele.",
           "_sekce_kdo_streamoval.html",
           lambda o: {"podle_uzivatele": stats.bandwidth_podle(o, "user_name")},
-          sirka="pul"),
+          sirka="pul",
+          oblast="sit"),
     Sekce("podle_prehravace", "Přenos podle přehrávače",
           "Kolik dat proteklo přes kterou aplikaci.",
           "_sekce_podle_prehravace.html",
           lambda o: {"podle_klienta": stats.bandwidth_podle(o, "client")},
-          sirka="pul"),
+          sirka="pul",
+          oblast="sit"),
     Sekce("odkud", "Odkud se dívají",
-          "Adresy, ze kterých se streamuje - domácí síť, nebo zvenku.",
+          "Adresy, ze kterých se streamuje: domácí síť, nebo zvenku.",
           "_sekce_odkud.html",
-          lambda o: {"odkud": stats.odkud_se_divaji(o)}),
+          lambda o: {"odkud": stats.odkud_se_divaji(o)},
+          oblast="sit"),
     Sekce("pomer_jazyku", "Poměr jazyků",
           "V jakém jazyce se na serveru sleduje.",
           "_sekce_pomer_jazyku.html",
-          lambda o: {"watched": langstats.watched_languages(
-              o, langstats.colour_map())}, sirka="pul"),
+          lambda o: {"watched": _jednou(_sledovane_jazyky, o)}, sirka="pul",
+          oblast="jazyky"),
     Sekce("dabing", "Dabing, nebo originál?",
           "Kolik se sleduje v dabingu a kolik v původním znění.",
           "_sekce_dabing.html",
           lambda o: {"dubbing": langstats.dubbed_vs_original(
-              o, langstats.preferred_language())}, sirka="pul"),
+              o, _jednou(langstats.preferred_language))}, sirka="pul",
+          oblast="jazyky"),
     Sekce("titulky", "Titulky",
           "Jak často a v jakém jazyce se zapínají titulky.",
           "_sekce_titulky.html",
-          lambda o: {"subtitles": langstats.subtitle_usage(o)}, sirka="pul"),
+          lambda o: {"subtitles": langstats.subtitle_usage(o)}, sirka="pul",
+          oblast="jazyky"),
     Sekce("jazyky_knihovny", "Jazyky v knihovně",
-          "Co je v knihovně k dispozici - nezávisle na tom, co se sleduje.",
+          "Co je v knihovně k dispozici, nezávisle na tom, co se sleduje.",
           "_sekce_jazyky_knihovny.html",
-          lambda o: {"library": langstats.library_languages(
-              langstats.colour_map())}, obdobi=False, sirka="pul"),
+          lambda o: {"library": langstats.library_languages(_barvy())},
+          obdobi=False, sirka="pul",
+          oblast="jazyky"),
     Sekce("knihovna_celkem", "Celkem za všechny knihovny",
           "Položky, velikost a odkud jsou technická data. Stav, ne období.",
           "_sekce_knihovna_celkem.html",
-          lambda o: {"coverage": langstats.coverage()}, obdobi=False),
+          # Technická data jako na stránce Knihovna - `langstats.coverage`
+          # je pokrytí jazyků pro stránku Jazyky, jen pod stejným jménem.
+          lambda o: {"coverage": stats.tech_coverage()}, obdobi=False,
+          oblast="knihovna"),
     Sekce("rust_knihovny", "Růst knihovny",
           "Velikost knihovny den po dni a kam to spěje.",
-          "_sekce_rust.html", lambda o: data_rustu(o)),
+          "_sekce_rust.html", lambda o: data_rustu(o),
+          oblast="knihovna"),
     Sekce("kodeky", "Kodeky",
-          "Čím je knihovna zakódovaná. Období neřeší - je to stav knihovny.",
+          "Čím je knihovna zakódovaná. Období neřeší, je to stav knihovny.",
           "_sekce_kodeky.html", lambda o: {"codecs": stats.codec_breakdown()},
-          obdobi=False, sirka="pul"),
+          obdobi=False, sirka="pul",
+          oblast="knihovna"),
     Sekce("rozliseni", "Rozlišení",
           "Kolik je v knihovně 4K, kolik Full HD a kolik zbytku.",
           "_sekce_rozliseni.html",
           lambda o: {"resolutions": stats.resolution_breakdown()},
-          obdobi=False, sirka="pul"),
+          obdobi=False, sirka="pul",
+          oblast="knihovna"),
     Sekce("dynamicky_rozsah", "Dynamický rozsah",
           "SDR, HDR a Dolby Vision v knihovně.",
           "_sekce_rozsah.html", lambda o: {"ranges": stats.video_range_breakdown()},
-          obdobi=False, sirka="pul"),
+          obdobi=False, sirka="pul",
+          oblast="knihovna"),
+
+    # Zjištění. Data z týchž funkcí a se stejným počtem řádků jako stránka
+    # Zjištění (insights.RADKU_ZJISTENI); kolik se jich ukáže rovnou, řídí
+    # Nastavení → Rozhraní → Dlouhé seznamy, zbytek je v okně.
+    Sekce("zj_nevyuzite", "Místo, které nikdo nevyužívá",
+          "Soubory, které za období nikdo nepustil, a kolik místa zabírají.",
+          "_sekce_zj_nevyuzite.html",
+          lambda o: {"dead": insights.dead_storage(insights.RADKU_ZJISTENI, days=o)},
+          okno_tabulka=True, oblast="zebricky"),
+    Sekce("zj_transcodovane", "Nejčastěji transcodované soubory",
+          "Co server přepočítává nejčastěji, i s kodekem a rozlišením.",
+          "_sekce_zj_transcodovane.html",
+          lambda o: {"transcodes": insights.transcode_offenders(o, insights.RADKU_ZJISTENI)},
+          sirka="pul", okno_tabulka=True, oblast="zebricky"),
+    Sekce("zj_duvody", "Proč se transcoduje",
+          "Z jakých důvodů server přepočítává: kodek, bitrate, titulky.",
+          "_sekce_zj_duvody.html",
+          lambda o: {"reasons": insights.transcode_reasons(o)},
+          sirka="pul", oblast="zebricky"),
+    Sekce("zj_rychlost", "Rychlost převodu",
+          "Stíhá server převádět? Průměr, nejpomalejší a nejrychlejší převody.",
+          "_sekce_zj_rychlost.html",
+          lambda o: {"rychlost": insights.rychlost_prevodu(o)},
+          oblast="zebricky"),
+    Sekce("zj_kvalita", "Díváš se na to hodně, ale ve slabé kvalitě",
+          "Často sledované tituly v nízkém rozlišení: kandidáti na lepší verzi.",
+          "_sekce_zj_kvalita.html",
+          lambda o: {"upgrades": insights.upgrade_candidates(o, insights.RADKU_ZJISTENI)},
+          sirka="pul", okno_tabulka=True, oblast="zebricky"),
+    Sekce("zj_velke", "Zabírá hodně, sledováno skoro vůbec",
+          "Velké soubory, na které se skoro nikdo nedívá.",
+          "_sekce_zj_velke.html",
+          lambda o: {"oversized": insights.oversized_rarely_watched(
+              o, insights.RADKU_ZJISTENI)},
+          sirka="pul", okno_tabulka=True, oblast="zebricky"),
+    Sekce("zj_knihovny", "Využití knihoven",
+          "Kolik místa která knihovna zabírá proti tomu, kolik se z ní sleduje.",
+          "_sekce_zj_knihovny.html",
+          lambda o: {"efficiency": insights.storage_efficiency(o)},
+          oblast="zebricky"),
+    Sekce("zj_duplicity", "Možné duplicity",
+          "Tituly, které jsou v knihovně nejspíš víckrát. Stav, ne období.",
+          "_sekce_zj_duplicity.html",
+          lambda o: {"duplicates": insights.duplicate_candidates(insights.RADKU_ZJISTENI)},
+          obdobi=False, sirka="pul", okno_tabulka=True, oblast="zebricky"),
+    Sekce("zj_odlozene", "Začaté a odložené",
+          "Co lidé začali sledovat a nedokoukali.",
+          "_sekce_zj_odlozene.html",
+          lambda o: {"abandoned": insights.never_finished(o, insights.RADKU_ZJISTENI)},
+          sirka="pul", okno_tabulka=True, oblast="zebricky"),
+
+    # Jazyky - doplněk karet výš (poměr, dabing, titulky, jazyky knihovny).
+    Sekce("kdo_jazyk", "Kdo v jakém jazyce sleduje",
+          "Jazyk zvuku a titulků po jednotlivých divácích.",
+          "_sekce_kdo_jazyk.html",
+          # `watched` kvůli legendě - totéž, co bere karta Poměr jazyků.
+          lambda o: {"by_user": langstats.languages_by_user(o, _barvy()),
+                     "watched": _jednou(_sledovane_jazyky, o)},
+          oblast="jazyky"),
+    Sekce("kombinace", "Kombinace stop",
+          "Které kombinace zvuku a titulků v knihovně jsou. Stav, ne období.",
+          "_sekce_kombinace.html",
+          lambda o: {"combinations": langstats.language_combinations(),
+                     "all_combinations": langstats.vsechny_kombinace(),
+                     "undefined_items": langstats.undefined_language_items()},
+          obdobi=False, sirka="pul", oblast="jazyky"),
+    Sekce("chybi_stopa", "Sledujete to, ale stopa chybí",
+          "Sledované tituly, kterým chybí zvuková stopa v hlavním jazyce.",
+          "_sekce_chybi_stopa.html",
+          lambda o: {"missing_preferred": langstats.missing_preferred(
+              o, _jednou(langstats.preferred_language))},
+          oblast="jazyky"),
+
+    # Uživatelé. Obě karty berou tutéž tabulku jako stránka Uživatelé.
+    Sekce("uzivatele_graf", "Sledovanost podle uživatele",
+          "Kolik hodin kdo za období odsledoval, jako graf.",
+          "_sekce_uzivatele_graf.html",
+          lambda o: {"rows": _jednou(stats.user_table, o)}, oblast="uzivatele"),
+    Sekce("uzivatele_tabulka", "Uživatelé",
+          "Všichni uživatelé: hodiny, spuštění, tituly, přepočty, naposledy.",
+          "_sekce_uzivatele_tabulka.html",
+          lambda o: {"rows": _jednou(stats.user_table, o)}, oblast="uzivatele"),
+
+    # Knihovna a Síť.
+    Sekce("knihovny", "Knihovny",
+          "Dlaždice knihoven: počet položek a velikost, s odkazem na detail.",
+          "_sekce_knihovny.html", lambda o: {"libraries": stats.library_cards()},
+          obdobi=False, oblast="knihovna"),
+    Sekce("sit_cisla", "Čísla sítě",
+          "Špička, přeneseno celkem, podíl překódovaných a průměrný tok.",
+          "_sekce_sit_cisla.html",
+          lambda o: {"sit_prehled": stats.bandwidth_prehled(o)}, oblast="sit"),
+    Sekce("mapa", "Mapa",
+          "Odkud se dívá z veřejných adres: na mapě a po zemích.",
+          "_sekce_mapa.html",
+          lambda o: {"hotspoty": stats.hotspoty(o), "zeme": stats.zeme_divaku(o),
+                     "geo": stav_geoip()},
+          oblast="sit"),
 )
 
 PODLE_KLICE: dict[str, Sekce] = {s.klic: s for s in SEZNAM}
@@ -269,28 +456,111 @@ def _podminka_uctu(account_id: int | None) -> tuple[str, list[Any]]:
     return "account_id = ?", [account_id]
 
 
+def smi(karta: Sekce, account: dict[str, Any] | None) -> bool:
+    """Smí účet vidět tuhle kartu? Podle oblasti, jako stránku, odkud je.
+
+    Správce vidí všechno (pristup.vidi to ví sám). Ostatní podle stromu
+    práv - vlastního, nebo své skupiny. Bez toho by přehled byl zadní
+    vrátka: kdo smí na přehled, viděl by v něm i kartu ze stránky, kam
+    nesmí (třeba IP adresy ze Sítě).
+    """
+    return pristup.vidi(pristup.role(account), karta.oblast, account)
+
+
+def povolene(rozvrzeni: list[Sekce], account: dict[str, Any] | None) -> list[Sekce]:
+    """Jen karty, které účet smí - ve stejném pořadí."""
+    return [karta for karta in rozvrzeni if smi(karta, account)]
+
+
 def je_zapnuty() -> bool:
     """Je vlastní přehled zapnutý v nastavení?"""
     return (db.get_setting(ZAPNUTO, "0") or "0").strip() == "1"
 
 
+def vidi_prehled(account: dict[str, Any] | None) -> bool:
+    """Má účet v přehledu pro všechny co vidět?
+
+    Zapnutý, smí na něj (oblast přehledu) a podle svých práv v něm vidí
+    aspoň jednu kartu. Jedno místo pro menu, přistání po přihlášení
+    i samotnou stránku: tři kopie téže podmínky se dvakrát rozešly.
+    Prázdná stránka „ještě v něm nic není" by lhala, „sem nemáš přístup"
+    hned po přihlášení je nejhorší možné uvítání.
+    """
+    return (je_zapnuty()
+            and pristup.smi_cestu(pristup.role(account), "/dashboard", account)
+            and bool(povolene(nacti_rozvrzeni(), account)))
+
+
+# Název přehledu pro všechny. Zadává ho správce v Nastavení → Rozhraní a
+# ukáže se v menu i jako nadpis stránky - „Rodina", „Kino", podle toho,
+# k čemu ji poskládal. Nepřekládá se: je to jeho text, ne věta aplikace.
+NAZEV_KLIC = "dashboard_nazev"
+NAZEV_MAX = 40
+
+
+class NeplatnyNazev(ValueError):
+    """Název, který nejde použít. `veta` je česká věta = klíč překladu,
+    `hodnoty` se do ní dosadí (viz web_zaklad._flash)."""
+
+    def __init__(self, veta: str, **hodnoty: Any) -> None:
+        super().__init__(veta)
+        self.veta = veta
+        self.hodnoty = hodnoty
+
+
+def nazev() -> str:
+    """Uložený název přehledu pro všechny, nebo prázdno."""
+    return (db.get_setting(NAZEV_KLIC, "") or "").strip()
+
+
+def over_nazev(text: str) -> str:
+    """Vyčištěný název, nebo NeplatnyNazev.
+
+    Mezery na okrajích pryč, víc mezer za sebou jako jedna. Délka v
+    znacích (ne bajtech), aby se vešel do menu. A nesmí se plést se
+    stránkami, které v menu už jsou - „Přehled" a „Můj přehled" v žádném
+    jazyce rozhraní: kdo přepne jazyk, viděl by dvě stejné položky.
+    """
+    cisty = " ".join((text or "").split())
+    if not cisty:
+        raise NeplatnyNazev(
+            "Vlastní přehled potřebuje název stránky. Ukáže se v menu i jako nadpis.")
+    if len(cisty) > NAZEV_MAX:
+        raise NeplatnyNazev("Název stránky může mít nejvýš {max} znaků.", max=NAZEV_MAX)
+    obsazene = {i18n.translate(veta, jazyk).casefold()
+                for veta in ("Přehled", "Můj přehled") for jazyk in i18n.LANGUAGES}
+    if cisty.casefold() in obsazene:
+        raise NeplatnyNazev("Název „{nazev}“ už má jiná stránka v menu. Vyber jiný.",
+                            nazev=cisty)
+    return cisty
+
+
+def doplnit_nazev() -> bool:
+    """Stávající instalace: zapnutý přehled bez názvu dostane „Vlastní přehled".
+
+    Tak se mu říkalo do teď, takže se v menu nic nezmění. Volá se při
+    startu; podruhé nic nedělá a název, který si správce dal, nepřepíše.
+    Vypnutý přehled zůstane bez názvu - dostane ho, až ho někdo zapne.
+    """
+    if not je_zapnuty() or nazev():
+        return False
+    db.set_setting(NAZEV_KLIC, i18n.translate("Vlastní přehled", i18n.jazyk_serveru()))
+    return True
+
+
 def nacti_rozvrzeni(account_id: int | None = None) -> list[Sekce]:
     """Poskládaný přehled. Neznámé klíče se tiše přeskočí.
 
-    `account_id` je připravené na později. Dnes se ukládá jen společné
-    rozvržení (`account_id IS NULL`), protože **žádné nastavení v aplikaci
-    zatím není uživatelské** - všechno je serverové. Až tahle část vznikne,
-    přibudou řádky s konkrétním účtem a pravidlo bude znít "má-li člověk
-    vlastní, platí ony; jinak společné". Žádná migrace dat.
+    Bez `account_id` je to přehled pro všechny (`account_id IS NULL`),
+    s ním Můj přehled toho účtu - a jen ten: prázdný Můj přehled je
+    prázdný, nepůjčuje si rozvržení přehledu pro všechny. Je to jiná
+    stránka s jiným účelem, a kdo si ji ještě nesložil, má vidět výzvu,
+    ne cizí výběr, který by si pak omylem uložil jako svůj.
     """
     kde, hodnoty = _podminka_uctu(account_id)
     radky = db.query_all(
         f"SELECT sekce, sirka FROM dashboard_layout"
         f" WHERE {kde} ORDER BY poradi", tuple(hodnoty))
-    if not radky and account_id is not None:
-        radky = db.query_all(
-            "SELECT sekce, sirka FROM dashboard_layout"
-            " WHERE account_id IS NULL ORDER BY poradi")
 
     rozvrzeni: list[Sekce] = []
     for radek in radky:
@@ -357,9 +627,23 @@ def data_pro(rozvrzeni: list[Sekce], obdobi: Any) -> dict[str, Any]:
 
     Klíče se napříč sekcemi neopakují, takže se dají přisypat do kontextu
     šablony rovnou - a šablonky pak fungují stejně tady jako na svých
-    původních stránkách.
+    původních stránkách. Co potřebuje víc karet, se spočítá jednou
+    (`_jednou`).
     """
-    kontext: dict[str, Any] = {}
-    for sekce in rozvrzeni:
-        kontext.update(sekce.data(obdobi))
-    return kontext
+    token = _pamet.set({})
+    try:
+        kontext: dict[str, Any] = {}
+        for sekce in rozvrzeni:
+            kontext.update(sekce.data(obdobi))
+        return kontext
+    finally:
+        _pamet.reset(token)
+
+
+def data_oblasti(oblast: str, obdobi: Any) -> dict[str, Any]:
+    """Data všech karet jedné oblasti - pro stránku, ze které karty jsou.
+
+    Stránka (Zjištění, Síť) si je nebere zvlášť: dvě kopie téhož výpočtu
+    se rozešly a karta pak v přehledu ukazovala jiná čísla než na stránce.
+    """
+    return data_pro([karta for karta in SEZNAM if karta.oblast == oblast], obdobi)

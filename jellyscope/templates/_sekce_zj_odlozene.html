@@ -1,0 +1,34 @@
+{# Karta „Začaté a odložené“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_odlozene) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `abandoned (insights.never_finished)`. #}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Začaté a odložené") }}</h2>
+        <p class="card-note">{{ _("nikdo se nedostal dál než do 15 % délky") }}</p>
+    </div>
+    {% if abandoned %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Titul") }}</th><th class="num">{{ _("Pokusů") }}</th>
+                <th class="num">{{ _("Nejdál") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in abandoned %}
+            <tr class="{{ trida_radku(loop.index) }}">
+                <td class="truncate" title="{{ row.label }}">{{ row.label }}</td>
+                <td class="num">{{ row.attempts }}</td>
+                <td class="num muted">{{ row.best_percent | percent }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ tlacitko_cela_tabulka(abandoned | length) }}
+    {% else %}
+    <p class="chart-empty">{{ _("Nic odloženého.") }}</p>
+    {% endif %}
+</div>

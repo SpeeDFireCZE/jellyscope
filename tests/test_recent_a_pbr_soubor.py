@@ -365,5 +365,19 @@ check(nova == [], "a volající ho může rovnou přidat k ostatním")
 
 
 print()
+print("--- zpráva úlohy: věty o archivu bez dvojí tečky ---")
+# Obe vety o archivu konci teckou a lepily se pres ". ". Kdyz se naraz
+# archivovalo z obou duvodu, v logu ulohy stalo "...pripojena.. 2 drive
+# ulozenych polozek...".
+zprava = scanner._zprava_nedavnych(od="2026-01-01", pridano=3, videno=40,
+                                   nahrazeno=2, znovu=1)
+check(".." not in zprava, f"žádné dvě tečky za sebou ({zprava!r})")
+check(zprava.startswith("3 ") and "2 z nich" in zprava and "1 dříve" in zprava,
+      "a ve zprávě je všechno: nové, nahrazené i znovu založené")
+check(scanner._zprava_nedavnych(od="2026-01-01", pridano=0, videno=40,
+                                nahrazeno=0, znovu=0) == "Nic nového (zkontrolováno 40)",
+      "bez archivu zůstane zpráva, jak byla")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

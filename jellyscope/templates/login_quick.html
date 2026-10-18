@@ -23,7 +23,7 @@
 
         <h2 style="margin:0 0 6px; font-size:17px">{{ _("Přihlášení kódem") }}</h2>
         <p class="hint" style="margin-top:0">
-            {{ _("Otevři si Jellyfin, kde už jsi přihlášený, a v nastavení účtu zadej tenhle kód – v Jellyfinu se tomu říká Quick Connect.") }}
+            {{ _("Otevři si Jellyfin, kde už jsi přihlášený, a v nastavení účtu zadej tenhle kód (v Jellyfinu se tomu říká Quick Connect).") }}
         </p>
 
         <div class="quick-kod">{{ kod }}</div>
@@ -60,7 +60,7 @@
                 }
                 if (data.konec) {
                     bezi = false;
-                    stav.textContent = "{{ _("Kód už neplatí. Zkus to znovu.") }}";
+                    stav.textContent = {{ _("Kód už neplatí. Zkus to znovu.")|tojson }};
                 }
             })
             .catch(function () { /* vypadek site neni duvod prestat */ });

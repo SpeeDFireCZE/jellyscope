@@ -23,18 +23,32 @@ Otisk je SHA-256, ne PBKDF2 jako u hesel, a je to schválně: token si
 nikdo nevymýšlí, vyrábí ho `secrets.token_urlsafe(32)` - 256 bitů
 náhody. Pomalý otisk chrání před hádáním slabého hesla; tady není co
 hádat a každý požadavek by se o to zpomalil.
+
+Vlastník a stav
+---------------
+
+Klíč patří účtu a smí **přesně to, co jeho vlastník** - ne víc. Klíče
+z doby před vlastníky (`account_id` je NULL) jsou klíče serveru a mají
+plná práva, aby se po aktualizaci nerozbila Grafana ani Homepage.
+
+Správce může klíč vypnout a zase zapnout - třeba když má podezření, že
+unikl, a chce to nejdřív prověřit. Vypnutý klíč nic nevrátí, ale v
+seznamu zůstane i se svými záznamy použití. Každý požadavek s
+existujícím klíčem se zapíše (`api_pouziti`): kdy, kam, odkud a jak
+dopadl. Viz zapis_pouziti().
 """
 from __future__ import annotations
 
 import hashlib
 import logging
 import secrets
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from . import db, formatting, insights, scanner, stats
+from . import accounts, db, formatting, insights, pristup, scanner, stats
 
 log = logging.getLogger("jellyscope.api")
 
@@ -53,39 +67,115 @@ UKAZKA_ZNAKU = 5
 # token jeste?" staci minuta.
 ZAPIS_POUZITI_PO = timedelta(minutes=1)
 
+# Stavy klice. Zneplatneni stav nema - to je smazani radku.
+AKTIVNI = "aktivni"
+VYPNUTY = "vypnuty"
+
+# Zaznam pouziti: kolik dni se drzi (nastaveni `api_pouziti_dni`), jak
+# dlouha adresa se vejde a jak casto se po nem uklizi. Uklizi se pri
+# zapisu, ne v nocni uloze - ta je ve vychozim stavu vypnuta, a zaznam by
+# pak rostl navzdy.
+POUZITI_DNI_KLIC = "api_pouziti_dni"
+POUZITI_DNI_VYCHOZI = 30
+POUZITI_DNI_MAX = 365
+CESTA_ZNAKU = 300
+UKLID_PO_SEKUNDACH = 3600
+_posledni_uklid = 0.0
+
 router = APIRouter(prefix="/api/v1", tags=["api"])
+
+# Kterou cast stromu "co kdo vidi" (pristup.OBLASTI) ktera adresa ukazuje.
+# Klic je cesta routy tak, jak ji zna FastAPI - i se `{item_id}`. None =
+# smi kazdy, kdo prosel over_token: rozcestnik neukazuje data a historie
+# si filtr na vlastniho divaka vnuti sama, jako stranka Historie.
+#
+# Adresa, ktera tu chybi, je zavrena pro kazdeho krome spravce - nova
+# routa bez oblasti se tak neotevre omylem. Test hlida, ze tu je kazda.
+OBLASTI_ADRES: dict[str, str | None] = {
+    "/api/v1": None,
+    "/api/v1/": None,
+    "/api/v1/libraries": "knihovna",
+    "/api/v1/library": "knihovna",
+    "/api/v1/recently-added": "knihovna",
+    "/api/v1/item/{item_id}": "knihovna",
+    "/api/v1/top-items": "zebricky",
+    "/api/v1/least-played": "zebricky",
+    "/api/v1/unwatched": "zebricky",
+    "/api/v1/insights": "zebricky",
+    "/api/v1/summary": "prehled",
+    "/api/v1/play-methods": "prehled",
+    "/api/v1/now-playing": "prave_hraje",
+    "/api/v1/users": "uzivatele",
+    "/api/v1/history": None,
+    "/api/v1/bandwidth": "sit",
+}
 
 
 def _otisk(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def vytvor(jmeno: str) -> dict[str, Any]:
+def vytvor(jmeno: str, account_id: int | None = None) -> dict[str, Any]:
     """Vyrobí token. Vrátí ho v čitelné podobě - naposledy.
 
     Ukládá se jen otisk, takže tuhle hodnotu už podruhé nikdo nezjistí.
     Stránka to říká nahlas; token, který jde přečíst kdykoliv, je jen
     delší heslo v databázi.
+
+    `account_id` je vlastník. Bez něj vznikne klíč serveru s plnými právy -
+    to zůstává jen kvůli starším klíčům a testům; stránky klíč vždycky
+    vyrábějí někomu.
     """
     jmeno = (jmeno or "").strip()[:60] or "bez názvu"
     token = PREDPONA + secrets.token_urlsafe(32)
     with db.connect() as conn:
-        conn.execute(
-            "INSERT INTO api_tokens (name, token_hash, ukazka, created_at)"
-            " VALUES (?, ?, ?, ?)",
-            (jmeno, _otisk(token), token[:UKAZKA_ZNAKU], db.utcnow()),
+        token_id = conn.insert_returning_id(
+            "INSERT INTO api_tokens (name, token_hash, ukazka, created_at, account_id)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (jmeno, _otisk(token), token[:UKAZKA_ZNAKU], db.utcnow(), account_id),
         )
         conn.commit()
     log.info("Vyroben API token %s", jmeno)
-    return {"token": token, "jmeno": jmeno}
+    return {"token": token, "jmeno": jmeno, "id": token_id}
 
 
-def seznam() -> list[dict[str, Any]]:
-    """Tokeny pro výpis v Nastavení. Bez otisků - ty tam nemají co dělat."""
-    return db.query_all(
-        "SELECT id, name, ukazka, created_at, last_used_at"
-        "  FROM api_tokens ORDER BY id DESC"
-    )
+def seznam(account_id: int | None = None) -> list[dict[str, Any]]:
+    """Tokeny pro výpis. Bez otisků - ty tam nemají co dělat.
+
+    Bez parametru všechny i se jménem vlastníka (pro správce), s ním jen
+    klíče toho účtu (Můj účet). `vlastnik` je None u klíče serveru.
+    """
+    sql = ("SELECT t.id, t.name, t.ukazka, t.created_at, t.last_used_at,"
+           "       t.stav, t.account_id, a.username AS vlastnik"
+           "  FROM api_tokens t LEFT JOIN accounts a ON a.id = t.account_id")
+    if account_id is None:
+        return db.query_all(sql + " ORDER BY t.id DESC")
+    return db.query_all(sql + " WHERE t.account_id = ? ORDER BY t.id DESC",
+                        (account_id,))
+
+
+def _nastav_stav(token_id: int, stav: str) -> str:
+    radek = db.query_one("SELECT name FROM api_tokens WHERE id = ?", (token_id,))
+    if not radek:
+        return ""
+    with db.connect() as conn:
+        conn.execute("UPDATE api_tokens SET stav = ? WHERE id = ?", (stav, token_id))
+        conn.commit()
+    if stav == VYPNUTY:
+        log.info("Vypnut API token %s", radek["name"])
+    else:
+        log.info("Zapnut API token %s", radek["name"])
+    return str(radek["name"])
+
+
+def vypni(token_id: int) -> str:
+    """Vypne klíč, ale nesmaže ho. Vrátí jeho jméno (prázdné = není)."""
+    return _nastav_stav(token_id, VYPNUTY)
+
+
+def zapni(token_id: int) -> str:
+    """Vypnutý klíč zase pustí dovnitř. Vrátí jeho jméno."""
+    return _nastav_stav(token_id, AKTIVNI)
 
 
 def zrus(token_id: int) -> str:
@@ -131,7 +221,15 @@ def token_z_hlavicky(request: Request) -> str:
 
 
 def over_token(request: Request) -> dict[str, Any]:
-    """Závora před každou adresou API."""
+    """Závora před každou adresou API.
+
+    Pořadí kontrol: klíč existuje (jinak 401) → je zapnutý → vlastník smí.
+    Jakmile se klíč najde, zapíše se jeho id do `request.state`, aby
+    požadavek šel do záznamu použití - i když skončí zamítnutím.
+
+    Vrátí řádek klíče a navíc `account` (účet vlastníka, u klíče serveru
+    None) a `role` (skupina, podle které se řídí práva).
+    """
     token = token_z_hlavicky(request)
     if not token:
         raise HTTPException(
@@ -141,17 +239,162 @@ def over_token(request: Request) -> dict[str, Any]:
         )
 
     radek = db.query_one(
-        "SELECT id, name, last_used_at FROM api_tokens WHERE token_hash = ?",
+        "SELECT id, name, last_used_at, stav, account_id"
+        "  FROM api_tokens WHERE token_hash = ?",
         (_otisk(token),),
     )
-    if not radek:
+    # Ucet smazany bez kaskady (rucni zasah do databaze) = klic, ktery
+    # nikomu nepatri. Tvari se jako neexistujici, ne jako klic serveru.
+    ucet = accounts.get(radek["account_id"]) if radek and radek["account_id"] else None
+    if not radek or (radek["account_id"] and not ucet):
         # Zamerne tataz veta jako u chybejiciho tokenu, jen jina prvni
         # pulka: co presne je spatne, se utocnik dozvedet nema.
         raise HTTPException(status_code=401, detail="Neplatný token.",
                             headers={"WWW-Authenticate": "Bearer"})
 
+    request.state.api_token_id = radek["id"]
+    if radek["stav"] != AKTIVNI:
+        raise HTTPException(status_code=403, detail="Klíč je vypnutý.")
+
+    # Klic serveru ma plna prava. Klic spravce taky - ale jen dokud je
+    # spravcem: kdo o roli prijde, ma prava ctenare (divaka) a jeho klic
+    # se zacne ridit povolenim stejne jako kazdy jiny.
+    kdo = pristup.role(ucet) if ucet else pristup.SPRAVCE
+    if ucet and not pristup.smi_klic(ucet):
+        raise HTTPException(status_code=403,
+                            detail="Účet nemá povolený vlastní klíč.")
+    # Divak z Jellyfinu smi dovnitr jen tim, ze ho pusti Jellyfin. Kdyz
+    # spravce prihlasovani pres Jellyfin vypne (nebo divaka v Jellyfinu
+    # zakaze), ma prestat i jeho klic - jinak by si nastroj bral data dal,
+    # zatimco spravce je presvedceny, ze divaci jsou venku.
+    if kdo == pristup.DIVAK:
+        if not pristup.login_zapnuty():
+            raise HTTPException(status_code=403,
+                                detail="Přihlášení přes Jellyfin je vypnuté.")
+        divak = db.query_one("SELECT is_disabled FROM users WHERE id = ?",
+                             (str(ucet.get("jellyfin_user_id") or ""),))
+        if divak and divak["is_disabled"]:
+            raise HTTPException(status_code=403,
+                                detail="Účet je v Jellyfinu zakázaný.")
+
     _oznac_pouziti(radek)
-    return dict(radek)
+    return {**radek, "account": ucet, "role": kdo}
+
+
+def _smi(token: dict[str, Any], cesta: str) -> bool:
+    """Smí vlastník klíče na adresu s touhle cestou routy?"""
+    if token["role"] == pristup.SPRAVCE:
+        return True
+    if cesta not in OBLASTI_ADRES:
+        return False
+    oblast = OBLASTI_ADRES[cesta]
+    return oblast is None or pristup.vidi(token["role"], oblast, token["account"])
+
+
+def povolene_adresy(account: dict[str, Any] | None) -> list[str]:
+    """Adresy, na které smí klíč tohohle účtu - pro návod na Můj účet.
+
+    Tytéž podmínky jako smi_adresu(), jen bez klíče v ruce. Rozcestník
+    (`/api/v1/`) je tu jednou, i když na něj vedou dvě cesty.
+    """
+    token = {"role": pristup.role(account), "account": account}
+    return [cesta.replace("{item_id}", "{id}") for cesta in OBLASTI_ADRES
+            if cesta != "/api/v1" and _smi(token, cesta)]
+
+
+def smi_adresu(request: Request,
+               token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+    """Závora za over_token: klíč vidí přesně to, co jeho vlastník.
+
+    Jedna závislost pro všechny adresy, ne kontrola v každé zvlášť -
+    adresa, na kterou by se zapomnělo, je přesně ta, kterou někdo najde.
+    """
+    cesta = getattr(request.scope.get("route"), "path", "")
+    if not _smi(token, cesta):
+        raise HTTPException(status_code=403,
+                            detail="Vlastník klíče tuhle část nevidí.")
+    return token
+
+
+def _pro_vlastnika(token: dict[str, Any], data: Any) -> Any:
+    """Schová cizí jména, id a adresy, když je má vlastník klíče skryté.
+
+    Stejné pravidlo jako na stránkách (pristup.anonymizuj_pro). Projdou
+    tudy **zdrojové řádky** ze `stats`, ne hotová odpověď: tam se jméno
+    jmenuje `user` a pristup.anonymizuj() ho podle klíče nepozná.
+    """
+    return pristup.anonymizuj_pro(data, token.get("account"))
+
+
+def dny_pouziti() -> int:
+    """Kolik dní se drží záznam použití (nastavení, oříznuté do mezí)."""
+    return db.get_int_setting(POUZITI_DNI_KLIC, 1, POUZITI_DNI_MAX, POUZITI_DNI_VYCHOZI)
+
+
+def zapis_pouziti(token_id: int, cesta: str, ip: str, vysledek: int) -> None:
+    """Zapíše jeden požadavek do záznamu použití.
+
+    Volá ho middleware ve web.py až po odpovědi - jen tehdy je známý
+    výsledek. Nejvýš jednou za hodinu přitom smaže, co je starší než
+    nastavení `api_pouziti_dni`.
+    """
+    # Nulovy znak PostgreSQL do textu nevezme a cely radek by odmitl. Kdo
+    # ma uniklý klic, by si ho jinak pridal do adresy a v zaznamu by po
+    # nem nezustala stopa.
+    cesta = (cesta or "").replace("\x00", "")[:CESTA_ZNAKU]
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO api_pouziti (token_id, kdy, cesta, ip, vysledek)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (token_id, db.utcnow(), cesta, ip, int(vysledek)),
+        )
+        conn.commit()
+    uklid_pouziti()
+
+
+def uklid_pouziti(vynutit: bool = False) -> int:
+    """Smaže záznamy použití starší než `api_pouziti_dni`. Vrátí kolik.
+
+    Nejvýš jednou za hodinu (`vynutit` to obejde - po změně doby držení).
+    Volá se po zápisu a z plánovače úloh: kdyby jen po zápisu, po
+    zneplatnění všech klíčů by provoz ustal a IP adresy by v databázi
+    zůstaly navždy, ačkoliv stránka slibuje, že se mažou.
+    """
+    global _posledni_uklid
+    if not vynutit and time.time() - _posledni_uklid < UKLID_PO_SEKUNDACH:
+        return 0
+    _posledni_uklid = time.time()
+    hranice = datetime.now(timezone.utc) - timedelta(days=dny_pouziti())
+    with db.connect() as conn:
+        smazano = conn.execute("DELETE FROM api_pouziti WHERE kdy < ?",
+                               (hranice.strftime(db.TIME_FORMAT),)).rowcount
+        conn.commit()
+    return max(0, int(smazano or 0))
+
+
+def pouziti(token_id: int | None = None, account_id: int | None = None,
+            limit: int = 200) -> list[dict[str, Any]]:
+    """Záznam použití pro Nastavení → API, nejnovější první.
+
+    `token` je jméno klíče a `vlastnik` jméno účtu; u smazaného klíče
+    jsou obě None. Filtr podle klíče nebo podle účtu je volitelný.
+    """
+    sql = ("SELECT p.kdy, p.cesta, p.ip, p.vysledek, p.token_id,"
+           "       t.name AS token, a.username AS vlastnik"
+           "  FROM api_pouziti p"
+           "  LEFT JOIN api_tokens t ON t.id = p.token_id"
+           "  LEFT JOIN accounts a ON a.id = t.account_id")
+    podminky, parametry = [], []
+    if token_id is not None:
+        podminky.append("p.token_id = ?")
+        parametry.append(token_id)
+    if account_id is not None:
+        podminky.append("t.account_id = ?")
+        parametry.append(account_id)
+    if podminky:
+        sql += " WHERE " + " AND ".join(podminky)
+    return db.query_all(sql + " ORDER BY p.id DESC LIMIT ?",
+                        (*parametry, max(1, int(limit))))
 
 
 def _dny(days: Any, vychozi: int = 30) -> int:
@@ -165,19 +408,23 @@ def _dny(days: Any, vychozi: int = 30) -> int:
 
 @router.get("")
 @router.get("/")
-def rozcestnik(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
-    """Co API umí. Aby se to nemuselo hledat v dokumentaci."""
+def rozcestnik(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+    """Co API umí. Aby se to nemuselo hledat v dokumentaci.
+
+    Jen adresy, které tenhle klíč smí - co by vrátilo 403, tu nemá co
+    dělat.
+    """
     from . import __version__
 
     return {
         "jellyscope": __version__,
-        "endpoints": {
+        "endpoints": {adresa: popis for adresa, popis in {
             "/api/v1/summary": "watching over a period (?days=30)",
             "/api/v1/now-playing": "what is playing right now",
             "/api/v1/library": "size of the library, growth and free space",
             "/api/v1/libraries": "every library: items, size, codecs",
             "/api/v1/top-items": "most watched titles (?days=30&limit=10&kind=both|movies|series)",
-            "/api/v1/least-played": "least played files, never played first (?days=365&limit=25&min_size_mb=0)",
+            "/api/v1/least-played": "least played files, never played first; within the same play count biggest first, or by date added with order=oldest|newest (?days=365&limit=25&min_size_mb=0&order=size)",
             "/api/v1/unwatched": "files nobody watched over the period, and how much space they take (?days=365&limit=25)",
             "/api/v1/users": "viewers with watch time over the period (?days=30)",
             "/api/v1/history": "recent playbacks (?days=30&limit=50&user=<id>&kind=both|movies|series)",
@@ -186,8 +433,13 @@ def rozcestnik(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
             "/api/v1/insights": "transcode offenders, upgrade candidates, oversized and never finished titles, conversion speed in fps (?days=30&limit=15)",
             "/api/v1/bandwidth": "how much data went out and where to (?days=30)",
             "/api/v1/item/{id}": "one title: file, versions and who watched it",
-        },
+        }.items() if _smi(token, adresa.replace("{id}", "{item_id}"))},
         "note": "Read-only. Authenticate with: Authorization: Bearer <token>",
+        "item_fields": "every item that is one file (least-played, unwatched, recently-added, "
+                       "item, insights.oversized_rarely_watched) has path, tmdb_id, season and "
+                       "episode; for an episode tmdb_id is the series' TMDB id and season + "
+                       "episode say which one. Lists by title (top-items and the other insights "
+                       "lists) have no single file; a playback in history has item_id for /item/{id}",
     }
 
 
@@ -213,6 +465,28 @@ def _druh(kind: Any) -> str:
                                   stats.KIND_SERIES) else stats.KIND_BOTH
 
 
+def _soubor(row: dict[str, Any]) -> dict[str, Any]:
+    """Cesta a tmdb id - u každé položky (souboru), kterou API vrací.
+
+    U dílu je `tmdb_id` id **seriálu**: díl sám v TMDB vlastní id
+    obvykle nemá a Jellyscope si ukládá to seriálové. Který díl to je,
+    říká řada a číslo dílu vedle - teprve dohromady je to adresa dílu
+    v TMDB. U všeho ostatního jsou obě None: hudební stopa má v
+    `index_number` číslo stopy a za díl by se vydávala.
+
+    Cesta je celá, jak ji vidí server - stejně jako v detailu titulu.
+    Klíč ji dostane, jen když vlastník smí na adresu, která ji vrací
+    (viz OBLASTI_ADRES).
+    """
+    dil = row.get("type") == "Episode"
+    return {
+        "path": row.get("path"),
+        "tmdb_id": row.get("tmdb_id"),
+        "season": row.get("parent_index_number") if dil else None,
+        "episode": row.get("index_number") if dil else None,
+    }
+
+
 def _titul(row: dict[str, Any]) -> dict[str, Any]:
     """Jeden titul z knihovny tak, jak ho API vrací - všude stejně."""
     return {
@@ -222,6 +496,7 @@ def _titul(row: dict[str, Any]) -> dict[str, Any]:
         "series": row.get("series_name"),
         "year": row.get("production_year"),
         "library": row.get("library_name"),
+        **_soubor(row),
         "size_bytes": row.get("size_bytes"),
         "size_human": formatting.bytes_human(row.get("size_bytes") or 0),
         "resolution": (f"{row.get('width')}x{row.get('height')}"
@@ -232,7 +507,7 @@ def _titul(row: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/libraries")
-def knihovny(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+def knihovny(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Každá knihovna zvlášť - to, co jsou karty na stránce Knihovna."""
     karty = [{
         "id": k["id"],
@@ -248,7 +523,7 @@ def knihovny(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
 
 @router.get("/top-items")
 def nejsledovanejsi(days: Any = 30, limit: Any = 10, kind: Any = "both",
-                    token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+                    token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Nejsledovanější tituly za období. Díly seriálu se sčítají."""
     dny = _dny(days)
     radky = stats.top_items(dny, _limit(limit, 10, 200), _druh(kind))
@@ -268,20 +543,28 @@ def nejsledovanejsi(days: Any = 30, limit: Any = 10, kind: Any = "both",
 
 @router.get("/least-played")
 def nejmene_hrane(days: Any = 365, limit: Any = 25, min_size_mb: Any = 0,
-                  token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+                  order: Any = None,
+                  token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Soubory od nejméně hraných: nuly napřed, v nich největší první.
 
     Počet spuštění je za období, poslední přehrání za celou historii -
     u nuly v období je právě to ta informace, kterou člověk chce.
+
+    `order` je nepovinné a mění jen pořadí titulů se stejným počtem
+    spuštění: `oldest` / `newest` podle data přidání místo velikosti.
+    Bez něj (nebo s neznámou hodnotou) se řadí jako dřív - dashboard
+    postavený na staré odpovědi se nezmění.
     """
     dny = _dny(days, 365)
     try:
         min_bajtu = max(0, int(float(min_size_mb))) * 1_048_576
     except (TypeError, ValueError):
         min_bajtu = 0
-    radky = insights.least_played(dny, _limit(limit, 25), min_bajtu)
+    poradi = insights.poradi_nejmene_hranych(order)
+    radky = insights.least_played(dny, _limit(limit, 25), min_bajtu, poradi)
     return {
         "days": dny,
+        "order": poradi,
         "items": [{
             **_titul(r),
             "plays": int(r.get("plays") or 0),
@@ -293,7 +576,7 @@ def nejmene_hrane(days: Any = 365, limit: Any = 25, min_size_mb: Any = 0,
 
 @router.get("/unwatched")
 def nesledovane(days: Any = 365, limit: Any = 25,
-                token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+                token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Co se za období vůbec nehrálo - a kolik místa to zabírá.
 
     Nejcennější číslo, které Jellyscope umí: podíl knihovny, který nikoho
@@ -315,12 +598,11 @@ def nesledovane(days: Any = 365, limit: Any = 25,
 
 @router.get("/users")
 def divaci(days: Any = 30,
-           token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+           token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Diváci a kolik toho za období odsledovali.
 
-    Jsou tu jména - stejně jako na stránce Uživatelé. Token k API má
-    v ruce správce a je to jeho server; komu jména dávat nechce, ten
-    token nedá.
+    Jsou tu jména - stejně jako na stránce Uživatelé, a stejně jako tam
+    je klíč diváka nebo čtenáře s anonymizací dostane schovaná.
     """
     dny = _dny(days)
     return {
@@ -334,14 +616,14 @@ def divaci(days: Any = 30,
             "watched_hours": round(float(r.get("hours") or 0), 2),
             "transcoded_hours": round(float(r.get("transcoded_hours") or 0), 2),
             "last_seen": r.get("last_seen"),
-        } for r in stats.user_table(dny)],
+        } for r in _pro_vlastnika(token, stats.user_table(dny))],
     }
 
 
 @router.get("/history")
 def historie(days: Any = 30, limit: Any = 50, user: Any = None,
              kind: Any = "both",
-             token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+             token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Poslední přehrávání - nejnovější první.
 
     Pole jsou vyjmenovaná, ne `p.*`: řádek historie nese i adresu,
@@ -353,8 +635,11 @@ def historie(days: Any = 30, limit: Any = 50, user: Any = None,
     # Historie), ne po okamžicích - proto datum, ne časová značka.
     od = (date.today() - timedelta(days=dny - 1)).isoformat()
     kdo = str(user).strip()[:64] if user else None
-    radky = stats.history(limit=_limit(limit, 50), user_id=kdo,
-                          kind=_druh(kind), od=od)
+    # Divak vidi jen svou historii, at si do adresy napise cokoliv -
+    # stejne jako na strance Historie.
+    kdo = pristup.muj_divak(token.get("account")) or kdo
+    radky = _pro_vlastnika(token, stats.history(limit=_limit(limit, 50), user_id=kdo,
+                                                kind=_druh(kind), od=od))
     return {
         "days": dny,
         "count": len(radky),
@@ -379,15 +664,19 @@ def historie(days: Any = 30, limit: Any = 50, user: Any = None,
 
 @router.get("/recently-added")
 def nedavno_pridane(limit: Any = 18,
-                    token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
-    """Co do knihovny přišlo naposledy. Díly jedné dávky jsou u sebe."""
+                    token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+    """Co do knihovny přišlo naposledy. Díly jedné dávky jsou u sebe.
+
+    Seriál, kterému přibylo víc dílů naráz, je tu jednou - položkou je
+    nejnovější díl té dávky, takže id, cesta, řada a díl patří jemu.
+    """
     radky = stats.recently_added(_limit(limit, 18, 200))
     return {"count": len(radky), "items": [_titul(r) for r in radky]}
 
 
 @router.get("/play-methods")
 def zpusoby_prehrani(days: Any = 30,
-                     token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+                     token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Přímé přehrávání proti překódování - a čím se lidé dívají."""
     dny = _dny(days)
     return {
@@ -406,7 +695,7 @@ def zpusoby_prehrani(days: Any = 30,
 
 @router.get("/insights")
 def zjisteni(days: Any = 30, limit: Any = 15,
-             token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+             token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Stránka Zjištění v číslech - tituly, které stojí za pozornost."""
     dny = _dny(days)
     kolik = _limit(limit, 15, 100)
@@ -433,6 +722,8 @@ def zjisteni(days: Any = 30, limit: Any = 15,
         "oversized_rarely_watched": [{
             "id": r.get("id"),
             "title": r.get("label"),
+            "type": r.get("type"),
+            **_soubor(r),
             "plays": int(r.get("plays") or 0),
             "watched_hours": round(float(r.get("hours") or 0), 2),
             "size_bytes": r.get("size_bytes"),
@@ -478,7 +769,7 @@ def _rozliseni(row: dict[str, Any]) -> str | None:
 
 @router.get("/bandwidth")
 def provoz(days: Any = 30,
-           token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+           token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Kolik dat odešlo a kam - souhrn, bez adres jednotlivých lidí."""
     dny = _dny(days)
     prehled = stats.bandwidth_prehled(dny)
@@ -519,7 +810,7 @@ def _puvod(skupina: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/item/{item_id}")
 def titul(item_id: str,
-          token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+          token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Jeden titul: soubor, jeho verze a kdo se na něj díval."""
     # Id z Jellyfinu je hex, v ukazce "demo-ep-0-1" - pismena, cislice,
     # pomlcka, podtrzitko. Cokoliv jineho je preklep nebo pokus a odpoved
@@ -536,7 +827,6 @@ def titul(item_id: str,
     return {
         **_titul(polozka),
         "is_missing": bool(polozka.get("is_missing")),
-        "path": polozka.get("path"),
         "container": polozka.get("container"),
         "bitrate": polozka.get("bitrate"),
         "runtime_seconds": int((polozka.get("runtime_ticks") or 0) / 10_000_000),
@@ -558,7 +848,7 @@ def titul(item_id: str,
 
 @router.get("/summary")
 def souhrn(days: Any = 30,
-           token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+           token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Sledovanost za období - to, co je na Přehledu nahoře."""
     dny = _dny(days)
     prehled = stats.overview(dny)
@@ -576,10 +866,10 @@ def souhrn(days: Any = 30,
 
 
 @router.get("/now-playing")
-def prave_hraje(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+def prave_hraje(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Právě běžící přehrávání. Prázdný seznam je taky odpověď."""
     relace = []
-    for row in stats.active_sessions():
+    for row in _pro_vlastnika(token, stats.active_sessions()):
         relace.append({
             "user": row.get("user_name"),
             "title": row.get("item_name"),
@@ -601,7 +891,7 @@ def prave_hraje(token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
 
 @router.get("/library")
 def knihovna(days: Any = 30,
-             token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
+             token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
     """Velikost knihovny, růst za období a volné místo.
 
     Tatáž čísla, jaká stojí na stránce Knihovna - počítaná týmiž

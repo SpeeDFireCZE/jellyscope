@@ -21,7 +21,7 @@
     {% if draft_pending %}
     <div class="flash info" style="margin-bottom:16px">
         <span class="dot"></span>
-        <span>{{ _("Ve formuláři jsou rozepsané hodnoty, které ještě nejsou uložené. Heslo si pamatuju, takže ho znovu vyplňovat nemusíš – stačí kliknout na Uložit.") }}</span>
+        <span>{{ _("Ve formuláři jsou rozepsané hodnoty, které ještě nejsou uložené. Heslo si pamatuju, takže ho znovu vyplňovat nemusíš, stačí kliknout na Uložit.") }}</span>
     </div>
     {% endif %}
 
@@ -31,13 +31,13 @@
         <span>
             {{ _("Uloženo je") }} <strong>{{ database.describe() }}</strong>,
             {{ _("ale aplikace zatím běží na") }} <strong>{{ running_database.describe() }}</strong>.
-            {{ _("Přepne se až po restartu – tlačítko je nahoře vpravo.") }}
+            {{ _("Přepne se až po restartu (tlačítko je nahoře vpravo).") }}
         </span>
     </div>
     {% endif %}
 
     <p class="card-note" style="margin-bottom:16px">
-        {{ _("SQLite je výchozí a nic se pro něj neinstaluje – celá databáze je jeden soubor. PostgreSQL má smysl, když ho už doma provozuješ. Změna se projeví až po restartu aplikace.") }}
+        {{ _("SQLite je výchozí a nic se pro něj neinstaluje: celá databáze je jeden soubor. PostgreSQL má smysl, když ho už doma provozuješ. Změna se projeví až po restartu aplikace.") }}
     </p>
 
     {# Formulář zná svůj stav už ze serveru (třída is-sqlite / is-postgres),
@@ -62,7 +62,7 @@
                 <span>
                     <span class="title">PostgreSQL</span>
                     <span class="desc">
-                        {{ _("Samostatný databázový server. Má smysl, když ho už provozuješ – pro domácnost SQLite bohatě stačí.") }}
+                        {{ _("Samostatný databázový server. Má smysl, když ho už provozuješ. Pro domácnost SQLite bohatě stačí.") }}
                         {% if not psycopg_available %}
                             {# Návod se ukazuje jen tehdy, když ovladač
                                opravdu chybí. install.sh ho obvykle
@@ -124,12 +124,12 @@
                     <span>
                         <span class="title">{{ _("Používat connection pool") }}</span>
                         <span class="desc">
-                            {{ _("Drží pár spojení otevřených a půjčuje je, místo aby se ke každému dotazu navazovalo nové. Jedna stránka si o data řekne asi dvanáctkrát – po síti je ten rozdíl znát, na stejném stroji jen malý.") }}
+                            {{ _("Drží pár spojení otevřených a půjčuje je, místo aby se ke každému dotazu navazovalo nové. Jedna stránka si o data řekne asi dvanáctkrát. Po síti je ten rozdíl znát, na stejném stroji jen malý.") }}
                             {% if not pool_available %}
                                 <br><span class="badge critical"><span class="dot"></span>{{ _("knihovna psycopg_pool chybí") }}</span>
                                 <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code><br>
                             {% endif %}
-                            {{ _("Když ji doinstalovat nemůžeš, nech tohle vypnuté – aplikace pojede dál, jen si bude spojení navazovat po jednom.") }}
+                            {{ _("Když ji doinstalovat nemůžeš, nech tohle vypnuté. Aplikace pojede dál, jen si bude spojení navazovat po jednom.") }}
                         </span>
                     </span>
                 </label>
@@ -159,7 +159,7 @@
            kterou už má, a stiskne Přenést data - čímž si ji vymaže. #}
         <div class="flash info" style="margin-top:10px">
             <span class="dot"></span>
-            <span>{{ _("Připojuješ se k databázi, ve které data už jsou (třeba po přeinstalování aplikace)? Pak přenos NEspouštěj – stačí Uložit nastavení a restartovat. Aplikace se na ni připojí a data v ní zůstanou.") }}</span>
+            <span>{{ _("Připojuješ se k databázi, ve které data už jsou (třeba po přeinstalování aplikace)? Pak přenos NEspouštěj, stačí Uložit nastavení a restartovat. Aplikace se na ni připojí a data v ní zůstanou.") }}</span>
         </div>
     </form>
 

@@ -1,0 +1,126 @@
+{# Okno „Jak se to používá" pro čtecí API. Je ho stejně potřeba v Nastavení
+   → API (správce) i na stránce Můj účet (uživatel s vlastním klíčem), tak
+   je tady jednou - dva opsané návody by se časem rozešly.
+
+   Kontext:
+     api_navod_adresy - adresy, které smí klíč přihlášeného účtu
+                        (api.povolene_adresy; správci vyjdou všechny).
+                        Povinné: bez něj okno neukáže žádnou adresu -
+                        radši prázdná tabulka než celé API čtenáři, na
+                        jehož stránce se zapomnělo seznam předat.
+     api_ukazka       - adresa do příkladu s curl. Bez ní /api/v1/summary.
+
+   Tabulka je seznam (adresa, ukázka volání, popis): podle prvního sloupce
+   se filtruje, takže uživatel nevidí adresy, které by mu vrátily 403.
+   Je psaná ručně kvůli popiskům; test_api_klice hlídá, že v ní je každá
+   adresa z api.OBLASTI_ADRES.
+
+   Věty jen pro čtenáře a diváky („jen adresy, na které tvůj klíč smí",
+   „správce vidí použití") se řídí rolí, ne tím, na jaké je to stránce -
+   správce je na stránce Můj účet pořád správce. #}
+{% set povolene = api_navod_adresy or [] %}
+{% set pro_ctenare = not (account and account.is_admin) %}
+{% set ukazka = api_ukazka or "/api/v1/summary" %}
+{% set radky = [
+    ("/api/v1/", "GET /api/v1/",
+     _("Rozcestník: verze a seznam adres.")),
+    ("/api/v1/summary", "GET /api/v1/summary?days=30",
+     _("Sledovanost za období: odsledované hodiny, počet přehrání, diváci, tituly, podíl přepočtů a kolik se hraje právě teď.")),
+    ("/api/v1/now-playing", "GET /api/v1/now-playing",
+     _("Právě běžící přehrávání: kdo, co, čím, jestli se přepočítává a jak daleko je.")),
+    ("/api/v1/library", "GET /api/v1/library",
+     _("Velikost knihovny, počty položek, volné místo a růst za období.")),
+    ("/api/v1/libraries", "GET /api/v1/libraries",
+     _("Každá knihovna zvlášť: položky, velikost, délka obsahu.")),
+    ("/api/v1/top-items", "GET /api/v1/top-items?days=30&limit=10&kind=both",
+     _("Nejsledovanější tituly; díly seriálu se sčítají. kind = both / movies / series.")),
+    ("/api/v1/least-played", "GET /api/v1/least-played?days=365&limit=25&min_size_mb=0&order=size",
+     _("Soubory od nejméně hraných, nikdy nehrané napřed. Se stejným počtem spuštění největší první, nebo podle data přidání: order = oldest / newest. S posledním přehráním za celou historii.")),
+    ("/api/v1/unwatched", "GET /api/v1/unwatched?days=365&limit=25",
+     _("Co se za období vůbec nehrálo a kolik místa to zabírá, i jako podíl knihovny.")),
+    ("/api/v1/users", "GET /api/v1/users?days=30",
+     _("Diváci a jejich sledovanost za období: hodiny, spuštění, tituly, přepočty.")),
+    ("/api/v1/history", "GET /api/v1/history?days=30&limit=50&user=&kind=both",
+     _("Poslední přehrávání, nejnovější první. Bez IP adres, ty API nevydává.")),
+    ("/api/v1/recently-added", "GET /api/v1/recently-added?limit=18",
+     _("Co do knihovny přišlo naposledy.")),
+    ("/api/v1/play-methods", "GET /api/v1/play-methods?days=30",
+     _("Přímé přehrávání proti přepočtům a čím se lidé dívají.")),
+    ("/api/v1/insights", "GET /api/v1/insights?days=30&limit=15",
+     _("Stránka Zjištění v číslech: co se nejvíc přepočítává, co si zaslouží lepší kvalitu, velké a málo sledované, nedokoukané, a rychlost převodu ve snímcích za vteřinu.")),
+    ("/api/v1/bandwidth", "GET /api/v1/bandwidth?days=30",
+     _("Kolik dat odešlo, špička, podíl přepočtů, doma proti internetu a po zemích. Bez adres.")),
+    ("/api/v1/item/{id}", "GET /api/v1/item/<id>",
+     _("Jeden titul: soubor, jeho verze a kdo se na něj díval.")),
+] %}
+<dialog class="okno okno-siroke" id="okno-api-dokumentace">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("API pro nástroje") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+
+    <div class="okno-obsah">
+        <p>
+            {{ _("API dává hotová čísla nástrojům, které si z nich staví přehledy: Grafaně, Homepage, vlastnímu skriptu. Čte se přes něj, nemění se jím nic: pod /api/ jsou samá GET a cokoliv jiného skončí chybou.") }}
+        </p>
+
+        <h3 class="skupina">{{ _("Přihlášení") }}</h3>
+        <p class="card-note">
+            {{ _("Klíč se posílá v hlavičce. Do adresy nepatří, protože ta se objeví v logu proxy, v historii prohlížeče i v odkazu, který někdo pošle dál.") }}
+        </p>
+        <pre style="overflow-x:auto"><code>curl -H "Authorization: Bearer {{ _("VÁŠ_KLÍČ") }}" \
+     {{ request.base_url }}{{ ukazka[1:] }}</code></pre>
+
+        <h3 class="skupina">{{ _("Co se dá zjistit") }}</h3>
+        {% if pro_ctenare %}
+        <p class="card-note">{{ _("Jen adresy, na které tvůj klíč smí. Klíč smí přesně to, co ty.") }}</p>
+        {% endif %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Adresa") }}</th>
+                    <th>{{ _("Co vrátí") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for adresa, volani, popis in radky if adresa in povolene %}
+                <tr>
+                    <td class="nowrap"><code>{{ volani }}</code></td>
+                    <td>{{ popis }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="card-note">{{ _("Každá položka, která je jeden soubor (nejméně hrané, nesledované, nedávno přidané, jeden titul a velké málo sledované ve Zjištěních), nese celou cestu (path) a tmdb_id. U dílu seriálu je tmdb_id id seriálu a který díl to je, říkají season a episode.") }}</p>
+
+        {# Ukázka je odpověď /summary - kdo na ni nesmí, tomu by jen
+           ukazovala něco, co sám nedostane. #}
+        {% if "/api/v1/summary" in povolene %}
+        <h3 class="skupina">{{ _("Ukázka odpovědi") }}</h3>
+        <pre><code>{
+  "days": 30,
+  "watched_hours": 647.0,
+  "plays": 1066,
+  "users": 11,
+  "titles": 36,
+  "transcode_share_percent": 29.6,
+  "active_now": 1
+}</code></pre>
+        {% endif %}
+
+        <h3 class="skupina">{{ _("Na co si dát pozor") }}</h3>
+        <ul class="card-note" style="margin:0; padding-left:18px">
+            <li>{{ _("Klíč je vidět jen jednou, při vyrobení. Potom z něj zůstane prvních pár znaků, protože uložený je otisk, ne klíč.") }}</li>
+            <li>{{ _("Ztracený klíč se nedohledává, zneplatní se a vyrobí nový. Ostatních klíčů se to nedotkne.") }}</li>
+            <li>{{ _("Klíčů může být víc, jeden na nástroj. Podle sloupce „naposledy použit“ je pak vidět, který už nikdo nepoužívá.") }}</li>
+            <li>{{ _("Klíč smí přesně to, co jeho vlastník: komu chybí oblast Síť, ten nedostane ani /api/v1/bandwidth, a jména ostatních mu API schová stejně jako stránky.") }}</li>
+            {% if pro_ctenare %}
+            {# Uživatel má vědět, že se jeho dotazy zapisují - i s adresou,
+               odkud přišly. Jinak by to bylo sledování potichu. #}
+            <li>{{ _("Správce vidí, kdy a odkud (i s IP adresou) se tvůj klíč použil, a může ho vypnout.") }}</li>
+            {% endif %}
+            <li>{{ _("Odpovědi nemají hlavičky CORS, takže je nepřečte cizí stránka v prohlížeči. API je pro nástroje na serveru.") }}</li>
+        </ul>
+    </div>
+</dialog>

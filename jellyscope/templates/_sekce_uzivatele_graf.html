@@ -1,0 +1,13 @@
+{# Karta ze stránky Uživatelé (users.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč uzivatele_graf) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `rows (stats.user_table)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Sledovanost podle uživatele") }}</h2>
+        <p class="card-note">{{ _("v hodinách") }}</p>
+    </div>
+    {{ charts.hbar_chart(rows | selectattr('hours') | list, 'name', 'hours') | safe }}
+</div>

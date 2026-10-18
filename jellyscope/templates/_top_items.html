@@ -53,8 +53,7 @@
    a tváří se jako neexistující film, nic neřekl. #}
 {% if top_items and top_items[0]._skryto %}
 <p class="card-note" style="margin-top:12px">
-    {{ _("Nezobrazuje se") }} {{ top_items[0]._skryto | number }}
-    {{ _("titulů, ke kterým v knihovně ani v archivu nic nevede – ze záznamu se nedá zjistit, o co šlo.") }}
+    {{ _("Nezobrazuje se {n} titulů, ke kterým v knihovně ani v archivu nic nevede. Ze záznamu se nedá zjistit, o co šlo.").format(n=top_items[0]._skryto | number) }}
     <a href="/settings?section=import">{{ _("Zkusit je navázat") }}</a>
 </p>
 {% endif %}

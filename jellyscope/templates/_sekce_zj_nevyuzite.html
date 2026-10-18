@@ -1,0 +1,60 @@
+{# Karta „Místo, které nikdo nevyužívá“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_nevyuzite) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `dead (insights.dead_storage)`. #}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+<div class="card" id="nevyuzite-misto">
+    <div class="card-head">
+        <h2>{{ _("Místo, které nikdo nevyužívá") }}</h2>
+        <p class="card-note">
+            {{ _("nic nepřehráno za") }} {{ _(day_labels[days]) }}
+            &middot; {{ _("nově přidané tituly se nepočítají") }}
+        </p>
+    </div>
+
+    <div class="hero">{{ dead.size_bytes | bytes }}</div>
+    <div class="delta flat">
+        {{ dead.item_count | number }} {{ _("titulů") }} &middot;
+        {{ dead.share | percent(1) }} {{ _("z celkové velikosti knihovny") }}
+        ({{ dead.library_bytes | bytes }})
+    </div>
+
+    {% if dead.rows %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Titul") }}</th><th>{{ _("Knihovna") }}</th><th class="num">{{ _("Velikost") }}</th>
+                <th class="num">{{ _("Rozlišení") }}</th><th>{{ _("Kodek") }}</th>
+                <th class="num">{{ _("Přidáno") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in dead.rows %}
+            <tr class="{{ trida_radku(loop.index) }}">
+                <td class="strong truncate" title="{{ row.name }}">
+                    <a href="/item/{{ row.id }}">
+                        {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
+                        {{ row.name }}
+                    </a>
+                    {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
+                </td>
+                <td class="muted">{{ row.library_name or '-' }}</td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="muted">{{ (row.video_codec or '-') | upper }}</td>
+                <td class="num muted">{{ row.date_created | datetime }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ tlacitko_cela_tabulka(dead.rows | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Jellyscope nic nemaže a nic mazat neumí. Jen ti ukáže, kde se dívat.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("Žádný nesledovaný obsah, nebo ještě nemáš dost historie.") }}</p>
+    {% endif %}
+</div>

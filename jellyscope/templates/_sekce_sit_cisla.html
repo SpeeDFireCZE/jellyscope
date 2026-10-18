@@ -1,0 +1,15 @@
+{# Karta ze stránky Síť (network.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč sit_cisla) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `sit_prehled (stats.bandwidth_prehled)`. #}
+{% from "_macros.html" import tile with context %}
+<div class="kpi-row">
+    {{ tile(_("Špička"), sit_prehled.spicka_mbit ~ " Mbit/s", note=sit_prehled.spicka_kdy) }}
+    {{ tile(_("Přeneseno celkem"), sit_prehled.bajtu | bytes,
+            note=(sit_prehled.prehravani | number) ~ " " ~ _("přehrávání")) }}
+    {{ tile(_("Z toho překódovaných"), sit_prehled.podil_transcode | percent,
+            note=sit_prehled.bajtu_transcode | bytes) }}
+    {{ tile(_("Průměrný tok jednoho streamu"), sit_prehled.prumer_mbit ~ " Mbit/s") }}
+</div>

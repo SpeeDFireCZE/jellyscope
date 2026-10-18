@@ -142,7 +142,7 @@
                value="{{ settings.backup_path }}" placeholder="/var/backups/jellyscope">
         <p class="hint">
             {{ _("Nech prázdné, dokud pravidelné zálohy nechceš. Složka se v případě potřeby vytvoří.") }}
-            {{ _("Před každým mazáním (odklízení historie, zapomenutí diváka) se záloha dělá vždy – bez nastavené složky do") }} <code>data/zalohy</code>.
+            {{ _("Před každým mazáním (odklízení historie, zapomenutí diváka) se záloha dělá vždy, a když složka nastavená není, jde do") }} <code>data/zalohy</code>.
             {% if backup_free %}{{ _("Volné místo") }}: {{ backup_free | bytes }}.{% endif %}
         </p>
     </div>
@@ -151,7 +151,7 @@
         <label for="backup_keep">{{ _("Kolik záloh nechat") }}</label>
         <input type="number" id="backup_keep" name="backup_keep" form="ulohy"
                value="{{ settings.backup_keep }}" min="1" max="365">
-        <p class="hint">{{ _("Starší se při každé záloze smažou, aby složka nerostla donekonečna. Platí zvlášť pro pravidelné zálohy a zvlášť pro ty před mazáním – jinak by pár zapomenutých diváků za den vytlačilo všechny noční zálohy.") }}</p>
+        <p class="hint">{{ _("Starší se při každé záloze smažou, aby složka nerostla donekonečna. Platí zvlášť pro pravidelné zálohy a zvlášť pro ty před mazáním. Jinak by pár zapomenutých diváků za den vytlačilo všechny noční zálohy.") }}</p>
     </div>
 
     {# Jen u PostgreSQL - SQLite se zálohuje vestavěnou funkcí a žádný
@@ -175,7 +175,7 @@
                     {%- endif %}
                 {% endfor %}
                 {% if pg_dumps[0][0] < pg_server %}
-                <br>{{ _("Žádný z nich server nezvládne – pg_dump umí zálohovat jen server stejné nebo starší verze. Doinstaluj klienta:") }}
+                <br>{{ _("Žádný z nich server nezvládne: pg_dump umí zálohovat jen server stejné nebo starší verze. Doinstaluj klienta:") }}
                 <br><code>sudo apt install -y postgresql-client-{{ pg_server }}</code>
                 {% endif %}
             {% else %}
@@ -221,14 +221,14 @@
                            Proto důrazné potvrzení - a proto si Jellyscope
                            napřed uloží současný stav, viz restore_backup(). #}
                         <form method="post" action="/settings/backup/restore"
-                              onsubmit="return confirm('{{ _("Obnovit databázi ze zálohy") }} {{ row.name }}?\n\n{{ _("Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje.") }}')">
+                              onsubmit='return confirm({{ (_("Obnovit databázi ze zálohy") ~ " " ~ row.name ~ "?\n\n" ~ _("Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje."))|tojson }})'>
                             <input type="hidden" name="name" value="{{ row.name }}">
                             <button data-keep-scroll class="btn" type="submit">{{ _("Obnovit") }}</button>
                         </form>
                         {# Potvrzení je tu schválně: smazaná záloha se nedá
                            vrátit a řádky jsou si na pohled podobné. #}
                         <form method="post" action="/settings/backup/delete"
-                              onsubmit="return confirm('{{ _("Opravdu smazat zálohu") }} {{ row.name }}?')">
+                              onsubmit='return confirm({{ (_("Opravdu smazat zálohu") ~ " " ~ row.name ~ "?")|tojson }})'>
                             <input type="hidden" name="name" value="{{ row.name }}">
                             <button data-keep-scroll class="btn" type="submit">{{ _("Smazat") }}</button>
                         </form>
@@ -259,7 +259,7 @@
                value="{{ retence_dnu }}" min="{{ retence_min }}" max="{{ retence_max }}"
                style="width:120px">
         <p class="hint">
-            {{ _("Platí, teprve když je úloha „Odklízení historie“ výš zapnutá – bez ní se nemaže nic. Právě běžící přehrávání se nemaže nikdy.") }}
+            {{ _("Platí, teprve když je úloha „Odklízení historie“ výš zapnutá. Bez ní se nemaže nic. Právě běžící přehrávání se nemaže nikdy.") }}
             <br>
             {% if odklid.celkem %}
                 {{ _("V historii je") }} <strong>{{ odklid.celkem | number }}</strong>
@@ -324,7 +324,7 @@
             {% endif %}
         </div>
         <p class="hint">
-            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu – ten odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie. Před smazáním se udělá záloha databáze. Do noci jde zásah vzít zpět.") }}
+            {{ _("Smaže všechno, co je o tom divákovi zaznamenané. Účet samotný je v Jellyfinu a odsud smazat nejde, takže ho příští synchronizace zase uvidí, jen už bez historie. Před smazáním se udělá záloha databáze. Do noci jde zásah vzít zpět.") }}
         </p>
     </div>
 
@@ -387,7 +387,7 @@
         </table>
 
         <p class="card-note">
-            {{ _("Zálohu nahraješ v Nastavení → Databáze. Mizí stejně jako ostatní zálohy – podle toho, kolik jich necháváš; s poslední zálohou zmizí divák i z tohohle seznamu.") }}
+            {{ _("Zálohu nahraješ v Nastavení → Databáze. Mizí stejně jako ostatní zálohy, podle toho, kolik jich necháváš. S poslední zálohou zmizí divák i z tohohle seznamu.") }}
         </p>
 
         <div class="btn-row">
@@ -406,7 +406,7 @@
         <p>{{ _("Smaže se všechno, co je o tom divákovi zaznamenané. Těsně před tím se udělá záloha databáze, a do dnešní noci jde zásah vzít zpět jedním tlačítkem.") }}</p>
 
         <p class="card-note">
-            {{ _("Účet zůstává v Jellyfinu, takže ho příští synchronizace zase uvidí – jen už bez historie.") }}
+            {{ _("Účet zůstává v Jellyfinu, takže ho příští synchronizace zase uvidí, jen už bez historie.") }}
         </p>
 
         <div class="btn-row">
@@ -440,13 +440,13 @@
 
     {% if settings.tech_source != 'ffprobe' %}
         <p class="card-note">
-            {{ _("Zdroj technických dat je nastavený na Jellyfin. Chceš-li měřit soubory přímo, přepni ve Sběru dat volbu na \"ffprobe + Jellyfin\" a ulož nastavení.") }}
+            {{ _("Zdroj technických dat je nastavený na Jellyfin. Chceš-li měřit soubory přímo, přepni ve Sběru dat volbu na „ffprobe + Jellyfin“ a ulož nastavení.") }}
         </p>
     {% else %}
         {# Ať je jasné, že tlačítka níž jsou na výjimečné situace, ne na
            běžný provoz - o ten se stará synchronizace sama. #}
         <p class="card-note">
-            {{ _("Samo se to děje po každé synchronizaci knihovny a u nově přidaných titulů. Tlačítka níž jsou na to, když nechceš čekat – nebo když potřebuješ přeměřit i soubory, které už změřené jsou (třeba po výměně souboru na stejném místě).") }}
+            {{ _("Samo se to děje po každé synchronizaci knihovny a u nově přidaných titulů. Tlačítka níž jsou na to, když nechceš čekat, nebo když potřebuješ přeměřit i soubory, které už změřené jsou (třeba po výměně souboru na stejném místě).") }}
         </p>
     {% endif %}
 
@@ -500,7 +500,7 @@
         {{ _("Kromě historie srovná i knihovnu: díl, jehož soubor se v Jellyfinu vyměnil, se vrátí z archivu k tomu živému i s odsledovaným časem. Samotná synchronizace knihovny tohle nedělá.") }}
     </p>
     <p class="card-note" style="margin-top:8px">
-        {{ _("Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz – typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.") }}
+        {{ _("Duplicitní záznamy vznikaly, když proti jedné databázi omylem běžely dva sběrače naráz, typicky stará verze aplikace vedle nové. Tomu už sběrač předchází sám.") }}
     </p>
     <p class="card-note" style="margin-top:8px">
         {{ _("Záznamy visící na špatném dílu jsou pozůstatek chyby ve slučování podle TMDB: u epizody se bralo id celého seriálu, takže se historie všech dílů slila na jediný. Opravuje se podle názvu dílu, který v záznamu zůstal.") }}
@@ -520,12 +520,12 @@
             <li>{{ _("ani jeden nepochází z importu.") }}</li>
         </ul>
         <p class="card-note" style="margin-bottom:6px">
-            <strong>{{ _("Co se tedy NEsloučí:") }}</strong>
+            <strong>{{ _("Co se tedy nesloučí:") }}</strong>
         </p>
         <ul class="card-note" style="margin:0 0 10px 18px">
-            <li>{{ _("film začatý včera večer a dokoukaný dnes – dvě sledování, dva záznamy, časy se nepřekrývají;") }}</li>
-            <li>{{ _("film dokoukaný a hned puštěný znovu – navazující úseky překryv nejsou;") }}</li>
-            <li>{{ _("tentýž film na televizi a na telefonu zároveň – liší se zařízením;") }}</li>
+            <li>{{ _("film začatý včera večer a dokoukaný dnes: dvě sledování, dva záznamy, časy se nepřekrývají;") }}</li>
+            <li>{{ _("film dokoukaný a hned puštěný znovu: navazující úseky překryv nejsou;") }}</li>
+            <li>{{ _("tentýž film na televizi a na telefonu zároveň: liší se zařízením;") }}</li>
             <li>{{ _("dva různí uživatelé u téhož titulu ve stejnou chvíli.") }}</li>
         </ul>
         <p class="card-note">
@@ -557,7 +557,7 @@
                 <td>
                     {{ _("Záznamy bez položky v knihovně") }}
                     <div class="card-note">
-                        {{ _("Zkusí se navázat podle názvu. Díl se tím zařadí pod svůj seriál – jinak se v přehledech tváří jako samostatný film.") }}
+                        {{ _("Zkusí se navázat podle názvu. Díl se tím zařadí pod svůj seriál, jinak by se v přehledech tvářil jako samostatný film.") }}
                     </div>
                 </td>
                 <td class="num strong">
@@ -569,7 +569,7 @@
                 <td>
                     {{ _("Záznamy s jiným názvem, než má titul v knihovně") }}
                     <div class="card-note">
-                        {{ _("Název se u přehrávání ukládá spolu se záznamem, aby historie smazaného titulu nezůstala bezejmenná. Když se ale titul přejmenuje – typicky když v Jellyfinu spravíš špatně určená metadata –, starý záznam si nese původní jméno. Ve statistikách pak k jednomu titulu patří název druhého.") }}
+                        {{ _("Název se u přehrávání ukládá spolu se záznamem, aby historie smazaného titulu nezůstala bezejmenná. Když se ale titul přejmenuje (typicky když v Jellyfinu spravíš špatně určená metadata), starý záznam si nese původní jméno. Ve statistikách pak k jednomu titulu patří název druhého.") }}
                     </div>
                 </td>
                 <td class="num strong">{{ stale_name_rows | number }}</td>
@@ -593,13 +593,13 @@
         </a>
     </div>
     <p class="card-note" style="margin-top:10px">
-        {{ _("Nejdřív se Jellyfinu ukážou identifikátory z převzaté historie – ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte. Teprve na tom stojí zbytek: navázání podle názvu, slučování duplicit a srovnání jmen.") }}
+        {{ _("Nejdřív se Jellyfinu ukážou identifikátory z převzaté historie. Ty jsou pravé, jen k nim v knihovně nic nevede. Jellyfin z nich řekne seriál i číslo dílu, takže záznam, který nese jen „7. epizoda“, se konečně dá zařadit. Do Jellyfinu se přitom jen čte. Teprve na tom stojí zbytek: navázání podle názvu, slučování duplicit a srovnání jmen.") }}
     </p>
     <p class="card-note" style="margin-top:10px">
-        {{ _("Ručně to mačkat nemusíš – totéž dělá úloha „Narovnání dat“ výš, každý den ve zvolený čas.") }}
+        {{ _("Ručně to mačkat nemusíš, totéž dělá úloha „Narovnání dat“ výš každý den ve zvolený čas.") }}
     </p>
     <p class="card-note" style="margin-top:10px">
-        {{ _("Pustit se to dá opakovaně – podruhé už nenajde nic. Záznamy se neslučují sečtením: dva zápisy o tomtéž přehrávání nejsou dvě zhlédnutí, takže ze skupiny zůstane ten úplnější.") }}
+        {{ _("Pustit se to dá opakovaně, podruhé už nenajde nic. Záznamy se neslučují sečtením: dva zápisy o tomtéž přehrávání nejsou dvě zhlédnutí, takže ze skupiny zůstane ten úplnější.") }}
     </p>
 </div>
 

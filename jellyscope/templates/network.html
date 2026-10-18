@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile with context %}
+{% from "_macros.html" import period_filter with context %}
 {% block title %}{{ _("Síť") }} · Jellyscope{% endblock %}
 
 {% block content %}
@@ -7,7 +7,7 @@
     <div>
         <h1>{{ _("Síť") }}</h1>
         <p class="subtitle">
-            {{ _("Kolik dat teklo ze serveru k přehrávačům – a kdy to bylo nejvíc.") }}
+            {{ _("Kolik dat teklo ze serveru k přehrávačům a kdy to bylo nejvíc.") }}
         </p>
     </div>
     {{ period_filter(obdobi, '/network') }}
@@ -17,17 +17,10 @@
    podle něj bude dimenzovat linku, má vědět, jak vzniklo. #}
 <div class="flash info" style="margin-bottom:18px">
     <span class="dot"></span>
-    <span>{{ _("Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání – při překódování z výsledného toku, jinak ze zdrojového souboru. Pozastavené přehrávání se nepočítá, protože při pauze nic neteče. Je to tedy poctivý odhad, ne měření drátu: přeskakování a buffer skutečná čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla systému.") }}</span>
+    <span>{{ _("Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání: při překódování z výsledného toku, jinak ze zdrojového souboru. Pozastavené přehrávání se nepočítá, protože při pauze nic neteče. Je to tedy poctivý odhad, ne měření drátu: přeskakování a buffer skutečná čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla systému.") }}</span>
 </div>
 
-<div class="kpi-row">
-    {{ tile(_("Špička"), prehled.spicka_mbit ~ " Mbit/s", note=prehled.spicka_kdy) }}
-    {{ tile(_("Přeneseno celkem"), prehled.bajtu | bytes,
-            note=(prehled.prehravani | number) ~ " " ~ _("přehrávání")) }}
-    {{ tile(_("Z toho překódovaných"), prehled.podil_transcode | percent,
-            note=prehled.bajtu_transcode | bytes) }}
-    {{ tile(_("Průměrný tok jednoho streamu"), prehled.prumer_mbit ~ " Mbit/s") }}
-</div>
+{% include "_sekce_sit_cisla.html" %}
 
 {# Živý tok. `data-refresh` a `data-partial` obsluhuje base.html -
    stejný mechanismus, jakým se obnovuje "právě se hraje" na Přehledu. #}
@@ -44,95 +37,5 @@
 
 {% include "_sekce_odkud.html" %}
 
-<div class="card" id="mapa">
-    <div class="card-head">
-        <h2>{{ _("Mapa") }}</h2>
-        <p class="card-note">{{ _("velikost tečky odpovídá odsledovanému času") }}</p>
-    </div>
-
-    {% if hotspoty %}
-        {# Ovládání je v HTML nad mapou, ne uvnitř SVG: tlačítko se
-           dá stylovat jako každé jiné a nezvětšuje se s přiblížením.
-           Klikáním i kolečkem se ovládá totéž - který způsob je zapnutý,
-           se vybírá v Nastavení → Rozhraní. #}
-        <div class="mapa-obal">
-            {{ charts.mapa_sveta(hotspoty, mapa_zoom) | safe }}
-            <div class="mapa-ovladani">
-                <button class="btn mapa-tlacitko" type="button" data-mapa="blize"
-                        data-tip="{{ _("Přiblížit") }}" aria-label="{{ _("Přiblížit") }}">+</button>
-                <button class="btn mapa-tlacitko" type="button" data-mapa="dale"
-                        data-tip="{{ _("Oddálit") }}" aria-label="{{ _("Oddálit") }}">&minus;</button>
-                <button class="btn mapa-tlacitko" type="button" data-mapa="zpet"
-                        data-tip="{{ _("Celý svět") }}" aria-label="{{ _("Celý svět") }}">&#8634;</button>
-            </div>
-            <p class="card-note mapa-napoveda">
-                {% if mapa_zoom == 'wheel' %}
-                    {{ _("Kolečkem přiblížíš, tažením posuneš, dvojklik vrátí celý svět.") }}
-                {% else %}
-                    {{ _("Klikáním přiblížíš, tažením posuneš, dvojklik vrátí celý svět.") }}
-                {% endif %}
-            </p>
-        </div>
-
-        <div class="table-wrap" style="margin-top:14px">
-            <table>
-                <thead>
-                <tr>
-                    <th>{{ _("Země") }}</th>
-                    <th class="num">{{ _("Míst") }}</th>
-                    <th class="num">{{ _("Spuštění") }}</th>
-                    <th class="num">{{ _("Čas") }}</th>
-                    <th class="num">{{ _("Přeneseno") }}</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for radek in zeme %}
-                <tr>
-                    <td class="strong">{{ radek.label }}</td>
-                    <td class="num">{{ radek.mist | number }}</td>
-                    <td class="num">{{ radek.plays | number }}</td>
-                    <td class="num">{{ radek.sekund | seconds }}</td>
-                    <td class="num">{{ radek.bajtu | bytes }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <p class="card-note" style="margin-top:12px">
-            {{ _("Umisťují se jen veřejné adresy – ta z domácí sítě žádné místo neoznačuje. Přesnost je podle GeoLite2: u pevných linek sedí město, u mobilních sítí ukáže klidně střed země. Na otázku „dívá se někdo z ciziny?“ to stačí, na hledání lidí ne.") }}
-        </p>
-    {% elif not geo.knihovna %}
-        <p class="card-note">
-            {{ _("Mapa potřebuje knihovnu maxminddb, která není povinnou součástí aplikace. Doinstaluj ji do téhož prostředí, ve kterém Jellyscope běží:") }}
-        </p>
-        <pre class="fallback" style="margin-top:8px"><code>{{ geo.python }} -m pip install maxminddb</code></pre>
-    {% elif not geo.databaze %}
-        <p class="card-note">
-            {{ _("Mapa potřebuje databázi GeoLite2 – jeden soubor, který leží v data/ a odpovídá bez internetu. Stáhne se na kliknutí (asi 65 MB); je to jediná chvíle, kdy aplikace sáhne jinam než na Jellyfin.") }}
-        </p>
-        <div class="btn-row" style="margin-top:12px">
-            <form method="post" action="/network/geoip">
-                <button class="btn primary" type="submit">{{ _("Stáhnout databázi GeoLite2") }}</button>
-            </form>
-        </div>
-        <p class="card-note" style="margin-top:10px">
-            {{ _("Data © MaxMind, GeoLite2 (CC BY-SA 4.0). Stahuje se ze zrcadla na GitHubu, protože u MaxMinda samotného je k tomu potřeba účet a klíč.") }}
-        </p>
-    {% else %}
-        <p class="card-note">
-            {{ _("Databáze je připravená, ale žádné přehrávání z veřejné adresy zatím není – všechno šlo z domácí sítě.") }}
-        </p>
-    {% endif %}
-
-    {% if geo.databaze %}
-        <p class="card-note" style="margin-top:12px">
-            {{ _("Databáze") }}: {{ geo.bajtu | bytes }},
-            {{ _("stažena") }} {{ geo.stari | relative }}.
-            <form method="post" action="/network/geoip" style="display:inline">
-                <button class="btn" type="submit" style="margin-left:8px">{{ _("Aktualizovat") }}</button>
-            </form>
-        </p>
-    {% endif %}
-</div>
+{% include "_sekce_mapa.html" %}
 {% endblock %}

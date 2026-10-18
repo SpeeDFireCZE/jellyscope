@@ -115,6 +115,31 @@ for jmeno in ("cs.json", "log/cs.json"):
     check(not jine,
           f"{jmeno}: klíč = hodnota ({len(jine)} nesedících {[k[:25] for k in jine[:2]]})")
 
+from jinja2 import Environment  # noqa: E402
+
+_JINJA = Environment()
+SABLONY = sorted((PROJECT / "jellyscope" / "templates").rglob("*.html"))
+
+
+def klice_sablony(text: str) -> list[str]:
+    """Doslovné klíče `_("...")` / `_('...')` tak, jak je uvidí Jinja.
+
+    Lexer Jinja vynechá komentáře {# #} a řetězec rovnou odescapuje
+    (\\" i \\n), takže klíč je přesně ten, který se za běhu hledá ve
+    slovníku. Regulární výraz to dřív neuměl: větu s \\"možné\\" uvnitř
+    přehlédl a na anglické i španělské stránce zůstala česky.
+    """
+    tokeny = list(_JINJA.lexer.tokenize(text))
+    return [c.value for a, b, c, d in zip(tokeny, tokeny[1:], tokeny[2:], tokeny[3:])
+            if (a.type, a.value) == ("name", "_") and b.type == "lparen"
+            and c.type == "string" and d.type == "rparen"]
+
+
+def bez_komentaru(text: str) -> str:
+    # Zakomentovane `{# _("stara veta") #}` neni pouziti.
+    return re.sub(r"\{#.*?#\}", "", text, flags=re.S)
+
+
 print()
 print("--- žádné heslo navíc ---")
 # Klíč se v kódu může objevit rozdělený přes dva řádky ("začátek "
@@ -122,9 +147,13 @@ print("--- žádné heslo navíc ---")
 # hlásil jako nepoužité skoro každou delší větu.
 zdroj_kodu = ""
 for cesta in (list((PROJECT / "jellyscope").glob("*.py"))
-              + list((PROJECT / "jellyscope" / "templates").rglob("*.html"))
               + [PROJECT / x for x in ("run.py", "manage.py", "demo.py")]):
     zdroj_kodu += cesta.read_text(encoding="utf-8") + "\n"
+for cesta in SABLONY:
+    text = cesta.read_text(encoding="utf-8")
+    # Sablona dvakrat: jako text (klice v seznamech, `_(promenna)`) a jako
+    # klice odescapovane lexerem (veta s uvozovkou uvnitr).
+    zdroj_kodu += bez_komentaru(text) + "\n" + "\n".join(klice_sablony(text)) + "\n"
 
 slepeny = re.sub(r'"\s*\n\s*"', "", zdroj_kodu)
 slepeny = re.sub(r"'\s*\n\s*'", "", slepeny)
@@ -143,31 +172,75 @@ print("--- co šablony chtějí přeložit, to ve zdroji je ---")
 # doslovne klice: `_(promenna)` se staticky precist neda.
 zdroj = set(obsah.get("cs.json", {}))
 chybi = []
-for cesta in sorted((PROJECT / "jellyscope" / "templates").rglob("*.html")):
-    text = cesta.read_text(encoding="utf-8")
-    for nalez in re.finditer(r'_\(\s*"([^"]{2,})"\s*\)', text):
-        klic = nalez.group(1)
-        if klic not in zdroj and not klic.startswith("{"):
+for cesta in SABLONY:
+    for klic in klice_sablony(cesta.read_text(encoding="utf-8")):
+        if len(klic) >= 2 and klic not in zdroj and not klic.startswith("{"):
             chybi.append(f"{cesta.name}: {klic[:40]!r}")
-check(not chybi, f"chybějících vět ve zdroji: {len(chybi)} {chybi[:3]}")
+check(not chybi, f"chybějících vět ve zdroji: {len(chybi)} {chybi[:5]}")
+
+# Past: hledani musi umet vetu s escapovanou uvozovkou i v apostrofech
+# a nesmi pocitat komentar - jinak by kontrola vyse tise nevidela presne
+# ty pripady, kvuli kterym vznikla.
+check(klice_sablony('{{ _("proto \\"možné\\".") }}{{ _(\'a\') }}{# {{ _("komentář") }} #}')
+      == ['proto "možné".', "a"],
+      "hledání pozná větu s uvozovkami uvnitř, apostrofy i komentář")
 
 print()
 print("--- dosazovaná místa sedí ve všech jazycích ---")
 # "{n} dílů" -> "{n} episodes". Kdyby v překladu {n} chybělo, číslo se
 # tiše ztratí: věta dává smysl, jen v ní není údaj, kvůli kterému vznikla.
-# U logu je to totéž s "%s".
+#
+# U logu je to totéž s "%s", jen tam záleží i na pořadí: hodnoty se
+# dosazují podle pozice, takže prohozené "%d ... %s" za běhu vyhodí
+# TypeError a hláška se z logu ztratí. Pojmenovaná místa %(x)s pořadí
+# mít nemusí. Vzor zná i %02d (S%02dE%02d u dílů seriálu).
+VZOR_LOG = re.compile(r"%(?:\(\w+\))?0?\d*[sdrf]")
+VZOR_UI = re.compile(r"\{(\w+)\}")
+
+
+def nesedi(klic: str, preklad: str, log: bool) -> bool:
+    vzor = VZOR_LOG if log else VZOR_UI
+    v_klici, v_prekladu = vzor.findall(klic), vzor.findall(preklad)
+    if log and not any("(" in m for m in v_klici):
+        return v_klici != v_prekladu
+    return sorted(v_klici) != sorted(v_prekladu)
+
+
+def format_selze(klic: str, preklad: str) -> bool:
+    # Sablona vola `_("Po {n} ...").format(n=...)` bez pojistky. Osamocena
+    # "{" nebo prazdne "{}" v prekladu vzorem vyse projdou, ale .format()
+    # na nich spadne a stranka skonci chybou 500.
+    mista = VZOR_UI.findall(klic)
+    if not mista:
+        return False
+    try:
+        preklad.format(**dict.fromkeys(mista, "1"))
+    except (KeyError, IndexError, ValueError):
+        return True
+    return False
+
+
 for jmeno, data in obsah.items():
-    vzor = re.compile(r"%[sdrf]") if jmeno.startswith("log/") \
-        else re.compile(r"\{(\w+)\}")
-    spatne = []
+    log = jmeno.startswith("log/")
+    spatne, rozbite = [], []
     for klic, preklad in data.items():
         # Prazdny preklad = nepreloženo (tak to zapisuje Weblate); ten se
         # nenacita a propada na anglictinu, takze neni co porovnavat.
         if not preklad.strip():
             continue
-        if sorted(vzor.findall(klic)) != sorted(vzor.findall(preklad)):
+        if nesedi(klic, preklad, log):
             spatne.append(f"{klic[:35]!r}")
+        if not log and format_selze(klic, preklad):
+            rozbite.append(f"{klic[:35]!r}")
     check(not spatne, f"{jmeno}: {len(spatne)} nesedících {spatne[:3]}")
+    if not log:
+        check(not rozbite, f"{jmeno}: .format() projde u všech vět ({len(rozbite)} {rozbite[:3]})")
+
+# Past: kontroly musi poznat prohozene poradi, %02d i rozbitou zavorku.
+check(nesedi("na %s (%d/%d)", "(%d/%d) na %s", log=True), "pozná prohozené %s a %d v logu")
+check(nesedi("S%02dE%02d", "S%dE%d", log=True), "pozná ztracené %02d")
+check(format_selze("Po {n} pokusech", "Tras {n} intentos {"), "pozná osamocenou závorku")
+check(not format_selze("Po {n} pokusech", "Tras {n} intentos"), "a správný překlad projde")
 
 print()
 print("--- a jazyk se pozná podle souboru, ne podle kódu ---")

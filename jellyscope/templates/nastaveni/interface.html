@@ -49,7 +49,7 @@
                     </span>
                 </label>
             </div>
-            <p class="hint">{{ _("Změní se jen vzhled – žádná data, žádné výpočty. Přepnout jde kdykoliv zpátky.") }}</p>
+            <p class="hint">{{ _("Změní se jen vzhled, data ani výpočty ne. Přepnout jde kdykoliv zpátky.") }}</p>
         </div>
 
         <div class="field">
@@ -72,13 +72,13 @@
                     <span>
                         <span class="title">{{ _("Přesný na minuty") }}</span>
                         <span class="desc">
-                            {{ _("„12:24“, „4:22“. Nad deset hodin se totiž desetinná místa utínají, takže den se 34,52 hodinami se hlásí jako 35 – skoro půlhodina rozdílu.") }}
+                            {{ _("„12:24“, „4:22“. Nad deset hodin se totiž desetinná místa utínají, takže den se 34,52 hodinami se hlásí jako 35, tedy skoro o půl hodiny jinak.") }}
                         </span>
                     </span>
                 </label>
             </div>
-            <p class="hint">{{ _("Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté – tam je „40“ značka měřítka, ne údaj.") }}</p>
-            <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich – ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
+            <p class="hint">{{ _("Týká se čísel, která se čtou jako údaj: bublin v grafech a hodnot u pruhů. Popisky os zůstávají kulaté, protože tam je „40“ značka měřítka, ne údaj.") }}</p>
+            <p class="hint">{{ _("Je to čistě nastavení zobrazení. Aplikace uvnitř počítá vždycky se sekundami, které nahlásil Jellyfin, a hlavní čísla („Celkem odsledováno“) se sčítají z nich, ne z toho, co je vidět v grafu. Přepínač tedy nemění žádná data ani výpočty, jen zápis.") }}</p>
         </div>
 
         <div class="btn-row">
@@ -90,7 +90,7 @@
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Vlastní přehled") }}</h2>
-        <p class="card-note">{{ _("záložka, kterou si člověk poskládá sám") }}</p>
+        <p class="card-note">{{ _("stránka pro všechny, kterou skládá správce") }}</p>
     </div>
         <div class="field">
             <label>{{ _("Vlastní přehled") }}</label>
@@ -117,7 +117,16 @@
                     </span>
                 </label>
             </div>
-            <p class="hint">{{ _("Sestavuje ho správce a platí pro celý server – stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.") }}</p>
+            <p class="hint">{{ _("Sestavuje ho správce a platí pro celý server, stejně jako ostatní nastavení. Dokud v něm nic není, záložka se neukáže.") }}</p>
+        </div>
+
+        {# Název jde do menu a do nadpisu - „Rodina", „Kino", podle toho,
+           k čemu stránka je. Nepřekládá se, je to text správce. #}
+        <div class="field">
+            <label for="dashboard_nazev">{{ _("Název stránky") }}</label>
+            <input type="text" id="dashboard_nazev" name="dashboard_nazev"
+                   maxlength="40" value="{{ nazev_prehledu }}" style="max-width:320px">
+            <p class="hint">{{ _("Ukáže se v menu a jako nadpis stránky. Bez něj přehled zapnout nejde.") }}</p>
         </div>
 
         <div class="btn-row">
@@ -132,7 +141,7 @@
         <p class="card-note">{{ _("kolik toho karta ukáže rovnou, než se zbytek schová do okna") }}</p>
     </div>
     <p class="card-note" style="margin-bottom:14px">
-        {{ _("Každý další stream (nebo další divák) posouvá zbytek stránky dolů. Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. Kolik se vejde na obrazovku, víš líp než aplikace – proto je to tady, a ne natvrdo v kódu.") }}
+        {{ _("Každý další stream (nebo další divák) posouvá zbytek stránky dolů. Nad tímhle počtem se seznam schová za tlačítko a otevře se v okně. Kolik se vejde na obrazovku, víš líp než aplikace, a proto se to nastavuje tady.") }}
     </p>
 
         <div class="field">
@@ -144,7 +153,7 @@
         </div>
 
         <div class="field">
-            <label for="ui_max_streams_mobile">{{ _("Přehrávání na Přehledu – mobil") }}</label>
+            <label for="ui_max_streams_mobile">{{ _("Přehrávání na Přehledu (mobil)") }}</label>
             <input type="number" id="ui_max_streams_mobile" name="ui_max_streams_mobile"
                    min="{{ strop_min }}" max="{{ strop_max }}"
                    value="{{ strop_streamu_mobil }}" style="width:120px">
@@ -162,13 +171,29 @@
         </div>
 
         <div class="field">
-            <label for="ui_max_viewers_mobile">{{ _("Diváků v jazykových statistikách – mobil") }}</label>
+            <label for="ui_max_viewers_mobile">{{ _("Diváků v jazykových statistikách (mobil)") }}</label>
             <input type="number" id="ui_max_viewers_mobile" name="ui_max_viewers_mobile"
                    min="{{ strop_min }}" max="{{ strop_max }}"
                    value="{{ strop_lidi_mobil }}" style="width:120px">
             <p class="hint">
                 {{ _("Na úzké obrazovce je pruh přes celou šířku a pod diváky je ještě legenda a tabulka. Zbytek se schová za tlačítko, které otevře tytéž diváky v okně.") }}
             </p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows">{{ _("Řádků v tabulkách Zjištění") }}</label>
+            <input type="number" id="ui_max_rows" name="ui_max_rows"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_radku }}" style="width:120px">
+            <p class="hint">{{ _("Tabulky na stránce Zjištění jsou seřazené od nejdůležitějšího. Nad tento počet se zkrátí a celá tabulka se otevře v okně.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows_mobile">{{ _("Řádků v tabulkách Zjištění (mobil)") }}</label>
+            <input type="number" id="ui_max_rows_mobile" name="ui_max_rows_mobile"
+                   min="{{ strop_min }}" max="{{ strop_max }}"
+                   value="{{ strop_radku_mobil }}" style="width:120px">
+            <p class="hint">{{ _("Na úzké obrazovce je řádek tabulky vyšší, takže se jich vejde míň.") }}</p>
         </div>
 
         <div class="btn-row">
@@ -202,7 +227,7 @@
                     <span>
                         <span class="title">{{ _("Kolečkem") }}</span>
                         <span class="desc">
-                            {{ _("Pohodlnější, ale dokud je kurzor nad mapou, stránka se kolečkem neposune – rolování si mapa vezme pro sebe.") }}
+                            {{ _("Pohodlnější, ale dokud je kurzor nad mapou, stránka se kolečkem neposune, protože si rolování mapa vezme pro sebe.") }}
                         </span>
                     </span>
                 </label>

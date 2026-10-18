@@ -20,7 +20,10 @@
     --surface-2:       #f2f1ed;
     --text-primary:    #0b0b0b;
     --text-secondary:  #52514e;
-    --text-muted:      #898781;
+    /* Pomocny text (data, poznamky pod kartou). Drive #898781, jenze to
+       na plose --surface-2 davalo 3,2 : 1 a bezny text chce aspon 4,5 : 1.
+       Hlida tests/test_kontrast.py. */
+    --text-muted:      #6e6c67;
     --border:          rgba(11, 11, 11, 0.10);
     --grid:            #e1e0d9;
     --axis:            #c3c2b7;
@@ -64,9 +67,38 @@
        kategorie a jsou vybrane tak, aby se navzajem nepletly. Tohle je
        barva aplikace - aktivni polozka menu, vybrany chip, jednobarevny
        graf, kde zadna kategorie neni. */
-    --accent:     #0b7fb0;
+    --accent:     #0b7eae;
     --accent-2:   #8a44a8;
+    /* Bile pismo na barve aplikace (Ulozit, vybrany chip). Puvodni
+       #0b7fb0 s bilou davala 4,49 : 1, o chlup pod hranici; #0b7eae
+       je na oko tataz modra a dava 4,56. */
     --accent-ink: #ffffff;
+
+    /* Pismo na barevnem podkladu: procenta v dilcich deleneho pruhu,
+       popisek cerveneho tlacitka. Bila nesedi na kazde barve - na
+       tyrkysove v tmavem motivu mela 1,9 : 1. Ke kazde barve, ktera muze
+       nest text, proto patri vlastni inkoust: cerny, nebo bily, podle
+       toho, co da aspon 4,5 : 1. Motivy dole prepisuji jen ty, ktere se
+       u nich lisi. Spocitane a hlidane v tests/test_kontrast.py. */
+    --ink-tmava: #000000;
+    --ink-bila:  #ffffff;
+    --ink-series-1:   var(--ink-tmava);
+    --ink-series-2:   var(--ink-bila);
+    --ink-series-3:   var(--ink-tmava);
+    --ink-series-4:   var(--ink-tmava);
+    --ink-series-5:   var(--ink-bila);
+    --ink-series-6:   var(--ink-bila);
+    --ink-series-7:   var(--ink-bila);
+    --ink-series-8:   var(--ink-bila);
+    --ink-good:       var(--ink-tmava);
+    --ink-warning:    var(--ink-tmava);
+    --ink-serious:    var(--ink-tmava);
+    --ink-critical:   var(--ink-bila);
+    --ink-text-muted: var(--ink-bila);
+    --ink-linka-1:    var(--ink-tmava);
+    --ink-linka-2:    var(--ink-bila);
+    --ink-linka-3:    var(--ink-tmava);
+    /* Barva aplikace ma inkoust uz od zacatku: --accent-ink. */
 
     /* Podklad postranniho panelu - viz .sidebar. */
     --rail:       #fdfdfc;
@@ -90,7 +122,7 @@
         --surface-2:      #1c2231;
         --text-primary:   #eef2f8;
         --text-secondary: #a9b4c6;
-        --text-muted:     #7b8598;
+        --text-muted:     #818ca0;
         --border:         rgba(238, 242, 248, 0.10);
         --grid:           #232a3a;
         --axis:           #333c50;
@@ -100,6 +132,13 @@
         --accent-2:   #aa5cc3;
         --accent-ink: #04161d;
         --rail:       #0a0c13;
+
+        /* Svetlejsi barvy tmaveho motivu chteji tmave pismo. */
+        --ink-series-5:   var(--ink-tmava);
+        --ink-series-7:   var(--ink-tmava);
+        --ink-series-8:   var(--ink-tmava);
+        --ink-critical:   var(--ink-tmava);
+        --ink-text-muted: var(--ink-tmava);
 
         /* Cary v grafu na Prehledu - z rozsahu Jellyfinu, ale ne primo
            z loga. Modra a fialova z loga se pri deuteranopii temer
@@ -147,7 +186,7 @@
     --surface-2:      #1c2231;
     --text-primary:   #eef2f8;
     --text-secondary: #a9b4c6;
-    --text-muted:     #7b8598;
+    --text-muted:     #818ca0;
     --border:         rgba(238, 242, 248, 0.10);
     --grid:           #232a3a;
     --axis:           #333c50;
@@ -156,6 +195,13 @@
     --accent-2:   #aa5cc3;
     --accent-ink: #04161d;
     --rail:       #0a0c13;
+
+    /* Svetlejsi barvy tmaveho motivu chteji tmave pismo. */
+    --ink-series-5:   var(--ink-tmava);
+    --ink-series-7:   var(--ink-tmava);
+    --ink-series-8:   var(--ink-tmava);
+    --ink-critical:   var(--ink-tmava);
+    --ink-text-muted: var(--ink-tmava);
 
     /* Cary v grafu na Prehledu - z rozsahu Jellyfinu, ale ne primo
        z loga. Modra a fialova z loga se pri deuteranopii temer
@@ -290,6 +336,67 @@ a { color: inherit; }
 }
 
 .sidebar-foot { margin-top: auto; font-size: 12px; color: var(--text-muted); }
+
+/* Můj účet v patičce menu. Vypadá a chová se jako ostatní tlačítka
+   (.btn: Světlý / tmavý, Odhlásit) - plocha, rámeček i ztmavnutí při
+   najetí stejné; vlastní barva nebo modré ohraničení by z něj dělaly
+   jiný druh ovládacího prvku. Na stránce Můj účet zůstane ztmavlé, jako
+   vybraná položka menu. Výška aspoň 44 px: na telefonu se trefuje prstem. */
+.ucet-odkaz {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    margin-top: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--axis);
+    border-radius: 8px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+.ucet-odkaz:hover,
+.ucet-odkaz[aria-current="page"] { background: var(--surface-2); }
+.ucet-avatar {
+    position: relative;
+    overflow: hidden;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 14px;
+    font-weight: 700;
+}
+/* Profilový obrázek z Jellyfinu leží přes písmeno a vyplní kolečko;
+   když se nenačte, odstraní se a písmeno je vidět. Vlastní plocha, ať
+   písmeno neprosvítá průhlednými místy obrázku (kreslená postavička). */
+.ucet-avatar img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: var(--accent);
+}
+/* Na stránce Můj účet totéž kolečko, větší, vedle nadpisu. */
+.ucet-hlava { display: flex; align-items: center; gap: 14px; }
+.ucet-avatar-velky { width: 52px; height: 52px; font-size: 22px; }
+.ucet-text { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.3; }
+.ucet-text strong {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ucet-role { font-size: 12px; color: var(--text-muted); }
+/* „Můj účet" se nezalomí v půlce; role ano - „espectador de Jellyfin"
+   by se jinak nevešel a vylezl přes šipku. */
+.ucet-role > span:last-child { white-space: nowrap; }
+.ucet-sipka { flex: none; font-size: 20px; line-height: 1; color: var(--text-muted); }
 
 /* Obsah je dashboard - tabulky, mřížky plakátů, grafy. Ty šířku využijí,
    na rozdíl od článku, kde by dlouhé řádky ubíraly na čitelnosti.
@@ -448,6 +555,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 }
 .grid-2 > .card { margin-bottom: 0; }
 
+/* Karty, ktere se svym obsahem lisi na vysku (tabulka vedle kratkeho
+   grafu na Zjistenich). Natazena karta pak mela pod grafem prazdnou
+   plochu na vysku pul obrazovky; takhle konci tam, kde konci obsah. */
+.grid-2.nahoru { align-items: start; }
+
 .kpi-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
@@ -466,7 +578,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    jako udaj, ne jako nadpis - a rada dlazdic vedle sebe drzi jednu linku,
    protoze verzalky nemaji dotahy nahoru ani dolu. */
 .tile-label {
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     font-weight: 600;
@@ -564,6 +676,17 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     gap: 10px;
 }
 
+/* Popisek nad pruhem, v cele delce (charts.hbar_chart(popisky_nad=True)).
+   Pro popisky, ktere jsou veta - duvody prepoctu by se jinak usekly. */
+.hbars.popisky-nad .hbar-row {
+    grid-template-columns: 1fr max-content;
+    row-gap: 4px;
+}
+.hbars.popisky-nad .hbar-label {
+    grid-column: 1 / -1;
+    white-space: normal;
+}
+
 /* Zebricek ma pred popiskem cislo. Rika "treti" driv, nez se to da
    odpocitat ocima - a u seznamu deseti titulu to je rozdil. */
 .hbar-row.is-ranked { grid-template-columns: 18px minmax(0, 30%) 1fr max-content; }
@@ -588,6 +711,10 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    pozornost od sloupcu, kvuli kterym tam graf je. */
 .hbar-link { text-decoration: none; color: inherit; }
 .hbar-link:hover { color: var(--text-primary); text-decoration: underline; }
+/* Popisek grafu ma overflow: hidden (dlouhe jmeno se usekne). Ramecek
+   fokusu kresleny ven by se orizl a s klavesnici by nebylo videt, kde
+   clovek je - proto dovnitr. */
+.hbar-link:focus-visible { outline-offset: -2px; }
 
 .hbar-track {
     /* Drážka je jen naznačená - je to pozadí, ne data. Plná --grid dělala
@@ -635,10 +762,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     overflow: hidden;
 }
 
+/* Barvu pisma dava dilek sam (charts.stacked_bar, var(--ink-*)): bila na
+   kazdou barvu nesedi. */
 .stack-seg span {
     font-size: 12px;
     font-weight: 600;
-    color: #fff;
     white-space: nowrap;
 }
 
@@ -710,7 +838,9 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     padding: 9px 12px;
     border-radius: 10px;
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
-    max-width: 340px;
+    /* Na úzkém telefonu (320 px) by 340 px bylo širší než displej
+       a bublina by se do okna nevešla, ať ji skript posune kamkoliv. */
+    max-width: min(340px, calc(100vw - 16px));
     opacity: 0;
     transition: opacity 0.08s ease;
 }
@@ -728,9 +858,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .tooltip-radek {
     font-weight: 550;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Dlouhý řádek se zalomí, ne useknout „…": u transcode je na konci
+       právě to důležité („nestíhá, obraz může sekat") a na telefonu se
+       do šířky displeje nevejde skoro nic. Pokračování je odsazené, ať
+       je vidět, že patří k řádku nad ním, ne že je to další údaj. */
+    padding-left: 1em;
+    text-indent: -1em;
+    overflow-wrap: anywhere;
 }
 .tooltip-radek + .tooltip-radek { margin-top: 2px; }
 
@@ -955,8 +1089,11 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    pozvánka k posunutí. */
 .recent-card { padding-bottom: 12px; }
 .recent-card .poster-strip {
-    margin: 0 -20px -6px;
-    padding: 2px 20px 10px;
+    /* Nahore 8 px misto 2: plakat se po najeti lehce zvetsi a pas, ktery
+       se posouva do stran, orezava vse, co z nej vycniva. Zaporny horni
+       okraj vraci vysku, takze se pod pasem nic neposune. */
+    margin: -6px -20px -6px;
+    padding: 8px 20px 10px;
     /* Bez tohohle radku se prvni plakat lepil na ramecek karty, prestoze
        odsazeni tu bylo. Muze za to `scroll-snap`: prohlizec "pricvakne"
        prvni polozku na zacatek posouvaci oblasti a leve odsazeni tim
@@ -1009,9 +1146,18 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     margin-bottom: 7px;
 }
 
-.poster-frame { display: block; }
+.poster-frame { display: block; transition: transform 0.16s ease, border-color 0.14s ease; }
 .poster-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .poster-card:hover .poster-frame { border-color: var(--accent); }
+
+/* Po najeti se plakat lehce zvetsi, aby bylo videt, na co clovek miri.
+   Klavesnici totez pres fokus na nazvu (obrazek sam se pri Tabu
+   preskakuje). Karta s dily se nezvetsuje - ta po najeti roste do sirky
+   a ukaze seznam dilu, zvetseni navic by z ni udelalo neco jineho. */
+.poster-card:not(.has-episodes):hover .poster-frame,
+.poster-card:not(.has-episodes):focus-within .poster-frame {
+    transform: scale(1.05);
+}
 
 .poster-badge {
     position: absolute;
@@ -1019,7 +1165,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     top: 6px;
     background: rgba(11, 11, 11, 0.82);
     color: #fff;
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 600;
     padding: 2px 6px;
     border-radius: 4px;
@@ -1074,7 +1220,9 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     flex-direction: column;
     gap: 3px;
     padding: 8px 7px;
-    background: rgba(11, 11, 11, 0.88);
+    /* Plna barva, ne pruhledna: nadpis nahore ma stejnou, a kdyby byly
+       obe pruhledne, nadpis by na seznamu delal tmavsi obdelnik. */
+    background: #0f0f0f;
     overflow-y: auto;
     opacity: 0;
     visibility: hidden;
@@ -1110,9 +1258,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
        `top: -8px` je odsazení seznamu, aby nadpis dosedl na okraj. */
     position: sticky;
     top: -8px;
-    background: rgba(11, 11, 11, 0.95);
-    padding: 3px 0 2px;
-    font-size: 10px;
+    /* Pres celou sirku seznamu a ve stejne barve - drive mel vlastni,
+       tmavsi pas jen od textu doprava a na seznamu vypadal jako cizi
+       obdelnik. Musi byt plny, aby pod nim nebyly videt odrolovane dily. */
+    background: #0f0f0f;
+    margin: 0 -7px;
+    padding: 3px 7px 2px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -1122,7 +1274,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .poster-episodes a {
     display: block;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.35;
     color: #fff;
     text-decoration: none;
@@ -1137,7 +1289,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .poster-episodes a strong { color: var(--series-1); font-weight: 700; }
 .poster-episodes a:hover { background: rgba(255, 255, 255, 0.18); }
 
-.poster-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.poster-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
 /* --------------------------------------------------------------------- */
 /* Zalozky                                                                */
@@ -1292,13 +1444,21 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 
 .media-card:hover .media-poster { border-color: var(--series-1); }
 
+/* Stejne jako plakaty v pasu Nove pridane: lehke zvetseni po najeti
+   a pri fokusu z klavesnice (karta je jeden odkaz). */
+.media-poster { transition: transform 0.16s ease, border-color 0.14s ease; }
+.media-card:hover .media-poster,
+.media-card:focus-visible .media-poster {
+    transform: scale(1.04);
+}
+
 .media-size {
     position: absolute;
     right: 6px;
     bottom: 6px;
     background: rgba(11, 11, 11, 0.82);
     color: #fff;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
     padding: 2px 7px;
     border-radius: 5px;
@@ -1399,6 +1559,13 @@ table.facts th {
     .sloupec-navic { display: none; }
 }
 
+/* Historie: zarizeni a aplikace pod sebou. Bez minimalni sirky prohlizec
+   sloupec zuzil tak, ze se "Chrome na notebooku / Jellyfin Web" lamalo
+   na pet radku. Duvod prepoctu se zalamuje v rozumne sirce. */
+.zarizeni { min-width: 9.5em; }
+.zarizeni-aplikace { font-size: 12px; }
+.duvod-prepoctu { font-size: 12px; max-width: 15em; margin-top: 2px; }
+
 /* --------------------------------------------------------------------- */
 /* Tabulky - kazdy graf ma mit i ctenou podobu                            */
 /* --------------------------------------------------------------------- */
@@ -1428,6 +1595,12 @@ td {
 
 tbody tr:hover { background: var(--surface-2); }
 tbody tr:last-child td { border-bottom: none; }
+/* Zkracena tabulka (Zjisteni): posledni VIDITELNY radek je ten pred prvnim
+   schovanym. Bez tohohle by pod nim zustala cara tesne nad tlacitkem. */
+tbody tr:has(+ tr.radek-navic) td { border-bottom: none; }
+@media (max-width: 860px) {
+    tbody tr:has(+ tr.jen-desktop) td { border-bottom: none; }
+}
 
 /* --------------------------------------------------------------------- */
 /* Srovnání dvou období                                                   */
@@ -1543,7 +1716,7 @@ details.paths pre {
     gap: 5px;
     padding: 2px 8px;
     border-radius: 999px;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
     border: 1px solid var(--border);
     background: var(--surface-2);
@@ -1700,6 +1873,17 @@ textarea { min-height: 92px; resize: vertical; font-family: ui-monospace, "Casca
    pohybu tabulatorem je nutny, jinak clovek netusi, kde je.
    :focus-visible presne tohle rozliseni dela za nas: u textovych poli
    ramecek zustava vzdycky, u zaskrtavatek a prepinacu jen pri klavesnici. */
+
+/* Odkazy, tlacitka a rozbalovaci prepinace maji jeden ramecek v barve
+   aplikace. Drive tu zustaval vychozi ramecek prohlizece, ktery vypada
+   v kazdem prohlizeci jinak a na tmavem podkladu misty zanikal. Prvky
+   s vlastnim rameckem (.link-button, menu) ho prebiji vyssi
+   specificnosti. */
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid var(--series-1);
     outline-offset: 1px;
@@ -1824,6 +2008,10 @@ label:has(> input[type="radio"]) { cursor: pointer; }
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.5;
+    /* V popisu byva cesta k ffprobe. Na Windows je to jedno dlouhe slovo
+       bez mezer (C:\Users\...\WinGet\Packages\...) a na telefonu by
+       roztahlo celou stranku do sirky. */
+    overflow-wrap: anywhere;
 }
 
 .btn {
@@ -1873,7 +2061,8 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .btn.danger {
     background: var(--critical);
     border-color: var(--critical);
-    color: #fff;
+    /* Bila na svetle cervene tmaveho motivu mela jen 3,2 : 1. */
+    color: var(--ink-critical);
 }
 
 .btn.danger:hover { filter: brightness(1.07); }
@@ -2000,7 +2189,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .dialog p { margin: 0 0 14px; font-size: 14px; color: var(--text-secondary); }
 
 .dialog-label {
-    font-size: 11.5px !important;
+    font-size: 12px !important;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--text-muted) !important;
@@ -2144,7 +2333,10 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 
 @media (max-width: 860px) {
-    .layout { grid-template-columns: 1fr; }
+    /* `align-content: start`: u stranky kratsi nez obrazovka (Muj ucet na
+       vysokem telefonu) si mrizka jinak rozdelila volne misto i do radku
+       s hlavickou a nad logem vznikl prazdny pruh. */
+    .layout { grid-template-columns: 1fr; align-content: start; }
     .sidebar {
         position: static;
         height: auto;
@@ -2372,7 +2564,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     left: 6px;
     padding: 2px 7px;
     border-radius: 999px;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
     background: rgba(0, 0, 0, 0.62);
     color: #fff;
@@ -2458,6 +2650,11 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 @media (prefers-reduced-motion: reduce) {
     .flash-toast { animation: none; }
     .flash-toast.odchazi { transition: none; }
+}
+
+/* Plakat se zvetsi i tak, jen bez animace. */
+@media (prefers-reduced-motion: reduce) {
+    .poster-frame, .media-poster { transition: none; }
 }
 
 
@@ -2616,7 +2813,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 
 .kalendar-den-tydne {
-    font-size: 10.5px;
+    font-size: 12px;
     color: var(--text-muted);
     text-align: center;
     padding-bottom: 4px;
@@ -2641,7 +2838,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .kalendar-den.dnes { box-shadow: inset 0 0 0 1px var(--axis); }
 .kalendar-den.vybrany {
     background: var(--series-1);
-    color: #fff;
+    color: var(--ink-series-1);
     font-weight: 600;
 }
 
@@ -2849,6 +3046,49 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 
 .okno-obsah .session { break-inside: avoid; }
 
+/* Okno, jehož obsah může být delší než obrazovka (Práva účtu: strom
+   oblastí s popisky). `.okno` má `overflow: visible` kvůli našeptávačům,
+   takže bez tohohle obsah vytekl pod spodní okraj okna. Výšku okna hlídá
+   prohlížeč sám (modální <dialog> nepřeroste obrazovku); uvnitř se dělí
+   na hlavu, posuvný obsah a patu s tlačítkem, které zůstane vidět.
+   `display: flex` jen u otevřeného okna - viz .okno-rozvrzeni. */
+.okno-posuvne { overflow: hidden; }
+.okno-posuvne[open] { display: flex; flex-direction: column; }
+.okno-posuvne > form:not(.okno-hlava) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.okno-posuvne .okno-obsah { max-height: none; flex: 1; min-height: 0; }
+.okno-posuvne .okno-hlava { flex: none; }
+
+/* Čerstvě vyrobený API klíč v řádku tabulky (makro bunka_klice). Je
+   dlouhý (přes 40 znaků): zalomí se kdekoliv, ale sloupec nespadne pod
+   rozumnou šířku - tabulka se radši posune. Jedno kliknutí do klíče ho
+   označí celý. */
+.novy-klic { min-width: 180px; }
+.novy-klic-text {
+    display: block;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+.novy-klic-akce {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+/* .hint má vzhled jen uvnitř .field - tady ho buňka potřebuje sama. */
+.novy-klic .hint {
+    color: var(--text-muted);
+    font-size: 12.5px;
+    white-space: normal;
+}
+.novy-klic p.hint { margin: 6px 0 0; }
+
 
 /* Atribut `hidden` znamená "tohle není vidět" - jenže prohlížeč ho řeší
    pravidlem [hidden] { display: none }, které přebije každé konkrétnější
@@ -2937,7 +3177,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     --surface-2:       #f2f1ed;
     --text-primary:    #0b0b0b;
     --text-secondary:  #52514e;
-    --text-muted:      #898781;
+    --text-muted:      #6e6c67;
     --border:          rgba(11, 11, 11, 0.10);
     --grid:            #e1e0d9;
     --axis:            #c3c2b7;
@@ -2956,11 +3196,24 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     --serious:  #ec835a;
     --critical: #d03b3b;
 
+    /* Pismo na barvach klasicke palety. Plati i pro klasicky tmavy - ten
+       stavove barvy (a tedy i cervenou) bere odsud, takze na cervene
+       zustava bile pismo i tam. */
+    --ink-series-2:   var(--ink-tmava);
+    --ink-series-5:   var(--ink-tmava);
+    --ink-series-8:   var(--ink-tmava);
+    --ink-critical:   var(--ink-bila);
+
     /* Barva aplikace byla drive tataz jako prvni barva serie - a obe
-       strany prechodu stejne, takze z prechodu zbude plna barva. */
-    --accent:     var(--series-1);
-    --accent-2:   var(--series-1);
+       strany prechodu stejne, takze z prechodu zbude plna barva. Ve
+       svetlem je o chlup tmavsi nez serie: #2a78d6 s bilym pismem davala
+       4,42 : 1, #2975d1 dava 4,61 a na oko je stejna. */
+    --accent:     #2975d1;
+    --accent-2:   #2975d1;
     --accent-ink: #ffffff;
+    --ink-linka-1: var(--ink-series-1);
+    --ink-linka-2: var(--ink-series-2);
+    --ink-linka-3: var(--ink-series-3);
     --rail:       var(--surface-1);
 
     --linka-1: var(--series-1);
@@ -2977,7 +3230,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
         --surface-2:      #232322;
         --text-primary:   #ffffff;
         --text-secondary: #c3c2b7;
-        --text-muted:     #898781;
+        --text-muted:     #8d8b85;
         --border:         rgba(255, 255, 255, 0.10);
         --grid:           #2c2c2a;
         --axis:           #383835;
@@ -2990,6 +3243,12 @@ details.fallback[open] > summary { margin-bottom: 4px; }
         --series-6: #008300;
         --series-7: #9085e9;
         --series-8: #e66767;
+
+        /* Barva aplikace je v tmavem zase prvni serie; na ni patri tmave
+           pismo (bila na #3987e5 mela 3,6 : 1). */
+        --accent:     var(--series-1);
+        --accent-2:   var(--series-1);
+        --accent-ink: #04161d;
     }
 }
 
@@ -2999,7 +3258,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     --surface-2:      #232322;
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
+    --text-muted:     #8d8b85;
     --border:         rgba(255, 255, 255, 0.10);
     --grid:           #2c2c2a;
     --axis:           #383835;
@@ -3012,6 +3271,12 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     --series-6: #008300;
     --series-7: #9085e9;
     --series-8: #e66767;
+
+    /* Barva aplikace je v tmavem zase prvni serie; na ni patri tmave
+       pismo (bila na #3987e5 mela 3,6 : 1). */
+    --accent:     var(--series-1);
+    --accent-2:   var(--series-1);
+    --accent-ink: #04161d;
 }
 
 /* --- tvary, ktere novy vzhled zmenil ------------------------------- */
@@ -3069,9 +3334,9 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 [data-skin="klasicky"] .session-vice {
     background: var(--series-1);
     border: 1px solid var(--series-1);
-    color: #fff;
+    color: var(--ink-series-1);
 }
-[data-skin="klasicky"] .session-vice strong { color: #fff; }
+[data-skin="klasicky"] .session-vice strong { color: var(--ink-series-1); }
 [data-skin="klasicky"] .session-vice .session-vice-note { color: rgb(255 255 255 / 82%); }
 
 /* Hlavni tlacitko melo obrys a plnou barvu. */
@@ -3113,7 +3378,8 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     .dash-sekce.dash-cela    { grid-column: span 6; }
 }
 
-.dash-vyzva { text-align: center; padding: 28px 20px; }
+/* Přes celou mřížku: jinak výzva zabrala jeden ze šesti sloupců. */
+.dash-vyzva { text-align: center; padding: 28px 20px; grid-column: 1 / -1; }
 
 /* --- okno s rozvržením --------------------------------------------- */
 /* Skládá se tady, ne přetahováním skutečných panelů: panel s grafem je
@@ -3246,7 +3512,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .dash-polozka:hover:not(:disabled) { border-color: var(--accent); }
 .dash-polozka:disabled { opacity: 0.4; cursor: default; }
 .dash-polozka-nazev { font-weight: 600; font-size: 12.5px; }
-.dash-polozka-popis { font-size: 11.5px; color: var(--text-muted); }
+.dash-polozka-popis { font-size: 12px; color: var(--text-muted); }
 
 /* Pata drží tlačítka na místě, ať je v mřížce cokoliv. */
 .okno-pata {
@@ -3274,13 +3540,17 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 */
 .verze-licence {
     margin-top: 4px;
-    font-size: 11.5px;
+    font-size: 12px;
 }
 
 .verze-licence a { color: var(--text-muted); text-decoration: none; }
 .verze-licence a:hover { text-decoration: underline; }
 
 .jen-mobil { display: none; }
+
+/* Radek tabulky nad stropem (Zjisteni, viz makro trida_radku). Cela
+   tabulka je v okne #okno-tabulka, kam se kopiruje uz bez teto tridy. */
+.radek-navic { display: none; }
 
 @media (max-width: 860px) {
     .jen-desktop { display: none; }

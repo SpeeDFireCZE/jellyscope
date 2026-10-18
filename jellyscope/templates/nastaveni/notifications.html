@@ -23,7 +23,7 @@
 <div class="flash info">
     <span class="dot"></span>
     <span>
-        {{ _("Tyto notifikace upozorňují jen na to, co se děje v Jellyscope. Pokud Jellyscope nefunguje, nefungují ani notifikace – pro kontrolu funkčnosti Jellyscope využij například Uptime Kuma.") }}
+        {{ _("Tyto notifikace upozorňují jen na to, co se děje v Jellyscope. Pokud Jellyscope nefunguje, nefungují ani notifikace. Jestli Jellyscope běží, hlídej třeba přes Uptime Kuma.") }}
     </span>
 </div>
 
@@ -84,7 +84,7 @@
                 <label for="smtp-heslo">{{ _("Heslo") }}</label>
                 <input type="password" id="smtp-heslo" name="smtp_heslo"
                        value="" autocomplete="new-password"
-                       placeholder="{{ _('uloženo – nech prázdné, ať zůstane') if ma_smtp_heslo else '' }}">
+                       placeholder="{{ _('uloženo (nech prázdné, ať zůstane)') if ma_smtp_heslo else '' }}">
                 <p class="hint">{{ _("Uložené heslo se do stránky nikdy nevypisuje. Prázdné pole ho nechá být.") }}</p>
             </div>
         </div>
@@ -123,8 +123,8 @@
             <label for="discord-webhook">{{ _("Adresa webhooku") }}</label>
             <input type="password" id="discord-webhook" name="discord_webhook"
                    value="" autocomplete="off"
-                   placeholder="{{ _('uloženo – nech prázdné, ať zůstane') if ma_discord else 'https://discord.com/api/webhooks/…' }}">
-            <p class="hint">{{ _("Na kanálu: Upravit kanál → Integrace → Webhooky. Kdo tu adresu má, může psát do kanálu za tebe – proto se sem už nevypisuje.") }}</p>
+                   placeholder="{{ _('uloženo (nech prázdné, ať zůstane)') if ma_discord else 'https://discord.com/api/webhooks/…' }}">
+            <p class="hint">{{ _("Na kanálu: Upravit kanál → Integrace → Webhooky. Kdo tu adresu má, může psát do kanálu za tebe, proto se sem už nevypisuje.") }}</p>
         </div>
 
         {# --- Telegram --- #}
@@ -140,7 +140,7 @@
                 <label for="telegram-token">{{ _("Token bota") }}</label>
                 <input type="password" id="telegram-token" name="telegram_token"
                        value="" autocomplete="off"
-                       placeholder="{{ _('uloženo – nech prázdné, ať zůstane') if ma_telegram else '123456:ABC…' }}">
+                       placeholder="{{ _('uloženo (nech prázdné, ať zůstane)') if ma_telegram else '123456:ABC…' }}">
                 <p class="hint">{{ _("Bota založí @BotFather.") }}</p>
             </div>
             <div class="field">
@@ -191,7 +191,7 @@
                 <span>
                     <span class="title">{{ _("Sběrač běží, ale nesbírá") }}</span>
                     <span class="desc">
-                        {{ _("Vyprší token, změní se adresa Jellyfinu, rozbije se přihlášení – aplikace běží dál a historie se tiše zastaví. Přehrávání se dá zpětně doimportovat, ale jazyk stopy ani bitrate v importu nejsou, takže díra zůstane.") }}
+                        {{ _("Vyprší token, změní se adresa Jellyfinu nebo se rozbije přihlášení. Aplikace běží dál a historie se tiše zastaví. Přehrávání se dá zpětně doimportovat, ale jazyk stopy ani bitrate v importu nejsou, takže díra zůstane.") }}
                     </span>
                 </span>
             </label>
@@ -202,7 +202,7 @@
                 <span>
                     <span class="title">{{ _("Dochází místo na disku") }}</span>
                     <span class="desc">
-                        {{ _("Počítá se z růstu knihovny a z volného místa, které hlásí Jellyfin. U knihovny v cloudu nebo na sdíleném úložišti ho nepozná ani on – pro ten případ jde ve Sběru dat zadat kapacitu ručně a volné místo se dopočítá z ní.") }}
+                        {{ _("Počítá se z růstu knihovny a z volného místa, které hlásí Jellyfin. U knihovny v cloudu nebo na sdíleném úložišti ho nepozná ani on. Pro ten případ jde ve Sběru dat zadat kapacitu ručně a volné místo se dopočítá z ní.") }}
                     </span>
                 </span>
             </label>
@@ -213,7 +213,7 @@
                 <span>
                     <span class="title">{{ _("Týdenní souhrn") }}</span>
                     <span class="desc">
-                        {{ _("Není to porucha – kolik se za týden odsledovalo, co se dívalo nejvíc a kdo byl nejaktivnější.") }}
+                        {{ _("Není to porucha: kolik se za týden odsledovalo, co se dívalo nejvíc a kdo byl nejaktivnější.") }}
                     </span>
                 </span>
             </label>
@@ -224,7 +224,7 @@
                 <label for="ticho-minut">{{ _("Ticho sběrače (minut)") }}</label>
                 <input type="number" id="ticho-minut" name="ticho_minut" min="5" max="1440"
                        value="{{ notifikace.ticho_minut }}">
-                <p class="hint">{{ _("Sběrač se ptá po vteřinách, takže půlhodina je jistota, ne netrpělivost – krátký výpadek sítě by jinak posílal zprávu pokaždé.") }}</p>
+                <p class="hint">{{ _("Sběrač se ptá po vteřinách, takže půlhodina je bezpečná rezerva. Krátký výpadek sítě by jinak posílal zprávu pokaždé.") }}</p>
             </div>
             <div class="field">
                 <label for="misto-dnu">{{ _("Ozvat se, když místo dojde za (dnů)") }}</label>
@@ -266,7 +266,7 @@
     </form>
 
     <p class="card-note" style="margin-top:14px">
-        {{ _("Kontrolu pouští úloha „Upozornění“ – jak často, se nastavuje v Úlohách a zálohách.") }}
+        {{ _("Kontrolu pouští úloha „Upozornění“. Jak často, se nastavuje v Úlohách a zálohách.") }}
     </p>
 </div>
 
@@ -304,7 +304,7 @@
                 – {{ _("proč se to stalo (kolik minut sběrač mlčí, za kolik dnů dojde místo).") }}
             </p>
             {% elif not zprava.ma_text %}
-            <p class="hint">{{ _("Souhrn má jen předmět – obsah se skládá z čísel za týden.") }}</p>
+            <p class="hint">{{ _("Souhrn má jen předmět, obsah se skládá z čísel za týden.") }}</p>
             {% endif %}
         </div>
         {% endfor %}

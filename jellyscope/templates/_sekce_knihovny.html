@@ -1,0 +1,34 @@
+{# Karta ze stránky Knihovna (library_index.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč knihovny) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `libraries (stats.library_cards)`. #}
+{% if libraries %}
+<div class="lib-grid">
+    {% for row in libraries %}
+    <a class="lib-card" href="/library/{{ row.id }}">
+        <div class="lib-cover">
+            {% if row.poster_id %}
+                {# loading="lazy" - obrázky mimo obrazovku se stáhnou až
+                   ve chvíli, kdy k nim uživatel doroluje. #}
+                <img src="/image/{{ row.poster_id }}?kind=Backdrop&w=600"
+                     alt="" loading="lazy" onerror="this.remove()">
+            {% endif %}
+            <span class="lib-cover-name">{{ row.name }}</span>
+        </div>
+        <div class="lib-facts">
+            <div><span class="muted">{{ _("Knihovna") }}</span><span class="strong">{{ row.name }}</span></div>
+            <div><span class="muted">{{ _("Typ") }}</span><span>{{ _(row.type_label) }}</span></div>
+            <div><span class="muted">{{ _("Souborů") }}</span><span>{{ row.item_count | number }}</span></div>
+            <div><span class="muted">{{ _("Velikost") }}</span><span class="strong">{{ row.size_bytes | bytes }}</span></div>
+            <div><span class="muted">{{ _("Délka obsahu") }}</span><span>{{ row.hours | hours }}</span></div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p class="chart-empty">{{ _("Žádné knihovny. Spusť synchronizaci v Nastavení.") }}</p>
+</div>
+{% endif %}

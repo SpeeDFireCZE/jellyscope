@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter with context %}
-{% block title %}{{ _("Vlastní přehled") }}{% endblock %}
+{% from "_macros.html" import period_filter, okno_tabulka with context %}
+{% block title %}{{ nadpis }}{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div>
-        <h1>{{ _("Vlastní přehled") }}</h1>
+        <h1>{{ nadpis }}</h1>
         <p class="page-note">
-            {% if rozvrzeni %}
-                {{ _("Poskládaný z existujících statistik. Počítá se jen to, co je tady – nic navíc.") }}
+            {% if osobni %}
+                {{ _("Tvůj přehled z vybraných statistik. Vidíš ho jen ty.") }}
+            {% elif rozvrzeni %}
+                {{ _("Poskládaný z existujících statistik. Počítá se jen to, co je tady.") }}
             {% else %}
                 {{ _("Zatím prázdný. Přidej si sekce, které chceš vidět po přihlášení.") }}
             {% endif %}
@@ -28,7 +30,7 @@
         </div>
         {% endif %}
         {% if potrebuje_obdobi %}
-            {{ period_filter(obdobi, '/dashboard') }}
+            {{ period_filter(obdobi, adresa_stranky) }}
         {% endif %}
     </div>
 </div>
@@ -40,12 +42,14 @@
 
     {% if not rozvrzeni %}
     <div class="card dash-vyzva">
-        <p>{{ _("Vlastní přehled je zapnutý, ale ještě v něm nic není.") }}</p>
-        {% if muze_upravovat %}
-        <p class="card-note">{{ _("Klikni na „Upravit přehled“ a vyber si sekce.") }}</p>
+        {% if osobni %}
+        <p>{{ _("Můj přehled je zatím prázdný.") }}</p>
         {% else %}
-        <p class="card-note">{{ _("Sestavit ho může správce serveru.") }}</p>
+        <p>{{ _("Vlastní přehled je zapnutý, ale ještě v něm nic není.") }}</p>
         {% endif %}
+        {# Prázdný vidí jen ten, kdo ho skládá: Můj přehled jeho majitel,
+           přehled pro všechny správce (ostatní routa vrátí na Přehled). #}
+        <p class="card-note">{{ _("Klikni na „Upravit přehled“ a vyber si sekce.") }}</p>
     </div>
     {% endif %}
 </div>
@@ -86,7 +90,7 @@
                     takže v atributu s dvojitými uvozovkami by JSON značku
                     ukončil uprostřed. #}
                  data-sirky='{{ sirky | tojson }}'
-                 data-prazdno="{{ _('Zatím nic – vyber si vpravo ze seznamu.') }}">
+                 data-prazdno="{{ _('Zatím nic. Vyber si vpravo ze seznamu.') }}">
                 {% for sekce in rozvrzeni %}
                 <div class="dash-dlazdice dash-{{ sekce.sirka }}"
                      data-sekce="{{ sekce.klic }}" data-sirka="{{ sekce.sirka }}">
@@ -120,11 +124,15 @@
         </div>
     </div>
 
-    <form method="post" action="/dashboard/layout" id="dash-form" class="okno-pata">
+    <form method="post" action="{{ akce_ulozeni }}" id="dash-form" class="okno-pata">
         <input type="hidden" name="poradi" id="dash-poradi" value="">
         <button class="btn dash-zavrit" type="button" id="dash-zrusit">{{ _("Zrušit") }}</button>
         <button class="btn primary" type="submit" id="dash-ulozit">{{ _("Uložit") }}</button>
     </form>
 </dialog>
 {% endif %}
+
+{# Jedno okno pro celou tabulku libovolné karty Zjištění - stejné jako na
+   stránce Zjištění (viz tlacitko_cela_tabulka v _macros.html). #}
+{% if potrebuje_okno_tabulka %}{{ okno_tabulka() }}{% endif %}
 {% endblock %}

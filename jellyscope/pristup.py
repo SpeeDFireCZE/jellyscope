@@ -58,6 +58,37 @@ def role(account: dict[str, Any] | None) -> str:
     return DIVAK if account.get("jellyfin_user_id") else CTENAR
 
 
+def muj_divak(account: dict[str, Any] | None) -> str:
+    """Id diváka, na kterého je účet omezený. Prázdno = vidí všechno.
+
+    Omezený je jen ten, kdo se přihlásil **svým jellyfinovým účtem**:
+    tam víme, komu patří která přehrávání, a nic dalšího mu do toho není.
+    Správce vidí všechno, ať je odkudkoliv. Místní čtenářský účet zakládá
+    správce ručně a odjakživa vidí celé statistiky - měnit mu to pod
+    rukama by znamenalo, že po aktualizaci najednou nevidí, co včera.
+
+    Jedno místo pro stránky i API klíče: je to bezpečnostní pravidlo
+    a dvě kopie by se dřív nebo později rozešly.
+    """
+    if not account or account.get("is_admin"):
+        return ""
+    return str(account.get("jellyfin_user_id") or "")
+
+
+def anonymizuj_pro(data: Any, account: dict[str, Any] | None) -> Any:
+    """Schová cizí jména a adresy, když je má účet podle správce skryté.
+
+    Pro stránky (celý kontext šablony) i pro API klíč (data jeho
+    vlastníka). Čtecí účet nepatří žádnému divákovi, takže se mu schová
+    úplně každé jméno - není ke komu dělat výjimku. Nepřihlášený a klíč
+    serveru (bez vlastníka) dostanou data, jak jsou.
+    """
+    kdo = role(account)
+    if kdo in ("", SPRAVCE) or not anonymizace_zapnuta(kdo, account):
+        return data
+    return anonymizuj(data, muj_divak(account))
+
+
 class Oblast:
     """Jeden řádek ve stromu „co divák uvidí"."""
 
@@ -100,13 +131,13 @@ OBLASTI: tuple[Oblast, ...] = (
            "Kdo co sleduje teď. Jména lze skrýt anonymizací.",
            ("/partials/now-playing", "/api/now-playing"), pod="prehled"),
     Oblast("jazyky", "Jazyky",
-           "Dabing a titulky - souhrn i po jednotlivých divácích.",
+           "Dabing a titulky: souhrn i po jednotlivých divácích.",
            ("/languages",)),
     Oblast("uzivatele", "Seznam diváků",
            "Kdo na serveru sleduje a kolik. Jména lze skrýt anonymizací.",
            ("/users",)),
     Oblast("sit", "Síť a adresy",
-           "Odkud se kdo připojuje. Tohle jsou IP adresy - rozmysli si to.",
+           "Odkud se kdo připojuje. Tohle jsou IP adresy, tak si to rozmysli.",
            ("/network", "/partials/network-live")),
 )
 
@@ -115,6 +146,7 @@ PODLE_KLICE = {oblast.klic: oblast for oblast in OBLASTI}
 # Cesty, které smí každý přihlášený - na nich není nic o nikom jiném.
 VZDY = (
     "/history",          # vlastni historie; filtr se vnucuje v route
+    "/account",          # Muj ucet: jazyk a heslo jednoho uctu, nic ciziho
     "/image/",
     "/static/",
     "/health",
@@ -203,6 +235,41 @@ def anonymizace_zapnuta(kdo: str = DIVAK,
         return vlastni["anonymizace"]
     return db.get_setting(f"{kdo}_anonymizace",
                           "1" if kdo == DIVAK else "0") == "1"
+
+
+# ---------------------------------------------------------------------------
+# Vlastní API klíč
+# ---------------------------------------------------------------------------
+#
+# Čtenář nebo divák si smí vyrobit klíč, jen když to správce povolí:
+# skupině (nastavení `{kdo}_smi_klic`, výchozí ne) nebo jednomu účtu
+# (`accounts.smi_klic`: "1" / "0", NULL = podle skupiny). Výjimka u účtu
+# je schválně nezávislá na stromu stránek - kvůli jednomu klíči se nemá
+# muset přepisovat celý strom.
+
+SMI_KLIC_KLIC = "{kdo}_smi_klic"
+
+
+def smi_klic_skupina(kdo: str) -> bool:
+    """Povolení vlastního klíče pro celou skupinu (čtenáři / diváci)."""
+    return db.get_setting(SMI_KLIC_KLIC.format(kdo=kdo), "0") == "1"
+
+
+def smi_klic(account: dict[str, Any] | None) -> bool:
+    """Smí si tenhle účet vyrobit a používat vlastní API klíč?
+
+    Nesmysl ve sloupci (ruční zásah do databáze) se bere jako „podle
+    skupiny" - ani zavřené, ani otevřené dveře navíc.
+    """
+    kdo = role(account)
+    if kdo == SPRAVCE:
+        return True
+    if not kdo:
+        return False
+    vyjimka = (account or {}).get("smi_klic")
+    if vyjimka in ("1", "0"):
+        return vyjimka == "1"
+    return smi_klic_skupina(kdo)
 
 
 def vidi(kdo: str, klic: str, account: dict[str, Any] | None = None) -> bool:

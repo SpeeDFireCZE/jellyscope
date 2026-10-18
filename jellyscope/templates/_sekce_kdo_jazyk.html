@@ -1,0 +1,130 @@
+{# Karta ze stránky Jazyky (languages.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč kdo_jazyk) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `by_user (langstats.languages_by_user)` a kvůli legendě `watched`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Kdo v jakém jazyce sleduje") }}</h2>
+        <p class="card-note">{{ _("každý pruh je jeden člověk, šířka = podíl jazyka") }}</p>
+    </div>
+
+    {# Jeden pruh se vypisuje dvakrat - v karte i v okne -, takze je z nej
+       makro. Dve kopie by se casem rozesly. #}
+    {% macro pruh(person) %}
+    <div style="margin-bottom:18px" data-uzivatel="{{ person.user_id or '' }}">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px">
+            <strong>
+                <a href="/users/{{ person.user_id }}">{{ person.name }}</a>
+            </strong>
+            <span class="card-note">
+                {{ person.total | hours }}
+                {% if person.main %}
+                    &middot; {{ _("převážně") }} {{ person.main.label }}
+                    ({{ person.main.percent | percent }})
+                {% endif %}
+            </span>
+        </div>
+        {{ charts.stacked_bar(person.segments) | safe }}
+    </div>
+    {% endmacro %}
+
+    {# Do `strop_lidi` se pruhy vypisuji rovnou. Nad nim se schovaji do
+       okna: pri padesati divacich by karta nekoncila a vsechno pod ni
+       by bylo mimo obrazovku. #}
+    {# Dva stropy: jeden pro širokou obrazovku, druhý pro mobil. Server
+       neví, na čem se člověk dívá, tak pošle obojí a rozhodne CSS -
+       proto `jen-desktop` a `jen-mobil` místo dvou různých stránek.
+       Stejně jako u „Právě se hraje“, viz _now_playing.html. #}
+    {% set schovat_lidi = by_user | length > strop_lidi %}
+    {% set schovat_lidi_mobil = by_user | length > strop_lidi_mobil %}
+
+    {% if schovat_lidi %}
+        <div class="btn-row" style="margin-bottom:12px">
+            <button class="btn session-vice" type="button" data-okno="okno-jazyky">
+                <span>
+                    <strong>{{ _("Diváci jsou skrytí, je jich hodně") }}</strong><br>
+                    <span class="session-vice-note">
+                        {{ _("zobrazit všech {n}").format(n=by_user | length) }}
+                    </span>
+                </span>
+            </button>
+        </div>
+    {% else %}
+        {# Pruhy nad mobilním stropem se na úzké obrazovce schovají -
+           na široké zůstávají všechny. #}
+        {% for person in by_user %}
+            {% if loop.index > strop_lidi_mobil %}
+                <div class="jen-desktop">{{ pruh(person) }}</div>
+            {% else %}
+                {{ pruh(person) }}
+            {% endif %}
+        {% endfor %}
+
+        {% if schovat_lidi_mobil %}
+        {# Na mobilu vede na tytéž diváky v okně jako u širokého stropu. #}
+        <div class="btn-row jen-mobil" style="margin-bottom:12px">
+            <button class="btn" type="button" data-okno="okno-jazyky">
+                {{ _("zobrazit všech {n}").format(n=by_user | length) }}
+            </button>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    {# Legenda je společná pro všechny pruhy - barvy jsou u všech stejné. #}
+    {{ charts.legend(watched.rows) | safe }}
+
+    {# Okno musí být na stránce i tehdy, když se schovává jen na mobilu -
+       tlačítko výš na něj míří. #}
+    {% if schovat_lidi or schovat_lidi_mobil %}
+    <dialog class="okno okno-siroke" id="okno-jazyky">
+        <form method="dialog" class="okno-hlava">
+            <h2>{{ _("Kdo v jakém jazyce sleduje") }} ({{ by_user | length }})</h2>
+            <button class="btn okno-zavrit" type="submit"
+                    aria-label="{{ _("Zavřít") }}">&times;</button>
+        </form>
+
+        {# Filtr platí jen tady v okně - je to způsob, jak se v dlouhém
+           seznamu dobrat jednoho člověka, ne uložené nastavení. #}
+        <div class="filtr-pole" style="margin-bottom:14px">
+            <label for="filtr-jazyku">{{ _("Uživatel") }}</label>
+            <select id="filtr-jazyku" data-filtr-okna="okno-jazyky">
+                <option value="">{{ _("všichni") }}</option>
+                {% for person in by_user %}
+                    <option value="{{ person.user_id }}">{{ person.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="okno-obsah">
+            {% for person in by_user %}{{ pruh(person) }}{% endfor %}
+            {{ charts.legend(watched.rows) | safe }}
+        </div>
+    </dialog>
+    {% endif %}
+
+    <details style="margin-top:14px">
+        <summary class="card-note" style="cursor:pointer">{{ _("Zobrazit jako tabulku") }}</summary>
+        <div class="table-wrap" style="margin-top:10px">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Uživatel") }}</th><th>{{ _("Jazyk") }}</th>
+                    <th class="num">{{ _("Podíl") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for person in by_user %}
+                    {% for segment in person.segments %}
+                    <tr>
+                        <td>{{ person.name if loop.first else '' }}</td>
+                        <td>{{ segment.label }}</td>
+                        <td class="num">{{ segment.percent | percent(1) }}</td>
+                        <td class="num">{{ segment.hours | hours }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>

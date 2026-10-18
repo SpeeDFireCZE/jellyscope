@@ -103,6 +103,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # A totez pro uzkou obrazovku - vejde se tam min, viz web._stropy().
     "ui_max_streams_mobile": "3",
     "ui_max_viewers_mobile": "5",
+    # Radky tabulek na strance Zjisteni (nevyuzite misto, transcody...).
+    # Driv mely 15 az 25 radku natvrdo a karta vedle zustavala prazdna.
+    "ui_max_rows": "10",
+    "ui_max_rows_mobile": "5",
     # Jak se priblizuje mapa na strance Sit. "click" schvalne jako
     # vychozi: kolecko nad mapou by jinak zastavilo rolovani stranky
     # a clovek by u mapy uvizl. Viz web._stropy() a base.html.
@@ -761,6 +765,27 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # Vlastni prava uctu jako JSON, nebo NULL = plati nastaveni
         # skupiny (ctenari / divaci). Viz pristup.vlastni_prava().
         "pristup": "TEXT",
+        # Jazyk rozhrani, ktery si ucet vybral na strance Muj ucet.
+        # NULL = jazyk serveru. Viz i18n.current_language().
+        "ui_language": "TEXT",
+        # Smi si ucet vyrobit vlastni API klic? "1" / "0", NULL = podle
+        # skupiny. Viz pristup.smi_klic().
+        "smi_klic": "TEXT",
+    },
+    "users": {
+        # Otisk profiloveho obrazku z Jellyfinu (PrimaryImageTag z /Users).
+        # NULL = obrazek nema. Podle otisku se pozna i jeho zmena - je
+        # v adrese, kterou si prohlizec pamatuje. Viz web.muj_obrazek().
+        "image_tag": "TEXT",
+    },
+    "api_tokens": {
+        # Komu klic patri. NULL = klic serveru z doby pred vlastniky:
+        # ma plna prava, aby se po aktualizaci nerozbila Grafana. Smazany
+        # ucet vezme sve klice s sebou. Viz api.over_token().
+        "account_id": "INTEGER REFERENCES accounts(id) ON DELETE CASCADE",
+        # 'aktivni' / 'vypnuty'. Vypnout a zapnout smi jen spravce;
+        # zneplatneni je smazani radku.
+        "stav": "TEXT NOT NULL DEFAULT 'aktivni'",
     },
     "playback": {
         "audio_language": "TEXT",

@@ -57,7 +57,12 @@
             </div>
         </div>
         {% else %}
-        <a class="poster-frame" href="/item/{{ row.id }}">
+        {# Plakát i název pod ním vedou na tentýž titul. Myší se klikne
+           kamkoliv, ale klávesnice a čtečka obrazovky mají mít jeden
+           odkaz: jinak se u každého plakátu mačká Tab dvakrát a čtečka
+           u obrázku přečte jen „odkaz" bez jména (alt je prázdný, protože
+           název je hned pod ním). #}
+        <a class="poster-frame" href="/item/{{ row.id }}" tabindex="-1" aria-hidden="true">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
                  loading="lazy" onerror="this.style.display='none'">
             {% if row.is_episode %}

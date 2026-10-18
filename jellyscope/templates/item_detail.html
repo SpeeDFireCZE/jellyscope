@@ -51,7 +51,7 @@
 <div class="flash warning">
     <span class="dot"></span>
     <span>
-        {{ _("Tenhle titul už v Jellyfinu není – je v archivu. Historie přehrávání zůstává, aby ve statistikách nezůstaly bezejmenné záznamy. Když se soubor vrátí, Jellyscope ho podle tmdb ID zase spáruje.") }}
+        {{ _("Tenhle titul už v Jellyfinu není, je v archivu. Historie přehrávání zůstává, aby ve statistikách nezůstaly bezejmenné záznamy. Když se soubor vrátí, Jellyscope ho podle tmdb ID zase spáruje.") }}
     </span>
 </div>
 {% if account.is_admin %}
@@ -63,7 +63,7 @@
         <h2>{{ _("Co s tímhle titulem") }}</h2>
     </div>
     <p class="card-note" style="margin-bottom:12px">
-        {{ _("Patří-li historie jinému titulu – Jellyfin ho třeba určil špatně a po opravě ho založil znovu pod jiným názvem –, přiřaď ji k němu. Jinak jde titul s historií smazat.") }}
+        {{ _("Patří-li historie jinému titulu (Jellyfin ho třeba určil špatně a po opravě ho založil znovu pod jiným názvem), přiřaď ji k němu. Jinak jde titul s historií smazat.") }}
     </p>
     <div class="btn-row">
         <button class="btn primary" type="button" data-okno="okno-priradit">
@@ -115,10 +115,10 @@
 
     <p>
         {{ _("Titul i celá jeho historie přehrávání") }}{% if summary.plays %} ({{ summary.plays | number }} {{ _("záznamů") }}){% endif %}.
-        {{ _("Statistiky se o ten čas sníží. Těsně před tím se udělá záloha databáze – jinak to vrátit nejde.") }}
+        {{ _("Statistiky se o ten čas sníží. Těsně před tím se udělá záloha databáze, jinak to vrátit nejde.") }}
     </p>
     <p class="card-note">
-        {{ _("Patří-li ta historie jinému titulu, použij raději Přiřadit k jinému titulu – nic se tím neztratí.") }}
+        {{ _("Patří-li ta historie jinému titulu, použij raději Přiřadit k jinému titulu, nic se tím neztratí.") }}
     </p>
 
     <div class="btn-row">
@@ -283,7 +283,7 @@
                             {% if s.language_source == 'jellyfin' %}
                                 <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
                             {% elif s.language_source == 'nazev' %}
-                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin – tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
+                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin, tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
                             {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
@@ -340,7 +340,7 @@
                             {% if s.language_source == 'jellyfin' %}
                                 <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
                             {% elif s.language_source == 'nazev' %}
-                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin – tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
+                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin, tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
                             {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>

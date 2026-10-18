@@ -1,0 +1,43 @@
+{# Karta „Využití knihoven“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_knihovny) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `efficiency (insights.storage_efficiency)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Využití knihoven") }}</h2>
+        <p class="card-note">{{ _("kolik místa zabírají versus kolik se z nich sleduje") }}</p>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Knihovna") }}</th><th class="num">{{ _("Titulů") }}</th>
+                <th class="num">{{ _("Velikost") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                <th class="num">{{ _("Sledovaných titulů") }}</th><th class="num">{{ _("Využití") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in efficiency %}
+            {% set usage = (row.watched_items / row.item_count * 100) if row.item_count else 0 %}
+            <tr>
+                <td class="strong">{{ row.label }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.watched_items | number }}</td>
+                <td class="num">
+                    {% if usage >= 40 %}
+                        <span class="badge good"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% elif usage >= 15 %}
+                        <span class="badge warning"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% else %}
+                        <span class="badge critical"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -11,7 +11,9 @@
    rozejdou. #}
 {% macro stream(row) %}
     <div class="session" data-uzivatel="{{ row.user_id or '' }}">
-        <a class="session-poster" href="/item/{{ row.item_id }}">
+        {# Obrázek vede tam, kam název vedle něj - pro klávesnici a čtečku
+           je to jeden odkaz, viz _recently_added.html. #}
+        <a class="session-poster" href="/item/{{ row.item_id }}" tabindex="-1" aria-hidden="true">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=200{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
                  loading="lazy" onerror="this.style.display='none'">
         </a>
@@ -64,7 +66,7 @@
             {# Důvod přepočtu hlásí Jellyfin - je to nejužitečnější údaj
                na celé kartě, když chceš vědět, proč server topí. #}
             {% if row.play_method == 'Transcode' and row.transcode_reasons %}
-                <p class="session-reason">{{ _("Důvod") }}: {{ row.transcode_reasons }}</p>
+                <p class="session-reason" title="{{ row.transcode_reasons }}">{{ _("Důvod") }}: {{ row.transcode_reasons | duvody }}</p>
             {% endif %}
 
             {# Postup přehrávání. Čas je ve tvaru jako v přehrávači
@@ -149,7 +151,7 @@
 {# Na mobilu vede na tytéž streamy v okně jako u širokého stropu. #}
 <div class="btn-row jen-mobil" style="margin-bottom:8px">
     <button class="btn" type="button" data-okno="okno-streamy">
-        {{ _("zobrazit všech") }} {{ active | length }}
+        {{ _("zobrazit všech {n}").format(n=active | length) }}
     </button>
 </div>
 {% endif %}
@@ -161,9 +163,9 @@
 <div class="sessions" style="margin-bottom:4px">
     <button class="btn session-vice" type="button" data-okno="okno-streamy">
         <span>
-            <strong>{{ _("Přehrávání jsou skrytá – je jich hodně") }}</strong><br>
+            <strong>{{ _("Přehrávání jsou skrytá, je jich hodně") }}</strong><br>
             <span class="session-vice-note">
-                {{ _("zobrazit všech") }} {{ active | length }}
+                {{ _("zobrazit všech {n}").format(n=active | length) }}
             </span>
         </span>
     </button>

@@ -16,12 +16,12 @@
     </div>
 
     <p class="card-note" style="margin-bottom:14px">
-        {{ _("Po") }} {{ block_attempts }}
-        {{ _("neúspěšných pokusech z jedné adresy se přihlašování z ní na chvíli zavře. Každá další blokace v řadě je delší:") }}
+        {# Celé věty s číslem uvnitř, ne útržky kolem něj: `_("Po")` je
+           i zkratka pondělí a anglicky se tu dřív psalo „Mon 5 failed…“. #}
+        {{ _("Po {n} neúspěšných pokusech z jedné adresy se přihlašování z ní na chvíli zavře. Každá další blokace v řadě je delší:").format(n=block_attempts) }}
         {% for sekund in block_levels %}{{ (sekund / 60) | round | int }} min{{ ", " if not loop.last }}{% endfor %},
         {{ _("pak už trvale.") }}
-        {{ _("Když se adresa") }} {{ block_forget_hours }}
-        {{ _("hodin chová slušně, počítá se zase od začátku.") }}
+        {{ _("Když se adresa {n} hodin chová slušně, počítá se zase od začátku.").format(n=block_forget_hours) }}
     </p>
 
     {% if not blocks %}
@@ -84,7 +84,7 @@
     {% endif %}
 
     <p class="card-note" style="margin-top:14px">
-        {{ _("Adresa se bere z připojení. Běží-li před Jellyscope reverzní proxy, vyplň v .env FORWARDED_ALLOW_IPS – jinak tu bude pokaždé adresa té proxy a blokace by platila pro všechny naráz.") }}
+        {{ _("Adresa se bere z připojení. Běží-li před Jellyscope reverzní proxy, vyplň v .env FORWARDED_ALLOW_IPS. Jinak tu bude pokaždé adresa té proxy a blokace by platila pro všechny naráz.") }}
     </p>
 </div>
 

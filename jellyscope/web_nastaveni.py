@@ -20,6 +20,7 @@ import os
 import sys
 import time
 from datetime import datetime
+from html import escape
 from typing import Any
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -37,8 +38,8 @@ from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
 from .i18n import translate as _t
 from .web_zaklad import (
     KAPACITA_JEDNOTKY, STROP_MAX, STROP_MIN, VZHLEDY, ZOOM_REZIMY,
-    SETTINGS_SECTIONS, STARTED_AT, ZPET_NA_IMPORT, _clamp, _context,
-    _flash, _hlaska_importu, config,
+    SETTINGS_SECTIONS, STARTED_AT, ZPET_NA_IMPORT, _cislo_z_formulare, _clamp, _context,
+    _bez_mezipameti, _flash, _hlaska_importu, _novy_klic, config,
     log, require_admin, require_login, templates,
 )
 
@@ -222,6 +223,10 @@ def settings_page(
     log_file: str = "",
     log_lines: int = 0,
     log_level: str = "",
+    # Filtr záznamu použití API klíčů: jeden klíč, nebo klíče jednoho
+    # účtu. Text, ne číslo - nesmysl v adrese má dát celý záznam, ne 422.
+    klic: str = "",
+    ucet: str = "",
     account: dict[str, Any] = Depends(require_login),
 ):
     allowed = {key for key, _name, admin_only in SETTINGS_SECTIONS
@@ -347,13 +352,31 @@ def settings_page(
             zapomenuti=odklizeni.zapomenuti(),
         )
     elif section == "api":
+        filtr_klic = _cislo_z_formulare(klic) or None
+        filtr_ucet = _cislo_z_formulare(ucet) or None
+        tokeny = api.seznam()
+        # Co filtr ukazuje, slovy - aby bylo vidět, že záznam není celý.
+        if filtr_klic:
+            filtr_popis = next((t["name"] for t in tokeny if t["id"] == filtr_klic), "")
+        elif filtr_ucet:
+            filtr_popis = (accounts.get(filtr_ucet) or {}).get("username", "")
+        else:
+            filtr_popis = ""
         context.update(
-            api_tokeny=api.seznam(),
+            api_tokeny=tokeny,
+            api_pouziti=api.pouziti(filtr_klic, filtr_ucet),
+            api_filtr=filtr_popis or (_t("smazaný klíč") if filtr_klic else ""),
+            api_filtr_zapnuty=bool(filtr_klic or filtr_ucet),
+            # Okno „Jak se to používá" (_api_navod.html) - správci vyjdou
+            # všechny adresy, ale seznam se předává vždycky výslovně.
+            api_navod_adresy=api.povolene_adresy(account),
+            api_pouziti_dni=api.dny_pouziti(),
+            api_pouziti_max=api.POUZITI_DNI_MAX,
             # Nově vyrobený klíč se ukazuje jen jednou, hned po
             # přesměrování; drží se proto v relaci, ne v adrese - a při
-            # dalším načtení stránky už ho nemá kdo vypsat.
-            novy_token=request.session.pop("novy_api_token", ""),
-            api_ukazka_znaku=api.UKAZKA_ZNAKU,
+            # dalším načtení stránky už ho nemá kdo vypsat. Ukáže se
+            # v řádku svého klíče (makro bunka_klice).
+            novy_token=_novy_klic(request, "novy_api_token"),
         )
     elif section == "blocks":
         context.update(
@@ -406,6 +429,8 @@ def settings_page(
         context.update(
             ctenar_strom=pristup.strom(pristup.CTENAR),
             ctenar_anonymizace=pristup.anonymizace_zapnuta(pristup.CTENAR),
+            ctenar_smi_klic=pristup.smi_klic_skupina(pristup.CTENAR),
+            divak_smi_klic=pristup.smi_klic_skupina(pristup.DIVAK),
         )
         vsechny = accounts.all_accounts()
         context.update(
@@ -423,6 +448,13 @@ def settings_page(
                     "strom": pristup.strom(pristup.role(ucet), ucet),
                     "anonymizace": pristup.anonymizace_zapnuta(
                         pristup.role(ucet), ucet),
+                    # Vyjimka pro vlastni API klic: skupina / ano / ne.
+                    # Je zvlast od stromu a plati v obou rezimech. Volba
+                    # se cte zpatky z VOLBY_KLICE, at jsou obe strany jedna.
+                    "smi_klic": {hodnota: volba for volba, hodnota
+                                 in VOLBY_KLICE.items()}.get(
+                        ucet.get("smi_klic"), "skupina"),
+                    "smi_klic_skupina": pristup.smi_klic_skupina(pristup.role(ucet)),
                 }
                 for ucet in vsechny if not ucet.get("is_admin")
             },
@@ -447,9 +479,12 @@ def settings_page(
     context.setdefault("zona_ted",
                        datetime.now(formatting.zona()).strftime("%d.%m.%Y %H:%M"))
 
-    return templates.TemplateResponse(
+    odpoved = templates.TemplateResponse(
         request, "settings.html", _context(request, account, **context)
     )
+    if context.get("novy_token"):
+        _bez_mezipameti(odpoved)
+    return odpoved
 
 
 @router.post("/settings")
@@ -489,7 +524,7 @@ def settings_save(
             raise ValueError
         db.set_setting("path_mappings", json.dumps(parsed))
     except ValueError:
-        _flash(request, "Přepis cest není platný JSON - nechal jsem původní hodnotu.", "warning")
+        _flash(request, "Přepis cest není platný JSON, nechal jsem původní hodnotu.", "warning")
         return RedirectResponse("/settings?section=data", status_code=303)
 
     _flash(request, "Nastavení uloženo.", "success")
@@ -507,7 +542,8 @@ async def settings_sync(request: Request, account: dict[str, Any] = Depends(requ
     if scanner.is_scan_running():
         _flash(request, "Jiná úloha už běží, počkej na její dokončení.", "warning")
     else:
-        asyncio.create_task(scanner.sync_library())
+        # V jazyce serveru, ne v jazyce toho, kdo kliknul - viz i18n.bez_jazyka_uctu.
+        asyncio.create_task(i18n.bez_jazyka_uctu(scanner.sync_library()))
         _flash(request, "Synchronizace knihovny spuštěna.", "info")
         # `wait=task` necha stranku pockat a po dokonceni ji obnovi -
         # jinak clovek koukа na "bezi" a netusi, kdy uz je hotovo.
@@ -530,8 +566,8 @@ async def settings_stop(
     if scanner.request_stop():
         _flash(
             request,
-            "Pokyn k zastavení předán. Úloha dokončí rozpracovanou položku "
-            "a skončí - stránka se pak obnoví sama.",
+            "Pokyn k zastavení předán. Úloha dokončí rozpracovanou položku a skončí. Stránka se "
+            "pak obnoví sama.",
             "info",
         )
     else:
@@ -577,8 +613,8 @@ async def settings_scan(
     if scanner.is_scan_running():
         _flash(request, "Jiná úloha už běží, počkej na její dokončení.", "warning")
     else:
-        asyncio.create_task(scanner.run_tech_scan(
-            only_missing=(mode == "missing"), library_id=library_id or None))
+        asyncio.create_task(i18n.bez_jazyka_uctu(scanner.run_tech_scan(
+            only_missing=(mode == "missing"), library_id=library_id or None)))
         _flash(request, "Analýza souborů spuštěna.", "info")
         oddelovac = "&" if "?" in zpet else "?"
         return RedirectResponse(f"{zpet}{oddelovac}wait=task", status_code=303)
@@ -600,6 +636,27 @@ def _uloz_strom(formular: Any, kdo: str) -> None:
                        "1" if formular.get(f"vidi_{oblast.klic}") else "0")
 
 
+@router.post("/settings/accounts/klice")
+def settings_klice(request: Request, ctenar_smi_klic: str = Form(""),
+                   divak_smi_klic: str = Form(""),
+                   account: dict[str, Any] = Depends(require_admin)):
+    """Kdo si smí vyrobit vlastní API klíč - výchozí hodnota skupin.
+
+    Nezaškrtnuté zaškrtávátko prohlížeč vůbec nepošle, proto prázdno = ne.
+    Výjimky u jednotlivých účtů (okno Práva) platí dál.
+    """
+    for kdo, hodnota in ((pristup.CTENAR, ctenar_smi_klic),
+                         (pristup.DIVAK, divak_smi_klic)):
+        db.set_setting(pristup.SMI_KLIC_KLIC.format(kdo=kdo), "1" if hodnota else "0")
+    db.forget_settings()
+    _flash(request, "Uloženo. Kdo má u účtu výjimku, toho se to netýká.", "success")
+    return RedirectResponse("/settings?section=accounts#klice", status_code=303)
+
+
+# Volba „Vlastní API klíče" v okně Práva -> hodnota sloupce accounts.smi_klic.
+VOLBY_KLICE = {"skupina": None, "ano": "1", "ne": "0"}
+
+
 @router.post("/settings/accounts/prava")
 async def settings_prava_uctu(request: Request,
                               account: dict[str, Any] = Depends(require_admin)):
@@ -619,13 +676,20 @@ async def settings_prava_uctu(request: Request,
         _flash(request, "Tenhle účet vlastní práva nemá.", "error")
         return RedirectResponse("/settings?section=accounts", status_code=303)
 
+    # Vlastni API klic se uklada v obou rezimech - je to jina otazka nez
+    # strom stranek. Formular bez te volby (starsi stranka v otevrene
+    # karte) vyjimku necha, jak byla.
+    volba_klice = str(formular.get("smi_klic") or "")
+    if volba_klice in VOLBY_KLICE:
+        accounts.uloz_smi_klic(account_id, VOLBY_KLICE[volba_klice])
+
     if str(formular.get("rezim") or "") == "vlastni":
         prava = pristup.zabal_prava(
             (oblast.klic for oblast in pristup.OBLASTI
              if formular.get(f"vidi_{oblast.klic}")),
             bool(formular.get("anonymizace")))
         accounts.uloz_prava(account_id, prava)
-        _flash(request, "Uloženo. Účet {jmeno} má vlastní práva – nastavení skupiny se ho už netýká.",
+        _flash(request, "Uloženo. Účet {jmeno} má vlastní práva, nastavení skupiny se ho už netýká.",
                "success", jmeno=cil["username"])
     else:
         accounts.uloz_prava(account_id, None)
@@ -663,8 +727,8 @@ async def settings_divaci(request: Request,
     db.forget_settings()
 
     if not pristup.login_zapnuty():
-        _flash(request, "Uloženo. Jellyfinové účty dovnitř nesmí – "
-                        "dovnitř se chodí jen místními účty.", "success")
+        _flash(request, "Uloženo. Jellyfinové účty dovnitř nesmí, přihlásit se jde jen místními "
+                        "účty.", "success")
     else:
         _flash(request, "Uloženo. Diváci z Jellyfinu se přihlásí svým heslem.",
                "success")
@@ -836,7 +900,7 @@ def settings_database(
 
     ok, message = db.test_connection(candidate)
     if not ok:
-        _flash(request, "Neukládám - spojení nefunguje: {duvod}", "error",
+        _flash(request, "Neukládám, spojení nefunguje: {duvod}", "error",
                duvod=message)
         return RedirectResponse("/settings?section=database", status_code=303)
 
@@ -1016,10 +1080,13 @@ def settings_interface(request: Request,
                        ui_max_streams_mobile: str = Form(""),
                        ui_max_viewers: str = Form(""),
                        ui_max_viewers_mobile: str = Form(""),
+                       ui_max_rows: str = Form(""),
+                       ui_max_rows_mobile: str = Form(""),
                        ui_map_zoom: str = Form("click"),
                        ui_skin: str = Form("novy"),
                        ui_cas_presne: str = Form("0"),
                        ui_dashboard: str = Form("0"),
+                       dashboard_nazev: str = Form(""),
                        account: dict[str, Any] = Depends(require_admin)):
     """Stropy dlouhých seznamů - kolik se vypíše, než se zbytek schová.
 
@@ -1037,14 +1104,37 @@ def settings_interface(request: Request,
                                                 STROP_MAX, 10)))
     db.set_setting("ui_max_viewers_mobile",
                    _clamp(ui_max_viewers_mobile, STROP_MIN, STROP_MAX, 5))
+    db.set_setting("ui_max_rows", _clamp(ui_max_rows, STROP_MIN, STROP_MAX, 10))
+    db.set_setting("ui_max_rows_mobile",
+                   _clamp(ui_max_rows_mobile, STROP_MIN, STROP_MAX, 5))
     # Cokoli mimo znamé režimy je překlep nebo podvržený formulář -
     # v obou případech je správná odpověď výchozí hodnota, ne uložit to.
     db.set_setting("ui_map_zoom",
                    ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
     db.set_setting("ui_skin", ui_skin if ui_skin in VZHLEDY else "novy")
     db.set_setting("ui_cas_presne", "1" if ui_cas_presne == "1" else "0")
-    zapina_prehled = ui_dashboard == "1" and not sekce.je_zapnuty()
-    db.set_setting(sekce.ZAPNUTO, "1" if ui_dashboard == "1" else "0")
+    # Přehled pro všechny má název, který jde do menu. Zkontroluje se, kdykoliv
+    # ho někdo posílá nebo přehled zapíná; neplatný se neuloží a platí ten
+    # předchozí. Bez platného názvu se přehled nezapne - v menu by nebylo
+    # co napsat. Ostatní nastavení se uloží i tak.
+    chce_prehled = ui_dashboard == "1"
+    chyba_nazvu = None
+    if chce_prehled or dashboard_nazev.strip():
+        try:
+            db.set_setting(sekce.NAZEV_KLIC, sekce.over_nazev(dashboard_nazev))
+        except sekce.NeplatnyNazev as chyba:
+            chyba_nazvu = chyba
+    # Zapínat s neplatným názvem nejde, i když si vypnutý přehled pamatuje
+    # starý: hláška říká „nejde" a přehled nemá potichu naskočit pod jménem,
+    # které správce právě přepsal. Zapnutý zůstane zapnutý pod dosavadním.
+    if chce_prehled and (not sekce.nazev()
+                         or (chyba_nazvu is not None and not sekce.je_zapnuty())):
+        chce_prehled = False
+    zapina_prehled = chce_prehled and not sekce.je_zapnuty()
+    db.set_setting(sekce.ZAPNUTO, "1" if chce_prehled else "0")
+    if chyba_nazvu is not None:
+        _flash(request, chyba_nazvu.veta, "error", **chyba_nazvu.hodnoty)
+        return RedirectResponse("/settings?section=interface", status_code=303)
     _flash(request, "Uloženo.", "success")
 
     # Kdo přehled právě zapnul, jde rovnou sestavit - zapnout a sestavit
@@ -1123,11 +1213,15 @@ def settings_language(
         if hasattr(time, "tzset"):
             time.tzset()
     else:
-        _flash(request, "Časovou zónu {zona} neznám – nechal jsem tu původní.",
+        _flash(request, "Časovou zónu {zona} neznám, nechal jsem tu původní.",
                "error", zona=zona)
         return RedirectResponse("/settings?section=general", status_code=303)
 
-    _flash(request, i18n.translate("Uložit jazyk", ui_language) + " ✓", "success")
+    # Hláška v jazyce, ve kterém se stránka hned ukáže: nově zvolený jazyk
+    # serveru, ledaže má správce vlastní jazyk (Můj účet) - pak ten.
+    vlastni = account.get("ui_language")
+    jazyk_hlasky = vlastni if vlastni in i18n.LANGUAGES else ui_language
+    _flash(request, i18n.translate("Uložit jazyk", jazyk_hlasky) + " ✓", "success")
     return RedirectResponse("/settings?section=general", status_code=303)
 
 
@@ -1172,11 +1266,16 @@ def _stranka_aktualizace() -> str:
     v okamžiku, kdy na disku už leží nová. Proto nesmí sáhnout na nic,
     co se s verzí mění: ani na šablonu, ani na styl, ani na kontext.
     """
-    nadpis = i18n.translate("Aktualizuji…")
-    popis = i18n.translate("Nová verze je stažená. Aplikace se teď "
-                           "restartuje - jakmile bude nahoře, pustím tě dál.")
-    dlouho = i18n.translate("Trvá to déle, než je zdrávo.")
-    pokracovat = i18n.translate("Zkusit to znovu")
+    # Stranka je skladana v Pythonu, takze ji nechrani autoescape Jinja.
+    # Preklady pisou cizi lide pres Weblate: znacka v nich se musi ukazat
+    # jako text a apostrof ("It's taking longer") nesmi rozbit JS retezec,
+    # jinak by funkce zkus() nevznikla a cekarna by nikdy nepustila dal.
+    nadpis = escape(i18n.translate("Aktualizuji…"))
+    popis = escape(i18n.translate("Nová verze je stažená. Aplikace se teď restartuje. Jakmile bude "
+                                  "nahoře, pustím tě dál."))
+    dlouho = escape(i18n.translate("Trvá to déle, než je zdrávo."))
+    pokracovat = escape(i18n.translate("Zkusit to znovu"))
+    pozn_pomalu = json.dumps(f'{dlouho} <a href="/">{pokracovat}</a>')
     beh_od = int(STARTED_AT)
     verze_ted = __version__
     return f"""<!doctype html>
@@ -1229,7 +1328,7 @@ def _stranka_aktualizace() -> str:
   function zkus() {{
     if (pokusu++ > VZDAT_TO) {{
       document.getElementById("pozn").innerHTML =
-        '{dlouho} <a href="/">{pokracovat}</a>';
+        {pozn_pomalu};
       return;
     }}
     fetch("/health", {{ cache: "no-store", credentials: "same-origin" }})
@@ -1320,7 +1419,7 @@ async def historie_zapomen(request: Request, user_id: str = Form(""),
     """
     user_id = (user_id or "").strip()
     if not odklizeni.pocet_relaci(user_id):
-        _flash(request, "Nebylo co zapomenout - k tomu divákovi nic nemáme.",
+        _flash(request, "Nebylo co zapomenout, k tomu divákovi nic nemáme.",
                "info")
         return RedirectResponse("/settings?section=tasks#odklizeni",
                             status_code=303)
@@ -1328,7 +1427,7 @@ async def historie_zapomen(request: Request, user_id: str = Form(""),
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
         _flash(request,
-               "Historie se nesmazala - nejdřív se nepovedla záloha: {duvod}",
+               "Historie se nesmazala, protože se nejdřív nepovedla záloha: {duvod}",
                "error", duvod=zaloha.get("message") or "?")
         return RedirectResponse("/settings?section=tasks#odklizeni",
                             status_code=303)
@@ -1342,8 +1441,8 @@ async def historie_zapomen(request: Request, user_id: str = Form(""),
     # o teze akci by v logu jen prekazel.
     kdy = tasks.kdy_odlozene_preskladani()
     _flash(request,
-           "Historie diváka {jmeno} je pryč ({n} přehrávání) – ze statistik "
-           "hned. Do {kdy} ji jde vrátit zpět, potom bude smazaná nadobro.",
+           "Historie diváka {jmeno} je pryč ze statistik ({n} přehrávání). Do {kdy} ji jde "
+           "vrátit zpět, potom bude smazaná nadobro.",
            "success",
            jmeno=vysledek["jmeno"] or user_id, n=vysledek["smazano"],
            kdy=kdy.strftime("%d.%m. %H:%M") if kdy else "?")
@@ -1362,7 +1461,7 @@ async def historie_vrat(request: Request, udalost: str = Form(""),
     vysledek = await asyncio.to_thread(odklizeni.vrat_z_kose, udalost)
     if not vysledek["vraceno"]:
         _flash(request,
-               "Vrátit se nepodařilo - v koši už nic takového není.", "error")
+               "Vrátit se nepodařilo, v koši už nic takového není.", "error")
     else:
         _flash(request, "Historie diváka {jmeno} je zpátky ({n} přehrávání).",
                "success", jmeno=vysledek["jmeno"], n=vysledek["vraceno"])
@@ -1498,7 +1597,7 @@ async def tasks_run(
         # a druha uloha pak jen narazila na zamek a tise skoncila.
         _flash(request, "Jiná úloha už běží, počkej na její dokončení.", "warning")
     else:
-        asyncio.create_task(tasks.run_now(key))
+        asyncio.create_task(i18n.bez_jazyka_uctu(tasks.run_now(key)))
         # Název úlohy je česká konstanta z tasks.py - v anglickém
         # rozhraní se musí přeložit stejně jako zbytek hlášky.
         _flash(request, "{uloha}: {stav}", "info",
@@ -1623,7 +1722,7 @@ def history_assign(request: Request, item_id: str = Form(""),
     if vysledek.get("status") != "ok":
         _flash(request, vysledek.get("message", "Nepovedlo se."), "error")
     else:
-        _flash(request, "Přiřazeno k „{nazev}“ – {n} záznamů.", "success",
+        _flash(request, "Přiřazeno k „{nazev}“: {n} záznamů.", "success",
                nazev=vysledek["name"], n=vysledek["rows"])
     return RedirectResponse("/settings/history/orphans", status_code=303)
 
@@ -1692,12 +1791,17 @@ def account_password(
     password_again: str = Form(""),
     account: dict[str, Any] = Depends(require_login),
 ):
-    """Zmena hesla.
+    """Zmena hesla jineho uctu (spravce).
 
-    Sve vlastni heslo si smi zmenit kazdy. Cizi jen spravce - proto tahle
-    routa nepouziva require_admin, ale kontroluje opravneni sama.
+    Vlastni heslo sem nepatri: meni se na strance Muj ucet, kde se chce
+    soucasne heslo. Tady se nechce - spravce tudy pomaha tomu, kdo heslo
+    zapomnel - takze kdyby slo i o vlastni, obesel by se tim pozadavek na
+    soucasne heslo (a spravce z Jellyfinu by si nastavil mistni heslo).
     """
-    if account_id != account["id"] and not account["is_admin"]:
+    if account_id == account["id"]:
+        _flash(request, "Vlastní heslo se mění na stránce Můj účet.", "info")
+        return RedirectResponse("/account", status_code=303)
+    if not account["is_admin"]:
         raise HTTPException(status_code=403, detail="Cizi heslo smi menit jen spravce.")
 
     try:
@@ -1727,10 +1831,10 @@ def account_role(
 def api_token_novy(request: Request, name: str = Form(""),
                    account: dict[str, Any] = Depends(require_admin)):
     """Vyrobí token pro čtecí API a jednou ho ukáže."""
-    vysledek = api.vytvor(name)
+    vysledek = api.vytvor(name, account["id"])
     # Do relace, ne do adresy: adresa se objeví v logu proxy i v historii
     # prohlížeče, a tohle je jediná chvíle, kdy je token čitelný.
-    request.session["novy_api_token"] = vysledek["token"]
+    request.session["novy_api_token"] = {"id": vysledek["id"], "token": vysledek["token"]}
     _flash(request, "Klíč „{jmeno}“ vznikl.", "success",
            jmeno=vysledek["jmeno"])
     return RedirectResponse("/settings?section=api", status_code=303)
@@ -1739,11 +1843,8 @@ def api_token_novy(request: Request, name: str = Form(""),
 @router.post("/settings/api/token/zrusit")
 def api_token_zrusit(request: Request, token_id: str = Form(""),
                      account: dict[str, Any] = Depends(require_admin)):
-    """Zneplatní jeden token. Ostatních se to nedotkne."""
-    try:
-        cislo = int(token_id)
-    except (TypeError, ValueError):
-        cislo = 0
+    """Zneplatní jeden token - i cizí. Ostatních se to nedotkne."""
+    cislo = _cislo_z_formulare(token_id)
     jmeno = api.zrus(cislo) if cislo else ""
     if jmeno:
         _flash(request, "Klíč „{jmeno}“ už neplatí.", "success",
@@ -1751,6 +1852,51 @@ def api_token_zrusit(request: Request, token_id: str = Form(""),
     else:
         _flash(request, "Takový klíč tu není.", "info")
     return RedirectResponse("/settings?section=api", status_code=303)
+
+
+@router.post("/settings/api/token/vypnout")
+def api_token_vypnout(request: Request, token_id: str = Form(""),
+                      account: dict[str, Any] = Depends(require_admin)):
+    """Vypne klíč, ale nesmaže ho.
+
+    Na chvíli, kdy je podezření, že klíč unikl: přestane fungovat hned,
+    ale zůstane i se záznamy použití, takže se dá dohledat, kdo a odkud
+    se s ním ptal - a když to byl planý poplach, zase zapnout.
+    """
+    cislo = _cislo_z_formulare(token_id)
+    jmeno = api.vypni(cislo) if cislo else ""
+    if jmeno:
+        _flash(request, "Klíč „{jmeno}“ je vypnutý. Dokud ho nezapneš, API mu nic nevrátí.",
+               "success", jmeno=jmeno)
+    else:
+        _flash(request, "Takový klíč tu není.", "info")
+    return RedirectResponse("/settings?section=api", status_code=303)
+
+
+@router.post("/settings/api/token/zapnout")
+def api_token_zapnout(request: Request, token_id: str = Form(""),
+                      account: dict[str, Any] = Depends(require_admin)):
+    """Vypnutý klíč zase pustí k datům."""
+    cislo = _cislo_z_formulare(token_id)
+    jmeno = api.zapni(cislo) if cislo else ""
+    if jmeno:
+        _flash(request, "Klíč „{jmeno}“ zase funguje.", "success", jmeno=jmeno)
+    else:
+        _flash(request, "Takový klíč tu není.", "info")
+    return RedirectResponse("/settings?section=api", status_code=303)
+
+
+@router.post("/settings/api/pouziti")
+def api_pouziti_ulozit(request: Request, api_pouziti_dni: str = Form(""),
+                       account: dict[str, Any] = Depends(require_admin)):
+    """Kolik dní držet záznam použití klíčů."""
+    db.set_setting(api.POUZITI_DNI_KLIC,
+                   _clamp(api_pouziti_dni, 1, api.POUZITI_DNI_MAX,
+                          api.POUZITI_DNI_VYCHOZI))
+    # Kratší doba platí hned, ne až za hodinu po dalším dotazu.
+    api.uklid_pouziti(vynutit=True)
+    _flash(request, "Doba držení záznamu použití uložena.", "success")
+    return RedirectResponse("/settings?section=api#pouziti", status_code=303)
 
 
 @router.post("/settings/accounts/delete")

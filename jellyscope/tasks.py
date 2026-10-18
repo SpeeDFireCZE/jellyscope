@@ -267,11 +267,10 @@ TASKS: dict[str, Task] = {
             key="recent",
             name="Nově přidané tituly",
             description=(
-                "Stáhne jen tituly, které v knihovně ještě nejsou - "
-                "podle data posledního přidaného. Jellyfin skoro nezatíží, "
-                "takže plná synchronizace může běžet mnohem řidčeji. "
-                "Při zdroji dat 'ffprobe' rovnou změří i nově přidané "
-                "soubory, aby na technická data nečekaly do další analýzy."
+                "Stáhne jen tituly, které v knihovně ještě nejsou, podle data posledního "
+                "přidaného. Jellyfin skoro nezatíží, takže plná synchronizace může běžet mnohem "
+                "řidčeji. Při zdroji dat 'ffprobe' rovnou změří i nově přidané soubory, aby na "
+                "technická data nečekaly do další analýzy."
             ),
             interval_setting="recent_sync_minutes",
             default_minutes=15,
@@ -282,11 +281,10 @@ TASKS: dict[str, Task] = {
             key="tidy",
             name="Narovnání dat",
             description=(
-                "Srovná historii i knihovnu: dohledá v Jellyfinu záznamy, "
-                "ke kterým nic nevede, naváže je podle názvu a čísla dílu, "
-                "sloučí duplicity, srovná názvy - a vrátí z archivu díly, "
-                "které v knihovně zase jsou (typicky po výměně souboru). "
-                "Nic nemaže - jen opravuje vazby."
+                "Srovná historii i knihovnu: dohledá v Jellyfinu záznamy, ke kterým nic nevede, "
+                "naváže je podle názvu a čísla dílu, sloučí duplicity, srovná názvy a vrátí z "
+                "archivu díly, které v knihovně zase jsou (typicky po výměně souboru). Nic "
+                "nemaže, jen opravuje vazby."
             ),
             time_setting="task_tidy_time",
             default_time="04:00",
@@ -297,11 +295,10 @@ TASKS: dict[str, Task] = {
             key="notifikace",
             name="Upozornění",
             description=(
-                "Zkontroluje, jestli sběrač sbírá a jestli nedochází místo, "
-                "a v určený den pošle týdenní souhrn. Zprávu pošle jen při "
-                "změně - z hlídače, který se ozývá pořád, si člověk udělá "
-                "ticho a pak mu unikne to podstatné. Kudy se posílá a na co "
-                "se hlídá, je v Upozorněních."
+                "Zkontroluje, jestli sběrač sbírá a jestli nedochází místo, a v určený den pošle "
+                "týdenní souhrn. Zprávu pošle jen při změně. Hlídače, který se ozývá pořád, "
+                "člověk umlčí a pak mu unikne to podstatné. Kudy se posílá a na co se hlídá, je "
+                "v Upozorněních."
             ),
             interval_setting="notifikace_minuty",
             default_minutes=15,
@@ -312,9 +309,9 @@ TASKS: dict[str, Task] = {
             key="updates",
             name="Kontrola aktualizací",
             description=(
-                "Zeptá se GitHubu, jestli nevyšlo novější vydání. Nic "
-                "neinstaluje - jen to řekne. Je to jediné spojení jinam než "
-                "na Jellyfin, proto je ve výchozím stavu vypnutá."
+                "Zeptá se GitHubu, jestli nevyšlo novější vydání. Nic neinstaluje, jen to "
+                "oznámí. Je to jediné spojení jinam než na Jellyfin, proto je ve výchozím stavu "
+                "vypnutá."
             ),
             time_setting="task_updates_time",
             default_time="05:00",
@@ -325,10 +322,9 @@ TASKS: dict[str, Task] = {
             key="purge",
             name="Odklízení historie",
             description=(
-                "Smaže přehrávání starší než nastavená hranice. Ve výchozím "
-                "stavu je vypnuté a zapnout se musí ručně - spolu s tím, jak "
-                "dlouhá historie se nechává. Právě běžící přehrávání se "
-                "nemaže, ať sběrač nepřijde o rozdělanou relaci. Před "
+                "Smaže přehrávání starší než nastavená hranice. Ve výchozím stavu je vypnuté a "
+                "zapnout se musí ručně, spolu s tím, jak dlouhá historie se nechává. Právě "
+                "běžící přehrávání se nemaže, ať sběrač nepřijde o rozdělanou relaci. Před "
                 "smazáním se udělá záloha databáze; bez ní se nemaže."
             ),
             time_setting="task_purge_time",
@@ -592,7 +588,8 @@ def _vyber_pg_dump(config: Any) -> str:
 ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_versions",
                       "item_streams",
                       "accounts", "dashboard_layout", "library_snapshot",
-                      "settings", "scan_log", "api_tokens", "login_blocks",
+                      "settings", "scan_log", "api_tokens", "api_pouziti",
+                      "login_blocks",
                       "zapomenuti", "playback")
 
 
@@ -1294,6 +1291,13 @@ async def run_scheduler() -> None:
             # Neni to uloha - nema zapinani ani rozvrh, jen dluh po rucnim
             # zapomenuti divaka, ktery se splaci v noci.
             await _dodelej_odlozene_preskladani()
+
+            # Stare zaznamy pouziti API klicu (i s IP adresami). Mazou se
+            # i po zapisu, ale kdyz provoz ustane - treba po zneplatneni
+            # vsech klicu -, zadny zapis neprijde. Sama si hlida, ze bezi
+            # nejvys jednou za hodinu.
+            from . import api
+            await asyncio.to_thread(api.uklid_pouziti)
 
         except asyncio.CancelledError:
             raise

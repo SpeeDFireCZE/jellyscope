@@ -1,0 +1,183 @@
+{# Můj účet - stránka o jednom účtu, ne zmenšené Nastavení.
+
+   Otevře ji každý přihlášený (správce, čtenář i divák z Jellyfinu); je
+   v povolujícím seznamu pristup.VZDY. Nic serverového tu není: jazyk platí
+   jen pro tenhle účet a heslo se mění jen vlastní - účet se v routách bere
+   z relace, ne z formuláře. #}
+{% extends "base.html" %}
+{% from "_macros.html" import bunka_klice %}
+{% block title %}{{ _("Můj účet") }} &middot; Jellyscope{% endblock %}
+{% block content %}
+<div class="page-head">
+    {# Stejné kolečko jako v patičce menu, jen větší: písmeno, přes něj
+       profilový obrázek z Jellyfinu, pokud ho účet má. #}
+    <div class="ucet-hlava">
+        {% set obrazek = obrazek_uctu() %}
+        <span class="ucet-avatar ucet-avatar-velky" aria-hidden="true">{{ account.username[:1] | upper }}
+            {%- if obrazek %}<img src="{{ obrazek }}" alt="" onerror="this.remove()">{% endif -%}
+        </span>
+        <div>
+        <h1>{{ _("Můj účet") }}</h1>
+        <p class="subtitle">
+            <strong>{{ account.username }}</strong>
+            {% if account.is_admin %}
+                <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
+            {% elif z_jellyfinu %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("divák z Jellyfinu") }}</span>
+            {% else %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("čtenář") }}</span>
+            {% endif %}
+        </p>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="max-width:640px">
+    <div class="card-head">
+        <h2>{{ _("Jazyk rozhraní") }}</h2>
+    </div>
+    <form method="post" action="/account/language">
+        <div class="field">
+            <label for="ui_language">{{ _("Jazyk") }}</label>
+            <select id="ui_language" name="ui_language" style="width:auto">
+                {# Prázdná hodnota = jazyk serveru. Vedle je napsané, který
+                   to teď je - „podle serveru" samo o sobě nic neřekne. #}
+                <option value="" {{ 'selected' if not jazyk_uctu }}>
+                    {{ _("Podle serveru ({jazyk})").format(jazyk=ui_languages[jazyk_serveru]) }}
+                </option>
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == jazyk_uctu }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <p class="hint">{{ _("Platí jen pro tvůj účet. Výchozí jazyk pro všechny nastavuje správce v Nastavení → Obecné.") }}</p>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="max-width:640px">
+    <div class="card-head">
+        <h2>{{ _("Heslo") }}</h2>
+    </div>
+    {% if z_jellyfinu %}
+        {# Účet z Jellyfinu tu žádné heslo nemá - přihlašuje se tím
+           z Jellyfinu, a to se mění tam. Formulář by jen sliboval
+           něco, co nejde. #}
+        <p class="card-note">{{ _("Přihlašuješ se účtem z Jellyfinu, takže heslo si měníš v Jellyfinu.") }}</p>
+    {% else %}
+    <form method="post" action="/account/password">
+        <div class="field">
+            <label for="current_password">{{ _("Současné heslo") }}</label>
+            <input type="password" id="current_password" name="current_password"
+                   autocomplete="current-password" required>
+        </div>
+        <div class="field">
+            <label for="new_password">{{ _("Nové heslo") }}</label>
+            <input type="password" id="new_password" name="password"
+                   autocomplete="new-password" required>
+            <p class="hint">{{ _("Alespoň 8 znaků.") }}</p>
+        </div>
+        <div class="field">
+            <label for="new_password_again">{{ _("Nové heslo znovu") }}</label>
+            <input type="password" id="new_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Změnit heslo") }}</button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+{# Můj přehled - vlastní stránka z vybraných statistik. Bez povolení, pro
+   každého; karty se řídí právy účtu. Prázdný se odtud skládá, s kartami
+   se odtud otevírá (a je i v menu). #}
+<div class="card" id="muj-prehled" style="max-width:640px">
+    <div class="card-head">
+        <div>
+            <h2>{{ _("Můj přehled") }}</h2>
+            <p class="card-note" style="margin:4px 0 0">{{ _("Vlastní stránka z vybraných statistik. Vidíš ji jen ty.") }}</p>
+        </div>
+        <a class="btn" href="/account/prehled">{{ _("Otevřít") if ma_muj_prehled() else _("Poskládat") }}</a>
+    </div>
+</div>
+
+{# Vlastní API klíče. Karta je jen pro toho, komu je správce povolil -
+   nebo kdo už nějaký klíč má: ten ho musí umět zneplatnit, i když mu
+   povolení mezitím vzali. Klíč smí přesně to, co účet sám, proto okno
+   „Jak se to používá" vypíše jen adresy podle práv tohohle účtu, ne
+   celé API. Čerstvý klíč se ukáže v řádku svého klíče (bunka_klice). #}
+{% if smi_klic or api_klice %}
+<div class="card" id="klice" style="max-width:640px">
+    {# Návod je v okně, stejném jako v Nastavení → API - jen s adresami,
+       které smí klíč tohohle účtu (viz _api_navod.html). #}
+    <div class="card-head">
+        <div>
+            <h2>{{ _("API klíče") }}</h2>
+            <p class="card-note" style="margin:4px 0 0">{{ _("pro Grafanu, Homepage a podobné nástroje, jen ke čtení") }}</p>
+        </div>
+        <button class="btn" type="button" data-okno="okno-api-dokumentace">
+            {{ _("Jak se to používá") }}
+        </button>
+    </div>
+
+    {% if smi_klic %}
+    <form method="post" action="/account/klic" class="btn-row" style="margin-bottom:16px">
+        <input type="text" name="name" maxlength="60"
+               placeholder="{{ _('K čemu bude, třeba Grafana') }}"
+               style="max-width:280px">
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Vyrobit klíč") }}</button>
+    </form>
+    {% else %}
+    <p class="card-note">{{ _("Nový klíč ti správce nepovolil. Ty, které máš, můžeš zneplatnit.") }}</p>
+    {% endif %}
+
+    {% if api_klice %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Název") }}</th>
+                <th>{{ _("Klíč") }}</th>
+                <th>{{ _("Stav") }}</th>
+                <th>{{ _("Vyrobeno") }}</th>
+                <th>{{ _("Naposledy použit") }}</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for klic in api_klice %}
+            <tr>
+                <td class="strong">{{ klic.name }}</td>
+                {{ bunka_klice(klic, novy_klic, 12) }}
+                <td class="nowrap">
+                    {% if klic.stav == "vypnuty" %}
+                    <span class="badge warning" title="{{ _('Vypnul ho správce. Zapnout ho může zase jen on.') }}"><span class="dot"></span>{{ _("vypnutý") }}</span>
+                    {% elif not smi_klic %}
+                    <span class="badge warning" title="{{ _('Správce ti povolení vzal. Klíč zase začne fungovat, až ho vrátí.') }}"><span class="dot"></span>{{ _("bez povolení") }}</span>
+                    {% else %}
+                    <span class="badge good"><span class="dot"></span>{{ _("aktivní") }}</span>
+                    {% endif %}
+                </td>
+                <td class="nowrap muted">{{ klic.created_at | relative }}</td>
+                <td class="nowrap muted">
+                    {{ klic.last_used_at | relative if klic.last_used_at else _("nikdy") }}
+                </td>
+                <td>
+                    <form method="post" action="/account/klic/zrusit"
+                          onsubmit='return confirm({{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.")|tojson }})'>
+                        <input type="hidden" name="token_id" value="{{ klic.id }}">
+                        <button data-keep-scroll class="btn danger" type="submit">{{ _("Zneplatnit") }}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+</div>
+{% include "_api_navod.html" %}
+{% endif %}
+{% endblock %}

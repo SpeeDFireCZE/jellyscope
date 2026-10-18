@@ -1,0 +1,72 @@
+{# Karta ze stránky Jazyky (languages.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč chybi_stopa) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `missing_preferred (langstats.missing_preferred)`. #}
+<div class="card">
+    <div class="card-head">
+        {# Název jazyka je v prvním pádě ("Angličtina"), takže věta musí být
+           postavená na něj. "Sledujete to, ale angličtina to není" česky
+           nedává smysl a skloňovat název jazyka obecně nejde - u každého
+           jazyka rozhraní jinak. Dvojtečka to řeší za nás. #}
+        <h2>
+            {{ _("Sledujete to, ale stopa chybí") }}: {{ missing_preferred.name }}
+        </h2>
+        <p class="card-note">
+            {{ _("celkem") }} {{ missing_preferred.total | number }} {{ _("titulů") }}
+        </p>
+    </div>
+    {# Stránka Jazyky kartu bez řádků vůbec nevloží; v přehledu stojí
+       pořád, tak bez řádků řekne, že je všechno v pořádku. #}
+    {% if missing_preferred.rows %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Titul") }}</th><th>{{ _("Dostupné stopy") }}</th>
+                <th>{{ _("Titulky") }} ({{ missing_preferred.name }})</th>
+                <th class="num">{{ _("Odsledováno") }}</th><th class="num">{{ _("Spuštění") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in missing_preferred.rows %}
+            <tr>
+                {# Proklik na detail: u seriálu na seriál, u dílu a filmu
+                   na soubor. Bez něj byl seznam slepá ulička - člověk se
+                   dozvěděl název a dál musel hledat sám.
+
+                   Řádek je buď celý seriál (stopa chybí všem jeho dílům),
+                   nebo jeden díl - pak je za názvem seriálu jeho označení
+                   a pod ním název dílu, ať je co shánět jasné. #}
+                <td class="truncate strong" title="{{ row.label }}">
+                    <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                    {% if row.is_series %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("celý seriál") }}</span>
+                    {% elif row.episode_name %}
+                        <div class="card-note">{{ row.episode_name }}</div>
+                    {% endif %}
+                </td>
+                <td class="muted">{{ row.audio_label }}</td>
+                <td>
+                    {% if row.has_preferred_subtitles %}
+                        <span class="badge good"><span class="dot"></span>{{ _("ano") }}</span>
+                    {% else %}
+                        <span class="badge warning"><span class="dot"></span>{{ _("ne") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num muted">{{ row.plays | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Kandidáti na sehnání jiné verze. Díváte se na ně, ale zvuk v tomhle jazyce u nich Jellyfin nabídnout nemůže:") }}
+        {{ missing_preferred.name }}.
+    </p>
+    {% else %}
+    <p class="card-note">{{ _("Všechno, co se sleduje, tu stopu má.") }}</p>
+    {% endif %}
+</div>

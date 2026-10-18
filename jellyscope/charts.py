@@ -271,6 +271,7 @@ def hbar_chart(
     link_prefix: str | None = None,
     link_key: str = "id",
     poradi: bool = False,
+    popisky_nad: bool = False,
 ) -> str:
     """Porovnani hodnot mezi kategoriemi.
 
@@ -290,14 +291,21 @@ def hbar_chart(
     je graf opravdu **zebricek** - u nejsledovanejsich titulu nebo
     nejaktivnejsich uzivatelu. Kde se jen porovnavaji kategorie mezi
     sebou (kodeky, jazyky), by cislo lhalo o poradi, ktere zadne neni.
+
+    `popisky_nad=True` da popisek na vlastni radek nad pruh, v cele delce.
+    Pro popisky, ktere jsou cela veta (duvody prepoctu): v tretine karty
+    by se usekly a zbyl by z nich zacatek, ktery nic nerika. S poradim
+    se nesnese - cislo by si vzalo prvni sloupec a mrizka by se rozsypala.
     """
+    if popisky_nad and poradi:
+        raise ValueError("hbar_chart: popisky_nad a poradi spolu nejdou")
     rows = [row for row in rows if row is not None][:limit]
     if not rows:
         return _empty(_t("Zatím žádná data"))
 
     maximum = max(float(row.get(value_key) or 0) for row in rows) or 1.0
 
-    parts = ['<div class="hbars">']
+    parts = ['<div class="hbars popisky-nad">' if popisky_nad else '<div class="hbars">']
     for index, row in enumerate(rows):
         value = float(row.get(value_key) or 0)
         label = str(row.get(label_key, ""))
@@ -389,6 +397,23 @@ def _barva_segmentu(segment: dict[str, Any], index: int) -> str:
     return ROLE_BARVY[role]
 
 
+def _inkoust(barva: str) -> str:
+    """Barva písma, které je na podkladu `barva` čitelné.
+
+    Bílá nesedí všude: v tmavém motivu měla na tyrkysovém dílku 1,9 : 1.
+    Barvy dílků jsou proměnné motivu (var(--series-3), var(--good)) a ke
+    každé patří v CSS inkoust var(--ink-series-3), spočítaný pro každý
+    motiv zvlášť; hlídá ho tests/test_kontrast.py. Barva aplikace má svůj
+    inkoust odjakživa jako --accent-ink.
+    """
+    promenna = re.fullmatch(r"var\(--([a-z0-9-]+)\)", barva)
+    if not promenna:
+        return "#fff"
+    if promenna.group(1) == "accent":
+        return "var(--accent-ink)"
+    return f"var(--ink-{promenna.group(1)}, #fff)"
+
+
 def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
     """Jeden pruh rozdeleny na casti - "z ceho se sklada celek".
 
@@ -410,9 +435,10 @@ def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
         # Popisek dovnitr jen tehdy, kdyz je cast dost siroka. Orezany text
         # uvnitr pruhu je horsi nez zadny - legenda ho stejne nese.
         inner = f"{share:.0f} %" if share >= 9 else ""
+        barva = _barva(_barva_segmentu(segment, index))
         parts.append(
             f'<div class="stack-seg" style="flex-grow: {share:.4f}; '
-            f'background: {_barva(_barva_segmentu(segment, index))}"'
+            f'background: {barva}; color: {_inkoust(barva)}"'
             f' data-tip="{_e(title)}">'
             f'<span>{inner}</span></div>'
         )

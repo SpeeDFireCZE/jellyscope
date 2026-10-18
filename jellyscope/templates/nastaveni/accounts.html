@@ -6,16 +6,18 @@
    Makra se importují tady, ne v rodiči: záviset na tom, že se
    `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
    a funguje jen náhodou. #}
-{% from "_macros.html" import running_task, file_picker %}
+{% from "_macros.html" import running_task, file_picker, nazev_oblasti %}
 
 {# ================================================================== #}
 {# Akce nad účty. Formuláře byly dřív pořád otevřené pod sebou a stránka
    kvůli nim byla nekonečná - přitom se každý z nich použije jednou za
    půl roku. Teď jsou v oknech (<dialog>), která umí Esc i klik mimo. #}
 <div class="btn-row" style="margin-bottom:16px">
-    <button class="btn primary" type="button" data-okno="okno-vlastni-heslo">
-        {{ _("Změnit své heslo") }}
-    </button>
+    {# Vlastní heslo se mění na stránce Můj účet - tam se chce současné
+       heslo. Okno tady ho nechtělo, takže kdo si sedl k cizímu
+       přihlášenému prohlížeči, mohl správci heslo přepsat a zamknout ho
+       venku. #}
+    <a class="btn primary" href="/account">{{ _("Změnit své heslo") }}</a>
     {% if account.is_admin %}
     <button class="btn" type="button" data-okno="okno-pridat">
         {{ _("Přidat uživatele") }}
@@ -34,7 +36,7 @@
     </div>
 
     <p class="card-note" style="margin-bottom:16px">
-        {{ _("Tohle nejsou uživatelé Jellyfinu – to jsou účty, kterými se někdo přihlašuje sem. Když někomu založíš účet tady, do Jellyfinu se tím nedostane.") }}
+        {{ _("Tohle nejsou uživatelé Jellyfinu, ale účty, kterými se někdo přihlašuje sem. Když někomu založíš účet tady, do Jellyfinu se tím nedostane.") }}
     </p>
 
     <div class="table-wrap">
@@ -81,7 +83,7 @@
                     {% if row.id == account.id %}
                         {% if admin_count <= 1 %}
                             <span class="card-note">
-                                {{ _("poslední správce – nelze smazat ani si odebrat práva") }}
+                                {{ _("poslední správce: nejde smazat ani si odebrat práva") }}
                             </span>
                         {% else %}
                             <span class="card-note">{{ _("vlastní účet") }}</span>
@@ -107,7 +109,7 @@
                            otázkou - "jmeno?" nikomu neřekne, co se stane.
                            Skutečnou pojistkou zůstává accounts.delete(). #}
                         <form method="post" action="/settings/accounts/delete"
-                              onsubmit="return confirm('{{ _("Opravdu smazat účet") }} {{ row.username }}? {{ _("Tenhle krok nejde vzít zpět. Nasbíraná data zůstanou, mizí jen přihlášení do Jellyscope.") }}')">
+                              onsubmit='return confirm({{ (_("Opravdu smazat účet") ~ " " ~ row.username ~ "? " ~ _("Tenhle krok nejde vzít zpět. Nasbíraná data zůstanou, mizí jen přihlášení do Jellyscope."))|tojson }})'>
                             <input type="hidden" name="account_id" value="{{ row.id }}">
                             <button data-keep-scroll class="btn danger" type="submit">{{ _("Smazat") }}</button>
                         </form>
@@ -121,32 +123,6 @@
     </div>
 </div>
 {% endif %}
-
-<dialog class="okno" id="okno-vlastni-heslo">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ _("Změnit své heslo") }}</h2>
-        <button class="btn okno-zavrit" type="submit"
-                aria-label="{{ _("Zavřít") }}">&times;</button>
-    </form>
-    <form method="post" action="/settings/accounts/password">
-        <input type="hidden" name="account_id" value="{{ account.id }}">
-        <div class="field">
-            <label for="own_password">{{ _("Nové heslo") }}</label>
-            <input type="password" id="own_password" name="password"
-                   autocomplete="new-password" required>
-            <p class="hint">{{ _("Alespoň 8 znaků.") }}</p>
-        </div>
-        <div class="field">
-            <label for="own_password_again">{{ _("Nové heslo znovu") }}</label>
-            <input type="password" id="own_password_again" name="password_again"
-                   autocomplete="new-password" required>
-        </div>
-        <div class="btn-row">
-            <button data-keep-scroll class="btn primary" type="submit">{{ _("Změnit heslo") }}</button>
-        </div>
-    </form>
-</dialog>
-
 {% if account.is_admin %}
 <dialog class="okno" id="okno-pridat">
     <form method="dialog" class="okno-hlava">
@@ -176,7 +152,7 @@
                 <span>
                     <span class="title">{{ _("Správce") }}</span>
                     <span class="desc">
-                        {{ _("Smí měnit nastavení, spouštět analýzy a spravovat účty. Bez toho vidí jen statistiky – a to je pro většinu lidí správně.") }}
+                        {{ _("Smí měnit nastavení, spouštět analýzy a spravovat účty. Bez toho vidí jen statistiky, což většině lidí stačí.") }}
                     </span>
                 </span>
             </label>
@@ -197,7 +173,8 @@
         <div class="field">
             <label for="target_account">{{ _("Účet") }}</label>
             <select id="target_account" name="account_id">
-                {% for row in all_accounts %}
+                {# Bez vlastního účtu - to se mění na stránce Můj účet. #}
+                {% for row in all_accounts if row.id != account.id %}
                     <option value="{{ row.id }}">{{ row.username }}</option>
                 {% endfor %}
             </select>
@@ -228,7 +205,10 @@
 {# ------------------------------------------------------------------ #}
 {% for row in all_accounts if row.id in prava_uctu %}
 {% set prava = prava_uctu[row.id] %}
-<dialog class="okno" id="okno-prava-{{ row.id }}">
+{# Strom s popisky je delší než obrazovka notebooku: posouvá se jen
+   obsah (.okno-obsah), hlavička s křížkem a tlačítko Uložit zůstávají
+   vidět. Viz .okno-posuvne ve style.css. #}
+<dialog class="okno okno-posuvne" id="okno-prava-{{ row.id }}">
     <form method="dialog" class="okno-hlava">
         <h2>{{ _("Práva účtu") }} {{ row.username }}</h2>
         <button class="btn okno-zavrit" type="submit"
@@ -237,6 +217,7 @@
     <form method="post" action="/settings/accounts/prava" class="prava-uctu">
         <input type="hidden" name="account_id" value="{{ row.id }}">
 
+        <div class="okno-obsah">
         <div class="field">
             <label class="prepinac">
                 <input type="radio" name="rezim" value="skupina"
@@ -250,6 +231,14 @@
                     <span class="hint">{{ _("Co se změní u skupiny, změní se i tomuhle účtu.") }}</span>
                 </span>
             </label>
+            {# Odkaz až za <label>: uvnitř by byl součástí názvu volby
+               (čtečka ho přečte s ní) a klik na něj by okno zavřel, aniž
+               by se cokoliv uložilo - zatímco tady je vidět, kam vede. #}
+            {% if prava.skupina == 'divak' %}
+            <p class="hint" style="margin:-6px 0 0 21px">
+                <a href="/settings?section=jellyfin#divaci">{{ _("Skupinu diváků nastavíš v sekci Jellyfin.") }}</a>
+            </p>
+            {% endif %}
             <label class="prepinac" style="margin-top:8px">
                 <input type="radio" name="rezim" value="vlastni"
                        {{ 'checked' if prava.vlastni }}>
@@ -270,7 +259,7 @@
                 <input type="checkbox" name="vidi_{{ oblast.klic }}"
                        {{ 'checked' if oblast.zapnuto }}>
                 <span>
-                    {{ _(oblast.nazev) }}
+                    {{ nazev_oblasti(oblast, nazev_prehledu) }}
                     <span class="hint">{{ _(oblast.popis) }}</span>
                 </span>
             </label>
@@ -282,7 +271,23 @@
             <span>{{ _("Skrýt jména a adresy diváků") }}</span>
         </label>
 
-        <div class="btn-row" style="margin-top:16px">
+        {# Vlastní API klíč je jiná otázka než strom stránek, a proto se
+           ukládá v obou režimech - skript ho nezamyká. Klíč pak smí přesně
+           to, co účet podle stromu nahoře. #}
+        <div class="field" style="margin-top:14px">
+            <label for="smi-klic-{{ row.id }}">{{ _("Vlastní API klíče") }}</label>
+            <select id="smi-klic-{{ row.id }}" name="smi_klic">
+                <option value="skupina" {{ 'selected' if prava.smi_klic == 'skupina' }}>
+                    {{ _("Podle skupiny (teď smí)") if prava.smi_klic_skupina else _("Podle skupiny (teď nesmí)") }}
+                </option>
+                <option value="ano" {{ 'selected' if prava.smi_klic == 'ano' }}>{{ _("Smí si vyrábět klíče") }}</option>
+                <option value="ne" {{ 'selected' if prava.smi_klic == 'ne' }}>{{ _("Nesmí") }}</option>
+            </select>
+            <span class="hint">{{ _("Platí v obou režimech nahoře. Klíč, který už má, po odebrání povolení přestane fungovat, ale nesmaže se.") }}</span>
+        </div>
+        </div>
+
+        <div class="okno-pata">
             <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit práva") }}</button>
         </div>
     </form>
@@ -328,9 +333,20 @@ document.querySelectorAll("form.prava-uctu").forEach(function (form) {
     <form method="post" action="/settings/ctenari" id="ctenari-form"></form>
 
     <p class="hint" style="margin-top:0">
-        {{ _("Ve výchozím stavu vidí čtenář statistiky celé – tak se tyhle účty odjakživa zakládaly. Co mu ukázat nechceš, odškrtni.") }}
-        {{ _("Jeden účet může mít práva vlastní – tlačítko Práva u účtu výš; skupina se ho pak netýká.") }}
+        {{ _("Ve výchozím stavu vidí čtenář statistiky celé, tak se tyhle účty odjakživa zakládaly. Co mu ukázat nechceš, odškrtni.") }}
+        {{ _("Jeden účet může mít práva vlastní (tlačítko Práva u účtu výš). Skupina se ho pak netýká.") }}
     </p>
+    {# Diváci z Jellyfinu jsou druhá skupina, jen se nenastavuje tady:
+       co uvidí, je u Jellyfinu vedle zapnutí jejich přihlašování, protože
+       jedno bez druhého nedává smysl. Informační box s tlačítkem, ne věta
+       v textu - v textu zapadla a hledá se tu přitom jako první. #}
+    <div class="flash info" style="margin:0 0 14px; flex-wrap:wrap; align-items:center">
+        <span class="dot" style="margin-top:0"></span>
+        <span style="flex:1; min-width:200px">
+            {{ _("Diváci z Jellyfinu mají vlastní skupinu. Co uvidí, se nastavuje v sekci Jellyfin, u jejich přihlašování.") }}
+        </span>
+        <a class="btn" href="/settings?section=jellyfin#divaci">{{ _("Nastavit diváky z Jellyfinu") }}</a>
+    </div>
 
     <div class="strom">
         {% for oblast in ctenar_strom %}
@@ -338,7 +354,7 @@ document.querySelectorAll("form.prava-uctu").forEach(function (form) {
             <input type="checkbox" name="vidi_{{ oblast.klic }}" form="ctenari-form"
                    {{ 'checked' if oblast.zapnuto }}>
             <span>
-                {{ _(oblast.nazev) }}
+                {{ nazev_oblasti(oblast, nazev_prehledu) }}
                 <span class="hint">{{ _(oblast.popis) }}</span>
             </span>
         </label>
@@ -360,3 +376,34 @@ document.querySelectorAll("form.prava-uctu").forEach(function (form) {
         </button>
     </div>
 </div>
+
+{% if account.is_admin %}
+{# ------------------------------------------------------------------ #}
+{# Kdo si smí vyrobit vlastní API klíč (na stránce Můj účet). Správce  #}
+{# smí vždycky. Klíč má přesně práva svého vlastníka, takže tohle      #}
+{# rozhoduje jen o tom, jestli si čísla smí brát i nástroj, ne o tom,  #}
+{# co uvidí. Výjimka pro jeden účet je v okně Práva.                   #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="klice">
+    <div class="card-head">
+        <h2>{{ _("Vlastní API klíče") }}</h2>
+        <p class="card-note">{{ _("výchozí hodnota skupin, správce smí vždycky") }}</p>
+    </div>
+    <form method="post" action="/settings/accounts/klice">
+        <label class="prepinac">
+            <input type="checkbox" name="ctenar_smi_klic" {{ 'checked' if ctenar_smi_klic }}>
+            <span>{{ _("Čtenářské účty") }}</span>
+        </label>
+        <label class="prepinac" style="margin-top:8px">
+            <input type="checkbox" name="divak_smi_klic" {{ 'checked' if divak_smi_klic }}>
+            <span>{{ _("Diváci z Jellyfinu") }}</span>
+        </label>
+        <p class="hint">
+            {{ _("Klíč si pak vyrobí na stránce Můj účet a smí s ním přesně to, co sám: stejné části statistik a stejné skrývání jmen. Vidíš ho v Nastavení → API, kde ho můžeš vypnout nebo zneplatnit.") }}
+        </p>
+        <div class="btn-row" style="margin-top:16px">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+    </form>
+</div>
+{% endif %}

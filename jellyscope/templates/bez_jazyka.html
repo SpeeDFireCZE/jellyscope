@@ -15,7 +15,7 @@
 
 <div class="card">
     <p class="card-note" style="margin-bottom:14px">
-        {{ _("U těchhle souborů není u zvukové stopy vyplněný jazyk – Jellyfin ho hlásí jako „und“ (undefined) nebo vůbec. Do jazykových statistik proto nevstupují a v grafech by se objevily jen jako „Neuvedeno“.") }}
+        {{ _("U těchhle souborů není u zvukové stopy vyplněný jazyk: Jellyfin ho hlásí jako „und“ (undefined), nebo vůbec. Do jazykových statistik proto nevstupují a v grafech by se objevily jen jako „Neuvedeno“.") }}
     </p>
     <p class="card-note" style="margin-bottom:14px">
         {{ _("Spraví se to v souboru, ne v Jellyfinu: stopě chybí jazykový kód. U MKV ho doplníš třeba nástrojem mkvpropedit (mění jen hlavičku, nepřekódovává), pak stačí v Jellyfinu obnovit metadata titulu a v Jellyscope spustit synchronizaci.") }}
@@ -65,7 +65,7 @@
                     {% if row.path %}
                         <div class="card-note" style="word-break:break-all">{{ row.path }}</div>
                     {% else %}
-                        <div class="card-note">{{ _("cesta není známá – spusť synchronizaci knihovny") }}</div>
+                        <div class="card-note">{{ _("cesta není známá, spusť synchronizaci knihovny") }}</div>
                     {% endif %}
                 </td>
                 <td class="muted">{{ row.library_name or '–' }}</td>
@@ -87,7 +87,7 @@
         {% if search %}
             {{ _("Nic nenalezeno.") }}
         {% else %}
-            {{ _("Všechny soubory mají jazyk vyplněný. To je vzácné – gratuluji.") }}
+            {{ _("Všechny soubory mají jazyk vyplněný. To je vzácné, gratuluji.") }}
         {% endif %}
     </p>
 </div>

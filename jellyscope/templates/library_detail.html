@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import tile, pager, method_badge, transcode_popis, vyber_cile %}
+{% from "_macros.html" import period_filter with context %}
 {% block title %}{{ library.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -31,6 +32,11 @@
 {# ================================================================== #}
 {% if tab == 'overview' %}
 {# ================================================================== #}
+
+{# Přehled je o tom, co v knihovně je - zvolené období na něj nemá vliv.
+   Bez té věty se nedalo poznat, jestli čísla nejsou za „posledních 30
+   dní" jako o stránku vedle. #}
+<p class="card-note" style="margin:0 0 12px">{{ _("Stav knihovny teď. Zvolené období na něj nemá vliv.") }}</p>
 
 <div class="kpi-row">
     {# "Souborů", ne "Titulů": u serialu je kazdy dil samostatny soubor,
@@ -118,6 +124,7 @@
         {% endif %}
         <span class="card-note">{{ total | number }} {{ _("nalezeno") }}</span>
     </form>
+    <p class="card-note" style="margin:6px 0 0">{{ _("Počet přehrání u titulů je za celou historii, ne za zvolené období.") }}</p>
 
     {# Živá knihovna / archiv. Archiv jsou tituly, které už v Jellyfinu
        nejsou - Jellyscope je nemaže, protože na ně odkazuje historie. #}
@@ -132,7 +139,7 @@
 
     {% if archived %}
     <p class="card-note" style="margin-top:10px">
-        {{ _("Tyhle tituly už v Jellyfinu nejsou. Jellyscope je nemaže sám – historie přehrávání na ně odkazuje a bez nich by ve statistikách zůstaly bezejmenné záznamy. Když se soubor vrátí (i s jiným ItemId), Jellyscope ho podle tmdb ID zase spáruje a historie naváže.") }}
+        {{ _("Tyhle tituly už v Jellyfinu nejsou. Jellyscope je nemaže sám, protože na ně odkazuje historie přehrávání a bez nich by ve statistikách zůstaly bezejmenné záznamy. Když se soubor vrátí (i s jiným ItemId), Jellyscope ho podle tmdb ID zase spáruje a historie naváže.") }}
     </p>
     {% if k_mazani %}
     <div class="btn-row" style="margin-top:10px">
@@ -331,8 +338,27 @@
 {% else %}
 {# ================================================================== #}
 
+{# Aktivita je za zvolené období - stejné jako na Přehledu a jinde
+   (pamatuje se mezi stránkami). Přepínač nese `tab`, jinak by klik na
+   „rok" skončil na Přehledu knihovny. #}
+<div class="section-head">
+    <div>
+        <p class="card-note">
+            {# Vlastní rozmezí stojí na tlačítku přepínače vedle - podruhé
+               by se jen opakovalo. Rok má vlastní větu: „za posledních" +
+               „rok" by dalo „za posledních rok". A „posledních" tam být
+               musí - „za 30 dnů" jde číst i jako „za 30 dní od teď". #}
+            {% if obdobi.vlastni %}{{ _("Co se v knihovně sledovalo ve vybraném období.") }}
+            {% elif days == 365 %}{{ _("Co se v knihovně sledovalo za poslední rok.") }}
+            {% else %}{{ _("Co se v knihovně sledovalo za posledních {obdobi}.").format(obdobi=_(day_labels[days])) }}
+            {% endif %}
+        </p>
+    </div>
+    {{ period_filter(obdobi, '/library/' ~ library.id, {'tab': 'activity'}) }}
+</div>
+
 <div class="kpi-row">
-    {{ tile(_("Odsledováno"), activity.totals.hours | hours, note=_("za posledních 90 dnů")) }}
+    {{ tile(_("Odsledováno"), activity.totals.hours | hours) }}
     {{ tile(_("Spuštění"), activity.totals.plays | number) }}
     {{ tile(_("Diváků"), activity.totals.users | number) }}
     {{ tile(_("Různých titulů"), activity.totals.item_count | number) }}
@@ -359,7 +385,10 @@
 {# Poslední přehrávání jsou cizí jména - jen pro správce. #}
 {% if not muj_divak %}
 <div class="card">
-    <div class="card-head"><h2>{{ _("Poslední přehrávání") }}</h2></div>
+    <div class="card-head">
+        <h2>{{ _("Poslední přehrávání") }}</h2>
+        <p class="card-note">{{ _("posledních 25, bez ohledu na období") }}</p>
+    </div>
     <div class="table-wrap">
         <table>
             <thead>

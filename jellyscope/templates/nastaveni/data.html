@@ -25,7 +25,7 @@
        přijdeš. #}
     <div class="flash info" style="margin-bottom:14px">
         <span class="dot"></span>
-        <span>{{ _("Volba se týká jen údajů o souborech (kodek, rozlišení, velikost). Kdo se na co dívá, se čte z Jellyfinu vždycky – na tom tahle volba nic nemění.") }}</span>
+        <span>{{ _("Volba se týká jen údajů o souborech (kodek, rozlišení, velikost). Kdo se na co dívá, se čte z Jellyfinu vždycky a tahle volba na tom nic nemění.") }}</span>
     </div>
 
     <div class="radio-set">
@@ -46,7 +46,7 @@
             <span>
                 <span class="title">{{ _("ffprobe + Jellyfin") }}</span>
                 <span class="desc">
-                    {{ _("Soubory čteme přímo z disku přes ffprobe – přesné údaje včetně skutečné velikosti, HDR a počtu zvukových kanálů. Seznam titulů, uživatelé a statistiky přehrávání jdou dál z Jellyfinu. Potřebuje nainstalovaný ffmpeg a přístup k souborům.") }}
+                    {{ _("Soubory čteme přímo z disku přes ffprobe, takže údaje jsou přesné včetně skutečné velikosti, HDR a počtu zvukových kanálů. Seznam titulů, uživatelé a statistiky přehrávání jdou dál z Jellyfinu. Potřebuje nainstalovaný ffmpeg a přístup k souborům.") }}
                     {% if ffprobe_found %}
                         <br><span class="badge good"><span class="dot"></span>{{ _("ffprobe nalezen") }}</span>
                         <code style="font-size:12px">{{ ffprobe_found }}</code>

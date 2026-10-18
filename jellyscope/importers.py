@@ -2262,8 +2262,8 @@ DUVOD_NIC = "nic"
 DUVODY_POPIS: dict[str, dict[str, Any]] = {
     DUVOD_ID: {
         "nadpis": "Identifikátor sedí, jen jinak zapsaný",
-        "popis": "Titul v knihovně je - jen se jeho id píše jinak "
-                 "(s pomlčkami / bez nich). Spraví to Uklidit historii.",
+        "popis": "Titul v knihovně je, jen se jeho id píše jinak (s pomlčkami nebo bez nich). "
+                 "Spraví to Uklidit historii.",
         "resitelne": True,
     },
     DUVOD_JEDNA_SHODA: {
@@ -2274,16 +2274,15 @@ DUVODY_POPIS: dict[str, dict[str, Any]] = {
     },
     DUVOD_VIC_SHOD: {
         "nadpis": "Název sedí na víc titulů",
-        "popis": "Typicky „7. epizoda“ nebo „Pilot“ - takový díl má každý "
-                 "seriál. Stroj hádat nesmí, ale ty poznáš, kam to patří: "
-                 "zkus Dohledat v Jellyfinu, nebo přiřaď ručně.",
+        "popis": "Typicky „7. epizoda“ nebo „Pilot“: takový díl má každý seriál. Stroj hádat "
+                 "nesmí, ty ale poznáš, kam patří. Zkus Dohledat v Jellyfinu, nebo ho přiřaď "
+                 "ručně.",
         "resitelne": True,
     },
     DUVOD_SERIAL_JE: {
         "nadpis": "Seriál v knihovně je, díl nesedí",
-        "popis": "Název nese seriál i číslo dílu, ale takový díl v knihovně "
-                 "není - číslování se mezi zdroji rozchází. Ruční přiřazení "
-                 "to vyřeší.",
+        "popis": "Název nese seriál i číslo dílu, ale takový díl v knihovně není, protože se "
+                 "číslování mezi zdroji rozchází. Ruční přiřazení to vyřeší.",
         "resitelne": True,
     },
     DUVOD_ZNA_SERIAL: {

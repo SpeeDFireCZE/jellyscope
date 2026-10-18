@@ -176,6 +176,18 @@ TIMEOUT_RETRIES = 2
 # jen tocilo kolecko a dalsi dotaz by se navrsil na predchozi.
 QUICK_TIMEOUT = httpx.Timeout(connect=5.0, read=20.0, write=10.0, pool=5.0)
 
+# Obrázky, které Jellyscope z Jellyfinu pustí dál na svou adresu. Ne
+# „cokoliv image/*": SVG umí skript, a kdyby ho někdo otevřel přímo na
+# adrese Jellyscope, běžel by pod ní (stránky mají script-src
+# 'unsafe-inline'). Plakáty i profilové fotky jsou tyhle rastrové formáty.
+TYPY_OBRAZKU = ("image/png", "image/jpeg", "image/webp", "image/gif",
+                "image/avif", "image/bmp")
+
+# Strop velikosti jednoho obrázku. Profilovou fotku Jellyfin nezmenšuje
+# (vrací ji, jak ji kdo nahrál), takže fotka z telefonu může mít desítky
+# MB - a celá by šla přes paměť Jellyscope do třicetipixelového kolečka.
+MAX_BAJTU_OBRAZKU = 8 * 1024 * 1024
+
 
 class JellyfinClient:
     """Tenka obalka nad HTTP voláními do Jellyfinu.
@@ -331,17 +343,43 @@ class JellyfinClient:
         nikdy nedostanou do stranky. Kdyby si obrazky tahal prohlizec sam,
         musel by o obojim vedet.
         """
+        return await self._stahni_obrazek(f"/Items/{item_id}/Images/{kind}",
+                                          {"maxWidth": max_width, "quality": 90})
+
+    async def obrazek_uzivatele(self, user_id: str, tag: str) -> tuple[bytes, str] | None:
+        """Profilový obrázek uživatele Jellyfinu. None = nemá nebo nejde.
+
+        `GET /UserImage?userId=&tag=` - ověřeno naostro na 10.11.11, 12.0
+        i 12.1 (stará cesta `/Users/{id}/Images/Primary` v popisu API už
+        není). Zmenšit ho Jellyfin neumí, `maxWidth` tady ignoruje - přijde
+        tak, jak ho uživatel nahrál; proto strop MAX_BAJTU_OBRAZKU.
+        """
+        return await self._stahni_obrazek("/UserImage", {"userId": user_id, "tag": tag})
+
+    async def _stahni_obrazek(self, cesta: str,
+                              params: dict[str, Any]) -> tuple[bytes, str] | None:
+        """Jeden obrázek z Jellyfinu - jen povolený typ a jen do stropu.
+
+        Společné pro plakáty i profilové fotky, ať platí stejná pravidla:
+        cokoliv jiného než obrázek (SVG, HTML, nic) nebo nad strop je None
+        a volající ukáže náhradu. Stahuje se po kusech, takže se obří soubor
+        do paměti celý nenačte - po překročení stropu se přestane.
+        """
         try:
-            response = await self._client.get(
-                f"/Items/{item_id}/Images/{kind}",
-                params={"maxWidth": max_width, "quality": 90},
-            )
+            async with self._client.stream("GET", cesta, params=params) as response:
+                if response.status_code != 200:
+                    return None
+                typ = response.headers.get("content-type", "").split(";")[0].strip().lower()
+                if typ not in TYPY_OBRAZKU:
+                    return None
+                obsah = bytearray()
+                async for kus in response.aiter_bytes():
+                    obsah.extend(kus)
+                    if len(obsah) > MAX_BAJTU_OBRAZKU:
+                        return None
         except httpx.RequestError:
             return None
-
-        if response.status_code != 200 or not response.content:
-            return None
-        return response.content, response.headers.get("content-type", "image/jpeg")
+        return (bytes(obsah), typ) if obsah else None
 
     async def over_prihlaseni(self, jmeno: str, heslo: str) -> dict[str, Any] | None:
         """Ověří jméno a heslo proti Jellyfinu. None = nesedí.

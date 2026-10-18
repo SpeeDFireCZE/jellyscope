@@ -346,10 +346,11 @@ def get(account_id: int) -> dict[str, Any] | None:
 
 def all_accounts() -> list[dict[str, Any]]:
     # `jellyfin_user_id` a `pristup` jsou tu kvuli Nastaveni: podle
-    # prvniho se pozna divak z Jellyfinu, podle druheho vlastni prava.
+    # prvniho se pozna divak z Jellyfinu, podle druheho vlastni prava;
+    # `smi_klic` je vyjimka pro vlastni API klic (okno Prava).
     return [dict(r) for r in db.query_all(
         "SELECT id, username, is_admin, created_at, last_login,"
-        " jellyfin_user_id, pristup"
+        " jellyfin_user_id, pristup, smi_klic"
         " FROM accounts ORDER BY is_admin DESC, LOWER(username)"
     )]
 
@@ -482,7 +483,7 @@ def odeber_bez_jellyfinu(ziva_id: set[str] | list[str]) -> list[str]:
     * Poslední správce zůstává, ať říká Jellyfin cokoli - jinak by se do
       Nastavení už nikdo nedostal.
     """
-    ziva = {_hole_id(jid) for jid in ziva_id if jid}
+    ziva = {hole_id(jid) for jid in ziva_id if jid}
     if not ziva:
         return []
 
@@ -491,7 +492,7 @@ def odeber_bez_jellyfinu(ziva_id: set[str] | list[str]) -> list[str]:
             "SELECT id, username, is_admin, jellyfin_user_id FROM accounts"
             " WHERE jellyfin_user_id IS NOT NULL AND jellyfin_user_id <> ''"):
         ucet = dict(ucet)
-        if _hole_id(str(ucet["jellyfin_user_id"])) in ziva:
+        if hole_id(str(ucet["jellyfin_user_id"])) in ziva:
             continue
         if ucet["is_admin"] and admin_count() <= 1:
             log.warning("ucet %s uz v Jellyfinu neni, ale je posledni"
@@ -506,7 +507,7 @@ def odeber_bez_jellyfinu(ziva_id: set[str] | list[str]) -> list[str]:
     return smazane
 
 
-def _hole_id(jellyfin_id: str) -> str:
+def hole_id(jellyfin_id: str) -> str:
     """Id bez pomlček a malými písmeny.
 
     Jellyfin posílá totéž id jednou s pomlčkami, jednou bez - podle
@@ -536,6 +537,65 @@ def set_password(account_id: int, password: str, again: str | None = None) -> No
     # Heslo samotne se do logu nedostane, jen to, ze se zmenilo a komu.
     ucet = get(account_id) or {}
     log.info("zmeneno heslo uctu %s", ucet.get("username") or account_id)
+
+
+class SpatneSoucasneHeslo(AccountError):
+    """Špatné současné heslo na stránce Můj účet.
+
+    Zvlášť od ostatních chyb, protože se počítá do brzdy proti hádání
+    (stejné jako u přihlášení). Příliš krátké nové heslo hádání není.
+    """
+
+
+def otisk_relace(ucet: dict[str, Any]) -> str:
+    """Krátký otisk hesla do relace (cookie).
+
+    Při přihlášení se uloží, při každém požadavku se porovná. Když se heslo
+    změní, otisk přestane sedět a stará relace skončí. Je to otisk otisku,
+    ne heslo ani jeho uložený otisk: cookie je podepsaná, ale čitelná.
+    Účet z Jellyfinu má otisk hesla prázdný, takže ho tohle nikdy neodhlásí.
+    """
+    zdroj = "relace:" + str(ucet.get("password_hash") or "")
+    return hashlib.sha256(zdroj.encode("utf-8")).hexdigest()[:16]
+
+
+def zmen_vlastni_heslo(account_id: int, soucasne: str, password: str,
+                       again: str | None = None) -> None:
+    """Změna vlastního hesla ze stránky Můj účet - jen se současným heslem.
+
+    Správce v Nastavení → Účty mění hesla bez starého: zapomenuté heslo je
+    přesně důvod, proč tam jde. Tady ne - kdo si sedne k cizímu přihlášenému
+    prohlížeči, nemá si moct heslo přepsat a vlastníka tím zamknout venku.
+    Účet z Jellyfinu tu heslo nemá vůbec, to patří Jellyfinu.
+    """
+    ucet = get(account_id)
+    if ucet is None:
+        raise AccountError("Účet neexistuje.")
+    if ucet.get("jellyfin_user_id"):
+        raise AccountError("Heslo k účtu z Jellyfinu se mění v Jellyfinu.")
+    if not verify_password(soucasne or "", str(ucet.get("password_hash") or "")):
+        raise SpatneSoucasneHeslo("Současné heslo nesedí.")
+    set_password(account_id, password, again)
+
+
+def uloz_smi_klic(account_id: int, hodnota: str | None) -> None:
+    """Výjimka k povolení vlastního API klíče: "1", "0", nebo None = skupina.
+
+    Cokoliv jiného se uloží jako None - do sloupce patří jen tři stavy.
+    """
+    with db.connect() as conn:
+        conn.execute("UPDATE accounts SET smi_klic = ? WHERE id = ?",
+                     (hodnota if hodnota in ("1", "0") else None, account_id))
+
+
+def nastav_jazyk(account_id: int, jazyk: str | None) -> None:
+    """Jazyk rozhraní účtu (Můj účet). Prázdný = jazyk serveru.
+
+    Platnost kódu hlídá routa - tady se jen ukládá.
+    """
+    with db.connect() as conn:
+        conn.execute("UPDATE accounts SET ui_language = ? WHERE id = ?",
+                     (jazyk or None, account_id))
 
 
 def set_admin(account_id: int, is_admin: bool) -> None:

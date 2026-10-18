@@ -414,6 +414,83 @@ finally:
 check("<script>" in UTOK, "a útočný řetězec je doopravdy spustitelný kód")
 
 print()
+print("--- čekárna po aktualizaci a překlad s apostrofem ---")
+# Cekarna je poskladana v Pythonu (bez sablony, viz _stranka_aktualizace),
+# takze ji autoescape Jinja nechrani. Preklad z Weblate jako "It's taking
+# longer" by v JS retezci v apostrofech zpusobil SyntaxError: funkce zkus()
+# by nevznikla a cekarna by po aktualizaci zustala navzdy na "Updating...".
+# A znacka v prekladu by se vykreslila jako HTML.
+import json as _json  # noqa: E402
+import re  # noqa: E402
+
+from jellyscope import web_nastaveni as _wn  # noqa: E402
+
+UTOK_APOSTROF = "It's </p><img src=x onerror=alert(1)>"
+klice_cekarny = ["Aktualizuji…", "Trvá to déle, než je zdrávo.", "Zkusit to znovu",
+                 "Nová verze je stažená. Aplikace se teď restartuje. Jakmile bude "
+                 "nahoře, pustím tě dál."]
+puvodni = {k: i18n.TRANSLATIONS["en"].get(k) for k in klice_cekarny}
+for klic in klice_cekarny:
+    i18n.TRANSLATIONS["en"][klic] = UTOK_APOSTROF
+puvodni_jazyk = db.get_setting("ui_language", "cs")
+db.set_setting("ui_language", "en")
+db.forget_settings()
+try:
+    cekarna = _wn._stranka_aktualizace()
+finally:
+    for klic, hodnota in puvodni.items():
+        if hodnota is None:
+            i18n.TRANSLATIONS["en"].pop(klic, None)
+        else:
+            i18n.TRANSLATIONS["en"][klic] = hodnota
+    db.set_setting("ui_language", puvodni_jazyk)
+    db.forget_settings()
+check("<img" not in cekarna, "značka z překladu se v čekárně nevykreslí")
+vyraz = re.search(r"innerHTML\s*=\s*(.+?);\s*\n", cekarna, re.S)
+try:
+    hodnota_js = _json.loads(vyraz.group(1)) if vyraz else None
+except ValueError:
+    hodnota_js = None
+check(hodnota_js is not None and "<img" not in hodnota_js,
+      "text pro pomalý restart je platný JS řetězec i s apostrofem")
+
+print()
+print("--- texty v JavaScriptu jdou přes tojson ---")
+# Totez v sablonach. V <script> autoescape udela z apostrofu &#39;, ktery
+# se pak ukaze doslova. V atributu onsubmit="confirm('...')" je to horsi:
+# prohlizec &#39; pred spustenim zase prevede na apostrof, JS skonci chybou
+# a formular se odesle BEZ potvrzeni - treba smazani uctu nebo zalohy.
+# Preklady pritom chodi z Weblate rovnou k uzivatelum (aktualizace
+# prekladu), bez vydani a bez kontroly.
+def _vyrazy_v_js(text: str) -> list[str]:
+    vyrazy = []
+    for blok in re.findall(r"<script[^>]*>(.*?)</script>", text, re.S):
+        vyrazy += re.findall(r"\{\{(.*?)\}\}", blok, re.S)
+    for zacatek in re.finditer(r"\son[a-z]+=([\"'])", text):
+        uvozovka, i, hodnota = zacatek.group(1), zacatek.end(), ""
+        while i < len(text) and text[i] != uvozovka:
+            if text.startswith("{{", i):
+                konec = text.find("}}", i)
+                hodnota += text[i:konec + 2]
+                i = konec + 2
+            else:
+                i += 1
+        vyrazy += re.findall(r"\{\{(.*?)\}\}", hodnota, re.S)
+    return vyrazy
+
+
+bez_tojson = []
+for sablona in sorted((PROJECT / "jellyscope" / "templates").rglob("*.html")):
+    for vyraz in _vyrazy_v_js(sablona.read_text(encoding="utf-8")):
+        if "_(" in vyraz and "tojson" not in vyraz:
+            bez_tojson.append(f"{sablona.name}: {vyraz.strip()[:50]}")
+check(not bez_tojson, f"žádný překlad v JS bez tojson ({len(bez_tojson)}: {bez_tojson[:4]})")
+# Past: hledani musi najit preklad v atributu i ve skriptu.
+check(len(_vyrazy_v_js('<form onsubmit="return confirm(\'{{ _("a") }}\')">'
+                       '<script>x = "{{ _("b") }}";</script>')) == 2,
+      "a hledání najde překlad v atributu i ve skriptu")
+
+print()
 print("--- útok do všech textů, které jdou do stránky bez escapování ---")
 # Predchozi oddil hlida jedno misto, o kterem uz vime. Tenhle se pta
 # obracene: kdyz se spustitelny kod vlozi do **kazdeho** textu, ktery do

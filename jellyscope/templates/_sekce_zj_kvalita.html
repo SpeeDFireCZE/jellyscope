@@ -1,0 +1,45 @@
+{# Karta „Díváš se na to hodně, ale ve slabé kvalitě“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_kvalita) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `upgrades (insights.upgrade_candidates)`. #}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Díváš se na to hodně, ale ve slabé kvalitě") }}</h2>
+        <p class="card-note">{{ _("pod 1080p nebo pod 3 Mb/s") }}</p>
+    </div>
+    {% if upgrades %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr><th>{{ _("Titul") }}</th><th class="num">{{ _("Odsledováno") }}</th>
+                <th class="num">{{ _("Rozlišení") }}</th><th class="num">Bitrate</th></tr>
+            </thead>
+            <tbody>
+            {% for row in upgrades %}
+            <tr class="{{ trida_radku(loop.index) }}">
+                {# Proklik na detail: u seriálu na seriál, u filmu
+                   na soubor - odkud se dá rovnou zjistit, co je to
+                   za soubor a kde leží. #}
+                <td class="truncate" title="{{ row.label }}">
+                    {% if row.detail_url %}
+                        <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                    {% else %}
+                        {{ row.label }}
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="num muted">{{ row.bitrate | bitrate }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ tlacitko_cela_tabulka(upgrades | length) }}
+    <p class="card-note" style="margin-top:12px">{{ _("Kandidáti na sehnání lepší kopie.") }}</p>
+    {% else %}
+    <p class="chart-empty">{{ _("Vše, na co se díváš, je v pořádné kvalitě.") }}</p>
+    {% endif %}
+</div>

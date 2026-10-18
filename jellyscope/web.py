@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -34,7 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import (accounts, api, applog, charts, collector, db, formatting, geoip,
-               i18n, insights, langstats, languages,
+               i18n, langstats, languages,
                pristup,
                scanner, sekce,
                stats, tasks)
@@ -61,14 +60,17 @@ from .web_zaklad import (  # noqa: F401 - dal se pouzivaji i zvenku
     VZHLEDY,
     ZOOM_REZIMY,
     ZPET_NA_IMPORT,
+    _bez_mezipameti,
     _cas_presne,
     _cesky_datum,
+    _cislo_z_formulare,
     _clamp,
     _context,
     _flash,
     _hlaska_importu,
     _known_note,
     _linked_note,
+    _novy_klic,
     _obdobi_do_sablony,
     _obdobi_popis,
     _opraveno_note,
@@ -80,8 +82,10 @@ from .web_zaklad import (  # noqa: F401 - dal se pouzivaji i zvenku
     _zoom_rezim,
     config,
     current_account,
+    prihlas_do_relace,
     log,
     muj_divak,
+    otisk_obrazku_uctu,
     require_admin,
     require_login,
     templates,
@@ -128,6 +132,9 @@ async def lifespan(app: FastAPI):
 
     db.init_db()
     log.info("databaze pripravena")
+    # Přehled pro všechny má od verze s Mým přehledem název. Stávající
+    # zapnutý bez názvu dostane ten, pod kterým ho lidé znali.
+    sekce.doplnit_nazev()
 
     # Zona aplikace do prostredi procesu.
     #
@@ -192,6 +199,10 @@ async def lifespan(app: FastAPI):
         background.append(
             asyncio.create_task(demodata.obnovuj(), name="demo-obnova")
         )
+        # A v Prave se hraje porad neco bezi - vymysleny stream hraje dal.
+        background.append(
+            asyncio.create_task(demodata.udrzuj_zive(), name="demo-zivy-stream")
+        )
     else:
         background.append(
             asyncio.create_task(collector.run_forever(), name="collector")
@@ -251,7 +262,7 @@ async def ukazkovy_rezim(request: Request, call_next):
     umí. Jen místo práce odpoví hláškou.
     """
     if _demo_blokuje(request):
-        _flash(request, "Tohle je ukázka – data se v ní nemění. "
+        _flash(request, "Tohle je ukázka, data se v ní nemění. "
                         "Na vlastní instalaci tlačítko funguje.", "info")
         # Zpátky přesně tam, odkud člověk přišel - ne na Přehled. Kdo
         # zkoumá Nastavení, má po kliknutí zůstat v Nastavení; vyhodit ho
@@ -271,6 +282,14 @@ async def ukazkovy_rezim(request: Request, call_next):
         kam = _cesta_odkud_prisel(request.headers.get("referer"))
         return RedirectResponse(kam, status_code=303)
     return await call_next(request)
+
+
+# Co smí divák z Jellyfinu odeslat (POST). Jinak jen čte. Vlastní API
+# klíč si vyrobí jen s povolením - to hlídá routa sama.
+DIVAK_SMI_POST = frozenset({"/logout", "/account/language", "/account/password",
+                            "/account/klic", "/account/klic/zrusit",
+                            # Můj přehled - vlastní rozvržení, nikoho jiného.
+                            "/account/prehled"})
 
 
 @app.middleware("http")
@@ -299,16 +318,24 @@ async def rozsah_divaka(request: Request, call_next):
     divak = muj_divak(ucet)
     cesta = request.url.path
 
+    # Kdo nesmi Prehled, toho / posle na prvni stranku, kterou smi (divaka
+    # na jeho vlastni) - ne na „sem nemas pristup". Sem miri i prihlaseni,
+    # heslem i kodem, takze se po nem nikdo nezasekne na zavrenych dverich.
     # `ucet` jde s kazdym dotazem dal: ucet muze mit vlastni prava, ktera
     # skupinu prebiji (Nastaveni -> Ucty -> Prava).
+    if cesta == "/" and not pristup.vidi(kdo, "prehled", ucet):
+        return RedirectResponse(pristup.domovska(kdo, divak, ucet), status_code=303)
     if divak:
-        if cesta == "/" and not pristup.vidi(kdo, "prehled", ucet):
-            return RedirectResponse(f"/users/{divak}", status_code=303)
         if cesta.startswith("/users/"):
             if cesta.rstrip("/") != f"/users/{divak}":
                 return _nesmis(request)
             return await call_next(request)
-        if request.method != "GET" and cesta != "/logout":
+        # Divak nic nemeni, jen cte - s vyjimkou odhlaseni a sveho uctu
+        # (Muj ucet). Vycet, ne predpona /account/: kazda dalsi zapisujici
+        # routa se sem musi pridat vedome, jinak by byla divakum otevrena
+        # sama od sebe. Routy berou ucet z relace a heslo uctu z Jellyfinu
+        # odmitne sama routa (accounts.zmen_vlastni_heslo).
+        if request.method != "GET" and cesta not in DIVAK_SMI_POST:
             return _nesmis(request)
 
     if not pristup.smi_cestu(kdo, cesta, ucet):
@@ -322,6 +349,25 @@ def _nesmis(request: Request):
     ucet = current_account(request)
     return templates.TemplateResponse(
         request, "nesmis.html", _context(request, ucet), status_code=403)
+
+
+@app.middleware("http")
+async def jazyk_uctu(request: Request, call_next):
+    """Jazyk, který si přihlášený účet vybral na stránce Můj účet.
+
+    Pořadí middlewarů tu rozhoduje: každý další obaluje ty předchozí.
+    Tenhle potřebuje relaci, takže musí být uvnitř SessionMiddleware (ten
+    se přidává hned pod ním), a zároveň vně `rozsah_divaka`
+    a `ukazkovy_rezim` - i jejich stránky („sem nemáš přístup", hláška
+    ukázky) mají být v jazyce účtu. Bez účtu (přihlášení, API klíčem)
+    zůstane jazyk serveru.
+    """
+    ucet = current_account(request)
+    token = i18n.nastav_jazyk_uctu((ucet or {}).get("ui_language"))
+    try:
+        return await call_next(request)
+    finally:
+        i18n.vrat_jazyk_uctu(token)
 
 
 app.add_middleware(
@@ -354,6 +400,74 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # prihlasovaci cookie, API tokenem. Nic pod /api/ nic nemeni - jsou tam
 # sama GET.
 app.include_router(api.router)
+
+
+class ZaznamPouzitiApi:
+    """Každý požadavek s existujícím klíčem se zapíše - až po odpovědi.
+
+    Až teprve po ní je známý výsledek (200, 403, ...). Id klíče sem
+    nechává api.over_token() v `request.state`; neplatný klíč ho nenechá,
+    a tak se nezapíše.
+
+    Čisté ASGI, ne `@app.middleware`: tam odchází tělo odpovědi až po
+    návratu middlewaru, takže by zápis do databáze zdržel každou odpověď
+    API - a když databázi zrovna drží úloha (přeskládání, import), čekalo
+    by se až patnáct vteřin. Tady má klient odpověď dřív, než se zapisuje.
+
+    Zápis nesmí shodit odpověď: kdo se ptá na čísla, má je dostat, i když
+    se záznam zrovna nepovedl. A neodchycená chyba routy (500) se zapíše
+    taky - pak se pošle dál, ať ji obslouží Starlette jako dřív.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http" or not scope["path"].startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+        vysledek = 500
+
+        async def posli(zprava) -> None:
+            nonlocal vysledek
+            if zprava["type"] == "http.response.start":
+                vysledek = zprava["status"]
+            await send(zprava)
+
+        try:
+            await self.app(scope, receive, posli)
+        except Exception:
+            await _zapis_pouziti(scope, vysledek)
+            raise
+        await _zapis_pouziti(scope, vysledek)
+
+
+# Kdy se naposledy zalogovala chyba zapisu pouziti. Kdyz databaze zapis
+# odmita porad, Grafana by kazdych par vterin pridala do logu celou
+# chybovou hlasku - staci jedna za ctvrt hodiny.
+CHYBA_ZAPISU_PO_SEKUNDACH = 900
+_posledni_chyba_zapisu = 0.0
+
+
+async def _zapis_pouziti(scope, vysledek: int) -> None:
+    global _posledni_chyba_zapisu
+    token_id = (scope.get("state") or {}).get("api_token_id")
+    if not token_id:
+        return
+    cesta = scope["path"]
+    dotaz = scope.get("query_string", b"").decode("latin-1")
+    if dotaz:
+        cesta = f"{cesta}?{dotaz}"
+    try:
+        await asyncio.to_thread(api.zapis_pouziti, token_id, cesta,
+                                _adresa_klienta(Request(scope)), vysledek)
+    except Exception:  # noqa: BLE001 - zaznam je navic, odpoved ne
+        if time.time() - _posledni_chyba_zapisu >= CHYBA_ZAPISU_PO_SEKUNDACH:
+            _posledni_chyba_zapisu = time.time()
+            log.exception("Zapis pouziti API klice se nepovedl")
+
+
+app.add_middleware(ZaznamPouzitiApi)
 
 
 DEMO_POVOLENO = frozenset({
@@ -494,12 +608,15 @@ async def handle_http_error(request: Request, exc: HTTPException):
     """Presmerovani misto chybove hlasky u nepřihlaseneho uzivatele."""
     if exc.status_code == 307 and "Location" in (exc.headers or {}):
         return RedirectResponse(exc.headers["Location"], status_code=303)
-    if exc.status_code == 403:
+    # API se ptaji programy (Grafana, Homepage), ne lide: chybova stranka
+    # v HTML by jim nerekla nic. Tam je kazda chyba JSON s duvodem.
+    api_pozadavek = request.url.path.startswith("/api/")
+    if exc.status_code == 403 and not api_pozadavek:
         return templates.TemplateResponse(
             request, "error.html",
             {"code": 403, "message": exc.detail}, status_code=403,
         )
-    if exc.status_code == 404:
+    if exc.status_code == 404 and not api_pozadavek:
         return templates.TemplateResponse(
             request, "error.html",
             {"code": 404, "message": exc.detail or "Stranka nenalezena."},
@@ -568,7 +685,7 @@ def setup_submit(
         )
 
     db.set_setting("ui_language", ui_language)
-    request.session["account_id"] = account_id
+    prihlas_do_relace(request, accounts.get(account_id) or {"id": account_id})
     _flash(request, i18n.translate("Účet vytvořen. Vítej v Jellyscope.", ui_language),
            "success")
     return RedirectResponse("/settings", status_code=303)
@@ -673,15 +790,19 @@ async def login_submit(
 
     accounts.zapomen_neuspechy(klic)
 
-    # Pri prihlaseni zahodime starou relaci a zalozime novou. Brani to
-    # utoku, pri kterem ti nekdo podstrci sve ID relace jeste pred
-    # prihlasenim a pak se do ni "sveze".
-    request.session.clear()
-    request.session["account_id"] = account["id"]
-    # Vlastní přehled je po přihlášení první, co člověk uvidí - o to jde.
-    # Prázdný ale ne: to by byl horší začátek než Přehled.
-    kam = "/dashboard" if (sekce.je_zapnuty() and sekce.nacti_rozvrzeni()) else "/"
-    return RedirectResponse(kam, status_code=303)
+    prihlas_do_relace(request, account)
+    return RedirectResponse(_kam_po_prihlaseni(account), status_code=303)
+
+
+def _kam_po_prihlaseni(account: dict[str, Any]) -> str:
+    """Kam po přihlášení heslem.
+
+    Přehled pro všechny je první, co člověk uvidí - o to jde. Jen když
+    v něm má co vidět (sekce.vidi_prehled, totéž co menu). Jinak Přehled;
+    kdo nesmí ani ten, toho `rozsah_divaka` pošle dál na první stránku,
+    kterou smí - stejně jako po přihlášení kódem, které jde rovnou na /.
+    """
+    return "/dashboard" if sekce.vidi_prehled(account) else "/"
 
 
 @app.post("/login/quick")
@@ -775,9 +896,7 @@ async def login_quick_stav(request: Request):
         return {"hotovo": False, "konec": True}
 
     ucet = accounts.z_jellyfinu(udaje)
-    # Stara relace pryc i tady - stejny duvod jako u hesla.
-    request.session.clear()
-    request.session["account_id"] = ucet["id"]
+    prihlas_do_relace(request, ucet)
     accounts.zapomen_neuspechy(_adresa_klienta(request))
     log.info("prihlaseni pres Quick Connect: %s", udaje.get("jmeno"))
     return {"hotovo": True}
@@ -796,6 +915,168 @@ def _login_chyba(request: Request, hlaska: str):
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Muj ucet - stranka o jednom uctu, ne zmensene Nastaveni
+# ---------------------------------------------------------------------------
+#
+# Ucet se vzdycky bere z relace, nikdy z formulare: odsud nejde zmenit nic
+# ciziho, ani kdyby nekdo do formulare podstrcil cizi id.
+
+@app.get("/account", response_class=HTMLResponse)
+def muj_ucet(request: Request, account: dict[str, Any] = Depends(require_login)):
+    adresy = api.povolene_adresy(account)
+    novy = _novy_klic(request, "novy_klic_uctu")
+    odpoved = templates.TemplateResponse(request, "ucet.html", _context(
+        request, account,
+        jazyk_uctu=account.get("ui_language") or "",
+        z_jellyfinu=bool(account.get("jellyfin_user_id")),
+        smi_klic=pristup.smi_klic(account),
+        api_klice=api.seznam(account["id"]),
+        # Okno „Jak se to používá" (_api_navod.html) ukáže jen tyhle adresy.
+        api_navod_adresy=adresy,
+        # Příklad v návodu má fungovat hned: první adresa s daty, kterou
+        # účet smí (ne natvrdo /summary - to divák ve výchozím stavu nesmí).
+        api_ukazka=next((a for a in adresy if a != "/api/v1/" and "{" not in a),
+                        "/api/v1/"),
+        # Nový klíč jen jednou, hned po přesměrování - v řádku svého klíče
+        # (viz bunka_klice). Pod vlastním jménem v relaci: klíč vyrobený
+        # tady se nemá ukázat v Nastavení a naopak.
+        novy_klic=novy,
+    ))
+    return _bez_mezipameti(odpoved) if novy else odpoved
+
+
+def _bez_obrazku() -> Response:
+    """Obrázek není (nebo Jellyfin neodpovídá) - písmeno zůstane.
+
+    Holá 404 bez chybové stránky: <img> by ji stejně nezobrazil. A pět
+    minut se prohlížeč neptá znovu, ať každá stránka nezkouší Jellyfin,
+    který zrovna neběží.
+    """
+    return Response(status_code=404, headers={"Cache-Control": "private, max-age=300"})
+
+
+@app.get("/account/obrazek")
+async def muj_obrazek(request: Request, account: dict[str, Any] = Depends(require_login)):
+    """Profilový obrázek přihlášeného účtu z Jellyfinu - jen vlastní.
+
+    V adrese není žádné id: kdo se zeptá, dostane svůj obrázek, nikoho
+    jiného - parametry navíc se ignorují. `?v=` je jen otisk, aby nový
+    obrázek v Jellyfinu znamenal novou adresu.
+
+    Na disk serveru se neukládá (šetří místo). Stáhne se přes server, aby
+    se adresa Jellyfinu ani klíč nedostaly do stránky. Prohlížeč si ho
+    nechá, ale před každým použitím se zeptá (no-cache + ETag): server
+    ověří přihlášení a vrátí 304 bez dotazu do Jellyfinu. Na sdíleném
+    počítači tak cizí fotku z mezipaměti nikdo jiný nedostane.
+    """
+    divak = str(account.get("jellyfin_user_id") or "")
+    otisk = await asyncio.to_thread(otisk_obrazku_uctu, account) if divak else ""
+    if not otisk:
+        return _bez_obrazku()
+    hlavicky = {"Cache-Control": "private, no-cache", "ETag": f'"{otisk}"'}
+    if request.headers.get("if-none-match") == hlavicky["ETag"]:
+        return Response(status_code=304, headers=hlavicky)
+    pripojeni = await asyncio.to_thread(db.jellyfin_connection)
+    # Krátký limit: čeká na to člověk u stránky, ne úloha na pozadí.
+    async with JellyfinClient(*pripojeni, timeout=QUICK_TIMEOUT) as client:
+        vysledek = await client.obrazek_uzivatele(divak, otisk)
+    if vysledek is None:
+        return _bez_obrazku()
+    obsah, typ = vysledek
+    return Response(obsah, media_type=typ, headers=hlavicky)
+
+
+@app.post("/account/language")
+def muj_ucet_jazyk(request: Request, ui_language: str = Form(""),
+                   account: dict[str, Any] = Depends(require_login)):
+    """Jazyk rozhraní účtu. Prázdný = jazyk serveru."""
+    if ui_language and ui_language not in i18n.LANGUAGES:
+        _flash(request, "Takový jazyk tu není.", "error")
+        return RedirectResponse("/account", status_code=303)
+    accounts.nastav_jazyk(account["id"], ui_language or None)
+    # Hláška už v nově zvoleném jazyce - stránka, na kterou se vrací, v něm
+    # bude taky. Překládá se rovnou (`_flash` hotovou větu nechá být).
+    _flash(request, i18n.translate("Jazyk uložen.", ui_language or i18n.jazyk_serveru()),
+           "success")
+    return RedirectResponse("/account", status_code=303)
+
+
+@app.post("/account/klic")
+def muj_ucet_klic(request: Request, name: str = Form(""),
+                  account: dict[str, Any] = Depends(require_login)):
+    """Vlastní API klíč - jen s povolením od správce.
+
+    Klíč patří účtu z relace, ne z formuláře, a smí přesně to, co účet
+    sám (viz api.over_token a api.smi_adresu).
+    """
+    if not pristup.smi_klic(account):
+        _flash(request, "Vlastní API klíče ti správce nepovolil.", "error")
+        return RedirectResponse("/account#klice", status_code=303)
+    vysledek = api.vytvor(name, account["id"])
+    request.session["novy_klic_uctu"] = {"id": vysledek["id"], "token": vysledek["token"]}
+    _flash(request, "Klíč „{jmeno}“ vznikl.", "success", jmeno=vysledek["jmeno"])
+    return RedirectResponse("/account#klice", status_code=303)
+
+
+@app.post("/account/klic/zrusit")
+def muj_ucet_klic_zrusit(request: Request, token_id: str = Form(""),
+                         account: dict[str, Any] = Depends(require_login)):
+    """Zneplatní vlastní klíč. I bez povolení - starý klíč se musí dát zahodit.
+
+    Id z formuláře se ověří proti klíčům účtu z relace: cizí klíč tudy
+    zneplatnit nejde, ať se do formuláře napíše cokoliv.
+    """
+    cislo = _cislo_z_formulare(token_id)
+    vlastni = {klic["id"] for klic in api.seznam(account["id"])}
+    jmeno = api.zrus(cislo) if cislo in vlastni else ""
+    if jmeno:
+        _flash(request, "Klíč „{jmeno}“ už neplatí.", "success", jmeno=jmeno)
+    else:
+        _flash(request, "Takový klíč tu není.", "info")
+    return RedirectResponse("/account#klice", status_code=303)
+
+
+@app.post("/account/password")
+def muj_ucet_heslo(request: Request, current_password: str = Form(""),
+                   password: str = Form(""), password_again: str = Form(""),
+                   account: dict[str, Any] = Depends(require_login)):
+    """Vlastní heslo, jen se současným heslem. Účet z Jellyfinu ho tu nemá.
+
+    Brzda proti hádání je tatáž jako u přihlášení a se stejným počítadlem
+    (adresa klienta). Bez ní by přihlášená relace - třeba v cizím
+    prohlížeči - byla neomezené orákulum na heslo, a každý pokus navíc
+    stojí čtvrt vteřiny výpočtu PBKDF2.
+    """
+    zpet = RedirectResponse("/account", status_code=303)
+    klic = _adresa_klienta(request)
+    zbyva = accounts.blokace_zbyva(klic)
+    if zbyva:
+        _flash(request, _blokace_hlaska(zbyva), "error")
+        return zpet
+    try:
+        accounts.zmen_vlastni_heslo(account["id"], current_password,
+                                    password, password_again)
+    except accounts.SpatneSoucasneHeslo as exc:
+        blokace = accounts.zapocitej_neuspech(klic)
+        if blokace:
+            log.warning("zmena hesla z %s zablokovana (%s. stupen)", klic, blokace["level"])
+            _flash(request, _blokace_hlaska(-1 if blokace["permanent"]
+                                            else blokace["seconds"]), "error")
+        else:
+            _flash(request, exc.prelozena(), "error")
+        return zpet
+    except accounts.AccountError as exc:
+        _flash(request, exc.prelozena(), "error")
+        return zpet
+    accounts.zapomen_neuspechy(klic)
+    # Tahle relace zustava (novy otisk), ostatni relace uctu skonci -
+    # viz current_account.
+    request.session["otisk"] = accounts.otisk_relace(accounts.get(account["id"]) or {})
+    _flash(request, "Heslo změněno.", "success")
+    return zpet
 
 
 # ---------------------------------------------------------------------------
@@ -822,7 +1103,8 @@ def _blokace_hlaska(zbyva: int) -> str:
 
 
 def _adresa_klienta(request: Request) -> str:
-    """Odkud požadavek přišel. Slouží jen jako klíč brzdy u přihlašování.
+    """Odkud požadavek přišel. Klíč brzdy u přihlašování a IP v záznamu
+    použití API klíčů.
 
     Adresu bereme z `request.client` a nikam jinam se nedíváme - ačkoliv
     to tady dřív bylo naopak.
@@ -1313,6 +1595,9 @@ def library_detail(
     sort: str = "size",
     page: int = 1,
     archived: int = 0,
+    days: Optional[int] = None,
+    od: Optional[str] = None,
+    do: Optional[str] = None,
     account: dict[str, Any] = Depends(require_login),
 ):
     """Detail jedne knihovny. Zalozky se prepinaji parametrem v adrese.
@@ -1374,7 +1659,13 @@ def library_detail(
             context["strop_mazani"] = STROP_MAZANI_ARCHIVU
             context["k_prirazeni"] = archiv[:STROP_PRIRAZENI_ARCHIVU]
     else:
-        context.update(activity=stats.library_activity(library_id))
+        # Aktivita bere zvolene obdobi jako ostatni stranky (i vlastni
+        # rozmezi a i zapamatovane odjinud). Drive mela napevno 90 dni
+        # a nebylo to poznat - kdo mel jinde 30 dni, cetl cisla za 90.
+        # Prehled a Media zustavaji bez obdobi: jsou o tom, co v knihovne
+        # je, ne co se sledovalo.
+        obdobi = _days(request, days, od, do)
+        context.update(days=obdobi, activity=stats.library_activity(library_id, obdobi))
 
     return templates.TemplateResponse(
         request, "library_detail.html", _context(request, account, **context)
@@ -1477,7 +1768,7 @@ async def item_refresh(
     if tech.get("ok"):
         zprava += " " + _t("(včetně změření souboru)")
     elif tech.get("failed"):
-        zprava += " " + _t("(soubor se změřit nepodařilo - viz Log)")
+        zprava += " " + _t("(soubor se změřit nepodařilo, viz Log)")
     _flash(request, zprava, "success")
     return RedirectResponse(f"/item/{item_id}", status_code=303)
 
@@ -1508,7 +1799,7 @@ async def item_delete(
 
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
-        _flash(request, "Nic se nesmazalo - nejdřív se nepovedla záloha: {duvod}",
+        _flash(request, "Nic se nesmazalo, protože se nejdřív nepovedla záloha: {duvod}",
                "error", duvod=zaloha.get("message") or "?")
         return RedirectResponse(f"/item/{item_id}", status_code=303)
 
@@ -1556,7 +1847,7 @@ async def item_priradit(
 
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
-        _flash(request, "Nic se nepřesunulo - nejdřív se nepovedla záloha: {duvod}",
+        _flash(request, "Nic se nepřesunulo, protože se nejdřív nepovedla záloha: {duvod}",
                "error", duvod=zaloha.get("message") or "?")
         return RedirectResponse(f"/item/{item_id}", status_code=303)
 
@@ -1594,11 +1885,11 @@ async def archiv_priradit(
     # jedine, ktere tohle pole posila - odeslani jinou cestou (Enter ve
     # formulari, stranka bez skriptu) nezmeni nic.
     if formular.get("potvrzeno") != "1":
-        _flash(request, "Nic se nezměnilo - přiřazení se provede až po potvrzení rekapitulace.",
+        _flash(request, "Nic se nezměnilo. Přiřazení se provede až po potvrzení rekapitulace.",
                "info")
         return RedirectResponse(zpet, status_code=303)
     if not dvojice:
-        _flash(request, "Žádné přiřazení - u žádného titulu nebyl vybraný cíl.", "info")
+        _flash(request, "Žádné přiřazení, u žádného titulu nebyl vybraný cíl.", "info")
         return RedirectResponse(zpet, status_code=303)
 
     chyby: list[str] = []
@@ -1615,7 +1906,7 @@ async def archiv_priradit(
 
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
-        _flash(request, "Nic se nepřesunulo - nejdřív se nepovedla záloha: {duvod}",
+        _flash(request, "Nic se nepřesunulo, protože se nejdřív nepovedla záloha: {duvod}",
                "error", duvod=zaloha.get("message") or "?")
         return RedirectResponse(zpet, status_code=303)
 
@@ -1653,21 +1944,21 @@ async def archiv_smazat(
     # Maže se až po potvrzení. Tlačítko „Ano, smazat" je jediné, které
     # tohle pole posílá.
     if formular.get("potvrzeno") != "1":
-        _flash(request, "Nic se nesmazalo - smazání se provede až po potvrzení.", "info")
+        _flash(request, "Nic se nesmazalo. Smazání se provede až po potvrzení.", "info")
         return RedirectResponse(zpet, status_code=303)
     vybrane = [str(h) for h in formular.getlist("smazat")]
     if not stats.jen_z_archivu(vybrane, library_id):
-        _flash(request, "Nic se nesmazalo - nebyla vybraná žádná položka z archivu.", "info")
+        _flash(request, "Nic se nesmazalo, nebyla vybraná žádná položka z archivu.", "info")
         return RedirectResponse(zpet, status_code=303)
 
     zaloha = await tasks.zaloha_pred_mazanim()
     if zaloha.get("status") != "ok":
-        _flash(request, "Nic se nesmazalo - nejdřív se nepovedla záloha: {duvod}",
+        _flash(request, "Nic se nesmazalo, protože se nejdřív nepovedla záloha: {duvod}",
                "error", duvod=zaloha.get("message") or "?")
         return RedirectResponse(zpet, status_code=303)
 
     vysledek = await asyncio.to_thread(stats.smaz_z_archivu, vybrane, library_id)
-    _flash(request, "Smazáno z archivu - titulů: {t}, záznamů v historii: {n}.", "success",
+    _flash(request, "Smazáno z archivu. Titulů: {t}, záznamů v historii: {n}.", "success",
            t=vysledek["titulu"], n=vysledek["prehravani"])
     return RedirectResponse(zpet, status_code=303)
 
@@ -1791,33 +2082,84 @@ def vlastni_prehled(request: Request, days: Optional[int] = None,
     """Přehled poskládaný z existujících sekcí.
 
     Vypnutý je jako by nebyl: záložka není v menu a adresa vede zpátky
-    na Přehled. Zapíná se v Nastavení -> Rozhraní.
+    na Přehled. Zapíná se v Nastavení -> Rozhraní. Stejně tak pro toho,
+    kdo v něm podle svých práv nemá co vidět (sekce.vidi_prehled, totéž
+    co menu) - jen správce sem smí i s prázdným, aby si ho sestavil.
     """
-    if not sekce.je_zapnuty():
+    if not (sekce.vidi_prehled(account)
+            or (account.get("is_admin") and sekce.je_zapnuty())):
         return RedirectResponse("/", status_code=303)
+    return _vykresli_prehled(request, account, _days(request, days, od, do),
+                             osobni=False)
 
-    rozvrzeni = sekce.nacti_rozvrzeni()
-    obdobi = _days(request, days, od, do)
-    # Spočítá se JEN to, co je poskládané. Přehled naproti tomu počítá
-    # všech deset sekcí každému bez ohledu na to, na co se dívá.
-    data = sekce.data_pro(rozvrzeni, obdobi)
 
+@app.get("/account/prehled", response_class=HTMLResponse)
+def muj_prehled(request: Request, days: Optional[int] = None,
+                od: Optional[str] = None, do: Optional[str] = None,
+                account: dict[str, Any] = Depends(require_login)):
+    """Můj přehled - stránka, kterou si účet poskládá sám a vidí jen on.
+
+    Účet se bere z relace, nikdy z adresy: cizí Můj přehled se otevřít nedá.
+    Karta, ke které účet mezitím ztratil oprávnění, zůstane na svém místě
+    s hláškou proč - sám si ji přidal, tak nemá hádat, co se rozbilo.
+    """
+    return _vykresli_prehled(request, account, _days(request, days, od, do),
+                             osobni=True)
+
+
+def _vykresli_prehled(request: Request, account: dict[str, Any], obdobi: Any,
+                      *, osobni: bool):
+    """Stránka přehledu - pro všechny i Můj přehled, jedna šablona.
+
+    Oba ukazují jen data karet, které účet smí; ostatní se ani nespočítají,
+    jinak by přehled byl zadní vrátka na stránky, kam člověk nesmí. Přehled
+    pro všechny takovou kartu vynechá, Můj přehled ji nechá na místě
+    s hláškou proč.
+    """
+    if osobni:
+        rozvrzeni = sekce.nacti_rozvrzeni(account["id"])
+        povolene = sekce.povolene(rozvrzeni, account)
+        nadpis, adresa_stranky = _t("Můj přehled"), "/account/prehled"
+        akce_ulozeni, muze_upravovat = "/account/prehled", True
+    else:
+        rozvrzeni = povolene = sekce.povolene(sekce.nacti_rozvrzeni(), account)
+        # Nadpis i titulek okna: název od správce. Prázdný jen u přehledu
+        # zapnutého dřív, než se název zadával, a bez restartu (migrace
+        # ho doplní při startu) - pak to, jak se mu říkalo.
+        nadpis, adresa_stranky = sekce.nazev() or _t("Vlastní přehled"), "/dashboard"
+        # V ukázce tlačítko zůstává vidět schválně - stejně jako všude
+        # jinde. Akci zastaví až `_demo_blokuje` a řekne to nahlas.
+        akce_ulozeni, muze_upravovat = "/dashboard/layout", bool(account.get("is_admin"))
+    # Spočítá se JEN to, co je poskládané a smí se. Přehled naproti tomu
+    # počítá všech deset sekcí každému bez ohledu na to, na co se dívá.
+    data = sekce.data_pro(povolene, obdobi)
     return templates.TemplateResponse(request, "vlastni_prehled.html", _context(
         request, account,
         days=obdobi,
+        nadpis=nadpis,
+        # Karty poznají, že nejsou na své stránce (mapa nenabízí stažení
+        # GeoIP, tabulka uživatelů má jiný nadpis).
+        v_prehledu=True,
+        akce_ulozeni=akce_ulozeni,
+        adresa_stranky=adresa_stranky,
+        osobni=osobni,
         rozvrzeni=rozvrzeni,
-        # Do okna jde CELÝ registr; co už v přehledu je, se jen zašedne.
-        # Kdyby se použité sekce vynechávaly, seznam by při přidávání
-        # a odebírání poskakoval a člověk by ztrácel místo, kde byl.
-        vsechny_sekce=sekce.SEZNAM,
+        bez_prava={s.klic for s in rozvrzeni} - {s.klic for s in povolene},
+        # Názvy oblastí pro hlášku „nemáš oprávnění k oblasti …".
+        oblasti=pristup.PODLE_KLICE,
+        # Do okna jde celý registr, co účet smí; co už v přehledu je, se
+        # jen zašedne. Kdyby se použité sekce vynechávaly, seznam by při
+        # přidávání a odebírání poskakoval a člověk by ztrácel místo.
+        # Jen pro toho, kdo smí skládat - jinak se okno ani nekreslí.
+        vsechny_sekce=sekce.povolene(list(sekce.SEZNAM), account) if muze_upravovat else [],
         pouzite={s.klic for s in rozvrzeni},
         sirky=sekce.SIRKY,
-        # Přepínač období má smysl jen tehdy, když ho aspoň jedna sekce
+        # Přepínač období má smysl jen tehdy, když ho aspoň jedna karta
         # používá - jinak by tam stál a nic nedělal.
-        potrebuje_obdobi=any(s.obdobi for s in rozvrzeni),
-        # V ukázce tlačítko zůstává vidět schválně - stejně jako všude
-        # jinde. Akci zastaví až `_demo_blokuje` a řekne to nahlas.
-        muze_upravovat=bool(account.get("is_admin")),
+        potrebuje_obdobi=any(s.obdobi for s in povolene),
+        # Karty Zjištění ukážou pár řádků a zbytek otevřou ve společném okně.
+        potrebuje_okno_tabulka=any(s.okno_tabulka for s in povolene),
+        muze_upravovat=muze_upravovat,
         **data,
     ))
 
@@ -1836,24 +2178,35 @@ def vlastni_prehled_uloz(request: Request, poradi: str = Form(""),
     return RedirectResponse("/dashboard", status_code=303)
 
 
+@app.post("/account/prehled")
+def muj_prehled_uloz(request: Request, poradi: str = Form(""),
+                     account: dict[str, Any] = Depends(require_login)):
+    """Uloží Můj přehled - vždycky účtu z relace, `account_id` z formuláře
+    se nečte vůbec.
+
+    Uložit jde karta, kterou účet smí, nebo karta, která v jeho přehledu
+    už je (i bez práva - jinak by se přeskládáním potichu ztratila). Cizí
+    kartu si podvrženým formulářem nepřidá: spadla by mezi „bez práva"
+    a ukazovala jen hlášku, ale do databáze nepatří.
+    """
+    smi = ({s.klic for s in sekce.povolene(list(sekce.SEZNAM), account)}
+           | {s.klic for s in sekce.nacti_rozvrzeni(account["id"])})
+    polozky = [(klic, sirka) for klic, sirka in sekce.rozdel_zadani(poradi or "")
+               if klic in smi]
+    ulozene = sekce.uloz_rozvrzeni(polozky, account["id"])
+    _flash(request, "Uloženo." if ulozene else "Přehled je teď prázdný.",
+           "success" if ulozene else "info")
+    return RedirectResponse("/account/prehled", status_code=303)
+
+
 @app.get("/insights", response_class=HTMLResponse)
 def insights_page(request: Request, days: Optional[int] = None,
                   od: Optional[str] = None, do: Optional[str] = None,
                   account: dict[str, Any] = Depends(require_login)):
     days = _days(request, days, od, do)
+    # Stránka je složená z karet Zjištění, data bere z jejich registru.
     return templates.TemplateResponse(request, "insights.html", _context(
-        request, account,
-        days=days,
-        dead=insights.dead_storage(days=days),
-        transcodes=insights.transcode_offenders(days),
-        reasons=insights.transcode_reasons(days),
-        rychlost=insights.rychlost_prevodu(days),
-        upgrades=insights.upgrade_candidates(days),
-        oversized=insights.oversized_rarely_watched(days),
-        efficiency=insights.storage_efficiency(days),
-        duplicates=insights.duplicate_candidates(),
-        abandoned=insights.never_finished(days),
-    ))
+        request, account, days=days, **sekce.data_oblasti("zebricky", days)))
 
 
 # Období, která si člověk v historii vybírá. Klíč jde do adresy, takže
@@ -2206,30 +2559,9 @@ def network_page(request: Request, days: Optional[int] = None,
     daty, ktera uz mame.
     """
     days = _days(request, days, od, do)
+    # Stránka je složená z karet Sítě, data bere z jejich registru.
     return templates.TemplateResponse(request, "network.html", _context(
-        request, account,
-        days=days,
-        prehled=stats.bandwidth_prehled(days),
-        # Zive: co tece prave ted a posledni hodina po minutach. Nezalezi
-        # na vybranem obdobi - "prave ted" je porad ted.
-        ted=stats.tok_ted(),
-        zive=stats.bandwidth_zive(days),
-        denni_spicky=stats.bandwidth_denni_spicky(days),
-        podle_uzivatele=stats.bandwidth_podle(days, "user_name"),
-        podle_klienta=stats.bandwidth_podle(days, "client"),
-        odkud=stats.odkud_se_divaji(days),
-        hotspoty=stats.hotspoty(days),
-        zeme=stats.zeme_divaku(days),
-        geo={
-            "knihovna": geoip.knihovna_je(),
-            "databaze": geoip.je_k_dispozici(),
-            "bajtu": geoip.velikost_databaze(),
-            "stari": geoip.stari_databaze(),
-            # Cesta k pythonu, kterym aplikace bezi - at jde prikaz
-            # zkopirovat a nekonci u obecneho "pip install".
-            "python": sys.executable,
-        },
-    ))
+        request, account, days=days, **sekce.data_oblasti("sit", days)))
 
 
 @app.post("/network/geoip")
@@ -2241,7 +2573,7 @@ async def network_geoip(request: Request,
     kliknuti. Proto ji smi spustit spravce, ne kazdy prihlaseny.
     """
     if not geoip.knihovna_je():
-        _flash(request, "Chybí knihovna maxminddb – bez ní se databáze nepřečte.",
+        _flash(request, "Chybí knihovna maxminddb, bez ní se databáze nepřečte.",
                "error")
         return RedirectResponse("/network#mapa", status_code=303)
 

@@ -6,7 +6,7 @@
    Makra se importují tady, ne v rodiči: záviset na tom, že se
    `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
    a funguje jen náhodou. #}
-{% from "_macros.html" import running_task, file_picker %}
+{% from "_macros.html" import running_task, file_picker, nazev_oblasti %}
 
 {# ================================================================== #}
 <div class="card">
@@ -29,7 +29,7 @@
                    autocomplete="off"
                    placeholder="{{ '••••••••••••' if has_api_key else '' }}">
             <p class="hint">
-                {{ _("Jellyfin → Ovládací panel → Rozšířené → Klíče API → \"+\"") }}<br>
+                {{ _("Jellyfin → Ovládací panel → Rozšířené → Klíče API → „+“") }}<br>
                 {% if has_api_key %}{{ _("Nech prázdné, pokud klíč měnit nechceš.") }}{% endif %}
             </p>
         </div>
@@ -55,15 +55,15 @@
                 </option>
             </select>
             <p class="hint">
-                {{ _("Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné – mění se jen to, jak se posílají dotazy.") }}
-                {{ _("Po přepnutí se verze zjistí znovu – hned při uložení, nebo při testu spojení.") }}
+                {{ _("Dvanáctka už nepřijímá staré přihlašovací hlavičky a nemá cesty /emby/. Adresa i klíč zůstávají stejné, mění se jen to, jak se posílají dotazy.") }}
+                {{ _("Po přepnutí se verze zjistí znovu, hned při uložení nebo při testu spojení.") }}
                 {% if zjistena_verze %}<br>{{ _("Server naposledy hlásil verzi") }}
                     <strong>{{ zjistena_verze }}</strong>.{% endif %}
             </p>
             {% if generace_nesedi %}
             <p class="hint">
                 <span class="badge warning"><span class="dot"></span>{{ _("server hlásí jinou generaci, než jaká je zvolená") }}</span>
-                <br>{{ _("Platí ruční volba – od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.") }}
+                <br>{{ _("Platí ruční volba, od toho tu je. Jestli to není záměr, přepni zpátky na „Zjistit ze serveru“.") }}
             </p>
             {% endif %}
         </div>
@@ -131,7 +131,7 @@
     <div class="flash warning" style="margin-bottom:14px">
         <span class="dot"></span>
         <span>
-            {{ _("Adresa Jellyfinu začíná http://, takže spojení není šifrované. API klíč i hesla, která sem diváci zadají, jdou po síti čitelně – kdokoliv na cestě (router, Wi-Fi, proxy) si je může přečíst. Na https:// to neplatí.") }}
+            {{ _("Adresa Jellyfinu začíná http://, takže spojení není šifrované. API klíč i hesla, která sem diváci zadají, jdou po síti čitelně a kdokoliv na cestě (router, Wi-Fi, proxy) si je může přečíst. Na https:// to neplatí.") }}
         </span>
     </div>
     {% endif %}
@@ -142,7 +142,7 @@
         <span>{{ _("Povolit Jellyfin login") }}</span>
     </label>
     <p class="hint">
-        {{ _("Kdo má účet v Jellyfinu, přihlásí se sem stejným jménem a heslem. Heslo se tady neukládá – jen se pošle Jellyfinu k ověření. Kdo je správcem Jellyfinu, je správcem i tady; ostatní vidí to, co je zaškrtnuté níž.") }}
+        {{ _("Kdo má účet v Jellyfinu, přihlásí se sem stejným jménem a heslem. Heslo se tady neukládá, jen se pošle Jellyfinu k ověření. Kdo je správcem Jellyfinu, je správcem i tady; ostatní vidí to, co je zaškrtnuté níž.") }}
     </p>
 
     {# Strom: co je odsazené, platí jen se svým nadřazeným. Proto se
@@ -151,7 +151,7 @@
     <div class="field" style="margin-top:18px">
         <label>{{ _("Co divák uvidí") }}</label>
         <p class="hint" style="margin-top:0">
-            {{ _("Vlastní statistiky a vlastní historii vidí vždycky – bez toho by přihlášení nemělo smysl.") }}
+            {{ _("Vlastní statistiky a vlastní historii vidí vždycky, bez toho by přihlášení nemělo smysl.") }}
         </p>
         <div class="strom">
             {% for oblast in divak_strom %}
@@ -159,7 +159,7 @@
                 <input type="checkbox" name="vidi_{{ oblast.klic }}" form="divaci-form"
                        {{ 'checked' if oblast.zapnuto }}>
                 <span>
-                    {{ _(oblast.nazev) }}
+                    {{ nazev_oblasti(oblast, nazev_prehledu) }}
                     <span class="hint">{{ _(oblast.popis) }}</span>
                 </span>
             </label>
@@ -173,7 +173,7 @@
         <span>{{ _("Skrýt jména a adresy ostatních diváků") }}</span>
     </label>
     <p class="hint">
-        {{ _("Na stránkách, kam diváka pustíš, se místo cizích jmen ukáže „Divák 3“ a místo IP adresy pomlčka. Číslo je stálé, takže se dá porovnávat – jen nejde poznat, komu patří. Sebe vidí divák pod svým jménem.") }}
+        {{ _("Na stránkách, kam diváka pustíš, se místo cizích jmen ukáže „Divák 3“ a místo IP adresy pomlčka. Číslo je stálé, takže se dá porovnávat, jen nejde poznat, komu patří. Sebe vidí divák pod svým jménem.") }}
     </p>
 
     <div class="btn-row" style="margin-top:16px">

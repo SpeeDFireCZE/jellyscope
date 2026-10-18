@@ -20,7 +20,7 @@
         {{ tile(_("Z internetu"), odkud.skupiny.internet.plays | number,
                 note=odkud.skupiny.internet.bajtu | bytes) }}
         {{ tile(_("Neznámo odkud"), odkud.skupiny.neznamo.plays | number,
-                note=_("z importu – adresu nenesou")) }}
+                note=_("z importu, adresu nenesou")) }}
     </div>
 
     {% if odkud.adresy %}

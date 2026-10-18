@@ -57,7 +57,13 @@ check(klient.count("_client.post(") == 4,
       f"POST je jen čtyřikrát, všechny kvůli přihlášení "
       f"({klient.count('_client.post(')}x)")
 check(klient.count("async def _get") == 1, "existuje jediná odesílací funkce")
-check("await self._client.get(" in klient, "stahování obrázků jde taky přes GET")
+# Obrazky se stahuji po kusech (strop velikosti) pres _client.stream().
+# Tam se metoda pise jako text - kdyby v nem stalo cokoliv jineho nez
+# GET, kontrola put/delete/patch vys by to nevidela.
+metody_streamu = re.findall(r'_client\.stream\(\s*"(\w+)"', klient)
+check(bool(metody_streamu) and set(metody_streamu) == {"GET"},
+      f"stahování obrázků jde přes GET ({metody_streamu})")
+check("_client.request(" not in klient, "jellyfin.py nevolá obecné _client.request()")
 
 
 print()
@@ -78,6 +84,7 @@ CTECI_ADRESY = {
     "/Items",                           # položky knihovny
     "/Users/{user_id}/Items",           # položky očima jednoho uživatele
     "/Items/{item_id}/Images/{kind}",   # plakát
+    "/UserImage",                       # profilový obrázek diváka (Můj účet)
     # Dotazovací rozhraní pluginu Playback Reporting. Jediné místo, kde se
     # posílá POST - SQL jde v těle požadavku a hlídá ho jen_cteni().
     "/user_usage_stats/submit_custom_query",

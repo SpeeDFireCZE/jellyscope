@@ -17,7 +17,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import db, dialect, stats
+from . import db, dialect, formatting, stats
+
+# Kolik radku si tabulky Zjisteni vezmou z databaze - na strance Zjisteni
+# i v prehledu. Rovnou se jich ukaze jen par (Nastaveni -> Rozhrani ->
+# Dlouhe seznamy) a zbytek je v okne. Driv mela tabulka natvrdo 15 az 25
+# radku, takze "zobrazit vse" by ukazalo 25 z 36 titulu, o kterych mluvi
+# hlavicka karty. Horni mez je kvuli velke knihovne: tisice nesledovanych
+# dilu by v okne nikdo neprosel.
+RADKU_ZJISTENI = 100
 
 
 def _meze(zadani: Any) -> tuple[str, str]:
@@ -67,6 +75,7 @@ def dead_storage(limit: int = 25, days: int = 365) -> dict[str, Any]:
     rows = db.query_all(
         f"""
         SELECT i.id, i.name, i.type, i.series_name, i.production_year,
+               i.parent_index_number, i.index_number, i.path, i.tmdb_id,
                i.size_bytes, i.height, i.width, i.video_codec, i.bitrate,
                i.date_created, l.name AS library_name
         FROM items i
@@ -113,14 +122,40 @@ _NAPOSLEDY_HRANE = f"""
 """
 
 
-def least_played(days: int = 365, limit: int = 25,
-                 min_size_bytes: int = 0) -> list[dict[str, Any]]:
+# Jak `least_played()` radi tituly se stejnym poctem spusteni. Do SQL jde
+# jen hodnota z tohohle slovniku, nikdy text z adresy. Titul bez data
+# pridani je v obou smerech az na konci: SQLite a PostgreSQL by NULL
+# jinak radily kazdy jinam (viz test_dialect).
+PORADI_NEJMENE_HRANYCH = {
+    "size": "COALESCE(i.size_bytes, 0) DESC",
+    "oldest": "CASE WHEN i.date_created IS NULL THEN 1 ELSE 0 END, i.date_created ASC",
+    "newest": "CASE WHEN i.date_created IS NULL THEN 1 ELSE 0 END, i.date_created DESC",
+}
+
+
+def poradi_nejmene_hranych(hodnota: Any) -> str:
+    """Platný klíč řazení; prázdno nebo cokoliv neznámého = "size".
+
+    Jediné místo, kde se rozhoduje o výchozím řazení - API podle toho
+    i hlásí, jak seřadilo.
+    """
+    klic = str(hodnota or "").strip().lower()
+    return klic if klic in PORADI_NEJMENE_HRANYCH else "size"
+
+
+def least_played(days: int = 365, limit: int = 25, min_size_bytes: int = 0,
+                 poradi: str = "size") -> list[dict[str, Any]]:
     """Tituly seřazené od nejméně hraných - nuly napřed, pak podle místa.
 
     Vedle `dead_storage()` (co se **vůbec** nehrálo) odpovídá na širší
     otázku: co se hraje nejmíň? Film spuštěný jednou za rok zabírá
     stejné místo jako ten, co se hraje týdně, a tenhle seznam je řadí
     vedle sebe.
+
+    `poradi` mění jen to, jak se seřadí tituly se **stejným** počtem
+    spuštění: "size" (výchozí) největší napřed, "oldest" / "newest" podle
+    data přidání. Nejméně hrané jsou napřed vždycky - jinak by to byl
+    jen seznam knihovny podle data. Neznámá hodnota = výchozí.
 
     Počet spuštění se bere jen za zvolené období a jen ze spuštění, která
     se počítají (viz `MIN_PLAY_SECONDS`); poslední přehrání je ale za
@@ -131,9 +166,11 @@ def least_played(days: int = 365, limit: int = 25,
     pro každou položku zvlášť, i pro ty, které se do `limit` nevejdou.
     """
     od, do = _meze(days)
+    razeni = PORADI_NEJMENE_HRANYCH[poradi_nejmene_hranych(poradi)]
     return db.query_all(
         f"""
         SELECT i.id, i.name, i.type, i.series_name, i.production_year,
+               i.parent_index_number, i.index_number, i.path, i.tmdb_id,
                i.size_bytes, i.height, i.width, i.video_codec,
                i.date_created, l.name AS library_name,
                COALESCE(s.plays, 0)         AS plays,
@@ -146,7 +183,7 @@ def least_played(days: int = 365, limit: int = 25,
         WHERE i.is_missing = 0
           AND i.type IN ('Movie', 'Episode')
           AND COALESCE(i.size_bytes, 0) >= ?
-        ORDER BY plays ASC, COALESCE(i.size_bytes, 0) DESC, i.name
+        ORDER BY plays ASC, {razeni}, COALESCE(i.size_bytes, 0) DESC, i.name
         LIMIT ?
         """,
         (od, do, int(min_size_bytes), int(limit)),
@@ -295,8 +332,10 @@ def transcode_reasons(days: int) -> list[dict[str, Any]]:
             if reason:
                 counter[reason] = counter.get(reason, 0) + int(row["plays"])
 
+    # `label` je kod, jak ho poslal Jellyfin (podle nej se da dohledat
+    # v jeho dokumentaci), `nazev` veta pro cloveka, kterou ukazuje stranka.
     return [
-        {"label": label, "plays": plays}
+        {"label": label, "nazev": formatting.duvody_prepoctu(label), "plays": plays}
         for label, plays in sorted(counter.items(), key=lambda pair: -pair[1])
     ]
 
@@ -380,6 +419,11 @@ def oversized_rarely_watched(days: int, limit: int = 15) -> list[dict[str, Any]]
         f"""
         SELECT i.id,
                COALESCE(i.series_name, i.name) AS label,
+               i.type,
+               i.parent_index_number,
+               i.index_number,
+               i.path,
+               i.tmdb_id,
                i.height,
                i.width,
                i.bitrate,
@@ -396,7 +440,8 @@ def oversized_rarely_watched(days: int, limit: int = 15) -> list[dict[str, Any]]
         WHERE i.is_missing = 0
           AND i.size_bytes IS NOT NULL
           AND i.size_bytes > 2147483648      -- vetsi nez 2 GB
-        GROUP BY i.id, i.series_name, i.name, i.height, i.width, i.bitrate,
+        GROUP BY i.id, i.series_name, i.name, i.type, i.parent_index_number,
+                 i.index_number, i.path, i.tmdb_id, i.height, i.width, i.bitrate,
                  i.video_codec, i.size_bytes
         HAVING COUNT(p.id) <= 2
         ORDER BY gb_per_hour DESC

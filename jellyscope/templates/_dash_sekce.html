@@ -10,7 +10,17 @@
    Čeká `sekce` (položka registru, viz jellyscope/sekce.py). #}
 <div class="dash-sekce dash-{{ sekce.sirka }}" data-sekce="{{ sekce.klic }}"
      data-sirka="{{ sekce.sirka }}">
-    {% if sekce.obal_karta %}
+    {# Karta mimo práva (jen Můj přehled - přehled pro všechny ji vůbec
+       nepošle): na svém místě a ve své šířce, s názvem a důvodem. Data
+       se pro ni nespočítala, takže tu není co prozradit. #}
+    {% if sekce.klic in bez_prava %}
+        <div class="card dash-bez-prava">
+            <div class="card-head"><h2>{{ _(sekce.nazev) }}</h2></div>
+            <p class="card-note">
+                {{ _("Nemáš oprávnění k oblasti „{oblast}“. Karta se ukáže, až ti ji správce povolí.").format(oblast=_(oblasti[sekce.oblast].nazev)) }}
+            </p>
+        </div>
+    {% elif sekce.obal_karta %}
         <div class="card">{% include sekce.sablona %}</div>
     {% else %}
         {% include sekce.sablona %}

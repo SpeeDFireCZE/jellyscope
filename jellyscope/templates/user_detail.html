@@ -8,7 +8,12 @@
         <h1>{{ user.name }}</h1>
         <p class="subtitle">
             <a href="/users">&larr; {{ _("zpět na uživatele") }}</a>
-            &middot; {{ _("posledních") }} {{ _(day_labels[days]) }}
+            {# Stejné tři podoby jako na seznamu uživatelů (users.html). #}
+            &middot;
+            {% if obdobi.vlastni %}{{ _("ve vybraném období") }}
+            {% elif days == 365 %}{{ _("za poslední rok") }}
+            {% else %}{{ _("za posledních {obdobi}").format(obdobi=_(day_labels[days])) }}
+            {% endif %}
         </p>
     </div>
     {{ period_filter(obdobi, '/users/' ~ user.id) }}
@@ -74,11 +79,11 @@
     {% if genres %}
         {{ charts.donut_chart(genres, 'label', 'hours') | safe }}
         <p class="card-note" style="margin-top:14px">
-            {{ _("Jeden titul má obvykle žánrů víc, takže se jeho čas počítá do každého z nich – procenta se proto nesčítají na sto. Žánry hlásí Jellyfin tak, jak je má u titulů vyplněné.") }}
+            {{ _("Jeden titul má obvykle žánrů víc, takže se jeho čas počítá do každého z nich. Procenta se proto nesčítají na sto. Žánry hlásí Jellyfin tak, jak je má u titulů vyplněné.") }}
         </p>
     {% else %}
         <p class="card-note">
-            {{ _("Zatím nevíme – žánry se doplní při další synchronizaci knihovny.") }}
+            {{ _("Zatím nevíme. Žánry se doplní při další synchronizaci knihovny.") }}
         </p>
     {% endif %}
 </div>

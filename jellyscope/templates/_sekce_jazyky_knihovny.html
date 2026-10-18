@@ -12,7 +12,7 @@
     {% if library %}
         {{ charts.hbar_chart(library, 'label', 'item_count', unit='') | safe }}
         <p class="card-note" style="margin-top:14px">
-            {{ _("Jeden titul se počítá do každé stopy, kterou má – film s českou i anglickou stopou je v obou řádcích. Součet proto převyšuje počet titulů.") }}
+            {{ _("Jeden titul se počítá do každé stopy, kterou má: film s českou i anglickou stopou je v obou řádcích. Součet proto převyšuje počet titulů.") }}
         </p>
     {% else %}
         <p class="chart-empty">

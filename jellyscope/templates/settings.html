@@ -12,7 +12,7 @@
        která je celá o Jellyfinu, by kratší popisek svedl k obavě, že se
        restartuje mediální server. Restartuje se jen tenhle proces. #}
     <form method="post" action="/settings/restart"
-          onsubmit="return confirm('{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}')">
+          onsubmit='return confirm({{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.")|tojson }})'>
         <button class="btn" type="submit"
                 title="{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}">
             &#8635; {{ _("Restartovat Jellyscope") }}
@@ -65,7 +65,7 @@
 <div class="flash info" style="margin-bottom:18px">
     <span class="dot"></span>
     <span>
-        {{ _("V ukázce je nastavení jen na koukání – tlačítka fungují, ale nic neuloží. Data jsou vymyšlená a stejná pro všechny návštěvníky.") }}
+        {{ _("V ukázce je nastavení jen na koukání: tlačítka fungují, ale nic neuloží. Data jsou vymyšlená a stejná pro všechny návštěvníky.") }}
     </span>
 </div>
 {% endif %}

@@ -1,0 +1,40 @@
+{# Karta „Zabírá hodně, sledováno skoro vůbec“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_velke) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `oversized (insights.oversized_rarely_watched)`. #}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Zabírá hodně, sledováno skoro vůbec") }}</h2>
+        <p class="card-note">{{ _("gigabajty na jednu odsledovanou hodinu") }}</p>
+    </div>
+    {% if oversized %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr><th>{{ _("Titul") }}</th><th class="num">{{ _("Velikost") }}</th>
+                <th class="num">GB / h</th><th class="num">{{ _("Přehrání") }}</th></tr>
+            </thead>
+            <tbody>
+            {% for row in oversized %}
+            <tr class="{{ trida_radku(loop.index) }}">
+                <td class="truncate" title="{{ row.label }}">
+                    <a href="/item/{{ row.id }}">{{ row.label }}</a>
+                </td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ '%.1f' | format(row.gb_per_hour or 0) | replace('.', ',') }}</td>
+                <td class="num muted">{{ row.plays | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ tlacitko_cela_tabulka(oversized | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Kandidáti na překódování do úspornějšího formátu (např. HEVC).") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("Žádné neúměrně velké soubory.") }}</p>
+    {% endif %}
+</div>

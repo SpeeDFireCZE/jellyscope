@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, period_filter with context %}
+{% from "_macros.html" import period_filter with context %}
 {% block title %}{{ _("Knihovna") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -15,34 +15,7 @@
     {{ period_filter(obdobi, '/library') }}
 </div>
 
-{% if libraries %}
-<div class="lib-grid">
-    {% for row in libraries %}
-    <a class="lib-card" href="/library/{{ row.id }}">
-        <div class="lib-cover">
-            {% if row.poster_id %}
-                {# loading="lazy" - obrázky mimo obrazovku se stáhnou až
-                   ve chvíli, kdy k nim uživatel doroluje. #}
-                <img src="/image/{{ row.poster_id }}?kind=Backdrop&w=600"
-                     alt="" loading="lazy" onerror="this.remove()">
-            {% endif %}
-            <span class="lib-cover-name">{{ row.name }}</span>
-        </div>
-        <div class="lib-facts">
-            <div><span class="muted">{{ _("Knihovna") }}</span><span class="strong">{{ row.name }}</span></div>
-            <div><span class="muted">{{ _("Typ") }}</span><span>{{ _(row.type_label) }}</span></div>
-            <div><span class="muted">{{ _("Souborů") }}</span><span>{{ row.item_count | number }}</span></div>
-            <div><span class="muted">{{ _("Velikost") }}</span><span class="strong">{{ row.size_bytes | bytes }}</span></div>
-            <div><span class="muted">{{ _("Délka obsahu") }}</span><span>{{ row.hours | hours }}</span></div>
-        </div>
-    </a>
-    {% endfor %}
-</div>
-{% else %}
-<div class="card">
-    <p class="chart-empty">{{ _("Žádné knihovny. Spusť synchronizaci v Nastavení.") }}</p>
-</div>
-{% endif %}
+{% include "_sekce_knihovny.html" %}
 
 {# ------------------------------------------------------------------ #}
 {# Souhrn za všechny knihovny dohromady                                #}

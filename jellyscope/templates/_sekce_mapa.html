@@ -1,0 +1,110 @@
+{# Karta ze stránky Síť (network.html).
+
+   Vkládá ji ta stránka i přehled (sekce.py, klíč mapa) - jedna
+   šablonka, ať se obě místa nerozejdou. V přehledu je navíc
+   `v_prehledu` (True).
+   Čeká `hotspoty, zeme (stats), geo (sekce.stav_geoip)`. #}
+<div class="card" id="mapa">
+    <div class="card-head">
+        <h2>{{ _("Mapa") }}</h2>
+        <p class="card-note">{{ _("velikost tečky odpovídá odsledovanému času") }}</p>
+    </div>
+
+    {% if hotspoty %}
+        {# Ovládání je v HTML nad mapou, ne uvnitř SVG: tlačítko se
+           dá stylovat jako každé jiné a nezvětšuje se s přiblížením.
+           Klikáním i kolečkem se ovládá totéž - který způsob je zapnutý,
+           se vybírá v Nastavení → Rozhraní. #}
+        <div class="mapa-obal">
+            {{ charts.mapa_sveta(hotspoty, mapa_zoom) | safe }}
+            <div class="mapa-ovladani">
+                <button class="btn mapa-tlacitko" type="button" data-mapa="blize"
+                        data-tip="{{ _("Přiblížit") }}" aria-label="{{ _("Přiblížit") }}">+</button>
+                <button class="btn mapa-tlacitko" type="button" data-mapa="dale"
+                        data-tip="{{ _("Oddálit") }}" aria-label="{{ _("Oddálit") }}">&minus;</button>
+                <button class="btn mapa-tlacitko" type="button" data-mapa="zpet"
+                        data-tip="{{ _("Celý svět") }}" aria-label="{{ _("Celý svět") }}">&#8634;</button>
+            </div>
+            <p class="card-note mapa-napoveda">
+                {% if mapa_zoom == 'wheel' %}
+                    {{ _("Kolečkem přiblížíš, tažením posuneš, dvojklik vrátí celý svět.") }}
+                {% else %}
+                    {{ _("Klikáním přiblížíš, tažením posuneš, dvojklik vrátí celý svět.") }}
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <thead>
+                <tr>
+                    <th>{{ _("Země") }}</th>
+                    <th class="num">{{ _("Míst") }}</th>
+                    <th class="num">{{ _("Spuštění") }}</th>
+                    <th class="num">{{ _("Čas") }}</th>
+                    <th class="num">{{ _("Přeneseno") }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for radek in zeme %}
+                <tr>
+                    <td class="strong">{{ radek.label }}</td>
+                    <td class="num">{{ radek.mist | number }}</td>
+                    <td class="num">{{ radek.plays | number }}</td>
+                    <td class="num">{{ radek.sekund | seconds }}</td>
+                    <td class="num">{{ radek.bajtu | bytes }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Umisťují se jen veřejné adresy, adresa z domácí sítě žádné místo neoznačuje. Přesnost je podle GeoLite2: u pevných linek sedí město, u mobilních sítí ukáže klidně střed země. Na otázku „dívá se někdo z ciziny?“ to stačí, na hledání lidí ne.") }}
+        </p>
+    {% elif not geo.knihovna %}
+        <p class="card-note">
+            {{ _("Mapa potřebuje knihovnu maxminddb, která není povinnou součástí aplikace. Doinstaluj ji do téhož prostředí, ve kterém Jellyscope běží:") }}
+        </p>
+        <pre class="fallback" style="margin-top:8px"><code>{{ geo.python }} -m pip install maxminddb</code></pre>
+    {% elif not geo.databaze %}
+        <p class="card-note">
+            {{ _("Mapa potřebuje databázi GeoLite2: jeden soubor, který leží v data/ a odpovídá bez internetu. Stáhne se na kliknutí (asi 65 MB); je to jediná chvíle, kdy aplikace sáhne jinam než na Jellyfin.") }}
+        </p>
+        {# Stáhnout databázi smí jen správce, a to na stránce Síť; přehled
+           na ni jen odkáže - tlačítka správce do poskládané stránky
+           nepatří. Ostatní se dozví, kdo to může udělat. #}
+        {% if not je_spravce %}
+        <p class="card-note" style="margin-top:12px">{{ _("Stáhnout ji může správce serveru.") }}</p>
+        {% else %}
+        <div class="btn-row" style="margin-top:12px">
+            {% if v_prehledu %}
+            <a class="btn" href="/network#mapa">{{ _("Otevřít stránku Síť") }}</a>
+            {% else %}
+            <form method="post" action="/network/geoip">
+                <button class="btn primary" type="submit">{{ _("Stáhnout databázi GeoLite2") }}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        <p class="card-note" style="margin-top:10px">
+            {{ _("Data © MaxMind, GeoLite2 (CC BY-SA 4.0). Stahuje se ze zrcadla na GitHubu, protože u MaxMinda samotného je k tomu potřeba účet a klíč.") }}
+        </p>
+    {% else %}
+        <p class="card-note">
+            {{ _("Databáze je připravená, ale žádné přehrávání z veřejné adresy zatím není, všechno šlo z domácí sítě.") }}
+        </p>
+    {% endif %}
+
+    {% if geo.databaze %}
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Databáze") }}: {{ geo.bajtu | bytes }},
+            {{ _("stažena") }} {{ geo.stari | relative }}.
+            {% if je_spravce and not v_prehledu %}
+            <form method="post" action="/network/geoip" style="display:inline">
+                <button class="btn" type="submit" style="margin-left:8px">{{ _("Aktualizovat") }}</button>
+            </form>
+            {% endif %}
+        </p>
+    {% endif %}
+</div>

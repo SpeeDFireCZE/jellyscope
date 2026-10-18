@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -160,13 +161,59 @@ LANGUAGES: dict[str, str] = {
 }
 
 
-def current_language() -> str:
-    """Nastavený jazyk rozhraní. Čte se z databáze, ne z .env."""
+# Jazyk přihlášeného účtu pro právě vyřizovaný požadavek (Můj účet).
+#
+# Nastavuje ho middleware ve web.py podle účtu z relace. ContextVar, ne
+# globální proměnná: požadavky běží souběžně a jazyk jednoho by jinak
+# přepsal jazyk druhého. Kde žádný účet není - přihlašovací stránka, úlohy
+# na pozadí, log, upozornění - zůstane prázdný a platí jazyk serveru.
+_JAZYK_UCTU: ContextVar[str | None] = ContextVar("jazyk_uctu", default=None)
+
+
+def nastav_jazyk_uctu(kod: str | None) -> Any:
+    """Jazyk účtu pro tenhle požadavek. Vrací token pro `vrat_jazyk_uctu`."""
+    return _JAZYK_UCTU.set(kod or None)
+
+
+def vrat_jazyk_uctu(token: Any) -> None:
+    _JAZYK_UCTU.reset(token)
+
+
+async def bez_jazyka_uctu(coro: Any) -> Any:
+    """Spustí úlohu na pozadí v jazyce serveru, ne v jazyce účtu.
+
+    `asyncio.create_task` uvnitř požadavku zkopíruje kontext i s jazykem
+    toho, kdo úlohu spustil. Zpráva v logu úloh a upozornění by pak vznikly
+    v jeho osobním jazyce - a vidí je všichni. Úloha má vlastní kopii
+    kontextu, takže vynulování tady nikoho jiného neovlivní.
+
+    Použití: `asyncio.create_task(i18n.bez_jazyka_uctu(uloha()))`.
+    (`create_task(..., context=...)` by bylo čistší, ale umí ho až Python
+    3.11 a aplikace běží i na 3.10.)
+    """
+    _JAZYK_UCTU.set(None)
+    return await coro
+
+
+def jazyk_serveru() -> str:
+    """Jazyk z Nastavení → Obecné - výchozí pro všechny bez vlastní volby."""
     # Import až tady, aby se modul dal načíst i v testech bez databáze.
     from . import db
 
     value = db.get_setting("ui_language", DEFAULT_LANGUAGE)
     return value if value in LANGUAGES else DEFAULT_LANGUAGE
+
+
+def current_language() -> str:
+    """Jazyk rozhraní: vlastní volba účtu, jinak jazyk serveru.
+
+    Volba účtu, jejíž soubor mezitím zmizel (smazaný překlad), se tiše
+    ignoruje - jinak by člověk uvízl v jazyce, který už neexistuje.
+    """
+    vlastni = _JAZYK_UCTU.get()
+    if vlastni and vlastni in LANGUAGES:
+        return vlastni
+    return jazyk_serveru()
 
 
 # Jazyk, na který se propadá, když překlad chybí.

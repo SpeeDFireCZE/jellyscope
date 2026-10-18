@@ -739,7 +739,7 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
         SELECT i.id, i.name, i.type, i.series_id, i.series_name,
                i.production_year, i.date_created, i.height, i.size_bytes,
                i.library_id, i.parent_index_number, i.index_number,
-               i.image_tag, i.series_image_tag,
+               i.image_tag, i.series_image_tag, i.path, i.tmdb_id,
                l.name AS library_name
         FROM items i
         LEFT JOIN libraries l ON l.id = i.library_id
@@ -2615,8 +2615,14 @@ def library_overview(library_id: str) -> dict[str, Any]:
     ) or {}
 
 
-def library_activity(library_id: str, days: int = 90) -> dict[str, Any]:
-    """Co se v teto knihovne sledovalo."""
+def library_activity(library_id: str, days: Any) -> dict[str, Any]:
+    """Co se v teto knihovne sledovalo za zvolene obdobi.
+
+    `days` je pocet dnu nebo vlastni `Obdobi`, stejne jako jinde. Bez
+    vychozi hodnoty schvalne: drive tu bylo napevno 90 a stranka tak
+    tise pocitala za jine obdobi, nez mel clovek zvolene.
+    Posledni prehravani jsou mimo obdobi - vzdycky poslednich 25.
+    """
     nedavne = db.query_all(
         """
         SELECT p.*, i.height, i.video_codec AS source_codec,

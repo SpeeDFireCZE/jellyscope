@@ -1,0 +1,46 @@
+{# Karta „Nejčastěji transcodované soubory“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_transcodovane) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `transcodes (insights.transcode_offenders)`. #}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Nejčastěji transcodované soubory") }}</h2>
+    </div>
+    {% if transcodes %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr><th>{{ _("Titul") }}</th><th class="num">{{ _("Transcode") }}</th>
+                <th class="num">{{ _("Rozlišení") }}</th><th>{{ _("Kodek") }}</th></tr>
+            </thead>
+            <tbody>
+            {% for row in transcodes %}
+            <tr class="{{ trida_radku(loop.index) }}">
+                {# Proklik na detail: u seriálu na seriál, u filmu na
+                   soubor. Řádky bez odkazu jsou tituly, které už
+                   v knihovně nejsou - odkaz na 404 je horší než žádný. #}
+                <td class="truncate" title="{{ row.label }}">
+                    {% if row.detail_url %}
+                        <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                    {% else %}
+                        {{ row.label }}
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.transcodes | number }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="muted">{{ (row.video_codec or '-') | upper }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ tlacitko_cela_tabulka(transcodes | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Převod těchto souborů do formátu, který tvoje přehrávače zvládnou přímo (obvykle H.264 + AAC), sundá zátěž z procesoru serveru.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("Žádný transcode. To je dobrá zpráva.") }}</p>
+    {% endif %}
+</div>

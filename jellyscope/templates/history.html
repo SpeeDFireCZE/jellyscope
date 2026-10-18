@@ -118,7 +118,7 @@
                     {% endif %}
                 </td>
 
-                <td class="muted sloupec-navic">{{ row.device_name or '?' }}<br>{{ row.client or '' }}</td>
+                <td class="muted sloupec-navic zarizeni">{{ row.device_name or '?' }}<div class="zarizeni-aplikace">{{ row.client or '' }}</div></td>
                 {# Druh záznamu. Bez něj se u „Ostatního“ z grafu nedalo
                    dohledat, o co vlastně šlo - v seznamu byly jen názvy,
                    které samy o sobě nic neříkají. #}
@@ -126,7 +126,7 @@
                 <td class="sloupec-navic">
                     {{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}
                     {% if row.play_method == 'Transcode' and row.transcode_reasons %}
-                        <div class="muted" style="font-size:12px">{{ row.transcode_reasons }}</div>
+                        <div class="muted duvod-prepoctu" title="{{ row.transcode_reasons }}">{{ row.transcode_reasons | duvody }}</div>
                     {% endif %}
                 </td>
                 <td class="num">{{ row.watched_seconds | seconds }}</td>
@@ -138,7 +138,7 @@
 
     {% if not rows %}
         <p class="chart-empty">
-            {{ _("Zatím žádná historie. Collector zaznamená každé přehrávání, které proběhne od chvíle, kdy Jellyscope běží. Starší data se dají naimportovat z Playback Reporting nebo Jellystatu – viz Nastavení.") }}
+            {{ _("Zatím žádná historie. Collector zaznamená každé přehrávání, které proběhne od chvíle, kdy Jellyscope běží. Starší data se dají naimportovat z Playback Reporting nebo Jellystatu (viz Nastavení).") }}
         </p>
     {% endif %}
 

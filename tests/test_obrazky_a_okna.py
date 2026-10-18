@@ -167,8 +167,6 @@ with TestClient(app) as client:
 
 print()
 print("--- dlouhé seznamy jdou do okna ---")
-import re  # noqa: E402
-
 from jellyscope import web  # noqa: E402
 
 stropy = web._stropy()
@@ -210,8 +208,11 @@ with TestClient(app) as client:
                           follow_redirects=False)
     check(odpoved.headers.get("location") == "/settings?section=interface",
           "uložení vrací zpátky na tu samou sekci")
+    # Radky tabulek Zjisteni formular tady neposila, takze maji vychozi
+    # hodnoty - hlida je tests/test_zjisteni_strop.py.
     check(web._stropy() == {"strop_streamu": 7, "strop_streamu_mobil": 2,
-                            "strop_lidi": 9, "strop_lidi_mobil": 4},
+                            "strop_lidi": 9, "strop_lidi_mobil": 4,
+                            "strop_radku": 10, "strop_radku_mobil": 5},
           f"a hodnoty z formuláře se uložily ({web._stropy()})")
 db.set_setting("ui_max_streams", "2")
 
@@ -241,8 +242,18 @@ with TestClient(app) as client:
 zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
 check('mapa.dataset.zoom === "wheel"' in zaklad,
       "posluchač kolečka je podmíněný režimem")
-check('data-mapa="blize"' in (PROJECT / "jellyscope" / "templates"
-                              / "network.html").read_text(encoding="utf-8"),
+# Mapa a karta "kdo v jakem jazyce" maji vlastni sablonku, kterou vklada
+# stranka i prehled. Znacky se hledaji v ni - a stranka ji musi vkladat.
+SABLONY = PROJECT / "jellyscope" / "templates"
+
+
+def karta_stranky(stranka: str, karta: str) -> str:
+    """Sablonka karty, kdyz ji stranka opravdu vklada; jinak prazdny text."""
+    vklada = f'{{% include "{karta}" %}}' in (SABLONY / stranka).read_text(encoding="utf-8")
+    return (SABLONY / karta).read_text(encoding="utf-8") if vklada else ""
+
+
+check('data-mapa="blize"' in karta_stranky("network.html", "_sekce_mapa.html"),
       "nad mapou jsou tlačítka pro přiblížení")
 db.set_setting("ui_max_streams", "2")
 
@@ -255,8 +266,7 @@ check('data-filtr-okna="okno-streamy"' in sablona, "a v okně je filtr uživatel
 check(sablona.count("{{ stream(row) }}") == 3,
       f"stream se kreslí jedním makrem všude ({sablona.count('{{ stream(row) }}')}x)")
 
-sablona = (PROJECT / "jellyscope" / "templates" / "languages.html").read_text(
-    encoding="utf-8")
+sablona = karta_stranky("languages.html", "_sekce_kdo_jazyk.html")
 check('data-okno="okno-jazyky"' in sablona, "totéž u jazyků")
 check('data-filtr-okna="okno-jazyky"' in sablona, "i s filtrem")
 

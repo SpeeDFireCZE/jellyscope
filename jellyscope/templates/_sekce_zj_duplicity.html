@@ -1,0 +1,45 @@
+{# Karta „Možné duplicity“ ze stránky Zjištění.
+
+   Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
+   klíč zj_duplicity) - jedna šablonka, ať se obě místa nerozejdou.
+   Čeká `duplicates (insights.duplicate_candidates)`. #}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Možné duplicity") }}</h2>
+        <p class="card-note">{{ _("shoda názvu a roku") }}</p>
+    </div>
+    {% if duplicates %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Film") }}</th><th class="num">{{ _("Kopií") }}</th>
+                <th class="num">{{ _("Dohromady") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in duplicates %}
+            <tr class="{{ trida_radku(loop.index) }}">
+                <td>
+                    <div class="strong">{{ row.label }}
+                        {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
+                    </div>
+                    <div class="muted" style="font-size:12.5px">{{ row.variants }}</div>
+                    {% if row.paths %}
+                    <details class="paths"><summary>{{ _("cesty") }}</summary><pre>{{ row.paths }}</pre></details>
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.copies }}</td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ tlacitko_cela_tabulka(duplicates | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Pozor: shoda názvu není důkaz. Může jít o režisérský sestřih vedle kinoverze, proto „možné“.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("Žádné duplicity nenalezeny.") }}</p>
+    {% endif %}
+</div>

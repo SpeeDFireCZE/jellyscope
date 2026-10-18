@@ -1,13 +1,115 @@
 # Changelog
 
-Notable changes, newest first. Versions follow [semantic versioning](https://semver.org):
-the middle number goes up for a **large** release — several new features
+Notable changes, newest first. Versions follow [semantic versioning](https://semver.org).
+The middle number goes up for a **large** release: several new features
 together, a reworked interface, something you would notice at a glance.
 The last one goes up for a fix or a small addition, and one useful
-feature on its own usually counts as that: an existing capability
-growing, rather than a new one arriving.
+feature on its own usually counts as that, because an existing capability
+grows rather than a new one arriving.
 
-The database migrates itself on start — upgrading is `git pull` and a restart.
+The database migrates itself on start, so upgrading is `git pull` and a
+restart.
+
+## 1.8.0
+
+Every account gets a page of its own: its own language, password, API
+keys and dashboard. API keys belong to accounts and see exactly what
+their owner may see, and the shared dashboard has a name and offers
+every statistic.
+
+### Before you upgrade
+
+- **Everyone signs in once more.** A session now carries a stamp of the
+  password, so a password change signs that account out of every other
+  session. Sessions from before the upgrade have no stamp.
+- **Existing API keys keep working.** They have no owner, so they become
+  *server keys* with full access, and Grafana or Homepage do not break.
+  New keys belong to an account and may do exactly what it may.
+- **Requests with an API key are logged, with the client's IP
+  address.** The log is kept 30 days (*Settings → API*) and only the
+  administrator sees it.
+- **Errors under `/api/` are always JSON.** A 403 or 404 used to come
+  back as an HTML error page.
+- **A custom overview that is switched on keeps its layout** and gets
+  the name "Custom overview" in the server language. The administrator
+  can rename it.
+- New versions of fastapi (0.143.0) and tzdata (2026.5).
+  `deploy/update.sh` and a new Docker image install them.
+
+### Added
+
+- **My account** (`/account`, the button at the bottom of the menu) for
+  every signed-in account: its own interface language (everyone else
+  keeps the server language), a password change that asks for the
+  current password (local accounts; a Jellyfin viewer changes it in
+  Jellyfin), its own API keys when the administrator allows them, and
+  *My overview*. A Jellyfin viewer sees their Jellyfin profile picture
+  there and in the menu. Jellyscope does not store it.
+- **API keys belong to accounts.** A key sees the same pages and the
+  same anonymization as its owner. *Settings → API* lists every key
+  with its owner. A key can be switched off for a while or revoked for
+  good, and the usage log shows when, whose key and which address.
+  Whether readers and Jellyfin viewers may make their own keys is set
+  per group in *Settings → Accounts* (off by default), with an exception
+  per account. A Jellyfin viewer's key stops working when Jellyfin
+  sign-in is switched off or the viewer is disabled in Jellyfin. A new
+  key is shown once, in its row with a Copy button, and a *How to use
+  it* dialog lists the addresses the key may call.
+- **Dashboards.** Besides the fixed Overview there is the shared
+  dashboard, which the administrator builds for everyone and has to
+  name (the name shows in the menu and as the heading), and *My
+  overview*, which each account builds for itself and nobody else sees.
+  The builder offers every statistic: the Insights tables, the map and
+  the language, user, library and network cards. Comparison stays on
+  its own page, since it needs two periods. Cards follow access rights:
+  the shared dashboard leaves out a card the account may not see, and
+  My overview keeps it in place with a note that the permission is
+  missing.
+- **API:** `/api/v1/least-played` takes `order=oldest|newest`, which
+  orders titles with the same play count by date added. Every item that
+  is one file carries `path`, `tmdb_id`, season and episode.
+- **The Activity tab of a library follows the selected period** and has
+  its own period switch. Every library tab says what period it covers.
+- **The whole interface in Spanish.** No native speaker has checked it
+  yet. English and Czech are plainer.
+- **The demo always has something playing:** the made-up stream in *Now
+  playing* moves on with the clock.
+
+### Changed
+
+- **Text is readable in all four looks.** Grey helper text, percentages
+  on bars, the red Delete button and selected chips reach a 4.5:1
+  contrast, text outside charts is at least 12 px, and links and
+  buttons share one focus ring.
+- Transcode reasons are in plain words. Insights tables show the first
+  rows and open in full in a window (*Settings → Interface → Long
+  lists*).
+- A poster grows a little on hover and on keyboard focus. Each poster
+  is one link for the keyboard and screen readers.
+- After signing in, the shared dashboard is the first page only when
+  the account may open it and sees a card in it. Opened directly by
+  someone who sees no card in it, it goes back to the Overview instead
+  of saying there is nothing in it yet.
+- An account that may not open the Overview is sent from `/` to the
+  first page it may open, after a password or a Quick Connect sign-in
+  alike. It used to get a "no access" page.
+- Only the administrator sees the buttons that download or update the
+  GeoIP database. Everyone else got a "no access" page from them.
+- Images from Jellyfin (posters, profile pictures) are passed on only in
+  raster formats up to 8 MB, never as SVG.
+
+### Fixed
+
+- **The period sentence reads right for a year and a custom range.** It
+  used to say "over the last 1 year", or "over the last ." with nothing
+  after it.
+- **The tooltip stays inside the window on a phone.** Half of the
+  transcode details used to end up past the left edge.
+- **The "Across all libraries" card showed zeros** on the custom overview.
+- The rights dialog scrolls inside and keeps Save in view.
+- The "Added episodes" heading no longer sits in a darker box of its
+  own.
+- Four sentences with quotation marks inside were never translated.
 
 ## 1.7.7
 

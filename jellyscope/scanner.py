@@ -475,6 +475,39 @@ async def refresh_series(series_id: str) -> dict[str, Any]:
     return vysledek
 
 
+def _zprava_nedavnych(od: str | None, pridano: int, videno: int,
+                      nahrazeno: int = 0, znovu: int = 0) -> str:
+    """Zpráva do logu úlohy „Nově přidané tituly".
+
+    Věty o archivu končí tečkou, začátek zprávy ne („Nic nového
+    (zkontrolováno 40)"). Dřív se lepily přes ". " a když se naráz
+    archivovalo z obou důvodů, stály v logu dvě tečky za sebou.
+    """
+    if not od:
+        zprava = _t("{n} nejnovějších titulů (knihovna byla prázdná)").format(n=pridano)
+    elif pridano:
+        zprava = _t("{n} nových titulů (zkontrolováno {celkem})").format(
+            n=pridano, celkem=videno)
+    else:
+        # Nula je uplne bezny vysledek - uloha bezi kazdych par minut.
+        # Musi se tak i tvarit, jinak clovek marne hleda, co pribylo.
+        zprava = _t("Nic nového (zkontrolováno {celkem})").format(celkem=videno)
+    vety = []
+    # Kdyz slo o vymenene soubory, ma to byt videt v logu ulohy - jinak je
+    # "3 nove tituly" matouci: nove nejsou, jen jinak velke.
+    if od and pridano and nahrazeno:
+        vety.append(_t(
+            "{n} z nich nahradilo starší soubor. Ty jsou v archivu a jejich historie je "
+            "připojená.").format(n=nahrazeno))
+    if znovu:
+        vety.append(_t(
+            "{n} dříve uložených položek Jellyfin mezitím založil znovu, staré jsou v "
+            "archivu.").format(n=znovu))
+    if not vety:
+        return zprava
+    return zprava.rstrip(".") + ". " + " ".join(vety)
+
+
 async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
     """Rychla synchronizace: jen tituly, ktere v knihovne jeste nemame.
 
@@ -572,27 +605,9 @@ async def sync_recent(max_items: int = 2000) -> dict[str, Any]:
 
         _clear_progress()
         pridano = len(nova_id)
-        if not od:
-            zprava = _t("{n} nejnovějších titulů (knihovna byla prázdná)").format(n=pridano)
-        elif pridano:
-            zprava = _t("{n} nových titulů (zkontrolováno {celkem})").format(
-                n=pridano, celkem=videno)
-            # Kdyz slo o vymenene soubory, ma to byt videt v logu ulohy -
-            # jinak je "3 nove tituly" matouci: nove nejsou, jen jinak
-            # velke.
-            if srovnani.get("archivovano"):
-                zprava += ". " + _t(
-                    "{n} z nich nahradilo starší soubor – ty jsou v archivu"
-                    " a historie je připojená.").format(
-                        n=srovnani["archivovano"])
-        else:
-            # Nula je uplne bezny vysledek - uloha bezi kazdych par minut.
-            # Musi se tak i tvarit, jinak clovek marne hleda, co pribylo.
-            zprava = _t("Nic nového (zkontrolováno {celkem})").format(celkem=videno)
-        if revize.get("archivovano"):
-            zprava += ". " + _t(
-                "{n} dříve uložených položek Jellyfin mezitím založil znovu"
-                " – staré jsou v archivu.").format(n=revize["archivovano"])
+        zprava = _zprava_nedavnych(od, pridano, videno,
+                                   nahrazeno=srovnani.get("archivovano", 0),
+                                   znovu=revize.get("archivovano", 0))
         finish_task_log(scan_id, "done", total=videno, ok=pridano, message=zprava)
 
 
@@ -985,14 +1000,16 @@ async def _sync_users(client: JellyfinClient) -> int:
             policy = user.get("Policy") or {}
             conn.execute(
                 """
-                INSERT INTO users (id, name, is_administrator, is_disabled, last_activity, synced_at)
-                VALUES (?,?,?,?,?,?)
+                INSERT INTO users (id, name, is_administrator, is_disabled, last_activity,
+                                   synced_at, image_tag)
+                VALUES (?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     is_administrator = excluded.is_administrator,
                     is_disabled = excluded.is_disabled,
                     last_activity = excluded.last_activity,
-                    synced_at = excluded.synced_at
+                    synced_at = excluded.synced_at,
+                    image_tag = excluded.image_tag
                 """,
                 (
                     user.get("Id"),
@@ -1001,6 +1018,9 @@ async def _sync_users(client: JellyfinClient) -> int:
                     1 if policy.get("IsDisabled") else 0,
                     user.get("LastActivityDate"),
                     now,
+                    # Otisk profiloveho obrazku; bez obrazku ho Jellyfin
+                    # vubec neposle. Prazdny retezec = taky zadny.
+                    user.get("PrimaryImageTag") or None,
                 ),
             )
 

@@ -3,6 +3,40 @@
   Napíše se jednou, volá se všude. Přesně jako funkce v Pythonu.
 #}
 
+{# Dlouhé tabulky (Zjištění). Řádek nad stropem se schová všude, nad
+   mobilním stropem jen na úzké obrazovce. Stropy jsou v Nastavení →
+   Rozhraní → Dlouhé seznamy; celou tabulku otevře tlačítko níž v okně
+   #okno-tabulka (JS v base.html). Řádky jsou seřazené od nejdůležitějšího,
+   takže to podstatné zůstává vidět. #}
+{% macro trida_radku(poradi) -%}
+    {%- if poradi > strop_radku %}radek-navic{% elif poradi > strop_radku_mobil %}jen-desktop{% endif -%}
+{%- endmacro %}
+
+{# Tlačítko je všude, kde je něco schované: nad stropem pro širokou
+   obrazovku vždycky, mezi oběma stropy jen na mobilu. Stropy si každý
+   nastavuje sám a mobilní nemusí být menší - podmínka jen „nad mobilním"
+   by pak schovala řádky bez tlačítka, kterým by šly zobrazit. #}
+{% macro tlacitko_cela_tabulka(pocet) %}
+{% if pocet > strop_radku or pocet > strop_radku_mobil %}
+<div class="btn-row{{ '' if pocet > strop_radku else ' jen-mobil' }}" style="margin-top:12px">
+    <button class="btn" type="button" data-okno-tabulka>
+        {{ _("zobrazit celou tabulku ({n})").format(n=pocet) }}
+    </button>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro okno_tabulka() %}
+<dialog class="okno okno-siroke" id="okno-tabulka">
+    <form method="dialog" class="okno-hlava">
+        <h2></h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <div class="okno-obsah table-wrap"></div>
+</dialog>
+{% endmacro %}
+
 {# Přepínač období. Patří nad všechny grafy, které ovlivňuje - nikdy
    dovnitř jednotlivých karet. Zvolená hodnota platí i po přechodu na
    jinou záložku, takže okno je napříč aplikací synchronní. #}
@@ -16,12 +50,17 @@
    `obdobi` připravuje web._obdobi_do_sablony(): buď zvolený počet dnů,
    nebo vlastní rozmezí. Poslední volba otevře okno se dvěma daty - do
    pevné nabídky se „loňský prosinec" vejít nemůže, a přitom je to přesně
-   ta otázka, kvůli které se člověk dívá na statistiky nejčastěji. #}
-{% macro period_filter(obdobi, base_url) %}
+   ta otázka, kvůli které se člověk dívá na statistiky nejčastěji.
+
+   `zachovat` jsou parametry adresy, které se při přepnutí období nesmí
+   ztratit - třeba záložka knihovny. Bez nich by klik na „rok" v Aktivitě
+   skončil na Přehledu knihovny. #}
+{% macro period_filter(obdobi, base_url, zachovat=None) %}
+{%- set navic = (zachovat | urlencode ~ '&') if zachovat else '' -%}
 <div class="filters">
     {% for days in allowed_days %}
         <a class="chip {{ 'active' if not obdobi.vlastni and days == obdobi.days }}"
-           data-keep-scroll href="{{ base_url }}?days={{ days }}">{{ _(day_labels[days]) }}</a>
+           data-keep-scroll href="{{ base_url }}?{{ navic }}days={{ days }}">{{ _(day_labels[days]) }}</a>
     {% endfor %}
     <button class="chip {{ 'active' if obdobi.vlastni }}" type="button"
             data-okno="okno-obdobi">
@@ -54,6 +93,9 @@
        ve vlastním rámečku) a uprostřed jinak sladěného okna trčí -
        stejná lekce jako u filtru v historii. #}
     <form method="get" action="{{ base_url }}" class="obdobi-form">
+        {% for klic, hodnota in (zachovat or {}).items() %}
+        <input type="hidden" name="{{ klic }}" value="{{ hodnota }}">
+        {% endfor %}
         <div class="obdobi-pole">
             <div class="field">
                 <label for="obdobi-od">{{ _("Od") }}</label>
@@ -83,7 +125,7 @@
         <div class="btn-row" style="margin-top:14px">
             <button class="btn primary" type="submit">{{ _("Použít") }}</button>
             {% if obdobi.vlastni %}
-                <a class="btn" href="{{ base_url }}?days=30">{{ _("Zpět na 30 dnů") }}</a>
+                <a class="btn" href="{{ base_url }}?{{ navic }}days=30">{{ _("Zpět na 30 dnů") }}</a>
             {% endif %}
         </div>
     </form>
@@ -181,7 +223,7 @@
     <span class="dot"></span>
     <span>
         {% if stop_pending %}
-            {{ _("Zastavuji – úloha dokončí rozpracovanou položku a skončí.") }}
+            {{ _("Zastavuji. Úloha dokončí rozpracovanou položku a skončí.") }}
         {% else %}
             {{ _("Úloha právě běží.") }}
         {% endif %}
@@ -312,8 +354,8 @@
 {% macro file_picker(name, accept) %}
 <label class="file-picker">
     <input type="file" name="{{ name }}" accept="{{ accept }}" required
-           onchange="this.parentNode.querySelector('.file-name').textContent =
-                     this.files.length ? this.files[0].name : '{{ _("Soubor nevybrán") }}'">
+           onchange='this.parentNode.querySelector(".file-name").textContent =
+                     this.files.length ? this.files[0].name : {{ _("Soubor nevybrán")|tojson }}'>
     <span class="btn">{{ _("Vybrat soubor") }}</span>
     <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
 </label>
@@ -419,3 +461,39 @@
     <span class="badge good"><span class="dot"></span>{{ _("přímé") }}</span>
 {% endif %}
 {% endmacro %}
+
+
+{# Buňka „Klíč" v tabulce API klíčů (Nastavení → API i Můj účet).
+
+   Čerstvě vyrobený klíč se ukáže celý - ale jen při prvním zobrazení po
+   vyrobení: server ho drží v relaci a při vykreslení hned zahodí. I s
+   tlačítkem Kopírovat. Po obnovení stránky z klíče zbyde začátek
+   a hvězdičky - a tlačítko zmizí s ním, protože kopírovat už není co.
+   Celý klíč je ve stránce jen jednou (žádný data-atribut navíc);
+   tlačítko si ho bere z <code> podle id. Viz [data-kopirovat] v base.html.
+
+   `novy` = {"id": ..., "token": ...} z relace, nebo nic. #}
+{% macro bunka_klice(klic, novy, hvezdicek=24) %}
+{% if novy and novy.id == klic.id %}
+<td class="novy-klic">
+    <code class="novy-klic-text" id="novy-klic-{{ klic.id }}">{{ novy.token }}</code>
+    <div class="novy-klic-akce">
+        <button class="btn" type="button" data-kopirovat="novy-klic-{{ klic.id }}"
+                data-hotovo="{{ _('Klíč zkopírován.') }}"
+                data-oznaceno="{{ _('Klíč je označený, zkopíruj ho Ctrl+C.') }}">{{ _("Kopírovat") }}</button>
+        <span class="hint" role="status" aria-atomic="true"></span>
+    </div>
+    <p class="hint">{{ _("Ulož si ho teď. Po obnovení stránky z něj zůstane jen začátek.") }}</p>
+</td>
+{% else %}
+<td class="muted nowrap"><code>{{ klic.ukazka }}{{ '*' * hvezdicek }}</code></td>
+{% endif %}
+{% endmacro %}
+
+
+{# Název oblasti ve stromu práv (účty, skupina čtenářů, diváci z Jellyfinu).
+   U přehledu pro všechny i se jménem od správce - jinak by nebylo poznat,
+   kterou stránku zaškrtnutí povoluje. #}
+{% macro nazev_oblasti(oblast, nazev_prehledu) -%}
+{{ _(oblast.nazev) }}{% if oblast.klic == 'dashboard' and nazev_prehledu %} („{{ nazev_prehledu }}“){% endif %}
+{%- endmacro %}

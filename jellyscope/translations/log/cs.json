@@ -138,5 +138,11 @@
     "prihlaseni kodem z %s zablokovano (%s. stupen)": "prihlaseni kodem z %s zablokovano (%s. stupen)",
     "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu": "rychla synchronizace: %s nedavnych polozek Jellyfin uz nezna - jsou v archivu",
     "archivovana polozka %s prirazena k %s (%s prehravani)": "archivovana polozka %s prirazena k %s (%s prehravani)",
-    "z archivu smazano %s polozek (%s prehravani)": "z archivu smazano %s polozek (%s prehravani)"
+    "z archivu smazano %s polozek (%s prehravani)": "z archivu smazano %s polozek (%s prehravani)",
+    "zmena hesla z %s zablokovana (%s. stupen)": "zmena hesla z %s zablokovana (%s. stupen)",
+    "Vypnut API token %s": "Vypnut API token %s",
+    "Zapnut API token %s": "Zapnut API token %s",
+    "Zapis pouziti API klice se nepovedl": "Zapis pouziti API klice se nepovedl",
+    "otisk profiloveho obrazku nejde precist": "otisk profiloveho obrazku nejde precist",
+    "vymysleny stream ukazky se nepodarilo ozivit": "vymysleny stream ukazky se nepodarilo ozivit"
 }

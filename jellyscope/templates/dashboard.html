@@ -35,8 +35,11 @@
         <p class="card-note">
             {# U vlastního období `days` nic neříká - bez téhle větve tu
                zbyla věta "Co se na serveru dělo za posledních ." #}
+            {# Rok má vlastní větu, jinak by vyšlo „za posledních rok" -
+               stejně jako u knihovny (library_detail.html). #}
             {% if obdobi.vlastni %}{{ _("Co se na serveru dělo ve vybraném období.") }}
-            {% else %}{{ _("Co se na serveru dělo za posledních") }} {{ _(day_labels[days]) }}.
+            {% elif days == 365 %}{{ _("Co se na serveru dělo za poslední rok.") }}
+            {% else %}{{ _("Co se na serveru dělo za posledních {obdobi}.").format(obdobi=_(day_labels[days])) }}
             {% endif %}
         </p>
     </div>
