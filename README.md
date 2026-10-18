@@ -180,6 +180,12 @@ two periods.
 - **My overview** is built by each account for itself on *My account*,
   with no permission needed. Nobody else sees it.
 
+Setting up the shared dashboard takes three steps: name it and switch it
+on, pick the cards (each with a width of a third, a half or the whole
+row), and save.
+
+![Building the shared dashboard: name it in Settings → Interface, pick the cards, save](docs/screenshots/dashboard.gif)
+
 Cards follow access rights. The shared dashboard leaves out a card from an
 area the account may not see, and its data is not even computed. My
 overview keeps such a card in its place with a note that the permission is
