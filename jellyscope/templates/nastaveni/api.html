@@ -60,7 +60,7 @@
                 <td class="strong">{{ token.name }}</td>
                 <td class="nowrap">
                     {% if token.vlastnik %}
-                    <a href="/settings?section=api&amp;ucet={{ token.account_id }}#pouziti"
+                    <a href="/settings?section=log&amp;log_druh=api&amp;log_ucet={{ token.vlastnik | urlencode }}"
                        title="{{ _('Použití všech klíčů tohoto účtu') }}">{{ token.vlastnik }}</a>
                     {% else %}
                     <span class="muted" title="{{ _('Klíč z doby před vlastníky. Má plná práva, jako správce.') }}">{{ _("klíč serveru") }}</span>
@@ -83,7 +83,7 @@
                 </td>
                 <td>
                     <div class="btn-row" style="flex-wrap:nowrap">
-                        <a class="btn" href="/settings?section=api&amp;klic={{ token.id }}#pouziti">{{ _("Použití") }}</a>
+                        <a class="btn" href="/settings?section=log&amp;log_druh=api&amp;log_klic={{ token.id }}">{{ _("Použití") }}</a>
                         {% if token.stav == "vypnuty" %}
                         <form method="post" action="/settings/api/token/zapnout">
                             <input type="hidden" name="token_id" value="{{ token.id }}">
@@ -113,72 +113,18 @@
     {% endif %}
 </div>
 
-{# Záznam použití. Každý dotaz s existujícím klíčem - i vypnutým nebo
-   zamítnutým, protože právě ten je při podezření na únik zajímavý.
-   Neplatné klíče se nezapisují: nemají vlastníka a byl by to jen šum. #}
+{# Záznam použití je log API v Nastavení → Log: s filtry podle vlastníka,
+   klíče a IP, ke stažení, a jak dlouho se drží, řídí úloha Rotace logů. #}
 <div class="card" id="pouziti">
     <div class="card-head">
         <h2>{{ _("Použití") }}</h2>
-        <p class="card-note">
-            {% if api_filtr_zapnuty %}
-            {{ _("Jen") }} <strong>{{ api_filtr or "—" }}</strong> ·
-            <a href="/settings?section=api#pouziti">{{ _("zobrazit vše") }}</a>
-            {% else %}
-            {{ _("posledních {n} dotazů").format(n=api_pouziti | length) }}
-            {% endif %}
-        </p>
     </div>
-
-    {% if api_pouziti %}
-    <div class="table-wrap">
-        <table>
-            <thead><tr>
-                <th>{{ _("Kdy") }}</th>
-                <th>{{ _("Vlastník") }}</th>
-                <th>{{ _("Klíč") }}</th>
-                <th>{{ _("Adresa") }}</th>
-                <th>{{ _("IP") }}</th>
-                <th>{{ _("Výsledek") }}</th>
-            </tr></thead>
-            <tbody>
-            {% for z in api_pouziti %}
-            <tr>
-                <td class="nowrap muted" title="{{ z.kdy }} UTC">{{ z.kdy | relative }}</td>
-                <td class="nowrap">
-                    {% if z.vlastnik %}{{ z.vlastnik }}
-                    {% elif z.token %}<span class="muted">{{ _("klíč serveru") }}</span>
-                    {% else %}<span class="muted">—</span>{% endif %}
-                </td>
-                <td class="nowrap">
-                    {% if z.token %}{{ z.token }}
-                    {% else %}<span class="muted">{{ _("smazaný klíč") }}</span>{% endif %}
-                </td>
-                {# Dlouhá adresa se zalomí kdekoliv, ale ne užší než tohle:
-                   na telefonu by jinak sloupec spadl na pár znaků a řádek
-                   by byl přes celou obrazovku. Tabulka se radši posune. #}
-                <td style="min-width:240px"><code style="overflow-wrap:anywhere">{{ z.cesta }}</code></td>
-                <td class="nowrap muted">{{ z.ip or "—" }}</td>
-                <td class="nowrap">
-                    {# Číslo je vidět vždycky - barva tečky jen napovídá. #}
-                    <span class="badge {{ 'good' if z.vysledek < 400 else 'warning' }}"><span class="dot"></span>{{ z.vysledek }}</span>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <p class="card-note">
+        {{ _("Každý dotaz s existujícím klíčem se zapíše do logu API: kdy, výsledek, odkud, čí klíč a kam. I vypnutý nebo zamítnutý - právě ten je při podezření na únik zajímavý. Jak dlouho se drží, řídí úloha Rotace logů.") }}
+    </p>
+    <div class="btn-row" style="margin-top:12px">
+        <a class="btn" href="/settings?section=log&amp;log_druh=api">{{ _("Otevřít log API") }}</a>
     </div>
-    {% else %}
-    <p class="card-note">{{ _("Zatím žádný dotaz.") }}</p>
-    {% endif %}
-
-    <form method="post" action="/settings/api/pouziti" class="btn-row" style="margin-top:16px">
-        <label for="api-pouziti-dni">{{ _("Záznam držet (dní)") }}</label>
-        <input type="number" id="api-pouziti-dni" name="api_pouziti_dni"
-               min="1" max="{{ api_pouziti_max }}" value="{{ api_pouziti_dni }}"
-               style="max-width:100px">
-        <button data-keep-scroll class="btn" type="submit">{{ _("Uložit") }}</button>
-    </form>
-    <p class="card-note">{{ _("Starší záznamy se mažou průběžně, nejvýš jednou za hodinu.") }}</p>
 </div>
 
 {# Návod je společný se stránkou Můj účet - tam jen s adresami, které

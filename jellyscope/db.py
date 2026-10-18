@@ -125,6 +125,12 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # s tim, co synchronizace prave stahla, a zaloha uz ma ulozit
     # srovnana data.
     "task_tidy_time": "04:00",
+    # Rotace logu: kazdy den v tenhle cas se podiva, jestli uz uplynulo
+    # `logrotate_dni`; drzi `logrotate_pocet` starych logu (applog.rotuj).
+    "task_logrotate_enabled": "1",
+    "task_logrotate_time": "00:05",
+    "logrotate_dni": "7",
+    "logrotate_pocet": "4",
     "task_backup_time": "04:30",
     "task_purge_time": "04:45",
     "backup_path": "",
@@ -1172,8 +1178,9 @@ def get_public_settings() -> dict[str, str]:
 TAJNE_CASTI = ("heslo", "password", "token", "webhook", "api_key", "secret")
 
 # Provozni zaznamy, ne nastaveni: prepisuji se samy a v logu by po nich
-# nezustalo nic nez sum.
-NELOGOVANE = ("jellyfin_version", "notify_state_", "db_compaction_pending")
+# nezustalo nic nez sum. Podtrzitko na zacatku maji zaznamy sberace - cas
+# posledniho dotazu se prepisuje pri kazdem dotazu na Jellyfin.
+NELOGOVANE = ("_", "jellyfin_version", "notify_state_", "db_compaction_pending")
 
 
 # Konce jmen, u kterych se hodnota vypsat smi. Cisla, prepinace, adresa

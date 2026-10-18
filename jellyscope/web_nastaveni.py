@@ -27,7 +27,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import (APIRouter, Depends, File, Form, HTTPException,
                      Request, UploadFile)
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
+                               StreamingResponse)
 
 from . import __version__
 from . import (accounts, api, applog, db, dbmigrate, dialect,
@@ -223,10 +224,13 @@ def settings_page(
     log_file: str = "",
     log_lines: int = 0,
     log_level: str = "",
-    # Filtr záznamu použití API klíčů: jeden klíč, nebo klíče jednoho
-    # účtu. Text, ne číslo - nesmysl v adrese má dát celý záznam, ne 422.
-    klic: str = "",
-    ucet: str = "",
+    # Který log: aplikace („app"), nebo API. U logu API filtry: vlastník
+    # klíče, klíč a IP. Text, ne číslo - nesmysl v adrese má dát celý
+    # log, ne 422.
+    log_druh: str = "",
+    log_ucet: str = "",
+    log_klic: str = "",
+    log_ip: str = "",
     account: dict[str, Any] = Depends(require_login),
 ):
     allowed = {key for key, _name, admin_only in SETTINGS_SECTIONS
@@ -327,6 +331,10 @@ def settings_page(
             # viset a výsledek by se neobjevil. Viz hlídač v base.html.
             reload_on_task=True,
             task_list=tasks.all_statuses(),
+            logrotate_dni=tasks.dni_rotace(),
+            logrotate_pocet=tasks.pocet_rotace(),
+            logrotate_dni_max=applog.DNI_MAX,
+            logrotate_pocet_max=applog.POCET_MAX,
             backups=tasks.list_backups(),
             backup_free=tasks.free_space(db.get_setting("backup_path", "")),
             # Co je na stroji za pg_dump a co za server. Bez toho se
@@ -352,26 +360,11 @@ def settings_page(
             zapomenuti=odklizeni.zapomenuti(),
         )
     elif section == "api":
-        filtr_klic = _cislo_z_formulare(klic) or None
-        filtr_ucet = _cislo_z_formulare(ucet) or None
-        tokeny = api.seznam()
-        # Co filtr ukazuje, slovy - aby bylo vidět, že záznam není celý.
-        if filtr_klic:
-            filtr_popis = next((t["name"] for t in tokeny if t["id"] == filtr_klic), "")
-        elif filtr_ucet:
-            filtr_popis = (accounts.get(filtr_ucet) or {}).get("username", "")
-        else:
-            filtr_popis = ""
         context.update(
-            api_tokeny=tokeny,
-            api_pouziti=api.pouziti(filtr_klic, filtr_ucet),
-            api_filtr=filtr_popis or (_t("smazaný klíč") if filtr_klic else ""),
-            api_filtr_zapnuty=bool(filtr_klic or filtr_ucet),
+            api_tokeny=api.seznam(),
             # Okno „Jak se to používá" (_api_navod.html) - správci vyjdou
             # všechny adresy, ale seznam se předává vždycky výslovně.
             api_navod_adresy=api.povolene_adresy(account),
-            api_pouziti_dni=api.dny_pouziti(),
-            api_pouziti_max=api.POUZITI_DNI_MAX,
             # Nově vyrobený klíč se ukazuje jen jednou, hned po
             # přesměrování; drží se proto v relaci, ne v adrese - a při
             # dalším načtení stránky už ho nemá kdo vypsat. Ukáže se
@@ -462,15 +455,33 @@ def settings_page(
     elif section == "log":
         # Vstup z adresy nikdy nedůvěřuj - ani vlastnímu odkazu. Jméno
         # souboru si ověří applog sám (viz _bezpecna_cesta), tady stačí
-        # počet řádků a úroveň.
+        # počet řádků, úroveň a filtry.
         radku = log_lines if log_lines > 0 else applog.DEFAULT_LINES
-        uroven = log_level if log_level in applog.levels() else ""
-        context.update(
-            log=applog.read_lines(log_file, radku, uroven),
-            log_lines=radku,
-            log_level=uroven,
-            log_levels=applog.levels(),
-        )
+        context.update(log_druh="api" if log_druh == "api" else "app", log_lines=radku)
+        if context["log_druh"] == "api":
+            klice = api.seznam()
+            filtr_klic = _cislo_z_formulare(log_klic) or ""
+            context.update(
+                api_log=applog.read_api(radku, log_ucet.strip(), filtr_klic,
+                                        log_ip.strip()[:64]),
+                # Nabídka filtrů: klíče, které existují, a jejich vlastníci
+                # („-" = klíč serveru). Smazaný klíč v logu zůstane, jen se
+                # podle něj nedá vybrat.
+                api_log_klice=klice,
+                api_log_vlastnici=sorted({k["vlastnik"] or "-" for k in klice}),
+                log_ucet=log_ucet.strip(), log_klic=filtr_klic,
+                log_ip=log_ip.strip()[:64],
+                log_zalohy=applog.zalohy(applog.API_NAME),
+            )
+        else:
+            uroven = log_level if log_level in applog.levels() else ""
+            vypis = applog.read_lines(log_file, radku, uroven)
+            context.update(
+                log=vypis,
+                log_level=uroven,
+                log_levels=applog.levels(),
+                log_zalohy=applog.zalohy(vypis["name"]),
+            )
 
     # Nabidka zon a aktualni cas v te zvolene - at je po ulozeni videt,
     # ze se opravdu neco zmenilo. Bez toho by clovek koukal na pole
@@ -1476,6 +1487,8 @@ async def tasks_save(
     backup_keep: str = Form("7"),
     pg_dump_path: str = Form(""),
     history_retention_days: str = Form(""),
+    logrotate_dni: str = Form(""),
+    logrotate_pocet: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
     """Ulozi nastaveni vsech uloh najednou.
@@ -1522,9 +1535,34 @@ async def tasks_save(
     db.set_setting("backup_path", backup_path.strip())
     db.set_setting("backup_keep", _clamp(backup_keep, 1, 365, 7))
     db.set_setting("pg_dump_path", pg_dump_path.strip())
+    # Rotace logu. Vymazane pole nema rozvrh rozbit: nahradou je ulozena
+    # hodnota, ne nula.
+    db.set_setting(applog.DNI_KLIC, _clamp(logrotate_dni, 1, applog.DNI_MAX,
+                                           tasks.dni_rotace()))
+    db.set_setting(applog.POCET_KLIC, _clamp(logrotate_pocet, 1, applog.POCET_MAX,
+                                             tasks.pocet_rotace()))
+    applog.nastav_pocet(tasks.pocet_rotace())
 
     _flash(request, "Nastavení úloh uloženo.", "success")
     return RedirectResponse("/settings?section=tasks", status_code=303)
+
+
+@router.get("/settings/log/stahnout")
+def log_stahnout(soubor: str = "",
+                 account: dict[str, Any] = Depends(require_admin)):
+    """Stáhne log - i odrotovanou zálohu, dokud ji rotace nesmazala.
+
+    Jméno se ověří proti složce s logy (applog.ke_stazeni), jinak by šlo
+    přes adresu stáhnout libovolný soubor. Tajné hodnoty se nahradí
+    hvězdičkami stejně jako ve výpisu na stránce.
+    """
+    cesta = applog.ke_stazeni(soubor)
+    if cesta is None:
+        raise HTTPException(status_code=404, detail="Takový log tu není.")
+    return StreamingResponse(
+        applog.stahni(cesta), media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{cesta.name}"',
+                 "Cache-Control": "no-store"})
 
 
 @router.get("/settings/backup/download")
@@ -1884,19 +1922,6 @@ def api_token_zapnout(request: Request, token_id: str = Form(""),
     else:
         _flash(request, "Takový klíč tu není.", "info")
     return RedirectResponse("/settings?section=api", status_code=303)
-
-
-@router.post("/settings/api/pouziti")
-def api_pouziti_ulozit(request: Request, api_pouziti_dni: str = Form(""),
-                       account: dict[str, Any] = Depends(require_admin)):
-    """Kolik dní držet záznam použití klíčů."""
-    db.set_setting(api.POUZITI_DNI_KLIC,
-                   _clamp(api_pouziti_dni, 1, api.POUZITI_DNI_MAX,
-                          api.POUZITI_DNI_VYCHOZI))
-    # Kratší doba platí hned, ne až za hodinu po dalším dotazu.
-    api.uklid_pouziti(vynutit=True)
-    _flash(request, "Doba držení záznamu použití uložena.", "success")
-    return RedirectResponse("/settings?section=api#pouziti", status_code=303)
 
 
 @router.post("/settings/accounts/delete")

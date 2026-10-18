@@ -18,8 +18,6 @@ import os
 import re
 import sys
 import tempfile
-import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -37,7 +35,7 @@ import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 
-from jellyscope import accounts, api, db, jellyfin, pristup, web  # noqa: E402
+from jellyscope import accounts, api, applog, db, jellyfin, pristup, web  # noqa: E402
 
 failures = 0
 
@@ -128,10 +126,7 @@ db.set_setting("ctenar_smi_klic", "0")
 print("--- stav a vlastník klíče ---")
 with db.connect() as conn:
     sloupce_klicu = conn.table_columns("api_tokens")
-    sloupce_pouziti = conn.table_columns("api_pouziti")
 check({"account_id", "stav"} <= set(sloupce_klicu), "api_tokens má vlastníka a stav")
-check({"token_id", "kdy", "cesta", "ip", "vysledek"} <= set(sloupce_pouziti),
-      "tabulka api_pouziti existuje se všemi sloupci")
 
 anon = TestClient(web.app)
 
@@ -148,11 +143,17 @@ def pozadavek(token: str) -> Request:
 
 
 def posledni_pouziti() -> dict:
-    return db.query_one("SELECT * FROM api_pouziti ORDER BY id DESC LIMIT 1") or {}
+    """Poslední řádek logu API (applog.read_api) pod jmény, která test zná."""
+    radky = applog.read_api(applog.MAX_LINES)["radky"]
+    if not radky:
+        return {}
+    radek = radky[0]
+    return {"cesta": radek["cesta"], "ip": radek["ip"], "vysledek": radek["vysledek"],
+            "token_id": radek["klic_id"], "vlastnik": radek["vlastnik"]}
 
 
 def pocet_pouziti() -> int:
-    return int(db.query_one("SELECT COUNT(*) AS n FROM api_pouziti")["n"])
+    return len(applog.read_api(applog.MAX_LINES)["radky"])
 
 
 # Review Focus 5: dnesni klice nemaji vlastnika a po aktualizaci musi
@@ -227,7 +228,7 @@ zavolej("js_tohle-neni-zadny-klic")
 anon.get("/api/v1/summary")
 check(pocet_pouziti() == pred, "neplatný nebo chybějící klíč se nezapisuje")
 
-# Review Focus 4: dlouha adresa se do databaze nevejde cela.
+# Review Focus 4: dlouha adresa se do logu nezapise cela.
 zavolej(serveru["token"], "/api/v1/summary?x=" + "a" * 400)
 check(len(posledni_pouziti().get("cesta", "")) == 300, "dlouhá adresa se ořízne na 300 znaků")
 
@@ -249,59 +250,12 @@ db.set_setting("ctenar_smi_klic", "1")
 docasny = accounts.create("docasny", "docasneheslo")
 klic_docasny = api.vytvor("Docasny", docasny)
 check(zavolej(klic_docasny["token"]).status_code == 200, "klíč dočasného účtu projde")
-jeho = db.query_one("SELECT COUNT(*) AS n FROM api_pouziti WHERE token_id = ?",
-                    (klic_docasny["id"],))["n"]
-bez_klice = db.query_one("SELECT COUNT(*) AS n FROM api_pouziti WHERE token_id IS NULL")["n"]
+jeho = len(applog.read_api(applog.MAX_LINES, klic=klic_docasny["id"])["radky"])
 accounts.delete(docasny)
 check(zavolej(klic_docasny["token"]).status_code == 401, "smazaný účet: klíč neexistuje (401)")
-po = db.query_one("SELECT COUNT(*) AS n FROM api_pouziti WHERE token_id IS NULL")["n"]
-check(jeho > 0 and po == bez_klice + jeho, "záznamy použití zůstanou, bez klíče (NULL)")
+check(jeho > 0 and len(applog.read_api(applog.MAX_LINES, klic=klic_docasny["id"])["radky"]) == jeho,
+      "záznamy v logu API zůstanou i po smazání účtu")
 db.set_setting("ctenar_smi_klic", "0")
-
-zaznamy = api.pouziti()
-check({"kdy", "cesta", "ip", "vysledek", "token_id", "token", "vlastnik"} <= set(zaznamy[0]),
-      "pouziti vrací kdy, cestu, IP, výsledek, klíč a vlastníka")
-check(zaznamy[0]["cesta"] == posledni_pouziti()["cesta"], "nejnovější záznam je první")
-check(len(api.pouziti(limit=2)) == 2, "limit omezí počet řádků")
-check(all(z["token_id"] == klic_ctenare["id"] for z in api.pouziti(token_id=klic_ctenare["id"]))
-      and api.pouziti(token_id=klic_ctenare["id"]), "filtr podle klíče")
-check(all(z["vlastnik"] == "ctenar" for z in api.pouziti(account_id=ctenar_id))
-      and api.pouziti(account_id=ctenar_id), "filtr podle účtu")
-smazane = [z for z in zaznamy if z["token_id"] is None]
-check(smazane and all(z["token"] is None and z["vlastnik"] is None for z in smazane),
-      "záznam smazaného klíče nemá jméno ani vlastníka")
-
-stary = (datetime.now(timezone.utc) - timedelta(days=40)).strftime(db.TIME_FORMAT)
-
-
-def vloz_stary() -> None:
-    with db.connect() as conn:
-        conn.execute("INSERT INTO api_pouziti (token_id, kdy, cesta, ip, vysledek)"
-                     " VALUES (?, ?, ?, ?, ?)",
-                     (serveru["id"], stary, "/api/v1/stary", "1.1.1.1", 200))
-        conn.commit()
-
-
-def je_stary() -> bool:
-    return db.query_one("SELECT id FROM api_pouziti WHERE cesta = '/api/v1/stary'") is not None
-
-
-check(api.POUZITI_DNI_VYCHOZI == 30, "výchozí doba držení záznamu je 30 dní")
-vloz_stary()
-api._posledni_uklid = time.time()
-api.zapis_pouziti(serveru["id"], "/api/v1/novy", "1.1.1.1", 200)
-check(je_stary(), "do hodiny od posledního úklidu se nemaže")
-api._posledni_uklid = 0
-api.zapis_pouziti(serveru["id"], "/api/v1/novy", "1.1.1.1", 200)
-check(not je_stary(), "záznam starší než 30 dní se při zápisu smaže")
-check(db.query_one("SELECT id FROM api_pouziti WHERE cesta = '/api/v1/novy'") is not None,
-      "čerstvé záznamy zůstanou")
-db.set_setting("api_pouziti_dni", "50")
-vloz_stary()
-api._posledni_uklid = 0
-api.zapis_pouziti(serveru["id"], "/api/v1/novy", "1.1.1.1", 200)
-check(je_stary(), "doba držení jde nastavit (50 dní: čtyřicetidenní zůstane)")
-db.set_setting("api_pouziti_dni", "30")
 
 
 print("--- práva vlastníka ---")
@@ -406,13 +360,13 @@ check(posli(spravce_k, "/settings/api/token/vypnout", token_id="nesmysl") == 303
 
 zavolej(serveru["token"], "/api/v1/summary?znacka=serveru")
 zavolej(klic_ctenare["token"], "/api/v1/summary?znacka=ctenare")
-stranka = spravce_k.get("/settings?section=api").text
+stranka = spravce_k.get("/settings?section=log&log_druh=api").text
 check("/api/v1/summary?znacka=serveru" in stranka and "testclient" in stranka,
-      "karta Použití ukazuje adresu i IP")
-podle_klice = spravce_k.get(f"/settings?section=api&klic={klic_ctenare['id']}").text
-check("znacka=ctenare" in podle_klice and "znacka=serveru" not in podle_klice, "filtr klic= ukáže jen ten klíč")
-podle_uctu = spravce_k.get(f"/settings?section=api&ucet={ctenar_id}").text
-check("znacka=ctenare" in podle_uctu and "znacka=serveru" not in podle_uctu, "filtr ucet= ukáže jen klíče účtu")
+      "log API v Nastavení → Log ukazuje adresu i IP")
+podle_klice = spravce_k.get(f"/settings?section=log&log_druh=api&log_klic={klic_ctenare['id']}").text
+check("znacka=ctenare" in podle_klice and "znacka=serveru" not in podle_klice, "filtr klíče ukáže jen ten klíč")
+podle_uctu = spravce_k.get("/settings?section=log&log_druh=api&log_ucet=ctenar").text
+check("znacka=ctenare" in podle_uctu and "znacka=serveru" not in podle_uctu, "filtr uživatele ukáže jen jeho klíče")
 check(spravce_k.get("/settings?section=api&klic=abc&ucet=").status_code == 200,
       "nesmyslný filtr stránku neshodí")
 
@@ -421,19 +375,8 @@ nove = spravce_k.post("/settings/api/token", data={"name": "Moje Grafana"},
 moje = [r for r in api.seznam(ucet("spravce")["id"]) if r["name"] == "Moje Grafana"]
 check(nove.status_code == 303 and len(moje) == 1, "klíč vyrobený správcem patří jemu")
 
-posli(spravce_k, "/settings/api/pouziti", api_pouziti_dni=0)
-check(db.get_setting("api_pouziti_dni") == "1", "doba držení 0 -> 1")
-posli(spravce_k, "/settings/api/pouziti", api_pouziti_dni=9999)
-check(db.get_setting("api_pouziti_dni") == "365", "doba držení 9999 -> 365")
-posli(spravce_k, "/settings/api/pouziti", api_pouziti_dni=45)
-check(db.get_setting("api_pouziti_dni") == "45"
-      and 'value="45"' in spravce_k.get("/settings?section=api").text,
-      "doba držení se uloží a ukáže ve formuláři")
-db.set_setting("api_pouziti_dni", "30")
-
-for adresa in ("/settings/api/token/vypnout", "/settings/api/token/zapnout",
-               "/settings/api/pouziti"):
-    check(posli(ctenar_k, adresa, token_id=serveru["id"], api_pouziti_dni=5) == 403,
+for adresa in ("/settings/api/token/vypnout", "/settings/api/token/zapnout"):
+    check(posli(ctenar_k, adresa, token_id=serveru["id"]) == 403,
           f"čtenář na {adresa}: 403")
 check(stav_klice(serveru["id"]) == "aktivni", "a stav klíče se nezměnil")
 
@@ -624,19 +567,10 @@ chyb_zapisu = [r for r in zachytavac.zaznamy if "Zapis pouziti" in r.getMessage(
 check(len(chyb_zapisu) == 1, f"opakovaná chyba zápisu se zaloguje jednou, ne pokaždé ({len(chyb_zapisu)})")
 
 
-print("--- po revizi: nulový znak, úklid bez provozu ---")
+print("--- po revizi: nulový znak ---")
 zavolej(serveru["token"], "/api/v1/item/abc%00def")
 check("\x00" not in posledni_pouziti().get("cesta", "x\x00"),
-      "nulový znak z adresy se do záznamu nedostane (PostgreSQL by řádek odmítl)")
-
-vloz_stary()
-api._posledni_uklid = 0
-check(api.uklid_pouziti() >= 1 and not je_stary(), "úklid jde pustit i bez nového požadavku")
-vloz_stary()
-api._posledni_uklid = time.time()
-check(api.uklid_pouziti() == 0 and je_stary(), "ale nejvýš jednou za hodinu")
-posli(spravce_k, "/settings/api/pouziti", api_pouziti_dni=30)
-check(not je_stary(), "uložení doby držení uklidí hned")
+      "nulový znak z adresy se do záznamu nedostane")
 
 
 print("--- po revizi: Můj účet ---")

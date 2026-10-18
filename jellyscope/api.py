@@ -33,22 +33,21 @@ plná práva, aby se po aktualizaci nerozbila Grafana ani Homepage.
 
 Správce může klíč vypnout a zase zapnout - třeba když má podezření, že
 unikl, a chce to nejdřív prověřit. Vypnutý klíč nic nevrátí, ale v
-seznamu zůstane i se svými záznamy použití. Každý požadavek s
-existujícím klíčem se zapíše (`api_pouziti`): kdy, kam, odkud a jak
-dopadl. Viz zapis_pouziti().
+seznamu zůstane. Každý požadavek s existujícím klíčem se zapíše do
+logu API (`data/logs/api.log`): kdy, kam, odkud a jak dopadl. Viz
+zapis_pouziti().
 """
 from __future__ import annotations
 
 import hashlib
 import logging
 import secrets
-import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from . import accounts, db, formatting, insights, pristup, scanner, stats
+from . import accounts, applog, db, formatting, insights, pristup, scanner, stats
 
 log = logging.getLogger("jellyscope.api")
 
@@ -70,17 +69,6 @@ ZAPIS_POUZITI_PO = timedelta(minutes=1)
 # Stavy klice. Zneplatneni stav nema - to je smazani radku.
 AKTIVNI = "aktivni"
 VYPNUTY = "vypnuty"
-
-# Zaznam pouziti: kolik dni se drzi (nastaveni `api_pouziti_dni`), jak
-# dlouha adresa se vejde a jak casto se po nem uklizi. Uklizi se pri
-# zapisu, ne v nocni uloze - ta je ve vychozim stavu vypnuta, a zaznam by
-# pak rostl navzdy.
-POUZITI_DNI_KLIC = "api_pouziti_dni"
-POUZITI_DNI_VYCHOZI = 30
-POUZITI_DNI_MAX = 365
-CESTA_ZNAKU = 300
-UKLID_PO_SEKUNDACH = 3600
-_posledni_uklid = 0.0
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
 
@@ -252,7 +240,11 @@ def over_token(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail="Neplatný token.",
                             headers={"WWW-Authenticate": "Bearer"})
 
-    request.state.api_token_id = radek["id"]
+    # Pro log API (web.ZaznamPouzitiApi): zapíše se i zamítnutý požadavek
+    # - právě ten je při podezření na únik zajímavý.
+    request.state.api_klic_do_logu = {
+        "id": radek["id"], "jmeno": radek["name"],
+        "vlastnik": (ucet or {}).get("username") or ""}
     if radek["stav"] != AKTIVNI:
         raise HTTPException(status_code=403, detail="Klíč je vypnutý.")
 
@@ -326,75 +318,16 @@ def _pro_vlastnika(token: dict[str, Any], data: Any) -> Any:
     return pristup.anonymizuj_pro(data, token.get("account"))
 
 
-def dny_pouziti() -> int:
-    """Kolik dní se drží záznam použití (nastavení, oříznuté do mezí)."""
-    return db.get_int_setting(POUZITI_DNI_KLIC, 1, POUZITI_DNI_MAX, POUZITI_DNI_VYCHOZI)
-
-
-def zapis_pouziti(token_id: int, cesta: str, ip: str, vysledek: int) -> None:
-    """Zapíše jeden požadavek do záznamu použití.
+def zapis_pouziti(klic: dict[str, Any], cesta: str, ip: str, vysledek: int) -> None:
+    """Zapíše jeden požadavek do logu API (applog.zapis_api).
 
     Volá ho middleware ve web.py až po odpovědi - jen tehdy je známý
-    výsledek. Nejvýš jednou za hodinu přitom smaže, co je starší než
-    nastavení `api_pouziti_dni`.
+    výsledek. `klic` je to, co nechal v požadavku over_token(): id, jméno
+    a vlastník (prázdný = klíč serveru). Jak dlouho se záznam drží, řídí
+    úloha Rotace logů.
     """
-    # Nulovy znak PostgreSQL do textu nevezme a cely radek by odmitl. Kdo
-    # ma uniklý klic, by si ho jinak pridal do adresy a v zaznamu by po
-    # nem nezustala stopa.
-    cesta = (cesta or "").replace("\x00", "")[:CESTA_ZNAKU]
-    with db.connect() as conn:
-        conn.execute(
-            "INSERT INTO api_pouziti (token_id, kdy, cesta, ip, vysledek)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (token_id, db.utcnow(), cesta, ip, int(vysledek)),
-        )
-        conn.commit()
-    uklid_pouziti()
-
-
-def uklid_pouziti(vynutit: bool = False) -> int:
-    """Smaže záznamy použití starší než `api_pouziti_dni`. Vrátí kolik.
-
-    Nejvýš jednou za hodinu (`vynutit` to obejde - po změně doby držení).
-    Volá se po zápisu a z plánovače úloh: kdyby jen po zápisu, po
-    zneplatnění všech klíčů by provoz ustal a IP adresy by v databázi
-    zůstaly navždy, ačkoliv stránka slibuje, že se mažou.
-    """
-    global _posledni_uklid
-    if not vynutit and time.time() - _posledni_uklid < UKLID_PO_SEKUNDACH:
-        return 0
-    _posledni_uklid = time.time()
-    hranice = datetime.now(timezone.utc) - timedelta(days=dny_pouziti())
-    with db.connect() as conn:
-        smazano = conn.execute("DELETE FROM api_pouziti WHERE kdy < ?",
-                               (hranice.strftime(db.TIME_FORMAT),)).rowcount
-        conn.commit()
-    return max(0, int(smazano or 0))
-
-
-def pouziti(token_id: int | None = None, account_id: int | None = None,
-            limit: int = 200) -> list[dict[str, Any]]:
-    """Záznam použití pro Nastavení → API, nejnovější první.
-
-    `token` je jméno klíče a `vlastnik` jméno účtu; u smazaného klíče
-    jsou obě None. Filtr podle klíče nebo podle účtu je volitelný.
-    """
-    sql = ("SELECT p.kdy, p.cesta, p.ip, p.vysledek, p.token_id,"
-           "       t.name AS token, a.username AS vlastnik"
-           "  FROM api_pouziti p"
-           "  LEFT JOIN api_tokens t ON t.id = p.token_id"
-           "  LEFT JOIN accounts a ON a.id = t.account_id")
-    podminky, parametry = [], []
-    if token_id is not None:
-        podminky.append("p.token_id = ?")
-        parametry.append(token_id)
-    if account_id is not None:
-        podminky.append("t.account_id = ?")
-        parametry.append(account_id)
-    if podminky:
-        sql += " WHERE " + " AND ".join(podminky)
-    return db.query_all(sql + " ORDER BY p.id DESC LIMIT ?",
-                        (*parametry, max(1, int(limit))))
+    applog.zapis_api(klic["id"], klic.get("jmeno") or "", klic.get("vlastnik") or "",
+                     cesta, ip, vysledek)
 
 
 def _dny(days: Any, vychozi: int = 30) -> int:

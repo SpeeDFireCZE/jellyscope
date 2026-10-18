@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -42,11 +43,19 @@ from .config import BASE_DIR
 
 log = logging.getLogger("jellyscope.applog")
 
-# Jeden soubor, po naplnění se přejmenuje a začne nový. Bez stropu by log
+# Logy otáčí úloha Rotace logů (jak často a kolik starých nechat je
+# v Úlohách). Strop velikosti je pojistka mezi rotacemi: bez něj by log
 # na dlouho běžícím serveru v tichosti zaplnil disk - a záloha, která se
 # nevejde na disk, nadělá víc škody než užitku.
-MAX_BYTES = 2 * 1024 * 1024
-BACKUP_COUNT = 3
+MAX_BYTES = 20 * 1024 * 1024
+POCET_VYCHOZI = 4
+POCET_MAX = 100
+DNI_VYCHOZI = 7
+DNI_MAX = 365
+POCET_KLIC = "logrotate_pocet"
+DNI_KLIC = "logrotate_dni"
+# Kdy se naposledy rotovalo. Podtržítko: provozní záznam, do logu nepatří.
+POSLEDNI_KLIC = "_logrotate_naposledy"
 
 # Kolik řádků se dá zobrazit najednou. Strop je tu proto, že soubor může mít
 # dva megabajty a poslat je všechny do stránky by ji jen zahltilo.
@@ -61,6 +70,12 @@ _handler: RotatingFileHandler | None = None
 # Vlastní soubor aplikace. Ostatní (out.log, err.log) zakládá správce
 # procesů, ty jen čteme.
 OWN_NAME = "jellyscope.log"
+# Každý požadavek s existujícím API klíčem: kdy, výsledek, odkud, čí klíč
+# a kam. Vlastní soubor, ne řádek v logu aplikace - Grafana se ptá každých
+# pár vteřin a všechno ostatní by v tom zaniklo.
+API_NAME = "api.log"
+# Obě rotuje úloha Rotace logů; out.log a err.log patří správci procesů.
+VLASTNI = (OWN_NAME, API_NAME)
 
 # Popisky, ať je z rozhraní poznat, čí který soubor je. Kdo nasazoval
 # přes supervisord, jinak neví, proč jsou soubory tři.
@@ -69,6 +84,12 @@ POPISKY = {
     "out.log": "standardní výstup (supervisord)",
     "err.log": "chybový výstup (supervisord)",
 }
+
+# Adresa v logu API: delší se ořízne (dotaz může být dlouhý jen proto, že
+# ho někdo tak poslal).
+CESTA_ZNAKU = 300
+# Kolik řádků logu API se nejvýš projde při filtrování.
+API_PROJIT = 20000
 
 
 def log_dir() -> Path:
@@ -94,6 +115,8 @@ def available_files() -> list[dict[str, Any]]:
     nalezene = []
     try:
         for cesta in sorted(slozka.glob("*.log")):
+            if cesta.name == API_NAME:  # má vlastní pohled s filtry
+                continue
             try:
                 velikost = cesta.stat().st_size
             except OSError:
@@ -111,22 +134,68 @@ def available_files() -> list[dict[str, Any]]:
     return nalezene
 
 
-def _bezpecna_cesta(name: str) -> Path | None:
+_ZALOHA = re.compile(r"^[A-Za-z0-9_.-]+\.log\.(\d{1,3})$")
+
+
+def _bezpecna_cesta(name: str, i_zalohy: bool = False) -> Path | None:
     """Přeloží jméno z formuláře na soubor ve složce s logy.
 
     Jméno přichází z prohlížeče, takže se s ním nesmí zacházet jako
     s cestou - `../../.env` je taky "jméno". Proto se nebere nic než
     holé jméno souboru a výsledek se ještě ověří proti seznamu toho,
-    co ve složce doopravdy je.
+    co ve složce doopravdy je. `i_zalohy` pustí i odrotované zálohy
+    (`jellyscope.log.2`) - jen ke stažení.
     """
-    if not name:
+    if not name or name != Path(name).name:
         return None
-    if name != Path(name).name or not name.endswith(".log"):
+    if not (name.endswith(".log") or (i_zalohy and _ZALOHA.match(name))):
         return None
     cesta = log_dir() / name
     if not cesta.is_file():
         return None
     return cesta
+
+
+def zalohy(name: str) -> list[dict[str, Any]]:
+    """Odrotované zálohy jednoho logu (`api.log.1`, `.2` …), nejnovější první.
+
+    Ukazují se, aby se daly stáhnout dřív, než je rotace smaže.
+    """
+    slozka = log_dir()
+    if not name or name != Path(name).name or not slozka.is_dir():
+        return []
+    nalezene = []
+    for cesta in slozka.glob(f"{name}.*"):
+        shoda = _ZALOHA.match(cesta.name)
+        if not shoda or cesta.name[:-len(shoda.group(1)) - 1] != name:
+            continue
+        try:
+            stat = cesta.stat()
+        except OSError:
+            continue
+        nalezene.append({"name": cesta.name, "cislo": int(shoda.group(1)),
+                         "size_bytes": stat.st_size,
+                         "zmeneno": datetime.fromtimestamp(stat.st_mtime)
+                         .strftime("%d.%m.%Y %H:%M")})
+    return sorted(nalezene, key=lambda z: z["cislo"])
+
+
+def ke_stazeni(name: str) -> Path | None:
+    """Soubor (i zálohu), který se smí stáhnout. None = takový tu není."""
+    return _bezpecna_cesta(name, i_zalohy=True)
+
+
+def stahni(cesta: Path):
+    """Obsah logu po řádcích, s tajnými hodnotami nahrazenými hvězdičkami.
+
+    Stažený soubor je totéž jako výpis na stránce: co se nesmí ukázat,
+    nesmí ani odejít. Čte se po řádcích, ne celý do paměti.
+    """
+    tajemstvi = _tajemstvi()
+    with cesta.open("rb") as soubor:
+        for radek in soubor:
+            yield _zamaskuj(radek.decode("utf-8", errors="replace"),
+                            tajemstvi).encode("utf-8")
 
 
 
@@ -205,7 +274,7 @@ def setup() -> Path | None:
     try:
         cesta.parent.mkdir(parents=True, exist_ok=True)
         handler = RotatingFileHandler(
-            cesta, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8")
+            cesta, maxBytes=MAX_BYTES, backupCount=POCET_VYCHOZI, encoding="utf-8")
     except OSError as exc:
         log.warning("log do souboru se nepodařilo založit (%s): %s", cesta, exc)
         return None
@@ -237,6 +306,154 @@ def setup() -> Path | None:
 
     _handler = handler
     return cesta
+
+
+# ---------------------------------------------------------------------------
+# Log API
+# ---------------------------------------------------------------------------
+#
+# Radek jde rovnou do vlastniho souboroveho handleru, ne pres logger:
+# patri jen do api.log (ne do logu aplikace ani na standardni vystup)
+# a je to zaznam pro spravce, ne diagnostika - zadne nastaveni urovni
+# logovani ani logging.disable() ho nesmi umlcet. Soubor se zaklada az
+# s prvnim zapisem, i v testech a skriptech, ktere setup() nevolaji.
+_api_handler: RotatingFileHandler | None = None
+
+
+def _api_pripraven() -> RotatingFileHandler | None:
+    global _api_handler
+    if _api_handler is None:
+        cesta = log_dir() / API_NAME
+        try:
+            cesta.parent.mkdir(parents=True, exist_ok=True)
+            _api_handler = RotatingFileHandler(
+                cesta, maxBytes=MAX_BYTES, backupCount=POCET_VYCHOZI, encoding="utf-8")
+        except OSError as exc:
+            log.warning("log API se nepodařilo založit (%s): %s", cesta, exc)
+            return None
+        _api_handler.setFormatter(logging.Formatter("%(message)s"))
+    return _api_handler
+
+
+def _pole(hodnota: Any) -> str:
+    """Hodnota do řádku logu API: bez oddělovače a bez konců řádků."""
+    text = "".join(z if z.isprintable() else " " for z in str(hodnota or ""))
+    return text.replace("|", "/").strip() or "-"
+
+
+def zapis_api(klic_id: int, klic: str, vlastnik: str, cesta: str, ip: str,
+              vysledek: int) -> None:
+    """Zapíše jeden požadavek s API klíčem do api.log.
+
+    Řádek: `kdy | výsledek | IP | #id jméno klíče | vlastník | adresa`.
+    Vlastník „-" je klíč serveru (bez účtu). Čte se zpátky v read_api().
+    """
+    handler = _api_pripraven()
+    if handler is None:
+        return
+    kdy = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    radek = " | ".join((kdy, str(int(vysledek)), _pole(ip),
+                        f"#{int(klic_id)} {_pole(klic)}", _pole(vlastnik),
+                        _pole(cesta)[:CESTA_ZNAKU]))
+    # handle(): zámek, rotace pojistkou podle velikosti i zápis - bez
+    # loggeru a jeho úrovní.
+    handler.handle(logging.LogRecord("jellyscope.api_log", logging.INFO, __file__,
+                                     0, radek, None, None))
+
+
+def _rozeber_api(radek: str) -> dict[str, Any] | None:
+    casti = radek.rstrip("\n").split(" | ", 5)
+    if len(casti) != 6:
+        return None
+    kdy, vysledek, ip, klic, vlastnik, cesta = casti
+    shoda = re.match(r"^#(\d+) ?(.*)$", klic)
+    try:
+        cislo = int(vysledek)
+    except ValueError:
+        return None
+    return {"kdy": kdy, "vysledek": cislo, "ip": "" if ip == "-" else ip,
+            "klic_id": int(shoda.group(1)) if shoda else None,
+            "klic": shoda.group(2) if shoda else klic,
+            "vlastnik": "" if vlastnik == "-" else vlastnik, "cesta": cesta}
+
+
+def read_api(limit: int = DEFAULT_LINES, ucet: str = "", klic: Any = None,
+             ip: str = "") -> dict[str, Any]:
+    """Posledních `limit` požadavků z api.log, nejnovější první.
+
+    Filtry: `ucet` = vlastník klíče („-" = klíč serveru), `klic` = id
+    klíče, `ip` = část adresy. Prochází se konec souboru (API_PROJIT
+    řádků), ne celý - starší je v zálohách ke stažení.
+    """
+    limit = max(10, min(MAX_LINES, limit))
+    cesta = log_dir() / API_NAME
+    vysledek: dict[str, Any] = {"radky": [], "name": API_NAME, "path": str(cesta),
+                                "exists": cesta.is_file(), "size_bytes": 0}
+    if not vysledek["exists"]:
+        return vysledek
+    try:
+        radky = _tail(cesta, API_PROJIT)
+        vysledek["size_bytes"] = cesta.stat().st_size
+    except OSError:
+        return vysledek
+    try:
+        klic_id = int(klic) if klic not in (None, "") else None
+    except (TypeError, ValueError):
+        klic_id = None
+    vybrane = []
+    for radek in radky:
+        zaznam = _rozeber_api(radek)
+        if zaznam is None:
+            continue
+        if ucet and (zaznam["vlastnik"] or "-") != ucet:
+            continue
+        if klic_id is not None and zaznam["klic_id"] != klic_id:
+            continue
+        if ip and ip.strip() not in zaznam["ip"]:
+            continue
+        vybrane.append(zaznam)
+    vysledek["radky"] = list(reversed(vybrane[-limit:]))
+    return vysledek
+
+
+# ---------------------------------------------------------------------------
+# Rotace
+# ---------------------------------------------------------------------------
+
+def nastav_pocet(pocet: int) -> None:
+    """Kolik starých logů držet - i pro rotaci pojistkou podle velikosti."""
+    pocet = max(1, min(POCET_MAX, int(pocet)))
+    for handler in (_handler, _api_pripraven()):
+        if handler is not None:
+            handler.backupCount = pocet
+
+
+def rotuj(pocet: int) -> dict[str, Any]:
+    """Otočí logy aplikace a API: dosavadní soubor se stane zálohou .1.
+
+    Starší zálohy se posunou (.1 → .2 …) a co je navíc nad `pocet`, se
+    smaže. Soubory správce procesů (out.log, err.log) se neotáčí - ty
+    patří jemu. Vrátí, co se otočilo a co se nepovedlo.
+    """
+    pocet = max(1, min(POCET_MAX, int(pocet)))
+    nastav_pocet(pocet)
+    otoceno, chyby = [], []
+    for jmeno, handler in ((OWN_NAME, _handler), (API_NAME, _api_pripraven())):
+        if handler is None:
+            continue
+        try:
+            handler.doRollover()
+            otoceno.append(jmeno)
+        except OSError as exc:
+            # Typicky Windows: soubor drží otevřený jiný proces.
+            chyby.append(f"{jmeno}: {exc}")
+        for zaloha in zalohy(jmeno):
+            if zaloha["cislo"] > pocet:
+                try:
+                    (log_dir() / zaloha["name"]).unlink()
+                except OSError as exc:
+                    chyby.append(f"{zaloha['name']}: {exc}")
+    return {"otoceno": otoceno, "chyby": chyby}
 
 
 def _tajemstvi() -> list[str]:

@@ -350,25 +350,6 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 
 
--- Kdy a cim se API ptalo. Jeden radek na jeden pozadavek s existujicim
--- klicem - i vypnutym, protoze presne to ma spravce videt. Neplatny klic
--- se nezapisuje: nema vlastnika a byl by to jen sum.
---
--- Smazany klic tu nechava radky s `token_id = NULL`: je videt, ze se
--- pouzival, i kdyz uz neexistuje. Stare radky maze api.zapis_pouziti()
--- (nejvys jednou za hodinu, starsi nez nastaveni `api_pouziti_dni`).
-CREATE TABLE IF NOT EXISTS api_pouziti (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    token_id  INTEGER REFERENCES api_tokens(id) ON DELETE SET NULL,
-    kdy       TEXT    NOT NULL,     -- UTC
-    cesta     TEXT    NOT NULL,     -- adresa i s parametry, nejvys 300 znaku
-    ip        TEXT,
-    vysledek  INTEGER NOT NULL      -- HTTP stav: 200, 403, 404, ...
-);
-CREATE INDEX IF NOT EXISTS idx_api_pouziti_kdy   ON api_pouziti (kdy);
-CREATE INDEX IF NOT EXISTS idx_api_pouziti_token ON api_pouziti (token_id);
-
-
 -- Zapomenuti divaci: jeden radek na jedno kliknuti "Ano, zapomenout".
 --
 -- Drzi se kvuli vraceni: dokud jsou radky v kosi, da se zasah vzit zpet

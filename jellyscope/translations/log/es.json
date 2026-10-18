@@ -144,5 +144,7 @@
     "Zapnut API token %s": "token de API %s activado",
     "Zapis pouziti API klice se nepovedl": "No se pudo escribir el registro de uso de la clave de API",
     "otisk profiloveho obrazku nejde precist": "no se puede leer la huella de la imagen de perfil",
-    "vymysleny stream ukazky se nepodarilo ozivit": "no se pudo reanimar la reproducción inventada de la demo"
+    "vymysleny stream ukazky se nepodarilo ozivit": "no se pudo reanimar la reproducción inventada de la demo",
+    "log API se nepodařilo založit (%s): %s": "no se pudo crear el log de la API (%s): %s",
+    "rotace logu: %s": "rotación de logs: %s"
 }

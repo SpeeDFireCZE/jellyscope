@@ -132,6 +132,9 @@ async def lifespan(app: FastAPI):
 
     db.init_db()
     log.info("databaze pripravena")
+    # Kolik starých logů držet, i pro rotaci pojistkou podle velikosti.
+    # Log se zapíná před databází, takže se to dozví až teď.
+    applog.nastav_pocet(tasks.pocet_rotace())
     # Přehled pro všechny má od verze s Mým přehledem název. Stávající
     # zapnutý bez názvu dostane ten, pod kterým ho lidé znali.
     sekce.doplnit_nazev()
@@ -405,14 +408,13 @@ app.include_router(api.router)
 class ZaznamPouzitiApi:
     """Každý požadavek s existujícím klíčem se zapíše - až po odpovědi.
 
-    Až teprve po ní je známý výsledek (200, 403, ...). Id klíče sem
-    nechává api.over_token() v `request.state`; neplatný klíč ho nenechá,
-    a tak se nezapíše.
+    Až teprve po ní je známý výsledek (200, 403, ...). Klíč (id, jméno,
+    vlastník) sem nechává api.over_token() v `request.state`; neplatný
+    klíč ho nenechá, a tak se nezapíše. Zapisuje se do logu API.
 
     Čisté ASGI, ne `@app.middleware`: tam odchází tělo odpovědi až po
-    návratu middlewaru, takže by zápis do databáze zdržel každou odpověď
-    API - a když databázi zrovna drží úloha (přeskládání, import), čekalo
-    by se až patnáct vteřin. Tady má klient odpověď dřív, než se zapisuje.
+    návratu middlewaru, takže by zápis zdržel každou odpověď API. Tady má
+    klient odpověď dřív, než se zapisuje.
 
     Zápis nesmí shodit odpověď: kdo se ptá na čísla, má je dostat, i když
     se záznam zrovna nepovedl. A neodchycená chyba routy (500) se zapíše
@@ -442,24 +444,24 @@ class ZaznamPouzitiApi:
         await _zapis_pouziti(scope, vysledek)
 
 
-# Kdy se naposledy zalogovala chyba zapisu pouziti. Kdyz databaze zapis
-# odmita porad, Grafana by kazdych par vterin pridala do logu celou
-# chybovou hlasku - staci jedna za ctvrt hodiny.
+# Kdy se naposledy zalogovala chyba zapisu pouziti. Kdyz zapis selhava
+# porad (plny disk, prava), Grafana by kazdych par vterin pridala do logu
+# celou chybovou hlasku - staci jedna za ctvrt hodiny.
 CHYBA_ZAPISU_PO_SEKUNDACH = 900
 _posledni_chyba_zapisu = 0.0
 
 
 async def _zapis_pouziti(scope, vysledek: int) -> None:
     global _posledni_chyba_zapisu
-    token_id = (scope.get("state") or {}).get("api_token_id")
-    if not token_id:
+    klic = (scope.get("state") or {}).get("api_klic_do_logu")
+    if not klic:
         return
     cesta = scope["path"]
     dotaz = scope.get("query_string", b"").decode("latin-1")
     if dotaz:
         cesta = f"{cesta}?{dotaz}"
     try:
-        await asyncio.to_thread(api.zapis_pouziti, token_id, cesta,
+        await asyncio.to_thread(api.zapis_pouziti, klic, cesta,
                                 _adresa_klienta(Request(scope)), vysledek)
     except Exception:  # noqa: BLE001 - zaznam je navic, odpoved ne
         if time.time() - _posledni_chyba_zapisu >= CHYBA_ZAPISU_PO_SEKUNDACH:

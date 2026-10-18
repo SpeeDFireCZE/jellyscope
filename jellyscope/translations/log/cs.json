@@ -144,5 +144,7 @@
     "Zapnut API token %s": "Zapnut API token %s",
     "Zapis pouziti API klice se nepovedl": "Zapis pouziti API klice se nepovedl",
     "otisk profiloveho obrazku nejde precist": "otisk profiloveho obrazku nejde precist",
-    "vymysleny stream ukazky se nepodarilo ozivit": "vymysleny stream ukazky se nepodarilo ozivit"
+    "vymysleny stream ukazky se nepodarilo ozivit": "vymysleny stream ukazky se nepodarilo ozivit",
+    "log API se nepodařilo založit (%s): %s": "log API se nepodařilo založit (%s): %s",
+    "rotace logu: %s": "rotace logu: %s"
 }

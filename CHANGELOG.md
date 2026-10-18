@@ -26,8 +26,8 @@ every statistic.
   *server keys* with full access, and Grafana or Homepage do not break.
   New keys belong to an account and may do exactly what it may.
 - **Requests with an API key are logged, with the client's IP
-  address.** The log is kept 30 days (*Settings → API*) and only the
-  administrator sees it.
+  address,** in a log of their own (`data/logs/api.log`). Only the
+  administrator sees it, in *Settings → Log*.
 - **Errors under `/api/` are always JSON.** A 403 or 404 used to come
   back as an HTML error page.
 - **A custom overview that is switched on keeps its layout** and gets
@@ -48,7 +48,7 @@ every statistic.
 - **API keys belong to accounts.** A key sees the same pages and the
   same anonymization as its owner. *Settings → API* lists every key
   with its owner. A key can be switched off for a while or revoked for
-  good, and the usage log shows when, whose key and which address.
+  good, and the API log shows when, whose key and which address.
   Whether readers and Jellyfin viewers may make their own keys is set
   per group in *Settings → Accounts* (off by default), with an exception
   per account. A Jellyfin viewer's key stops working when Jellyfin
@@ -74,6 +74,14 @@ every statistic.
   yet. English and Czech are plainer.
 - **The demo always has something playing:** the made-up stream in *Now
   playing* moves on with the clock.
+- **Settings → Log has the API log next to the application log,** with
+  filters by user, key and IP address. Either log can be downloaded whole
+  (passwords and keys replaced with stars, as on the page).
+- **Log rotation,** a new task: every N days (7 by default) it puts the
+  application log and the API log aside and starts new ones, and keeps
+  the set number of old ones (4 by default). Until they are deleted, the
+  old ones can be downloaded in *Settings → Log*. Both numbers are in
+  *Settings → Tasks and backups*.
 
 ### Changed
 
@@ -100,6 +108,9 @@ every statistic.
 
 ### Fixed
 
+- **The log no longer gets a line every few seconds** saying that the
+  setting `_collector_last_poll` changed. The collector rewrites it on
+  every poll; it is a record, not a setting.
 - **The period sentence reads right for a year and a custom range.** It
   used to say "over the last 1 year", or "over the last ." with nothing
   after it.

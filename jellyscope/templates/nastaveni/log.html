@@ -1,4 +1,4 @@
-{# Sekce Nastavení: log aplikace a kde ho hledat
+{# Sekce Nastavení: log aplikace, log API a kde ho hledat
 
    Vkládá se z `settings.html` přes `{% include %}`, takže má tentýž
    kontext - proměnné se nepředávají, jsou prostě k dispozici.
@@ -8,11 +8,149 @@
    a funguje jen náhodou. #}
 {% from "_macros.html" import running_task, file_picker %}
 
+{# Odrotované zálohy jednoho logu - ke stažení, dokud je rotace nesmaže. #}
+{% macro starsi_logy(zalohy) %}
+{% if zalohy %}
+<h3 class="skupina" style="margin-top:20px">{{ _("Starší logy") }}</h3>
+<p class="skupina-popis">{{ _("odložené úlohou Rotace logů; nejstarší zmizí s další rotací") }}</p>
+<div class="table-wrap">
+    <table>
+        <thead><tr>
+            <th>{{ _("Soubor") }}</th><th class="num">{{ _("Velikost") }}</th>
+            <th>{{ _("Uloženo") }}</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for zaloha in zalohy %}
+        <tr>
+            <td class="nowrap"><code>{{ zaloha.name }}</code></td>
+            <td class="num">{{ zaloha.size_bytes | bytes }}</td>
+            <td class="nowrap muted">{{ zaloha.zmeneno }}</td>
+            <td><a class="btn" href="/settings/log/stahnout?soubor={{ zaloha.name | urlencode }}">{{ _("Stáhnout") }}</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Který log. Odkazy, ne formulář: je to pohled, ne nastavení serveru. #}
+<div class="filters" style="margin-bottom:16px">
+    <a class="chip {{ 'active' if log_druh == 'app' }}" href="/settings?section=log">{{ _("Log aplikace") }}</a>
+    <a class="chip {{ 'active' if log_druh == 'api' }}" href="/settings?section=log&amp;log_druh=api">{{ _("Log API") }}</a>
+</div>
+
+{% if log_druh == 'api' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Log API") }}</h2>
+        <p class="card-note" style="overflow-wrap:anywhere">{{ api_log.path }}</p>
+    </div>
+
+    <form method="get" action="/settings" class="log-controls">
+        <input type="hidden" name="section" value="log">
+        <input type="hidden" name="log_druh" value="api">
+
+        <label>
+            {{ _("Uživatel") }}
+            <select name="log_ucet" onchange="this.form.submit()">
+                <option value="">{{ _("všichni") }}</option>
+                {% for vlastnik in api_log_vlastnici %}
+                <option value="{{ vlastnik }}" {% if vlastnik == log_ucet %}selected{% endif %}>
+                    {{ _("klíč serveru") if vlastnik == "-" else vlastnik }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Klíč") }}
+            <select name="log_klic" onchange="this.form.submit()">
+                <option value="">{{ _("všechny") }}</option>
+                {% for klic in api_log_klice %}
+                <option value="{{ klic.id }}" {% if klic.id == log_klic %}selected{% endif %}>
+                    {{ klic.name }} ({{ klic.vlastnik or _("klíč serveru") }})
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("IP adresa") }}
+            <input type="text" name="log_ip" value="{{ log_ip }}" maxlength="64"
+                   placeholder="192.168." style="max-width:170px">
+        </label>
+
+        <label>
+            {{ _("Řádků") }}
+            <select name="log_lines" onchange="this.form.submit()">
+                {% for pocet in [100, 200, 500, 1000, 2000] %}
+                <option value="{{ pocet }}" {% if pocet == log_lines %}selected{% endif %}>{{ pocet }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <button data-keep-scroll class="btn" type="submit">{{ _("Filtrovat") }}</button>
+    </form>
+
+    {% if not api_log.exists %}
+        <p class="chart-empty" style="margin-top:14px">{{ _("Zatím žádný dotaz s API klíčem.") }}</p>
+    {% elif not api_log.radky %}
+        <p class="chart-empty" style="margin-top:14px">{{ _("Filtru v posledních záznamech nic neodpovídá.") }}</p>
+    {% else %}
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Kdy") }}</th>
+                <th>{{ _("Výsledek") }}</th>
+                <th>{{ _("IP") }}</th>
+                <th>{{ _("Klíč") }}</th>
+                <th>{{ _("Vlastník") }}</th>
+                <th>{{ _("Adresa") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for z in api_log.radky %}
+            <tr>
+                <td class="nowrap muted">{{ z.kdy }}</td>
+                <td class="nowrap">
+                    {# Číslo je vidět vždycky - barva tečky jen napovídá. #}
+                    <span class="badge {{ 'good' if z.vysledek < 400 else 'warning' }}"><span class="dot"></span>{{ z.vysledek }}</span>
+                </td>
+                <td class="nowrap muted">{{ z.ip or "—" }}</td>
+                <td class="nowrap">{{ z.klic }}</td>
+                <td class="nowrap">
+                    {% if z.vlastnik %}{{ z.vlastnik }}
+                    {% else %}<span class="muted">{{ _("klíč serveru") }}</span>{% endif %}
+                </td>
+                {# Dlouhá adresa se zalomí kdekoliv, ale ne užší než tohle:
+                   na telefonu by jinak sloupec spadl na pár znaků. #}
+                <td style="min-width:240px"><code style="overflow-wrap:anywhere">{{ z.cesta }}</code></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if api_log.exists %}
+    <div class="btn-row" style="margin-top:14px">
+        <a class="btn" href="/settings/log/stahnout?soubor={{ api_log.name | urlencode }}">{{ _("Stáhnout celý log") }}</a>
+    </div>
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Nejnovější dotaz nahoře. Zapisuje se každý dotaz s existujícím klíčem, i zamítnutý; neplatný klíč ne. Jak dlouho se log drží, řídí úloha Rotace logů v Úlohách.") }}
+    </p>
+
+    {{ starsi_logy(log_zalohy) }}
+</div>
+
+{% else %}
 {# ================================================================== #}
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Log aplikace") }}</h2>
-        <p class="card-note">{{ log.path }}</p>
+        <p class="card-note" style="overflow-wrap:anywhere">{{ log.path }}</p>
     </div>
 
     {% if not log.files %}
@@ -91,9 +229,16 @@
     </script>
     {% endif %}
 
+    {% if log.exists %}
+    <div class="btn-row" style="margin-top:14px">
+        <a class="btn" href="/settings/log/stahnout?soubor={{ log.name | urlencode }}">{{ _("Stáhnout celý log") }}</a>
+    </div>
+    {% endif %}
     <p class="card-note" style="margin-top:12px">
         {{ _("Zobrazuje se konec souboru. API klíč a hesla se ve výpisu nahrazují hvězdičkami, i kdyby je do logu zanesla hláška o chybě.") }}
     </p>
+
+    {{ starsi_logy(log_zalohy) }}
     {% endif %}
 </div>
 
@@ -109,5 +254,6 @@
         {{ _("U supervisordu je totéž ve výše nabízených souborech out.log a err.log.") }}
     </p>
 </div>
+{% endif %}
 
 {# ================================================================== #}

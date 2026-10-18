@@ -286,7 +286,7 @@ card takes the full width.
 
 ### Scheduled tasks and backups
 
-**Settings → Tasks and backups** has seven tasks:
+**Settings → Tasks and backups** has eight tasks:
 
 | Task | When | What it does |
 |---|---|---|
@@ -297,6 +297,7 @@ card takes the full width.
 | Check for updates | daily at a set time | Asks GitHub whether a newer release is out. It installs nothing, and it is off by default. |
 | Clearing out the history | daily at a set time | Deletes playbacks older than the limit that is set. Off by default. |
 | Database backup | daily at a set time | Saves a copy into the chosen folder and deletes surplus older ones. |
+| Log rotation | daily at a set time | Every N days (7 by default) puts the application log and the API log aside and starts new ones. Keeps the set number of old ones (4 by default). |
 
 Their default times follow that order. The tidy-up works on what the sync
 has just fetched, and the backup then stores data that has already been
@@ -313,6 +314,9 @@ schedule.
 
 Backups can be downloaded, deleted and restored from the same page.
 Restoring saves the current state first, so a misclick costs nothing.
+Logs work the same way: **Settings → Log** shows the application log or
+the API log, either can be downloaded whole, and the older ones that Log
+rotation put aside wait there for download until it deletes them.
 SQLite backups use the built-in snapshot function rather than a file copy,
 because a copy taken mid-write can be corrupt.
 
@@ -349,14 +353,13 @@ The admin can **disable** any key, which stops it but keeps it with its
 log so it can be enabled again, or **revoke** it for good. The owner can
 only revoke their own.
 
-**Usage log.** Every request with an existing key is written down: when,
-which key and whose, the address with its parameters, the IP address and
-the result (200, 403 and so on). Settings → API shows the last 200, for one
-key or one account through the links in the table, and only the admin sees
-it. Entries are kept for 30 days by default (1 to 365, set on the same
-page) and older ones are removed once an hour, also when no requests come
-in.
-A request with an unknown key is not written down.
+**Usage log.** Every request with an existing key is written to the API
+log (`data/logs/api.log`): when, the result (200, 403 and so on), the IP
+address, which key and whose, and the address with its parameters.
+**Settings → Log → API log** shows it with filters by user, key and IP
+address, and only the admin sees it. On Settings → API, the links in the
+key table open it already filtered. How long it is kept is up to the Log
+rotation task. A request with an unknown key is not written down.
 
 Errors come back as JSON with a `detail` field: 401 for a missing or
 unknown key, 403 for a disabled key, for an owner without the permission

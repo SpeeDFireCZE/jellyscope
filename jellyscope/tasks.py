@@ -72,11 +72,11 @@ import shutil
 import sqlite3
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import db, odklizeni, scanner
+from . import applog, db, odklizeni, scanner
 from .i18n import translate as _t
 from .config import BASE_DIR
 
@@ -102,6 +102,12 @@ class Task:
     default_time: str = ""
     interval_setting: str = ""
     default_minutes: int = 0
+
+    # Kdyz se rucni spusteni chova jinak nez naplanovane (Rotace logu:
+    # naplanovana otoci logy jen po nastavenem poctu dni, rucni hned).
+    rucni_runner: Callable[[], Awaitable[dict[str, Any]]] | None = None
+    # Datum dalsiho skutecneho behu, kdyz neni kazdy den (Rotace logu).
+    dalsi_beh: Callable[[], date | None] | None = None
 
     @property
     def je_denni(self) -> bool:
@@ -210,6 +216,59 @@ async def _run_updates() -> dict[str, Any]:
                 "message": _t("Je k dispozici verze {verze}.").format(
                     verze=vysledek.get("nalezena") or "?")}
     return {"status": "ok", "message": _t("Běží nejnovější vydání.")}
+
+
+def dni_rotace() -> int:
+    """Po kolika dnech se logy otáčí (Úlohy → Logy)."""
+    return db.get_int_setting(applog.DNI_KLIC, 1, applog.DNI_MAX, applog.DNI_VYCHOZI)
+
+
+def pocet_rotace() -> int:
+    """Kolik starých logů se drží (Úlohy → Logy)."""
+    return db.get_int_setting(applog.POCET_KLIC, 1, applog.POCET_MAX,
+                              applog.POCET_VYCHOZI)
+
+
+def _posledni_rotace() -> date | None:
+    try:
+        return date.fromisoformat(db.get_setting(applog.POSLEDNI_KLIC, "").strip())
+    except ValueError:
+        return None
+
+
+def dalsi_rotace() -> date | None:
+    """Kdy se logy otočí příště. None = při nejbližším termínu úlohy."""
+    posledni = _posledni_rotace()
+    return posledni + timedelta(days=dni_rotace()) if posledni else None
+
+
+async def _rotuj_logy() -> dict[str, Any]:
+    """Otočí logy aplikace a API hned - i ruční „Spustit hned"."""
+    scan_id = scanner.start_task_log("logrotate")
+    pocet = pocet_rotace()
+    vysledek = await asyncio.to_thread(applog.rotuj, pocet)
+    db.set_setting(applog.POSLEDNI_KLIC, date.today().isoformat())
+    zprava = _t("Otočeno: {soubory}. Starých logů se drží {pocet}.").format(
+        soubory=", ".join(vysledek["otoceno"]) or "-", pocet=pocet)
+    if vysledek["chyby"]:
+        zprava += " " + "; ".join(vysledek["chyby"])
+        log.warning("rotace logu: %s", "; ".join(vysledek["chyby"]))
+    stav = "error" if vysledek["chyby"] and not vysledek["otoceno"] else "ok"
+    scanner.finish_task_log(scan_id, stav, message=zprava)
+    log.info("rotace logu: %s", ", ".join(vysledek["otoceno"]) or "-")
+    return {"status": stav, "message": zprava}
+
+
+async def _run_logrotate() -> dict[str, Any]:
+    """Naplánovaná rotace: denně v nastavený čas, ale otočí jen po N dnech.
+
+    Den se počítá kalendářně od poslední rotace (i ruční), takže se točí
+    vždycky v čas úlohy - ne ve chvíli, kdy někdo kdysi klikl.
+    """
+    dalsi = dalsi_rotace()
+    if dalsi is not None and date.today() < dalsi:
+        return {"status": "ok", "preskoceno": True}
+    return await _rotuj_logy()
 
 
 async def _run_notifikace() -> dict[str, Any]:
@@ -331,6 +390,21 @@ TASKS: dict[str, Task] = {
             default_time="04:45",
             runner=_run_purge,
             log_kind="purge",
+        ),
+        Task(
+            key="logrotate",
+            name="Rotace logů",
+            description=(
+                "Uloží log aplikace i log API stranou a začne nové. Jak často se to děje a "
+                "kolik starých logů zůstává, je v části Logy níž. Starší se smažou; do té doby "
+                "se dají stáhnout v Nastavení → Log."
+            ),
+            time_setting="task_logrotate_time",
+            default_time="00:05",
+            runner=_run_logrotate,
+            rucni_runner=_rotuj_logy,
+            dalsi_beh=dalsi_rotace,
+            log_kind="logrotate",
         ),
         Task(
             key="backup",
@@ -588,8 +662,7 @@ def _vyber_pg_dump(config: Any) -> str:
 ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_versions",
                       "item_streams",
                       "accounts", "dashboard_layout", "library_snapshot",
-                      "settings", "scan_log", "api_tokens", "api_pouziti",
-                      "login_blocks",
+                      "settings", "scan_log", "api_tokens", "login_blocks",
                       "zapomenuti", "playback")
 
 
@@ -1090,6 +1163,10 @@ def status(task: Task) -> dict[str, Any]:
     }
     if task.je_denni:
         radek.update(volby_casu(task))
+    # Úloha, která neběží každý den: termín, kdy opravdu něco udělá.
+    dalsi = task.dalsi_beh() if task.dalsi_beh else None
+    radek["dalsi_datum"] = (dalsi.strftime("%d.%m.")
+                            if dalsi and dalsi > date.today() else "")
     return radek
 
 
@@ -1213,7 +1290,7 @@ async def run_now(key: str) -> dict[str, Any]:
     task = TASKS.get(key)
     if task is None:
         return {"status": "error", "message": "Neznámá úloha."}
-    return await task.runner()
+    return await (task.rucni_runner or task.runner)()
 
 
 def kdy_odlozene_preskladani(ted: datetime | None = None) -> datetime | None:
@@ -1292,12 +1369,6 @@ async def run_scheduler() -> None:
             # zapomenuti divaka, ktery se splaci v noci.
             await _dodelej_odlozene_preskladani()
 
-            # Stare zaznamy pouziti API klicu (i s IP adresami). Mazou se
-            # i po zapisu, ale kdyz provoz ustane - treba po zneplatneni
-            # vsech klicu -, zadny zapis neprijde. Sama si hlida, ze bezi
-            # nejvys jednou za hodinu.
-            from . import api
-            await asyncio.to_thread(api.uklid_pouziti)
 
         except asyncio.CancelledError:
             raise

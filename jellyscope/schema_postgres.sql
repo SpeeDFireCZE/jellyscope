@@ -309,17 +309,6 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 
 
--- Kdy a cim se API ptalo. Viz schema.sql.
-CREATE TABLE IF NOT EXISTS api_pouziti (
-    id        BIGSERIAL PRIMARY KEY,
-    token_id  BIGINT  REFERENCES api_tokens(id) ON DELETE SET NULL,
-    kdy       TEXT    NOT NULL,
-    cesta     TEXT    NOT NULL,
-    ip        TEXT,
-    vysledek  INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_api_pouziti_kdy   ON api_pouziti (kdy);
-CREATE INDEX IF NOT EXISTS idx_api_pouziti_token ON api_pouziti (token_id);
 
 
 -- Zapomenuti divaci: jeden radek na jedno kliknuti "Ano, zapomenout".
