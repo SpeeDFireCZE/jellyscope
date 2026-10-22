@@ -179,17 +179,18 @@ fi
 
 say "Dependencies"
 
-# Is the environment built on a new enough Python? The app needs 3.10 or
-# newer since FastAPI dropped 3.9. Without this check pip would be the
-# one to complain, with a message that never names the cause:
+# Is the environment built on a new enough Python? The app needs 3.11 or
+# newer since Starlette 1.8 (and 3.10 gets no security fixes after October
+# 2026). Without this check pip would be the one to complain, with a
+# message that never names the cause:
 #
 #     ERROR: Could not find a version that satisfies the requirement fastapi
 #
 # It reads as "the package does not exist", not as "your Python is too
 # old" - and the update would stop there with no idea what to do next.
-if ! "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+if ! "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
     OLD="$("$VENV/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo '?')"
-    die "The virtual environment is built on Python $OLD, the app needs 3.10+.
+    die "The virtual environment is built on Python $OLD, the app needs 3.11+.
 
      Nothing has been installed, the app keeps running on what it has.
 

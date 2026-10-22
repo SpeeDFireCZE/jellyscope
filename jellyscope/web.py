@@ -32,7 +32,7 @@ from fastapi.responses import (HTMLResponse, JSONResponse,
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import (accounts, api, applog, charts, collector, db, formatting, geoip,
+from . import (accounts, api, api_dotaz, applog, charts, collector, db, formatting, geoip,
                i18n, langstats, languages,
                pristup,
                scanner, sekce,
@@ -634,6 +634,16 @@ async def handle_http_error(request: Request, exc: HTTPException):
                         headers=exc.headers or None)
 
 
+@app.exception_handler(api_dotaz.ChybaApi)
+async def handle_api_error(request: Request, exc: api_dotaz.ChybaApi):
+    """Chyba API: vždy JSON se stejným tělem (`detail` + `error`).
+
+    Program podle `error` pozná, co je špatně, bez čtení věty. U 401 jde
+    s odpovědí i `WWW-Authenticate: Bearer`.
+    """
+    return JSONResponse(exc.telo(), status_code=exc.status, headers=exc.hlavicky)
+
+
 # ---- prvni spusteni ---------------------------------------------------
 
 def _setup_context(**extra: Any) -> dict[str, Any]:
@@ -941,6 +951,8 @@ def muj_ucet(request: Request, account: dict[str, Any] = Depends(require_login))
         api_klice=api.seznam(account["id"]),
         # Okno „Jak se to používá" (_api_navod.html) ukáže jen tyhle adresy.
         api_navod_adresy=adresy,
+        api_navod_pole=api.pole_adres(adresy),
+        api_navod_operatory=api_dotaz.OPERATORY,
         # Příklad v návodu má fungovat hned: první adresa s daty, kterou
         # účet smí (ne natvrdo /summary - to divák ve výchozím stavu nesmí).
         api_ukazka=next((a for a in adresy if a != "/api/v1/" and "{" not in a),

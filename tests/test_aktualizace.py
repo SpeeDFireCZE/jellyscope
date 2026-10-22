@@ -225,5 +225,160 @@ check(_prenese(_radek), "a řádek ze SQLite taky")
 _spojeni.close()
 
 print()
+print("--- před stažením se ověří balíčky nové verze ---")
+# 1.8.1 potřebuje Python 3.11. Tlačítko v 1.8.0 udělalo `git pull` a pak
+# spadlo na pip s hláškou, ze které příčina vidět nebyla. Teď se balíčky
+# nové verze nejdřív zkusí nainstalovat nanečisto (pip --dry-run) a když
+# to nejde, nestáhne se nic a hláška řekne proč.
+VOLANI: list[tuple] = []
+PIP_ZKOUSKA = {"kod": 0, "vystup": ""}
+GIT = {"requirements_stejne": False}
+NOVE_REQUIREMENTS = "starlette==9.0.0\n"
+
+
+def podvrzeny_git(*argumenty):
+    async def beh():
+        VOLANI.append(("git",) + argumenty)
+        if argumenty[:2] == ("diff", "--quiet") and "requirements.txt" in argumenty:
+            return {"kod": 0 if GIT["requirements_stejne"] else 1, "vystup": ""}
+        return {"kod": 0, "vystup": "Already up to date."}
+    return beh()
+
+
+def podvrzeny_obsah(*argumenty):
+    async def beh():
+        VOLANI.append(("git-obsah",) + argumenty)
+        return {"kod": 0, "vystup": NOVE_REQUIREMENTS}
+    return beh()
+
+
+def podvrzeny_spust(*prikaz):
+    async def beh():
+        VOLANI.append(prikaz)
+        if "--dry-run" in prikaz:
+            return dict(PIP_ZKOUSKA)
+        return {"kod": 0, "vystup": ""}
+    return beh()
+
+
+puvodni = (updates._git, updates._git_obsah, updates._spust)
+updates._git, updates._git_obsah, updates._spust = podvrzeny_git, podvrzeny_obsah, podvrzeny_spust
+db.set_setting(updates.NALEZENA_VERZE, "99.0.0")
+db.forget_settings()
+
+
+def stahlo() -> bool:
+    return any(v[:2] == ("git", "pull") for v in VOLANI)
+
+
+def instalovalo() -> bool:
+    return any("pip" in v and "install" in v and "--dry-run" not in v for v in VOLANI)
+
+
+def zkousel() -> bool:
+    return any("--dry-run" in v for v in VOLANI)
+
+
+# Python, který neexistuje (3.99): číslo se pak na stránku nemůže dostat
+# jinak než dosazením z výpisu pipu.
+NOVY_PYTHON = ("ERROR: Ignored the following versions that require a different python "
+               "version: 8.0.0 Requires-Python >=3.8; 9.0.0 Requires-Python >=3.99\n"
+               "ERROR: Could not find a version that satisfies the requirement "
+               "starlette==9.0.0 (from versions: 0.1.0, 1.7.0)\n"
+               "ERROR: No matching distribution found for starlette==9.0.0")
+PIP_ZKOUSKA.update(kod=1, vystup=NOVY_PYTHON)
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "error" and not stahlo() and not instalovalo(),
+      f"starý Python: nic se nestáhne ani nenainstaluje ({vysledek['status']})")
+check(vysledek.get("parametry", {}).get("potreba") == "3.99"
+      and vysledek.get("parametry", {}).get("mame") == "%d.%d" % sys.version_info[:2]
+      and "Python" in vysledek.get("message", ""),
+      f"hláška řekne, jaký Python je potřeba a jaký běží ({vysledek.get('parametry')})")
+check(any(v[:2] == ("git", "fetch") for v in VOLANI)
+      and any(v[:2] == ("git-obsah", "show") and "requirements.txt" in v[-1] for v in VOLANI),
+      "balíčky se berou z requirements.txt nové verze (fetch + show)")
+zkouska = next((v for v in VOLANI if "--dry-run" in v), ())
+check(bool(zkouska) and zkouska[0] == sys.executable,
+      "zkouší se Pythonem, na kterém aplikace běží")
+
+# Seznam „Ignored ..." pip skládá za všechny balíčky a bez jmen. Verze
+# Pythonu se bere jen u verze, která opravdu selhala, a jen když je
+# novější než ten, co běží - jinak by hláška radila nesmysl.
+for vystup, popis in (
+        ("ERROR: Ignored the following versions that require a different python version: "
+         "2.0 Requires-Python >=3.99\nERROR: No matching distribution found for starlette==9.0.0",
+         "Requires-Python patří jiné verzi"),
+        ("ERROR: Ignored the following versions that require a different python version: "
+         "9.0.0 Requires-Python >=3.8\nERROR: No matching distribution found for starlette==9.0.0",
+         "požadovaný Python není novější než běžící")):
+    PIP_ZKOUSKA.update(kod=1, vystup=vystup)
+    VOLANI.clear()
+    vysledek = asyncio.run(updates.aktualizuj())
+    check(vysledek["status"] == "error" and not stahlo()
+          and "potreba" not in vysledek.get("parametry", {})
+          and "vystup" in vysledek.get("parametry", {}),
+          f"{popis}: obecná hláška s výpisem pipu, ne rada o Pythonu")
+
+PIP_ZKOUSKA.update(kod=1, vystup="ERROR: No matching distribution found for nesmysl==9")
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "error" and not stahlo()
+      and "nesmysl==9" in vysledek.get("parametry", {}).get("vystup", ""),
+      "jiný problém s balíčky: nic se nestáhne a hláška ukáže, co řekl pip")
+
+PIP_ZKOUSKA.update(kod=2, vystup="no such option: --dry-run")
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "ok" and stahlo() and instalovalo(),
+      "starý pip bez --dry-run: zkouška se přeskočí, aktualizace proběhne jako dřív")
+
+# Neznámá volba v NOVÉM requirements.txt není starý pip - to se nestáhne.
+PIP_ZKOUSKA.update(kod=2, vystup="ERROR: Invalid requirement\nno such option: --budouci-volba")
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "error" and not stahlo(),
+      "neznámá volba v novém requirements.txt: nestáhne se")
+
+PIP_ZKOUSKA.update(kod=0, vystup="Would install starlette-9.0.0")
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "ok" and stahlo() and instalovalo(),
+      "balíčky jdou nainstalovat: stáhne se a nainstaluje")
+i_zkouska = next((i for i, v in enumerate(VOLANI) if "--dry-run" in v), 10 ** 6)
+i_pull = next((i for i, v in enumerate(VOLANI) if v[:2] == ("git", "pull")), -1)
+check(i_zkouska < i_pull, "zkouška je PŘED stažením")
+ostra = next((v for v in VOLANI if "pip" in v and "--dry-run" not in v), ())
+check(bool(zkouska) and [x for x in zkouska if x not in ("--dry-run",) and not str(x).endswith("requirements.txt")]
+      == [x for x in ostra if not str(x).endswith("requirements.txt")],
+      "zkouška i ostrá instalace volají pip stejně (jen --dry-run navíc)")
+
+# Beze změny requirements.txt (aktualizace jen překladů) se nezkouší nic.
+GIT["requirements_stejne"] = True
+PIP_ZKOUSKA.update(kod=1, vystup=NOVY_PYTHON)
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "ok" and not zkousel() and stahlo(),
+      "requirements.txt beze změny: žádná zkouška, rovnou stažení")
+GIT["requirements_stejne"] = False
+
+# Hláška dojde až na stránku i s čísly verzí.
+from fastapi.testclient import TestClient  # noqa: E402
+
+from jellyscope.web import app  # noqa: E402
+
+PIP_ZKOUSKA.update(kod=1, vystup=NOVY_PYTHON)
+klient = TestClient(app)
+klient.post("/login", data={"username": "spravce", "password": "dlouheheslo"})
+stranka = klient.post("/settings/update").text
+check("3.99" in stranka and "python3.99-venv" in stranka
+      and "%d.%d" % sys.version_info[:2] in stranka,
+      "na stránce je hláška s potřebnou i běžící verzí a příkazem pro ni")
+
+updates._git, updates._git_obsah, updates._spust = puvodni
+db.set_setting(updates.NALEZENA_VERZE, "")
+db.forget_settings()
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

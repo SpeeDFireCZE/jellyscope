@@ -45,9 +45,10 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 
-from . import accounts, applog, db, formatting, insights, pristup, scanner, stats
+from . import accounts, api_dotaz, applog, db, formatting, insights, pristup, scanner, stats
+from .api_dotaz import ChybaApi
 
 log = logging.getLogger("jellyscope.api")
 
@@ -220,11 +221,9 @@ def over_token(request: Request) -> dict[str, Any]:
     """
     token = token_z_hlavicky(request)
     if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Chybí token. Pošli hlavičku: Authorization: Bearer <token>",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise ChybaApi(401, "missing_token",
+                       "Missing token. Send the header: Authorization: Bearer <token>",
+                       hlavicky={"WWW-Authenticate": "Bearer"})
 
     radek = db.query_one(
         "SELECT id, name, last_used_at, stav, account_id"
@@ -237,8 +236,8 @@ def over_token(request: Request) -> dict[str, Any]:
     if not radek or (radek["account_id"] and not ucet):
         # Zamerne tataz veta jako u chybejiciho tokenu, jen jina prvni
         # pulka: co presne je spatne, se utocnik dozvedet nema.
-        raise HTTPException(status_code=401, detail="Neplatný token.",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise ChybaApi(401, "invalid_token", "Invalid token.",
+                       hlavicky={"WWW-Authenticate": "Bearer"})
 
     # Pro log API (web.ZaznamPouzitiApi): zapíše se i zamítnutý požadavek
     # - právě ten je při podezření na únik zajímavý.
@@ -246,28 +245,26 @@ def over_token(request: Request) -> dict[str, Any]:
         "id": radek["id"], "jmeno": radek["name"],
         "vlastnik": (ucet or {}).get("username") or ""}
     if radek["stav"] != AKTIVNI:
-        raise HTTPException(status_code=403, detail="Klíč je vypnutý.")
+        raise ChybaApi(403, "key_disabled", "The key is disabled.")
 
     # Klic serveru ma plna prava. Klic spravce taky - ale jen dokud je
     # spravcem: kdo o roli prijde, ma prava ctenare (divaka) a jeho klic
     # se zacne ridit povolenim stejne jako kazdy jiny.
     kdo = pristup.role(ucet) if ucet else pristup.SPRAVCE
     if ucet and not pristup.smi_klic(ucet):
-        raise HTTPException(status_code=403,
-                            detail="Účet nemá povolený vlastní klíč.")
+        raise ChybaApi(403, "key_not_allowed",
+                       "The key's account is not allowed a key of its own.")
     # Divak z Jellyfinu smi dovnitr jen tim, ze ho pusti Jellyfin. Kdyz
     # spravce prihlasovani pres Jellyfin vypne (nebo divaka v Jellyfinu
     # zakaze), ma prestat i jeho klic - jinak by si nastroj bral data dal,
     # zatimco spravce je presvedceny, ze divaci jsou venku.
     if kdo == pristup.DIVAK:
         if not pristup.login_zapnuty():
-            raise HTTPException(status_code=403,
-                                detail="Přihlášení přes Jellyfin je vypnuté.")
+            raise ChybaApi(403, "jellyfin_login_off", "Sign-in through Jellyfin is off.")
         divak = db.query_one("SELECT is_disabled FROM users WHERE id = ?",
                              (str(ucet.get("jellyfin_user_id") or ""),))
         if divak and divak["is_disabled"]:
-            raise HTTPException(status_code=403,
-                                detail="Účet je v Jellyfinu zakázaný.")
+            raise ChybaApi(403, "viewer_disabled", "The account is disabled in Jellyfin.")
 
     _oznac_pouziti(radek)
     return {**radek, "account": ucet, "role": kdo}
@@ -303,9 +300,55 @@ def smi_adresu(request: Request,
     """
     cesta = getattr(request.scope.get("route"), "path", "")
     if not _smi(token, cesta):
-        raise HTTPException(status_code=403,
-                            detail="Vlastník klíče tuhle část nevidí.")
+        raise ChybaApi(403, "area_not_allowed",
+                       "The key's owner cannot see this part of the statistics.")
     return token
+
+
+def dotaz_adresy(request: Request,
+                 token: dict[str, Any] = Depends(smi_adresu)) -> api_dotaz.Dotaz:
+    """Přečtený a zkontrolovaný dotaz adresy (filtry, sort, parametry).
+
+    Stojí za `smi_adresu`, takže FastAPI ji spustí až po závoře: kdo nemá
+    platný klíč, dostane 401/403 a nedozví se ani to, jaké parametry nebo
+    pole adresa zná.
+    """
+    cesta = getattr(request.scope.get("route"), "path", "")
+    return api_dotaz.nacti(list(request.query_params.multi_items()),
+                           ZNAME_PARAMETRY.get(cesta, set()), SEZNAMY.get(cesta, {}))
+
+
+def _dny_dotazu(dotaz: api_dotaz.Dotaz, vychozi: int = 30) -> int:
+    return api_dotaz.cele_cislo(dotaz, "days", vychozi, 1, 3650)
+
+
+def _limit_dotazu(dotaz: api_dotaz.Dotaz, vychozi: int | None, strop: int) -> int | None:
+    """Kolik řádků. Přes strop nebo nesmysl je 400, ne tiché oříznutí.
+
+    Strop je kvůli serveru, ne kvůli datům: „dej mi všechno" nad
+    knihovnou se čtyřiceti tisíci tituly je odpověď o desítkách MB a
+    dashboard, který se ptá každých pár vteřin, by tím server zaměstnal
+    naplno.
+    """
+    return api_dotaz.cele_cislo(dotaz, "limit", vychozi, 1, strop)
+
+
+def _nacist(dotaz: api_dotaz.Dotaz, seznam: str, limit: int | None) -> int:
+    """Kolik řádků si říct funkci, která má limit v SQL.
+
+    S filtrem nebo řazením celý seznam - filtr musí vidět všechno, jinak
+    by hledané řádky hlouběji v pořadí vypadly. Bez nich stačí `limit`
+    jako dřív: celý seznam je na velké knihovně drahý (historie za rok
+    ze 150 000 přehrání trvá sekundy) a výsledek by byl stejný.
+    """
+    if limit is None or any(dotaz.pro(seznam)):
+        return stats.BEZ_LIMITU
+    return limit
+
+
+def _druh_dotazu(dotaz: api_dotaz.Dotaz) -> str:
+    return api_dotaz.volba(dotaz, "kind", stats.KIND_BOTH,
+                           (stats.KIND_BOTH, stats.KIND_MOVIE, stats.KIND_SERIES))
 
 
 def _pro_vlastnika(token: dict[str, Any], data: Any) -> Any:
@@ -330,22 +373,15 @@ def zapis_pouziti(klic: dict[str, Any], cesta: str, ip: str, vysledek: int) -> N
                      cesta, ip, vysledek)
 
 
-def _dny(days: Any, vychozi: int = 30) -> int:
-    """Počet dní z adresy. Nesmysl spadne na výchozí hodnotu."""
-    try:
-        cislo = int(days)
-    except (TypeError, ValueError):
-        return vychozi
-    return max(1, min(cislo, 3650))
-
-
 @router.get("")
 @router.get("/")
-def rozcestnik(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def rozcestnik(token: dict[str, Any] = Depends(smi_adresu),
+               dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Co API umí. Aby se to nemuselo hledat v dokumentaci.
 
     Jen adresy, které tenhle klíč smí - co by vrátilo 403, tu nemá co
-    dělat.
+    dělat. U adres se seznamem i jejich pole a typy (`lists`) a jak se
+    filtruje (`filtering`), takže program zjistí, co smí poslat, sám.
     """
     from . import __version__
 
@@ -367,35 +403,18 @@ def rozcestnik(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
             "/api/v1/bandwidth": "how much data went out and where to (?days=30)",
             "/api/v1/item/{id}": "one title: file, versions and who watched it",
         }.items() if _smi(token, adresa.replace("{id}", "{item_id}"))},
-        "note": "Read-only. Authenticate with: Authorization: Bearer <token>",
+        "note": "Read-only. Authenticate with: Authorization: Bearer <token>. "
+                "Every list takes filters, sort and limit (see filtering and lists); "
+                "a malformed request is a 400 with an error code, never default data.",
+        "filtering": api_dotaz.napoveda(),
+        "lists": {adresa: seznamy for adresa, seznamy in SEZNAMY.items()
+                  if _smi(token, adresa)},
         "item_fields": "every item that is one file (least-played, unwatched, recently-added, "
                        "item, insights.oversized_rarely_watched) has path, tmdb_id, season and "
                        "episode; for an episode tmdb_id is the series' TMDB id and season + "
                        "episode say which one. Lists by title (top-items and the other insights "
                        "lists) have no single file; a playback in history has item_id for /item/{id}",
     }
-
-
-def _limit(limit: Any, vychozi: int, strop: int = 500) -> int:
-    """Kolik řádků. Nesmysl spadne na výchozí, moc se seřízne.
-
-    Strop je tu kvůli serveru, ne kvůli datům: „dej mi všechno" nad
-    knihovnou se čtyřiceti tisíci tituly je odpověď o desítkách MB a
-    dashboard, který se ptá každých pár vteřin, by tím server zaměstnal
-    naplno.
-    """
-    try:
-        cislo = int(limit)
-    except (TypeError, ValueError):
-        return vychozi
-    return max(1, min(cislo, strop))
-
-
-def _druh(kind: Any) -> str:
-    """"both" / "movies" / "series" - cokoliv jiného je "both"."""
-    hodnota = str(kind or "").strip().lower()
-    return hodnota if hodnota in (stats.KIND_BOTH, stats.KIND_MOVIE,
-                                  stats.KIND_SERIES) else stats.KIND_BOTH
 
 
 def _soubor(row: dict[str, Any]) -> dict[str, Any]:
@@ -439,9 +458,94 @@ def _titul(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Co jednotlivé adresy vracejí - podle toho se kontroluje filtr i řazení
+# a z toho se skládá nápověda. Test hlídá, že klíče řádku odpovědi jsou
+# přesně tahle pole: nápověda tak nemůže slíbit pole, které neexistuje.
+_T, _C, _CAS, _AN = api_dotaz.TEXT, api_dotaz.CISLO, api_dotaz.CAS, api_dotaz.ANO_NE
+POLE_TITULU: dict[str, str] = {
+    "id": _T, "name": _T, "type": _T, "series": _T, "year": _C, "library": _T,
+    "path": _T, "tmdb_id": _T, "season": _C, "episode": _C, "size_bytes": _C,
+    "size_human": _T, "resolution": _T, "video_codec": _T, "added_at": _CAS,
+}
+SEZNAMY: dict[str, dict[str, dict[str, str]]] = {
+    "/api/v1/least-played": {"items": {**POLE_TITULU, "plays": _C,
+                                       "watched_seconds": _C, "last_played": _CAS}},
+    "/api/v1/unwatched": {"items": POLE_TITULU},
+    "/api/v1/recently-added": {"items": POLE_TITULU},
+    "/api/v1/top-items": {"items": {"title": _T, "is_series": _AN, "plays": _C,
+                                    "watched_seconds": _C, "watched_hours": _C,
+                                    "url": _T}},
+    "/api/v1/users": {"users": {"id": _T, "name": _T, "is_administrator": _AN,
+                                "plays": _C, "titles": _C, "watched_hours": _C,
+                                "transcoded_hours": _C, "last_seen": _CAS}},
+    "/api/v1/history": {"playbacks": {
+        "user": _T, "user_id": _T, "title": _T, "series": _T, "type": _T,
+        "item_id": _T, "started_at": _CAS, "watched_seconds": _C,
+        "play_method": _T, "is_transcode": _AN, "client": _T, "device": _T,
+        "audio_language": _T, "subtitle_language": _T}},
+    "/api/v1/now-playing": {"sessions": {
+        "user": _T, "title": _T, "series": _T, "library": _T, "client": _T,
+        "device": _T, "play_method": _T, "is_transcode": _AN, "is_paused": _AN,
+        "audio_language": _T, "bitrate": _C, "position_seconds": _C,
+        "runtime_seconds": _C, "started_at": _CAS}},
+    "/api/v1/libraries": {"libraries": {"id": _T, "name": _T, "type": _T, "items": _C,
+                                        "size_bytes": _C, "size_human": _T,
+                                        "runtime_hours": _C}},
+    "/api/v1/bandwidth": {"countries": {"country": _T, "code": _T, "plays": _C,
+                                        "watched_seconds": _C, "bytes": _C}},
+    # Víc seznamů na jedné adrese: pole v dotazu nese předponu seznamu
+    # (`never_finished.title[contains]=x`). Bez filtru se volají jako dřív.
+    "/api/v1/insights": {
+        "transcode_offenders": {"title": _T, "transcodes": _C, "reasons": _T,
+                                "video_codec": _T, "audio_codec": _T,
+                                "resolution": _T, "url": _T},
+        "upgrade_candidates": {"title": _T, "plays": _C, "watched_hours": _C,
+                               "resolution": _T, "bitrate": _C, "video_codec": _T,
+                               "url": _T},
+        "oversized_rarely_watched": {"id": _T, "title": _T, "type": _T, "path": _T,
+                                     "tmdb_id": _T, "season": _C, "episode": _C,
+                                     "plays": _C, "watched_hours": _C,
+                                     "size_bytes": _C, "size_human": _T,
+                                     "gb_per_hour": _C, "resolution": _T},
+        "never_finished": {"title": _T, "attempts": _C, "best_percent": _C,
+                           "runtime_minutes": _C},
+    },
+    "/api/v1/play-methods": {
+        "methods": {"method": _T, "hours": _C},
+        "clients": {"client": _T, "hours": _C, "plays": _C},
+    },
+}
+# Obyčejné parametry adresy - co tu není (a není to filtr ani `sort`), je
+# 400 unknown_parameter.
+ZNAME_PARAMETRY: dict[str, set[str]] = {
+    "/api/v1/least-played": {"days", "limit", "min_size_mb", "order"},
+    "/api/v1/unwatched": {"days", "limit"},
+    "/api/v1/recently-added": {"limit"},
+    "/api/v1/top-items": {"days", "limit", "kind"},
+    "/api/v1/users": {"days", "limit"},
+    "/api/v1/history": {"days", "limit", "user", "kind"},
+    "/api/v1/now-playing": {"limit"},
+    "/api/v1/libraries": {"limit"},
+    "/api/v1/bandwidth": {"days", "limit"},
+    "/api/v1/insights": {"days", "limit"},
+    "/api/v1/play-methods": {"days", "limit"},
+    "/api/v1": set(),
+    "/api/v1/": set(),
+    "/api/v1/summary": {"days"},
+    "/api/v1/library": {"days"},
+    "/api/v1/item/{item_id}": set(),
+}
+
+
+def pole_adres(adresy: list[str]) -> dict[str, dict[str, dict[str, str]]]:
+    """Pole seznamů u adres, které klíč smí - pro okno „Jak se to používá"."""
+    return {adresa: SEZNAMY[adresa] for adresa in adresy if adresa in SEZNAMY}
+
+
 @router.get("/libraries")
-def knihovny(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def knihovny(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Každá knihovna zvlášť - to, co jsou karty na stránce Knihovna."""
+    limit = _limit_dotazu(dotaz, None, 500)
     karty = [{
         "id": k["id"],
         "name": k["name"],
@@ -451,33 +555,33 @@ def knihovny(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
         "size_human": formatting.bytes_human(int(k.get("size_bytes") or 0)),
         "runtime_hours": round(float(k.get("hours") or 0), 1),
     } for k in stats.library_cards()]
+    karty = api_dotaz.pouzij(karty, *dotaz.pro("libraries"), limit)
     return {"count": len(karty), "libraries": karty}
 
 
 @router.get("/top-items")
-def nejsledovanejsi(days: Any = 30, limit: Any = 10, kind: Any = "both",
-                    token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def nejsledovanejsi(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Nejsledovanější tituly za období. Díly seriálu se sčítají."""
-    dny = _dny(days)
-    radky = stats.top_items(dny, _limit(limit, 10, 200), _druh(kind))
+    dny = _dny_dotazu(dotaz)
+    limit = _limit_dotazu(dotaz, 10, 200)
+    druh = _druh_dotazu(dotaz)
+    polozky = [{
+        "title": r.get("label"),
+        "is_series": bool(r.get("is_series")),
+        "plays": int(r.get("plays") or 0),
+        "watched_seconds": int(r.get("seconds") or 0),
+        "watched_hours": round(float(r.get("hours") or 0), 2),
+        "url": r.get("detail_url"),
+    } for r in stats.top_items(dny, _nacist(dotaz, "items", limit), druh)]
     return {
         "days": dny,
-        "kind": _druh(kind),
-        "items": [{
-            "title": r.get("label"),
-            "is_series": bool(r.get("is_series")),
-            "plays": int(r.get("plays") or 0),
-            "watched_seconds": int(r.get("seconds") or 0),
-            "watched_hours": round(float(r.get("hours") or 0), 2),
-            "url": r.get("detail_url"),
-        } for r in radky],
+        "kind": druh,
+        "items": api_dotaz.pouzij(polozky, *dotaz.pro("items"), limit),
     }
 
 
 @router.get("/least-played")
-def nejmene_hrane(days: Any = 365, limit: Any = 25, min_size_mb: Any = 0,
-                  order: Any = None,
-                  token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def nejmene_hrane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Soubory od nejméně hraných: nuly napřed, v nich největší první.
 
     Počet spuštění je za období, poslední přehrání za celou historii -
@@ -485,62 +589,90 @@ def nejmene_hrane(days: Any = 365, limit: Any = 25, min_size_mb: Any = 0,
 
     `order` je nepovinné a mění jen pořadí titulů se stejným počtem
     spuštění: `oldest` / `newest` podle data přidání místo velikosti.
-    Bez něj (nebo s neznámou hodnotou) se řadí jako dřív - dashboard
-    postavený na staré odpovědi se nezmění.
+    Bez něj se řadí jako dřív - dashboard postavený na staré odpovědi se
+    nezmění. Neznámá hodnota je 400. `order` a `sort` naráz taky: řekly
+    by si každé o jiné pořadí.
     """
-    dny = _dny(days, 365)
-    try:
-        min_bajtu = max(0, int(float(min_size_mb))) * 1_048_576
-    except (TypeError, ValueError):
-        min_bajtu = 0
-    poradi = insights.poradi_nejmene_hranych(order)
-    radky = insights.least_played(dny, _limit(limit, 25), min_bajtu, poradi)
+    dny = _dny_dotazu(dotaz, 365)
+    limit = _limit_dotazu(dotaz, 25, 500)
+    min_bajtu = int(api_dotaz.cislo(dotaz, "min_size_mb", 0, 0)) * 1_048_576
+    if "order" in dotaz.hodnoty and dotaz.razeni:
+        raise api_dotaz.chyba("conflicting_parameters",
+                              "Use either 'order' or 'sort', not both.", "order")
+    poradi = api_dotaz.volba(dotaz, "order", "size",
+                             tuple(insights.PORADI_NEJMENE_HRANYCH))
+    polozky = [{
+        **_titul(r),
+        "plays": int(r.get("plays") or 0),
+        "watched_seconds": int(r.get("watched_seconds") or 0),
+        "last_played": r.get("last_played"),
+    } for r in insights.least_played(dny, _nacist(dotaz, "items", limit),
+                                     min_bajtu, poradi)]
     return {
         "days": dny,
         "order": poradi,
-        "items": [{
-            **_titul(r),
-            "plays": int(r.get("plays") or 0),
-            "watched_seconds": int(r.get("watched_seconds") or 0),
-            "last_played": r.get("last_played"),
-        } for r in radky],
+        "items": api_dotaz.pouzij(polozky, *dotaz.pro("items"), limit),
     }
 
 
 @router.get("/unwatched")
-def nesledovane(days: Any = 365, limit: Any = 25,
-                token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def nesledovane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Co se za období vůbec nehrálo - a kolik místa to zabírá.
 
     Nejcennější číslo, které Jellyscope umí: podíl knihovny, který nikoho
     nezajímá. Tituly přidané v posledních dnech se nepočítají, ty ještě
     šanci nedostaly.
+
+    S filtrem se počet, velikost a podíl počítají jen z vybraných řádků
+    (před limitem) - „kolik místa zabírá nesledované v téhle složce".
     """
-    dny = _dny(days, 365)
-    mrtve = insights.dead_storage(_limit(limit, 25), dny)
+    dny = _dny_dotazu(dotaz, 365)
+    limit = _limit_dotazu(dotaz, 25, 500)
+    mrtve = insights.dead_storage(_nacist(dotaz, "items", limit), dny)
+    knihovna = int(mrtve.get("library_bytes") or 0)
+    vybrane = api_dotaz.pouzij([_titul(r) for r in mrtve.get("rows") or []],
+                               *dotaz.pro("items"), None)
+    if dotaz.ma_filtr("items"):
+        souhrn = _souhrn_nevyuzitych(vybrane, knihovna)
+    else:
+        velikost = int(mrtve.get("size_bytes") or 0)
+        souhrn = {"count": int(mrtve.get("item_count") or 0), "size_bytes": velikost,
+                  "size_human": formatting.bytes_human(velikost),
+                  "share_percent": round(float(mrtve.get("share") or 0), 1)}
     return {
         "days": dny,
-        "count": int(mrtve.get("item_count") or 0),
-        "size_bytes": int(mrtve.get("size_bytes") or 0),
-        "size_human": formatting.bytes_human(int(mrtve.get("size_bytes") or 0)),
-        "library_bytes": int(mrtve.get("library_bytes") or 0),
-        "share_percent": round(float(mrtve.get("share") or 0), 1),
-        "items": [_titul(r) for r in mrtve.get("rows") or []],
+        "count": souhrn["count"],
+        "size_bytes": souhrn["size_bytes"],
+        "size_human": souhrn["size_human"],
+        "library_bytes": knihovna,
+        "share_percent": souhrn["share_percent"],
+        "items": vybrane if limit is None else vybrane[:limit],
+    }
+
+
+def _souhrn_nevyuzitych(radky: list[dict[str, Any]], library_bytes: int) -> dict[str, Any]:
+    """Počet, velikost a podíl na knihovně z (vyfiltrovaných) řádků."""
+    velikost = sum(int(r.get("size_bytes") or 0) for r in radky)
+    return {
+        "count": len(radky),
+        "size_bytes": velikost,
+        "size_human": formatting.bytes_human(velikost),
+        "share_percent": round(velikost / library_bytes * 100, 1) if library_bytes else 0.0,
     }
 
 
 @router.get("/users")
-def divaci(days: Any = 30,
-           token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def divaci(token: dict[str, Any] = Depends(smi_adresu),
+           dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Diváci a kolik toho za období odsledovali.
 
     Jsou tu jména - stejně jako na stránce Uživatelé, a stejně jako tam
-    je klíč diváka nebo čtenáře s anonymizací dostane schovaná.
+    je klíč diváka nebo čtenáře s anonymizací dostane schovaná. Filtr
+    běží až nad schovanými jmény, takže skutečné jméno jím najít nejde.
     """
-    dny = _dny(days)
-    return {
-        "days": dny,
-        "users": [{
+    dny = _dny_dotazu(dotaz)
+    limit = _limit_dotazu(dotaz, None, 500)
+    divaci = [{
             "id": r.get("id"),
             "name": r.get("name"),
             "is_administrator": bool(r.get("is_administrator")),
@@ -549,92 +681,132 @@ def divaci(days: Any = 30,
             "watched_hours": round(float(r.get("hours") or 0), 2),
             "transcoded_hours": round(float(r.get("transcoded_hours") or 0), 2),
             "last_seen": r.get("last_seen"),
-        } for r in _pro_vlastnika(token, stats.user_table(dny))],
-    }
+        } for r in _pro_vlastnika(token, stats.user_table(dny))]
+    return {"days": dny, "users": api_dotaz.pouzij(divaci, *dotaz.pro("users"), limit)}
 
 
 @router.get("/history")
-def historie(days: Any = 30, limit: Any = 50, user: Any = None,
-             kind: Any = "both",
-             token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def historie(token: dict[str, Any] = Depends(smi_adresu),
+             dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Poslední přehrávání - nejnovější první.
 
     Pole jsou vyjmenovaná, ne `p.*`: řádek historie nese i adresu,
     ze které se člověk díval, a ta do souhrnu pro dashboard nepatří.
     Pro provoz po síti je `/api/v1/bandwidth`, a to bez adres.
+
+    Divácký klíč vidí jen svou historii. Cizí `user` je 403 - dřív se
+    potichu přepsal na vlastního diváka a nástroj si myslel, že má cizí
+    data.
     """
-    dny = _dny(days)
+    dny = _dny_dotazu(dotaz)
+    limit = _limit_dotazu(dotaz, 50, 500)
+    druh = _druh_dotazu(dotaz)
     # Historie filtruje po DNECH v místním čase (tak, jak to má stránka
     # Historie), ne po okamžicích - proto datum, ne časová značka.
     od = (date.today() - timedelta(days=dny - 1)).isoformat()
-    kdo = str(user).strip()[:64] if user else None
-    # Divak vidi jen svou historii, at si do adresy napise cokoliv -
-    # stejne jako na strance Historie.
-    kdo = pristup.muj_divak(token.get("account")) or kdo
-    radky = _pro_vlastnika(token, stats.history(limit=_limit(limit, 50), user_id=kdo,
-                                                kind=_druh(kind), od=od))
+    # Prázdné `user=` ukazoval návod jako „všichni" - bere se jako bez něj.
+    kdo = None if dotaz.hodnoty.get("user") == "" else api_dotaz.identifikator(dotaz, "user")
+    muj = pristup.muj_divak(token.get("account"))
+    if muj and kdo and accounts.hole_id(kdo) != accounts.hole_id(muj):
+        raise ChybaApi(403, "own_history_only",
+                       "This key sees only the history of its own account.", "user")
+    filtry, razeni = dotaz.pro("playbacks")
+    if not (filtry or razeni):
+        radky = _pro_vlastnika(token, stats.history(limit=limit, user_id=muj or kdo,
+                                                    kind=druh, od=od))
+        prehrani = [_prehrani(r) for r in radky]
+    else:
+        # Celá historie období po dávkách: v paměti jen to, co filtr pustí.
+        # Bez řazení stačí prvních `limit` shod - pořadí je dané dotazem.
+        prehrani = []
+        for davka in stats.historie_pro_api(user_id=muj or kdo, kind=druh, od=od):
+            prehrani += api_dotaz.pouzij([_prehrani(r) for r in _pro_vlastnika(token, davka)],
+                                         filtry, [], None)
+            if not razeni and len(prehrani) >= limit:
+                break
+        prehrani = api_dotaz.pouzij(prehrani, [], razeni, limit)
+    return {"days": dny, "count": len(prehrani), "playbacks": prehrani}
+
+
+def _prehrani(r: dict[str, Any]) -> dict[str, Any]:
+    """Jedno přehrání tak, jak ho API vrací."""
     return {
-        "days": dny,
-        "count": len(radky),
-        "playbacks": [{
-            "user": r.get("user_name"),
-            "user_id": r.get("user_id"),
-            "title": r.get("item_name"),
-            "series": r.get("series_name"),
-            "type": r.get("item_type"),
-            "item_id": r.get("item_id"),
-            "started_at": r.get("started_at"),
-            "watched_seconds": int(r.get("watched_seconds") or 0),
-            "play_method": r.get("play_method"),
-            "is_transcode": str(r.get("play_method") or "").lower().startswith("transcode"),
-            "client": r.get("client"),
-            "device": r.get("device_name"),
-            "audio_language": r.get("audio_language"),
-            "subtitle_language": r.get("subtitle_language"),
-        } for r in radky],
+        "user": r.get("user_name"),
+        "user_id": r.get("user_id"),
+        "title": r.get("item_name"),
+        "series": r.get("series_name"),
+        "type": r.get("item_type"),
+        "item_id": r.get("item_id"),
+        "started_at": r.get("started_at"),
+        "watched_seconds": int(r.get("watched_seconds") or 0),
+        "play_method": r.get("play_method"),
+        "is_transcode": str(r.get("play_method") or "").lower().startswith("transcode"),
+        "client": r.get("client"),
+        "device": r.get("device_name"),
+        "audio_language": r.get("audio_language"),
+        "subtitle_language": r.get("subtitle_language"),
     }
 
 
 @router.get("/recently-added")
-def nedavno_pridane(limit: Any = 18,
-                    token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def nedavno_pridane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Co do knihovny přišlo naposledy. Díly jedné dávky jsou u sebe.
 
     Seriál, kterému přibylo víc dílů naráz, je tu jednou - položkou je
     nejnovější díl té dávky, takže id, cesta, řada a díl patří jemu.
     """
-    radky = stats.recently_added(_limit(limit, 18, 200))
-    return {"count": len(radky), "items": [_titul(r) for r in radky]}
+    limit = _limit_dotazu(dotaz, 18, 200)
+    polozky = api_dotaz.pouzij(
+        [_titul(r) for r in stats.recently_added(_nacist(dotaz, "items", limit))],
+        *dotaz.pro("items"), limit)
+    return {"count": len(polozky), "items": polozky}
 
 
 @router.get("/play-methods")
-def zpusoby_prehrani(days: Any = 30,
-                     token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
-    """Přímé přehrávání proti překódování - a čím se lidé dívají."""
-    dny = _dny(days)
+def zpusoby_prehrani(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
+    """Přímé přehrávání proti překódování - a čím se lidé dívají.
+
+    `limit` platí pro oba seznamy; bez něj jsou způsoby celé a klientů
+    25 jako dřív. Klienti se počítají všichni a filtr jde přes ně celé.
+    """
+    dny = _dny_dotazu(dotaz)
+    limit = _limit_dotazu(dotaz, None, 500)
+    kolik_klientu = 25 if limit is None else limit
+    zpusoby = [{
+        "method": r.get("method"),
+        "hours": round(float(r.get("hours") or 0), 2),
+    } for r in stats.play_method_breakdown(dny)]
+    klienti = [{
+        "client": r.get("label"),
+        "hours": round(float(r.get("hours") or 0), 2),
+        "plays": int(r.get("plays") or 0),
+    } for r in stats.client_breakdown(dny, _nacist(dotaz, "clients", kolik_klientu))]
     return {
         "days": dny,
-        "methods": [{
-            "method": r.get("method"),
-            "hours": round(float(r.get("hours") or 0), 2),
-        } for r in stats.play_method_breakdown(dny)],
-        "clients": [{
-            "client": r.get("label"),
-            "hours": round(float(r.get("hours") or 0), 2),
-            "plays": int(r.get("plays") or 0),
-        } for r in stats.client_breakdown(dny, 25)],
+        "methods": api_dotaz.pouzij(zpusoby, *dotaz.pro("methods"), limit),
+        "clients": api_dotaz.pouzij(klienti, *dotaz.pro("clients"), kolik_klientu),
     }
 
 
 @router.get("/insights")
-def zjisteni(days: Any = 30, limit: Any = 15,
-             token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
-    """Stránka Zjištění v číslech - tituly, které stojí za pozornost."""
-    dny = _dny(days)
-    kolik = _limit(limit, 15, 100)
+def zjisteni(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
+    """Stránka Zjištění v číslech - tituly, které stojí za pozornost.
+
+    Každý seznam se spočítá celý a filtr s jeho předponou jde přes něj
+    celý; `limit` je až nakonec a platí pro všechny čtyři.
+    """
+    dny = _dny_dotazu(dotaz)
+    kolik = _limit_dotazu(dotaz, 15, 100)
+
+    def nacist(jmeno: str) -> int:
+        return _nacist(dotaz, jmeno, kolik)
+
+    def seznam(jmeno: str, polozky: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return api_dotaz.pouzij(polozky, *dotaz.pro(jmeno), kolik)
+
     return {
         "days": dny,
-        "transcode_offenders": [{
+        "transcode_offenders": seznam("transcode_offenders", [{
             "title": r.get("label"),
             "transcodes": int(r.get("transcodes") or 0),
             "reasons": r.get("reasons"),
@@ -642,8 +814,8 @@ def zjisteni(days: Any = 30, limit: Any = 15,
             "audio_codec": r.get("audio_codec"),
             "resolution": _rozliseni(r),
             "url": r.get("detail_url"),
-        } for r in insights.transcode_offenders(dny, kolik)],
-        "upgrade_candidates": [{
+        } for r in insights.transcode_offenders(dny, nacist("transcode_offenders"))]),
+        "upgrade_candidates": seznam("upgrade_candidates", [{
             "title": r.get("label"),
             "plays": int(r.get("plays") or 0),
             "watched_hours": round(float(r.get("hours") or 0), 2),
@@ -651,8 +823,8 @@ def zjisteni(days: Any = 30, limit: Any = 15,
             "bitrate": r.get("bitrate"),
             "video_codec": r.get("video_codec"),
             "url": r.get("detail_url"),
-        } for r in insights.upgrade_candidates(dny, kolik)],
-        "oversized_rarely_watched": [{
+        } for r in insights.upgrade_candidates(dny, nacist("upgrade_candidates"))]),
+        "oversized_rarely_watched": seznam("oversized_rarely_watched", [{
             "id": r.get("id"),
             "title": r.get("label"),
             "type": r.get("type"),
@@ -663,13 +835,14 @@ def zjisteni(days: Any = 30, limit: Any = 15,
             "size_human": formatting.bytes_human(r.get("size_bytes") or 0),
             "gb_per_hour": round(float(r.get("gb_per_hour") or 0), 2),
             "resolution": _rozliseni(r),
-        } for r in insights.oversized_rarely_watched(dny, kolik)],
-        "never_finished": [{
+        } for r in insights.oversized_rarely_watched(
+            dny, nacist("oversized_rarely_watched"))]),
+        "never_finished": seznam("never_finished", [{
             "title": r.get("label"),
             "attempts": int(r.get("attempts") or 0),
             "best_percent": round(float(r.get("best_percent") or 0), 1),
             "runtime_minutes": round(float(r.get("runtime_minutes") or 0)),
-        } for r in insights.never_finished(dny, kolik)],
+        } for r in insights.never_finished(dny, nacist("never_finished"))]),
         "transcode_speed": _rychlost(insights.rychlost_prevodu(dny)),
     }
 
@@ -701,10 +874,13 @@ def _rozliseni(row: dict[str, Any]) -> str | None:
 
 
 @router.get("/bandwidth")
-def provoz(days: Any = 30,
-           token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
-    """Kolik dat odešlo a kam - souhrn, bez adres jednotlivých lidí."""
-    dny = _dny(days)
+def provoz(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
+    """Kolik dat odešlo a kam - souhrn, bez adres jednotlivých lidí.
+
+    Filtr zúží jen seznam zemí; souhrnná čísla jsou ze všech přehrání.
+    """
+    dny = _dny_dotazu(dotaz)
+    limit = _limit_dotazu(dotaz, None, 500)
     prehled = stats.bandwidth_prehled(dny)
     odkud = stats.odkud_se_divaji(dny)["skupiny"]
     return {
@@ -723,13 +899,13 @@ def provoz(days: Any = 30,
             "internet": _puvod(odkud["internet"]),
             "unknown": _puvod(odkud["neznamo"]),
         },
-        "countries": [{
+        "countries": api_dotaz.pouzij([{
             "country": z.get("label"),
             "code": z.get("kod"),
             "plays": int(z.get("plays") or 0),
             "watched_seconds": int(z.get("sekund") or 0),
             "bytes": int(z.get("bajtu") or 0),
-        } for z in stats.zeme_divaku(dny)],
+        } for z in stats.zeme_divaku(dny)], *dotaz.pro("countries"), limit),
     }
 
 
@@ -743,7 +919,7 @@ def _puvod(skupina: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/item/{item_id}")
 def titul(item_id: str,
-          token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+          dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Jeden titul: soubor, jeho verze a kdo se na něj díval."""
     # Id z Jellyfinu je hex, v ukazce "demo-ep-0-1" - pismena, cislice,
     # pomlcka, podtrzitko. Cokoliv jineho je preklep nebo pokus a odpoved
@@ -752,10 +928,10 @@ def titul(item_id: str,
     # ale pred tim, aby se s nesmyslem vubec pracovalo.
     if not item_id or len(item_id) > 64 or not all(
             c.isalnum() or c in "-_" for c in item_id):
-        raise HTTPException(status_code=404, detail="Titul neexistuje.")
+        raise ChybaApi(404, "not_found", "Item not found.")
     polozka = stats.item(item_id)
     if polozka is None:
-        raise HTTPException(status_code=404, detail="Titul neexistuje.")
+        raise ChybaApi(404, "not_found", "Item not found.")
     souhrn = stats.item_playback_summary(item_id)
     return {
         **_titul(polozka),
@@ -780,10 +956,9 @@ def titul(item_id: str,
 
 
 @router.get("/summary")
-def souhrn(days: Any = 30,
-           token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def souhrn(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Sledovanost za období - to, co je na Přehledu nahoře."""
-    dny = _dny(days)
+    dny = _dny_dotazu(dotaz)
     prehled = stats.overview(dny)
     watched = int(prehled.get("watched_seconds") or 0)
     return {
@@ -799,8 +974,10 @@ def souhrn(days: Any = 30,
 
 
 @router.get("/now-playing")
-def prave_hraje(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def prave_hraje(token: dict[str, Any] = Depends(smi_adresu),
+                dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Právě běžící přehrávání. Prázdný seznam je taky odpověď."""
+    limit = _limit_dotazu(dotaz, None, 500)
     relace = []
     for row in _pro_vlastnika(token, stats.active_sessions()):
         relace.append({
@@ -819,19 +996,19 @@ def prave_hraje(token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
             "runtime_seconds": int(row.get("runtime_seconds") or 0),
             "started_at": row.get("started_at"),
         })
+    relace = api_dotaz.pouzij(relace, *dotaz.pro("sessions"), limit)
     return {"count": len(relace), "sessions": relace}
 
 
 @router.get("/library")
-def knihovna(days: Any = 30,
-             token: dict[str, Any] = Depends(smi_adresu)) -> dict[str, Any]:
+def knihovna(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
     """Velikost knihovny, růst za období a volné místo.
 
     Tatáž čísla, jaká stojí na stránce Knihovna - počítaná týmiž
     funkcemi, ne vlastním dotazem. Dvě místa, která se ptají jinak, se
     dřív nebo později rozejdou.
     """
-    dny = _dny(days)
+    dny = _dny_dotazu(dotaz)
     stav = stats.stav_knihovny()
     rust = stats.rust_knihovny(dny)
     volne = scanner._volne_misto_knihovny()

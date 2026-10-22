@@ -266,12 +266,14 @@ ok "python3 $(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:
 
 # --- new enough Python? ----------------------------------------------------
 #
-# The app needs Python 3.10 or newer. Not a whim of ours: FastAPI stopped
-# supporting 3.9 with version 0.116, and the version we pin is newer than
-# that (see requirements.txt - the older pins had 21 known security holes).
+# The app needs Python 3.11 or newer. Not a whim of ours: Starlette, which
+# FastAPI is built on, needs 3.11 since version 1.8, and Python 3.10 itself
+# gets no more security fixes after October 2026 (see requirements.txt -
+# the older pins had 21 known security holes).
 #
-# Ubuntu 20.04 ships Python 3.8 by default and the installation there
-# ends with a message that never names the cause:
+# Ubuntu 20.04 ships Python 3.8 and Ubuntu 22.04 Python 3.10 by default,
+# and the installation there ends with a message that never names the
+# cause:
 #
 #   ERROR: Could not find a version that satisfies the requirement fastapi==0.141.1
 #
@@ -279,7 +281,7 @@ ok "python3 $(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:
 # Python installed next to the default one - it is often already there -
 # and use that.
 
-MIN_MINOR=10
+MIN_MINOR=11
 PYTHON_BIN="python3"
 
 version_ok() {
@@ -290,7 +292,7 @@ if ! version_ok python3; then
     OLD="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo '?')"
     warn "the default python3 is $OLD, we need 3.$MIN_MINOR or newer"
 
-    for candidate in python3.13 python3.12 python3.11 python3.10; do
+    for candidate in python3.13 python3.12 python3.11; do
         if command -v "$candidate" >/dev/null && version_ok "$candidate"; then
             PYTHON_BIN="$candidate"
             ok "found a newer one next to it: $candidate"
@@ -303,23 +305,22 @@ if ! version_ok "$PYTHON_BIN"; then
     die "Python 3.$MIN_MINOR+ is not in the system and I did not find one
      next to the default either.
 
-     Typical for Ubuntu 20.04, which ships Python 3.8.
+     Typical for Ubuntu 22.04 (Python 3.10) and 20.04 (Python 3.8).
      Do NOT upgrade the whole system over this - adding a newer Python
      next to the current one breaks nothing.
 
      1) TRY THIS FIRST - it needs no third-party package source:
 
-            sudo apt install python3.10 python3.10-venv
+            sudo apt install python3.11 python3.11-venv
 
-        Ubuntu 22.04 and newer have python3.10 right in their own
-        repository, so this is usually all it takes. If apt says it does
+        Ubuntu 22.04 has python3.11 right in its own repository
+        (universe), so this is usually all it takes. If apt says it does
         not know the package, universe is probably missing:
 
             sudo add-apt-repository universe && sudo apt update
 
         On Ubuntu 20.04 apt will not find it whatever you do - its own
-        repository stops at python3.9, which is no longer enough. There,
-        go straight to point 2.
+        repository stops at python3.9. There, go straight to point 2.
 
      2) When that fails, reach for the deadsnakes PPA:
 

@@ -25,6 +25,7 @@ import logging
 import pathlib
 import re
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -325,7 +326,9 @@ async def aktualizuj() -> dict[str, Any]:
     """Stahne novou verzi a doinstaluje zavislosti. Nerestartuje.
 
     Deleji se presne dva kroky z `deploy/update.sh` - `git pull` a
-    `pip install`. Restart si rika volajici sam (viz web_nastaveni._naplanuj_restart),
+    `pip install` - a pred nimi zkouska nanecisto, jestli pujdou balicky
+    nove verze nainstalovat (`_overeni_balicku`). Restart si rika volajici
+    sam (viz web_nastaveni._naplanuj_restart),
     protoze aplikace umi nahradit svuj proces a nepotrebuje k tomu
     spravce sluzby.
 
@@ -362,12 +365,15 @@ async def aktualizuj() -> dict[str, Any]:
                                "(kód, který ještě nevyšel jako vydání). "
                                "Aktualizace počká, až vyjde."}
 
+    neprojde = await _overeni_balicku()
+    if neprojde:
+        return neprojde
+
     pull = await _git("pull", "--ff-only")
     if pull["kod"] != 0:
         return {"status": "error", "message": pull["vystup"][-400:]}
 
-    pip = await _spust(sys.executable, "-m", "pip", "install", "--quiet",
-                       "-r", str(KOREN / "requirements.txt"))
+    pip = await _pip("-r", str(KOREN / "requirements.txt"))
     if pip["kod"] != 0:
         return {"status": "error", "message": pip["vystup"][-400:]}
 
@@ -376,6 +382,72 @@ async def aktualizuj() -> dict[str, Any]:
     # prekladech visela az do dalsi kontroly, i kdyz uz jsou v aplikaci.
     db.set_setting(NOVE_PREKLADY, "")
     return {"status": "ok", "vystup": pull["vystup"]}
+
+
+async def _overeni_balicku() -> dict[str, Any] | None:
+    """Půjdou balíčky nové verze na tomhle serveru nainstalovat? None = ano.
+
+    Zkusí se to nanečisto (`pip install --dry-run`) s `requirements.txt`
+    z nové verze, ještě PŘED stažením. Dřív se nejdřív stáhl kód a teprve
+    pip zjistil, že to nejde - 1.8.1 potřebuje Python 3.11 a na 3.10
+    skončilo tlačítko hláškou, ze které příčina vidět nebyla. Takhle se
+    nestáhne nic, dál běží tahle verze a hláška řekne, co udělat.
+
+    Když se to ověřit nedá (nejde fetch, starý pip bez --dry-run), nic se
+    nezdržuje - aktualizace proběhne jako dřív a případnou chybu ohlásí
+    pip sám. Beze změny `requirements.txt` (třeba jen překlady) se nezkouší
+    nic - balíčky jsou tytéž, které už běží.
+    """
+    if (await _git("fetch", "--quiet"))["kod"] != 0:
+        return None
+    if (await _git("diff", "--quiet", "HEAD", "@{u}", "--", "requirements.txt"))["kod"] == 0:
+        return None
+    nove = await _git_obsah("show", "@{u}:requirements.txt")
+    if nove["kod"] != 0:
+        return None
+    with tempfile.TemporaryDirectory() as slozka:
+        soubor = pathlib.Path(slozka) / "requirements.txt"
+        soubor.write_text(nove["vystup"], encoding="utf-8")
+        zkouska = await _pip("--dry-run", "-r", str(soubor))
+    vystup = zkouska["vystup"]
+    if zkouska["kod"] == 0 or "no such option: --dry-run" in vystup:
+        return None
+    potreba = _potrebny_python(vystup)
+    if potreba:
+        return {"status": "error",
+                "message": "Nová verze potřebuje Python {potreba} nebo novější, tady běží "
+                           "{mame}. Nic jsem nestáhl, dál běží tahle verze. Doinstaluj "
+                           "Python {potreba} vedle stávajícího (Ubuntu: sudo apt install "
+                           "python{potreba} python{potreba}-venv), pak ve složce aplikace "
+                           "spusť git pull a bash deploy/install.sh a restartuj službu - "
+                           "prostředí se postaví na novém Pythonu, databáze i .env "
+                           "zůstanou.",
+                "parametry": {"potreba": potreba, "mame": "%d.%d" % sys.version_info[:2]}}
+    return {"status": "error",
+            "message": "Balíčky nové verze se na tomhle serveru nedají nainstalovat, "
+                       "tak jsem nic nestáhl a dál běží tahle verze. Co hlásí pip: {vystup}",
+            "parametry": {"vystup": vystup.strip()[-400:]}}
+
+
+def _potrebny_python(vystup: str) -> str:
+    """Jaký Python chce balíček, který se nedal nainstalovat. Prázdné = nevím.
+
+    Seznam „Ignored the following versions ... Requires-Python" skládá pip
+    za všechny balíčky dohromady a bez jejich jmen. Bere se proto jen
+    požadavek u verze, která doopravdy selhala („No matching distribution
+    found for starlette==1.8.0"), a jen když chce novější Python, než
+    běží - jinak by hláška radila doinstalovat něco, co tu už je.
+    """
+    nejvyssi = ""
+    for _, verze in re.findall(r"No matching distribution found for ([\w.\-\[\]]+)==(\S+)",
+                               vystup):
+        for pozadavek in re.findall(r"(?<![\w.])" + re.escape(verze)
+                                    + r" Requires-Python\s*>=\s*(3\.\d+)", vystup):
+            cislo = tuple(int(x) for x in pozadavek.split("."))
+            if cislo > sys.version_info[:2] and (not nejvyssi or cislo > tuple(
+                    int(x) for x in nejvyssi.split("."))):
+                nejvyssi = pozadavek
+    return nejvyssi
 
 
 async def _co_prijde_mimo_preklady() -> list[str] | None:
@@ -392,6 +464,29 @@ async def _co_prijde_mimo_preklady() -> list[str] | None:
 
 async def _git(*argumenty: str) -> dict[str, Any]:
     return await _spust("git", "-C", str(KOREN), *argumenty)
+
+
+async def _git_obsah(*argumenty: str) -> dict[str, Any]:
+    """Git, ze kterého je potřeba jen stdout - obsah souboru, ne hlášky.
+
+    `_spust` slévá stderr do stdout. U `git show` by se tak varování
+    (třeba „unable to access ...") zapsalo do requirements.txt jako
+    požadavek a zkouška balíčků by spadla na něčem, co s nimi nesouvisí.
+    """
+    proces = await asyncio.create_subprocess_exec(
+        "git", "-C", str(KOREN), *argumenty,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+        cwd=str(KOREN),
+    )
+    vystup, _ = await proces.communicate()
+    return {"kod": proces.returncode, "vystup": vystup.decode("utf-8", "replace")}
+
+
+async def _pip(*argumenty: str) -> dict[str, Any]:
+    """`pip install` Pythonem, na kterém běží aplikace - jedno místo pro
+    zkoušku nanečisto i pro ostrou instalaci, ať ověřují totéž."""
+    return await _spust(sys.executable, "-m", "pip", "install", "--quiet", *argumenty)
 
 
 async def _spust(*prikaz: str) -> dict[str, Any]:

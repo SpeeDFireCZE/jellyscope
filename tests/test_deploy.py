@@ -314,19 +314,19 @@ check("psycopg" not in (PROJECT / "requirements.txt").read_text(encoding="utf-8"
 # Ubuntu 20.04 ma Python 3.8 a instalace na nem koncila hlaskou
 # "Could not find a version that satisfies the requirement uvicorn",
 # ktera pricinu vubec nepojmenuje. Skript to musi poznat driv.
-check("MIN_MINOR=10" in install, "install.sh zna minimalni verzi Pythonu")
+check("MIN_MINOR=11" in install, "install.sh zna minimalni verzi Pythonu")
 check("python3.11" in install, "hleda novejsi Python nainstalovany vedle")
 check("deadsnakes" in install, "poradi, jak novejsi Python pridat")
 # Minimum drzi pohromade s tim, co si zada FastAPI z requirements.txt.
 # Kdyby se cislo zmenilo jen na jednom miste, instalace by prosla
 # a spadla az pri pip installu - s hlaskou, ktera pricinu nepojmenuje.
-check("Python 3.10 or newer" in (PROJECT / "requirements.txt").read_text(encoding="utf-8"),
+check("Python 3.11 or newer" in (PROJECT / "requirements.txt").read_text(encoding="utf-8"),
       "a requirements.txt rika totez")
 
 # Deadsnakes je az druha volba: nestavi balicky pro ARM a je to cizi
-# zdroj. Ubuntu 22.04 a novejsi ma python3.10 primo u sebe.
-check("python3.10-venv" in install, "nabizi python3.10 z repozitare Ubuntu")
-check(install.index("python3.10-venv") < install.index("ppa:deadsnakes"),
+# zdroj. Ubuntu 22.04 a novejsi ma python3.11 primo u sebe (universe).
+check("python3.11-venv" in install, "nabizi python3.11 z repozitare Ubuntu")
+check(install.index("python3.11-venv") < install.index("ppa:deadsnakes"),
       "a nabizi ho DRIV nez PPA deadsnakes")
 check("dpkg --print-architecture" in install,
       "kdyz PPA nezabere, poradi zjistit architekturu (deadsnakes neumi ARM)")
@@ -451,7 +451,7 @@ for needle, why in [
     # "Could not find a version that satisfies the requirement" - ta zni
     # jako by balicek neexistoval, ne jako "mas stary Python". Update to
     # musi poznat driv a poradit, co s tim.
-    ("sys.version_info >= (3, 10)", "pozná prostředí na starém Pythonu"),
+    ("sys.version_info >= (3, 11)", "pozná prostředí na starém Pythonu"),
     ("bash deploy/install.sh", "a poradí, čím ho postavit znovu"),
 ]:
     check(needle in update, f"update.sh: {why}")

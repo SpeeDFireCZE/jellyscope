@@ -6,7 +6,7 @@
 # the job just runs them one by one and collects the failures - the same
 # thing you would do on your own machine.
 #
-# Two Python versions on purpose: 3.10 is the oldest one we support (see
+# Two Python versions on purpose: 3.11 is the oldest one we support (see
 # requirements.txt) and 3.13 is what most people will actually have. Bugs
 # that only show up on one of them are exactly what a matrix is for.
 # ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@ jobs:
       # it breaks on both is half the diagnosis.
       fail-fast: false
       matrix:
-        python: ["3.10", "3.13"]
+        python: ["3.11", "3.13"]
 
     steps:
       - uses: actions/checkout@v7

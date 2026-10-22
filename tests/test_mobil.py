@@ -258,5 +258,18 @@ check(".log-controls select { width: auto; }" in STYL,
       "na desktopu zůstává výběr široký jako nejdelší volba")
 
 print()
+print("--- příklady filtrů v okně API ---")
+# Adresa s filtrem je dlouhá a bez mezer („path[starts_with]=/media/...").
+# Na 360 px se ořízla a popisek se lepil hned za ni. Láme se kdekoliv
+# a popisek je na vlastním řádku.
+priklad = pravidlo(STYL, ".api-priklady code")
+check("overflow-wrap: anywhere" in priklad and "display: block" in priklad,
+      "adresa v příkladu se zalomí a stojí na vlastním řádku")
+check("display: block" in pravidlo(STYL, ".api-priklady .card-note"),
+      "popisek příkladu je pod adresou")
+check("overflow-wrap: anywhere" in pravidlo(STYL, ".api-pole p"),
+      "seznam polí u adresy se zalomí")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

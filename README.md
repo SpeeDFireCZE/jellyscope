@@ -4,7 +4,7 @@
 [![licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 [![demo: jellyscope.cz](https://img.shields.io/badge/demo-jellyscope.cz-3987e5.svg)](https://jellyscope.cz)
 [![translate: Weblate](https://img.shields.io/badge/translate-weblate-2eccaa.svg)](https://translate.jellyscope.cz/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
 > [!NOTE]
 > **Jellyfin 12 is supported**, and so is 10.x. Version 12 stopped
@@ -341,8 +341,9 @@ group, and the Rights dialog of one account can say yes or no for that
 account alone. Such a key sees what its owner sees. An address in an area
 the owner cannot open answers 403 (`/api/v1/` lists only the addresses the
 key may use), other people's names and addresses are hidden when the owner
-has anonymization on, and a viewer's key gets only the viewer's own history
-whatever `?user=` says. A viewer's key also stops while sign-in through
+has anonymization on, and a viewer's key gets only the viewer's own
+history: asking for someone else's with `?user=` is a 403. A viewer's key
+also stops while sign-in through
 Jellyfin is switched off or the viewer is disabled in Jellyfin. Taking the
 permission away stops the key without deleting it, and giving it back makes
 it work again. Keys made before keys
@@ -361,9 +362,13 @@ address, and only the admin sees it. On Settings → API, the links in the
 key table open it already filtered. How long it is kept is up to the Log
 rotation task. A request with an unknown key is not written down.
 
-Errors come back as JSON with a `detail` field: 401 for a missing or
-unknown key, 403 for a disabled key, for an owner without the permission
-and for an address outside the owner's rights.
+Errors come back as JSON with `detail`, a sentence, and `error`, a code a
+tool can check: 401 for a missing or unknown key (`missing_token`,
+`invalid_token`), 403 for a disabled key, an owner without the permission
+and an address outside the owner's rights (`key_disabled`,
+`key_not_allowed`, `area_not_allowed` and a few more), 404 for an unknown
+title (`not_found`) and 400 for a malformed request (see *Filtering and
+sorting* below).
 
 The key travels in a header and never in the address, because the address
 ends up in the proxy log, in the browser history and in the link somebody
@@ -384,7 +389,7 @@ curl -H "Authorization: Bearer js_your_key" http://localhost:8097/api/v1/summary
 | `GET /api/v1/least-played?days=365&limit=25&min_size_mb=0&order=size` | Files from the least played up, never played first, with the last time each was played. Within the same play count the largest come first; `order=oldest` or `order=newest` sorts them by date added instead. Without `order` nothing changes. |
 | `GET /api/v1/unwatched?days=365&limit=25` | What nobody watched over the period and how much space it takes, also as a share of the library. |
 | `GET /api/v1/users?days=30` | Viewers and their watching over the period: hours, plays, titles, transcoded hours. |
-| `GET /api/v1/history?days=30&limit=50&user=&kind=both` | Recent playbacks, newest first. No IP addresses; the API never hands those out. |
+| `GET /api/v1/history?days=30&limit=50&kind=both` | Recent playbacks, newest first. No IP addresses; the API never hands those out. |
 | `GET /api/v1/recently-added?limit=18` | What came into the library last. |
 | `GET /api/v1/play-methods?days=30` | Direct play against transcoding, and the clients people watch with. |
 | `GET /api/v1/insights?days=30&limit=15` | The Insights page in numbers: transcode offenders, upgrade candidates, oversized and rarely watched, never finished, and the conversion speed in fps (average, slowest, fastest, by hardware). |
@@ -398,11 +403,82 @@ episode rarely has its own, and `season` and `episode` say which one it
 is. Lists by title (top items, the other insights lists) have no single
 file.
 
+#### Filtering and sorting
+
+Every list in an answer can be narrowed, sorted and cut by the fields it
+already returns, so one address answers many questions:
+
+```
+GET /api/v1/least-played?path[starts_with]=/media/movies&sort=plays,added_at&limit=5
+```
+
+gives the five least played files under `/media/movies`, the oldest added
+first when the play count is the same.
+
+- **Filter:** `field[operator]=value`, one parameter per filter. All of
+  them must match.
+- **Sort:** `sort=field,-field`. A minus sorts descending; at most three
+  fields; empty values always come last. Without `sort` a list keeps its
+  usual order.
+- **Limit:** `limit`, with the same defaults and caps as before.
+- **Order:** filters first, then sorting, then the limit, always over the
+  whole list, so the limit never cuts off what a filter is looking for.
+
+| Field type | Operators | Value |
+|---|---|---|
+| text | `equals`, `not`, `contains`, `not_contains`, `starts_with`, `ends_with`, `in`, `empty` | any text up to 200 characters; case does not matter |
+| number | `equals`, `not`, `gt`, `gte`, `lt`, `lte`, `in`, `empty` | `12` or `1.5` |
+| time | `gt`, `gte`, `lt`, `lte`, `empty` | `2026-10-01` or `2026-10-01 18:30:00`, in UTC like the answer |
+| bool | `equals`, `not` | `true` or `false` |
+
+`in` takes values separated by commas (`type[in]=Movie,Episode`), and
+`empty=true` finds fields without a value. `not` and `not_contains` also
+match a field without a value; the other operators do not. A filter sees
+what the key sees: names hidden from the key's owner cannot be found by
+filtering for them either.
+
+`/api/v1/insights` and `/api/v1/play-methods` return several lists, so a
+field there carries the list name, and a list that no filter names comes
+back unchanged. Called without filters, both answer as they always did.
+
+```
+GET /api/v1/insights?never_finished.best_percent[lt]=50&sort=-never_finished.attempts
+GET /api/v1/play-methods?clients.hours[gte]=1
+```
+
+In `/api/v1/unwatched` a filter also narrows the totals (`count`,
+`size_bytes`, `share_percent`), so `?path[starts_with]=/media/series`
+says how much space the unwatched files in that folder take. `/api/v1/`
+lists the fields and types of every list the key may use.
+`/api/v1/summary`, `/api/v1/library` and `/api/v1/item/<id>` return one
+object and take no filters.
+
+**A malformed request is a 400, never default data.** An unknown
+parameter, field, list or operator, a value of the wrong type, `days`
+outside 1–3650, a `limit` over the cap, `order` together with `sort`:
+each answers 400 with a code in `error` (`unknown_parameter`,
+`unknown_field`, `unknown_list`, `unknown_operator`,
+`operator_not_allowed`, `invalid_value`, `duplicate_parameter`,
+`too_many`, `conflicting_parameters`, `not_filterable`), the `parameter`
+it is about and, where it helps, the `allowed` values. Before, such a
+request quietly got the default answer, which looked fine and was not
+what had been asked for. The key is checked first, so without a valid key
+the answer is 401 whatever the parameters say.
+
+```json
+{
+  "detail": "Unknown field 'patth' in items. Fields: id, name, type, …",
+  "error": "unknown_field",
+  "parameter": "patth[contains]",
+  "allowed": ["id", "name", "type", "…"]
+}
+```
+
 Every answer has a fixed shape built from the same functions the pages
 use, so a dashboard and the page it mirrors cannot drift apart. Row counts
-are capped (500 at most, fewer where a page shows fewer), so a tool asking
-every few seconds cannot make the server serialise the whole library each
-time.
+are capped (500 at most, fewer where a page shows fewer, and a `limit`
+over the cap is a 400), so a tool asking every few seconds cannot make the
+server serialise the whole library each time.
 
 ```json
 {
@@ -630,7 +706,7 @@ git pull && docker compose up -d --build
 
 ### By hand
 
-Python 3.10 or newer:
+Python 3.11 or newer:
 
 ```bash
 python3 -m venv .venv
@@ -840,6 +916,7 @@ jellyscope/
     ├── applog.py           log file and its viewer
     ├── porucha.py          the page shown when the database will not open
     ├── api.py              the read-only API and its keys
+    ├── api_dotaz.py        filters, sorting and checks for API requests
     ├── web.py              routes
     ├── web_zaklad.py       what every page needs: context, flashes, guards
     ├── web_nastaveni.py    the Settings routes, all thirty-six
@@ -902,7 +979,7 @@ they need no Jellyfin, no network and no ffmpeg:
 for t in tests/test_*.py; do .venv/bin/python "$t" || break; done
 ```
 
-The same loop runs in GitHub Actions on Python 3.10 and 3.13 for every push
+The same loop runs in GitHub Actions on Python 3.11 and 3.13 for every push
 and pull request.
 
 ---

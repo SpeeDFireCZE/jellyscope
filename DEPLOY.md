@@ -3,7 +3,7 @@
 How to get the app onto a server and keep it running. What the app *does*
 is in [README.md](README.md).
 
-It needs Python 3.10+, about 200 MB of disk and a reachable Jellyfin. No
+It needs Python 3.11+, about 200 MB of disk and a reachable Jellyfin. No
 database server is required, because SQLite is the default. `ffmpeg` is
 only used by the ffprobe data source, and the installer takes care of it.
 
@@ -101,6 +101,14 @@ It pulls the new version, reinstalls the dependencies from
 `requirements.txt` and restarts the service. It installs no system
 packages, and `.env` and `data/` are untouched. Back the database up first;
 see [Backups](#backups).
+
+The **Update and restart** button in the new-version dialog does the same
+from the browser. Before it downloads anything it tries the new version's
+packages in a dry run (`pip install --dry-run`). When they cannot be
+installed here - for example because the new version needs a newer
+Python - nothing is downloaded, the running version keeps running and the
+message says which Python is needed and what to do. In Docker the button
+is off; there the image is rebuilt.
 
 ---
 

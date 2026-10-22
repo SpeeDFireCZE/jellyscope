@@ -161,21 +161,21 @@ check(klient.get("/api/v1/summary",
       "druhý token platí dál")
 
 print()
-print("--- nesmysl v ?days= nesmí nic rozbít ---")
+print("--- nesmysl v ?days= vrátí 400, nic nerozbije ---")
 # `days` prichazi z adresy, tedy od kohokoliv, a konci v dotazu do
 # databaze. Nemusi to byt cislo a nemusi to byt rozumne cislo: prazdno,
-# pismena, zaporna hodnota, kus SQL. Vsechno se ma tise srovnat na
-# rozumny pocet dnu - ne spadnout a ne odejit do dotazu.
+# pismena, zaporna hodnota, kus SQL. Dřív se to tiše srovnalo na rozumný
+# počet dní a vrátila se data; teď je to 400 - a pořád nic nespadne a nic
+# neodejde do dotazu.
 for zlobivy in ("999999999999999999999", "-1", "abc", "", "1;DROP TABLE playback",
                 "1 OR 1=1", "0", "1e400", "../../etc/passwd", "NaN"):
     odpoved = klient.get(f"/api/v1/summary?days={zlobivy}",
                          headers={"Authorization": f"Bearer {druhy['token']}"})
-    check(odpoved.status_code == 200,
-          f"days={zlobivy[:24]!r} projde ({odpoved.status_code})")
-    if odpoved.status_code == 200:
-        dnu = odpoved.json().get("days")
-        check(isinstance(dnu, int) and 1 <= dnu <= 3650,
-              f"days={zlobivy[:24]!r} se srovnalo na {dnu}")
+    check(odpoved.status_code == 400 and odpoved.json().get("error") == "invalid_value",
+          f"days={zlobivy[:24]!r} -> 400 invalid_value ({odpoved.status_code})")
+odpoved = klient.get("/api/v1/summary?days=30",
+                     headers={"Authorization": f"Bearer {druhy['token']}"})
+check(odpoved.status_code == 200 and odpoved.json().get("days") == 30, "days=30 projde")
 
 # Tabulka, kterou se utok pokousel zahodit, tam porad je.
 check(db.query_value("SELECT COUNT(*) FROM playback") is not None,

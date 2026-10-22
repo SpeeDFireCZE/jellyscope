@@ -10,6 +10,82 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.8.1
+
+### IMPORTANT: this version needs Python 3.11 or newer
+
+**Python 3.10 is no longer enough.** Starlette 1.8, which this release needs, does not run on it, and Python 3.10 gets no security fixes after October 2026. **Docker is not affected** - the image has its own Python.
+
+**On Ubuntu 22.04 (Python 3.10), update from the command line instead of the button:**
+
+- **`sudo apt install python3.11 python3.11-venv`** - it is in Ubuntu's own repository (universe; if apt does not know the package, run `sudo add-apt-repository universe && sudo apt update` first).
+- **`cd /opt/jellyscope && git pull`** (your Jellyscope folder) - downloads 1.8.1, including the new `deploy/install.sh`.
+- **`bash deploy/install.sh`** - it sees that `.venv` is built on Python 3.10, builds a new one on 3.11 and keeps the database and `.env`.
+- **`sudo systemctl restart jellyscope`** (or however you start Jellyscope) - runs 1.8.1 on the new environment.
+
+**If you already clicked Update (or ran `update.sh`):** it stopped while installing the packages (pip says "Requires-Python >=3.11"). The new files are already downloaded, so some pages can show an error until Jellyscope restarts. Install Python 3.11, run `bash deploy/install.sh` and restart Jellyscope as above; the `git pull` is already done. From 1.8.1 on, the update button checks the new version's packages before it downloads anything.
+
+### What is new
+
+The read-only API filters, sorts and limits every list by the fields it returns, and a malformed request is an error instead of default data. A custom period can cover all of history.
+
+### Before you upgrade
+
+- **Python 3.11 or newer** - see the top of these notes.
+- **API requests that used to get default data now get 400.** An
+  unknown parameter, a typo in `kind` or `order`, `days` outside
+  1–3650, a `limit` over the cap (`limit=1000`) or a filter on a field
+  that does not exist answer 400 with a code in `error`. Before, they
+  quietly got the default answer. *Settings → Log → API log* shows
+  which tool sends them (result 400).
+- **A viewer's key asking `/api/v1/history?user=` for someone else gets
+  403** instead of its own history.
+- **API error messages are in English and carry a code** (`error`); the
+  status codes did not change.
+
+### Added
+
+- **Filtering and sorting in the API.** `field[operator]=value` on any
+  field a list returns (`equals`, `not`, `contains`, `starts_with`,
+  `gt`, `lte`, `in`, `empty` and more), `sort=field,-field` and `limit`,
+  always over the whole list and in that order, so the limit never cuts
+  off what a filter looks for. `/api/v1/insights` and
+  `/api/v1/play-methods` take the list name before the field and answer
+  as before without filters. `/api/v1/` lists the fields of every list;
+  the *How to use it* dialog has examples and the fields per address.
+- **All time** in the custom period dialog: from the first real play to
+  now, remembered like any other period.
+
+### Changed
+
+- **The profile picture is refreshed on every sign-in through
+  Jellyfin**, not only by the nightly sync. An unchanged picture is not
+  downloaded again.
+- **The update button checks the new version's packages before it
+  downloads anything** (a dry run of `pip install`). When they cannot be
+  installed here - for example because a later version needs a newer
+  Python - nothing is downloaded, this version keeps running and the
+  message says which Python is needed and what to do. Docker is not
+  affected; there the image is rebuilt.
+- fastapi 0.143.3, starlette 1.8.0.
+
+### Fixed
+
+- **A picture with a transparent background** showed the blue of the
+  letter circle through it; it now sits on the theme's neutral grey.
+- **Settings → Log:** the file picker ran off a phone screen.
+- **Languages:** saving the preferred language ended in an error (422)
+  with a custom period, and "total … over" had no period after it. The
+  same blank label in *Space nobody uses* on Insights.
+- **Comparison** started with all of history against an empty window
+  when All time was remembered; it starts on 30 days.
+- A broken import date (year 0001) could make every statistics page
+  fail once All time was remembered.
+- The links in the period dialog keep the scroll position, like the
+  period chips.
+- A failed write of the picture stamp no longer blocks a sign-in
+  through Jellyfin.
+
 ## 1.8.0
 
 Every account gets a page of its own: its own language, password, API

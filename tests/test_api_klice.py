@@ -167,8 +167,8 @@ check(overeni["account"] is None and overeni["role"] == pristup.SPRAVCE,
 
 check(api.vypni(serveru["id"]) == "Grafana", "vypni vrací jméno klíče")
 odpoved = zavolej(serveru["token"])
-check(odpoved.status_code == 403 and "vypnutý" in odpoved.json().get("detail", ""),
-      "vypnutý klíč: 403 Klíč je vypnutý")
+check(odpoved.status_code == 403 and odpoved.json().get("error") == "key_disabled",
+      "vypnutý klíč: 403 key_disabled")
 check(api.zapni(serveru["id"]) == "Grafana", "zapni vrací jméno klíče")
 check(zavolej(serveru["token"]).status_code == 200, "zapnutý klíč zase projde")
 odpoved = zavolej(serveru["token"], "/api/v1/item/neexistuje")
@@ -179,8 +179,8 @@ check(api.vypni(999999) == "" and api.zapni(999999) == "", "neexistující klí�
 ctenar_id = ucet("ctenar")["id"]
 klic_ctenare = api.vytvor("Homepage", ctenar_id)
 odpoved = zavolej(klic_ctenare["token"])
-check(odpoved.status_code == 403 and "povolený" in odpoved.json().get("detail", ""),
-      "čtenář bez povolení: 403 Účet nemá povolený vlastní klíč")
+check(odpoved.status_code == 403 and odpoved.json().get("error") == "key_not_allowed",
+      "čtenář bez povolení: 403 key_not_allowed")
 db.set_setting("ctenar_smi_klic", "1")
 check(zavolej(klic_ctenare["token"]).status_code == 200, "povolení zapnuté: klíč projde")
 overeni = api.over_token(pozadavek(klic_ctenare["token"]))
@@ -313,9 +313,15 @@ for cesta in get_cesty:
     check(odpoved.status_code == 200 and not unik,
           f"divák {adresa}: {odpoved.status_code}, bez cizích údajů {unik or ''}")
 
-historie = zavolej(klic_divaka["token"], f"/api/v1/history?user={CIZI_ID}").json()
+# Dřív se cizí `user` potichu přepsal na vlastního diváka. Teď je to 403:
+# klíč nedostane jiná data, než o která si řekl, a nikdo si nemyslí, že
+# vidí cizí historii.
+odpoved = zavolej(klic_divaka["token"], f"/api/v1/history?user={CIZI_ID}")
+check(odpoved.status_code == 403 and odpoved.json().get("error") == "own_history_only",
+      "divák s ?user=cizí id: 403 own_history_only")
+historie = zavolej(klic_divaka["token"], "/api/v1/history").json()
 check(historie["count"] > 0 and all(p["user_id"] == "u-mirek" for p in historie["playbacks"]),
-      "divák s ?user=cizí id dostane jen svou historii")
+      "divák bez ?user dostane jen svou historii")
 hraje = zavolej(klic_divaka["token"], "/api/v1/now-playing").json()
 check(hraje["count"] == 1 and hraje["sessions"][0]["user"] != CIZI_JMENO,
       "právě hraje: cizí relace je vidět, ale bez jména")
@@ -536,10 +542,10 @@ def rozbity_prehled(*args, **kwargs):
 api.stats.overview = rozbity_prehled
 logging.disable(logging.CRITICAL)
 odpoved = TestClient(web.app, raise_server_exceptions=False).get(
-    "/api/v1/summary?znacka=pad", headers={"Authorization": f"Bearer {serveru['token']}"})
+    "/api/v1/summary?days=29", headers={"Authorization": f"Bearer {serveru['token']}"})
 logging.disable(logging.NOTSET)
 api.stats.overview = puvodni_prehled
-check(odpoved.status_code == 500 and posledni_pouziti().get("cesta") == "/api/v1/summary?znacka=pad"
+check(odpoved.status_code == 500 and posledni_pouziti().get("cesta") == "/api/v1/summary?days=29"
       and posledni_pouziti().get("vysledek") == 500, "neodchycená chyba (500) se zapíše taky")
 
 
@@ -679,6 +685,23 @@ check("GET /api/v1/bandwidth" in spravce_navod and "GET /api/v1/summary" in spra
 chybi = [a for a in api.povolene_adresy(ucet("spravce"))
          if "GET " + a.replace("{id}", "&lt;id&gt;") not in spravce_navod]
 check(not chybi, f"okno návodu zná každou adresu API ({chybi})")
+# Filtrování a řazení: zápis, příklady a pole u adres. Pole se berou
+# z api.SEZNAMY - stejného popisu, jakým se dotaz kontroluje - takže
+# nápověda nemůže slíbit pole, které neexistuje.
+check("pole[operátor]=hodnota" in navod and "path[starts_with]=" in navod
+      and "sort=plays,added_at" in navod and "limit=5" in navod,
+      "okno uživatele vysvětluje filtry, řazení a limit s příkladem")
+check("never_finished." in spravce_navod and "starts_with" in spravce_navod
+      and "not_contains" in spravce_navod, "příklad s předponou seznamu a tabulka operátorů")
+check('data-pole-adresy="/api/v1/least-played"' in navod and "<code>path</code>" in navod,
+      "u adresy je rozbalovací seznam polí")
+check('data-pole-adresy="/api/v1/bandwidth"' not in navod,
+      "pole adres, na které klíč nesmí, nejsou vidět")
+check(all(f'data-pole-adresy="{a}"' in spravce_navod for a in api.SEZNAMY),
+      "správce vidí pole u všech adres se seznamem")
+check("unknown_field" in navod and "400" in navod, "okno vysvětluje chybu 400 s kódem")
+check("user=&amp;" not in spravce_navod and "user=&" not in spravce_navod,
+      "příklad historie bez prázdného user=")
 navod_spravce_ucet = okno_navodu(spravce_k.get("/account").text)
 check("GET /api/v1/bandwidth" in navod_spravce_ucet and "Správce vidí" not in navod_spravce_ucet
       and "tvůj klíč smí" not in navod_spravce_ucet,

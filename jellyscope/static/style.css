@@ -3049,6 +3049,19 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    a při šířce běžného okna by z ní byl jeden dlouhý sloupec. */
 .okno-siroke { width: min(760px, calc(100vw - 32px)); }
 
+/* Okno „Jak se to používá" u API: příklady filtrů a pole u adres.
+   Adresa s filtrem je dlouhá a bez mezer („path[starts_with]=/media/...")
+   - na telefonu by se ořízla, proto se láme kdekoliv a popisek stojí
+   pod ní, ne nalepený za ní. */
+.api-priklady { margin: 8px 0 14px; padding-left: 18px; }
+.api-priklady li { margin-bottom: 10px; }
+.api-priklady code { display: block; overflow-wrap: anywhere; }
+.api-priklady .card-note { display: block; margin-top: 2px; }
+.api-pole { margin-top: 6px; }
+.api-pole summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+.api-pole p { margin: 6px 0 0; overflow-wrap: anywhere; line-height: 1.7; }
+.api-typ { color: var(--text-secondary); font-size: 12px; }
+
 
 /* Obsah okna, který může být dlouhý (streamy, lidé). Roluje se uvnitř
    okna, ne celou stránkou - jinak by okno vyrostlo přes obrazovku a jeho

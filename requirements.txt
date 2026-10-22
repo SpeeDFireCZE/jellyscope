@@ -3,10 +3,11 @@
 # Deliberately as few as possible. Every extra library is one more thing
 # that can break, and one more thing you have to learn.
 
-# Needs Python 3.10 or newer - that is FastAPI's own floor since 0.116.
+# Needs Python 3.11 or newer - Starlette's floor since 1.8 (FastAPI's own
+# is 3.10), and Python 3.10 gets no security fixes after October 2026.
 
-fastapi==0.143.0           # web framework - routing, validation, async
-starlette==1.7.0           # what FastAPI is built on: routing, sessions,
+fastapi==0.143.3           # web framework - routing, validation, async
+starlette==1.8.0           # what FastAPI is built on: routing, sessions,
                            # static files, multipart. Pinned explicitly even
                            # though FastAPI pulls it in, because the security
                            # fixes below live here, not in FastAPI - an

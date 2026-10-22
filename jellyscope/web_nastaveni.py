@@ -31,7 +31,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
                                StreamingResponse)
 
 from . import __version__
-from . import (accounts, api, applog, db, dbmigrate, dialect,
+from . import (accounts, api, api_dotaz, applog, db, dbmigrate, dialect,
                formatting, i18n, importers, jellyfin, notifikace,
                odklizeni, pristup, scanner, sekce, stats, tasks, updates)
 from .config import BASE_DIR as PROJECT_DIR
@@ -365,6 +365,8 @@ def settings_page(
             # Okno „Jak se to používá" (_api_navod.html) - správci vyjdou
             # všechny adresy, ale seznam se předává vždycky výslovně.
             api_navod_adresy=api.povolene_adresy(account),
+            api_navod_pole=api.pole_adres(api.povolene_adresy(account)),
+            api_navod_operatory=api_dotaz.OPERATORY,
             # Nově vyrobený klíč se ukazuje jen jednou, hned po
             # přesměrování; drží se proto v relaci, ne v adrese - a při
             # dalším načtení stránky už ho nemá kdo vypsat. Ukáže se
@@ -1252,7 +1254,8 @@ async def settings_update(request: Request,
     """
     vysledek = await updates.aktualizuj()
     if vysledek.get("status") != "ok":
-        _flash(request, vysledek.get("message", "Aktualizace se nepovedla."), "error")
+        _flash(request, vysledek.get("message", "Aktualizace se nepovedla."), "error",
+               **vysledek.get("parametry", {}))
         return RedirectResponse("/settings?section=general", status_code=303)
 
     _naplanuj_restart()

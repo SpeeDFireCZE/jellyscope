@@ -155,10 +155,15 @@ check(nejnovejsi == ["Novinka", "Pilot", "Nikdo", "Amelie", "Duna"],
       f"newest: v nule od nejnovějšího ({nejnovejsi})")
 check(poradi("/api/v1/least-played?days=365&order=OLDEST") == nejstarsi,
       "velikost písmen nevadí")
-for spatne in ("bogus", "", "date_created; DROP TABLE items", "size"):
-    odpoved = klient.get(f"/api/v1/least-played?days=365&order={spatne}", headers=H).json()
-    check(odpoved["order"] == "size" and [p["name"] for p in odpoved["items"]] == jmena,
-          f"order={spatne[:20]!r} -> výchozí pořadí")
+odpoved = klient.get("/api/v1/least-played?days=365&order=size", headers=H).json()
+check(odpoved["order"] == "size" and [p["name"] for p in odpoved["items"]] == jmena,
+      "order=size -> výchozí pořadí")
+# Neznámé řazení dřív tiše spadlo na výchozí. Teď je to 400: odpověď
+# seřazená jinak, než o co si nástroj řekl, vypadá v pořádku, a není.
+for spatne in ("bogus", "", "date_created; DROP TABLE items"):
+    odpoved = klient.get(f"/api/v1/least-played?days=365&order={spatne}", headers=H)
+    check(odpoved.status_code == 400 and odpoved.json().get("error") == "invalid_value",
+          f"order={spatne[:20]!r} -> 400 invalid_value")
 # Titul bez data pridani: v obou smerech az za tituly s datem - SQLite
 # i PostgreSQL by NULL jinak radily kazdy jinam.
 with db.connect() as conn:
@@ -255,22 +260,22 @@ for spatne in ("neexistuje", "i1;DROP TABLE items", "../../etc/passwd",
 check(db.query_value("SELECT COUNT(*) FROM items") == 5, "tabulka items přežila")
 
 print()
-print("--- nesmysl v parametrech nic neshodí ---")
+print("--- nesmysl v parametrech vrátí 400, nic neshodí ---")
+# Dřív se nesmysl tiše srovnal na výchozí hodnotu a vrátila se data. Teď
+# je to 400 - a pořád nic nespadne a nic neodejde do SQL.
 for cesta in ("/api/v1/least-played?days=abc&limit=-5&min_size_mb=x",
               "/api/v1/least-played?limit=999999999",
               "/api/v1/least-played?order=" + "x" * 5000,
               "/api/v1/top-items?kind=DROP&limit=abc",
-              "/api/v1/history?days=1e400&limit=&user=" + "a" * 500,
               "/api/v1/unwatched?days=0&limit=0",
-              "/api/v1/insights?days=-3&limit=1;--",
               "/api/v1/recently-added?limit=1%20OR%201=1",
+              "/api/v1/history?days=1e400&limit=&user=" + "a" * 500,
+              "/api/v1/insights?days=-3&limit=1;--",
               "/api/v1/play-methods?days=NaN"):
     odpoved = klient.get(cesta, headers=H)
-    check(odpoved.status_code == 200, f"{cesta[:60]} -> {odpoved.status_code}")
-velky = klient.get("/api/v1/least-played?limit=999999999", headers=H).json()
-check(len(velky["items"]) <= 500, "strop na počet řádků drží")
-druh = klient.get("/api/v1/top-items?kind=DROP", headers=H).json()
-check(druh["kind"] == "both", f"neznámý druh spadne na both ({druh['kind']})")
+    check(odpoved.status_code == 400 and odpoved.json().get("error"),
+          f"{cesta[:60]} -> {odpoved.status_code}")
+check(db.query_value("SELECT COUNT(*) FROM items") == 5, "tabulka items přežila")
 
 print()
 print("HOTOVO - chyb:", failures)

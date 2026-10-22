@@ -96,6 +96,10 @@ class Obdobi:
 # ten zaznam, ktery clovek prave ted hleda. Vlastni obdobi si horni mez
 # urcuje samo.
 KONEC_CASU = "9999-12-31 23:59:59"
+# "Prakticky vsechno" pro funkce, ktere davaji `limit` do SQL (`LIMIT ?`).
+# API filtruje nad celym seznamem, takze ho potrebuje cely; cislo se vejde
+# do int64 v SQLite i PostgreSQL i po `limit * 6` v recently_added().
+BEZ_LIMITU = 1_000_000_000
 # Odkdy muze historie vubec sahat. Jellyfin vznikl v roce 2018, Emby 2013
 # - starsi prehrani je chyba importu (Playback Reporting umi poslat
 # DateTime.MinValue, tedy 0001-01-01) a o zacatku historie nerozhoduje.
@@ -733,6 +737,20 @@ def active_sessions() -> list[dict[str, Any]]:
     return rows
 
 
+# Nejnovejsi skupiny (serial, nebo film sam za sebe) - prvni krok
+# recently_added(). Jeden text pro oba dotazy, ktere ho potrebuji.
+_NEJNOVEJSI_SKUPINY = """
+        SELECT COALESCE(i.series_id, i.id) AS klic,
+               MAX(i.date_created)         AS pridano
+          FROM items i
+         WHERE i.is_missing = 0
+           AND i.date_created IS NOT NULL
+      GROUP BY COALESCE(i.series_id, i.id)
+      ORDER BY MAX(i.date_created) DESC
+         LIMIT ?
+"""
+
+
 def recently_added(limit: int = 18) -> list[dict[str, Any]]:
     """Naposledy pridane tituly.
 
@@ -749,30 +767,19 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
     potom se k nim dotahnou radky. Kolik dilu ma ktery serial, tim
     prestane hrat roli.
     """
-    skupiny_radky = db.query_all(
-        """
-        SELECT COALESCE(i.series_id, i.id) AS klic,
-               MAX(i.date_created)         AS pridano
-          FROM items i
-         WHERE i.is_missing = 0
-           AND i.date_created IS NOT NULL
-      GROUP BY COALESCE(i.series_id, i.id)
-      ORDER BY MAX(i.date_created) DESC
-         LIMIT ?
-        """,
-        (limit,),
-    )
+    skupiny_radky = db.query_all(_NEJNOVEJSI_SKUPINY, (limit,))
     if not skupiny_radky:
         return []
 
-    klice = [str(radek["klic"]) for radek in skupiny_radky]
     # Starsi nez tohle uz nemuze patrit do zadne z davek, ktere budeme
     # vypisovat - viz _ve_stejne_davce(). Bez toho omezeni by serial
     # o peti stovkach dilu dotahl vsechny.
     nejstarsi = min(str(radek["pridano"]) for radek in skupiny_radky)
     hranice = _o_hodin_zpet(nejstarsi, DAVKA_HODIN)
 
-    otazniky = ",".join("?" for _ in klice)
+    # Skupiny se do druheho dotazu davaji poddotazem, ne seznamem klicu
+    # `IN (?, ?, ...)`: API si s filtrem rika o celou knihovnu a SQLite
+    # snese nejvys 32 766 parametru - nad tolika filmy dotaz spadl.
     rows = db.query_all(
         f"""
         SELECT i.id, i.name, i.type, i.series_id, i.series_name,
@@ -785,10 +792,11 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
         WHERE i.is_missing = 0
           AND i.date_created IS NOT NULL
           AND i.date_created >= ?
-          AND COALESCE(i.series_id, i.id) IN ({otazniky})
+          AND COALESCE(i.series_id, i.id) IN (
+              SELECT klic FROM ({_NEJNOVEJSI_SKUPINY}) vybrane)
         ORDER BY i.date_created DESC
         """,
-        tuple([hranice] + klice),
+        (hranice, limit),
     )
 
     poradi: list[str] = []
@@ -891,11 +899,13 @@ def _o_hodin_zpet(cas: Any, hodin: int) -> str:
     vraci se prazdny retezec - ten je v porovnani mensi nez cokoliv,
     takze se radeji nevyfiltruje nic.
     """
+    # OverflowError: Jellyfin umí poslat DateCreated 0001-01-01 (MinValue)
+    # a o den dřív už žádné datum není.
     try:
         moment = datetime.strptime(str(cas).replace("T", " ")[:19], db.TIME_FORMAT)
-    except (TypeError, ValueError):
+        return (moment - timedelta(hours=hodin)).strftime(db.TIME_FORMAT)
+    except (TypeError, ValueError, OverflowError):
         return ""
-    return (moment - timedelta(hours=hodin)).strftime(db.TIME_FORMAT)
 
 
 def _ve_stejne_davce(nejnovejsi: Any, zkoumany: Any) -> bool:
@@ -1748,6 +1758,38 @@ def history(
         # slouzi obema mistum.
         row["prepocet"] = popis_prepoctu(row)
     return rows
+
+
+def historie_pro_api(user_id: str | None = None, kind: str = KIND_BOTH,
+                     od: str | None = None, po: int = 2000):
+    """Historie pro API s filtrem: tenké řádky po dávkách, nejnovější první.
+
+    S filtrem musí API projít celou historii zvoleného období. `history()`
+    k tomu nepatří: vrací p.* se vším a ke každému řádku počítá rozbor
+    přepočtu - na 150 000 přehráních to bylo přes 400 MB paměti. Tady jsou
+    jen sloupce, které API vrací, a čtou se po `po` řádcích, takže
+    v paměti zůstane jen to, co filtr pustí dál. Podmínky stejné jako
+    v `history()` (`_filtr_historie`).
+    """
+    where, params = _filtr_historie(user_id=user_id, kind=kind, od=od)
+    with db.connect() as conn:
+        kurzor = conn.execute(
+            f"""
+            SELECT p.user_name, p.user_id, p.item_name, p.series_name,
+                   p.item_type, p.item_id, p.started_at, p.watched_seconds,
+                   p.play_method, p.client, p.device_name,
+                   p.audio_language, p.subtitle_language
+            FROM playback p
+            WHERE {' AND '.join(where)}
+            ORDER BY p.started_at DESC
+            """,
+            tuple(params),
+        )
+        while True:
+            davka = kurzor.fetchmany(po)
+            if not davka:
+                return
+            yield [dict(radek) for radek in davka]
 
 
 def history_count(

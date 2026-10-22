@@ -9,6 +9,9 @@
                         radši prázdná tabulka než celé API čtenáři, na
                         jehož stránce se zapomnělo seznam předat.
      api_ukazka       - adresa do příkladu s curl. Bez ní /api/v1/summary.
+     api_navod_pole   - pole seznamů u povolených adres (api.pole_adres) pro
+                        rozbalovací „Pole pro filtr a řazení“ u adresy.
+     api_navod_operatory - operátory podle typu pole (api_dotaz.OPERATORY).
 
    Tabulka je seznam (adresa, ukázka volání, popis): podle prvního sloupce
    se filtruje, takže uživatel nevidí adresy, které by mu vrátily 403.
@@ -21,6 +24,9 @@
 {% set povolene = api_navod_adresy or [] %}
 {% set pro_ctenare = not (account and account.is_admin) %}
 {% set ukazka = api_ukazka or "/api/v1/summary" %}
+{% set pole_adres = api_navod_pole or {} %}
+{% set typy_poli = {"text": _("text"), "number": _("číslo"), "time": _("čas"),
+                    "bool": _("ano/ne")} %}
 {% set radky = [
     ("/api/v1/", "GET /api/v1/",
      _("Rozcestník: verze a seznam adres.")),
@@ -40,7 +46,7 @@
      _("Co se za období vůbec nehrálo a kolik místa to zabírá, i jako podíl knihovny.")),
     ("/api/v1/users", "GET /api/v1/users?days=30",
      _("Diváci a jejich sledovanost za období: hodiny, spuštění, tituly, přepočty.")),
-    ("/api/v1/history", "GET /api/v1/history?days=30&limit=50&user=&kind=both",
+    ("/api/v1/history", "GET /api/v1/history?days=30&limit=50&kind=both",
      _("Poslední přehrávání, nejnovější první. Bez IP adres, ty API nevydává.")),
     ("/api/v1/recently-added", "GET /api/v1/recently-added?limit=18",
      _("Co do knihovny přišlo naposledy.")),
@@ -86,13 +92,79 @@
                 {% for adresa, volani, popis in radky if adresa in povolene %}
                 <tr>
                     <td class="nowrap"><code>{{ volani }}</code></td>
-                    <td>{{ popis }}</td>
+                    <td>
+                        {{ popis }}
+                        {# Pole se berou z api.SEZNAMY - stejného popisu,
+                           jakým se dotaz kontroluje. `.items()` je tu
+                           metoda slovníku, ne klíč seznamu „items". #}
+                        {% set seznamy_adresy = pole_adres.get(adresa) %}
+                        {% if seznamy_adresy %}
+                        <details class="api-pole" data-pole-adresy="{{ adresa }}">
+                            <summary>{{ _("Pole pro filtr a řazení") }}</summary>
+                            {% for seznam, pole in seznamy_adresy.items() %}
+                            <p>
+                                {% if seznamy_adresy | length > 1 %}<strong>{{ seznam }}.</strong>{% endif %}
+                                {% for jmeno, typ in pole.items() %}<code>{{ jmeno }}</code>&nbsp;<span class="api-typ">{{ typy_poli[typ] }}</span>{{ ", " if not loop.last }}{% endfor %}
+                            </p>
+                            {% endfor %}
+                        </details>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
         <p class="card-note">{{ _("Každá položka, která je jeden soubor (nejméně hrané, nesledované, nedávno přidané, jeden titul a velké málo sledované ve Zjištěních), nese celou cestu (path) a tmdb_id. U dílu seriálu je tmdb_id id seriálu a který díl to je, říkají season a episode.") }}</p>
+
+        {# Filtry, řazení a limit (api_dotaz). Příklady jen pro adresy,
+           na které klíč smí - stejně jako tabulka výš. #}
+        <h3 class="skupina">{{ _("Filtrování a řazení") }}</h3>
+        <p class="card-note">
+            {{ _("Každý seznam jde zúžit filtrem pole[operátor]=hodnota, seřadit přes sort a zkrátit přes limit. Filtrů může být víc a platí všechny zároveň. Pořadí je vždycky filtry, řazení, limit, takže limit nikdy neodřízne, co filtr hledá.") }}
+        </p>
+        {% set priklady = [
+            ("/api/v1/least-played",
+             "GET /api/v1/least-played?path[starts_with]=/media/filmy&sort=plays,added_at&limit=5",
+             _("5 nejméně hraných souborů ze složky, při shodě od nejstaršího přidaného.")),
+            ("/api/v1/unwatched",
+             "GET /api/v1/unwatched?path[starts_with]=/media/serialy",
+             _("Kolik místa zabírá nesledované v jedné složce. Součty se spočítají jen z vybraných.")),
+            ("/api/v1/history",
+             "GET /api/v1/history?is_transcode[equals]=true&sort=-watched_seconds&limit=10",
+             _("10 nejdelších přehrání s přepočtem. Mínus v sort řadí sestupně.")),
+            ("/api/v1/insights",
+             "GET /api/v1/insights?never_finished.best_percent[lt]=50&sort=-never_finished.attempts",
+             _("Adresy s víc seznamy (insights, play-methods) chtějí před polem jméno seznamu. Bez filtru vrátí všechny seznamy jako dřív.")),
+        ] %}
+        <ul class="api-priklady">
+            {% for adresa, volani, popis in priklady if adresa in povolene %}
+            <li><code>{{ volani }}</code><span class="card-note">{{ popis }}</span></li>
+            {% endfor %}
+        </ul>
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Typ pole") }}</th>
+                    <th>{{ _("Operátory") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for typ, operatory in (api_navod_operatory or {}).items() %}
+                <tr>
+                    <td class="nowrap">{{ typy_poli[typ] }}</td>
+                    <td>{% for op in operatory %}<code>{{ op }}</code>{{ " " if not loop.last }}{% endfor %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <ul class="card-note" style="margin:0; padding-left:18px">
+            <li>{{ _("Text nerozlišuje velká a malá písmena. in bere hodnoty oddělené čárkou, empty=true najde pole bez hodnoty.") }}</li>
+            <li>{{ _("Čas se píše 2026-10-01 nebo 2026-10-01 18:30:00, v UTC stejně jako v odpovědi.") }}</li>
+            <li>{{ _("sort=pole,-pole řadí nejvýš podle tří polí, prázdné hodnoty jsou vždycky na konci.") }}</li>
+            <li>{{ _("Chybný dotaz (neznámý parametr, pole, operátor nebo hodnota) vrátí 400 a v těle error s kódem, třeba unknown_field. Výchozí data místo toho nikdy nepřijdou.") }}</li>
+            <li>{{ _("Pole a typy každé adresy vrací i rozcestník /api/v1/.") }}</li>
+        </ul>
 
         {# Ukázka je odpověď /summary - kdo na ni nesmí, tomu by jen
            ukazovala něco, co sám nedostane. #}
