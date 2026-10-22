@@ -83,7 +83,13 @@
                     &middot;
                 {% endif %}
                 {{ _("celkem") }} {{ watched.total_hours | hours }}
-                {{ _("za {obdobi}").format(obdobi=_(day_labels[days])) }}
+                {# U vlastního období (i celé historie) nemá `day_labels`
+                   co říct - vypíše se rozmezí. #}
+                {% if obdobi.vlastni %}
+                    {{ _("za {obdobi}").format(obdobi=obdobi.od_popis ~ " – " ~ obdobi.do_popis) }}
+                {% else %}
+                    {{ _("za {obdobi}").format(obdobi=_(day_labels[days])) }}
+                {% endif %}
             </div>
         </div>
 
@@ -93,7 +99,11 @@
            Volba se ukládá, takže po obnovení stránky zůstane. #}
         {% if language_options and account.is_admin %}
         <form method="post" action="/languages/preferred" class="lang-picker">
+            {# Jen počet dní: vlastní období si pamatuje relace a výpis
+               objektu by formulář shodil (422). #}
+            {% if days is number %}
             <input type="hidden" name="days" value="{{ days }}">
+            {% endif %}
             <label class="tile-label" for="preferred">{{ _("Preferovaný jazyk") }}</label>
             <select id="preferred" name="code" onchange="this.form.submit()">
                 {% for option in language_options %}

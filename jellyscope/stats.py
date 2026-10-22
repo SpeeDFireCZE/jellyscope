@@ -80,6 +80,9 @@ class Obdobi:
     # se obdobi napise: "20.8.2026" u celeho dne, "20.8.2026 21:30" u useku
     # vybraneho tazenim v grafu.
     cely_den: bool = True
+    # Cela historie (obdobi_cela_historie): pocita se jako "poslednich N
+    # dni" od prvniho prehrani, jen se jinak jmenuje.
+    cela_historie: bool = False
 
     @property
     def vlastni(self) -> bool:
@@ -93,6 +96,10 @@ class Obdobi:
 # ten zaznam, ktery clovek prave ted hleda. Vlastni obdobi si horni mez
 # urcuje samo.
 KONEC_CASU = "9999-12-31 23:59:59"
+# Odkdy muze historie vubec sahat. Jellyfin vznikl v roce 2018, Emby 2013
+# - starsi prehrani je chyba importu (Playback Reporting umi poslat
+# DateTime.MinValue, tedy 0001-01-01) a o zacatku historie nerozhoduje.
+NEJSTARSI_HISTORIE = "2000-01-01 00:00:00"
 
 
 def obdobi_dnu(days: int) -> Obdobi:
@@ -100,6 +107,35 @@ def obdobi_dnu(days: int) -> Obdobi:
     dny = max(1, int(days))
     zacatek = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=dny)
     return Obdobi(od=zacatek.strftime(db.TIME_FORMAT), do=KONEC_CASU, dny=dny)
+
+
+def obdobi_cela_historie() -> Obdobi:
+    """Celá historie: od dne prvního přehrání do teď, bez časového omezení.
+
+    Počítá se jako „posledních N dní", kde N sahá k prvnímu přehrání:
+    konec je otevřený (KONEC_CASU), takže zapamatovaná volba zahrne i to,
+    co přibude zítra, a délka, předchozí okno i kalendář grafu fungují
+    stejně jako u ostatních období. Bez historie je to dnešek.
+
+    Začátek je prvni_zaznam(), ne holé MIN: nesmyslné datum z importu by
+    jinak přeteklo při převodu do zóny a zapamatovaná volba by shodila
+    každou stránku.
+    """
+    zona = formatting.zona()
+    dnes = datetime.now(zona).replace(tzinfo=None)
+    prvni = prvni_zaznam()
+    try:
+        zacatek = (datetime.strptime(str(prvni)[:19], db.TIME_FORMAT)
+                   .replace(tzinfo=timezone.utc).astimezone(zona).replace(tzinfo=None))
+    except (TypeError, ValueError):
+        zacatek = dnes
+    den = min(zacatek, dnes).replace(hour=0, minute=0, second=0, microsecond=0)
+    zitra = dnes.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return Obdobi(
+        od=den.replace(tzinfo=zona).astimezone(timezone.utc).strftime(db.TIME_FORMAT),
+        do=KONEC_CASU, dny=(dnes.date() - den.date()).days + 1,
+        od_mistni=den.strftime(db.TIME_FORMAT), do_mistni=zitra.strftime(db.TIME_FORMAT),
+        cela_historie=True)
 
 
 def _mistni_cas(text: Any) -> tuple[datetime, bool] | None:
@@ -237,10 +273,13 @@ def prvni_zaznam() -> str:
     Slouzi ke srovnani s predchozim obdobim: kdyz predchozi okno zacina
     driv, nez sahaji nase data, neni to srovnani dvou obdobi, ale obdobi
     s prazdnem. Procenta z toho vyjdou libovolne velka a nic nerikaji.
+
+    Zaznam starsi nez NEJSTARSI_HISTORIE se nepocita - viz tam.
     """
     return str(db.query_value(
-        "SELECT MIN(started_at) FROM playback WHERE watched_seconds > 0",
-        default="") or "")
+        "SELECT MIN(started_at) FROM playback"
+        " WHERE watched_seconds > 0 AND started_at >= ?",
+        (NEJSTARSI_HISTORIE,), default="") or "")
 
 
 def lze_srovnat(zadani: Any) -> bool:

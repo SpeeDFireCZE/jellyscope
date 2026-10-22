@@ -1537,5 +1537,6 @@
     "Zatím žádný dotaz s API klíčem.": "No request with an API key yet.",
     "jak často se otáčí a kolik starých zůstává": "how often they rotate and how many old ones stay",
     "odložené úlohou Rotace logů; nejstarší zmizí s další rotací": "put aside by the Log rotation task; the oldest goes with the next rotation",
-    "všechny": "all"
+    "všechny": "all",
+    "Celá historie": "All time"
 }

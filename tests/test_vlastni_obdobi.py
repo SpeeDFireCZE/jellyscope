@@ -133,6 +133,42 @@ check(predchozi.do == stats._obdobi(30).od,
 check(predchozi.dny == 30, "a je stejně dlouhé")
 
 print()
+print("--- celá historie ---")
+# Od prvního přehrání do teď. Konec je otevřený jako u „posledních N dní",
+# takže zapamatovaná volba zahrne i to, co přibude zítra.
+cela = stats.obdobi_cela_historie()
+check(cela.cela_historie and cela.do == stats.KONEC_CASU,
+      "celá historie: období s otevřeným koncem")
+check(stats.overview(cela)["plays"] == 4,
+      f"zahrne všechna přehrávání ({stats.overview(cela)['plays']})")
+check(cela.od <= (TED - timedelta(days=100)).strftime(db.TIME_FORMAT),
+      f"začíná nejpozději prvním přehráním ({cela.od})")
+check(len(stats.daily_activity_split(cela)) == cela.dny and cela.dny >= 100,
+      f"graf po dnech jde od prvního dne ({cela.dny} dní)")
+check(stats.overview(stats.predchozi(cela))["plays"] == 0,
+      "před prvním přehráním nic není - srovnání nemá s čím")
+
+print()
+print("--- celá historie: nesmyslné datum z importu ---")
+# Import z Playback Reporting umí přinést DateTime.MinValue (0001-01-01).
+# Kdyby od něj celá historie začínala, převod do zóny přeteče a
+# zapamatovaná volba shodí každou stránku se statistikou. A přehrání
+# s nulou vteřin není přehrání - začátek neurčuje.
+db.set_setting("app_timezone", "Europe/Prague")
+prehrani(datetime(1, 1, 1), 600, "nesmysl-min")
+prehrani(TED - timedelta(days=400), 0, "nula-vterin")
+try:
+    cela2, chyba = stats.obdobi_cela_historie(), ""
+except Exception as e:  # noqa: BLE001
+    cela2, chyba = None, repr(e)
+check(cela2 is not None, f"nesmyslné datum nic neshodí {chyba}")
+if cela2 is not None:
+    check(cela2.od >= stats.NEJSTARSI_HISTORIE and abs(cela2.dny - cela.dny) <= 1,
+          f"začíná prvním skutečným přehráním ({cela2.od}, {cela2.dny} dní)")
+    check(stats.lze_srovnat(cela2) is False, "a srovnání s předchozím oknem nespadne")
+db.set_setting("app_timezone", "")
+
+print()
 print("--- přepínač a okno na stránce ---")
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -201,6 +237,51 @@ with TestClient(app) as client:
     for cesta in ("/insights", "/network", "/users", "/languages"):
         odpoved = client.get(f"{cesta}?od={pred_10}&do={pred_10}")
         check(odpoved.status_code == 200, f"{cesta} s vlastním obdobím")
+
+    # Celá historie: tlačítko v okně vlastního období, ne další volba
+    # v přepínači.
+    check('href="/?days=0"' in stranka, "v okně vlastního období je Celá historie")
+    vse = client.get("/?days=0").text
+    check(vybrany_chip(vse) == "Celá historie",
+          f"po kliknutí ji ukazuje přepínač ({vybrany_chip(vse)})")
+    check(vybrany_chip(client.get("/users").text) == "Celá historie",
+          "a platí i na dalších stránkách, jako každé období")
+    for cesta in ("/", "/insights", "/network", "/users", "/languages", "/library"):
+        check(client.get(f"{cesta}?days=0").status_code == 200, f"{cesta} za celou historii")
+    # Odkazy v okně drží polohu stránky stejně jako volby v přepínači -
+    # jinak by klik na Celou historii odskočil nahoru.
+    okno = stranka[stranka.index('id="okno-obdobi"'):]
+    for adresa in ("/?days=0", "/?days=30"):
+        znacka = re.search(r'<a [^>]*href="' + re.escape(adresa) + r'"[^>]*>', okno)
+        check(znacka is not None and "data-keep-scroll" in znacka.group(0),
+              f"odkaz {adresa} v okně drží polohu stránky")
+
+    # Srovnání: celá historie nemá stejně dlouhé okno před sebou - před
+    # prvním přehráním nic není. Výchozí dvojice je pak 30 dnů proti 30
+    # předchozím, ne všechno proti prázdnu.
+    client.get("/?days=0")
+    srovnani = client.get("/srovnani").text
+    check('name="a_days" value="30"' in srovnani,
+          "Srovnání při celé historii začne na 30 dnech")
+
+    # Jazyky: výběr preferovaného jazyka posílal skryté `days` - u období
+    # to byl výpis objektu a formulář skončil chybou 422.
+    with db.connect() as conn:
+        conn.execute("INSERT INTO items (id, name, type, audio_languages)"
+                     " VALUES ('film-1', 'Duna', 'Movie', 'ces')")
+        conn.commit()
+    jazyky = client.get("/languages").text
+    check('name="code"' in jazyky, "na Jazycích je výběr preferovaného jazyka")
+    check("Obdobi(" not in jazyky, "a nenese výpis objektu období")
+    odeslano = client.post("/languages/preferred", data={"code": "ces"},
+                           follow_redirects=False)
+    check(odeslano.status_code == 303, f"uložení projde ({odeslano.status_code})")
+    za = re.search(r"celkem\s+[^<]*?\s+za\s+([^<]*?)\s*<", jazyky)
+    check(za is None or za.group(1).strip() != "",
+          f"„celkem … za“ má za sebou období ({za.group(1).strip() if za else 'blok není'})")
+
+    check(vybrany_chip(client.get("/?days=30").text) == "30 dnů",
+          "klik na 30 dnů ji zase zruší")
 
 print()
 print("HOTOVO - chyb:", failures)

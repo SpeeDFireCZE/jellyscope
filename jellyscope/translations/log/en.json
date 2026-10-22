@@ -146,5 +146,6 @@
     "otisk profiloveho obrazku nejde precist": "profile picture tag cannot be read",
     "vymysleny stream ukazky se nepodarilo ozivit": "the demo's made-up stream could not be revived",
     "log API se nepodařilo založit (%s): %s": "the API log could not be created (%s): %s",
-    "rotace logu: %s": "log rotation: %s"
+    "rotace logu: %s": "log rotation: %s",
+    "otisk profiloveho obrazku nejde zapsat": "profile picture tag cannot be written"
 }

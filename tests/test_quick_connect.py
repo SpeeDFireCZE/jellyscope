@@ -76,7 +76,8 @@ def server(zadost: httpx.Request) -> httpx.Response:
     if cesta == "/Users/AuthenticateWithQuickConnect":
         return httpx.Response(200, json={
             "AccessToken": "TokenQXZ",
-            "User": {"Id": "u-mirek", "Name": "Mirek", "Policy": {}}})
+            "User": {"Id": "u-mirek", "Name": "Mirek", "Policy": {},
+                     "PrimaryImageTag": "qc-novy"}})
     if cesta == "/Sessions/Logout":
         ZRUSENE.append(zadost.headers.get("Authorization", ""))
         return httpx.Response(204)
@@ -126,6 +127,12 @@ check(not db.query_one(
 check(klient.get("/", follow_redirects=False).status_code == 303,
       "a dovnitř se zatím nikdo nedostal")
 
+# Divák už je synchronizovaný, se starým profilovým obrázkem.
+with db.connect() as conn:
+    conn.execute("INSERT INTO users (id, name, is_administrator, is_disabled, image_tag)"
+                 " VALUES ('u-mirek', 'Mirek', 0, 0, 'qc-stary')")
+    conn.commit()
+
 stav["potvrzeno"] = True
 stav_odpoved = klient.get("/login/quick/stav")
 check(stav_odpoved.json() == {"hotovo": True},
@@ -138,6 +145,8 @@ check(not (dict(ucet or {}).get("password_hash") or ""),
       "a žádné heslo u něj není - přes Quick Connect žádné nepadlo")
 check(not dict(ucet or {}).get("is_admin"),
       "kdo není správce v Jellyfinu, není správce ani tady")
+check(db.query_one("SELECT image_tag FROM users WHERE id = 'u-mirek'")["image_tag"]
+      == "qc-novy", "otisk profilového obrázku se obnovil s přihlášením")
 
 print()
 print("--- co odešlo a co po nás zůstalo ---")

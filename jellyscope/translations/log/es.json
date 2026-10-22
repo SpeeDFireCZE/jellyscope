@@ -146,5 +146,6 @@
     "otisk profiloveho obrazku nejde precist": "no se puede leer la huella de la imagen de perfil",
     "vymysleny stream ukazky se nepodarilo ozivit": "no se pudo reanimar la reproducción inventada de la demo",
     "log API se nepodařilo založit (%s): %s": "no se pudo crear el log de la API (%s): %s",
-    "rotace logu: %s": "rotación de logs: %s"
+    "rotace logu: %s": "rotación de logs: %s",
+    "otisk profiloveho obrazku nejde zapsat": "no se puede escribir la huella de la imagen de perfil"
 }

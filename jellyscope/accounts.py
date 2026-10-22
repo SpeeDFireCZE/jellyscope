@@ -432,6 +432,8 @@ def z_jellyfinu(udaje: dict[str, Any]) -> dict[str, Any]:
     jellyfin_id = str(udaje["id"])
     ucet = podle_jellyfin_id(jellyfin_id)
     ted = db.utcnow()
+    if "obrazek" in udaje:
+        obnov_obrazek(jellyfin_id, udaje["obrazek"])
 
     if ucet is None:
         # Jmeno uz muze patrit mistnimu uctu. Prepsat ho nesmime, tak se
@@ -460,6 +462,37 @@ def z_jellyfinu(udaje: dict[str, Any]) -> dict[str, Any]:
                  "spravce" if udaje["spravce"] else "divak")
     return db.query_one("SELECT * FROM accounts WHERE id = ?",
                         (ucet["id"],)) or {}
+
+
+def obnov_obrazek(jellyfin_id: str, otisk: str) -> bool:
+    """Zapíše otisk profilového obrázku diváka, když se změnil. True = změnil.
+
+    Volá se při každém přihlášení přes Jellyfin: otisk přijde s identitou,
+    takže nový obrázek je vidět hned, ne až po noční synchronizaci. Obrázek
+    sám se nestahuje - adresa v tlačítku Můj účet nese otisk, takže nový si
+    prohlížeč stáhne sám a nezměněný drží v mezipaměti.
+
+    Divák, o kterém Jellyscope ještě neví, se nezakládá: Jellyfin posílá id
+    jednou s pomlčkami, jednou bez, a vznikl by dvojník. Doplní ho
+    synchronizace.
+
+    Chyba databáze (zamčená, obnovená záloha bez sloupce) se jen zapíše
+    do logu: kvůli obrázku nesmí přihlášení spadnout.
+    """
+    hole = hole_id(str(jellyfin_id or ""))
+    if not hole:
+        return False
+    try:
+        with db.connect() as conn:
+            zmeneno = conn.execute(
+                "UPDATE users SET image_tag = ? WHERE REPLACE(LOWER(id), '-', '') = ?"
+                " AND COALESCE(image_tag, '') <> ?",
+                (otisk or None, hole, otisk or "")).rowcount
+            conn.commit()
+    except Exception:  # noqa: BLE001 - obrázek je kosmetika, přihlášení kvůli němu nespadne
+        log.warning("otisk profiloveho obrazku nejde zapsat", exc_info=True)
+        return False
+    return bool(zmeneno)
 
 
 def odeber_bez_jellyfinu(ziva_id: set[str] | list[str]) -> list[str]:

@@ -1537,5 +1537,6 @@
     "Zatím žádný dotaz s API klíčem.": "Todavía ninguna petición con clave de API.",
     "jak často se otáčí a kolik starých zůstává": "con qué frecuencia rotan y cuántos antiguos se quedan",
     "odložené úlohou Rotace logů; nejstarší zmizí s další rotací": "guardados por la tarea Rotación de logs; el más antiguo desaparece con la siguiente rotación",
-    "všechny": "todas"
+    "všechny": "todas",
+    "Celá historie": "Todo el historial"
 }

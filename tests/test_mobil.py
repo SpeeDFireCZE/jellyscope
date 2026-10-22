@@ -236,5 +236,27 @@ check("minmax(min(340px, 100%), 1fr)" in STYL,
       "mřížka karet si taky neřekne o víc, než kolik má")
 
 print()
+print("--- výběr v Logu se vejde na displej ---")
+# Volba nese jméno souboru, popisek i velikost („jellyscope.log.3 –
+# záloha (1.2 MB)") a výběr je široký jako nejdelší z nich. Na telefonu
+# tak vylezl z obrazovky: štítek ve flexu se nesmrskne pod šířku svého
+# obsahu. Na úzké obrazovce proto štítek zabere nejvýš celý řádek a výběr
+# se mu přizpůsobí - text volby se zkrátí, v rozbaleném seznamu je celý.
+
+
+def pravidlo(css: str, selektor: str) -> str:
+    nalez = re.search(re.escape(selektor) + r"\s*\{([^}]*)\}", css)
+    return nalez.group(1) if nalez else ""
+
+
+stitek = pravidlo(mobil_860, ".log-controls label")
+check("min-width: 0" in stitek and "max-width: 100%" in stitek,
+      "štítek se na telefonu vejde do řádku")
+check("max-width: 100%" in pravidlo(mobil_860, ".log-controls select"),
+      "a výběr ve štítku taky")
+check(".log-controls select { width: auto; }" in STYL,
+      "na desktopu zůstává výběr široký jako nejdelší volba")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

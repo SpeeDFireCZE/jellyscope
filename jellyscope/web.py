@@ -98,6 +98,9 @@ STATIC_DIR = PACKAGE_DIR / "static"
 # Obdobi, ktera si uzivatel muze vybrat. Pevny seznam - do SQL se nikdy
 # nedostane cislo primo z adresy.
 ALLOWED_DAYS = (7, 30, 90, 365)
+# `?days=0` = celá historie (stats.obdobi_cela_historie). Není v přepínači,
+# je jako tlačítko v okně vlastního období.
+CELA_HISTORIE = 0
 DAY_LABELS = {7: "7 dnů", 30: "30 dnů", 90: "90 dnů", 365: "rok"}
 
 # Jedno vychozi obdobi pro celou aplikaci. Drive melo kazde stranka vlastni
@@ -1163,8 +1166,14 @@ def _days(request: Request, value: Optional[int],
     if value in ALLOWED_DAYS:
         request.session[DAYS_SESSION_KEY] = int(value)
         return int(value)
+    if value == CELA_HISTORIE:
+        # Pamatuje se volba, ne meze: zítra má zahrnout i zítřek.
+        request.session[DAYS_SESSION_KEY] = CELA_HISTORIE
+        return stats.obdobi_cela_historie()
 
     remembered = request.session.get(DAYS_SESSION_KEY)
+    if remembered == CELA_HISTORIE and not isinstance(remembered, bool):
+        return stats.obdobi_cela_historie()
     if isinstance(remembered, dict):
         obdobi = stats.obdobi_od_do(remembered.get("od"), remembered.get("do"))
         if obdobi is not None:
@@ -1399,8 +1408,13 @@ def srovnani(request: Request,
     a stejne dlouhe okno pred nim. Stranka tak neco ukazuje hned a teprve
     kdo chce "srpen versus prosinec", saha na prepinace.
     """
+    vychozi = _days(request, None)
+    if getattr(vychozi, "cela_historie", False):
+        # Cela historie nema stejne dlouhe okno pred sebou - pred prvnim
+        # prehranim nic neni a srovnavalo by se vsechno s prazdnem.
+        vychozi = DEFAULT_DAYS
     prvni = _obdobi_srovnani(request, SROVNANI_A_KEY, a_days, a_od, a_do,
-                             vychozi=_days(request, None))
+                             vychozi=vychozi)
     druhe = _obdobi_srovnani(request, SROVNANI_B_KEY, b_days, b_od, b_do,
                              vychozi=stats.predchozi(prvni))
 

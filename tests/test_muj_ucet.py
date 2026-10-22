@@ -83,8 +83,10 @@ def server(zadost: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"\xff\xd8plakat", headers={"content-type": "image/jpeg"})
     telo = json.loads(zadost.content or b"{}")
     if (telo.get("Username"), telo.get("Pw")) == ("mirek", "tajne"):
+        # Jako skutečný Jellyfin: otisk obrázku přijde i s přihlášením.
         return httpx.Response(200, json={"User": {
-            "Id": "u-mirek", "Name": "mirek", "Policy": {"IsAdministrator": False}}})
+            "Id": "u-mirek", "Name": "mirek", "Policy": {"IsAdministrator": False},
+            "PrimaryImageTag": STAV_OBRAZKU["tag"] or None}})
     return httpx.Response(401, json={})
 
 
@@ -403,6 +405,65 @@ STAV_OBRAZKU["tag"] = ""
 asyncio.run(synchronizuj_uzivatele())
 check(avatar(divak) == "" and divak.get("/account/obrazek").status_code == 404,
       "obrázek v Jellyfinu smazaný: zpátky písmeno")
+
+print()
+print("--- obrázek se obnoví při přihlášení ---")
+# Synchronizace běží v noci. Kdo si v Jellyfinu změní obrázek a přihlásí
+# se, má ho vidět hned: otisk přijde s přihlášením, obrázek sám ne.
+STAV_OBRAZKU["tag"] = "tag1"
+asyncio.run(synchronizuj_uzivatele())
+STAV_OBRAZKU["tag"] = "tag3"
+DOTAZY_OBRAZKU.clear()
+znovu = prihlas("mirek", "tajne", "jellyfin")
+check(avatar(znovu) == "/account/obrazek?v=tag3",
+      "po přihlášení nová adresa obrázku, bez čekání na synchronizaci")
+check(not DOTAZY_OBRAZKU, "přihlášení samo obrázek nestahuje, jen porovná otisk")
+check(accounts.obnov_obrazek("u-mirek", "tag3") is False
+      and accounts.obnov_obrazek("U-MIREK", "tag4") is True,
+      "beze změny se nic nepřepisuje; id se porovná bez ohledu na pomlčky a velikost")
+STAV_OBRAZKU["tag"] = ""
+znovu = prihlas("mirek", "tajne", "jellyfin")
+check(avatar(znovu) == "", "obrázek v Jellyfinu smazaný: po přihlášení písmeno")
+check(accounts.obnov_obrazek("u-neznamy", "tag9") is False
+      and not db.query_one("SELECT id FROM users WHERE id = 'u-neznamy'"),
+      "nesynchronizovaného diváka nezakládá (doplní ho synchronizace)")
+
+# Otisk je kosmetika: když zápis selže (zamčená databáze, obnovená
+# záloha bez sloupce), přihlášení přes Jellyfin musí projít dál.
+import sqlite3  # noqa: E402
+
+puvodni_connect = db.connect
+
+
+def _zamcena(*args, **kwargs):
+    raise sqlite3.OperationalError("database is locked")
+
+
+db.connect = _zamcena
+try:
+    vysledek, chyba = accounts.obnov_obrazek("u-divak", "tag-x"), ""
+except Exception as e:  # noqa: BLE001
+    vysledek, chyba = None, repr(e)
+finally:
+    db.connect = puvodni_connect
+check(vysledek is False, f"selhaný zápis otisku přihlášení neshodí {chyba}")
+
+print()
+print("--- průhledný obrázek leží na neutrální ploše ---")
+# Obrázek s průhledným pozadím (postavička, logo) prosvítal modrou barvou
+# kolečka s písmenem. Pod obrázkem je teď plocha motivu - v tmavém režimu
+# tmavě šedá, ve světlém světle šedá -, takže do obrázku nic nepřidává.
+styl = (PROJECT / "jellyscope" / "static" / "style.css").read_text(encoding="utf-8")
+pod_obrazkem = re.search(r"\.ucet-avatar img\s*\{([^}]*)\}", styl)
+pod_obrazkem = pod_obrazkem.group(1) if pod_obrazkem else ""
+check("background: var(--surface-2)" in pod_obrazkem,
+      "pod obrázkem je neutrální plocha motivu")
+check("--accent" not in pod_obrazkem, "a ne barva zvýraznění")
+# Kolečko pod obrázkem má barvu písmena; na vyhlazeném okraji by z něj
+# prosvítal tenký modrý lem. S obrázkem je proto neutrální i kolečko.
+s_obrazkem = re.search(r"\.ucet-avatar:has\(img\)\s*\{([^}]*)\}", styl)
+check(s_obrazkem is not None and "var(--surface-2)" in s_obrazkem.group(1),
+      "kolečko s obrázkem nemá modrý lem")
 
 print()
 print("HOTOVO - chyb:", failures)

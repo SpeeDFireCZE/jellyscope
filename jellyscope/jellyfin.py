@@ -189,6 +189,24 @@ TYPY_OBRAZKU = ("image/png", "image/jpeg", "image/webp", "image/gif",
 MAX_BAJTU_OBRAZKU = 8 * 1024 * 1024
 
 
+def _identita(uzivatel: dict[str, Any], jmeno: str = "") -> dict[str, Any]:
+    """Kdo se přihlásil - stejně pro heslo i Quick Connect.
+
+    Jedno místo: kdyby se nový údaj přidal jen do jedné cesty, chovala by
+    se přihlášení heslem a přes Quick Connect potichu každé jinak.
+    """
+    politika = uzivatel.get("Policy") or {}
+    return {
+        "id": str(uzivatel["Id"]),
+        "jmeno": str(uzivatel.get("Name") or jmeno),
+        "spravce": bool(politika.get("IsAdministrator")),
+        "vypnuty": bool(politika.get("IsDisabled")),
+        # Otisk profilového obrázku: s ním je nový obrázek vidět hned
+        # po přihlášení (accounts.obnov_obrazek), obrázek sám ne.
+        "obrazek": str(uzivatel.get("PrimaryImageTag") or ""),
+    }
+
+
 class JellyfinClient:
     """Tenka obalka nad HTTP voláními do Jellyfinu.
 
@@ -423,13 +441,7 @@ class JellyfinClient:
         # nechat ho tam by znamenalo, ze Jellyscope po sobe necha viset
         # platny klic k cizimu uctu. Rusime ho hned.
         await self._zrus_token(str(data.get("AccessToken") or ""))
-        politika = uzivatel.get("Policy") or {}
-        return {
-            "id": str(uzivatel["Id"]),
-            "jmeno": str(uzivatel.get("Name") or jmeno),
-            "spravce": bool(politika.get("IsAdministrator")),
-            "vypnuty": bool(politika.get("IsDisabled")),
-        }
+        return _identita(uzivatel, jmeno)
 
     def _prihlasovaci_hlavicka(self) -> str:
         """Kdo se ptá. Bez ní Jellyfin přihlašovací volání odmítne.
@@ -510,13 +522,7 @@ class JellyfinClient:
         if not uzivatel.get("Id"):
             return None
         await self._zrus_token(str(data.get("AccessToken") or ""))
-        politika = uzivatel.get("Policy") or {}
-        return {
-            "id": str(uzivatel["Id"]),
-            "jmeno": str(uzivatel.get("Name") or ""),
-            "spravce": bool(politika.get("IsAdministrator")),
-            "vypnuty": bool(politika.get("IsDisabled")),
-        }
+        return _identita(uzivatel)
 
     async def _zrus_token(self, token: str) -> None:
         """Zahodí přístupový token, který vznikl ověřením hesla.

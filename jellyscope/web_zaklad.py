@@ -155,11 +155,12 @@ def _obdobi_do_sablony(zadani: Any) -> dict[str, Any]:
                 # den a cisla pod nim nedavaji smysl.
                 "od_popis": _obdobi_popis(zadani, zadani.od_mistni, od),
                 "do_popis": _obdobi_popis(zadani, zadani.do_mistni, do),
-                "dny": zadani.dny, "vlastni": True}
+                "dny": zadani.dny, "vlastni": True,
+                "cela_historie": zadani.cela_historie}
     return {"days": int(zadani), "od": "", "do": "",
             "od_text": "", "do_text": "",
             "od_popis": "", "do_popis": "",
-            "dny": int(zadani), "vlastni": False}
+            "dny": int(zadani), "vlastni": False, "cela_historie": False}
 
 
 def _obdobi_popis(obdobi: stats.Obdobi, mistni: str, den: str) -> str:

@@ -64,7 +64,9 @@
     {% endfor %}
     <button class="chip {{ 'active' if obdobi.vlastni }}" type="button"
             data-okno="okno-obdobi">
-        {% if obdobi.vlastni %}
+        {% if obdobi.cela_historie %}
+            {{ _("Celá historie") }}
+        {% elif obdobi.vlastni %}
             {# Po česku, stejně jako v polích - ať to je jedno datum,
                ne dva různé zápisy téhož. #}
             {{ obdobi.od_popis }} – {{ obdobi.do_popis }}
@@ -124,8 +126,13 @@
 
         <div class="btn-row" style="margin-top:14px">
             <button class="btn primary" type="submit">{{ _("Použít") }}</button>
+            {# Celá historie se nevyplňuje do polí: má sahat až do teď
+               i zítra, kdy by pevné datum skončilo dnešním dnem. #}
+            <a class="btn" data-keep-scroll
+               href="{{ base_url }}?{{ navic }}days=0">{{ _("Celá historie") }}</a>
             {% if obdobi.vlastni %}
-                <a class="btn" href="{{ base_url }}?{{ navic }}days=30">{{ _("Zpět na 30 dnů") }}</a>
+                <a class="btn" data-keep-scroll
+                   href="{{ base_url }}?{{ navic }}days=30">{{ _("Zpět na 30 dnů") }}</a>
             {% endif %}
         </div>
     </form>

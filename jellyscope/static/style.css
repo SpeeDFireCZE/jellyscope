@@ -373,15 +373,21 @@ a { color: inherit; }
 }
 /* Profilový obrázek z Jellyfinu leží přes písmeno a vyplní kolečko;
    když se nenačte, odstraní se a písmeno je vidět. Vlastní plocha, ať
-   písmeno neprosvítá průhlednými místy obrázku (kreslená postavička). */
+   písmeno neprosvítá průhlednými místy obrázku (kreslená postavička).
+   Neutrální plocha motivu, ne barva zvýraznění: modrá by se do obrázku
+   s průhledným pozadím propsala, šedá ho nechá být. */
 .ucet-avatar img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    background: var(--accent);
+    background: var(--surface-2);
 }
+/* Kolečko pod obrázkem nese barvu písmena - na vyhlazeném okraji by
+   z něj prosvítal tenký modrý lem. Když se obrázek nenačte a odstraní,
+   pravidlo přestane platit a písmeno je zase na modré. */
+.ucet-avatar:has(img) { background: var(--surface-2); }
 /* Na stránce Můj účet totéž kolečko, větší, vedle nadpisu. */
 .ucet-hlava { display: flex; align-items: center; gap: 14px; }
 .ucet-avatar-velky { width: 52px; height: 52px; font-size: 22px; }
@@ -2268,6 +2274,16 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 }
 
 .log-controls select { width: auto; }
+
+/* Na telefonu by výběr široký jako nejdelší volba („err.log – chybový
+   výstup (supervisord) (1.2 KB)") vylezl z obrazovky: štítek ve flexu
+   se nesmrskne pod šířku svého obsahu. Tady zabere nejvýš celý řádek
+   a výběr se mu přizpůsobí - text volby se zkrátí, v rozbaleném seznamu
+   je celý. */
+@media (max-width: 860px) {
+    .log-controls label { min-width: 0; max-width: 100%; }
+    .log-controls select { max-width: 100%; }
+}
 
 /* Vlastni posuvnik uvnitr ramecku. Log je ze sve podstaty dlouhy a siroky:
    bez tohohle by rostl do vysky pres celou stranku a dlouhe radky by
