@@ -279,6 +279,11 @@ with TestClient(app) as client:
     za = re.search(r"celkem\s+[^<]*?\s+za\s+([^<]*?)\s*<", jazyky)
     check(za is None or za.group(1).strip() != "",
           f"„celkem … za“ má za sebou období ({za.group(1).strip() if za else 'blok není'})")
+    # Totéž v kartě Místo, které nikdo nevyužívá: `day_labels` období nezná.
+    zjisteni = client.get("/insights?days=0").text
+    nic = re.search(r"nic nepřehráno za\s*([^<&]*?)\s*(&middot;|<)", zjisteni)
+    check(nic is not None and nic.group(1).strip() != "",
+          f"„nic nepřehráno za“ má za sebou období ({nic.group(1).strip() if nic else 'karta není'})")
 
     check(vybrany_chip(client.get("/?days=30").text) == "30 dnů",
           "klik na 30 dnů ji zase zruší")

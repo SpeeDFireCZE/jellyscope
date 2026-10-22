@@ -8,7 +8,10 @@
     <div class="card-head">
         <h2>{{ _("Místo, které nikdo nevyužívá") }}</h2>
         <p class="card-note">
-            {{ _("nic nepřehráno za") }} {{ _(day_labels[days]) }}
+            {{ _("nic nepřehráno za") }}
+            {# U vlastního období (i celé historie) vypíšeme rozmezí. #}
+            {% if obdobi is defined and obdobi.vlastni %}{{ obdobi.od_popis }} – {{ obdobi.do_popis }}
+            {% else %}{{ _(day_labels[days]) }}{% endif %}
             &middot; {{ _("nově přidané tituly se nepočítají") }}
         </p>
     </div>
