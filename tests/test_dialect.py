@@ -750,5 +750,20 @@ klic = _rizikova_razeni('db.query_one("SELECT id FROM items ORDER BY id DESC")')
 check(not klic, "sloupec, který NULL být nesmí, projde taky")
 
 print()
+print("--- předfiltr: malá písmena jen v ASCII, ne-ASCII řádky vždy dál ---")
+# Předfiltr historie v API (api._predfiltr_historie) smí v SQL pustit víc,
+# nikdy míň než přesný filtr v Pythonu. LOWER v PostgreSQL ale skládá
+# písmena podle locale databáze - v turecké z ASCII „I" udělá „ı" a řádek
+# „INFUSE" by se ztratil. Collation "C" mění jen ASCII, stejně jako SQLite.
+check(dialect.male_pismena(dialect.SQLITE, "p.client") == "LOWER(p.client)",
+      "SQLite: LOWER mění jen ASCII samo")
+check(dialect.male_pismena(dialect.POSTGRES, "p.client") == 'LOWER(p.client COLLATE "C")',
+      "PostgreSQL: LOWER s collation C")
+check(dialect.mimo_ascii(dialect.SQLITE, "p.client") == "p.client GLOB '*[^ -~]*'",
+      "SQLite: řádek s ne-ASCII znakem přes GLOB")
+check(dialect.mimo_ascii(dialect.POSTGRES, "p.client") == "p.client ~ '[^ -~]'",
+      "PostgreSQL: přes regulární výraz")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

@@ -47,7 +47,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from . import accounts, api_dotaz, applog, db, formatting, insights, pristup, scanner, stats
+from . import (accounts, api_dotaz, applog, db, dialect, formatting, insights, pristup,
+               scanner, stats)
 from .api_dotaz import ChybaApi
 
 log = logging.getLogger("jellyscope.api")
@@ -719,13 +720,91 @@ def historie(token: dict[str, Any] = Depends(smi_adresu),
         # Celá historie období po dávkách: v paměti jen to, co filtr pustí.
         # Bez řazení stačí prvních `limit` shod - pořadí je dané dotazem.
         prehrani = []
-        for davka in stats.historie_pro_api(user_id=muj or kdo, kind=druh, od=od):
+        for davka in stats.historie_pro_api(user_id=muj or kdo, kind=druh, od=od,
+                                            podminky=_predfiltr_historie(filtry)):
             prehrani += api_dotaz.pouzij([_prehrani(r) for r in _pro_vlastnika(token, davka)],
                                          filtry, [], None)
             if not razeni and len(prehrani) >= limit:
                 break
         prehrani = api_dotaz.pouzij(prehrani, [], razeni, limit)
     return {"days": dny, "count": len(prehrani), "playbacks": prehrani}
+
+
+# Pole historie, která jde předfiltrovat v SQL, a jejich sloupce. Jméno a id
+# diváka tu NEJSOU: schovávají se až v Pythonu (`_pro_vlastnika`), takže
+# filtr nad nimi v SQL by běžel nad skutečným jménem a prozradil by ho.
+_SLOUPCE_HISTORIE = {
+    "title": "p.item_name", "series": "p.series_name", "type": "p.item_type",
+    "item_id": "p.item_id", "play_method": "p.play_method", "client": "p.client",
+    "device": "p.device_name", "audio_language": "p.audio_language",
+    "subtitle_language": "p.subtitle_language", "watched_seconds": "p.watched_seconds",
+}
+_POROVNANI = {"equals": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+
+
+def _predfiltr_historie(filtry: list[api_dotaz.Filtr]) -> list[tuple[str, list[Any]]]:
+    """Filtry historie přeložené do SQL jako předfiltr. Jen nadmnožina!
+
+    Celá historie období znamená na velkém serveru přenést z databáze
+    statisíce řádků jen proto, aby je Python zahodil. Jednoduchá pole se
+    proto zúží už v SQL. Přesně rozhoduje dál Python (`api_dotaz.pouzij`),
+    takže SQL smí pustit víc, nikdy míň:
+
+    * text jen pro hodnoty v ASCII a jen `equals`, `in`, `contains`,
+      `starts_with`, `ends_with`; porovnává se malými písmeny jen v ASCII
+      (`dialect.male_pismena`) a řádky s jiným než ASCII textem jdou vždycky
+      dál (`dialect.mimo_ascii`) - `casefold` v Pythonu umí víc než LOWER
+      v databázi (`Straße` najde `strasse`);
+    * `%`, `_` i `!` v hodnotě jsou v LIKE obyčejné znaky (ESCAPE '!' -
+      zpětné lomítko by na PostgreSQL se standard_conforming_strings=off
+      rozbilo literál);
+    * negace (`not`, `not_contains`) a `empty` zůstávají jen Pythonu.
+
+    `is_transcode` kopíruje pravidlo z `_prehrani` (začátek „transcode"
+    bez ohledu na velikost písmen), ne `stats.je_transcode`: nadmnožinou
+    musí být vůči tomu, co rozhoduje Python.
+    """
+    kind = db.current_dialect()
+
+    def mimo_ascii(sloupec: str) -> str:
+        return dialect.mimo_ascii(kind, sloupec)
+
+    podminky: list[tuple[str, list[Any]]] = []
+    for filtr in filtry:
+        if filtr.pole == "is_transcode":
+            chce = filtr.hodnota if filtr.operator == "equals" else not filtr.hodnota
+            vyraz = (dialect.male_pismena(kind, "COALESCE(p.play_method, '')")
+                     + (" LIKE ?" if chce else " NOT LIKE ?"))
+            podminky.append((f"({vyraz} OR {mimo_ascii('p.play_method')})",
+                             ["transcode%"]))
+            continue
+        sloupec = _SLOUPCE_HISTORIE.get(filtr.pole)
+        if not sloupec:
+            continue
+        if filtr.typ == api_dotaz.CISLO:
+            if filtr.operator == "in":
+                podminky.append((f"{sloupec} IN ({','.join('?' for _ in filtr.hodnota)})",
+                                 list(filtr.hodnota)))
+            elif filtr.operator in _POROVNANI:
+                podminky.append((f"{sloupec} {_POROVNANI[filtr.operator]} ?", [filtr.hodnota]))
+            continue
+        hodnoty = filtr.hodnota if filtr.operator == "in" else (filtr.hodnota,)
+        if (filtr.operator not in ("equals", "in", "contains", "starts_with", "ends_with")
+                or not all(str(h).isascii() for h in hodnoty)):
+            continue
+        male = [str(h).lower() for h in hodnoty]
+        male_sloupec = dialect.male_pismena(kind, sloupec)
+        if filtr.operator in ("equals", "in"):
+            vyraz = f"{male_sloupec} IN ({','.join('?' for _ in male)})"
+            parametry = male
+        else:
+            holy = male[0].replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            vzor = {"contains": f"%{holy}%", "starts_with": f"{holy}%",
+                    "ends_with": f"%{holy}"}[filtr.operator]
+            vyraz = f"{male_sloupec} LIKE ? ESCAPE '!'"
+            parametry = [vzor]
+        podminky.append((f"({vyraz} OR {mimo_ascii(sloupec)})", parametry))
+    return podminky
 
 
 def _prehrani(r: dict[str, Any]) -> dict[str, Any]:

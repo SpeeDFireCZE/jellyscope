@@ -288,6 +288,10 @@ def poznamky_html(text: str) -> str:
 
     hotovo: list[str] = []
     v_seznamu = False
+    # Řádky rozepsaného odstavce. CHANGELOG se láme na ~72 znacích, a když
+    # byl každý řádek vlastní <p>, odstavec se v okně rozpadl na kousky.
+    # Složí se až na prázdném řádku, nadpisu, odrážce nebo na konci.
+    odstavec: list[str] = []
 
     def inline(radek: str) -> str:
         radek = html.escape(radek)
@@ -295,19 +299,27 @@ def poznamky_html(text: str) -> str:
         radek = re.sub(r"`([^`]+)`", r"<code>\1</code>", radek)
         return radek
 
+    def dokonci_odstavec() -> None:
+        if odstavec:
+            hotovo.append(f"<p>{inline(' '.join(odstavec))}</p>")
+            odstavec.clear()
+
     for radek in text.replace("\r\n", "\n").split("\n"):
         holy = radek.strip()
         if holy.startswith("#"):
+            dokonci_odstavec()
             if v_seznamu:
                 hotovo.append("</ul>")
                 v_seznamu = False
             hotovo.append(f"<h4>{inline(holy.lstrip('#').strip())}</h4>")
         elif holy.startswith(("- ", "* ")):
+            dokonci_odstavec()
             if not v_seznamu:
                 hotovo.append("<ul>")
                 v_seznamu = True
             hotovo.append(f"<li>{inline(holy[2:])}</li>")
         elif not holy:
+            dokonci_odstavec()
             if v_seznamu:
                 hotovo.append("</ul>")
                 v_seznamu = False
@@ -315,8 +327,9 @@ def poznamky_html(text: str) -> str:
             # Pokracovani odrazky na dalsim radku - patri do te posledni.
             hotovo[-1] = hotovo[-1][:-len("</li>")] + " " + inline(holy) + "</li>"
         else:
-            hotovo.append(f"<p>{inline(holy)}</p>")
+            odstavec.append(holy)
 
+    dokonci_odstavec()
     if v_seznamu:
         hotovo.append("</ul>")
     return "".join(hotovo)

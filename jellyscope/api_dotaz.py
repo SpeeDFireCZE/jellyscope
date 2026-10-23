@@ -227,6 +227,9 @@ def _hodnota(typ: str, text: str, parametr: str) -> Any:
     if typ == TEXT:
         if len(text) > MAX_TEXTU:
             raise chyba("invalid_value", f"Text longer than {MAX_TEXTU} characters.", parametr)
+        # PostgreSQL text s NUL nepřijme ani jako parametr - dotaz by spadl.
+        if "\x00" in text:
+            raise chyba("invalid_value", "Text contains a NUL character.", parametr)
         return text
     if typ == CISLO:
         try:

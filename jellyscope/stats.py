@@ -1642,6 +1642,21 @@ def hourly_heatmap(days: int) -> list[list[float]]:
 ZPUSOBY = ("DirectPlay", "DirectStream", "Transcode")
 
 
+def _pojistne_meze(where: list[str], params: list[Any], od: str | None,
+                   do: str | None) -> None:
+    """Meze `started_at` o dva dny širší než místní den - jen pro index."""
+    try:
+        if od:
+            params.append((date.fromisoformat(str(od)[:10]) - timedelta(days=2)).isoformat())
+            where.append("p.started_at >= ?")
+        if do:
+            params.append((date.fromisoformat(str(do)[:10]) + timedelta(days=3)).isoformat())
+            where.append("p.started_at < ?")
+    except ValueError:
+        # Nesmyslné datum neomezí nic navíc - rozhodne date() jako dřív.
+        return
+
+
 def _filtr_historie(
     user_id: str | None = None,
     search: str | None = None,
@@ -1674,10 +1689,15 @@ def _filtr_historie(
 
     # Jeden den je zvlastni pripad obdobi - prijde proklikem z tabulky
     # na Prehledu. Kdyz je vyplneny, obdobi se ignoruje.
+    # Pojistné meze v UTC: `date(..., 'localtime')` index použít neumí,
+    # takže krátké období četlo celou tabulku. Meze jsou o dva dny širší než
+    # jakýkoliv posun zóny, takže nic nevyřadí - přesně rozhoduje dál date().
     if day:
         where.append("date(p.started_at, 'localtime') = ?")
         params.append(day)
+        _pojistne_meze(where, params, day, day)
     else:
+        _pojistne_meze(where, params, od, do)
         if od:
             where.append("date(p.started_at, 'localtime') >= ?")
             params.append(od)
@@ -1748,7 +1768,10 @@ def history(
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
         WHERE {' AND '.join(where)}
-        ORDER BY p.started_at DESC
+        -- p.id rozhodne shodu casu: bez nej muze databaze (PostgreSQL)
+        -- vratit stejne stare zaznamy pokazde jinak a pri strankovani by
+        -- se jeden ukazal dvakrat a jiny vubec.
+        ORDER BY p.started_at DESC, p.id DESC
         LIMIT ? OFFSET ?
         """,
         tuple(params),
@@ -1761,7 +1784,8 @@ def history(
 
 
 def historie_pro_api(user_id: str | None = None, kind: str = KIND_BOTH,
-                     od: str | None = None, po: int = 2000):
+                     od: str | None = None, po: int = 2000,
+                     podminky: Any = ()):
     """Historie pro API s filtrem: tenké řádky po dávkách, nejnovější první.
 
     S filtrem musí API projít celou historii zvoleného období. `history()`
@@ -1770,8 +1794,15 @@ def historie_pro_api(user_id: str | None = None, kind: str = KIND_BOTH,
     jen sloupce, které API vrací, a čtou se po `po` řádcích, takže
     v paměti zůstane jen to, co filtr pustí dál. Podmínky stejné jako
     v `history()` (`_filtr_historie`).
+
+    `podminky` jsou dvojice (kus SQL, hodnoty) předfiltru z API
+    (`api._predfiltr_historie`) - kus SQL je vždycky text z kódu, hodnoty
+    jdou jako parametry.
     """
     where, params = _filtr_historie(user_id=user_id, kind=kind, od=od)
+    for kus, hodnoty in podminky:
+        where.append(kus)
+        params.extend(hodnoty)
     with db.connect() as conn:
         kurzor = conn.execute(
             f"""
@@ -1781,7 +1812,7 @@ def historie_pro_api(user_id: str | None = None, kind: str = KIND_BOTH,
                    p.audio_language, p.subtitle_language
             FROM playback p
             WHERE {' AND '.join(where)}
-            ORDER BY p.started_at DESC
+            ORDER BY p.started_at DESC, p.id DESC
             """,
             tuple(params),
         )
@@ -2711,7 +2742,7 @@ def library_activity(library_id: str, days: Any) -> dict[str, Any]:
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
         WHERE p.library_id = ? AND p.watched_seconds > 0
-        ORDER BY p.started_at DESC LIMIT 25
+        ORDER BY p.started_at DESC, p.id DESC LIMIT 25
         """,
         (library_id,),
     )
@@ -2809,7 +2840,7 @@ def item_playback(item_id: str, limit: int = 25) -> list[dict[str, Any]]:
         FROM playback p
         LEFT JOIN items i ON i.id = p.item_id
         WHERE p.item_id = ? AND p.watched_seconds > 0
-        ORDER BY p.started_at DESC LIMIT ?
+        ORDER BY p.started_at DESC, p.id DESC LIMIT ?
         """,
         (item_id, limit),
     )

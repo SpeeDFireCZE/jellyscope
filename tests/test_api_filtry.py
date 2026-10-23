@@ -452,6 +452,23 @@ check(api.pole_adres(["/api/v1/least-played", "/api/v1/summary"])
       "pole_adres: jen adresy se seznamem")
 
 print()
+print("--- krycí indexy pro souhrny přehrání ---")
+# Souhrny „kolikrát a kdy naposledy" (least-played, nevyužité místo,
+# Zjištění) šly přes index jen napůl: pro každé ze 150 000 přehrání pak
+# SQLite skočilo do tabulky pro watched_seconds a started_at. Krycí indexy
+# mají všechno v sobě - na 40 000 souborech 0,5 s -> 0,05-0,09 s.
+if db.current_dialect() == "postgres":
+    indexy = {r["indexname"] for r in db.query_all(
+        "SELECT indexname FROM pg_indexes WHERE tablename = 'playback'")}
+else:
+    indexy = {r["name"] for r in db.query_all(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'playback'")}
+check({"idx_playback_item_cas", "idx_playback_cas_item"} <= indexy,
+      f"playback má oba krycí indexy ({sorted(i for i in indexy if 'cas' in i)})")
+check("idx_playback_item" not in indexy,
+      "nadbytečný idx_playback_item (předpona krycího) je pryč - jen by zdržoval zápis")
+
+print()
 print("--- bez filtru se nenačítá celý seznam ---")
 # Celý seznam je drahý (na knihovně o 40 000 souborech desetiny sekundy
 # až sekundy). Bez filtru a řazení stačí, co bylo dřív: limit rovnou
@@ -526,6 +543,80 @@ check(len(vse_filtrem) == len(bez_filtru) > 0
       and sorted(json.dumps(p, sort_keys=True) for p in vse_filtrem)
       == sorted(json.dumps(p, sort_keys=True) for p in bez_filtru),
       "tenká cesta vrací stejné řádky jako dřív (filtr, který pustí všechno)")
+
+print()
+print("--- historie: předfiltr v SQL dává stejný výsledek ---")
+# Historie s filtrem přes celé období přenášela z databáze všechna
+# přehrání (150 000 řádků ~ 1 s) a filtrovalo se až v Pythonu. Jednoduchá
+# pole se teď předfiltrují v SQL. Je to jen NADMNOŽINA - přesně rozhoduje
+# dál Python - takže výsledek musí být s předfiltrem i bez něj stejný.
+with db.connect() as conn:
+    for k, (klient_, zarizeni, metoda) in enumerate((
+            ("Straße TV", "Obývák", "DirectPlay"), ("INFUSE", "iPad", "Transcode (v:h264)"),
+            ("100%_klient", "Telefon", "DirectStream"), (None, None, None),
+            ("a\\b TV", "Ložnice", "DirectPlay"))):
+        conn.execute(
+            "INSERT INTO playback (session_key, user_id, user_name, item_id, item_name,"
+            " item_type, started_at, last_seen_at, watched_seconds, paused_seconds,"
+            " is_paused, is_active, play_method, client, device_name)"
+            " VALUES (?, 'u1', 'Jana', 'e1', 'Pilot', 'Episode', ?, ?, ?, 0, 0, 0, ?, ?, ?)",
+            (f"pf{k}", pred(2 + k), pred(2 + k), 600 * (k + 1), metoda, klient_, zarizeni))
+    conn.commit()
+
+PODMINKY: list = []
+puvodni_tenka = stats.historie_pro_api
+
+
+def spion_historie(*args, **kwargs):
+    PODMINKY.append(list(kwargs.get("podminky") or []))
+    return puvodni_tenka(*args, **kwargs)
+
+
+stats.historie_pro_api = spion_historie
+puvodni_predfiltr = api._predfiltr_historie
+try:
+  for dotaz, ma_jit_do_sql in (
+        ("client[equals]=infuse", True), ("client[contains]=strasse", True),
+        ("client[contains]=%25_", True), ("client[starts_with]=jelly", True),
+        ("type[in]=movie,EPISODE", True), ("is_transcode[equals]=true", True),
+        ("is_transcode[not]=true", True), ("watched_seconds[gte]=1800&sort=-started_at", True),
+        ("title[ends_with]=1", True), ("device[contains]=ob", True),
+        ("client[contains]=a%5Cb", True), ("client[starts_with]=100%25_", True),
+        ("watched_seconds[in]=600,1200", True), ("client[contains]=!", True),
+        ("user[contains]=Pe", False), ("client[equals]=Straße TV", False),
+        ("client[not]=Infuse", False)):
+    adresa = f"/api/v1/history?days=30&limit=500&{dotaz}"
+    PODMINKY.clear()
+    s_predfiltrem = get(adresa).json()
+    api._predfiltr_historie = lambda filtry: []
+    bez = get(adresa).json()
+    api._predfiltr_historie = puvodni_predfiltr
+    check(s_predfiltrem == bez and "playbacks" in bez,
+          f"{dotaz}: stejný výsledek s předfiltrem i bez ({len(bez.get('playbacks', []))} řádků)")
+    check(bool(PODMINKY and PODMINKY[0]) == ma_jit_do_sql,
+          f"{dotaz}: {'jde' if ma_jit_do_sql else 'nejde'} do SQL ({PODMINKY[:1]})")
+finally:
+    stats.historie_pro_api = puvodni_tenka
+    api._predfiltr_historie = puvodni_predfiltr
+check([p["client"] for p in get("/api/v1/history?days=30&limit=500&client[contains]=a%5Cb")
+       .json().get("playbacks", [])] == ["a\\b TV"], "zpětné lomítko v hodnotě je obyčejný znak")
+odpoved = get("/api/v1/history?days=30&client[equals]=%00")
+check(odpoved.status_code == 400 and kod(odpoved) == "invalid_value",
+      f"NUL v hodnotě: 400, ne pád databáze ({odpoved.status_code})")
+
+# Předfiltr filtruje syrový sloupec. Kdyby _prehrani pole odvozovalo jinak
+# (COALESCE, překlad...), SQL by potichu zahazovalo řádky - proto se tu
+# hlídá, že každé předfiltrované pole je ten sloupec beze změny.
+for pole, sloupec in api._SLOUPCE_HISTORIE.items():
+    syrovy = {sloupec.split(".", 1)[1]: 4242 if pole == "watched_seconds" else "hodnota-" + pole}
+    check(api._prehrani(syrovy).get(pole) == next(iter(syrovy.values())),
+          f"pole {pole} je v odpovědi sloupec {sloupec} beze změny")
+check([p["client"] for p in get("/api/v1/history?days=30&limit=500&client[contains]=strasse")
+       .json().get("playbacks", [])] == ["Straße TV"],
+      "„strasse“ najde „Straße TV“ i s předfiltrem (ne-ASCII řádky SQL pouští dál)")
+check([p["client"] for p in get("/api/v1/history?days=30&limit=500&client[contains]=%25_")
+       .json().get("playbacks", [])] == ["100%_klient"],
+      "% a _ v hodnotě jsou v SQL obyčejné znaky, ne zástupné")
 
 print()
 print("--- rozbitá data a velká knihovna ---")

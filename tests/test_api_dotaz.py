@@ -104,6 +104,10 @@ for klic, hodnota in (("plays[gt]", "hodně"), ("plays[gt]", "nan"), ("plays[gt]
           f"{klic}={hodnota[:12]!r} -> invalid_value")
 check(jeden([("path[contains]", "x" * 200)]).filtry[0].hodnota == "x" * 200,
       "200 znaků ještě projde")
+# NUL v textu PostgreSQL nepřijme ani jako parametr - dotaz by spadl na 500.
+check(k(lambda: jeden([("path[contains]", "a\x00b")])) == "invalid_value",
+      "NUL v hodnotě -> invalid_value")
+check(k(lambda: jeden([("path[in]", "a,\x00")])) == "invalid_value", "i v in")
 check(jeden([("added_at[gte]", "2026-10-01")]).filtry[0].hodnota == "2026-10-01 00:00:00",
       "samotné datum = půlnoc toho dne")
 check(jeden([("added_at[lt]", "2026-10-01 18:30:00")]).filtry[0].hodnota

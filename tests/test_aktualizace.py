@@ -63,6 +63,21 @@ check("<strong>Plakát</strong>" in html and "<code>ImageTags</code>" in html,
       "tučné písmo a kód se přeloží")
 check("<p>Odstavec na konec.</p>" in html, "a odstavec je odstavec")
 
+# CHANGELOG se láme na ~72 znacích. Každý řádek odstavce byl vlastní <p>,
+# takže se v okně Nová verze odstavec rozpadl na kousky s mezerami mezi
+# nimi. Řádky jednoho odstavce patří k sobě - konec je až prázdný řádek,
+# nadpis nebo odrážka.
+zalomeny = updates.poznamky_html(
+    "Prvni radek odstavce\na jeho pokracovani.\n\nDruhy **odstavec**\nzase dva radky.\n"
+    "### Nadpis\nTreti odstavec\n- odrazka\nPo odrazce\n\nCtvrty.")
+check("<p>Prvni radek odstavce a jeho pokracovani.</p>" in zalomeny,
+      "zalomený odstavec je jeden <p>")
+check("<p>Druhy <strong>odstavec</strong> zase dva radky.</p>" in zalomeny,
+      "prázdný řádek odstavce odděluje, formátování platí přes celý")
+check("<h4>Nadpis</h4><p>Treti odstavec</p><ul><li>odrazka Po odrazce</li></ul><p>Ctvrty.</p>"
+      in zalomeny, "nadpis i odrážka odstavec ukončí; řádek za odrážkou ji dál pokračuje")
+check(zalomeny.count("<p>") == 4, f"odstavců je tolik, kolik je v textu ({zalomeny.count('<p>')})")
+
 print()
 print("--- cizí značka se do stránky nedostane ---")
 utok = updates.poznamky_html("- <img src=x onerror=alert(1)> a <b>tučně</b>")

@@ -67,6 +67,16 @@ The read-only API filters, sorts and limits every list by the fields it returns,
   Python - nothing is downloaded, this version keeps running and the
   message says which Python is needed and what to do. Docker is not
   affected; there the image is rebuilt.
+- **Faster statistics on large libraries.** Two covering indexes on the
+  playback table: least played, unused space and Insights are three to
+  seven times faster (measured on 40,000 files and 150,000 playbacks:
+  least played 1.1 s -> 0.14 s). They are built once at the first start
+  after the upgrade, which can take a few seconds on a big history. The
+  History page over a short period uses an index too instead of reading
+  every playback.
+- **API history with a filter** narrows simple fields like the player,
+  the type or the title already in the database instead of reading the
+  whole period: a year filtered by player 3.7 s -> 0.05 s.
 - fastapi 0.143.3, starlette 1.8.0.
 
 ### Fixed
@@ -85,6 +95,10 @@ The read-only API filters, sorts and limits every list by the fields it returns,
   period chips.
 - A failed write of the picture stamp no longer blocks a sign-in
   through Jellyfin.
+- **History:** playbacks that started in the same second could swap
+  places between two pages, so one showed twice and another not at all.
+- **The update dialog** broke every paragraph of the release notes into
+  one piece per line.
 
 ## 1.8.0
 

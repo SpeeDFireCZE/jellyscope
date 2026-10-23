@@ -197,6 +197,31 @@ def greatest(dialect: str, first: str, second: str) -> str:
 
 # Převod textového sloupce na místní čas. Časy ukládáme jako text v UTC,
 # takže se musí nejdřív přetypovat a pak posunout do zóny serveru.
+def male_pismena(dialect: str, sloupec: str) -> str:
+    """Sloupec malými písmeny - ale jen v ASCII, v obou databázích stejně.
+
+    SQLite mění v LOWER jen ASCII. PostgreSQL skládá podle locale databáze
+    a v turecké z „I" udělá „ı" - předfiltr v API (api._predfiltr_historie)
+    by pak zahodil řádek „INFUSE", který Python pustí. Collation "C" mění
+    jen ASCII; platí i pro ILIKE, na které se LIKE v PostgreSQL překládá.
+    """
+    if dialect == POSTGRES:
+        return f'LOWER({sloupec} COLLATE "C")'
+    return f"LOWER({sloupec})"
+
+
+def mimo_ascii(dialect: str, sloupec: str) -> str:
+    """Podmínka „v textu je něco jiného než tisknutelné ASCII".
+
+    Takové řádky pouští předfiltr vždycky dál: `casefold` v Pythonu umí
+    víc než LOWER v databázi (`Straße` -> `strasse`), takže o nich musí
+    rozhodnout Python.
+    """
+    if dialect == POSTGRES:
+        return f"{sloupec} ~ '[^ -~]'"
+    return f"{sloupec} GLOB '*[^ -~]*'"
+
+
 def _local(column: str) -> str:
     return (f"(({column})::timestamp AT TIME ZONE 'UTC' "
             f"AT TIME ZONE current_setting('TIMEZONE'))")
