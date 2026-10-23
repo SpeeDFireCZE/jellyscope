@@ -147,5 +147,7 @@
     "vymysleny stream ukazky se nepodarilo ozivit": "vymysleny stream ukazky se nepodarilo ozivit",
     "log API se nepodařilo založit (%s): %s": "log API se nepodařilo založit (%s): %s",
     "rotace logu: %s": "rotace logu: %s",
-    "otisk profiloveho obrazku nejde zapsat": "otisk profiloveho obrazku nejde zapsat"
+    "otisk profiloveho obrazku nejde zapsat": "otisk profiloveho obrazku nejde zapsat",
+    "Spravce %s vyrobil root klic %s (%s)": "Spravce %s vyrobil root klic %s (%s)",
+    "Spravce %s zmenil prava root klice %s: %s -> %s": "Spravce %s zmenil prava root klice %s: %s -> %s"
 }

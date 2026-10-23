@@ -147,5 +147,7 @@
     "vymysleny stream ukazky se nepodarilo ozivit": "the demo's made-up stream could not be revived",
     "log API se nepodařilo založit (%s): %s": "the API log could not be created (%s): %s",
     "rotace logu: %s": "log rotation: %s",
-    "otisk profiloveho obrazku nejde zapsat": "profile picture tag cannot be written"
+    "otisk profiloveho obrazku nejde zapsat": "profile picture tag cannot be written",
+    "Spravce %s vyrobil root klic %s (%s)": "Admin %s created root key %s (%s)",
+    "Spravce %s zmenil prava root klice %s: %s -> %s": "Admin %s changed the rights of root key %s: %s -> %s"
 }

@@ -346,7 +346,7 @@ def zapis_api(klic_id: int, klic: str, vlastnik: str, cesta: str, ip: str,
     """Zapíše jeden požadavek s API klíčem do api.log.
 
     Řádek: `kdy | výsledek | IP | #id jméno klíče | vlastník | adresa`.
-    Vlastník „-" je klíč serveru (bez účtu). Čte se zpátky v read_api().
+    Vlastník „-" je root klíč (bez účtu). Čte se zpátky v read_api().
     """
     handler = _api_pripraven()
     if handler is None:
@@ -381,7 +381,7 @@ def read_api(limit: int = DEFAULT_LINES, ucet: str = "", klic: Any = None,
              ip: str = "") -> dict[str, Any]:
     """Posledních `limit` požadavků z api.log, nejnovější první.
 
-    Filtry: `ucet` = vlastník klíče („-" = klíč serveru), `klic` = id
+    Filtry: `ucet` = vlastník klíče („-" = root klíč), `klic` = id
     klíče, `ip` = část adresy. Prochází se konec souboru (API_PROJIT
     řádků), ne celý - starší je v zálohách ke stažení.
     """

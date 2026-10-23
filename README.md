@@ -333,22 +333,47 @@ you lose one, revoke it and make another; no other key is affected. You can
 have one per tool, and the *last used* column shows which one nobody needs
 any more.
 
-**A key belongs to an account and can do exactly what that account can.**
-A key made in Settings belongs to the admin who made it. Reader accounts
-and Jellyfin viewers make their own on the **My account** page, once the
-admin allows it: **Settings → Accounts → Own API keys** sets this for each
-group, and the Rights dialog of one account can say yes or no for that
-account alone. Such a key sees what its owner sees. An address in an area
-the owner cannot open answers 403 (`/api/v1/` lists only the addresses the
-key may use), other people's names and addresses are hidden when the owner
-has anonymization on, and a viewer's key gets only the viewer's own
-history: asking for someone else's with `?user=` is a 403. A viewer's key
-also stops while sign-in through
-Jellyfin is switched off or the viewer is disabled in Jellyfin. Taking the
-permission away stops the key without deleting it, and giving it back makes
-it work again. Keys made before keys
-had owners keep full rights, so Grafana and Homepage go on working after
-the update; the list marks them as *server key*.
+**There are two kinds of keys.**
+
+**A user key belongs to an account and can do exactly what that account
+can.** Reader accounts and Jellyfin viewers make their own on the **My
+account** page, once the admin allows it: **Settings → Accounts → Own API
+keys** sets this for each group, and the Rights dialog of one account can
+say yes or no for that account alone. Admins make theirs on My account
+too. Such a key sees what its owner sees. An address in an area the owner
+cannot open answers 403 (`/api/v1/` lists only the addresses the key may
+use), other people's names and addresses are hidden when the owner has
+anonymization on, and a viewer's key gets only the viewer's own history:
+asking for someone else's with `?user=` is a 403. A viewer's key also
+stops while sign-in through Jellyfin is switched off or the viewer is
+disabled in Jellyfin. Taking the permission away stops the key without
+deleting it, and giving it back makes it work again. An admin's key can do
+everything only while its owner is an admin.
+
+**A root key belongs to no account and can do what the admin set for it.**
+Admins make root keys in **Settings → API**, and choose its rights there:
+
+- **Everything**: every address, the playback history and viewers' real
+  names, like an admin, including areas that later versions add.
+- **Only selected**: the same tree of areas as in an account's Rights
+  dialog, plus two boxes. **Playback history** (`/api/v1/history`) starts
+  unticked, so a key for a library widget does not learn who watched what
+  unless you tick it. **Hide viewers' names and addresses** works as it
+  does for an account. An area added in a later version stays off until
+  you tick it.
+
+The rights are checked on every request. Any admin can change them later
+with the **Rights** button next to the key; the change applies from the
+next request, and the application log records who changed them and what
+they were before and after. A root key does not depend on the admin who
+made it: when that admin loses the admin role or the account is deleted,
+the key keeps working with its own rights.
+
+Keys made before keys had owners are root keys with *everything*, so
+Grafana and Homepage go on working after the update. The key table shows
+them as *Root · everything*, and the API log as *root key*. Keys that
+admins made in Settings → API in 1.8.0 belong to those admins and stay
+user keys.
 
 The admin can **disable** any key, which stops it but keeps it with its
 log so it can be enabled again, or **revoke** it for good. The owner can
@@ -365,7 +390,7 @@ rotation task. A request with an unknown key is not written down.
 Errors come back as JSON with `detail`, a sentence, and `error`, a code a
 tool can check: 401 for a missing or unknown key (`missing_token`,
 `invalid_token`), 403 for a disabled key, an owner without the permission
-and an address outside the owner's rights (`key_disabled`,
+and an address outside the key's rights (`key_disabled`,
 `key_not_allowed`, `area_not_allowed` and a few more), 404 for an unknown
 title (`not_found`) and 400 for a malformed request (see *Filtering and
 sorting* below).

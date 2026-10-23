@@ -27,7 +27,7 @@ restart.
 
 ### What is new
 
-The read-only API filters, sorts and limits every list by the fields it returns, and a malformed request is an error instead of default data. A custom period can cover all of history.
+The read-only API filters, sorts and limits every list by the fields it returns, and a malformed request is an error instead of default data. Admins make root keys: API keys that belong to no account and can do only what the admin set. A custom period can cover all of history.
 
 ### Before you upgrade
 
@@ -42,6 +42,11 @@ The read-only API filters, sorts and limits every list by the fields it returns,
   403** instead of its own history.
 - **API error messages are in English and carry a code** (`error`); the
   status codes did not change.
+- **Server keys are now called root keys**, and nothing else changes for
+  them: they keep every right. **A key made in Settings → API is from now
+  on a root key** with the rights you choose when you make it. Keys that
+  admins made there in 1.8.0 still belong to them (user keys); an
+  admin's own key is now made on *My account*.
 
 ### Added
 
@@ -53,6 +58,14 @@ The read-only API filters, sorts and limits every list by the fields it returns,
   `/api/v1/play-methods` take the list name before the field and answer
   as before without filters. `/api/v1/` lists the fields of every list;
   the *How to use it* dialog has examples and the fields per address.
+- **Root keys.** *Settings → API* makes a key that belongs to no
+  account, with its own rights: *Everything*, or only selected areas
+  (the same tree as an account's rights), the playback history (a
+  separate box, off by default) and hidden viewer names. The rights are
+  checked on every request, any admin can change them later with the
+  *Rights* button, and the change is written to the application log.
+  Taking the admin role from the admin who made the key, or deleting
+  their account, does not touch it.
 - **All time** in the custom period dialog: from the first real play to
   now, remembered like any other period.
 

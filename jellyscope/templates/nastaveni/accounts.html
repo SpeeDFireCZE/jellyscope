@@ -6,7 +6,7 @@
    Makra se importují tady, ne v rodiči: záviset na tom, že se
    `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
    a funguje jen náhodou. #}
-{% from "_macros.html" import running_task, file_picker, nazev_oblasti %}
+{% from "_macros.html" import running_task, file_picker, strom_prav %}
 
 {# ================================================================== #}
 {# Akce nad účty. Formuláře byly dřív pořád otevřené pod sebou a stránka
@@ -253,18 +253,7 @@
            účet zrovna platí. Zaškrtnutí se uloží jen v režimu „vlastní";
            skript ho po přepnutí odemkne, bez skriptu je odemčený pořád
            a rozhoduje přepínač nahoře. #}
-        <div class="strom prava-strom">
-            {% for oblast in prava.strom %}
-            <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
-                <input type="checkbox" name="vidi_{{ oblast.klic }}"
-                       {{ 'checked' if oblast.zapnuto }}>
-                <span>
-                    {{ nazev_oblasti(oblast, nazev_prehledu) }}
-                    <span class="hint">{{ _(oblast.popis) }}</span>
-                </span>
-            </label>
-            {% endfor %}
-        </div>
+        {{ strom_prav(prava.strom, nazev_prehledu, trida="prava-strom") }}
 
         <label class="prepinac" style="margin-top:14px">
             <input type="checkbox" name="anonymizace" {{ 'checked' if prava.anonymizace }}>
@@ -348,18 +337,7 @@ document.querySelectorAll("form.prava-uctu").forEach(function (form) {
         <a class="btn" href="/settings?section=jellyfin#divaci">{{ _("Nastavit diváky z Jellyfinu") }}</a>
     </div>
 
-    <div class="strom">
-        {% for oblast in ctenar_strom %}
-        <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
-            <input type="checkbox" name="vidi_{{ oblast.klic }}" form="ctenari-form"
-                   {{ 'checked' if oblast.zapnuto }}>
-            <span>
-                {{ nazev_oblasti(oblast, nazev_prehledu) }}
-                <span class="hint">{{ _(oblast.popis) }}</span>
-            </span>
-        </label>
-        {% endfor %}
-    </div>
+    {{ strom_prav(ctenar_strom, nazev_prehledu, formular="ctenari-form") }}
 
     <label class="prepinac" style="margin-top:14px">
         <input type="checkbox" name="anonymizace" form="ctenari-form"

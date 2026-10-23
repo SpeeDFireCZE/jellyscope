@@ -58,7 +58,7 @@
                 <option value="">{{ _("všichni") }}</option>
                 {% for vlastnik in api_log_vlastnici %}
                 <option value="{{ vlastnik }}" {% if vlastnik == log_ucet %}selected{% endif %}>
-                    {{ _("klíč serveru") if vlastnik == "-" else vlastnik }}
+                    {{ _("root klíče") if vlastnik == "-" else vlastnik }}
                 </option>
                 {% endfor %}
             </select>
@@ -70,7 +70,7 @@
                 <option value="">{{ _("všechny") }}</option>
                 {% for klic in api_log_klice %}
                 <option value="{{ klic.id }}" {% if klic.id == log_klic %}selected{% endif %}>
-                    {{ klic.name }} ({{ klic.vlastnik or _("klíč serveru") }})
+                    {{ klic.name }} ({{ klic.vlastnik or _("root klíč") }})
                 </option>
                 {% endfor %}
             </select>
@@ -121,7 +121,7 @@
                 <td class="nowrap">{{ z.klic }}</td>
                 <td class="nowrap">
                     {% if z.vlastnik %}{{ z.vlastnik }}
-                    {% else %}<span class="muted">{{ _("klíč serveru") }}</span>{% endif %}
+                    {% else %}<span class="muted">{{ _("root klíč") }}</span>{% endif %}
                 </td>
                 {# Dlouhá adresa se zalomí kdekoliv, ale ne užší než tohle:
                    na telefonu by jinak sloupec spadl na pár znaků. #}

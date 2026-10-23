@@ -6,7 +6,45 @@
    Makra se importují tady, ne v rodiči: záviset na tom, že se
    `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
    a funguje jen náhodou. #}
-{% from "_macros.html" import running_task, file_picker, bunka_klice %}
+{% from "_macros.html" import running_task, file_picker, bunka_klice, nazev_oblasti, strom_prav %}
+
+{# Co smí root klíč - společné pro okno nového klíče i okno Práva.
+   U „Všechno" se zbytek schová (skript níž): strom by tam jen mátl,
+   klíč smí všechno bez ohledu na zaškrtnutí. Bez skriptu je vidět
+   všechno a rozhoduje přepínač. #}
+{% macro prava_klice(prava, id_skupiny, nazev_prehledu) %}
+<div class="field" role="radiogroup" aria-labelledby="{{ id_skupiny }}">
+    <label id="{{ id_skupiny }}">{{ _("Co klíč smí") }}</label>
+    <label class="prepinac">
+        <input type="radio" name="rezim" value="vse" {{ 'checked' if prava.vse }}>
+        <span>
+            {{ _("Všechno (i oblasti přidané později)") }}
+            <span class="hint">{{ _("Jako správce: všechny adresy API, historie přehrávání i skutečná jména diváků.") }}</span>
+        </span>
+    </label>
+    <label class="prepinac" style="margin-top:8px">
+        <input type="radio" name="rezim" value="vybrane" {{ 'checked' if not prava.vse }}>
+        <span>
+            {{ _("Jen vybrané") }}
+            <span class="hint">{{ _("Jen to, co zaškrtneš níž. Oblast přidaná v nové verzi bude vypnutá, dokud ji nezaškrtneš.") }}</span>
+        </span>
+    </label>
+</div>
+<div class="prava-vybrane">
+    {{ strom_prav(prava.strom, nazev_prehledu, trida="prava-strom") }}
+    <label class="prepinac" style="margin-top:14px">
+        <input type="checkbox" name="historie" {{ 'checked' if prava.historie }}>
+        <span>
+            {{ _("Historie přehrávání") }}
+            <span class="hint">{{ _("Adresa /api/v1/history - kdo co a kdy sledoval. Bez zaškrtnutí ji klíč nedostane.") }}</span>
+        </span>
+    </label>
+    <label class="prepinac" style="margin-top:8px">
+        <input type="checkbox" name="anonymizace" {{ 'checked' if prava.anonymizace }}>
+        <span>{{ _("Skrýt jména a adresy diváků") }}</span>
+    </label>
+</div>
+{% endmacro %}
 
 {# ================================================================== #}
 {# Čtecí API pro nástroje. Vlastní sekce, protože je to jiná otázka než
@@ -31,13 +69,12 @@
         <p class="card-note">{{ _("celkem") }} {{ api_tokeny | length }}</p>
     </div>
 
-    <form method="post" action="/settings/api/token" class="btn-row"
-          style="margin-bottom:16px">
-        <input type="text" name="name" maxlength="60"
-               placeholder="{{ _('K čemu bude, třeba Grafana') }}"
-               style="max-width:280px">
-        <button data-keep-scroll class="btn primary" type="submit">{{ _("Vyrobit klíč") }}</button>
-    </form>
+    {# Tady vzniká root klíč: nepatří žádnému účtu a smí jen to, co mu
+       správce v okně nastaví. Vlastní klíč s právy svého účtu si každý
+       vyrobí v Můj účet. #}
+    <div class="btn-row" style="margin-bottom:16px">
+        <button class="btn primary" type="button" data-okno="okno-novy-klic">{{ _("Vyrobit root klíč") }}</button>
+    </div>
 
     {% if api_tokeny %}
     {# Všechny klíče na serveru, i cizí: správce je ten, kdo musí poznat
@@ -47,7 +84,7 @@
         <table>
             <thead><tr>
                 <th>{{ _("Název") }}</th>
-                <th>{{ _("Vlastník") }}</th>
+                <th>{{ _("Typ a práva") }}</th>
                 <th>{{ _("Klíč") }}</th>
                 <th>{{ _("Stav") }}</th>
                 <th>{{ _("Vyrobeno") }}</th>
@@ -58,12 +95,29 @@
             {% for token in api_tokeny %}
             <tr>
                 <td class="strong">{{ token.name }}</td>
-                <td class="nowrap">
-                    {% if token.vlastnik %}
+                {# Root klíč: co smí, krátce (celé je v okně Práva).
+                   Uživatelský: čí je - práva má podle svého účtu. #}
+                <td class="typ-klice">
+                    {% if token.account_id is none %}
+                    {% set p = api_prava_klicu[token.id] %}
+                    {%- set casti = [] -%}
+                    {%- if p.vse -%}
+                        {%- set x = casti.append(_("všechno")) -%}
+                    {%- else -%}
+                        {%- for oblast in p.oblasti[:3] -%}
+                            {%- set x = casti.append(nazev_oblasti(oblast, nazev_prehledu)) -%}
+                        {%- endfor -%}
+                        {%- if p.oblasti | length > 3 -%}
+                            {%- set x = casti.append(_("a {n} další").format(n=p.oblasti | length - 3)) -%}
+                        {%- endif -%}
+                        {%- if p.historie %}{% set x = casti.append(_("historie")) %}{% endif -%}
+                        {%- if p.anonymizace %}{% set x = casti.append(_("jména skrytá")) %}{% endif -%}
+                    {%- endif -%}
+                    {{ _("Root") }} · {{ casti | join(", ") }}
+                    {% else %}
+                    {{ _("Uživatelský") }} ·
                     <a href="/settings?section=log&amp;log_druh=api&amp;log_ucet={{ token.vlastnik | urlencode }}"
                        title="{{ _('Použití všech klíčů tohoto účtu') }}">{{ token.vlastnik }}</a>
-                    {% else %}
-                    <span class="muted" title="{{ _('Klíč z doby před vlastníky. Má plná práva, jako správce.') }}">{{ _("klíč serveru") }}</span>
                     {% endif %}
                 </td>
                 {# Prvních pár znaků a zbytek hvězdičkami - celý klíč tu
@@ -84,6 +138,9 @@
                 <td>
                     <div class="btn-row" style="flex-wrap:nowrap">
                         <a class="btn" href="/settings?section=log&amp;log_druh=api&amp;log_klic={{ token.id }}">{{ _("Použití") }}</a>
+                        {% if token.account_id is none %}
+                        <button class="btn" type="button" data-okno="okno-prava-klice-{{ token.id }}">{{ _("Práva") }}</button>
+                        {% endif %}
                         {% if token.stav == "vypnuty" %}
                         <form method="post" action="/settings/api/token/zapnout">
                             <input type="hidden" name="token_id" value="{{ token.id }}">
@@ -112,6 +169,66 @@
     <p class="card-note">{{ _("Zatím žádný klíč. Bez něj API neodpovídá nikomu.") }}</p>
     {% endif %}
 </div>
+
+{# Nový root klíč. Okno, ne řádek nad tabulkou: strom oblastí je delší
+   než obrazovka telefonu - posouvá se jen obsah, Vyrobit zůstává vidět. #}
+<dialog class="okno okno-posuvne" id="okno-novy-klic">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Nový root klíč") }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/api/token" class="prava-klice">
+        <div class="okno-obsah">
+            <div class="field">
+                <label for="novy-klic-nazev">{{ _("Název") }}</label>
+                <input id="novy-klic-nazev" type="text" name="name" maxlength="60"
+                       placeholder="{{ _('K čemu bude, třeba Grafana') }}">
+            </div>
+            {{ prava_klice(api_novy_klic, "novy-klic-smi", nazev_prehledu) }}
+        </div>
+        <div class="okno-pata">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Vyrobit klíč") }}</button>
+        </div>
+    </form>
+</dialog>
+
+{# Práva jednoho root klíče. Předvyplněná tím, co platí; uložení platí
+   od dalšího dotazu s klíčem. #}
+{% for token in api_tokeny if token.id in api_prava_klicu %}
+<dialog class="okno okno-posuvne" id="okno-prava-klice-{{ token.id }}">
+    <form method="dialog" class="okno-hlava">
+        <h2>{{ _("Práva klíče") }} {{ token.name }}</h2>
+        <button class="btn okno-zavrit" type="submit"
+                aria-label="{{ _("Zavřít") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/api/token/prava" class="prava-klice">
+        <input type="hidden" name="token_id" value="{{ token.id }}">
+        <div class="okno-obsah">
+            {{ prava_klice(api_prava_klicu[token.id], "prava-klice-smi-" ~ token.id, nazev_prehledu) }}
+        </div>
+        <div class="okno-pata">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit práva") }}</button>
+        </div>
+    </form>
+</dialog>
+{% endfor %}
+
+<script>
+/* U „Všechno" se strom a zaškrtávátka schovají - klíč smí všechno
+   bez ohledu na ně. Bez skriptu zůstane vidět všechno. */
+document.querySelectorAll("form.prava-klice").forEach(function (form) {
+    var vybrane = form.querySelector(".prava-vybrane");
+    function prepni() {
+        var rezim = form.querySelector('input[name="rezim"]:checked');
+        vybrane.hidden = !!(rezim && rezim.value === "vse");
+    }
+    form.querySelectorAll('input[name="rezim"]').forEach(function (r) {
+        r.addEventListener("change", prepni);
+    });
+    prepni();
+});
+</script>
 
 {# Záznam použití je log API v Nastavení → Log: s filtry podle vlastníka,
    klíče a IP, ke stažení, a jak dlouho se drží, řídí úloha Rotace logů. #}

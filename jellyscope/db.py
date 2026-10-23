@@ -785,10 +785,13 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         "image_tag": "TEXT",
     },
     "api_tokens": {
-        # Komu klic patri. NULL = klic serveru z doby pred vlastniky:
-        # ma plna prava, aby se po aktualizaci nerozbila Grafana. Smazany
-        # ucet vezme sve klice s sebou. Viz api.over_token().
+        # Komu klic patri. NULL = root klic (bez vlastnika, vcetne klicu
+        # z doby pred vlastniky). Smazany ucet vezme sve klice s sebou.
+        # Viz api.over_token().
         "account_id": "INTEGER REFERENCES accounts(id) ON DELETE CASCADE",
+        # Prava root klice: NULL = vsechno (i klice pred vlastniky - aby se po
+        # aktualizaci nerozbila Grafana), jinak JSON z api.zabal_prava_klice.
+        "prava": "TEXT",
         # 'aktivni' / 'vypnuty'. Vypnout a zapnout smi jen spravce;
         # zneplatneni je smazani radku.
         "stav": "TEXT NOT NULL DEFAULT 'aktivni'",

@@ -351,7 +351,8 @@ def posli(klient: TestClient, adresa: str, **data) -> int:
 
 stranka = spravce_k.get("/settings?section=api").text
 check("Homepage" in stranka and "ctenar" in stranka, "správce vidí klíč čtenáře i s vlastníkem")
-check("klíč serveru" in stranka, "klíč bez vlastníka je popsaný jako klíč serveru")
+check("Root · všechno" in re.sub(r"\s+", " ", stranka),
+      "klíč bez vlastníka je root klíč se vším (Root · všechno)")
 
 check(posli(spravce_k, "/settings/api/token/vypnout", token_id=klic_ctenare["id"]) == 303
       and stav_klice(klic_ctenare["id"]) == "vypnuty", "správce klíč vypne")
@@ -376,10 +377,14 @@ check("znacka=ctenare" in podle_uctu and "znacka=serveru" not in podle_uctu, "fi
 check(spravce_k.get("/settings?section=api&klic=abc&ucet=").status_code == 200,
       "nesmyslný filtr stránku neshodí")
 
-nove = spravce_k.post("/settings/api/token", data={"name": "Moje Grafana"},
+# Nastaveni -> API vyrabi root klic: nepatri nikomu, ani spravci (viz
+# tests/test_root_klice.py). Vlastni klic spravce je v Muj ucet.
+nove = spravce_k.post("/settings/api/token", data={"name": "Moje Grafana", "rezim": "vse"},
                       follow_redirects=False)
 moje = [r for r in api.seznam(ucet("spravce")["id"]) if r["name"] == "Moje Grafana"]
-check(nove.status_code == 303 and len(moje) == 1, "klíč vyrobený správcem patří jemu")
+check(nove.status_code == 303 and not moje
+      and [r["account_id"] for r in api.seznam() if r["name"] == "Moje Grafana"] == [None],
+      "klíč z Nastavení → API je root klíč, správci nepatří")
 
 for adresa in ("/settings/api/token/vypnout", "/settings/api/token/zapnout"):
     check(posli(ctenar_k, adresa, token_id=serveru["id"]) == 403,
@@ -612,7 +617,7 @@ for kdo, klient, vyrob, stranka_url in (
         ("uživatel", novacek_k, "/account/klic", "/account")):
     if klient is novacek_k:
         accounts.uloz_smi_klic(novacek_id, "1")
-    posli(klient, vyrob, name=f"Radek {kdo}")
+    posli(klient, vyrob, name=f"Radek {kdo}", rezim="vse")
     html = klient.get(stranka_url).text
     radek = radek_klice(html, f"Radek {kdo}")
     cely = re.findall(CELY_KLIC, html)
@@ -628,7 +633,7 @@ for kdo, klient, vyrob, stranka_url in (
     check("*" * 12 in radek_klice(znovu, f"Radek {kdo}"), f"{kdo}: zbyde začátek a hvězdičky")
 for r in api.seznam(novacek_id):
     api.zrus(r["id"])
-for r in api.seznam(ucet("spravce")["id"]):
+for r in api.seznam():
     if r["name"] == "Radek správce":
         api.zrus(r["id"])
 
@@ -638,7 +643,7 @@ for klient, vyrob, stranka_url in ((spravce_k, "/settings/api/token", "/settings
                                    (novacek_k, "/account/klic", "/account")):
     if klient is novacek_k:
         accounts.uloz_smi_klic(novacek_id, "1")
-    posli(klient, vyrob, name="Bez mezipameti")
+    posli(klient, vyrob, name="Bez mezipameti", rezim="vse")
     odpoved = klient.get(stranka_url)
     check(re.findall(CELY_KLIC, odpoved.text)
           and "no-store" in odpoved.headers.get("cache-control", ""),
@@ -648,7 +653,7 @@ for r in api.seznam():
         api.zrus(r["id"])
 
 # Klic vyrobeny v Nastaveni patri spravci, ale na Muj ucet se ukazat nema.
-posli(spravce_k, "/settings/api/token", name="Jen v Nastaveni")
+posli(spravce_k, "/settings/api/token", name="Jen v Nastaveni", rezim="vse")
 check(not re.findall(CELY_KLIC, spravce_k.get("/account").text),
       "klíč vyrobený v Nastavení se na Můj účet neukáže")
 check(len(re.findall(CELY_KLIC, spravce_k.get("/settings?section=api").text)) == 1,

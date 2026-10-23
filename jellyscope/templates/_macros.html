@@ -504,3 +504,24 @@
 {% macro nazev_oblasti(oblast, nazev_prehledu) -%}
 {{ _(oblast.nazev) }}{% if oblast.klic == 'dashboard' and nazev_prehledu %} („{{ nazev_prehledu }}“){% endif %}
 {%- endmacro %}
+
+
+{# Strom práv - zaškrtávátko `vidi_<oblast>` za každou oblast. Jeden pro
+   všechna místa (okno Práva účtu, skupina čtenářů, diváci z Jellyfinu,
+   root klíč), ať se nová oblast nezapomene v jednom z nich.
+   `formular` = id formuláře, když strom stojí mimo něj (atribut form=);
+   `trida` = třída navíc, podle které strom najde skript stránky. #}
+{% macro strom_prav(strom, nazev_prehledu, formular="", trida="") %}
+<div class="strom{{ ' ' ~ trida if trida }}">
+    {% for oblast in strom %}
+    <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
+        <input type="checkbox" name="vidi_{{ oblast.klic }}"{% if formular %} form="{{ formular }}"{% endif %}
+               {{ 'checked' if oblast.zapnuto }}>
+        <span>
+            {{ nazev_oblasti(oblast, nazev_prehledu) }}
+            <span class="hint">{{ _(oblast.popis) }}</span>
+        </span>
+    </label>
+    {% endfor %}
+</div>
+{% endmacro %}

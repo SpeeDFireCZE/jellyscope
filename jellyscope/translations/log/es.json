@@ -147,5 +147,7 @@
     "vymysleny stream ukazky se nepodarilo ozivit": "no se pudo reanimar la reproducción inventada de la demo",
     "log API se nepodařilo založit (%s): %s": "no se pudo crear el log de la API (%s): %s",
     "rotace logu: %s": "rotación de logs: %s",
-    "otisk profiloveho obrazku nejde zapsat": "no se puede escribir la huella de la imagen de perfil"
+    "otisk profiloveho obrazku nejde zapsat": "no se puede escribir la huella de la imagen de perfil",
+    "Spravce %s vyrobil root klic %s (%s)": "El administrador %s creó la clave root %s (%s)",
+    "Spravce %s zmenil prava root klice %s: %s -> %s": "El administrador %s cambió los permisos de la clave root %s: %s -> %s"
 }

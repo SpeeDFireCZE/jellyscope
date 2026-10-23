@@ -3049,6 +3049,10 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    a při šířce běžného okna by z ní byl jeden dlouhý sloupec. */
 .okno-siroke { width: min(760px, calc(100vw - 32px)); }
 
+/* Tabulka klíčů: „Typ a práva" je krátký výčet (Root · Knihovna, …).
+   Bez spodní hranice ho tabulka smáčkne na slovo na řádek. */
+.typ-klice { min-width: 190px; }
+
 /* Okno „Jak se to používá" u API: příklady filtrů a pole u adres.
    Adresa s filtrem je dlouhá a bez mezer („path[starts_with]=/media/...")
    - na telefonu by se ořízla, proto se láme kdekoliv a popisek stojí

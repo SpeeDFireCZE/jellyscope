@@ -360,8 +360,15 @@ def settings_page(
             zapomenuti=odklizeni.zapomenuti(),
         )
     elif section == "api":
+        tokeny = api.seznam()
         context.update(
-            api_tokeny=api.seznam(),
+            api_tokeny=tokeny,
+            # Root klíče: co smí (sloupec Typ a práva) a předvyplněné okno
+            # Práva. Nový klíč začíná s ničím zaškrtnutým - práva se mu
+            # nastavují vědomě.
+            api_prava_klicu={t["id"]: _prava_root_klice(t["prava"])
+                             for t in tokeny if t["account_id"] is None},
+            api_novy_klic=_strom_klice([], historie=False, anonymizace=False, vse=False),
             # Okno „Jak se to používá" (_api_navod.html) - správci vyjdou
             # všechny adresy, ale seznam se předává vždycky výslovně.
             api_navod_adresy=api.povolene_adresy(account),
@@ -467,7 +474,7 @@ def settings_page(
                 api_log=applog.read_api(radku, log_ucet.strip(), filtr_klic,
                                         log_ip.strip()[:64]),
                 # Nabídka filtrů: klíče, které existují, a jejich vlastníci
-                # („-" = klíč serveru). Smazaný klíč v logu zůstane, jen se
+                # („-" = root klíč). Smazaný klíč v logu zůstane, jen se
                 # podle něj nedá vybrat.
                 api_log_klice=klice,
                 api_log_vlastnici=sorted({k["vlastnik"] or "-" for k in klice}),
@@ -1868,16 +1875,109 @@ def account_role(
     return RedirectResponse("/settings?section=accounts", status_code=303)
 
 
+def _strom_klice(oblasti: Any, historie: bool, anonymizace: bool,
+                 vse: bool) -> dict[str, Any]:
+    """Práva root klíče pro stránku: stav okna Práva a výčet do tabulky.
+
+    Strom kreslí pristup.strom stejně jako u účtu s vlastními právy -
+    jen z účtu, který existuje jen na tuhle chvíli.
+    """
+    zapnute = set(oblasti)
+    return {
+        "vse": vse,
+        "historie": historie,
+        "anonymizace": anonymizace,
+        "strom": pristup.strom(pristup.CTENAR, {
+            pristup.PRISTUP: pristup.zabal_prava(zapnute, anonymizace)}),
+        "oblasti": [oblast for oblast in pristup.OBLASTI if oblast.klic in zapnute],
+    }
+
+
+def _prava_root_klice(prava: str | None) -> dict[str, Any]:
+    """Co smí jeden root klíč (sloupec Typ a práva, okno Práva).
+
+    U „všechno" je strom zaškrtnutý celý: přesně to klíč smí, a kdo
+    přepne na „jen vybrané", ubírá z toho, co už platí - nezačíná od nuly.
+    """
+    rozbalena = api.prava_klice(prava)
+    if rozbalena is None:
+        return _strom_klice(pristup.PODLE_KLICE, historie=True, anonymizace=False, vse=True)
+    return _strom_klice(rozbalena["oblasti"], rozbalena["historie"],
+                        rozbalena["anonymizace"], vse=False)
+
+
+def _prava_klice_z_formulare(formular: Any) -> tuple[str | None, str]:
+    """Práva root klíče z formuláře: (práva, chyba). Prázdná chyba = v pořádku.
+
+    `rezim` je „vse" (práva NULL - všechno, i oblasti přidané později),
+    nebo „vybrane". Cokoliv jiného - i formulář bez něj ze starší stránky
+    v otevřené kartě - je chyba: hádat, co správce myslel, by u klíče
+    k datům znamenalo dát mu víc, než chtěl. Neznámé oblasti zahodí
+    api.zabal_prava_klice.
+    """
+    rezim = str(formular.get("rezim") or "")
+    if rezim == "vse":
+        return None, ""
+    if rezim != "vybrane":
+        return None, "Nejde poznat, co má klíč smět. Načti stránku znovu a vyber to."
+    oblasti = [oblast.klic for oblast in pristup.OBLASTI
+               if formular.get(f"vidi_{oblast.klic}")]
+    historie = bool(formular.get("historie"))
+    if not oblasti and not historie:
+        return None, "Zaškrtni, co klíč smí - aspoň jednu oblast nebo historii přehrávání."
+    return api.zabal_prava_klice(oblasti, bool(formular.get("anonymizace")), historie), ""
+
+
 @router.post("/settings/api/token")
-def api_token_novy(request: Request, name: str = Form(""),
-                   account: dict[str, Any] = Depends(require_admin)):
-    """Vyrobí token pro čtecí API a jednou ho ukáže."""
-    vysledek = api.vytvor(name, account["id"])
+async def api_token_novy(request: Request,
+                         account: dict[str, Any] = Depends(require_admin)):
+    """Vyrobí root klíč s právy z formuláře a jednou ho ukáže.
+
+    Root klíč nepatří žádnému účtu - ani správci, který ho vyrobil. Smí
+    jen to, co mu tu správce nastaví, a změna nebo smazání účtu správce
+    ho neovlivní. Vlastní klíč (s právy svého účtu) se vyrábí v Můj účet.
+    """
+    formular = await request.form()
+    prava, chyba = _prava_klice_z_formulare(formular)
+    if chyba:
+        _flash(request, chyba, "error")
+        return RedirectResponse("/settings?section=api", status_code=303)
+    vysledek = api.vytvor(str(formular.get("name") or ""), None, prava)
+    log.info("Spravce %s vyrobil root klic %s (%s)", account["username"],
+             vysledek["jmeno"], api.popis_prav_do_logu(prava))
     # Do relace, ne do adresy: adresa se objeví v logu proxy i v historii
     # prohlížeče, a tohle je jediná chvíle, kdy je token čitelný.
     request.session["novy_api_token"] = {"id": vysledek["id"], "token": vysledek["token"]}
     _flash(request, "Klíč „{jmeno}“ vznikl.", "success",
            jmeno=vysledek["jmeno"])
+    return RedirectResponse("/settings?section=api", status_code=303)
+
+
+@router.post("/settings/api/token/prava")
+async def api_token_prava(request: Request,
+                          account: dict[str, Any] = Depends(require_admin)):
+    """Změní práva root klíče. Platí od dalšího dotazu s ním.
+
+    Jen root klíč: uživatelský se řídí právy svého účtu a tudy se změnit
+    nedá (api.uloz_prava_klice ho odmítne). Kdo, co a jak bylo předtím,
+    jde do aplikačního logu - v tabulce klíčů se to neukládá.
+    """
+    formular = await request.form()
+    prava, chyba = _prava_klice_z_formulare(formular)
+    if chyba:
+        _flash(request, chyba, "error")
+        return RedirectResponse("/settings?section=api", status_code=303)
+    cislo = _cislo_z_formulare(formular.get("token_id"))
+    zmena = api.uloz_prava_klice(cislo, prava) if cislo else None
+    if zmena is None:
+        _flash(request, "Takový root klíč tu není. Uživatelský klíč se řídí právy svého účtu.",
+               "error")
+        return RedirectResponse("/settings?section=api", status_code=303)
+    log.info("Spravce %s zmenil prava root klice %s: %s -> %s", account["username"],
+             zmena["jmeno"], api.popis_prav_do_logu(zmena["pred"]),
+             api.popis_prav_do_logu(prava))
+    _flash(request, "Práva klíče „{jmeno}“ jsou uložená. Platí od dalšího dotazu.",
+           "success", jmeno=zmena["jmeno"])
     return RedirectResponse("/settings?section=api", status_code=303)
 
 

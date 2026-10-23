@@ -6,7 +6,7 @@
    Makra se importují tady, ne v rodiči: záviset na tom, že se
    `{% from %}` odněkud propíše, znamená mít závislost, která není vidět
    a funguje jen náhodou. #}
-{% from "_macros.html" import running_task, file_picker, nazev_oblasti %}
+{% from "_macros.html" import running_task, file_picker, strom_prav %}
 
 {# ================================================================== #}
 <div class="card">
@@ -153,18 +153,7 @@
         <p class="hint" style="margin-top:0">
             {{ _("Vlastní statistiky a vlastní historii vidí vždycky, bez toho by přihlášení nemělo smysl.") }}
         </p>
-        <div class="strom">
-            {% for oblast in divak_strom %}
-            <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
-                <input type="checkbox" name="vidi_{{ oblast.klic }}" form="divaci-form"
-                       {{ 'checked' if oblast.zapnuto }}>
-                <span>
-                    {{ nazev_oblasti(oblast, nazev_prehledu) }}
-                    <span class="hint">{{ _(oblast.popis) }}</span>
-                </span>
-            </label>
-            {% endfor %}
-        </div>
+        {{ strom_prav(divak_strom, nazev_prehledu, formular="divaci-form") }}
     </div>
 
     <label class="prepinac" style="margin-top:14px">

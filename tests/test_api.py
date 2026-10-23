@@ -198,7 +198,7 @@ with TestClient(app) as ctenar:
     check("okno-api-dokumentace" not in stranka.text,
           "a sekci API nevidí")
     check("Vyrobit klíč" not in stranka.text, "ani tlačítko na výrobu klíče")
-    odpoved = ctenar.post("/settings/api/token", data={"name": "podvrh"},
+    odpoved = ctenar.post("/settings/api/token", data={"name": "podvrh", "rezim": "vse"},
                           follow_redirects=False)
     check(odpoved.status_code == 403, f"a vyrobit klíč nesmí ({odpoved.status_code})")
 
@@ -212,7 +212,7 @@ with TestClient(app) as spravce:
     check("/api/v1/summary" in stranka.text, "která vypisuje adresy")
 
     pred = len(api.seznam())
-    odpoved = spravce.post("/settings/api/token", data={"name": "Ze stránky"},
+    odpoved = spravce.post("/settings/api/token", data={"name": "Ze stránky", "rezim": "vse"},
                            follow_redirects=False)
     check(odpoved.status_code == 303, "vyrobení přesměruje")
     check(len(api.seznam()) == pred + 1, "a klíč přibyl")

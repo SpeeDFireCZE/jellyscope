@@ -27,9 +27,11 @@ hádat a každý požadavek by se o to zpomalil.
 Vlastník a stav
 ---------------
 
-Klíč patří účtu a smí **přesně to, co jeho vlastník** - ne víc. Klíče
-z doby před vlastníky (`account_id` je NULL) jsou klíče serveru a mají
-plná práva, aby se po aktualizaci nerozbila Grafana ani Homepage.
+Uživatelský klíč (Můj účet) patří účtu a smí **přesně to, co jeho
+vlastník** - ne víc. Root klíč (Nastavení → API, `account_id` je NULL)
+nepatří nikomu a smí jen to, co mu nastavil správce (`api_tokens.prava`);
+bez nastavených práv smí všechno - to jsou i klíče z doby před vlastníky,
+aby se po aktualizaci nerozbila Grafana ani Homepage.
 
 Správce může klíč vypnout a zase zapnout - třeba když má podezření, že
 unikl, a chce to nejdřív prověřit. Vypnutý klíč nic nevrátí, ale v
@@ -40,6 +42,7 @@ zapis_pouziti().
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import secrets
 from datetime import date, datetime, timedelta, timezone
@@ -105,24 +108,26 @@ def _otisk(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def vytvor(jmeno: str, account_id: int | None = None) -> dict[str, Any]:
+def vytvor(jmeno: str, account_id: int | None = None,
+           prava: str | None = None) -> dict[str, Any]:
     """Vyrobí token. Vrátí ho v čitelné podobě - naposledy.
 
     Ukládá se jen otisk, takže tuhle hodnotu už podruhé nikdo nezjistí.
     Stránka to říká nahlas; token, který jde přečíst kdykoliv, je jen
     delší heslo v databázi.
 
-    `account_id` je vlastník. Bez něj vznikne klíč serveru s plnými právy -
-    to zůstává jen kvůli starším klíčům a testům; stránky klíč vždycky
-    vyrábějí někomu.
+    `account_id` je vlastník - uživatelský klíč (Můj účet). Bez něj vznikne
+    root klíč (Nastavení → API) s právy `prava` (`zabal_prava_klice`);
+    bez práv má všechno, jako klíče z doby před vlastníky.
     """
     jmeno = (jmeno or "").strip()[:60] or "bez názvu"
     token = PREDPONA + secrets.token_urlsafe(32)
     with db.connect() as conn:
         token_id = conn.insert_returning_id(
-            "INSERT INTO api_tokens (name, token_hash, ukazka, created_at, account_id)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (jmeno, _otisk(token), token[:UKAZKA_ZNAKU], db.utcnow(), account_id),
+            "INSERT INTO api_tokens (name, token_hash, ukazka, created_at, account_id, prava)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (jmeno, _otisk(token), token[:UKAZKA_ZNAKU], db.utcnow(), account_id,
+             prava if account_id is None else None),
         )
         conn.commit()
     log.info("Vyroben API token %s", jmeno)
@@ -133,15 +138,83 @@ def seznam(account_id: int | None = None) -> list[dict[str, Any]]:
     """Tokeny pro výpis. Bez otisků - ty tam nemají co dělat.
 
     Bez parametru všechny i se jménem vlastníka (pro správce), s ním jen
-    klíče toho účtu (Můj účet). `vlastnik` je None u klíče serveru.
+    klíče toho účtu (Můj účet). `vlastnik` je None u root klíče.
     """
     sql = ("SELECT t.id, t.name, t.ukazka, t.created_at, t.last_used_at,"
-           "       t.stav, t.account_id, a.username AS vlastnik"
+           "       t.stav, t.account_id, t.prava, a.username AS vlastnik"
            "  FROM api_tokens t LEFT JOIN accounts a ON a.id = t.account_id")
     if account_id is None:
         return db.query_all(sql + " ORDER BY t.id DESC")
     return db.query_all(sql + " WHERE t.account_id = ? ORDER BY t.id DESC",
                         (account_id,))
+
+
+def zabal_prava_klice(oblasti: Any, anonymizace: bool, historie: bool) -> str:
+    """Práva root klíče do podoby, v jaké se ukládají (`api_tokens.prava`).
+
+    Stejný tvar jako vlastní práva účtu (`pristup.zabal_prava`) a navíc
+    historie: u účtu je stránka Historie vidět vždy, root klíč pro widget
+    knihovny ji ale dostat nemá, dokud ji správce nezaškrtne.
+    """
+    return json.dumps({
+        "oblasti": sorted({str(k) for k in oblasti if str(k) in pristup.PODLE_KLICE}),
+        "anonymizace": bool(anonymizace),
+        "historie": bool(historie),
+    })
+
+
+def prava_klice(prava: Any) -> dict[str, Any] | None:
+    """Uložená práva root klíče. None = všechno.
+
+    Rozbitý JSON (ruční zásah do databáze) NIKDY neznamená všechno: bere se
+    jako „nic" - žádná oblast, žádná historie, jména schovaná. U účtu je
+    to naopak skupina (`pristup.vlastni_prava`); klíč skupinu nemá a plná
+    práva by byla přesně ta díra, kterou nikdo nečeká.
+    """
+    if prava is None:
+        return None
+    try:
+        data = json.loads(prava) if isinstance(prava, str) else prava
+    except (TypeError, ValueError):
+        data = None
+    if not isinstance(data, dict):
+        return {"oblasti": set(), "anonymizace": True, "historie": False}
+    oblasti = data.get("oblasti")
+    # Jen skutecne true/false: bool("false") je True, a ruka v databazi
+    # (text misto hodnoty, chybejici klic) nesmi otevrit historii ani
+    # odkryt jmena. Pochybnost = historie ne, jmena schovana.
+    return {
+        "oblasti": ({str(k) for k in oblasti if str(k) in pristup.PODLE_KLICE}
+                    if isinstance(oblasti, list) else set()),
+        "anonymizace": data.get("anonymizace") is not False,
+        "historie": data.get("historie") is True,
+    }
+
+
+def uloz_prava_klice(token_id: int, prava: str | None) -> dict[str, Any] | None:
+    """Změní práva ROOT klíče. Vrací jméno a předchozí práva, jinak None.
+
+    Uživatelský klíč se tudy nezmění - ten se řídí právy svého účtu.
+    Platí od dalšího požadavku: over_token čte práva při každém z nich.
+    """
+    radek = db.query_one("SELECT name, account_id, prava FROM api_tokens WHERE id = ?",
+                         (token_id,))
+    if not radek or radek["account_id"] is not None:
+        return None
+    with db.connect() as conn:
+        conn.execute("UPDATE api_tokens SET prava = ? WHERE id = ?", (prava, token_id))
+        conn.commit()
+    return {"jmeno": radek["name"], "pred": radek["prava"]}
+
+
+def popis_prav_do_logu(prava: str | None) -> str:
+    """Práva root klíče jedním řádkem pro aplikační log."""
+    rozbalena = prava_klice(prava)
+    if rozbalena is None:
+        return "all"
+    return (f"areas={','.join(sorted(rozbalena['oblasti'])) or '-'}"
+            f" history={'yes' if rozbalena['historie'] else 'no'}"
+            f" hide_names={'yes' if rozbalena['anonymizace'] else 'no'}")
 
 
 def _nastav_stav(token_id: int, stav: str) -> str:
@@ -217,8 +290,9 @@ def over_token(request: Request) -> dict[str, Any]:
     Jakmile se klíč najde, zapíše se jeho id do `request.state`, aby
     požadavek šel do záznamu použití - i když skončí zamítnutím.
 
-    Vrátí řádek klíče a navíc `account` (účet vlastníka, u klíče serveru
-    None) a `role` (skupina, podle které se řídí práva).
+    Vrátí řádek klíče a navíc `account` (účet, podle kterého se řídí
+    práva: vlastník; u root klíče s vybranými právy náhradní účet, u root
+    klíče se vším None), `role` (skupina) a `historie` (smí na historii).
     """
     token = token_z_hlavicky(request)
     if not token:
@@ -227,12 +301,12 @@ def over_token(request: Request) -> dict[str, Any]:
                        hlavicky={"WWW-Authenticate": "Bearer"})
 
     radek = db.query_one(
-        "SELECT id, name, last_used_at, stav, account_id"
+        "SELECT id, name, last_used_at, stav, account_id, prava"
         "  FROM api_tokens WHERE token_hash = ?",
         (_otisk(token),),
     )
     # Ucet smazany bez kaskady (rucni zasah do databaze) = klic, ktery
-    # nikomu nepatri. Tvari se jako neexistujici, ne jako klic serveru.
+    # nikomu nepatri. Tvari se jako neexistujici, ne jako root klic.
     ucet = accounts.get(radek["account_id"]) if radek and radek["account_id"] else None
     if not radek or (radek["account_id"] and not ucet):
         # Zamerne tataz veta jako u chybejiciho tokenu, jen jina prvni
@@ -248,10 +322,28 @@ def over_token(request: Request) -> dict[str, Any]:
     if radek["stav"] != AKTIVNI:
         raise ChybaApi(403, "key_disabled", "The key is disabled.")
 
-    # Klic serveru ma plna prava. Klic spravce taky - ale jen dokud je
-    # spravcem: kdo o roli prijde, ma prava ctenare (divaka) a jeho klic
-    # se zacne ridit povolenim stejne jako kazdy jiny.
-    kdo = pristup.role(ucet) if ucet else pristup.SPRAVCE
+    # Uzivatelsky klic: prava vlastnika. Klic spravce ma vsechno - ale jen
+    # dokud je spravcem: kdo o roli prijde, ma prava ctenare (divaka) a jeho
+    # klic se zacne ridit povolenim stejne jako kazdy jiny.
+    #
+    # Root klic (bez vlastnika): bez prav vsechno (i klice z doby
+    # pred vlastniky), s pravy se pocita jako ctenarsky ucet s vlastnimi
+    # pravy - pristup.vidi a anonymizuj_pro pak plati beze zmeny. Na zadny
+    # skutecny ucet nesaha, takze ho zmena spravce neovlivni.
+    ucet_prav = ucet
+    historie = True
+    if ucet:
+        kdo = pristup.role(ucet)
+    else:
+        prava = prava_klice(radek["prava"])
+        if prava is None:
+            kdo = pristup.SPRAVCE
+        else:
+            kdo = pristup.CTENAR
+            historie = prava["historie"]
+            ucet_prav = {"id": None, "username": "", "is_admin": False,
+                         pristup.PRISTUP: zabal_prava_klice(
+                             prava["oblasti"], prava["anonymizace"], prava["historie"])}
     if ucet and not pristup.smi_klic(ucet):
         raise ChybaApi(403, "key_not_allowed",
                        "The key's account is not allowed a key of its own.")
@@ -268,11 +360,15 @@ def over_token(request: Request) -> dict[str, Any]:
             raise ChybaApi(403, "viewer_disabled", "The account is disabled in Jellyfin.")
 
     _oznac_pouziti(radek)
-    return {**radek, "account": ucet, "role": kdo}
+    return {**radek, "account": ucet_prav, "role": kdo, "historie": historie}
 
 
 def _smi(token: dict[str, Any], cesta: str) -> bool:
     """Smí vlastník klíče na adresu s touhle cestou routy?"""
+    # Historie nemá oblast (u účtu je vidět vždy); root klíč s vybranými
+    # právy ji dostane jen se zaškrtnutím.
+    if cesta == "/api/v1/history" and not token.get("historie", True):
+        return False
     if token["role"] == pristup.SPRAVCE:
         return True
     if cesta not in OBLASTI_ADRES:
@@ -367,7 +463,7 @@ def zapis_pouziti(klic: dict[str, Any], cesta: str, ip: str, vysledek: int) -> N
 
     Volá ho middleware ve web.py až po odpovědi - jen tehdy je známý
     výsledek. `klic` je to, co nechal v požadavku over_token(): id, jméno
-    a vlastník (prázdný = klíč serveru). Jak dlouho se záznam drží, řídí
+    a vlastník (prázdný = root klíč). Jak dlouho se záznam drží, řídí
     úloha Rotace logů.
     """
     applog.zapis_api(klic["id"], klic.get("jmeno") or "", klic.get("vlastnik") or "",
