@@ -1,0 +1,164 @@
+/* ---------------------------------------------------------------------------
+   Sezónní výzdoba - společné pro všechny svátky.
+
+   Načítá se jen v době svátku (templates/_udalost_hlava.html), spolu
+   s CSS toho svátku. Tady je obal loga s ozdobami, místo pro ozdobu za
+   názvem a vrstva s animací přes stránku (tu vytváří udalosti.js).
+   --------------------------------------------------------------------------- */
+
+/* Logo s ozdobami: ozdoby se kladou kolem něj, ouška i za něj. */
+.brand-logo {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 28px;
+    height: 28px;
+}
+.brand-logo > .brand-mark { position: relative; z-index: 1; }
+.brand-logo > .oz {
+    position: absolute;
+    display: block;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* Ozdoba hned za názvem - ne až na kraji panelu. */
+.brand-ozdoby {
+    display: flex;
+    flex: none;
+    align-items: flex-end;
+    height: 32px;
+    margin-left: -4px;
+}
+.brand-ozdoby svg { display: block; overflow: visible; }
+
+/* Vrstva s animací: přes celou stránku, poloprůhledná, klikání jde skrz.
+   Nad obsahem, pod rozbalovacími menu a dialogy (50 a 60 ve style.css). */
+.udalost-efekt {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow: hidden;
+    opacity: .85;
+    pointer-events: none;
+}
+.udalost-efekt > * { position: absolute; }
+
+/* Bez pohybu (systémové „omezit animace" nebo volba účtu) vrstva nic
+   nepřehrává; udalosti.js v tom případě jen rozestaví stojící ozdoby. */
+@media (prefers-reduced-motion: reduce) {
+    .udalost-efekt * { animation: none !important; }
+}
+[data-udalost-pohyb="0"] .udalost-efekt * { animation: none !important; }
+
+/* Na papír výzdoba nepatří. */
+@media print {
+    .udalost-efekt,
+    .brand-ozdoby,
+    .brand-logo > .oz { display: none !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   Hry po kliknutí na ozdobu (static/udalosti/hry/<svátek>.js).
+   Ozdoba za názvem je tlačítko v řádku s odkazem na Přehled, ne v něm.
+   --------------------------------------------------------------------------- */
+.brand-radek { display: flex; align-items: center; }
+.udalost-hra {
+    padding: 0 2px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    transition: transform .2s;
+}
+/* Jen kde je myš - na dotyku by zvětšení po klepnutí zůstalo viset. */
+@media (hover: hover) {
+    .udalost-hra:hover { transform: scale(1.12); }
+}
+.udalost-hra:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Scéna: dialog přes celou obrazovku, nad vrstvou efektu (40) i menu (60). */
+.udalost-scena {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity .25s;
+}
+.udalost-scena.otevrena { opacity: 1; }
+.udalost-scena-pozadi { position: absolute; inset: 0; background: rgba(5, 6, 12, .62); }
+.udalost-jeviste { position: relative; width: 380px; max-width: 92vw; text-align: center; color: #fff; }
+/* Nízké okno (telefon na šířku): jeviště se zmenší, ať se vejde i s tlačítky. */
+.udalost-jeviste { width: min(380px, 92vw, calc(100vh - 130px)); }
+.udalost-jeviste { width: min(380px, 92vw, calc(100dvh - 130px)); }
+.udalost-jeviste:focus { outline: none; }
+.udalost-jeviste svg.platno {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.udalost-jeviste [tabindex]:focus-visible { outline: 2px dashed #fff; outline-offset: 4px; }
+.udalost-zavrit {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .45);
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+.udalost-zavrit:focus-visible,
+.udalost-tlacitka button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.udalost-napoveda { margin: 6px 0 0; font-size: 14px; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+.udalost-tlacitka { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+.udalost-tlacitka button {
+    padding: 8px 14px;
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+.udalost-tlacitka button.hlavni { border-color: #ff8c2e; background: #ff8c2e; color: #1a0d00; font-weight: 650; }
+.udalost-prani {
+    position: absolute;
+    left: 0;
+    right: 0;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    background: linear-gradient(180deg, #fff3b0, #ffc93c 55%, #f29d1a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 10px rgba(255, 200, 60, .55));
+    pointer-events: none;
+}
+.udalost-konfeta { position: absolute; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; }
+.udalost-finale { position: fixed; inset: 0; z-index: 70; overflow: hidden; pointer-events: none; }
+
+/* Bez pohybu hry fungují, jen se nic samo nehýbe. */
+@media (prefers-reduced-motion: reduce) {
+    .udalost-scena *, .udalost-hra * { animation: none !important; }
+}
+[data-udalost-pohyb="0"] .udalost-scena *,
+[data-udalost-pohyb="0"] .udalost-hra * { animation: none !important; }
+@media print {
+    .udalost-scena, .udalost-finale { display: none !important; }
+}

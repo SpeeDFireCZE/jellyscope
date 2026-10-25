@@ -746,7 +746,9 @@ _NEJNOVEJSI_SKUPINY = """
          WHERE i.is_missing = 0
            AND i.date_created IS NOT NULL
       GROUP BY COALESCE(i.series_id, i.id)
-      ORDER BY MAX(i.date_created) DESC
+      -- Pri stejnem datu rozhoduje klic, stejne jako ve vnejsim dotazu
+      -- (i.id) - jinak by limit vybral jine tituly nez cely seznam.
+      ORDER BY MAX(i.date_created) DESC, COALESCE(i.series_id, i.id)
          LIMIT ?
 """
 
@@ -794,7 +796,10 @@ def recently_added(limit: int = 18) -> list[dict[str, Any]]:
           AND i.date_created >= ?
           AND COALESCE(i.series_id, i.id) IN (
               SELECT klic FROM ({_NEJNOVEJSI_SKUPINY}) vybrane)
-        ORDER BY i.date_created DESC
+        -- Remizu mezi skupinami rozhoduje klic skupiny jako ve vnitrnim
+        -- dotazu - jinak by serial a film pridane naraz sly s limitem
+        -- v jinem poradi nez bez nej.
+        ORDER BY i.date_created DESC, COALESCE(i.series_id, i.id), i.id
         """,
         (hranice, limit),
     )
@@ -1604,7 +1609,7 @@ def client_breakdown(days: int, limit: int = 8) -> list[dict[str, Any]]:
         WHERE started_at >= ? AND started_at < ?
           AND watched_seconds > 0
         GROUP BY label
-        ORDER BY hours DESC
+        ORDER BY hours DESC, label
         LIMIT ?
         """,
         (*_meze(days), limit),
@@ -2021,7 +2026,9 @@ def user_detail(user_id: str, days: int) -> dict[str, Any]:
             ),
         ),
         "genres": user_genres(user_id, days),
-        "devices": db.query_all(
+        # Zařízení i pod svým jménem a s divákem: podle toho anonymizace
+        # pozná, že popisek je zařízení tohohle člověka (pristup.ZARIZENI).
+        "devices": [{**r, "device_name": r["label"], "user_id": user_id} for r in db.query_all(
             """
             SELECT COALESCE(device_name, 'nezname') AS label,
                    COALESCE(client, '') AS client,
@@ -2033,7 +2040,7 @@ def user_detail(user_id: str, days: int) -> dict[str, Any]:
             LIMIT 10
             """,
             (user_id, *_meze(days)),
-        ),
+        )],
     }
 
 
@@ -3612,62 +3619,114 @@ def odkud_se_divaji(days: int, limit: int = 20) -> dict[str, Any]:
     return {"skupiny": skupiny, "adresy": adresy}
 
 
-def hotspoty(days: int, limit: int = 60) -> list[dict[str, Any]]:
-    """Odkud se divali - misto po miste, od nejaktivnejsiho.
+def mista(days: int) -> list[dict[str, Any]]:
+    """Všechna místa za období, odkud se přehrávalo - bez limitu a bez řazení.
 
-    Umistuji se **jen verejne adresy**: ta z domaci site zadne misto
-    neoznacuje. Kdyz databaze GeoLite2 chybi (nebo chybi knihovna, ktera
-    ji umi cist), vraci se prazdny seznam a stranka mapu vubec neukaze -
-    misto toho, aby ukazala prazdnou.
+    Místo = jedny souřadnice z GeoIP. Nezaokrouhluje se: GeoLite2 dává
+    městům souřadnice po čtvrtích (Praha jich má jedenáct) a zaokrouhlení
+    na desetinu stupně z jednoho města dělalo několik teček se stejným
+    jménem. Slévání podle přiblížení dělá až mapa.shluky().
 
-    Body na temze miste se slucuji: deset lidi z jednoho mesta ma byt
-    jedna vetsi tecka, ne deset tecek pres sebe. Zaokrouhlujeme na
-    desetinu stupne, coz je zhruba deset kilometru.
+    Umisťují se **jen veřejné adresy**: ta z domácí sítě žádné místo
+    neoznačuje. Když databáze GeoLite2 chybí (nebo chybí knihovna, která
+    ji umí číst), vrací se prázdný seznam a stránka mapu vůbec neukáže.
+
+    Jeden dotaz po dvojicích adresa-divák: z něj jsou součty i skuteční
+    lidé. Počet lidí se z COUNT(DISTINCT) po adresách poskládat nedá -
+    člověk ze dvou adres by byl dva, tři lidé ze tří adres jeden.
+    `divaci` je množina user_id jen pro Python (shluky ji sjednocují),
+    do stránky se nedostane.
     """
     from . import geoip
 
     if not geoip.je_k_dispozici():
         return []
 
-    mista: dict[tuple[float, float], dict[str, Any]] = {}
-    for r in _provoz_podle_adresy(days):
+    adresy: dict[str, dict[str, Any]] = {}
+    for r in db.query_all(
+        """
+        SELECT remote_address                         AS adresa,
+               user_id,
+               SUM(watched_seconds)                   AS sekund,
+               SUM(watched_seconds * COALESCE(bitrate, 0)) / 8.0 AS bajtu,
+               COUNT(*)                               AS plays
+          FROM playback
+         WHERE started_at >= ? AND started_at < ?
+           AND watched_seconds > 0
+           AND remote_address IS NOT NULL AND remote_address != ''
+         GROUP BY remote_address, user_id
+        """,
+        (*_meze(days),),
+    ):
         adresa = str(r["adresa"] or "")
         # Prazdna adresa je import (ten ji nenese), domaci nic neoznacuje.
         if not adresa or je_domaci(adresa):
             continue
+        zaznam = adresy.setdefault(adresa, {"plays": 0, "sekund": 0, "bajtu": 0.0,
+                                            "divaci": set()})
+        zaznam["plays"] += int(r["plays"] or 0)
+        zaznam["sekund"] += int(r["sekund"] or 0)
+        zaznam["bajtu"] += float(r["bajtu"] or 0)
+        if r["user_id"]:
+            zaznam["divaci"].add(str(r["user_id"]))
+
+    podle_souradnic: dict[tuple[float, float], dict[str, Any]] = {}
+    for adresa, zaznam in adresy.items():
         misto = geoip.najdi(adresa)
         if not misto:
             continue
-        klic = (round(misto["lat"], 1), round(misto["lon"], 1))
-        bod = mista.setdefault(klic, {
-            "lat": misto["lat"], "lon": misto["lon"],
+        klic = (float(misto["lat"]), float(misto["lon"]))
+        bod = podle_souradnic.setdefault(klic, {
+            "lat": klic[0], "lon": klic[1],
             "mesto": misto["mesto"], "zeme": misto["zeme"], "kod": misto["kod"],
-            "plays": 0, "lidi": 0, "sekund": 0, "bajtu": 0.0, "adres": 0,
+            "plays": 0, "sekund": 0, "bajtu": 0.0, "adres": 0, "divaci": set(),
         })
-        bod["plays"] += int(r["plays"] or 0)
-        bod["lidi"] = max(bod["lidi"], int(r["lidi"] or 0))
-        bod["sekund"] += int(r["sekund"] or 0)
-        bod["bajtu"] += float(r["bajtu"] or 0)
+        bod["plays"] += zaznam["plays"]
+        bod["sekund"] += zaznam["sekund"]
+        bod["bajtu"] += zaznam["bajtu"]
         bod["adres"] += 1
+        bod["divaci"] |= zaznam["divaci"]
 
-    body = sorted(mista.values(), key=lambda b: b["sekund"], reverse=True)[:limit]
-    for bod in body:
+    vysledek = list(podle_souradnic.values())
+    for bod in vysledek:
         bod["bajtu"] = int(bod["bajtu"])
+        bod["divaci"] = frozenset(bod["divaci"])
+        bod["lidi"] = len(bod["divaci"])
         bod["popis"] = ", ".join(x for x in (bod["mesto"], bod["zeme"]) if x) or "?"
-    return body
+    return vysledek
 
 
-def zeme_divaku(days: int) -> list[dict[str, Any]]:
-    """Totez jako hotspoty, jen secteno po zemich - pro tabulku vedle mapy."""
+def hotspoty(days: int, limit: int = 500,
+             predpocitana: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Nejaktivnějších `limit` míst pro mapu, od nejsledovanějšího.
+
+    `predpocitana` jsou místa z mista() - karta Mapa je spočítá jednou pro
+    mapu i tabulku zemí. Při shodě času rozhodují souřadnice, ať je pořadí
+    pokaždé stejné a shluky na mapě neposkakují.
+    """
+    vse = predpocitana if predpocitana is not None else mista(days)
+    return sorted(vse, key=lambda b: (-b["sekund"], b["lat"], b["lon"]))[:limit]
+
+
+def zeme_divaku(days: int,
+                predpocitana: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Totez jako hotspoty, jen secteno po zemich - pro tabulku vedle mapy.
+
+    Sčítá se ze všech míst (mapa jich kreslí jen nejaktivnějších 500), a
+    „míst" jsou různá **města**: Praha je jedno místo, i když má na mapě
+    tečku za každou čtvrť.
+    """
     podle_zeme: dict[str, dict[str, Any]] = {}
-    for bod in hotspoty(days, limit=1000):
+    for bod in (predpocitana if predpocitana is not None else mista(days)):
         zaznam = podle_zeme.setdefault(bod["zeme"] or "?", {
             "label": bod["zeme"] or "?", "kod": bod["kod"],
-            "plays": 0, "sekund": 0, "bajtu": 0, "mist": 0,
+            "plays": 0, "sekund": 0, "bajtu": 0, "mesta": set(),
         })
         zaznam["plays"] += bod["plays"]
         zaznam["sekund"] += bod["sekund"]
         zaznam["bajtu"] += bod["bajtu"]
-        zaznam["mist"] += 1
+        zaznam["mesta"].add(bod["popis"])
+    for zaznam in podle_zeme.values():
+        zaznam["mist"] = len(zaznam.pop("mesta"))
     return sorted(podle_zeme.values(), key=lambda z: z["sekund"], reverse=True)
 

@@ -650,20 +650,10 @@ def _vyber_pg_dump(config: Any) -> str:
     )
 
 
-# Tabulky, ze kterych se sklada zaloha. Poradi neni nahodne: `item_streams`
-# se odkazuje na `items` cizim klicem, takze pri obnove musi byt polozky
-# uz na svem miste.
-# Vsechny tabulky ze schematu, v poradi, ve kterem se daji zalozit
-# i naplnit: `item_streams` odkazuje na `items`, `dashboard_layout` na
-# `accounts`. Obnova je maze v obracenem poradi.
-#
-# Seznam se hlida testem proti schema_postgres.sql - kdyz pribude tabulka
-# a sem se nezapise, zaloha by ji tise vynechala.
-ZALOHOVANE_TABULKY = ("libraries", "users", "items", "item_versions",
-                      "item_streams",
-                      "accounts", "dashboard_layout", "library_snapshot",
-                      "settings", "scan_log", "api_tokens", "login_blocks",
-                      "zapomenuti", "playback")
+# Tabulky, ze kterych se sklada zaloha - vsechny ze schematu, v poradi,
+# ve kterem se daji naplnit (seznam je v db.TABULKY, sdili ho i prevod
+# databaze). Obnova je maze v obracenem poradi.
+ZALOHOVANE_TABULKY = db.TABULKY
 
 
 def _sql_hodnota(hodnota: Any) -> str:

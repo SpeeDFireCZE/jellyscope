@@ -35,9 +35,11 @@ kterou se při psaní zapomene, tak nikomu nic neprozradí.
 from __future__ import annotations
 
 import json
+import re
+import time
 from typing import Any, Iterable
 
-from . import db
+from . import accounts, db
 
 # Zapnuté přihlašování jellyfinovým heslem.
 LOGIN_KLIC = "jellyfin_login_enabled"
@@ -80,13 +82,53 @@ def anonymizuj_pro(data: Any, account: dict[str, Any] | None) -> Any:
 
     Pro stránky (celý kontext šablony) i pro API klíč (data jeho
     vlastníka). Čtecí účet nepatří žádnému divákovi, takže se mu schová
-    úplně každé jméno - není ke komu dělat výjimku. Nepřihlášený a klíč
-    serveru (bez vlastníka) dostanou data, jak jsou.
+    úplně každé jméno - není ke komu dělat výjimku. Nepřihlášený a root
+    klíč se vším (bez vlastníka a bez vybraných práv) dostanou data, jak jsou.
     """
-    kdo = role(account)
-    if kdo in ("", SPRAVCE) or not anonymizace_zapnuta(kdo, account):
+    if not skryva_jmena(account):
         return data
     return anonymizuj(data, muj_divak(account))
+
+
+def skryva_jmena(account: dict[str, Any] | None) -> bool:
+    """Skrývají se tomuhle účtu cizí jména, adresy a id?
+
+    Jedno pravidlo pro data, která odcházejí (anonymizuj_pro), i pro id,
+    která přicházejí v adrese (divak_z_adresy) - kdyby se rozešla,
+    jedna strana by schovávala a druhá prozrazovala.
+    """
+    kdo = role(account)
+    return kdo not in ("", SPRAVCE) and anonymizace_zapnuta(kdo, account)
+
+
+# Id, které nevede k žádnému divákovi. Má tvar náhradního id, takže se dá
+# beze změny vrátit do adresy i do stránky; s otazníkem žádné id
+# z Jellyfinu nevypadá.
+NIKDO = "skryto-?"
+_NAHRADNI_ID = re.compile(r"skryto-([1-9][0-9]{0,8})")
+
+
+def divak_z_adresy(hodnota: str | None, account: dict[str, Any] | None) -> str | None:
+    """Id diváka z adresy (`?user=`, `/users/<id>`, filtr Historie) pro dotaz.
+
+    Účet se skrytými jmény zná cizí diváky jen pod náhradním id
+    (`skryto-2`) - jiné mu stránky ani API neukážou. To se tady přeloží
+    zpátky na diváka. Skutečné id cizího diváka nenajde nic: kdo ho zná
+    (je třeba v adrese profilu v Jellyfinu), poznal by podle něj, že
+    „Divák 2" je Petr. Vlastní id zůstává - divák o sobě ví.
+    """
+    if not hodnota or not skryva_jmena(account):
+        return hodnota
+    muj = muj_divak(account)
+    if muj and accounts.hole_id(hodnota) == accounts.hole_id(muj):
+        return hodnota
+    nalez = _NAHRADNI_ID.fullmatch(hodnota)
+    if nalez:
+        cislo = int(nalez.group(1))
+        for user_id, poradi in _poradi().items():
+            if poradi == cislo:
+                return user_id
+    return NIKDO
 
 
 class Oblast:
@@ -396,6 +438,11 @@ SOUSEDI_ADRESY = ("domaci", "lidi", "zeme", "mesto", "naposledy")
 
 SKRYTA_ADRESA = "—"
 
+# Názvy zařízení. V Jellyfinu se často jmenují po lidech („Petrův Shield")
+# a pseudonym „Divák 3" by sousední sloupec prozradil. Přehrávač (client:
+# Jellyfin Web, Android TV…) nic neprozrazuje a zůstává.
+ZARIZENI = ("device_name", "device")
+
 
 def _poradi() -> dict[str, int]:
     radky = db.query_all("SELECT id FROM users ORDER BY id")
@@ -406,6 +453,52 @@ def _poradi() -> dict[str, int]:
 def prezdivka(user_id: str, poradi: dict[str, int] | None = None) -> str:
     cisla = _poradi() if poradi is None else poradi
     return f"Divák {cisla.get(str(user_id), 0) or '?'}"
+
+
+def _poradi_zarizeni() -> dict[str, int]:
+    """Čísla zařízení podle prvního výskytu, ne podle abecedy.
+
+    Kdo zná názvy zařízení v domácnosti, by podle abecedního pořadí
+    „Zařízení 1..N" přiřadil zpátky. A nové zařízení dostane další číslo,
+    čísla těch starších se neposunou.
+    """
+    radky = db.query_all(
+        "SELECT device_name FROM playback"
+        " WHERE device_name IS NOT NULL AND device_name != ''"
+        " GROUP BY device_name ORDER BY MIN(id)")
+    return {str(dict(r)["device_name"]): poradi
+            for poradi, r in enumerate(radky, start=1)}
+
+
+# Pořadí zařízení drží chvíli v paměti: historie v API se anonymizuje po
+# dávkách a dotaz prochází celou tabulku přehrání - pro každou dávku znovu
+# by anonymizovaný klíč zpomalil zhruba pětkrát. Zařízení, které v paměti
+# ještě není (právě začalo hrát), načte pořadí znovu, nejvýš jednou za
+# ZARIZENI_ZNOVU sekund.
+ZARIZENI_PLATI = 60.0
+ZARIZENI_ZNOVU = 2.0
+_ZARIZENI: dict[str, Any] = {"kdy": None, "mapa": {}}
+
+
+def zapomen_zarizeni() -> None:
+    """Zahodí pořadí zařízení v paměti (testy, odklizení historie)."""
+    _ZARIZENI.update(kdy=None, mapa={})
+
+
+def _mapa_zarizeni(nazev: str) -> dict[str, int]:
+    ted = time.monotonic()
+    stari = None if _ZARIZENI["kdy"] is None else ted - _ZARIZENI["kdy"]
+    if stari is None or stari > ZARIZENI_PLATI or (
+            nazev not in _ZARIZENI["mapa"] and stari > ZARIZENI_ZNOVU):
+        _ZARIZENI.update(kdy=ted, mapa=_poradi_zarizeni())
+    return _ZARIZENI["mapa"]
+
+
+def prezdivka_zarizeni(nazev: str, poradi: dict[str, int]) -> str:
+    """Stálá přezdívka zařízení - „Zařízení 3" je zítra totéž zařízení."""
+    from .i18n import translate
+
+    return translate("Zařízení {n}").format(n=poradi.get(str(nazev), 0) or "?")
 
 
 def anonymizuj(hodnota: Any, muj_id: str,
@@ -426,8 +519,15 @@ def anonymizuj(hodnota: Any, muj_id: str,
         cizi_id = str(hodnota.get("user_id") or hodnota.get("id") or "")
         cizi = cizi_id != muj_id
         je_divak = _je_divak(hodnota)
+        # Zařízení bez diváka (souhrn přes víc lidí) je vždycky cizí.
+        nazev_zarizeni = next((hodnota[k] for k in ZARIZENI
+                               if isinstance(hodnota.get(k), str) and hodnota[k]), None)
+        cizi_zarizeni = nazev_zarizeni is not None and (cizi or not cizi_id)
         for klic, obsah in hodnota.items():
-            if cizi and isinstance(obsah, str) and (
+            if cizi_zarizeni and isinstance(obsah, str) and (
+                    klic in ZARIZENI or (klic == POPISEK and obsah == nazev_zarizeni)):
+                vysledek[klic] = prezdivka_zarizeni(obsah, _mapa_zarizeni(obsah))
+            elif cizi and isinstance(obsah, str) and (
                     klic in JMENA
                     or (klic == POPISEK and "user_id" in hodnota)
                     or (klic == "name" and je_divak)):

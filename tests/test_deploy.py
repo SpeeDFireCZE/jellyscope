@@ -314,12 +314,35 @@ check("psycopg" not in (PROJECT / "requirements.txt").read_text(encoding="utf-8"
 # Ubuntu 20.04 ma Python 3.8 a instalace na nem koncila hlaskou
 # "Could not find a version that satisfies the requirement uvicorn",
 # ktera pricinu vubec nepojmenuje. Skript to musi poznat driv.
-check("MIN_MINOR=11" in install, "install.sh zna minimalni verzi Pythonu")
+check('MIN_MINOR="${MIN_PY#3.}"' in install, "install.sh zna minimalni verzi Pythonu (z deploy/python-minimum)")
 check("python3.11" in install, "hleda novejsi Python nainstalovany vedle")
 check("deadsnakes" in install, "poradi, jak novejsi Python pridat")
 # Minimum drzi pohromade s tim, co si zada FastAPI z requirements.txt.
 # Kdyby se cislo zmenilo jen na jednom miste, instalace by prosla
 # a spadla az pri pip installu - s hlaskou, ktera pricinu nepojmenuje.
+minimum = PROJECT / "deploy" / "python-minimum"
+check(minimum.is_file() and minimum.read_text(encoding="utf-8").strip() == "3.11",
+      "minimum Pythonu na jednom strojově čitelném místě: deploy/python-minimum")
+check("deploy/python-minimum" in install and "deploy/python-minimum" in update,
+      "install.sh i update.sh berou minimum z něj")
+check("JELLYSCOPE_UPDATE_ZNOVU" in update
+      and re.search(r'exec env JELLYSCOPE_UPDATE_ZNOVU=1 JELLYSCOPE_UPDATE_PRED="\$BEFORE"'
+                    r' bash "\$APP_DIR/deploy/update.sh"', update),
+      "update.sh po stažení spustí svou novou verzi, když se změnila, a předá jí původní verzi")
+# Nova verze skriptu uz nestahuje znovu: jinak by za "puvodni verzi" vzala
+# tu prave stazenou a rada "git reset --hard $BEFORE" by vracela nikam.
+krok2 = update[update.find("# --- 2."):update.find("# --- 3.")]
+znovu = re.search(r'if \[\[ "\$\{JELLYSCOPE_UPDATE_ZNOVU:-\}" == "1" \]\]; then\n(.*?)\nelse\n',
+                  krok2, re.S)
+check(bool(znovu) and not re.search(r"git_ (pull|merge|fetch)", znovu.group(1))
+      and "JELLYSCOPE_UPDATE_PRED" in znovu.group(1),
+      "update.sh spuštěný znovu nestahuje a původní verzi bere z JELLYSCOPE_UPDATE_PRED")
+# Python se kontroluje PRED stazenim, s minimem z toho, co prijde. Po
+# stazeni by uz bezely nove sablony nad starym kodem - a zprava "nic se
+# nezmenilo" by nebyla pravda.
+check('git_ show "$UPSTREAM:deploy/python-minimum"' in krok2
+      and krok2.find('git_ show "$UPSTREAM:deploy/python-minimum"') < krok2.find("git_ merge --ff-only"),
+      "update.sh zkontroluje Python před stažením, s minimem nové verze")
 check("Python 3.11 or newer" in (PROJECT / "requirements.txt").read_text(encoding="utf-8"),
       "a requirements.txt rika totez")
 
@@ -428,7 +451,7 @@ check(not spustene,
       f"install.sh sám službu nespouští, jen poradí jak na to {spustene}")
 
 for needle, why in [
-    ("pull --ff-only", "nepřepíše místní historii"),
+    ("merge --ff-only", "nepřepíše místní historii"),
     ("diff --quiet", "odmítne aktualizaci s neuloženými změnami"),
     ("reset --hard", "poradí návrat na předchozí verzi"),
     ("pg_dump", "umí zazálohovat i PostgreSQL"),
@@ -451,7 +474,7 @@ for needle, why in [
     # "Could not find a version that satisfies the requirement" - ta zni
     # jako by balicek neexistoval, ne jako "mas stary Python". Update to
     # musi poznat driv a poradit, co s tim.
-    ("sys.version_info >= (3, 11)", "pozná prostředí na starém Pythonu"),
+    ("sys.version_info >= (3, ${MIN_PY#3.})", "pozná prostředí na starém Pythonu"),
     ("bash deploy/install.sh", "a poradí, čím ho postavit znovu"),
 ]:
     check(needle in update, f"update.sh: {why}")

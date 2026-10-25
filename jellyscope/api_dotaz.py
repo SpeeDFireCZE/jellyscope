@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -44,10 +45,19 @@ MAX_IN = 50
 MAX_TEXTU = 200
 
 TVAR_CASU = "%Y-%m-%d %H:%M:%S"
-_KLIC_FILTRU = re.compile(r"^(?:([a-z0-9_]+)\.)?([a-z0-9_]+)\[([a-z0-9_]+)\]$")
-_CAS = re.compile(r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$")
-_CELE = re.compile(r"^-?\d+$")
-_IDENTIFIKATOR = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Všechno se porovnává přes fullmatch a jen s ASCII číslicemi: `$` by
+# pustil i znak nového řádku na konci (`days=30\n`) a `\d` i arabské nebo
+# široké číslice, které int() klidně přečte.
+_KLIC_FILTRU = re.compile(r"(?:([a-z0-9_]+)\.)?([a-z0-9_]+)\[([a-z0-9_]+)\]")
+# Čas i v tom tvaru, v jakém ho API vrací (`2026-10-01T12:00:00.0000000Z`
+# z Jellyfinu): zlomky sekundy a Z se zahodí, porovnává se v UTC.
+_CAS = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
+                  r"(?:[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z?)?")
+_CELE = re.compile(r"-?[0-9]+")
+# Desetinné číslo s tečkou. float() sám by vzal i `1_0`, `٣`, `５`, `1e3`
+# nebo mezeru a nový řádek kolem - v adrese nic z toho nemá co dělat.
+_DESETINNE = re.compile(r"-?[0-9]+(?:\.[0-9]+)?")
+_IDENTIFIKATOR = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 class ChybaApi(Exception):
@@ -185,7 +195,7 @@ def _seznam_a_typ(predpona: str | None, pole: str, seznamy: dict[str, dict[str, 
 
 def _filtr(klic: str, text: str, seznamy: dict[str, dict[str, str]],
            povolene: list[str]) -> Filtr:
-    nalez = _KLIC_FILTRU.match(klic)
+    nalez = _KLIC_FILTRU.fullmatch(klic)
     if not nalez:
         raise chyba("unknown_parameter",
                     f"Unknown parameter '{klic}'. Filters are field[operator]=value.",
@@ -232,18 +242,16 @@ def _hodnota(typ: str, text: str, parametr: str) -> Any:
             raise chyba("invalid_value", "Text contains a NUL character.", parametr)
         return text
     if typ == CISLO:
-        try:
-            cislo = float(text)
-        except ValueError:
-            cislo = math.nan
+        cislo = float(text) if _DESETINNE.fullmatch(text) else math.nan
         if not math.isfinite(cislo):
             raise chyba("invalid_value", f"'{text[:40]}' is not a number.", parametr)
         return cislo
     if typ == CAS:
-        if not _CAS.match(text):
+        if not _CAS.fullmatch(text):
             raise chyba("invalid_value",
-                        "Time is YYYY-MM-DD or YYYY-MM-DD HH:MM:SS (UTC).", parametr)
-        uplny = text if len(text) > 10 else text + " 00:00:00"
+                        "Time is YYYY-MM-DD or YYYY-MM-DD HH:MM:SS (UTC); "
+                        "YYYY-MM-DDTHH:MM:SS.fffffffZ works too.", parametr)
+        uplny = text.replace("T", " ")[:19] if len(text) > 10 else text + " 00:00:00"
         try:
             datetime.strptime(uplny, TVAR_CASU)
         except ValueError:
@@ -293,6 +301,16 @@ def pouzij(radky: list[dict[str, Any]], filtry: list[Filtr], razeni: list[Razeni
     return vysledek if limit is None else vysledek[:limit]
 
 
+def _text(text: str) -> str:
+    """Text k porovnání: týž znak v kterémkoli zápisu a bez velikosti písmen.
+
+    „é" jde zapsat jedním znakem (NFC) i jako „e" + čárka (NFD) - adresa
+    z Macu nebo ze schránky klidně pošle to druhé. Bez sjednocení by se
+    „Amélie" nenašla.
+    """
+    return unicodedata.normalize("NFC", text).casefold()
+
+
 def _normalizuj(typ: str, hodnota: Any) -> Any:
     """Hodnota z řádku připravená k porovnání. None = pole bez hodnoty.
 
@@ -306,7 +324,7 @@ def _normalizuj(typ: str, hodnota: Any) -> Any:
         return None
     if typ == TEXT:
         text = str(hodnota)
-        return text.casefold() if text else None
+        return _text(text) if text else None
     if typ == CISLO:
         try:
             cislo = float(hodnota)
@@ -332,7 +350,7 @@ def _splnuje(radek: dict[str, Any], filtr: Filtr) -> bool:
         return (hodnota is None) == filtr.hodnota
     cil = filtr.hodnota
     if filtr.typ == TEXT:
-        cil = tuple(c.casefold() for c in cil) if operator == "in" else cil.casefold()
+        cil = tuple(_text(c) for c in cil) if operator == "in" else _text(cil)
     # Pole bez hodnoty „není rovno" ničemu a „neobsahuje" nic; všechno
     # ostatní (rovná se, obsahuje, větší než...) u něj neplatí.
     if operator == "not":
@@ -409,22 +427,22 @@ def cele_cislo(dotaz: Dotaz, jmeno: str, vychozi: int | None, od: int, do: int) 
     text = dotaz.hodnoty.get(jmeno)
     if text is None:
         return vychozi
-    if not _CELE.match(text) or not od <= int(text) <= do:
+    if not _CELE.fullmatch(text) or not od <= int(text) <= do:
         raise chyba("invalid_value",
                     f"'{jmeno}' is a whole number from {od} to {do}.", jmeno)
     return int(text)
 
 
-def cislo(dotaz: Dotaz, jmeno: str, vychozi: float, od: float) -> float:
+def cislo(dotaz: Dotaz, jmeno: str, vychozi: float, od: float, do: float) -> float:
+    """Číslo z adresy v mezích. Horní mez hlídá i databázi: obří číslo by
+    se do SQL nevešlo (`min_size_mb=1e20` dřív spadlo na 500)."""
     text = dotaz.hodnoty.get(jmeno)
     if text is None:
         return vychozi
-    try:
-        hodnota = float(text)
-    except ValueError:
-        hodnota = math.nan
-    if not math.isfinite(hodnota) or hodnota < od:
-        raise chyba("invalid_value", f"'{jmeno}' is a number, at least {od:g}.", jmeno)
+    hodnota = float(text) if _DESETINNE.fullmatch(text) else math.nan
+    if not math.isfinite(hodnota) or not od <= hodnota <= do:
+        raise chyba("invalid_value",
+                    f"'{jmeno}' is a number from {od:g} to {do:g}.", jmeno)
     return hodnota
 
 
@@ -444,7 +462,7 @@ def identifikator(dotaz: Dotaz, jmeno: str) -> str | None:
     text = dotaz.hodnoty.get(jmeno)
     if text is None:
         return None
-    if not _IDENTIFIKATOR.match(text):
+    if not _IDENTIFIKATOR.fullmatch(text):
         raise chyba("invalid_value",
                     f"'{jmeno}' is 1-64 letters, digits, '-' or '_'.", jmeno)
     return text

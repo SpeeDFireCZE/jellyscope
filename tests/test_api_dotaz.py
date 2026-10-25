@@ -192,9 +192,9 @@ check(k(lambda: api_dotaz.volba(dotaz(kind="filmy"), "kind", "both",
                                 ("both", "movies", "series"))) == "invalid_value",
       "neznámá volba -> invalid_value")
 check(api_dotaz.volba(dotaz(), "kind", "both", ("both",)) == "both", "volba: chybí -> výchozí")
-check(api_dotaz.cislo(dotaz(min_size_mb="10.5"), "min_size_mb", 0, 0) == 10.5, "cislo 10.5")
+check(api_dotaz.cislo(dotaz(min_size_mb="10.5"), "min_size_mb", 0, 0, 1e7) == 10.5, "cislo 10.5")
 for spatne in ("-5", "x", "nan", ""):
-    check(k(lambda: api_dotaz.cislo(dotaz(min_size_mb=spatne), "min_size_mb", 0, 0))
+    check(k(lambda: api_dotaz.cislo(dotaz(min_size_mb=spatne), "min_size_mb", 0, 0, 1e7))
           == "invalid_value", f"min_size_mb={spatne!r} -> invalid_value")
 check(api_dotaz.identifikator(dotaz(user="abc-DEF_12"), "user") == "abc-DEF_12",
       "identifikátor projde")

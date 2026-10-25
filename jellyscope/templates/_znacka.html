@@ -1,0 +1,45 @@
+{#
+  Obsah značky - logo a název - v postranním panelu a na přihlašovacích
+  stránkách. V době svátku (`svatek`, viz udalosti.py) přibude ozdoba na
+  logu; ozdoba za názvem je tlačítko hry (_udalost_hra.html) - mimo odkaz.
+  Mimo sezónu je značka přesně taková jako vždy.
+  Kresby jsou ze schválené ukázky (24. 10. 2026); animace jsou v CSS svátku.
+#}
+{%- if svatek %}
+<span class="brand-logo">
+    {%- if svatek == "velikonoce" %}
+    <svg class="oz oz-usi" viewBox="0 0 30 22" aria-hidden="true">
+        <g class="ucho l"><ellipse cx="10" cy="11" rx="4" ry="11" fill="#f3ece2" stroke="#b9ab98" stroke-width=".8"/>
+            <ellipse cx="10" cy="12" rx="1.9" ry="8" fill="#f4a7b9"/></g>
+        <g class="ucho p"><ellipse cx="20" cy="11" rx="4" ry="11" fill="#f3ece2" stroke="#b9ab98" stroke-width=".8"/>
+            <ellipse cx="20" cy="12" rx="1.9" ry="8" fill="#f4a7b9"/></g>
+    </svg>
+    {%- endif %}
+    <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
+    {%- if svatek == "vanoce" %}
+    <svg class="oz oz-cepice" viewBox="0 0 24 21" aria-hidden="true">
+        <path d="M2 17 C6 9 11 3 19 2 C18 7 18 12 21 17 Z" fill="#d62828"/>
+        {# Bílý lem a bambule s jemným obrysem - na světlém podkladu by zmizely. #}
+        <rect x="0" y="15" width="23" height="5.5" rx="2.7" fill="#fff" stroke="#c9c1b6" stroke-width=".7"/>
+        <circle cx="19" cy="2.6" r="2.7" fill="#fff" stroke="#c9c1b6" stroke-width=".7"/>
+    </svg>
+    {%- elif svatek == "halloween" %}
+    <svg class="oz oz-dyne" viewBox="0 0 18 16" aria-hidden="true">
+        <path d="M9 3 C9 1.2 10 .3 11.6 .2" stroke="#3d6b22" stroke-width="1.6" fill="none"/>
+        <ellipse cx="5.5" cy="9.5" rx="4.6" ry="6" fill="#e2690a"/>
+        <ellipse cx="12.5" cy="9.5" rx="4.6" ry="6" fill="#e2690a"/>
+        <ellipse cx="9" cy="9.5" rx="4.6" ry="6.3" fill="#f58a1f"/>
+        <path d="M5 8.2 l2-2.2 l1.1 2.2 Z M10.9 8.2 l1.1-2.2 l2 2.2 Z" fill="#2b1406"/>
+        <path d="M5.4 11.3 Q9 15.2 12.6 11.3 L11.2 12.4 L10.1 11.6 L9 12.6 L7.9 11.6 L6.8 12.4 Z" fill="#2b1406"/>
+    </svg>
+    {%- elif svatek == "silvestr" %}
+    <svg class="oz oz-jiskry" viewBox="0 0 30 22" aria-hidden="true">
+        <path class="jiskra" d="M8 2 L9.6 7.4 L15 9 L9.6 10.6 L8 16 L6.4 10.6 L1 9 L6.4 7.4 Z" fill="#f2c14e"/>
+        <path class="jiskra" d="M22 8 L23 11 L26 12 L23 13 L22 16 L21 13 L18 12 L21 11 Z" fill="#ffd97a"/>
+    </svg>
+    {%- endif %}
+</span>
+{%- else %}
+<img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
+{%- endif %}
+<span>Jellyscope</span>

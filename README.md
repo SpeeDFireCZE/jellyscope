@@ -153,6 +153,34 @@ what is missing instead of showing an empty map. Addresses from the home
 network are never placed, since `192.168.1.5` marks no spot on Earth.
 Data © MaxMind, GeoLite2 (CC BY-SA 4.0).
 
+A dot is one spot from GeoLite2, which for a larger city means one per
+district, and its viewers are counted as people: one person watching from
+two addresses is one. Zoomed out, nearby places merge into one dot
+("Prague, Czechia and 2 more places"); zooming in splits them, down to
+every single place, up to 1024×; with the detailed map or OpenStreetMap
+under the dots it always goes all the way. A click zooms in twice on the spot you
+clicked, so clicking a merged dot splits it.
+
+What lies under the dots:
+
+- **Drawn map** (default): land outlines and country borders built into
+  the application.
+- **Detailed map**: Natural Earth 1:10M with coastlines, lakes, rivers,
+  regions and city outlines, shown from 8× zoom. An admin downloads it
+  with a button on the Network page: about 75 MB from a fixed version
+  (v5.1.2) of the Natural Earth repository on GitHub. It is cut into tiles
+  and stored in the database, where it takes about 52 MB, so it is in
+  every backup too, and each backup grows by that much. The processing
+  takes a minute or two and briefly needs about 250 MB of memory. A button
+  deletes it again. Natural Earth data are in the public domain.
+- **OpenStreetMap** (*Settings → Interface → Map background*, off by
+  default): a real map with streets. The browser of everyone who opens the
+  map downloads the map images straight from `tile.openstreetmap.org`,
+  which therefore sees their IP address, the address of your server and
+  the area they are looking at. It learns nothing about plays or viewers.
+  The page lets those images in only while the option is on. Map data ©
+  OpenStreetMap contributors.
+
 ### Comparison of two periods
 
 "August against December" rather than "compared to the previous period".
@@ -343,7 +371,8 @@ say yes or no for that account alone. Admins make theirs on My account
 too. Such a key sees what its owner sees. An address in an area the owner
 cannot open answers 403 (`/api/v1/` lists only the addresses the key may
 use), other people's names and addresses are hidden when the owner has
-anonymization on, and a viewer's key gets only the viewer's own history:
+anonymization on (`?user=` then takes the substitute id the API returns,
+`skryto-3`), and a viewer's key gets only the viewer's own history:
 asking for someone else's with `?user=` is a 403. A viewer's key also
 stops while sign-in through Jellyfin is switched off or the viewer is
 disabled in Jellyfin. Taking the permission away stops the key without
@@ -609,9 +638,13 @@ a server shared by people who should not see each other can hide a lot.
 Local reader accounts have the same tree, set separately.
 
 **Anonymising** goes with it: on the pages you do open, somebody else's
-name reads `Viewer 3` and an IP address a dash. The number is stable, so
-rows can still be compared, but it does not lead to a person. Nobody is
-ever anonymised to themselves.
+name reads `Viewer 3`, an IP address a dash, and the name of somebody
+else's device (`Petr's Shield`) `Device 2` - the player stays. The
+numbers are stable, so rows can still be compared, but they do not lead
+to a person. Ids are replaced as well: links and the API show `skryto-3`
+instead of the Jellyfin id, and addresses and filters take only that - the
+real id of somebody else finds nothing, so knowing it from Jellyfin does
+not tell who `Viewer 3` is. Nobody is ever anonymised to themselves.
 
 A page a viewer cannot open answers with a short page saying why. The rule
 is an allow-list, so a page nobody thought about is closed rather than
@@ -933,9 +966,13 @@ jellyscope/
     ├── langstats.py        language statistics
     ├── sekce.py            the cards the dashboards are built from
     ├── charts.py           hand-drawn SVG charts
-    ├── worldmap.py         the map on the Network page
+    ├── worldmap.py         the map on the Network page (built-in outline, Mercator)
+    ├── mapa.py             map dots merged per zoom level
+    ├── mapa_podrobna.py    the detailed offline map (Natural Earth tiles)
+    ├── geometrie.py        simplifying and cutting shapes into map tiles
     ├── geoip.py            the offline GeoLite2 lookup
     ├── formatting.py       numbers for humans
+    ├── udalosti.py         a small surprise around some holidays
     ├── i18n.py             loads the translations, picks the language
     ├── translations/       one JSON file per language (+ log/)
     ├── applog.py           log file and its viewer
@@ -973,8 +1010,10 @@ release nobody can identify is worse than none.
 
 Jellyscope can watch for a new release: once a day it asks GitHub whether
 a newer one is out and says so in the corner. It installs nothing, and it
-is **off by default**. It is the only connection to anything other than
-Jellyfin, so that is your call. Updating stays with `deploy/update.sh`.
+is **off by default**. Apart from the downloads you start with a button
+(GeoLite2, the detailed map) and the optional OpenStreetMap background of
+the map, it is the only connection to anything other than Jellyfin, so
+that is your call. Updating stays with `deploy/update.sh`.
 
 ---
 

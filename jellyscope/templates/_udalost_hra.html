@@ -1,0 +1,84 @@
+{#
+  Ozdoba za názvem jako tlačítko - klik otevře hru svátku (jen v době
+  svátku, viz udalosti.py). Je MIMO odkaz na Přehled, jinak by klik na
+  stromeček otevřel Přehled. Hra se stáhne až po kliknutí
+  (static/udalosti/hry/<svátek>.js), její texty jsou tady v JSONu - jen
+  pro aktuální svátek, v jazyce účtu.
+#}
+{%- set texty_her = {
+    "vanoce": {"ozdoba": _("Rozbalit dárek"), "napoveda": _("Klikni na dárek"),
+               "prani": _("Veselé Vánoce!"), "darek": _("Dárek")},
+    "halloween": {"ozdoba": _("Vydlabat dýni"),
+                  "napoveda": _("Obtáhni tvar (oko, nos, pusu) – po puštění se vyřízne"),
+                  "rozsvitit": _("Rozsvítit"), "sfouknout": _("Sfouknout"), "znovu": _("Začít znovu"),
+                  "dyne": _("Dýně")},
+    "silvestr": {"ozdoba": _("Odpálit rachejtli"), "napoveda": _("Přetáhni zapalovač k roznětce"),
+                 "zapalovac": _("Zapalovač"), "hori": _("Hoří!"), "prani": _("Šťastný nový rok!")},
+    "velikonoce": {"ozdoba": _("Rozklepnout vajíčko"), "napoveda": _("Klikej na vajíčko"),
+                   "vajicko": _("Vajíčko"), "pip": _("píp!"), "prani": _("Veselé Velikonoce!")},
+} %}
+{%- set texty_hry = dict(texty_her[svatek], zavrit=_("Zavřít")) %}
+{#- Rok pro finále Silvestra - jen tehdy, ať se jinde zbytečně nepočítá. #}
+{%- if svatek == "silvestr" %}{% set texty_hry = dict(texty_hry, rok=udalost_rok()) %}{% endif %}
+<button type="button" class="udalost-hra brand-ozdoby" data-hra="{{ svatek }}" aria-label="{{ texty_hry.ozdoba }}">
+    {%- if svatek == "vanoce" %}
+    <svg class="bo-stromecek" viewBox="-1 -5 22 32" aria-hidden="true">
+        <path d="M10 1 L16 9 H13 L18 16 H14.5 L19.5 23 H.5 L5.5 16 H2 L7 9 H4 Z" fill="#1f8a4c"/>
+        <path d="M10 1 L16 9 H13 L18 16 H14.5 L19.5 23 H10 Z" fill="#17703c"/>
+        <rect x="8.5" y="22.5" width="3" height="4" rx=".5" fill="#7a4a1f"/>
+        <path class="hvezda" d="M10-4.5 l1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.2-2.3 1.2.5-2.5-1.8-1.7 2.5-.3z" fill="#ffd34d"/>
+        <circle class="svetlo s1" cx="8" cy="8" r="1.2" fill="#ff5252"/>
+        <circle class="svetlo s2" cx="12.5" cy="12.5" r="1.2" fill="#ffd34d"/>
+        <circle class="svetlo s3" cx="6.5" cy="15" r="1.2" fill="#4fc3f7"/>
+        <circle class="svetlo s1" cx="13.5" cy="19.5" r="1.2" fill="#ff5252"/>
+        <circle class="svetlo s2" cx="9" cy="20" r="1.2" fill="#b388ff"/>
+        <circle class="svetlo s3" cx="4.5" cy="21" r="1.2" fill="#ffd34d"/>
+    </svg>
+    {%- elif svatek == "halloween" %}
+    <svg class="bo-rakev" viewBox="-1 -2 26 39" aria-hidden="true">
+        <defs><clipPath id="udalost-rakev"><path d="M8 2 H16 L21.5 8.5 L17.5 32 H6.5 L2.5 8.5 Z"/></clipPath></defs>
+        <path d="M7 0 H17 L24 8 L19 34 H5 L0 8 Z" fill="#2a160c"/>
+        <path d="M8 2 H16 L21.5 8.5 L17.5 32 H6.5 L2.5 8.5 Z" fill="#6e0f1d"/>
+        <g clip-path="url(#udalost-rakev)"><g class="upir">
+            <path d="M3 36 L5 17 Q12 12 19 17 L21 36 Z" fill="#0d0d0d"/>
+            <path d="M5.5 17 L3.6 10.8 L9.2 14.6 Z M18.5 17 L20.4 10.8 L14.8 14.6 Z" fill="#b31b2c"/>
+            <ellipse cx="12" cy="11.5" rx="4.2" ry="5" fill="#e9e6f2"/>
+            <path d="M7.8 10 Q8 5.8 12 5.9 Q16 5.8 16.2 10 L14.5 8.4 L12 10.6 L9.5 8.4 Z" fill="#0d0d0d"/>
+            <circle class="oci" cx="10.4" cy="11.6" r=".85" fill="#ff2a2a"/>
+            <circle class="oci" cx="13.6" cy="11.6" r=".85" fill="#ff2a2a"/>
+            <path d="M10.4 14.2 Q12 15.2 13.6 14.2" stroke="#5a0b14" stroke-width=".6" fill="none"/>
+            <path d="M10.8 14.45 l.45 1.3 .45-1.2 Z M12.3 14.5 l.45 1.2 .45-1.3 Z" fill="#fff"/>
+        </g></g>
+        <g class="vika">
+            <path d="M7 0 H17 L24 8 L19 34 H5 L0 8 Z" fill="#5c3418" stroke="#3a1f0d" stroke-width="1"/>
+            <path d="M12 9 V23 M8.3 13.2 H15.7" stroke="#c9a14a" stroke-width="1.7" stroke-linecap="round"/>
+        </g>
+    </svg>
+    {%- elif svatek == "silvestr" %}
+    <svg class="bo-sampanske" viewBox="0 -24 32 66" aria-hidden="true">
+        <g transform="rotate(18 8 38)"><g class="lahev">
+            <path d="M1.5 36 V18 Q1.5 11.5 5.8 9.2 V0 H10.2 V9.2 Q14.5 11.5 14.5 18 V36 Q14.5 38.3 12.2 38.3 H3.8 Q1.5 38.3 1.5 36 Z" fill="#1f5a33"/>
+            <path d="M5.4-1 H10.6 V7.4 Q8 8.6 5.4 7.4 Z" fill="#d9b34a"/>
+            <rect x="3" y="21" width="10" height="9.5" rx="1.2" fill="#f3e6c4"/>
+            <path d="M5 24.5 H11 M6 27 H10" stroke="#b08a3e" stroke-width=".8"/>
+            <path d="M3.6 15.5 V34" stroke="#fff" stroke-opacity=".25" stroke-width="1.3" stroke-linecap="round"/>
+            <circle class="pena" style="--dx:-5px;--dy:-13px" cx="8" cy="-2" r="1.6" fill="#fff6d5"/>
+            <circle class="pena" style="--dx:1px;--dy:-18px" cx="8" cy="-2" r="1.3" fill="#ffe9a8"/>
+            <circle class="pena" style="--dx:6px;--dy:-12px" cx="8" cy="-2" r="1.7" fill="#fff6d5"/>
+            <circle class="pena" style="--dx:-1px;--dy:-10px" cx="8" cy="-2" r="1.1" fill="#ffffff"/>
+            <circle class="pena" style="--dx:4px;--dy:-16px" cx="8" cy="-2" r="1" fill="#ffe9a8"/>
+            <rect class="zatka" x="6.4" y="-4.6" width="3.2" height="3.8" rx=".9" fill="#c9a26b"/>
+        </g></g>
+    </svg>
+    {%- elif svatek == "velikonoce" %}
+    <svg class="bo-vajicko" viewBox="0 0 14 18" aria-hidden="true">
+        <defs><clipPath id="udalost-vajicko"><ellipse cx="7" cy="9.5" rx="6" ry="8"/></clipPath></defs>
+        <ellipse cx="7" cy="9.5" rx="6" ry="8" fill="#f2c94c"/>
+        <g clip-path="url(#udalost-vajicko)" fill="none" stroke-width="1.7">
+            <path d="M0 8 l2-2 l2 2 l2-2 l2 2 l2-2 l2 2 l2-2" stroke="#e05a8a"/>
+            <path d="M0 12.5 h14" stroke="#3f7fd4"/>
+        </g>
+    </svg>
+    {%- endif %}
+</button>
+<script type="application/json" id="udalost-texty">{{ texty_hry | tojson }}</script>

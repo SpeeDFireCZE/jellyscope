@@ -77,9 +77,16 @@ for sekce, akce, zkouska in (
         spatne.append(f"{sekce}: formulář se nenašel")
         continue
     uvnitr = set(re.findall(r'name="([a-z_0-9]+)"', stranka[zacatek:konec]))
+    # Pole ve VLASTNIM formulari (jina adresa, treba vyvojove datum
+    # vyzdoby v devu) se odesle samo - "mimo" je jen pole, ktere neni
+    # v zadnem formulari a nikdy by se neodeslalo.
+    v_jinych = set()
+    for jiny in re.findall(r"<form\b.*?</form>", stranka, flags=re.S):
+        if f'action="{akce}"' not in jiny.split(">", 1)[0]:
+            v_jinych |= set(re.findall(r'name="([a-z_0-9]+)"', jiny))
     # `kind` a `viewport` jsou meta znacky ze zakladni sablony.
     venku = (set(re.findall(r'name="([a-z_0-9]+)"', stranka))
-             - uvnitr - {"section", "kind", "viewport"})
+             - uvnitr - v_jinych - {"section", "kind", "viewport"})
     print(f"{sekce}: polí ve formuláři {len(uvnitr)}, mimo něj {sorted(venku)}")
     if venku:
         spatne.append(f"{sekce}: pole mimo formulář: {sorted(venku)}")

@@ -239,8 +239,9 @@ with TestClient(app) as client:
                       "ui_map_zoom": "vymysl"}, follow_redirects=False)
     check(web._zoom_rezim() == "click", "nesmysl spadne zpátky na klikání")
 
-zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
-check('mapa.dataset.zoom === "wheel"' in zaklad,
+# Skript mapy je ve vlastnim souboru (static/mapa.js), base.html ho jen nacita.
+mapa_js = (PROJECT / "jellyscope" / "static" / "mapa.js").read_text(encoding="utf-8")
+check('mapa.dataset.zoom === "wheel"' in mapa_js,
       "posluchač kolečka je podmíněný režimem")
 # Mapa a karta "kdo v jakem jazyce" maji vlastni sablonku, kterou vklada
 # stranka i prehled. Znacky se hledaji v ni - a stranka ji musi vkladat.

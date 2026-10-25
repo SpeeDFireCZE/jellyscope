@@ -234,9 +234,65 @@
             </div>
         </div>
 
+        {# Podklad z OSM je jediná volba v aplikaci, kvůli které prohlížeče
+           diváků chodí na cizí server - proto výchozí vypnutá a s větou
+           o tom, co přesně odchází ven. #}
+        <div class="field">
+            <label>{{ _("Podklad mapy") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_podklad" value="kresleny"
+                           {{ 'checked' if mapa_podklad != 'osm' }}>
+                    <span>
+                        <span class="title">{{ _("Kreslená mapa") }}</span>
+                        <span class="desc">
+                            {{ _("Obrys pevnin a hranice států přímo z aplikace, bez internetu. Když je na stránce Síť stažená podrobná mapa, ukáže se při přiblížení pobřeží, jezera, řeky a obrysy měst.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_podklad" value="osm"
+                           {{ 'checked' if mapa_podklad == 'osm' }}>
+                    <span>
+                        <span class="title">OpenStreetMap</span>
+                        <span class="desc">
+                            {{ _("Skutečná mapa s ulicemi. Obrázky mapy si stahuje prohlížeč každého, kdo mapu otevře, přímo z OpenStreetMap - ten tak vidí jeho IP adresu, adresu tohoto serveru a oblast, na kterou se dívá. O přehráních a divácích se nedozví nic.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+</div>
+
+<div class="card" id="vyzdoba">
+    <div class="card-head">
+        <h2>{{ _("Sezónní výzdoba") }}</h2>
+    </div>
+        <div class="field">
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_udalosti" value="1" {{ 'checked' if ui_udalosti }}>
+                    <span><span class="title">{{ _("Zapnutá") }}</span></span>
+                </label>
+                <label class="radio-card">
+                    <input type="radio" name="ui_udalosti" value="0" {{ 'checked' if not ui_udalosti }}>
+                    <span><span class="title">{{ _("Vypnutá") }}</span></span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Kolem některých svátků se Jellyscope sám ozdobí. Tady se to dá vypnout.") }}</p>
+        </div>
+
         <div class="btn-row">
             <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
         </div>
 </div>
 </form>
+{# Vývojové datum pro výzdobu - jen v devu (jellyscope/vyvoj.py). V produ
+   globál `vyvoj_datum` neexistuje a šablona se ani nehledá. #}
+{% if vyvoj_datum is defined %}{% include "nastaveni/_vyvoj_udalosti.html" %}{% endif %}
 {# ================================================================== #}

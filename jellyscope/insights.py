@@ -81,7 +81,7 @@ def dead_storage(limit: int = 25, days: int = 365) -> dict[str, Any]:
         FROM items i
         LEFT JOIN libraries l ON l.id = i.library_id
         {common_where}
-        ORDER BY i.size_bytes DESC
+        ORDER BY i.size_bytes DESC, i.id
         LIMIT ?
         """,
         (*_meze(days), limit),
@@ -183,7 +183,7 @@ def least_played(days: int = 365, limit: int = 25, min_size_bytes: int = 0,
         WHERE i.is_missing = 0
           AND i.type IN ('Movie', 'Episode')
           AND COALESCE(i.size_bytes, 0) >= ?
-        ORDER BY plays ASC, {razeni}, COALESCE(i.size_bytes, 0) DESC, i.name
+        ORDER BY plays ASC, {razeni}, COALESCE(i.size_bytes, 0) DESC, i.name, i.id
         LIMIT ?
         """,
         (od, do, int(min_size_bytes), int(limit)),
@@ -444,7 +444,7 @@ def oversized_rarely_watched(days: int, limit: int = 15) -> list[dict[str, Any]]
                  i.index_number, i.path, i.tmdb_id, i.height, i.width, i.bitrate,
                  i.video_codec, i.size_bytes
         HAVING COUNT(p.id) <= 2
-        ORDER BY gb_per_hour DESC
+        ORDER BY gb_per_hour DESC, i.id
         LIMIT ?
         """,
         (MIN_PLAY_SECONDS, *_meze(days), limit),
@@ -558,7 +558,9 @@ def never_finished(days: int, limit: int = 15) -> list[dict[str, Any]]:
           AND p.position_ticks IS NOT NULL
         GROUP BY COALESCE(p.series_name, p.item_name), i.runtime_ticks
         HAVING MAX(p.position_ticks * 100.0 / i.runtime_ticks) < 15
-        ORDER BY attempts DESC, best_percent ASC
+        -- Pri remize nazev a delka (= klic skupiny): bez nich vybere limit
+        -- v SQLite jine tituly nez v PostgreSQL.
+        ORDER BY attempts DESC, best_percent ASC, label, i.runtime_ticks
         LIMIT ?
         """,
         (*_meze(days), MIN_PLAY_SECONDS, limit),

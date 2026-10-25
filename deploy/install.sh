@@ -281,7 +281,11 @@ ok "python3 $(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:
 # Python installed next to the default one - it is often already there -
 # and use that.
 
-MIN_MINOR=11
+# The minimum lives in deploy/python-minimum - one place for this script,
+# update.sh and the update button in the app.
+MIN_PY="$( { tr -d '[:space:]' < "$APP_DIR/deploy/python-minimum"; } 2>/dev/null || true)"
+[[ "$MIN_PY" =~ ^3\.[0-9]+$ ]] || MIN_PY="3.11"
+MIN_MINOR="${MIN_PY#3.}"
 PYTHON_BIN="python3"
 
 version_ok() {

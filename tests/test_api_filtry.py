@@ -580,7 +580,9 @@ try:
         ("client[contains]=%25_", True), ("client[starts_with]=jelly", True),
         ("type[in]=movie,EPISODE", True), ("is_transcode[equals]=true", True),
         ("is_transcode[not]=true", True), ("watched_seconds[gte]=1800&sort=-started_at", True),
-        ("title[ends_with]=1", True), ("device[contains]=ob", True),
+        # Zařízení jako jméno: anonymizuje se až v Pythonu, v SQL by filtr
+        # běžel nad skutečným názvem (viz test_anonymizace_zarizeni).
+        ("title[ends_with]=1", True), ("device[contains]=ob", False),
         ("client[contains]=a%5Cb", True), ("client[starts_with]=100%25_", True),
         ("watched_seconds[in]=600,1200", True), ("client[contains]=!", True),
         ("user[contains]=Pe", False), ("client[equals]=Straße TV", False),

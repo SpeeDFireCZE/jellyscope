@@ -57,6 +57,34 @@
     </form>
 </div>
 
+{% if ui_udalosti %}
+<div class="card" style="max-width:640px">
+    <div class="card-head">
+        <h2>{{ _("Animace výzdoby") }}</h2>
+    </div>
+    <form method="post" action="/account/udalosti-pohyb">
+        <div class="field">
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="pohyb" value="1"
+                           {{ 'checked' if not account or account.udalosti_pohyb != '0' }}>
+                    <span><span class="title">{{ _("Zapnuté") }}</span></span>
+                </label>
+                <label class="radio-card">
+                    <input type="radio" name="pohyb" value="0"
+                           {{ 'checked' if account and account.udalosti_pohyb == '0' }}>
+                    <span><span class="title">{{ _("Vypnuté") }}</span></span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Ozdoby a sváteční barvy zůstanou, jen se nebude nic hýbat. Platí jen pro tvůj účet.") }}</p>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Uložit") }}</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 <div class="card" style="max-width:640px">
     <div class="card-head">
         <h2>{{ _("Heslo") }}</h2>

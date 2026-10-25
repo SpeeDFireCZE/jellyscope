@@ -319,6 +319,18 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 
 
 
+-- Podrobna mapa (Natural Earth 1:10M) rozrezana na dlazdice - viz
+-- mapa_podrobna.py. Obsah je JSON s cestami SVG po vrstvach. Text, ne
+-- binarne: pg_dump by binarni data v zaloze zapsal hexem dvojnasobne.
+CREATE TABLE IF NOT EXISTS mapa_dlazdice (
+    podrobnost INTEGER NOT NULL,
+    x          INTEGER NOT NULL,
+    y          INTEGER NOT NULL,
+    obsah      TEXT NOT NULL,
+    PRIMARY KEY (podrobnost, x, y)
+);
+
+
 -- Zapomenuti divaci: jeden radek na jedno kliknuti "Ano, zapomenout".
 --
 -- Drzi se kvuli vraceni: dokud jsou radky v kosi, da se zasah vzit zpet

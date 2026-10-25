@@ -111,6 +111,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # vychozi: kolecko nad mapou by jinak zastavilo rolovani stranky
     # a clovek by u mapy uvizl. Viz web._stropy() a base.html.
     "ui_map_zoom": "click",
+    "ui_map_podklad": "kresleny",
     # Vzhled aplikace: "novy" (barvy Jellyfinu) nebo "klasicky" (puvodni
     # modra na neutralnim podkladu). Neni to jen jina paleta - klasicky
     # vraci i ploche karty, tecky u odznaku a cislo nad krivkou misto
@@ -777,6 +778,9 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # Smi si ucet vyrobit vlastni API klic? "1" / "0", NULL = podle
         # skupiny. Viz pristup.smi_klic().
         "smi_klic": "TEXT",
+        # Smi se sezonni vyzdoba hybat? "0" = ucet si animace vypnul na
+        # strance Muj ucet, NULL = hybou se. Viz udalosti.pohyb().
+        "udalosti_pohyb": "TEXT",
     },
     "users": {
         # Otisk profiloveho obrazku z Jellyfinu (PrimaryImageTag z /Users).
@@ -998,6 +1002,22 @@ def _init_db(config: dialect.DatabaseConfig, tabulky: str,
     if config is database_config():
         seed_from_env()
     return added
+
+
+# Všechny tabulky ze schématu, v pořadí, ve kterém se dají naplnit:
+# `item_streams` odkazuje na `items`, `dashboard_layout` a `api_tokens` na
+# `accounts`. Mazat se mají v obráceném pořadí.
+#
+# Jediný seznam pro zálohu vlastním exportem (tasks.ZALOHOVANE_TABULKY)
+# i pro převod SQLite <-> PostgreSQL (dbmigrate.TABLES). Převod měl dřív
+# vlastní, ručně psaný seznam - a s novými tabulkami tiše vynechával API
+# klíče, přehledy nebo verze souborů. Proti oběma schématům ho hlídají
+# testy (test_vlastni_export_pg, test_prevod_databaze): tabulka, která
+# přibude do schema.sql, musí přibýt i sem.
+TABULKY = ("libraries", "users", "items", "item_versions", "item_streams",
+           "accounts", "dashboard_layout", "library_snapshot",
+           "settings", "scan_log", "api_tokens", "login_blocks",
+           "zapomenuti", "playback", "mapa_dlazdice")
 
 
 # Koš na zapomenuté diváky. Řádky se při zapomenutí **přesunou** sem,

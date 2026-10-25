@@ -38,7 +38,7 @@ from .config import BASE_DIR as PROJECT_DIR
 from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
 from .i18n import translate as _t
 from .web_zaklad import (
-    KAPACITA_JEDNOTKY, STROP_MAX, STROP_MIN, VZHLEDY, ZOOM_REZIMY,
+    KAPACITA_JEDNOTKY, PODKLADY_MAPY, STROP_MAX, STROP_MIN, VZHLEDY, ZOOM_REZIMY,
     SETTINGS_SECTIONS, STARTED_AT, ZPET_NA_IMPORT, _cislo_z_formulare, _clamp, _context,
     _bez_mezipameti, _flash, _hlaska_importu, _novy_klic, config,
     log, require_admin, require_login, templates,
@@ -906,7 +906,10 @@ def settings_database(
             return RedirectResponse("/settings?section=database", status_code=303)
 
         result = dbmigrate.copy_all(current, candidate)
-        if result.get("status") != "ok":
+        if result.get("tabulka"):
+            _flash(request, "Převod se zastavil u tabulky {tabulka}, nic se nezměnilo: {chyba}",
+                   "error", tabulka=result["tabulka"], chyba=result.get("chyba", ""))
+        elif result.get("status") != "ok":
             _flash(request, result.get("message", "Přenos selhal."), "error")
         else:
             _flash(
@@ -1103,10 +1106,12 @@ def settings_interface(request: Request,
                        ui_max_rows: str = Form(""),
                        ui_max_rows_mobile: str = Form(""),
                        ui_map_zoom: str = Form("click"),
+                       ui_map_podklad: str = Form("kresleny"),
                        ui_skin: str = Form("novy"),
                        ui_cas_presne: str = Form("0"),
                        ui_dashboard: str = Form("0"),
                        dashboard_nazev: str = Form(""),
+                       ui_udalosti: str = Form("1"),
                        account: dict[str, Any] = Depends(require_admin)):
     """Stropy dlouhých seznamů - kolik se vypíše, než se zbytek schová.
 
@@ -1131,8 +1136,15 @@ def settings_interface(request: Request,
     # v obou případech je správná odpověď výchozí hodnota, ne uložit to.
     db.set_setting("ui_map_zoom",
                    ui_map_zoom if ui_map_zoom in ZOOM_REZIMY else "click")
+    # Podklad z OSM posila prohlizece divaku na cizi server - jen kdyz
+    # je to vyslovne "osm", cokoliv jineho je kreslena mapa.
+    db.set_setting("ui_map_podklad",
+                   ui_map_podklad if ui_map_podklad in PODKLADY_MAPY else "kresleny")
     db.set_setting("ui_skin", ui_skin if ui_skin in VZHLEDY else "novy")
     db.set_setting("ui_cas_presne", "1" if ui_cas_presne == "1" else "0")
+    # Sezónní výzdoba: vypne ji jen výslovné "0". Formulář bez pole (jiná
+    # karta, starší stránka) ji nechá zapnutou - výchozí stav je zapnuto.
+    db.set_setting("ui_udalosti", "0" if ui_udalosti == "0" else "1")
     # Přehled pro všechny má název, který jde do menu. Zkontroluje se, kdykoliv
     # ho někdo posílá nebo přehled zapíná; neplatný se neuloží a platí ten
     # předchozí. Bez platného názvu se přehled nezapne - v menu by nebylo
@@ -1925,7 +1937,14 @@ def _prava_klice_z_formulare(formular: Any) -> tuple[str | None, str]:
     historie = bool(formular.get("historie"))
     if not oblasti and not historie:
         return None, "Zaškrtni, co klíč smí - aspoň jednu oblast nebo historii přehrávání."
-    return api.zabal_prava_klice(oblasti, bool(formular.get("anonymizace")), historie), ""
+    prava = api.zabal_prava_klice(oblasti, bool(formular.get("anonymizace")), historie)
+    # Jazyky, vlastní přehled ani srovnání nemají v API adresu - klíč jen
+    # s nimi by nesměl nic a nikdo by nevěděl proč.
+    if not api.adresy_root_klice(prava):
+        return None, ("Zaškrtnuté oblasti v API nic neotevírají. Přidej oblast, která má"
+                      " adresu v API (třeba Knihovnu nebo Seznam diváků), nebo historii"
+                      " přehrávání.")
+    return prava, ""
 
 
 @router.post("/settings/api/token")
@@ -1942,7 +1961,10 @@ async def api_token_novy(request: Request,
     if chyba:
         _flash(request, chyba, "error")
         return RedirectResponse("/settings?section=api", status_code=303)
-    vysledek = api.vytvor(str(formular.get("name") or ""), None, prava)
+    # Jméno jen jako text: soubor poslaný pod tímhle polem by se jinak
+    # stal jménem klíče („UploadFile(...)").
+    jmeno = formular.get("name")
+    vysledek = api.vytvor(jmeno if isinstance(jmeno, str) else "", None, prava)
     log.info("Spravce %s vyrobil root klic %s (%s)", account["username"],
              vysledek["jmeno"], api.popis_prav_do_logu(prava))
     # Do relace, ne do adresy: adresa se objeví v logu proxy i v historii

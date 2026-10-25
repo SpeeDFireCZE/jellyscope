@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -81,7 +81,9 @@ check(stats.overview(7)["plays"] == 2, "právě zapsané přehrávání je vidě
 
 print()
 print("--- vlastní rozmezí ---")
-pred_10 = (TED - timedelta(days=10)).date().isoformat()
+# Den záznamu v místní zóně, ne v UTC: rozmezí se počítá na místní dny
+# a mezi místní půlnocí a půlnocí v UTC by to byl den vedle.
+pred_10 = (TED - timedelta(days=10)).replace(tzinfo=timezone.utc).astimezone(formatting.zona()).date().isoformat()
 obdobi = stats.obdobi_od_do(pred_10, pred_10)
 check(obdobi is not None, "rozmezí jednoho dne dává smysl")
 check(obdobi.dny == 1, f"a je dlouhé jeden den ({obdobi.dny})")
@@ -100,7 +102,7 @@ print("--- konec rozmezí je včetně celého dne ---")
 # Dřív se za půlnoc brala ta v UTC a "20. srpna" pak ve skutečnosti
 # znamenalo 20. srpna od dvou ráno do dvou ráno dne dalšího.
 konec_mistni = datetime.strptime(obdobi.do_mistni, db.TIME_FORMAT)
-check(konec_mistni.date() == (TED - timedelta(days=9)).date()
+check(konec_mistni.date() == date.fromisoformat(pred_10) + timedelta(days=1)
       and konec_mistni.time().isoformat() == "00:00:00",
       f"horní mez je místní půlnoc dalšího dne ({obdobi.do_mistni})")
 check(datetime.strptime(obdobi.do, db.TIME_FORMAT)

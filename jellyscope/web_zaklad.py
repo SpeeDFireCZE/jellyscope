@@ -21,8 +21,8 @@ from typing import Any, Optional
 from fastapi import HTTPException, Request, Response
 from fastapi.templating import Jinja2Templates
 
-from . import (accounts, collector, db, formatting, i18n, pristup, scanner,
-               sekce, stats, updates)
+from . import (accounts, collector, db, formatting, i18n, mapa_podrobna, pristup,
+               scanner, sekce, stats, udalosti, updates)
 from .config import load_config
 from .i18n import translate as _t
 
@@ -204,6 +204,11 @@ STROP_MAX = 50
 # volba, ne rozhodnuti za uzivatele.
 ZOOM_REZIMY = ("click", "wheel")
 
+# Co je pod teckami na mape. "kresleny" je obrys pevnin (offline), "osm"
+# dlazdice z OpenStreetMap - ty si prohlizec stahuje z internetu, proto
+# je to volba spravce a vychozi je vypnuta. Viz web.csp().
+PODKLADY_MAPY = ("kresleny", "osm")
+
 
 # Vzhledy aplikace. "novy" jsou barvy Jellyfinu, "klasicky" puvodni
 # modra na neutralnim podkladu - viz konec style.css.
@@ -253,6 +258,17 @@ def _stropy() -> dict[str, int]:
             "ui_max_rows_mobile", minimum=STROP_MIN, maximum=STROP_MAX,
             fallback=5),
     }
+
+
+# Klíče kontextu, které jsou dokumentace (názvy a typy polí API), ne data
+# o divácích - anonymizace na ně nesahá (viz _context).
+NEANONYMIZOVAT = ("api_navod_pole",)
+
+
+def _podklad_mapy() -> str:
+    """Co je pod tečkami na mapě - kreslená mapa, nebo OpenStreetMap."""
+    podklad = (db.get_setting("ui_map_podklad", "kresleny") or "").strip()
+    return podklad if podklad in PODKLADY_MAPY else "kresleny"
 
 
 def _zoom_rezim() -> str:
@@ -506,11 +522,18 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         "strop_max": STROP_MAX,
         # Čím se přibližuje mapa na stránce Síť - viz _zoom_rezim().
         "mapa_zoom": _zoom_rezim(),
+        "mapa_podklad": _podklad_mapy(),
+        # Je stažená podrobná mapa (v tvaru, který tahle verze umí)? Z
+        # nastavení, ne dotazem na tabulku. Otisk jde do adresy dlaždic.
+        "mapa_podrobna": mapa_podrobna.stav()["platna"],
+        "mapa_podrobna_otisk": mapa_podrobna.stav()["otisk"],
         # Vzhled - viz VZHLEDY a konec style.css. Dosazuje se do <html>
         # rovnou na serveru, ne az JavaScriptem: jinak by stranka na
         # okamzik problikla v jednom vzhledu a prepnula se do druheho.
         "ui_skin": _vzhled(),
         "ui_cas_presne": _cas_presne(),
+        # Sezónní výzdoba zapnutá správcem? (Rozhraní a Můj účet.)
+        "ui_udalosti": udalosti.zapnuto(),
         # Zapnutý v nastavení? Tohle potřebuje přepínač v Rozhraní.
         "ui_dashboard": sekce.je_zapnuty(),
         # Záložka v menu (sekce.vidi_prehled). Prázdný přehled se ostatním
@@ -529,11 +552,15 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
             account and sekce.nacti_rozvrzeni(account["id"]))),
     }
     base.update(extra)
+    # Popis polí API (`{"device": "text", "user_id": "text"}`) je
+    # dokumentace, ne data o divácích - anonymizace by z typu udělala
+    # „Zařízení ?" a návod by přišel o typ pole. Jde mimo ni.
+    dokumentace = {klic: base.pop(klic) for klic in NEANONYMIZOVAT if klic in base}
     # Az uplne nakonec: co se schova, se schova ve VSEM, co jde do
     # sablony - vcetne toho, co pridala routa pres `extra`. Jedno misto
     # pro vsechny stranky: kdyby se to resilo v sablonach, stacilo by
     # zapomenout na jednu - a zrovna ta by byla ta, kterou nekdo otevre.
-    return pristup.anonymizuj_pro(base, account)
+    return {**pristup.anonymizuj_pro(base, account), **dokumentace}
 
 
 def _cesky_datum(iso: Optional[str]) -> str:

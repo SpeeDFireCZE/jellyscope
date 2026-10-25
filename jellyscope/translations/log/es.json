@@ -57,7 +57,7 @@
     "plugin odmitl rowid, pouzit zjednoduseny dotaz": "el plugin rechazó rowid; se usa la consulta simplificada",
     "pocet polozek se nepodarilo zjistit: %s": "no se pudo averiguar el número de elementos: %s",
     "prehravani: %d aktivnich, %d zacalo, %d skoncilo": "reproducciones: %d activas, %d empezadas, %d terminadas",
-    "prenos dat selhal": "la copia de datos ha fallado",
+    "prenos dat selhal (tabulka %s)": "la copia de datos ha fallado (tabla %s)",
     "prevzat bezici zaznam %s (jiny klic relace) - duplicita nevznikla": "retomado el registro en curso %s (otra clave de sesión); no se ha creado ningún duplicado",
     "prihlaseni z %s zablokovano (%s. stupen, %s)": "inicio de sesión desde %s bloqueado (nivel %s, %s)",
     "restart na zadost uzivatele": "reinicio solicitado por el usuario",
@@ -149,5 +149,10 @@
     "rotace logu: %s": "rotación de logs: %s",
     "otisk profiloveho obrazku nejde zapsat": "no se puede escribir la huella de la imagen de perfil",
     "Spravce %s vyrobil root klic %s (%s)": "El administrador %s creó la clave root %s (%s)",
-    "Spravce %s zmenil prava root klice %s: %s -> %s": "El administrador %s cambió los permisos de la clave root %s: %s -> %s"
+    "Spravce %s zmenil prava root klice %s: %s -> %s": "El administrador %s cambió los permisos de la clave root %s: %s -> %s",
+    "podrobnou mapu se nepodarilo stahnout: %s": "no se pudo descargar el mapa detallado: %s",
+    "podrobna mapa stazena: %s dlazdic, %s MB": "mapa detallado descargado: %s teselas, %s MB",
+    "podrobna mapa smazana": "mapa detallado eliminado",
+    "stahovani podrobne mapy zastaveno": "descarga del mapa detallado detenida",
+    "neplatne JELLYSCOPE_UDALOST_DATUM %r, plati dnesni datum": "JELLYSCOPE_UDALOST_DATUM no válido %r, se usa la fecha de hoy"
 }

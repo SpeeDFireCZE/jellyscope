@@ -1,0 +1,106 @@
+/* ---------------------------------------------------------------------------
+   Sezónní výzdoba: Velikonoce (neděle před nimi až Velikonoční pondělí)
+
+   Načítá se jen v době svátku (viz udalosti.py a _udalost_hlava.html), po
+   style.css. Mění se jen barva aplikace (--accent, --accent-2 a písmo na
+   ní); barvy grafů zůstávají. Kontrast hlídá tests/test_kontrast.py.
+   Tmavé hodnoty jsou dvakrát jako ve style.css: podle systému a po ručním
+   přepnutí.
+   --------------------------------------------------------------------------- */
+:root[data-udalost="velikonoce"] {
+    --accent:     #2f7d22;
+    --accent-2:   #8c6b00;
+    --accent-ink: #ffffff;
+    --udalost-zajic: #efe7dc;
+    --udalost-zajic-obrys: #b9ab98;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-udalost="velikonoce"]:not([data-theme="light"]) {
+        --accent:     #7fd16a;
+        --accent-2:   #f2d04b;
+        --accent-ink: #0b0b0b;
+        --udalost-zajic: #efe7dc;
+        --udalost-zajic-obrys: #efe7dc;
+    }
+}
+:root[data-udalost="velikonoce"][data-theme="dark"] {
+    --accent:     #7fd16a;
+    --accent-2:   #f2d04b;
+    --accent-ink: #0b0b0b;
+    --udalost-zajic: #efe7dc;
+    --udalost-zajic-obrys: #efe7dc;
+}
+
+/* Zaječí ouška za logem (pravé občas cukne) a malované vajíčko. */
+.oz-usi { width: 24px; top: -15px; left: 2px; z-index: 0; }
+.oz-usi .ucho { transform-box: fill-box; transform-origin: 50% 100%; }
+.oz-usi .ucho.l { transform: rotate(-14deg); }
+.oz-usi .ucho.p { transform: rotate(12deg); animation: udalost-cuknuti 4s ease-in-out infinite; }
+/* Vajíčko za názvem je tlačítko hry (rozklepnout). */
+.bo-vajicko { width: 15px; transform: rotate(14deg); }
+@keyframes udalost-cuknuti {
+    0%, 78%, 100% { transform: rotate(12deg); }
+    82% { transform: rotate(32deg); } 86% { transform: rotate(6deg); }
+    90% { transform: rotate(24deg); } 94% { transform: rotate(12deg); }
+}
+
+/* Zajíček skáče po spodním okraji a nechává za sebou vajíčka (udalosti.js). */
+.udalost-efekt .zajic {
+    bottom: 4px;
+    left: 0;
+    width: var(--s);
+    animation: udalost-beh 10s linear both;
+}
+.udalost-efekt .zajic > i {
+    display: block;
+    transform-origin: 50% 100%;
+    animation: udalost-skok .62s ease-in-out infinite;
+}
+.udalost-efekt .zajic svg,
+.udalost-efekt .zajic-st svg,
+.udalost-efekt .vajicko svg,
+.udalost-efekt .vajicko-st svg { display: block; width: 100%; }
+.udalost-efekt .zajic-st,
+.udalost-efekt .vajicko,
+.udalost-efekt .vajicko-st { bottom: 4px; }
+.udalost-efekt .vajicko,
+.udalost-efekt .vajicko-st { width: 13px; }
+@keyframes udalost-beh { from { transform: translateX(-90px); } to { transform: translateX(var(--w)); } }
+@keyframes udalost-skok {
+    0%, 100% { transform: translateY(0) scaleY(.9); }
+    35% { transform: translateY(-24px) scaleY(1.05); }
+    60% { transform: translateY(-24px) scaleY(1); }
+    85% { transform: translateY(0) scaleY(1); }
+}
+
+/* Bez pohybu: systém hlásí „omezit animace", nebo si to účet vypnul. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-udalost="velikonoce"] .brand-logo *,
+    :root[data-udalost="velikonoce"] .brand-ozdoby * { animation: none !important; }
+}
+:root[data-udalost="velikonoce"][data-udalost-pohyb="0"] .brand-logo *,
+:root[data-udalost="velikonoce"][data-udalost-pohyb="0"] .brand-ozdoby * { animation: none !important; }
+
+/* Hra: vajíčko (hry/velikonoce.js). Praskliny přibývají po kliknutí. */
+.udalost-scena .vejce { cursor: pointer; }
+.udalost-scena .vejce:focus { outline: none; }
+.udalost-scena .vejce:focus-visible { outline: 2px dashed #fff; outline-offset: 6px; }
+.udalost-scena .praskliny path {
+    fill: none;
+    stroke: #5a3d1a;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+}
+.udalost-scena .praskliny path.videt { opacity: 1; }
+.udalost-scena .pip {
+    position: absolute;
+    padding: 4px 10px;
+    border-radius: 14px;
+    background: #fff;
+    color: #222;
+    font-size: 18px;
+    font-weight: 800;
+    opacity: 0;
+}

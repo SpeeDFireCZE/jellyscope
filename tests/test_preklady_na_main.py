@@ -134,6 +134,8 @@ def podvrzeny_git(*argumenty):
         VOLANI.append(argumenty)
         if argumenty[0] == "diff" and "--name-only" in argumenty:
             return {"kod": 0, "vystup": chr(10).join(NA_DALCE)}
+        if argumenty[0] == "rev-parse":
+            return {"kod": 0, "vystup": "0123456789abcdef0123456789abcdef01234567"}
         return {"kod": 0, "vystup": "Already up to date."}
     return beh()
 
@@ -147,21 +149,23 @@ NA_DALCE = ["jellyscope/translations/es.json", "jellyscope/translations/log/es.j
 VOLANI.clear()
 vysledek = asyncio.run(updates.aktualizuj())
 check(vysledek["status"] == "ok", f"jen překlady na dálce -> pull proběhl ({vysledek['status']})")
-check(any(v[0] == "fetch" for v in VOLANI), "před tím se udělal fetch")
-check(any(v[0] == "pull" for v in VOLANI), "a pak pull")
+i_fetch = next((i for i, v in enumerate(VOLANI) if v[0] == "fetch"), 10 ** 6)
+i_diff = next((i for i, v in enumerate(VOLANI) if v[0] == "diff" and "--name-only" in v), -1)
+check(i_fetch < i_diff, "fetch je dřív, než se zjišťuje, co by aktualizace přinesla")
+check(any(v[0] == "merge" for v in VOLANI), "a pak se ověřený commit stáhne (merge)")
 
 NA_DALCE = ["jellyscope/translations/es.json", "jellyscope/web.py"]
 VOLANI.clear()
 vysledek = asyncio.run(updates.aktualizuj())
 check(vysledek["status"] == "error", "překlady + kód bez vydání -> nestáhne se nic")
 check("víc než překlady" in vysledek.get("message", ""), "a hláška říká proč")
-check(not any(v[0] == "pull" for v in VOLANI), "pull se nevolal")
+check(not any(v[0] in ("pull", "merge") for v in VOLANI), "nic se nestáhlo")
 
 db.set_setting(updates.NALEZENA_VERZE, "99.0.0")     # vydani je venku
 db.forget_settings()
 VOLANI.clear()
 vysledek = asyncio.run(updates.aktualizuj())
-check(vysledek["status"] == "ok" and any(v[0] == "pull" for v in VOLANI),
+check(vysledek["status"] == "ok" and any(v[0] == "merge" for v in VOLANI),
       "s vydaným vydáním se stáhne všechno (to je vydání)")
 db.set_setting(updates.NALEZENA_VERZE, "")
 db.forget_settings()

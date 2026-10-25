@@ -32,20 +32,10 @@ from . import db, dialect
 
 log = logging.getLogger("jellyscope.dbmigrate")
 
-# Pořadí je závazné: tabulky s cizími klíči až po těch, na které odkazují.
-TABLES: list[str] = [
-    "settings",
-    "accounts",
-    "libraries",
-    "users",
-    "items",
-    "item_streams",
-    "playback",
-    "scan_log",
-]
-
-# Tabulky s automaticky přidělovaným id - u nich se musí posunout čítač.
-SEQUENCE_TABLES = ["accounts", "playback", "scan_log"]
+# Všechny tabulky ze schématu, v pořadí podle cizích klíčů - tentýž seznam
+# jako u zálohy (db.TABULKY). Dřív tu byl vlastní, ručně psaný seznam a
+# převod s ním tiše vynechával API klíče, přehledy, verze souborů...
+TABLES: list[str] = list(db.TABULKY)
 
 BATCH_SIZE = 500
 
@@ -61,6 +51,9 @@ def copy_all(source: dialect.DatabaseConfig,
         return {"status": "error", "message": "Zdroj a cíl jsou tatáž databáze."}
 
     copied: dict[str, int] = {}
+    # U ktere tabulky se zrovna pracuje - at hlaska rekne, kde hledat.
+    # Samotne "FOREIGN KEY constraint failed" to nerekne.
+    tabulka: str | None = None
 
     # Cíl musí mít schéma, jinak není kam zapisovat.
     #
@@ -85,12 +78,23 @@ def copy_all(source: dialect.DatabaseConfig,
 
     try:
         with db.connect(source) as src, db.connect(target) as dst:
+            # Koš zapomenutých diváků (db.KOS) není ve schématu - vzniká,
+            # až je ho potřeba. Když ve zdroji je, přenese se taky: jinak
+            # by po převodu nešlo zapomenutého diváka vrátit.
+            tabulky = list(TABLES)
+            if db.sloupce(src, db.KOS):
+                db._zajisti_kos(dst)
+                tabulky.append(db.KOS)
+
             # Mažeme v opačném pořadí než plníme - ze stejného důvodu,
             # z jakého se plní odshora: cizí klíče.
-            for table in reversed(TABLES):
-                dst.execute(f"DELETE FROM {table}")
+            for table in reversed(tabulky):
+                tabulka = table
+                if db.sloupce(dst, table):
+                    dst.execute(f"DELETE FROM {table}")
 
-            for table in TABLES:
+            for table in tabulky:
+                tabulka = table
                 shared = [c for c in _columns(src, table) if c in dst.table_columns(table)]
                 if not shared:
                     continue
@@ -112,28 +116,39 @@ def copy_all(source: dialect.DatabaseConfig,
 
                 copied[table] = total
 
+            tabulka = None
             if dst.is_postgres:
-                _fix_sequences(dst)
+                _fix_sequences(dst, tabulky)
 
     except Exception as exc:  # noqa: BLE001 - hlášku ukazujeme uživateli
-        log.exception("prenos dat selhal")
-        return {"status": "error", "message": f"{type(exc).__name__}: {exc}"}
+        log.exception("prenos dat selhal (tabulka %s)", tabulka)
+        chyba = f"{type(exc).__name__}: {exc}"
+        if tabulka is None:
+            return {"status": "error", "message": chyba}
+        return {"status": "error", "message": f"{tabulka}: {chyba}",
+                "tabulka": tabulka, "chyba": chyba}
 
     return {"status": "ok", "copied": copied, "total": sum(copied.values())}
 
 
-def _fix_sequences(conn: db.Connection) -> None:
+def _fix_sequences(conn: db.Connection, tabulky: list[str]) -> None:
     """Posune čítače id za nejvyšší zkopírovanou hodnotu.
 
     PostgreSQL přiděluje id z posloupnosti, která o vložených hodnotách
     neví. Bez tohohle kroku by první nově vložený řádek dostal id 1
     a narazil na už existující záznam.
+
+    Které tabulky čítač mají, se zjistí z databáze (`pg_get_serial_sequence`),
+    ne z ručního seznamu - ten by se s novou tabulkou zase zapomněl.
     """
-    for table in SEQUENCE_TABLES:
-        conn.execute(
-            f"SELECT setval(pg_get_serial_sequence('{table}', 'id'),"
-            f" COALESCE((SELECT MAX(id) FROM {table}), 1))"
-        )
+    for table in tabulky:
+        if "id" not in db.sloupce(conn, table):
+            continue
+        posloupnost = dict(conn.execute(
+            "SELECT pg_get_serial_sequence(?, 'id') AS s", (table,)).fetchone())["s"]
+        if posloupnost:
+            conn.execute(
+                f"SELECT setval('{posloupnost}', COALESCE((SELECT MAX(id) FROM {table}), 1))")
 
 
 def summarise(config: dialect.DatabaseConfig) -> dict[str, int]:

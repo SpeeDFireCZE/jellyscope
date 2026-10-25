@@ -341,9 +341,7 @@ def over_token(request: Request) -> dict[str, Any]:
         else:
             kdo = pristup.CTENAR
             historie = prava["historie"]
-            ucet_prav = {"id": None, "username": "", "is_admin": False,
-                         pristup.PRISTUP: zabal_prava_klice(
-                             prava["oblasti"], prava["anonymizace"], prava["historie"])}
+            ucet_prav = _nahradni_ucet(prava)
     if ucet and not pristup.smi_klic(ucet):
         raise ChybaApi(403, "key_not_allowed",
                        "The key's account is not allowed a key of its own.")
@@ -375,6 +373,34 @@ def _smi(token: dict[str, Any], cesta: str) -> bool:
         return False
     oblast = OBLASTI_ADRES[cesta]
     return oblast is None or pristup.vidi(token["role"], oblast, token["account"])
+
+
+def _nahradni_ucet(prava: dict[str, Any]) -> dict[str, Any]:
+    """Čtenářský účet, který existuje jen pro kontrolu práv root klíče.
+
+    pristup.vidi a anonymizuj_pro pak platí beze změny. Na žádný skutečný
+    účet nesahá, takže ho změna správce neovlivní.
+    """
+    return {"id": None, "username": "", "is_admin": False,
+            pristup.PRISTUP: zabal_prava_klice(
+                prava["oblasti"], prava["anonymizace"], prava["historie"])}
+
+
+def adresy_root_klice(prava: str | None) -> list[str]:
+    """Adresy API, které root klíč s těmihle právy opravdu otevře.
+
+    Bez rozcestníku (`/api/v1/` smí každý klíč). Prázdný seznam = klíč by
+    nesměl nic - třeba jen s Jazyky nebo Srovnáním, které v API adresu
+    nemají; formulář takový klíč nevyrobí.
+    """
+    rozbalena = prava_klice(prava)
+    if rozbalena is None:
+        token = {"role": pristup.SPRAVCE, "account": None}
+    else:
+        token = {"role": pristup.CTENAR, "account": _nahradni_ucet(rozbalena),
+                 "historie": rozbalena["historie"]}
+    return [cesta.replace("{item_id}", "{id}") for cesta in OBLASTI_ADRES
+            if cesta not in ("/api/v1", "/api/v1/") and _smi(token, cesta)]
 
 
 def povolene_adresy(account: dict[str, Any] | None) -> list[str]:
@@ -692,7 +718,9 @@ def nejmene_hrane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, A
     """
     dny = _dny_dotazu(dotaz, 365)
     limit = _limit_dotazu(dotaz, 25, 500)
-    min_bajtu = int(api_dotaz.cislo(dotaz, "min_size_mb", 0, 0)) * 1_048_576
+    # Desetinná MB se neořezávají (1,5 MB je 1,5 MB, ne 1); strop 10 TB, ať
+    # se obří číslo vejde do databáze.
+    min_bajtu = round(api_dotaz.cislo(dotaz, "min_size_mb", 0, 0, 10_000_000) * 1_048_576)
     if "order" in dotaz.hodnoty and dotaz.razeni:
         raise api_dotaz.chyba("conflicting_parameters",
                               "Use either 'order' or 'sort', not both.", "order")
@@ -707,7 +735,8 @@ def nejmene_hrane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, A
                                      min_bajtu, poradi)]
     return {
         "days": dny,
-        "order": poradi,
+        # Se `sort` řadí sort, ne order - hlásit „size" by lhalo.
+        "order": None if dotaz.razeni else poradi,
         "items": api_dotaz.pouzij(polozky, *dotaz.pro("items"), limit),
     }
 
@@ -803,6 +832,10 @@ def historie(token: dict[str, Any] = Depends(smi_adresu),
     od = (date.today() - timedelta(days=dny - 1)).isoformat()
     # Prázdné `user=` ukazoval návod jako „všichni" - bere se jako bez něj.
     kdo = None if dotaz.hodnoty.get("user") == "" else api_dotaz.identifikator(dotaz, "user")
+    # Se skrytými jmény jen náhradní id, jaké API samo vrací (`skryto-2`);
+    # skutečné id cizího diváka nenajde nic - jinak by podle něj šlo
+    # poznat, kdo je „Divák 2".
+    kdo = pristup.divak_z_adresy(kdo, token.get("account"))
     muj = pristup.muj_divak(token.get("account"))
     if muj and kdo and accounts.hole_id(kdo) != accounts.hole_id(muj):
         raise ChybaApi(403, "own_history_only",
@@ -827,12 +860,13 @@ def historie(token: dict[str, Any] = Depends(smi_adresu),
 
 
 # Pole historie, která jde předfiltrovat v SQL, a jejich sloupce. Jméno a id
-# diváka tu NEJSOU: schovávají se až v Pythonu (`_pro_vlastnika`), takže
-# filtr nad nimi v SQL by běžel nad skutečným jménem a prozradil by ho.
+# diváka ani zařízení tu NEJSOU: schovávají se až v Pythonu
+# (`_pro_vlastnika`), takže filtr nad nimi v SQL by běžel nad skutečným
+# názvem a prozradil by ho.
 _SLOUPCE_HISTORIE = {
     "title": "p.item_name", "series": "p.series_name", "type": "p.item_type",
     "item_id": "p.item_id", "play_method": "p.play_method", "client": "p.client",
-    "device": "p.device_name", "audio_language": "p.audio_language",
+    "audio_language": "p.audio_language",
     "subtitle_language": "p.subtitle_language", "watched_seconds": "p.watched_seconds",
 }
 _POROVNANI = {"equals": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}

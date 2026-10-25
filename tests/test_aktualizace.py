@@ -251,11 +251,18 @@ GIT = {"requirements_stejne": False}
 NOVE_REQUIREMENTS = "starlette==9.0.0\n"
 
 
+OVERENY = "abc123def4567890abc123def4567890abc12345"
+MINIMUM = {"python": "3.0"}
+ZAKLAD_REQUIREMENTS = "starlette==9.0.0\n"
+
+
 def podvrzeny_git(*argumenty):
     async def beh():
         VOLANI.append(("git",) + argumenty)
         if argumenty[:2] == ("diff", "--quiet") and "requirements.txt" in argumenty:
             return {"kod": 0 if GIT["requirements_stejne"] else 1, "vystup": ""}
+        if argumenty[0] == "rev-parse":
+            return {"kod": 0, "vystup": OVERENY + "\n"}
         return {"kod": 0, "vystup": "Already up to date."}
     return beh()
 
@@ -263,6 +270,10 @@ def podvrzeny_git(*argumenty):
 def podvrzeny_obsah(*argumenty):
     async def beh():
         VOLANI.append(("git-obsah",) + argumenty)
+        if argumenty[-1].endswith("deploy/python-minimum"):
+            return {"kod": 0, "vystup": MINIMUM["python"] + "\n"}
+        if argumenty[-1].endswith(":base.txt"):
+            return {"kod": 0, "vystup": ZAKLAD_REQUIREMENTS}
         return {"kod": 0, "vystup": NOVE_REQUIREMENTS}
     return beh()
 
@@ -283,7 +294,7 @@ db.forget_settings()
 
 
 def stahlo() -> bool:
-    return any(v[:2] == ("git", "pull") for v in VOLANI)
+    return any(v[:2] == ("git", "merge") for v in VOLANI)
 
 
 def instalovalo() -> bool:
@@ -361,12 +372,42 @@ vysledek = asyncio.run(updates.aktualizuj())
 check(vysledek["status"] == "ok" and stahlo() and instalovalo(),
       "balíčky jdou nainstalovat: stáhne se a nainstaluje")
 i_zkouska = next((i for i, v in enumerate(VOLANI) if "--dry-run" in v), 10 ** 6)
-i_pull = next((i for i, v in enumerate(VOLANI) if v[:2] == ("git", "pull")), -1)
+i_pull = next((i for i, v in enumerate(VOLANI) if v[:2] == ("git", "merge")), -1)
 check(i_zkouska < i_pull, "zkouška je PŘED stažením")
+# Mezi zkouškou a stažením se main na GitHubu mohl pohnout. Stáhne se proto
+# přesně ověřený commit (merge --ff-only <sha>), ne co zrovna leží na dálce,
+# a fetch je jen jeden.
+check(any(v[:2] == ("git", "merge") and "--ff-only" in v and v[-1] == OVERENY for v in VOLANI)
+      and not any(v[:2] == ("git", "pull") for v in VOLANI)
+      and sum(1 for v in VOLANI if v[:2] == ("git", "fetch")) == 1,
+      "stáhne se přesně ověřený commit, žádný druhý fetch ani pull")
+check(any(v[:2] == ("git-obsah", "show") and v[-1] == f"{OVERENY}:requirements.txt" for v in VOLANI),
+      "requirements.txt se bere z ověřeného commitu")
 ostra = next((v for v in VOLANI if "pip" in v and "--dry-run" not in v), ())
 check(bool(zkouska) and [x for x in zkouska if x not in ("--dry-run",) and not str(x).endswith("requirements.txt")]
       == [x for x in ostra if not str(x).endswith("requirements.txt")],
       "zkouška i ostrá instalace volají pip stejně (jen --dry-run navíc)")
+
+# Minimum Pythonu nové verze je na jednom místě (deploy/python-minimum):
+# hláška je jasná i bez luštění výpisu pipu a pip se ani nezkouší.
+MINIMUM["python"] = "3.99"
+PIP_ZKOUSKA.update(kod=0, vystup="Would install starlette-9.0.0")
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "error" and not stahlo() and not zkousel()
+      and vysledek.get("parametry", {}).get("potreba") == "3.99",
+      f"nová verze chce novější Python (deploy/python-minimum): nic se nestáhne ({vysledek.get('parametry')})")
+MINIMUM["python"] = "3.0"
+
+# requirements.txt s odkazem na další soubor (-r): i ten se vezme z nové
+# verze, jinak by ho pip v dočasné složce nenašel.
+NOVE_REQUIREMENTS = "-r base.txt\nuvicorn==9.0.0\n"
+VOLANI.clear()
+vysledek = asyncio.run(updates.aktualizuj())
+check(vysledek["status"] == "ok"
+      and any(v[:2] == ("git-obsah", "show") and v[-1] == f"{OVERENY}:base.txt" for v in VOLANI),
+      "soubor z -r se vezme z ověřeného commitu")
+NOVE_REQUIREMENTS = "starlette==9.0.0\n"
 
 # Beze změny requirements.txt (aktualizace jen překladů) se nezkouší nic.
 GIT["requirements_stejne"] = True

@@ -9,8 +9,11 @@
   Texty procházejí funkcí `_()`. Když je nastavená angličtina, najde se
   anglické znění; jinak se vrátí česká věta beze změny. Viz i18n.py.
 #}
+{# Sezónní výzdoba: klíč svátku, nebo "" (viz udalosti.py). #}
+{%- set svatek = udalost() %}
 <!doctype html>
-<html lang="{{ ui_language }}" data-skin="{{ ui_skin }}">
+<html lang="{{ ui_language }}" data-skin="{{ ui_skin }}"
+      {%- if svatek %} data-udalost="{{ svatek }}" data-udalost-pohyb="{{ '1' if udalost_pohyb(account) else '0' }}"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,6 +22,7 @@
     {# SVG ikona zůstane ostrá v každé velikosti - od 16px v panelu
        prohlížeče po velké dlaždice na mobilu. #}
     <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
+    {% include "_udalost_hlava.html" %}
     <script>
         // Nastavení tmavého/světlého režimu se čte co nejdřív, ještě před
         // vykreslením stránky. Kdyby se to dělalo až později, stránka by
@@ -38,10 +42,12 @@
 <div class="layout">
 
     <aside class="sidebar">
+        {#- V dobe svatku je za odkazem tlacitko hry - v radku s nim, ne v nem. #}
+        {%- if svatek %}<div class="brand-radek">{% endif %}
         <a class="brand" href="/">
-            <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
-            <span>Jellyscope</span>
+            {% include "_znacka.html" %}
         </a>
+        {%- if svatek %}{% include "_udalost_hra.html" %}</div>{% endif %}
 
         {# Položky menu na jednom místě: kreslí se z nich jak seznam, tak
            název aktuální stránky na tlačítku burgeru. Dvě kopie by se
@@ -1944,165 +1950,6 @@
             }
         });
 
-        /* Mapa na stránce Síť: přibližuje se klikáním nebo kolečkem,
-           tažením se posouvá. Když je pár bodů blízko u sebe (jedno
-           město, více adres), bez přiblížení splynou v jednu skvrnu.
-
-           Čím se přibližuje, si vybírá člověk v Nastavení → Rozhraní
-           a server to pošle v data-zoom. Kolečko je pohodlnější, jenže
-           nad mapou přestane rolovat stránka - kdo kolem mapy jen
-           projíždí, uvízne u ní. Proto je výchozí klikání: kolečko pak
-           mapa vůbec neodchytává a stránka roluje jako všude jinde.
-
-           Mění se jen viewBox toho SVG - žádná knihovna, žádné dlaždice
-           z internetu. Souřadnice zůstávají zeměpisné, takže se nic
-           nemusí přepočítávat. */
-        (function () {
-            var mapa = document.querySelector(".mapa");
-            if (!mapa) { return; }
-
-            var vychozi = (mapa.dataset.vychozi || "0 0 360 180").split(" ").map(Number);
-            var pohled = vychozi.slice();
-            var tahne = null;
-
-            /* Tečky i čáry se musí při přiblížení ZMENŠIT v souřadnicích
-               mapy, jinak se s ní jen zvětší a dvě města vedle sebe
-               zůstanou slitá do jedné skvrny - přiblížení by pak nebylo
-               k ničemu. Poloměr proto přepočítáváme podle toho, jak moc
-               je výřez menší než celý svět. */
-            var zare = mapa.querySelectorAll(".mapa-bod circle");
-            var hranice = mapa.querySelector(".mapa-hranice");
-
-            function vykresli() {
-                mapa.setAttribute("viewBox", pohled.join(" "));
-                var pomer = pohled[2] / vychozi[2];
-                zare.forEach(function (kruh) {
-                    kruh.setAttribute("r", (kruh.dataset.r * pomer).toFixed(3));
-                });
-                if (hranice) {
-                    hranice.setAttribute("stroke-width", (0.16 * pomer).toFixed(4));
-                    /* Hranice se NEzapínají skokem: při pohledu na celý svět
-                       by z nich byla jen síť čar přes kontinenty, ale jakmile
-                       se člověk začne přibližovat, mají postupně přibývat -
-                       skok mezi „nic" a „všechno" působí jako blikání. */
-                    var sila = Math.min(1, Math.max(0, (1 - pomer) * 1.6));
-                    hranice.setAttribute("stroke-opacity", sila.toFixed(3));
-                }
-                mapa.classList.toggle("je-priblizena", pohled[2] < vychozi[2] - 0.5);
-            }
-
-            vykresli();
-
-            /* Aby přiblížení drželo bod pod kurzorem na místě, počítá se
-               poloha myši v souřadnicích mapy - ne v pixelech. */
-            function mistoPodMysi(event) {
-                var box = mapa.getBoundingClientRect();
-                return {
-                    x: pohled[0] + (event.clientX - box.left) / box.width * pohled[2],
-                    y: pohled[1] + (event.clientY - box.top) / box.height * pohled[3]
-                };
-            }
-
-            /* Jedno přiblížení, ať přijde odkudkoli.
-               `krok` menší než 1 přibližuje, větší oddaluje; `stred` je
-               bod v souřadnicích mapy, který má zůstat na místě. */
-            function priblizit(krok, stred) {
-                stred = stred || { x: pohled[0] + pohled[2] / 2,
-                                   y: pohled[1] + pohled[3] / 2 };
-
-                /* Meze: dál než celý svět se oddálit nedá a přiblížit se
-                   dá zhruba dvacetkrát - pod tím už je vidět jen šum. */
-                var sirka = Math.min(vychozi[2],
-                                     Math.max(vychozi[2] / 20, pohled[2] * krok));
-                var pomer = sirka / pohled[2];
-
-                pohled[2] = sirka;
-                pohled[3] = pohled[3] * pomer;
-                pohled[0] = stred.x - (stred.x - pohled[0]) * pomer;
-                pohled[1] = stred.y - (stred.y - pohled[1]) * pomer;
-
-                /* Ať výřez nevyjede mimo mapu - jinak člověk skončí
-                   u prázdné plochy a neví, jak zpátky. */
-                pohled[0] = Math.min(Math.max(pohled[0], 0), vychozi[2] - pohled[2]);
-                pohled[1] = Math.min(Math.max(pohled[1], 0), vychozi[3] - pohled[3]);
-                vykresli();
-            }
-
-            /* Kolečko se odchytává JEN v režimu "wheel". Jinak se na ně
-               vůbec neposlouchá, takže stránka nad mapou roluje dál -
-               to je celý smysl té volby. */
-            if (mapa.dataset.zoom === "wheel") {
-                mapa.addEventListener("wheel", function (event) {
-                    event.preventDefault();
-                    priblizit(event.deltaY < 0 ? 0.8 : 1.25, mistoPodMysi(event));
-                }, { passive: false });
-            }
-
-            mapa.addEventListener("pointerdown", function (event) {
-                tahne = { x: event.clientX, y: event.clientY,
-                          vx: pohled[0], vy: pohled[1], posunuto: false };
-                mapa.setPointerCapture(event.pointerId);
-            });
-
-            mapa.addEventListener("pointermove", function (event) {
-                if (!tahne) { return; }
-                var box = mapa.getBoundingClientRect();
-                /* Posun o pár pixelů ještě není tažení - myš ani prst
-                   nedrží při kliknutí úplně klidně. Bez téhle tolerance
-                   by se v režimu klikání skoro nikdy nepřiblížilo. */
-                if (Math.abs(event.clientX - tahne.x) > 4 ||
-                    Math.abs(event.clientY - tahne.y) > 4) {
-                    tahne.posunuto = true;
-                }
-                pohled[0] = tahne.vx - (event.clientX - tahne.x) / box.width * pohled[2];
-                pohled[1] = tahne.vy - (event.clientY - tahne.y) / box.height * pohled[3];
-                pohled[0] = Math.min(Math.max(pohled[0], 0), vychozi[2] - pohled[2]);
-                pohled[1] = Math.min(Math.max(pohled[1], 0), vychozi[3] - pohled[3]);
-                vykresli();
-            });
-
-            function pustit(event) {
-                if (!tahne) { return; }
-                /* Klik = stisk a puštění bez tažení. Přibližuje se na to
-                   místo, kam člověk klikl - stejně jako kolečkem.
-                   S Altem (nebo pravým tlačítkem) se oddaluje, ať je
-                   cesta zpátky i bez tlačítek. */
-                if (!tahne.posunuto && mapa.dataset.zoom !== "wheel") {
-                    priblizit(event.altKey || event.button === 2 ? 1.4 : 0.7,
-                              mistoPodMysi(event));
-                }
-                tahne = null;
-                if (mapa.hasPointerCapture(event.pointerId)) {
-                    mapa.releasePointerCapture(event.pointerId);
-                }
-            }
-            mapa.addEventListener("pointerup", pustit);
-            mapa.addEventListener("pointercancel", pustit);
-
-            /* Dvojklik vrátí celý svět - jediná cesta zpátky, kterou
-               člověk uhodne, aniž by ji někdo vysvětloval. */
-            mapa.addEventListener("dblclick", function () {
-                pohled = vychozi.slice();
-                vykresli();
-            });
-
-            /* Tlačítka nad mapou. Jsou tam v obou režimech: kdo nechce
-               klikat do mapy (a trefovat se), má plus a mínus. */
-            var obal = mapa.closest(".mapa-obal");
-            if (obal) {
-                obal.addEventListener("click", function (event) {
-                    var tlacitko = event.target.closest("[data-mapa]");
-                    if (!tlacitko) { return; }
-                    if (tlacitko.dataset.mapa === "zpet") {
-                        pohled = vychozi.slice();
-                        vykresli();
-                    } else {
-                        priblizit(tlacitko.dataset.mapa === "blize" ? 0.65 : 1.55);
-                    }
-                });
-            }
-        })();
-
         /* Filtr historie: pole pro přesná data se ukážou, jen když si
            člověk vybere „vlastní období". Bez JavaScriptu jsou vidět
            taky - `hidden` se sundá až tady, takže se nestane, že by
@@ -2142,5 +1989,7 @@
         prepinatelnaKarta("top-items-card", "/partials/top-items", "top_kind");
     })();
 </script>
+{# Mapa na stránce Síť a na kartě přehledu - vlastní soubor, je toho dost. #}
+<script src="/static/mapa.js?v={{ asset_version }}" defer></script>
 </body>
 </html>

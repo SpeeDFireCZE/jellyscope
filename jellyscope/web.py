@@ -16,6 +16,8 @@ jinam.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import importlib.util
 import os
 import re
 import time
@@ -30,13 +32,14 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import (HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import (accounts, api, api_dotaz, applog, charts, collector, db, formatting, geoip,
-               i18n, langstats, languages,
+               i18n, langstats, languages, mapa_podrobna,
                pristup,
                scanner, sekce,
-               stats, tasks)
+               stats, tasks, udalosti)
 # Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
 # leží na disku nová, ale tenhle proces pořád běží starý kód - a čekárna
 # po aktualizaci potřebuje vědět přesně to, co běží tady, ne co je na
@@ -79,6 +82,7 @@ from .web_zaklad import (  # noqa: F401 - dal se pouzivaji i zvenku
     _stropy,
     _veta,
     _vzhled,
+    _podklad_mapy,
     _zoom_rezim,
     config,
     current_account,
@@ -294,6 +298,8 @@ async def ukazkovy_rezim(request: Request, call_next):
 # klíč si vyrobí jen s povolením - to hlídá routa sama.
 DIVAK_SMI_POST = frozenset({"/logout", "/account/language", "/account/password",
                             "/account/klic", "/account/klic/zrusit",
+                            # Bez pohybu u sezónní výzdoby - jen pro sebe.
+                            "/account/udalosti-pohyb",
                             # Můj přehled - vlastní rozvržení, nikoho jiného.
                             "/account/prehled"})
 
@@ -488,25 +494,42 @@ def _demo_blokuje(request: Request) -> bool:
     return request.url.path not in DEMO_POVOLENO
 
 
-# Jedno misto, at se pravidla nerozejdou s tim, co stranky opravdu delaji.
-CSP = "; ".join((
-    "default-src 'self'",
-    # Ani data: - obrazky chodi vsechny pres /image, takze neni co povolovat.
-    "img-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    "script-src 'self' 'unsafe-inline'",
-    "connect-src 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'self'",
-    "base-uri 'self'",
-    # Zadne <object>, <embed> ani applety - aplikace je nepouziva.
-    "object-src 'none'",
-))
+# Odkud si prohlizec bere dlazdice mapy, kdyz spravce zapne podklad z OSM.
+OSM_DLAZDICE = "https://tile.openstreetmap.org"
+
+
+def csp(osm: bool = False) -> str:
+    """Bezpecnostni hlavicka Content-Security-Policy.
+
+    Jedno misto, at se pravidla nerozejdou s tim, co stranky opravdu
+    delaji. Obrazky chodi vsechny pres /image (ani data: neni co
+    povolovat) - s jedinou vyjimkou: dlazdice mapy z OpenStreetMap, a ty
+    jen kdyz je spravce zapnul. Vypnuty podklad = hlavicka jako vzdycky.
+    """
+    return "; ".join((
+        "default-src 'self'",
+        f"img-src 'self' {OSM_DLAZDICE}" if osm else "img-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline'",
+        "connect-src 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+        "base-uri 'self'",
+        # Zadne <object>, <embed> ani applety - aplikace je nepouziva.
+        "object-src 'none'",
+    ))
 
 
 @app.middleware("http")
 async def bezpecnostni_hlavicky(request: Request, call_next):
     response = await call_next(request)
+    # Podklad mapy z OpenStreetMap meni dve hlavicky (CSP a Referrer-Policy).
+    # Kdyz nastaveni nejde precist (databaze zrovna nebezi), plati prisna
+    # varianta - hlavicka nesmi shodit odpoved, ani /health nebo styly.
+    try:
+        osm = _podklad_mapy() == "osm"
+    except Exception:  # noqa: BLE001 - jakakoliv chyba = prisne hlavicky
+        osm = False
     # "Neuhaduj typ obsahu." Bez toho prohlizec u souboru, ktery vypada
     # jako HTML, ignoruje deklarovany typ a spusti ho jako stranku -
     # tyka se to hlavne obrazku, ktere vodime z Jellyfinu.
@@ -517,7 +540,12 @@ async def bezpecnostni_hlavicky(request: Request, call_next):
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     # "Pri odchodu na cizi web neposilej, odkud clovek prisel."
     # Adresy Jellyscope obsahuji id polozek i uzivatelu.
-    response.headers.setdefault("Referrer-Policy", "same-origin")
+    #
+    # Se zapnutym podkladem z OSM jde ven adresa serveru (bez cesty, takze
+    # bez id): OSM dlazdice bez Refereru odmita a atribut referrerpolicy
+    # u SVG <image> nemusi kazdy prohlizec znat. U volby to stoji.
+    response.headers.setdefault(
+        "Referrer-Policy", "strict-origin-when-cross-origin" if osm else "same-origin")
     # Nic z tohohle aplikace nepotrebuje, tak at si to o to nemuze rict
     # ani kus stranky, ktery by se sem nedopatrenim dostal.
     response.headers.setdefault(
@@ -543,7 +571,7 @@ async def bezpecnostni_hlavicky(request: Request, call_next):
     # poslat formular jinam (form-action) nebo stranku zaramovat
     # (frame-ancestors). Kdyby se onclick= jednou prepsaly na
     # addEventListener, da se `unsafe-inline` vymenit za nonce.
-    response.headers.setdefault("Content-Security-Policy", CSP)
+    response.headers.setdefault("Content-Security-Policy", csp(osm))
     return response
 
 
@@ -588,6 +616,11 @@ def _asset_version() -> str:
 
 
 templates.env.globals["asset_version"] = _asset_version()
+# Sezónní výzdoba: který svátek je (klíč, nebo "") a smí se účtu hýbat.
+# Globální funkce, ne kontext - přihlašovací stránky žádný _context nemají.
+templates.env.globals["udalost"] = udalosti.pro_sablonu
+templates.env.globals["udalost_pohyb"] = udalosti.pohyb
+templates.env.globals["udalost_rok"] = udalosti.rok_pro_sablonu
 # Ukazkovy rezim pozna i sablona: prihlasovaci stranka v nem rovnou rekne,
 # jakymi udaji se dovnitr. Je to globalni promenna, protoze prihlasovaci
 # stranka zadny vlastni kontext nema.
@@ -608,8 +641,15 @@ templates.env.globals["demo_mode"] = config.demo_mode
 
 
 
+# Kód chyby u HTTP chyb API, které nevznikly jako ChybaApi (neznámá adresa,
+# jiná metoda než GET) - program pozná, co je špatně, bez čtení věty.
+KODY_HTTP_CHYB = {401: "unauthorized", 403: "forbidden", 404: "not_found",
+                  405: "method_not_allowed"}
+
+
 @app.exception_handler(HTTPException)
-async def handle_http_error(request: Request, exc: HTTPException):
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_error(request: Request, exc: StarletteHTTPException):
     """Presmerovani misto chybove hlasky u nepřihlaseneho uzivatele."""
     if exc.status_code == 307 and "Location" in (exc.headers or {}):
         return RedirectResponse(exc.headers["Location"], status_code=303)
@@ -630,7 +670,10 @@ async def handle_http_error(request: Request, exc: HTTPException):
     # Hlavičky výjimky patří do odpovědi. U 401 z API je v nich
     # `WWW-Authenticate: Bearer`, tedy jediná věta, která volajícímu
     # řekne, čím se má prokázat - bez ní je to jen "nesmíš".
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+    telo: dict[str, Any] = {"detail": exc.detail}
+    if api_pozadavek:
+        telo["error"] = KODY_HTTP_CHYB.get(exc.status_code, "http_error")
+    return JSONResponse(telo, status_code=exc.status_code,
                         headers=exc.headers or None)
 
 
@@ -1018,6 +1061,15 @@ def muj_ucet_jazyk(request: Request, ui_language: str = Form(""),
     # bude taky. Překládá se rovnou (`_flash` hotovou větu nechá být).
     _flash(request, i18n.translate("Jazyk uložen.", ui_language or i18n.jazyk_serveru()),
            "success")
+    return RedirectResponse("/account", status_code=303)
+
+
+@app.post("/account/udalosti-pohyb")
+def muj_ucet_pohyb_udalosti(request: Request, pohyb: str = Form("1"),
+                            account: dict[str, Any] = Depends(require_login)):
+    """Hýbe se mi sezónní výzdoba? Vypne ji jen výslovné "0"."""
+    accounts.nastav_pohyb_udalosti(account["id"], pohyb != "0")
+    _flash(request, "Uloženo.", "success")
     return RedirectResponse("/account", status_code=303)
 
 
@@ -2094,7 +2146,9 @@ def user_detail(
     account: dict[str, Any] = Depends(require_login)
 ):
     days = _days(request, days, od, do)
-    detail = stats.user_detail(user_id, days)
+    # Se skrytymi jmeny vede odkaz na nahradni id (skryto-2) a skutecne
+    # id ciziho divaka nenajde nic - viz pristup.divak_z_adresy.
+    detail = stats.user_detail(pristup.divak_z_adresy(user_id, account), days)
     if not detail:
         raise HTTPException(status_code=404, detail="Uzivatel nenalezen")
 
@@ -2311,6 +2365,10 @@ def history(
     divak = muj_divak(account)
     if divak:
         user_id = divak
+    else:
+        # Se skrytými jmény přijde z nabídky náhradní id; skutečné id
+        # cizího diváka nenajde nic (pristup.divak_z_adresy).
+        user_id = pristup.divak_z_adresy(user_id, account)
 
     # Den přijde proklikem z tabulky na Přehledu; do SQL ho pustíme jen
     # ve tvaru RRRR-MM-DD. Jde tam jako parametr, takže i tak by byl
@@ -2359,7 +2417,14 @@ def history(
     return templates.TemplateResponse(request, "history.html", _context(
         request, account,
         rows=stats.history(limit=per_page, offset=(page - 1) * per_page, **filtr),
-        users=db.query_all("SELECT id, name FROM users ORDER BY name"),
+        # `is_disabled` jen proto, aby anonymizace poznala, že řádek je
+        # divák (holé id a jméno má i knihovna nebo titul) - jinak by
+        # nabídka ukázala skutečná jména i id. Se skrytými jmény podle id,
+        # tedy podle čísla „Divák N": pořadí podle jména by je prozradilo.
+        users=db.query_all(
+            "SELECT id, name, is_disabled FROM users ORDER BY id"
+            if pristup.skryva_jmena(account)
+            else "SELECT id, name, is_disabled FROM users ORDER BY name"),
         nabidka=nabidka,
         total=total,
         page=page,
@@ -2615,6 +2680,65 @@ async def network_geoip(request: Request,
     return RedirectResponse("/network#mapa", status_code=303)
 
 
+@app.post("/network/mapa-podrobna")
+async def network_mapa_podrobna(request: Request,
+                                account: dict[str, Any] = Depends(require_admin)):
+    """Stáhne podrobnou mapu (Natural Earth 1:10M) - úloha na pozadí.
+
+    Trvá pár minut (stažení asi 75 MB a rozřezání do dlaždic), proto se
+    jen odpálí a stránka si počká (`?wait=task`). Pod zámkem úloh - když
+    zrovna běží jiná (nebo tahle), druhá se nespustí.
+    """
+    if scanner.is_scan_running():
+        _flash(request, "Jiná úloha už běží, počkej na její dokončení.", "warning")
+        return RedirectResponse("/network#mapa", status_code=303)
+    # V jazyce serveru, ne v jazyce toho, kdo kliknul - viz i18n.bez_jazyka_uctu.
+    asyncio.create_task(i18n.bez_jazyka_uctu(mapa_podrobna.spust_ulohu()))
+    _flash(request, "Stahování podrobné mapy spuštěno. Trvá pár minut, stránka se sama obnoví.",
+           "info")
+    return RedirectResponse("/network?wait=task#mapa", status_code=303)
+
+
+@app.post("/network/mapa-podrobna/smazat")
+def network_mapa_podrobna_smazat(request: Request,
+                                 account: dict[str, Any] = Depends(require_admin)):
+    """Smaže podrobnou mapu - mapa se vrátí k zabudovanému obrysu.
+
+    Ne během úlohy: stahování by mapu po dokončení zase zapsalo.
+    """
+    if scanner.is_scan_running():
+        _flash(request, "Jiná úloha už běží, počkej na její dokončení.", "warning")
+        return RedirectResponse("/network#mapa", status_code=303)
+    mapa_podrobna.smaz()
+    _flash(request, "Podrobná mapa je smazaná.", "success")
+    return RedirectResponse("/network#mapa", status_code=303)
+
+
+@app.get("/network/mapa/dlazdice/{podrobnost}/{x}/{y}")
+def network_mapa_dlazdice(request: Request, podrobnost: str, x: str, y: str,
+                          account: dict[str, Any] = Depends(require_login)):
+    """Jedna dlaždice podrobné mapy - JSON s cestami SVG po vrstvách.
+
+    Souřadnice se čtou jako text a kontrolují ručně: nesmysl (záporné,
+    mimo síť, ne číslo) je 404, ne chyba validace. Platná dlaždice bez dat
+    (moře) je prázdný objekt - prohlížeč se na ni pak neptá znovu.
+    Prohlížeč si dlaždice drží týden; ETag se mění s každým stažením mapy.
+    """
+    if not all(re.fullmatch(r"\d{1,4}", hodnota) for hodnota in (podrobnost, x, y)):
+        raise HTTPException(status_code=404)
+    nastaveni = mapa_podrobna.PODROBNOSTI.get(int(podrobnost))
+    stav = mapa_podrobna.stav()
+    if (nastaveni is None or not stav["platna"]
+            or int(x) >= nastaveni["n"] or int(y) >= nastaveni["n"]):
+        raise HTTPException(status_code=404)
+    otisk = hashlib.sha256(f"{stav['kdy']}|{podrobnost}|{x}|{y}".encode()).hexdigest()[:20]
+    hlavicky = {"Cache-Control": "private, max-age=604800", "ETag": f'"{otisk}"'}
+    if request.headers.get("if-none-match") == hlavicky["ETag"]:
+        return Response(status_code=304, headers=hlavicky)
+    obsah = mapa_podrobna.dlazdice(int(podrobnost), int(x), int(y)) or "{}"
+    return Response(content=obsah, media_type="application/json", headers=hlavicky)
+
+
 @app.get("/languages", response_class=HTMLResponse)
 def languages_page(
     request: Request, days: Optional[int] = None,
@@ -2706,7 +2830,12 @@ def health(request: Request):
 
 @app.get("/api/now-playing")
 def api_now_playing(account: dict[str, Any] = Depends(require_login)):
-    return {"sessions": stats.active_sessions()}
+    """Právě běžící přehrávání jako JSON pro přihlášeného (mimo API s klíči).
+
+    Se skrytými jmény anonymizované jako stránka „Právě se hraje" - dřív
+    tu byla surová data i se jmény, zařízeními a IP adresami.
+    """
+    return pristup.anonymizuj_pro({"sessions": stats.active_sessions()}, account)
 
 
 # Routy Nastaveni bydli zvlast - je jich pres tricet a s ostatnimi
@@ -2716,3 +2845,13 @@ def api_now_playing(account: dict[str, Any] = Depends(require_login)):
 from . import web_nastaveni  # noqa: E402
 
 app.include_router(web_nastaveni.router)
+
+# Nástroje jen pro vývoj (jellyscope/vyvoj.py - datum pro sezónní výzdobu).
+# Do produ a dema se nekopírují (deploy/sync-do-produ.py, JEN_DEV), takže
+# tam soubor chybí a tady se jen přeskočí. find_spec, ne `except
+# ImportError`: chyba UVNITŘ vyvoj.py se nemá tiše spolknout.
+if importlib.util.find_spec(f"{__package__}.vyvoj") is not None:
+    from . import vyvoj  # noqa: E402
+    vyvoj.zapoj(app, templates)
+else:
+    vyvoj = None

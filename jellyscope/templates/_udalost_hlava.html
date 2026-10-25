@@ -1,0 +1,10 @@
+{# Sezónní výzdoba do <head> - jen v době svátku (`svatek`, viz
+   udalosti.py). Mimo ni se nenačte nic. Hra dnešního svátku se stahuje
+   hned se stránkou: až po kliknutí by na Přehledu čekala ve frontě za
+   plakáty (prohlížeč pouští na server jen šest spojení naráz). #}
+{%- if svatek %}
+    <link rel="stylesheet" href="/static/udalosti/udalosti.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/udalosti/{{ svatek }}.css?v={{ asset_version }}">
+    <script defer src="/static/udalosti/udalosti.js?v={{ asset_version }}"></script>
+    <script defer src="/static/udalosti/hry/{{ svatek }}.js?v={{ asset_version }}"></script>
+{%- endif %}

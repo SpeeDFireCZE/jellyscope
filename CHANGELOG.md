@@ -10,6 +10,60 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.8.2
+
+### What is new
+
+The map on the Network page shows every city as one place again: zoomed out, nearby places merge into one dot, and as you zoom in they split, down to every single place. Under the dots there can be a detailed offline map or OpenStreetMap. Moving the database from SQLite to PostgreSQL now takes every table along, and anonymisation hides device names too.
+
+### Before you upgrade
+
+- Nothing to do. The detailed map and the OpenStreetMap background are off until an admin switches them on.
+- **The detailed map takes about 52 MB in the database**, so once it is downloaded, every backup is that much bigger.
+- **Moved from SQLite to PostgreSQL with an earlier version?** The move left out API keys, dashboards, file versions, the daily library snapshots, address blocks and forgotten viewers (see *Fixed*). If you miss them and the old SQLite file is still there, the move can be run again in *Settings → Database* - but it replaces everything in PostgreSQL, including the history recorded since the first move.
+
+### Fixed
+
+- **A larger city showed as several dots, each with "1 people".** GeoLite2 gives a city coordinates per district and the map rounded them to a grid, so Prague became three dots called "Prague, Czechia". The number of people was the highest count of a single address instead of the people who watched from the place.
+- **People are counted as people**: one viewer watching from two addresses is one person, three viewers from three addresses are three. With "1 person / 2 people" in the right form.
+- **Moving the database (SQLite to PostgreSQL) left tables behind**: API keys, dashboards, file versions, the daily library snapshots, address blocks and forgotten viewers were not copied. Now every table goes, including viewers waiting in the bin, and every id counter in PostgreSQL is moved past the copied rows. The move and the backup use one list of tables that tests check against the schema. When the move fails, the message names the table where it stopped, and nothing in the target changes.
+- **Anonymisation hides device names too.** Devices are often named after people ("Petr's Shield"), so `Viewer 3` gave itself away in the next column. Somebody else's device is now `Device 2`, on the pages and in the API, and a filter on the real device name finds nothing; the player (Jellyfin Web, Android TV) stays. Devices are numbered in the order they first appeared, not alphabetically - whoever knows the family's device names could pair them back - and a new device does not shift the numbers of the older ones.
+- **With hidden names, a viewer could still be recognised by the Jellyfin id.** Whoever knew it (it is in the address of a Jellyfin profile) asked the API for `?user=<id>` or opened `/users/<id>` and saw whose rows `Viewer 2` were, and the viewer filter on the History page even listed the real names and ids, sorted by name. Now addresses and filters take only the substitute id the pages and the API show (`skryto-2`), the real id of somebody else finds nothing, and the filter lists `Viewer N` by number. The link from a row to the viewer's page works too - with hidden names it ended in a 404.
+- **The internal `/api/now-playing` address ignored anonymisation.** It is not part of the API with keys, but every signed-in account could open it, and it returned real names, devices and IP addresses also to accounts that should see them hidden. It now hides them the same way the pages do.
+- **API details:**
+  - a time filter takes the form the API returns (`2026-10-01T12:00:00.0000000Z`);
+  - `min_size_mb=1e20` is 400 instead of a server error, and `1.5` MB is no longer cut down to 1 MB;
+  - 404 and 405 under `/api/` carry an `error` code like every other error;
+  - numbers in parameters accept only plain digits and a decimal point - no trailing newline, no `1_0`, `1e3` or digits of other scripts;
+  - lists keep the same order with and without a limit when values tie, and the same order in SQLite and PostgreSQL;
+  - text matches whichever way an accented letter is written (`é` as one character or as `e` + accent);
+  - `/least-played` with `sort` no longer reports `order: size`;
+  - the Spanish name of the time field type.
+- **Root keys** with only areas that have no API address (Languages, Comparison) are refused with an explanation instead of being created as keys that can do nothing; a file sent instead of the key name no longer becomes the name.
+- **Detailed map:** the format of the stored tiles is recorded, so a future change of the grid asks for a new download instead of shifting the map, and the browser does not keep old tiles after a new download; *Delete* waits for a running download, *Stop* stops it; changing the zoom no longer flashes the drawn map or an empty sea; the map redraws when the window or the card changes size.
+- **Updating:**
+  - the update button installs exactly the commit it checked - a newer one pushed in between is not taken without the check;
+  - requirements files included with `-r` or `-c` are checked too;
+  - the minimum Python lives in one place (`deploy/python-minimum`) for the button, `install.sh` and `update.sh`;
+  - when an update brings a new `update.sh`, the rest of the run continues with the new script, which knows what the new release needs; it does not pull again and still knows which version to go back to;
+  - `update.sh` checks the Python version before it pulls, against the minimum of the version that is coming - a too old Python used to stop it after the pull, with new templates over the old running code;
+  - `update.sh` ended silently right after the backup when the backup folder was empty (the first run, or PostgreSQL with `SKIP_BACKUP=1`).
+
+### Added
+
+- **Dots merge and split with the zoom.** Zoomed out, nearby places are one dot ("Prague, Czechia and 2 more places"); every zoom step splits them further, down to every single place. The map zooms in up to 1024× (it used to stop at 20×): as far as the places split, and with the detailed map or OpenStreetMap always all the way. A click or the + button zooms twice as far, and a click on a merged dot zooms in on it.
+- **Detailed offline map** (Natural Earth 1:10M): coastlines, lakes, rivers, regions and city outlines from 8× zoom. An admin downloads it with a button on the Network page (about 75 MB, fixed version v5.1.2); it is cut into tiles and stored in the database (about 52 MB), so it is in the backups too. It can be downloaded again or deleted.
+- **OpenStreetMap background** in *Settings → Interface → Map background*, off by default: a real map with streets, darkened in the dark theme. The browser of whoever opens the map downloads the images straight from OpenStreetMap, which sees their IP address, the address of the server and the area they look at, and nothing about plays or viewers. The page lets these images in only while the option is on.
+
+### Changed
+
+- The map is in the Web Mercator projection, the same as OpenStreetMap; the default view leaves out the polar regions.
+- The *Places* column in the countries table counts cities: Prague is one place even though the map has a dot for each district.
+- The Network page counts the map places once instead of twice; with a long history it loads noticeably faster.
+
+P.S. Around some holidays, Jellyscope dresses up. `JELLYSCOPE_UDALOST_DATUM=2026-12-24` shows how.
+**Not for you? An admin switches the decorations off for good in *Settings → Interface → Seasonal decorations* - they then stay off for every holiday until switched back on.** Each account can also keep them but stop them moving (*My account → Decoration animations*).
+
 ## 1.8.1
 
 ### IMPORTANT: this version needs Python 3.11 or newer

@@ -78,6 +78,16 @@ def is_scan_running() -> bool:
     return _scan_lock.locked()
 
 
+def zamek_uloh() -> asyncio.Lock:
+    """Zámek, pod kterým běží úlohy, které se nesmí potkat.
+
+    Synchronizace, analýza souborů - a stažení podrobné mapy
+    (mapa_podrobna.spust_ulohu), které by jinak se synchronizací soupeřilo
+    o databázi i o paměť.
+    """
+    return _scan_lock
+
+
 # ---------------------------------------------------------------------------
 # Zastaveni bezici ulohy
 # ---------------------------------------------------------------------------

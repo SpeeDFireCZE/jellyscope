@@ -631,6 +631,14 @@ def nastav_jazyk(account_id: int, jazyk: str | None) -> None:
                      (jazyk or None, account_id))
 
 
+def nastav_pohyb_udalosti(account_id: int, pohyb: bool) -> None:
+    """Hýbe se účtu sezónní výzdoba? (Můj účet.) Zapnuto se ukládá jako
+    NULL - stejně jako účet, který volbu nikdy neviděl."""
+    with db.connect() as conn:
+        conn.execute("UPDATE accounts SET udalosti_pohyb = ? WHERE id = ?",
+                     (None if pohyb else "0", account_id))
+
+
 def set_admin(account_id: int, is_admin: bool) -> None:
     """Zmeni opravneni. Posledniho spravce degradovat nedovolime."""
     account = get(account_id)

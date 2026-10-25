@@ -9,16 +9,20 @@
 
    Stránka se sama ptá, jestli už potvrzení přišlo. Když skript
    neproběhne, je tu tlačítko „Zkusit hned" - jen se musí kliknout. #}
-<html lang="{{ ui_language | default('cs') }}">
+{#- Sezónní výzdoba (viz udalosti.py); bez účtu se vždy hýbe. -#}
+{%- set svatek = udalost() %}
+<html lang="{{ ui_language | default('cs') }}"
+      {%- if svatek %} data-udalost="{{ svatek }}" data-udalost-pohyb="1"{% endif %}>
 <head>
     {{ hlava(_("Přihlášení kódem")) }}
+    {% include "_udalost_hlava.html" %}
 </head>
 <body>
 <div class="login-page">
     <div class="login-box">
         <div class="brand" style="margin-bottom:20px; padding:0">
-            <img class="brand-mark" src="/static/logo.svg?v={{ asset_version }}" alt="" width="28" height="28">
-            <span>Jellyscope</span>
+            {% include "_znacka.html" %}
+            {%- if svatek %}{% include "_udalost_hra.html" %}{% endif %}
         </div>
 
         <h2 style="margin:0 0 6px; font-size:17px">{{ _("Přihlášení kódem") }}</h2>

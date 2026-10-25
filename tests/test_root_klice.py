@@ -240,6 +240,24 @@ posli(spravce_k, "/settings/api/token", name="Prazdny", rezim="vybrane", anonymi
 check(len(api.seznam()) == pocet, "jen vybrané bez oblasti i historie: klíč nevznikne")
 check("aspoň jednu oblast nebo historii" in spravce_k.get("/settings?section=api").text,
       "a stránka řekne proč")
+# Jazyky, vlastni prehled, srovnani nemaji v API zadnou adresu - klic jen
+# s nimi by nesmel nic a spravce by nevedel proc.
+pocet_pred = len(api.seznam())
+posli(spravce_k, "/settings/api/token", name="Jazyky", rezim="vybrane", vidi_jazyky="on",
+      vidi_srovnani="on")
+check(len(api.seznam()) == pocet_pred
+      and "nic neotevírají" in spravce_k.get("/settings?section=api").text,
+      "oblasti bez adresy v API: klíč nevznikne a stránka řekne proč")
+check(api.adresy_root_klice(api.zabal_prava_klice(["jazyky"], False, False)) == []
+      and "/api/v1/history" in api.adresy_root_klice(api.zabal_prava_klice([], False, True))
+      and "/api/v1/libraries" in api.adresy_root_klice(api.zabal_prava_klice(["knihovna"], False, False)),
+      "adresy_root_klice: co klíč s právy opravdu otevře")
+soubor = spravce_k.post("/settings/api/token", data={"rezim": "vse"},
+                        files={"name": ("klic.txt", b"obsah", "text/plain")}, follow_redirects=False)
+check(soubor.status_code == 303 and not any("UploadFile" in r["name"] for r in api.seznam()),
+      "soubor poslaný místo názvu se jménem klíče nestane")
+check("klíč serveru" not in (pristup.anonymizuj_pro.__doc__ or ""), "docstring mluví o root klíči")
+pocet = len(api.seznam())
 for spatne in ({"rezim": "cokoliv", "vidi_knihovna": "on"}, {"vidi_knihovna": "on"}):
     posli(spravce_k, "/settings/api/token", name="Divny", **spatne)
 check(len(api.seznam()) == pocet, "neznámý nebo chybějící režim: klíč nevznikne")

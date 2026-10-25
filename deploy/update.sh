@@ -76,6 +76,12 @@ echo "  user:   $APP_USER"
 
 # --- 1. backup -------------------------------------------------------------
 
+# Started again by its own previous version (see the end of step 2)? The
+# backup is from a moment ago - a second one would only take space.
+if [[ "${JELLYSCOPE_UPDATE_ZNOVU:-}" == "1" ]]; then
+say "Database backup"
+ok "done a moment ago by the previous version of this script"
+else
 say "Database backup"
 # We back up before changing anything. If the update goes wrong, there is
 # somewhere to go back to - and it costs a few seconds.
@@ -152,60 +158,119 @@ case "$DB_KIND" in
 esac
 
 # We keep the last ten backups, otherwise the folder would grow forever.
-ls -1t "$BACKUP_DIR"/* 2>/dev/null | tail -n +11 | xargs -r rm --
+# Only when there are more: in an empty folder `ls dir/*` fails, and with
+# `set -e` and `pipefail` the whole update ended right here, silently -
+# on the first run, or with PostgreSQL and SKIP_BACKUP=1.
+shopt -s nullglob
+BACKUPS=("$BACKUP_DIR"/*)
+shopt -u nullglob
+if [[ ${#BACKUPS[@]} -gt 10 ]]; then
+    ls -1t "${BACKUPS[@]}" | tail -n +11 | xargs -r rm --
+fi
+fi
 
 # --- 2. pulling the new version --------------------------------------------
 
 say "Pulling the new version"
-BEFORE="$(git_ rev-parse --short HEAD)"
 
-if ! git_ diff --quiet; then
-    warn "There are local changes in the folder. Show them with:"
-    warn "  git -C $APP_DIR diff"
-    die "Not updating, so you do not lose them."
-fi
+# Is the environment built on a new enough Python? The app needs 3.11 or
+# newer since Starlette 1.8 (and 3.10 gets no security fixes after October
+# 2026). The minimum lives in deploy/python-minimum - one place for this
+# script, install.sh and the update button. Without this check pip would
+# be the one to complain, with a message that never names the cause:
+#
+#     ERROR: Could not find a version that satisfies the requirement fastapi
+#
+# It reads as "the package does not exist", not as "your Python is too
+# old" - and the update would stop there with no idea what to do next.
+#
+# It runs BEFORE the new version is pulled, with the minimum of the
+# version that is coming: after the pull the running app would already
+# get new templates over its old code, and nothing would be unchanged.
+check_python() {
+    MIN_PY="$1"
+    [[ "$MIN_PY" =~ ^3\.[0-9]+$ ]] || MIN_PY="3.11"
+    if "$VENV/bin/python" -c "import sys; sys.exit(0 if sys.version_info >= (3, ${MIN_PY#3.}) else 1)" 2>/dev/null; then
+        return 0
+    fi
+    OLD="$("$VENV/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo '?')"
+    die "The virtual environment is built on Python $OLD, the new version needs $MIN_PY+.
 
-git_ pull --ff-only
-AFTER="$(git_ rev-parse --short HEAD)"
+     Nothing has been pulled or installed, the app keeps running on what it has.
 
-if [[ "$BEFORE" == "$AFTER" ]]; then
-    ok "you already have the newest version ($AFTER)"
+     Add a newer Python NEXT TO the current one - do not upgrade the
+     whole system over this and do not remove the old one, other things
+     on the machine may depend on it:
+
+         sudo apt install python$MIN_PY python$MIN_PY-venv
+
+     Then let install.sh rebuild the environment - it notices an old
+     .venv, throws it away and builds a new one. Your database and .env
+     stay where they are:
+
+         bash deploy/install.sh
+
+     and run this update again."
+}
+
+if [[ "${JELLYSCOPE_UPDATE_ZNOVU:-}" == "1" ]]; then
+    # The previous version of this script pulled a moment ago and checked
+    # Python against what came. We do not pull again: the version we came
+    # FROM would then be the one just pulled, and the way back below
+    # (`git reset --hard $BEFORE`) would lead nowhere.
+    BEFORE="${JELLYSCOPE_UPDATE_PRED:-}"
+    [[ "$BEFORE" =~ ^[0-9a-f]{4,64}$ ]] || BEFORE="$(git_ rev-parse --short HEAD)"
+    AFTER="$(git_ rev-parse --short HEAD)"
+    ok "pulled by the previous version of this script: $BEFORE → $AFTER"
 else
-    ok "$BEFORE → $AFTER"
-    git_ log --oneline "$BEFORE..$AFTER" | sed 's/^/    /'
+    BEFORE="$(git_ rev-parse --short HEAD)"
+
+    if ! git_ diff --quiet; then
+        warn "There are local changes in the folder. Show them with:"
+        warn "  git -C $APP_DIR diff"
+        die "Not updating, so you do not lose them."
+    fi
+
+    # Fetch first, look, then move. `git pull` would do all three at once,
+    # with no chance to stop before the code changes.
+    git_ fetch --quiet
+    UPSTREAM="$(git_ rev-parse --verify --quiet '@{u}')" \
+        || die "This branch does not follow any branch on the server, there is nothing to pull from.
+
+     Show which branch you are on:
+         git -C $APP_DIR status"
+    MIN_NEW="$( { git_ show "$UPSTREAM:deploy/python-minimum" | tr -d '[:space:]'; } 2>/dev/null || true)"
+    check_python "$MIN_NEW"
+
+    git_ merge --ff-only "$UPSTREAM"
+    AFTER="$(git_ rev-parse --short HEAD)"
+
+    if [[ "$BEFORE" == "$AFTER" ]]; then
+        ok "you already have the newest version ($AFTER)"
+    else
+        ok "$BEFORE → $AFTER"
+        git_ log --oneline "$BEFORE..$AFTER" | sed 's/^/    /'
+    fi
+
+    # Did the update bring a new version of THIS script? The rest of the
+    # run (dependencies, restart) belongs to the new version: the old one
+    # cannot know what the new release needs - when 1.8.1 raised the
+    # minimum to Python 3.11, the old script checked nothing and pip
+    # failed with a message that never named the cause.
+    if [[ "$BEFORE" != "$AFTER" ]] \
+            && ! git_ diff --quiet "$BEFORE" "$AFTER" -- deploy/update.sh; then
+        ok "the update script itself changed - continuing with the new version"
+        exec env JELLYSCOPE_UPDATE_ZNOVU=1 JELLYSCOPE_UPDATE_PRED="$BEFORE" bash "$APP_DIR/deploy/update.sh"
+    fi
 fi
 
 # --- 3. dependencies -------------------------------------------------------
 
 say "Dependencies"
 
-# Is the environment built on a new enough Python? The app needs 3.11 or
-# newer since Starlette 1.8 (and 3.10 gets no security fixes after October
-# 2026). Without this check pip would be the one to complain, with a
-# message that never names the cause:
-#
-#     ERROR: Could not find a version that satisfies the requirement fastapi
-#
-# It reads as "the package does not exist", not as "your Python is too
-# old" - and the update would stop there with no idea what to do next.
-if ! "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-    OLD="$("$VENV/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo '?')"
-    die "The virtual environment is built on Python $OLD, the app needs 3.11+.
-
-     Nothing has been installed, the app keeps running on what it has.
-
-     Add a newer Python NEXT TO the current one - do not upgrade the
-     whole system over this and do not remove the old one, other things
-     on the machine may depend on it:
-
-         sudo apt install python3.11 python3.11-venv
-
-     Then let install.sh rebuild the environment - it notices an old
-     .venv, throws it away and builds a new one. Your database and .env
-     stay where they are:
-
-         bash deploy/install.sh"
-fi
+# The new script checks Python by its own rules too - against the
+# minimum that is in the folder now.
+check_python "$( { tr -d '[:space:]' < "$APP_DIR/deploy/python-minimum"; } 2>/dev/null || true)"
 
 # `python -m pip`, not the .venv/bin/pip launcher - it may not exist and
 # it carries a hard-coded path that breaks when the folder moves.

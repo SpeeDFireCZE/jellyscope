@@ -195,6 +195,63 @@ for pravidlo in re.finditer(r"([^{}]+)\{([^{}]*)\}", CSS):
 check(not male, f"žádné drobné písmo mimo grafy ({len(male)}: {male[:4]})")
 
 print()
+print("--- akcenty sezónní výzdoby ---")
+# Svatek prebiji --accent, --accent-2 a --accent-ink. Akcent je i barva
+# textu (odkazy, aktivni prvky), takze musi byt citelny na podkladu,
+# a pismo na tlacitku v akcentu musi byt citelne na nem.
+for klic in ("vanoce", "halloween", "silvestr", "velikonoce"):
+    soubor = PROJECT / "jellyscope" / "static" / "udalosti" / f"{klic}.css"
+    css = soubor.read_text(encoding="utf-8") if soubor.exists() else ""
+
+    def blok_svatku(selektor: str) -> dict[str, str]:
+        i = css.find(selektor + " {")
+        if i < 0:
+            return {}
+        return dict(re.findall(r"(--[\w-]+):\s*([^;]+);", css[i:css.index("}", i)]))
+
+    svetly = blok_svatku(f':root[data-udalost="{klic}"]')
+    tmavy = blok_svatku(f':root[data-udalost="{klic}"][data-theme="dark"]')
+    systemovy = blok_svatku(f':root[data-udalost="{klic}"]:not([data-theme="light"])')
+    check(bool(svetly) and tmavy == systemovy and set(tmavy) == set(svetly),
+          f"{klic}: světlý blok a dvě shodné tmavé kopie se stejnými proměnnými",
+          str(sorted(set(tmavy.items()) ^ set(systemovy.items())))[:100])
+    # Svatek smi menit jen barvu aplikace a barvy svych efektu - barvu dat
+    # (--barva-dat*: stav "info", jednobarevne grafy, voda na mape) ne.
+    cizi = sorted(k for k in set(svetly) | set(tmavy)
+                  if k not in ("--accent", "--accent-2", "--accent-ink")
+                  and not k.startswith("--udalost-"))
+    check(not cizi, f"{klic}: mění jen barvu aplikace a své efekty ({cizi})")
+    for motiv, bloky in MOTIVY.items():
+        p = slozit(bloky + ([svetly, tmavy] if "tmavý" in motiv else [svetly]))
+        try:
+            ink = kontrast(hodnota(p, "--accent"), hodnota(p, "--accent-ink"))
+            # Tlacitka, cipy a znacka v menu jsou prechod --accent-2 ->
+            # --accent s pismem --accent-ink: citelne musi byt na obou koncich.
+            ink2 = kontrast(hodnota(p, "--accent-2"), hodnota(p, "--accent-ink"))
+            text = min(kontrast(hodnota(p, "--accent"), hodnota(p, podklad))
+                       for podklad in ("--page", "--surface-1"))
+        except (KeyError, ValueError):
+            ink = ink2 = text = 0.0
+        check(ink >= 4.5 and ink2 >= 4.5 and text >= 4.5, f"{klic} / {motiv}: akcent",
+              f"písmo na akcentu {ink:.2f}, na akcentu 2 {ink2:.2f}, akcent na podkladu {text:.2f}")
+
+print()
+print("--- barva dat = barva aplikace (dokud není svátek) ---")
+# Barva dat je kopie barvy aplikace, kterou svatek nemeni. Mimo svatek
+# musi byt stejna, jinak by se grafy a stavy zmenily i bez vyzdoby.
+for motiv, bloky in MOTIVY.items():
+    p = slozit(bloky)
+    try:
+        stejne = all(hodnota(p, dat) == hodnota(p, aplikace) for dat, aplikace in (
+            ("--barva-dat", "--accent"), ("--barva-dat-2", "--accent-2"),
+            ("--ink-barva-dat", "--accent-ink")))
+    except KeyError as chybi:
+        stejne, chybi_text = False, str(chybi)
+    else:
+        chybi_text = ""
+    check(stejne, f"{motiv}: --barva-dat* = --accent*", chybi_text)
+
+print()
 print("--- klávesnice: viditelný fokus ---")
 check(re.search(r":focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)", CSS) is not None,
       "odkazy a tlačítka mají jednotný rámeček fokusu v barvě aplikace")

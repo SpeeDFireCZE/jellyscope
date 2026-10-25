@@ -24,7 +24,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
-from . import db, formatting, geoip, i18n, insights, langstats, pristup, stats
+from . import db, formatting, geoip, i18n, insights, langstats, mapa_podrobna, pristup, stats
 from .i18n import translate as _t
 
 # Paměť jednoho data_pro(): karty, které potřebují totéž (tabulka uživatelů
@@ -168,6 +168,16 @@ def souhrn_obdobi(obdobi: Any) -> dict[str, Any]:
         },
         "poznamka_srovnani": poznamka,
     }
+
+
+def _data_mapy(obdobi: Any) -> dict[str, Any]:
+    """Data karty Mapa. Místa se spočítají jednou - pro mapu i tabulku zemí;
+    u velké historie je to nejdražší dotaz stránky Síť."""
+    vse = stats.mista(obdobi)
+    return {"hotspoty": stats.hotspoty(obdobi, predpocitana=vse),
+            "zeme": stats.zeme_divaku(obdobi, predpocitana=vse),
+            "geo": stav_geoip(), "podrobna": mapa_podrobna.stav(),
+            "podrobna_chyba": mapa_podrobna.posledni_chyba()}
 
 
 @dataclass(frozen=True)
@@ -428,8 +438,7 @@ SEZNAM: tuple[Sekce, ...] = (
     Sekce("mapa", "Mapa",
           "Odkud se dívá z veřejných adres: na mapě a po zemích.",
           "_sekce_mapa.html",
-          lambda o: {"hotspoty": stats.hotspoty(o), "zeme": stats.zeme_divaku(o),
-                     "geo": stav_geoip()},
+          lambda o: _data_mapy(o),
           oblast="sit"),
 )
 

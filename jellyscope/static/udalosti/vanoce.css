@@ -1,0 +1,92 @@
+/* ---------------------------------------------------------------------------
+   Sezónní výzdoba: Vánoce (17.-26. 12.)
+
+   Načítá se jen v době svátku (viz udalosti.py a _udalost_hlava.html), po
+   style.css. Mění se jen barva aplikace (--accent, --accent-2 a písmo na
+   ní); barvy grafů zůstávají. Kontrast hlídá tests/test_kontrast.py.
+   Tmavé hodnoty jsou dvakrát jako ve style.css: podle systému a po ručním
+   přepnutí.
+   --------------------------------------------------------------------------- */
+:root[data-udalost="vanoce"] {
+    --accent:     #c0392b;
+    --accent-2:   #1e7b3c;
+    --accent-ink: #ffffff;
+    --udalost-snih: #8fa9c2;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-udalost="vanoce"]:not([data-theme="light"]) {
+        --accent:     #ff6f61;
+        --accent-2:   #4cc27a;
+        --accent-ink: #0b0b0b;
+        --udalost-snih: #ffffff;
+    }
+}
+:root[data-udalost="vanoce"][data-theme="dark"] {
+    --accent:     #ff6f61;
+    --accent-2:   #4cc27a;
+    --accent-ink: #0b0b0b;
+    --udalost-snih: #ffffff;
+}
+
+/* Čepice na logu, za názvem stromeček s hvězdou a blikajícími světýlky. */
+.oz-cepice { width: 24px; top: -13px; left: 8px; transform: rotate(16deg); }
+.bo-stromecek { width: 22px; }
+.bo-stromecek .svetlo { animation: udalost-blik 1.8s ease-in-out infinite; }
+.bo-stromecek .s2 { animation-delay: .6s; }
+.bo-stromecek .s3 { animation-delay: 1.2s; }
+.bo-stromecek .hvezda {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: udalost-trpyt 2.4s ease-in-out infinite;
+}
+@keyframes udalost-blik { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes udalost-trpyt { 0%, 100% { transform: scale(.55); opacity: .5; } 50% { transform: scale(1); opacity: 1; } }
+
+/* Padající sníh (udalosti.js): velké vločky jako SVG, malé jako tečky. */
+.udalost-efekt .vlocka {
+    top: 0;
+    left: var(--x);
+    width: var(--s);
+    height: var(--s);
+    color: var(--udalost-snih);
+    opacity: var(--o);
+    animation: udalost-padani var(--d) linear var(--z) infinite both;
+}
+.udalost-efekt .vlocka > i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    animation: udalost-kyv calc(var(--d) / 3) ease-in-out infinite alternate;
+}
+.udalost-efekt .vlocka svg,
+.udalost-efekt .vlocka b { display: block; width: 100%; height: 100%; }
+.udalost-efekt .vlocka b { border-radius: 50%; background: currentColor; }
+.udalost-efekt .vlocka-st { color: var(--udalost-snih); opacity: .7; }
+.udalost-efekt .vlocka-st svg { display: block; width: 100%; }
+@keyframes udalost-padani { from { transform: translateY(-18px); } to { transform: translateY(calc(var(--h) + 18px)); } }
+@keyframes udalost-kyv { from { transform: translateX(-8px) rotate(-25deg); } to { transform: translateX(8px) rotate(25deg); } }
+
+/* Bez pohybu: systém hlásí „omezit animace", nebo si to účet vypnul. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-udalost="vanoce"] .brand-logo *,
+    :root[data-udalost="vanoce"] .brand-ozdoby * { animation: none !important; }
+}
+:root[data-udalost="vanoce"][data-udalost-pohyb="0"] .brand-logo *,
+:root[data-udalost="vanoce"][data-udalost-pohyb="0"] .brand-ozdoby * { animation: none !important; }
+
+/* Hra: dárek (hry/vanoce.js). Pohupuje se, dokud ho nikdo nerozbalí. */
+.udalost-scena .darek-cely {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: udalost-darek-vrti 2.6s ease-in-out infinite;
+    cursor: pointer;
+}
+.udalost-scena .darek-cely:focus { outline: none; }
+.udalost-scena .darek-cely:focus-visible { outline: 2px dashed #fff; outline-offset: 6px; }
+@keyframes udalost-darek-vrti {
+    0%, 70%, 100% { transform: rotate(0); }
+    76% { transform: rotate(-5deg); }
+    82% { transform: rotate(5deg); }
+    88% { transform: rotate(-3deg); }
+    94% { transform: rotate(2deg); }
+}

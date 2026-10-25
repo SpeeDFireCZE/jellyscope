@@ -73,6 +73,13 @@
        #0b7fb0 s bilou davala 4,49 : 1, o chlup pod hranici; #0b7eae
        je na oko tataz modra a dava 4,56. */
     --accent-ink: #ffffff;
+    /* Barva aplikace v DATECH: stav „info“ (Direct stream), jednobarevné
+       grafy, voda na mapě. Stejná jako --accent*, ale sezónní výzdoba
+       (static/udalosti/) ji nemění - jinak by o Halloweenu přímé
+       streamování vypadalo jako přepočet. Hlídá tests/test_kontrast.py. */
+    --barva-dat:     #0b7eae;
+    --barva-dat-2:   #8a44a8;
+    --ink-barva-dat: #ffffff;
 
     /* Pismo na barevnem podkladu: procenta v dilcich deleneho pruhu,
        popisek cerveneho tlacitka. Bila nesedi na kazde barve - na
@@ -131,6 +138,9 @@
         --accent:     #00a4dc;
         --accent-2:   #aa5cc3;
         --accent-ink: #04161d;
+        --barva-dat:     #00a4dc;
+        --barva-dat-2:   #aa5cc3;
+        --ink-barva-dat: #04161d;
         --rail:       #0a0c13;
 
         /* Svetlejsi barvy tmaveho motivu chteji tmave pismo. */
@@ -194,6 +204,9 @@
     --accent:     #00a4dc;
     --accent-2:   #aa5cc3;
     --accent-ink: #04161d;
+    --barva-dat:     #00a4dc;
+    --barva-dat-2:   #aa5cc3;
+    --ink-barva-dat: #04161d;
     --rail:       #0a0c13;
 
     /* Svetlejsi barvy tmaveho motivu chteji tmave pismo. */
@@ -600,7 +613,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    duvod, proc ho oko najde driv, nez precte cislo v bubline - sam kotouc
    o polomeru 3,5 px na tmavem podkladu splyva s carou. */
 .sparkline .chart-hit circle,
-.chart .chart-hit circle { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent) 70%, transparent)); }
+.chart .chart-hit circle { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--barva-dat) 70%, transparent)); }
 
 /* Ziva karta na Siti: cislo vlevo, minutova krivka vpravo.
 
@@ -888,8 +901,8 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
    jen v čase - výška grafu se tím neomezuje. */
 .chart-lze-vybirat { cursor: col-resize; touch-action: pan-y; }
 .chart-vyber {
-    fill: color-mix(in oklab, var(--accent) 22%, transparent);
-    stroke: var(--accent);
+    fill: color-mix(in oklab, var(--barva-dat) 22%, transparent);
+    stroke: var(--barva-dat);
     stroke-width: 1;
     pointer-events: none;
 }
@@ -1738,7 +1751,7 @@ details.paths pre {
 .badge.serious  .dot { background: var(--serious); }
 .badge.critical .dot { background: var(--critical); }
 .badge.neutral  .dot { background: var(--text-muted); }
-.badge.info     .dot { background: var(--accent); }
+.badge.info     .dot { background: var(--barva-dat); }
 
 /* Odznaky na karte prehravani.
 
@@ -1774,8 +1787,8 @@ details.paths pre {
 }
 
 .session-tags .badge.info {
-    background: color-mix(in oklab, var(--accent) 22%, transparent);
-    color: color-mix(in oklab, var(--accent) 74%, var(--text-primary));
+    background: color-mix(in oklab, var(--barva-dat) 22%, transparent);
+    color: color-mix(in oklab, var(--barva-dat) 74%, var(--text-primary));
 }
 
 .session-tags .badge.good {
@@ -2733,6 +2746,54 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    přiblížil a chce zpátky, nemá koukat, kam mu tlačítko odskočilo. */
 .mapa-obal { position: relative; }
 
+/* Podrobná offline mapa (mapa.js, dlaždice z /network/mapa/dlazdice).
+   Plochy jen výplní - obrys by na hranách dlaždic kreslil švy. Čáry mají
+   stálou šířku na obrazovce (non-scaling-stroke), ať se při přiblížení
+   nezvětšují. Barvy z motivu, takže sedí ve světlém i tmavém režimu. */
+.mapa-podrobna path { fill-rule: evenodd; }
+.mapa-podrobna .v-pevnina { fill: var(--axis); fill-opacity: 0.35; }
+/* Voda barvou aplikace (jezera jako řeky), města neutrálně - modrá
+   města se pletla s jezery. */
+.mapa-podrobna .v-jezera { fill: var(--barva-dat); fill-opacity: 0.22; }
+.mapa-podrobna .v-mesta { fill: var(--text-muted); fill-opacity: 0.22; }
+.mapa-podrobna .v-reky,
+.mapa-podrobna .v-kraje,
+.mapa-podrobna .v-hranice {
+    fill: none;
+    stroke: var(--text-muted);
+    vector-effect: non-scaling-stroke;
+}
+.mapa-podrobna .v-reky { stroke: var(--barva-dat); stroke-opacity: 0.5; stroke-width: 1; }
+.mapa-podrobna .v-kraje { stroke-width: 0.6; stroke-dasharray: 3 3; stroke-opacity: 0.6; }
+.mapa-podrobna .v-hranice { stroke-width: 1; stroke-opacity: 0.8; }
+
+/* Podpis OpenStreetMap v pravém dolním rohu mapy (podmínka použití
+   dlaždic). Malý, ale čitelný - na tmavé i světlé mapě. */
+.mapa-ram { position: relative; }
+.mapa-podpis {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    opacity: 0.9;
+}
+
+/* Dlaždice OSM jsou světlé; v tmavém režimu by mapa v tmavé stránce
+   svítila. Převrácení barev se zachovaným odstínem (modrá voda zůstane
+   modrá) a mírné ztlumení. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .mapa-dlazdice image {
+        filter: invert(1) hue-rotate(180deg) brightness(0.9);
+    }
+}
+:root[data-theme="dark"] .mapa-dlazdice image {
+    filter: invert(1) hue-rotate(180deg) brightness(0.9);
+}
+
 .mapa-ovladani {
     position: absolute;
     top: 10px;
@@ -2775,6 +2836,21 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .mapa.je-priblizena { cursor: grabbing; }
 
 .mapa-bod { transition: opacity 120ms ease; }
+
+/* Tečky podle úrovně přiblížení. Se skriptem (mapa.js přidá .js-urovne)
+   se prolínají přes průhlednost - display se animovat nedá; skrytá tečka
+   nechytá myš, takže tooltip patří jen tečkám, které jsou vidět. Bez
+   skriptu zůstanou vidět jen tečky 1× (display="none" u ostatních). */
+.mapa.js-urovne .mapa-bod {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease;
+}
+.mapa.js-urovne .mapa-bod.aktivni { opacity: 1; pointer-events: auto; }
+.mapa.js-urovne .mapa-bod.aktivni:hover { opacity: 0.8; }
+@media (prefers-reduced-motion: reduce) {
+    .mapa.js-urovne .mapa-bod { transition: none; }
+}
 .mapa-bod:hover { opacity: 0.8; }
 
 
@@ -3244,6 +3320,9 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     --accent:     #2975d1;
     --accent-2:   #2975d1;
     --accent-ink: #ffffff;
+    --barva-dat:     #2975d1;
+    --barva-dat-2:   #2975d1;
+    --ink-barva-dat: #ffffff;
     --ink-linka-1: var(--ink-series-1);
     --ink-linka-2: var(--ink-series-2);
     --ink-linka-3: var(--ink-series-3);
@@ -3282,6 +3361,9 @@ details.fallback[open] > summary { margin-bottom: 4px; }
         --accent:     var(--series-1);
         --accent-2:   var(--series-1);
         --accent-ink: #04161d;
+        --barva-dat:     var(--series-1);
+        --barva-dat-2:   var(--series-1);
+        --ink-barva-dat: #04161d;
     }
 }
 
@@ -3310,6 +3392,9 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     --accent:     var(--series-1);
     --accent-2:   var(--series-1);
     --accent-ink: #04161d;
+    --barva-dat:     var(--series-1);
+    --barva-dat-2:   var(--series-1);
+    --ink-barva-dat: #04161d;
 }
 
 /* --- tvary, ktere novy vzhled zmenil ------------------------------- */

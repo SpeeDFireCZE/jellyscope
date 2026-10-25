@@ -1,0 +1,137 @@
+/* ---------------------------------------------------------------------------
+   Sezónní výzdoba: Silvestr a Nový rok (27. 12.-1. 1.)
+
+   Načítá se jen v době svátku (viz udalosti.py a _udalost_hlava.html), po
+   style.css. Mění se jen barva aplikace (--accent, --accent-2 a písmo na
+   ní); barvy grafů zůstávají. Kontrast hlídá tests/test_kontrast.py.
+   Tmavé hodnoty jsou dvakrát jako ve style.css: podle systému a po ručním
+   přepnutí.
+   --------------------------------------------------------------------------- */
+:root[data-udalost="silvestr"] {
+    --accent:     #8a6300;
+    --accent-2:   #2a5bd7;
+    --accent-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-udalost="silvestr"]:not([data-theme="light"]) {
+        --accent:     #f2c14e;
+        --accent-2:   #7aa2ff;
+        --accent-ink: #0b0b0b;
+    }
+}
+:root[data-udalost="silvestr"][data-theme="dark"] {
+    --accent:     #f2c14e;
+    --accent-2:   #7aa2ff;
+    --accent-ink: #0b0b0b;
+}
+
+/* Jiskry u loga, za názvem šampaňské: zatřese se, vystřelí zátka a pěna
+   (smyčka 6 s). */
+.oz-jiskry { width: 30px; right: -20px; top: -10px; }
+.oz-jiskry .jiskra {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: udalost-trpyt 1.6s ease-in-out infinite;
+}
+.oz-jiskry .jiskra:nth-child(2) { animation-delay: .8s; }
+.bo-sampanske { width: 24px; }
+.bo-sampanske .lahev {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: udalost-tres 6s ease-in-out infinite;
+}
+.bo-sampanske .zatka {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: udalost-zatka 6s ease-out infinite;
+}
+.bo-sampanske .pena { opacity: 0; animation: udalost-pena 6s ease-out infinite; }
+@keyframes udalost-trpyt { 0%, 100% { transform: scale(.55); opacity: .5; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes udalost-tres {
+    0%, 34%, 46%, 100% { transform: rotate(0); }
+    36% { transform: rotate(-4deg); } 38% { transform: rotate(4deg); }
+    40% { transform: rotate(-4deg); } 42% { transform: rotate(4deg); } 44% { transform: rotate(-2deg); }
+}
+@keyframes udalost-zatka {
+    0%, 45% { transform: translate(0, 0) rotate(0); opacity: 1; }
+    58% { transform: translate(6px, -16px) rotate(240deg); opacity: 1; }
+    64%, 97% { transform: translate(7px, -19px) rotate(280deg); opacity: 0; }
+    98% { transform: translate(0, 0); opacity: 0; }
+    100% { transform: translate(0, 0); opacity: 1; }
+}
+@keyframes udalost-pena {
+    0%, 45% { transform: translate(0, 0) scale(.2); opacity: 0; }
+    49% { opacity: 1; }
+    72% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+    100% { opacity: 0; }
+}
+/* Bez animace (níže) zůstane zátka na láhvi a pěna schovaná - to je
+   výchozí stav prvků, animace ho jen na chvíli mění. */
+
+/* Rachejtle a jejich výbuchy - pohyb dělá udalosti.js (Web Animations). */
+.udalost-efekt .raketa { width: 3px; height: 13px; margin-left: -1px; border-radius: 2px; }
+.udalost-efekt .jiskra { width: 5px; height: 5px; margin: -2px 0 0 -2px; border-radius: 50%; }
+
+/* Bez pohybu: systém hlásí „omezit animace", nebo si to účet vypnul. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-udalost="silvestr"] .brand-logo *,
+    :root[data-udalost="silvestr"] .brand-ozdoby * { animation: none !important; }
+}
+:root[data-udalost="silvestr"][data-udalost-pohyb="0"] .brand-logo *,
+:root[data-udalost="silvestr"][data-udalost-pohyb="0"] .brand-ozdoby * { animation: none !important; }
+
+/* Hra: rachejtle (hry/silvestr.js). Zapalovač pulzuje kroužkem, dokud
+   ho nikdo nevezme; cíl na konci roznětky svítí. */
+.udalost-scena .zapalovac { cursor: grab; }
+.udalost-scena .zapalovac:active { cursor: grabbing; }
+.udalost-scena .zapalovac:focus { outline: none; }
+.udalost-scena .zapalovac:focus-visible { outline: 2px dashed #fff; outline-offset: 6px; }
+.udalost-scena .zapalovac .plaminek {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: udalost-plaminek .18s ease-in-out infinite alternate;
+}
+.udalost-scena .zapalovac .svatozar,
+.udalost-scena .cil-rozbusky {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: udalost-svatozar 1.4s ease-in-out infinite;
+}
+.udalost-scena .zapalovac .vyzva {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: udalost-vyzva 1.8s ease-out infinite;
+}
+.udalost-scena .zapalovac.drzi .vyzva { display: none; }
+@keyframes udalost-plaminek { from { transform: scaleY(.85) scaleX(1.05); } to { transform: scaleY(1.12) scaleX(.92); } }
+@keyframes udalost-svatozar { 0%, 100% { opacity: .4; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes udalost-vyzva { from { opacity: .9; transform: scale(.75); } to { opacity: 0; transform: scale(1.5); } }
+
+/* Finále přes celou stránku (po zavření scény). */
+.udalost-finale .raketa-velka {
+    position: absolute;
+    width: 10px;
+    height: 34px;
+    margin-left: -5px;
+    border-radius: 3px;
+    background: linear-gradient(#ffe08a, #e0433a);
+    box-shadow: 0 0 14px #ffd166;
+}
+.udalost-finale .jiskra-f {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    margin: -2.5px 0 0 -2.5px;
+    border-radius: 50%;
+}
+.udalost-finale .rok-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    font-size: 26px;
+    font-weight: 800;
+    text-align: center;
+    color: #ffd97a;
+    text-shadow: 0 0 12px rgba(255, 200, 80, .8), 0 1px 3px #000;
+    opacity: 0;
+}

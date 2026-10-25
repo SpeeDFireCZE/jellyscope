@@ -75,8 +75,9 @@ for cislo, vypln in enumerate(vyplne, start=1):
 bez_slotu = charts.hbar_chart([{"label": "A", "value": 5},
                                {"label": "B", "value": 3}],
                               "label", "value")
+# Barva dat = barva aplikace, kterou sezonni vyzdoba nemeni (style.css).
 for vypln in re.findall(r'background:\s*([^"]+)', bez_slotu):
-    check(vypln == "linear-gradient(90deg, var(--accent-2), var(--accent))",
+    check(vypln == "linear-gradient(90deg, var(--barva-dat-2), var(--barva-dat))",
           f"jednobarevný graf má přechod značky ({vypln[:34]})")
 
 print()

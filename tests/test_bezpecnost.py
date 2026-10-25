@@ -572,7 +572,8 @@ def _grafy(utok: str) -> dict[str, str]:
               "id": "x", "user_id": "x", "percent": 50, "gb": 3,
               "code": "cs", "slot": 2, "barva": "var(--accent)"}]
     body = [{"lat": 50.0, "lon": 14.4, "sekund": 60, "plays": 1, "lidi": 1,
-             "misto": utok, "zeme": utok, "mesto": utok}]
+             "misto": utok, "zeme": utok, "mesto": utok, "popis": utok,
+             "divaci": frozenset({"u1"})}]
     return {
         "hbar_chart": charts.hbar_chart(radky, "label", "value"),
         "hbar_chart s odkazem": charts.hbar_chart(

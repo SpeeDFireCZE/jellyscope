@@ -16,7 +16,15 @@
            Klikáním i kolečkem se ovládá totéž - který způsob je zapnutý,
            se vybírá v Nastavení → Rozhraní. #}
         <div class="mapa-obal">
-            {{ charts.mapa_sveta(hotspoty, mapa_zoom) | safe }}
+            {# Rám kolem samotného SVG: podpis OSM sedí v jeho rohu, ne pod
+               nápovědou. Podpis je podmínka použití dlaždic OSM. #}
+            <div class="mapa-ram">
+                {{ charts.mapa_sveta(hotspoty, mapa_zoom, mapa_podklad, mapa_podrobna, mapa_podrobna_otisk) | safe }}
+                {% if mapa_podklad == 'osm' %}
+                <a class="mapa-podpis" href="https://www.openstreetmap.org/copyright"
+                   target="_blank" rel="noopener noreferrer">&copy; OpenStreetMap</a>
+                {% endif %}
+            </div>
             <div class="mapa-ovladani">
                 <button class="btn mapa-tlacitko" type="button" data-mapa="blize"
                         data-tip="{{ _("Přiblížit") }}" aria-label="{{ _("Přiblížit") }}">+</button>
@@ -69,7 +77,7 @@
         <pre class="fallback" style="margin-top:8px"><code>{{ geo.python }} -m pip install maxminddb</code></pre>
     {% elif not geo.databaze %}
         <p class="card-note">
-            {{ _("Mapa potřebuje databázi GeoLite2: jeden soubor, který leží v data/ a odpovídá bez internetu. Stáhne se na kliknutí (asi 65 MB); je to jediná chvíle, kdy aplikace sáhne jinam než na Jellyfin.") }}
+            {{ _("Mapa potřebuje databázi GeoLite2: jeden soubor, který leží v data/ a odpovídá bez internetu. Stáhne se na kliknutí (asi 65 MB). Mimo Jellyfin aplikace sahá jen při takovém stažení na kliknutí a u volitelného podkladu z OpenStreetMap.") }}
         </p>
         {# Stáhnout databázi smí jen správce, a to na stránce Síť; přehled
            na ni jen odkáže - tlačítka správce do poskládané stránky
@@ -106,5 +114,50 @@
             </form>
             {% endif %}
         </p>
+
+        {# Podrobná mapa (Natural Earth 1:10M, mapa_podrobna.py): při
+           přiblížení pobřeží, jezera, řeky, kraje a obrysy měst. Stahuje
+           se na kliknutí a ukládá do databáze, takže je i v zálohách.
+           Stáhnout a smazat smí jen správce, a to na stránce Síť. #}
+        {% if podrobna and (podrobna.verze or (je_spravce and not v_prehledu)) %}
+        <p class="card-note" style="margin-top:12px">
+            {% if podrobna.verze %}
+                {{ _("Podrobná mapa") }}: {{ podrobna.bajtu | bytes }},
+                {{ _("stažena") }} {{ podrobna.kdy | relative }}.
+            {% else %}
+                {{ _("Podrobná mapa ukáže při přiblížení pobřeží, jezera, řeky, kraje a obrysy měst. Stáhne se na kliknutí a uloží do databáze, kde zabere asi 52 MB - je tak i v každé záloze.") }}
+            {% endif %}
+        </p>
+        {% if je_spravce and not v_prehledu %}
+        {% if podrobna.zastarala %}
+        <div class="flash warning" style="margin:10px 0 0">
+            <span class="dot"></span>
+            <span>{{ _("Podrobná mapa je stažená ve starším tvaru, než jaký tahle verze aplikace používá, a proto se neukazuje. Stáhni ji znovu.") }}</span>
+        </div>
+        {% endif %}
+        {% if podrobna_chyba %}
+        <div class="flash warning" style="margin:10px 0 0">
+            <span class="dot"></span>
+            <span>
+                {{ _("Poslední stažení podrobné mapy se nepovedlo") }}
+                ({{ podrobna_chyba.kdy | relative }}): {{ podrobna_chyba.duvod }}
+            </span>
+        </div>
+        {% endif %}
+        <div class="btn-row" style="margin-top:8px">
+            <form method="post" action="/network/mapa-podrobna">
+                <button class="btn{{ '' if podrobna.verze else ' primary' }}" type="submit">
+                    {{ _("Stáhnout znovu") if podrobna.verze else _("Stáhnout podrobnou mapu (asi 75 MB)") }}
+                </button>
+            </form>
+            {% if podrobna.verze %}
+            <form method="post" action="/network/mapa-podrobna/smazat"
+                  onsubmit='return confirm({{ _("Smazat podrobnou mapu? Mapa se vrátí k hrubému obrysu, stáhnout jde kdykoliv znovu.")|tojson }})'>
+                <button class="btn danger" type="submit">{{ _("Smazat") }}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endif %}
     {% endif %}
 </div>

@@ -1,0 +1,112 @@
+/* ---------------------------------------------------------------------------
+   Sezónní výzdoba: Halloween (24.-31. 10.)
+
+   Načítá se jen v době svátku (viz udalosti.py a _udalost_hlava.html), po
+   style.css. Mění se jen barva aplikace (--accent, --accent-2 a písmo na
+   ní); barvy grafů zůstávají. Kontrast hlídá tests/test_kontrast.py.
+   Tmavé hodnoty jsou dvakrát jako ve style.css: podle systému a po ručním
+   přepnutí.
+   --------------------------------------------------------------------------- */
+:root[data-udalost="halloween"] {
+    --accent:     #b04f00;
+    --accent-2:   #6b3fa0;
+    --accent-ink: #ffffff;
+    --udalost-netopyr: #24182e;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-udalost="halloween"]:not([data-theme="light"]) {
+        --accent:     #ff8c2e;
+        --accent-2:   #b48ae6;
+        --accent-ink: #0b0b0b;
+        --udalost-netopyr: #8a74b3;
+    }
+}
+:root[data-udalost="halloween"][data-theme="dark"] {
+    --accent:     #ff8c2e;
+    --accent-2:   #b48ae6;
+    --accent-ink: #0b0b0b;
+    --udalost-netopyr: #8a74b3;
+}
+
+/* Dýně u loga, za názvem rakev: víko se otevře, uvnitř upír s rozsvícenýma
+   očima, víko se zase zavře (smyčka 7 s). */
+.oz-dyne { width: 17px; right: -9px; bottom: -6px; }
+.bo-rakev { width: 22px; }
+.bo-rakev .vika {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: udalost-rakev 7s ease-in-out infinite;
+}
+.bo-rakev .upir {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: udalost-upir 7s ease-in-out infinite;
+}
+.bo-rakev .oci { animation: udalost-oci 7s ease-in-out infinite; }
+@keyframes udalost-rakev {
+    0%, 16% { transform: scaleX(1) skewY(0); }
+    28%, 72% { transform: scaleX(.14) skewY(-14deg); }
+    84%, 100% { transform: scaleX(1) skewY(0); }
+}
+@keyframes udalost-upir { 0%, 28% { transform: translateY(4px); } 38%, 66% { transform: translateY(0); } 76%, 100% { transform: translateY(4px); } }
+@keyframes udalost-oci { 0%, 36% { opacity: .25; } 42%, 64% { opacity: 1; } 70%, 100% { opacity: .25; } }
+
+/* Netopýři přes stránku a pavouk, který se spouští vpravo nahoře (udalosti.js). */
+.udalost-efekt .netopyr {
+    left: 0;
+    top: var(--y);
+    width: var(--s);
+    animation: udalost-let var(--d) linear var(--z) infinite both;
+}
+.udalost-efekt .netopyr.zpet { animation-direction: reverse; }
+.udalost-efekt .netopyr > i { display: block; animation: udalost-houpani 1.3s ease-in-out infinite alternate; }
+.udalost-efekt .netopyr svg,
+.udalost-efekt .netopyr-st svg { display: block; width: 100%; fill: var(--udalost-netopyr); }
+.udalost-efekt .netopyr svg { transform-origin: 50% 35%; animation: udalost-mavani .24s ease-in-out infinite alternate; }
+.udalost-efekt .netopyr-st { width: 34px; }
+.udalost-efekt .pavouk {
+    top: 0;
+    left: var(--x);
+    width: 32px;
+    animation: udalost-pavouk 10s ease-in-out infinite both;
+}
+.udalost-efekt .pavouk-st { width: 32px; }
+.udalost-efekt .pavouk svg,
+.udalost-efekt .pavouk-st svg { position: relative; display: block; width: 100%; }
+.udalost-efekt .nit {
+    position: absolute;
+    left: 50%;
+    bottom: 60%;
+    width: 1px;
+    height: 900px;
+    background: var(--text-muted);
+    opacity: .55;
+}
+@keyframes udalost-let { from { transform: translateX(-70px); } to { transform: translateX(var(--w)); } }
+@keyframes udalost-houpani { from { transform: translateY(-12px); } to { transform: translateY(12px); } }
+@keyframes udalost-mavani { from { transform: scaleY(1); } to { transform: scaleY(.55); } }
+@keyframes udalost-pavouk {
+    0% { transform: translateY(-40px); }
+    30% { transform: translateY(var(--hloubka)); }
+    38% { transform: translateY(calc(var(--hloubka) - 14px)); }
+    46%, 70% { transform: translateY(var(--hloubka)); }
+    100% { transform: translateY(-40px); }
+}
+
+/* Bez pohybu: systém hlásí „omezit animace", nebo si to účet vypnul. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-udalost="halloween"] .brand-logo *,
+    :root[data-udalost="halloween"] .brand-ozdoby * { animation: none !important; }
+}
+:root[data-udalost="halloween"][data-udalost-pohyb="0"] .brand-logo *,
+:root[data-udalost="halloween"][data-udalost-pohyb="0"] .brand-ozdoby * { animation: none !important; }
+
+/* Hra: dýně (hry/halloween.js). Výřez je tma s pruhem dužiny u okraje;
+   rozsvícená dýně má ve výřezech plamen a žlutější dužinu. */
+.udalost-scena .dyne-platno { cursor: crosshair; }
+.udalost-scena .svitici-dyne .vyrez-tma { fill: url(#udalost-dPlamen); }
+.udalost-scena .svitici-dyne .vyrez-duzina { fill: #ffe39a; }
+.udalost-scena .svitici-dyne .vyrezy { filter: url(#udalost-dZare); animation: udalost-plamen 1.4s ease-in-out infinite alternate; }
+.udalost-scena .dyne-svetlo { opacity: 0; transition: opacity .6s; }
+.udalost-scena .svitici-dyne .dyne-svetlo { opacity: 1; }
+@keyframes udalost-plamen { 0% { opacity: .82; } 35% { opacity: 1; } 60% { opacity: .9; } 100% { opacity: 1; } }

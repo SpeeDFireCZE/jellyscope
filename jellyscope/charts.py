@@ -340,7 +340,7 @@ def hbar_chart(
         if vlastni_slot:
             vypln = _vypln_pruhu(f"var(--series-{slot})")
         else:
-            vypln = "linear-gradient(90deg, var(--accent-2), var(--accent))"
+            vypln = "linear-gradient(90deg, var(--barva-dat-2), var(--barva-dat))"
         cislo = (f'<div class="hbar-rank">{index + 1}</div>') if poradi else ""
         parts.append(
             f'<div class="hbar-row{" is-ranked" if poradi else ""}" data-tip="{_e(title)}">'
@@ -370,7 +370,7 @@ def hbar_chart(
 # prouzek na konci je varovani, ne treti barva v poradi.
 ROLE_BARVY = {
     "good": "var(--good)",
-    "info": "var(--accent)",
+    "info": "var(--barva-dat)",
     "warning": "var(--warning)",
     "serious": "var(--serious)",
     "critical": "var(--critical)",
@@ -1008,9 +1008,9 @@ def sparkline(
     parts = [
         f'<svg class="sparkline" viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Vyvoj v case, {len(points)} dnu">',
-        f"<defs>{_prechod(1, jmeno, sila=0.28, barva='var(--accent)')}</defs>",
+        f"<defs>{_prechod(1, jmeno, sila=0.28, barva='var(--barva-dat)')}</defs>",
         f'<path d="{area}" fill="url(#{jmeno})" />',
-        f'<path d="{line}" fill="none" stroke="var(--accent)" '
+        f'<path d="{line}" fill="none" stroke="var(--barva-dat)" '
         f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />',
     ]
 
@@ -1028,7 +1028,7 @@ def sparkline(
         tip = _bublina(
             str(points[index].get(x_key, "")),
             [{"text": _udaj(values[index], unit),
-              "barva": "var(--accent)"}])
+              "barva": "var(--barva-dat)"}])
         hit_x, hit_w = _hit(x, hit_width / 2)
         parts.append(
             f'<g class="chart-hit" {tip}>'
@@ -1036,7 +1036,7 @@ def sparkline(
             f'width="{hit_w:.1f}" height="{height}" fill="transparent" />'
             f'<line x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="{height}" '
             f'stroke="var(--axis)" stroke-width="1" />'
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="var(--accent)" '
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="var(--barva-dat)" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
             f"</g>"
         )
@@ -1048,35 +1048,62 @@ def sparkline(
 # Mapa sveta - odkud se divaji
 # ---------------------------------------------------------------------------
 
-def mapa_sveta(body: Sequence[dict[str, Any]], rezim: str = "click") -> str:
-    """Obrys pevnin a na nem tecky podle toho, odkud se prehravalo.
+def mapa_sveta(mista: Sequence[dict[str, Any]], rezim: str = "click",
+               podklad: str = "kresleny", podrobna: bool = False,
+               podrobna_otisk: str = "") -> str:
+    """Mapa světa s tečkami podle toho, odkud se přehrávalo.
 
-    Kresli se stejnou rukou jako zbytek grafu: jedno SVG, zadna knihovna,
-    zadna dlazdicova mapa z internetu. Obrys je v `worldmap.PEVNINY`
-    (Natural Earth, public domain) a lezi ve stejne soustave souradnic
-    jako tecky, takze staci jedno `viewBox`.
+    Kreslí se stejnou rukou jako zbytek grafů: jedno SVG, žádná knihovna.
+    Obrys pevnin je ve `worldmap` (Natural Earth 1:110M) ve Web Mercatoru,
+    stejně jako tečky, takže stačí jedno `viewBox`.
 
-    `rezim` rika, cim se mapa priblizuje - "wheel" koleckem, "click"
-    klikanim a tlacitky. Rozhoduje o tom uzivatel v Nastaveni; sem to
-    jde jen jako atribut, obsluha je v base.html. Kolecko nad mapou
-    totiz zastavi rolovani stranky, coz nekomu vadi a nekomu vyhovuje.
+    **Úrovně.** Shluky jsou spočítané pro úrovně přiblížení 1×, 2×, 4× …
+    (mapa.shluky). Každá tečka nese, od které do které úrovně platí
+    (`data-od`, `data-do`), a skript (static/mapa.js) ukazuje ty, které
+    patří k aktuálnímu přiblížení; bez skriptu je vidět jen 1×. Pod tečkami jsou vrstvy
+    podkladu - zabudovaný obrys, podrobná offline mapa a dlaždice OSM;
+    ty dvě plní až skript.
 
-    Velikost tecky roste s **odmocninou** odsledovaneho casu, ne s casem
-    samotnym: oko porovnava plochy, takze dvojnasobny cas ma mit
-    dvojnasobnou plochu, ne dvojnasobny polomer. Bez odmocniny by jedno
-    aktivni misto prekrylo pul kontinentu.
+    `rezim` říká, čím se mapa přibližuje ("wheel" kolečkem, "click"
+    klikáním), `podklad` je "kresleny" nebo "osm" a `podrobna` říká, jestli
+    je stažená podrobná mapa - všechno jen atributy pro skript.
+
+    Velikost tečky roste s **odmocninou** odsledovaného času a počítá se
+    v rámci úrovně, na které se tečka objeví: největší shluk tam má plnou
+    velikost. Oko
+    porovnává plochy, takže dvojnásobný čas má dvojnásobnou plochu.
     """
-    from .worldmap import HRANICE, PEVNINY, SIRKA, VYSKA, na_mapu
+    from . import formatting, mapa
+    from .mapa_podrobna import PODROBNOSTI
+    from .worldmap import HRANICE, PEVNINY, SIRKA, VYCHOZI, VYSKA
 
-    if not body:
+    if not mista:
         return _empty(_t("Zatím žádná data"))
 
-    nejvic = max(float(b.get("sekund") or 0) for b in body) or 1.0
+    urovne = mapa.shluky(list(mista))
+    # Jak daleko jde přiblížit. S holou kreslenou mapou do úrovně, kde se
+    # rozdělí poslední shluk (aspoň 20×) - hrubý obrys dál nic neukáže.
+    # S podrobnou mapou nebo OSM je pod tečkami co vidět i tam, kde se už
+    # nic nerozpadá, takže vždy až na nejvyšší úroveň.
+    if podrobna or podklad == "osm":
+        max_priblizeni = mapa.MAX_UROVEN
+    else:
+        max_priblizeni = mapa.max_priblizeni(urovne, len(mista))
+    vychozi = " ".join(f"{v:g}" for v in VYCHOZI)
 
     casti = [
-        f'<svg class="mapa" viewBox="0 0 {SIRKA} {VYSKA}" '
-        f'data-vychozi="0 0 {SIRKA} {VYSKA}" '
+        f'<svg class="mapa" viewBox="{vychozi}" '
+        f'data-vychozi="{vychozi}" data-svet="0 0 {SIRKA} {VYSKA}" '
+        f'data-max="{max_priblizeni}" '
+        f'data-urovne="{" ".join(str(u["uroven"]) for u in urovne)}" '
+        # Nejvic odsledovaneho casu na kazde urovni - skript z nej pocita
+        # velikost tecky v ramci urovne, ktera je zrovna videt.
+        f'data-maxima="{" ".join(str(max(int(s["sekund"] or 0) for s in u["shluky"])) for u in urovne)}" '
         f'data-zoom="{_e(rezim if rezim in ("click", "wheel") else "click")}" '
+        f'data-podklad="{_e(podklad if podklad in ("kresleny", "osm") else "kresleny")}" '
+        f'data-podrobna="{"1" if podrobna else "0"}" '
+        f'data-podrobna-verze="{_e(podrobna_otisk)}" '
+        f'data-site="{" ".join(str(PODROBNOSTI[p]["n"]) for p in sorted(PODROBNOSTI))}" '
         f'preserveAspectRatio="xMidYMid meet" role="img" '
         f'aria-label="{_e(_t("Odkud se dívají"))}">',
         # Zare kolem bodu. Jeden pruhledny prechod pro vsechny tecky:
@@ -1084,51 +1111,79 @@ def mapa_sveta(body: Sequence[dict[str, Any]], rezim: str = "click") -> str:
         # jeho velikosti a nemusi se definovat pro kazdou zvlast.
         # Tecky na mape nejsou serie - je to jedna velicina na ruznych
         # mistech. Barva aplikace, stejna jako u krivky na Prehledu.
+        # Ostre bile jadro je soucasti prechodu (prvnich 15 %) - jedna
+        # kruznice na tecku misto dvou, stranka s tisicem shluku je tak
+        # o polovinu mensi.
         '<defs><radialGradient id="zare-mapa">'
-        '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.95" />'
-        '<stop offset="35%" stop-color="var(--accent)" stop-opacity="0.35" />'
-        '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />'
+        '<stop offset="0%" stop-color="#fff" stop-opacity="0.9" />'
+        '<stop offset="15%" stop-color="#fff" stop-opacity="0.85" />'
+        '<stop offset="19%" stop-color="var(--barva-dat)" stop-opacity="0.95" />'
+        '<stop offset="45%" stop-color="var(--barva-dat)" stop-opacity="0.35" />'
+        '<stop offset="100%" stop-color="var(--barva-dat)" stop-opacity="0" />'
         '</radialGradient></defs>',
         f'<rect x="0" y="0" width="{SIRKA}" height="{VYSKA}" '
         f'fill="var(--surface-2)" />',
-        f'<path d="{PEVNINY}" fill="var(--axis)" fill-opacity="0.35" '
-        f'stroke="var(--axis)" stroke-width="0.2" />',
+        # Podklad zespodu nahoru: zabudovany obrys (vzdycky), podrobna
+        # offline mapa a dlazdice OSM (obe plni skript). Podrobna mapa
+        # zabudovany obrys pri priblizeni schova - jinak by hruba pevnina
+        # vylezala do more.
+        f'<g class="mapa-podklad-zakladni"><path d="{PEVNINY}" fill="var(--axis)" '
+        f'fill-opacity="0.35" stroke="var(--axis)" stroke-width="0.2" /></g>',
+        '<g class="mapa-podrobna"></g>',
+        '<g class="mapa-dlazdice"></g>',
         # Hranice statu se kresli az po priblizeni - pri pohledu na cely
         # svet by z nich byla jen sit car pres kontinenty. Sirka cary se
         # pri priblizeni zmensuje spolu s vyrezem, aby zustala vlasova.
         # Hranice kreslime barvou textu, ne carou grafu: --axis ma skoro
         # tentyz odstin jako vypln pevnin, takze v ni hranice splyvaly.
-        f'<path class="mapa-hranice" d="{HRANICE}" fill="none" '
-        f'stroke="var(--text-muted)" stroke-width="0.16" '
-        f'stroke-opacity="0" stroke-linejoin="round" />',
-        # Vsechno, co se posouva a priblizuje, je v jedne skupine - JS pak
-        # meni jen viewBox a nemusi sahat na jednotlive prvky.
-        '<g class="mapa-body">',
     ]
-
-    for bod in body:
-        x, y = na_mapu(float(bod["lat"]), float(bod["lon"]))
-        podil = (float(bod.get("sekund") or 0) / nejvic) ** 0.5
-        polomer = 1.2 + podil * 4.0
-        tip = _t("{misto}: {n}× · {lidi} lidí").format(
-            misto=bod.get("popis") or "?", n=bod.get("plays") or 0,
-            lidi=bod.get("lidi") or 0)
-        # Dve kruznice na bod: mekka zare a v ni ostre jadro. Samotna
-        # tecka pusobi jako spinavy bod na skle; zare vypada jako svetlo
-        # videne z vesmiru - a hlavne je videt i tam, kde je bodu vic
-        # blizko sebe.
+    # Pres skutecnou mapu z OSM by hrube hranice 1:110M lezely kilometry
+    # vedle tech skutecnych - pri OSM se nekresli vubec.
+    if podklad != "osm":
         casti.append(
-            f'<g class="mapa-bod" data-tip="{_e(tip)}">'
-            f'<circle class="zare" cx="{x:.1f}" cy="{y:.1f}" '
-            f'r="{polomer * 2.2:.2f}" data-r="{polomer * 2.2:.2f}" '
-            f'fill="url(#zare-mapa)" />'
-            f'<circle class="jadro" cx="{x:.1f}" cy="{y:.1f}" '
-            f'r="{polomer * 0.4:.2f}" data-r="{polomer * 0.4:.2f}" '
-            f'fill="#fff" fill-opacity="0.85" />'
-            f'</g>'
+            f'<path class="mapa-hranice" d="{HRANICE}" fill="none" '
+            f'stroke="var(--text-muted)" stroke-width="0.16" '
+            f'stroke-opacity="0" stroke-linejoin="round" />')
+
+    # Shluk, ktery se pres nekolik urovni nemeni (tataz mista), je ve
+    # strance jednou - s rozsahem data-od / data-do. Kazda uroven zvlast by
+    # u par stovek mist dala megabajt SVG, protoze vzdalena mesta jsou
+    # samostatnou teckou skoro na vsech urovnich.
+    tecky: list[dict[str, Any]] = []
+    zive: dict[tuple[int, ...], dict[str, Any]] = {}
+    for uroven in urovne:
+        nejvic = max(float(s["sekund"] or 0) for s in uroven["shluky"]) or 1.0
+        dalsi: dict[tuple[int, ...], dict[str, Any]] = {}
+        for shluk in uroven["shluky"]:
+            tecka = zive.get(shluk["clenove"])
+            if tecka is None:
+                tecka = {"shluk": shluk, "od": uroven["uroven"], "nejvic": nejvic}
+                tecky.append(tecka)
+            tecka["do"] = uroven["uroven"]
+            dalsi[shluk["clenove"]] = tecka
+        zive = dalsi
+
+    for tecka in tecky:
+        shluk = tecka["shluk"]
+        # Velikost bez skriptu: v ramci urovne, na ktere se tecka objevi.
+        # Skript ji prepocita podle urovne, ktera je zrovna videt
+        # (data-s, data-maxima) - jinak by tecka prenesena z nizsi urovne
+        # mela meritko te nizsi a vetsi cas mohl vypadat mensi.
+        podil = (float(shluk["sekund"] or 0) / tecka["nejvic"]) ** 0.5
+        polomer = (1.2 + podil * 4.0) * 2.2
+        tip = _t("{misto}: {n}× · {lidi}").format(
+            misto=shluk["popis"], n=shluk["plays"],
+            lidi=formatting.tvar(shluk["lidi"], "{n} člověk", "{n} lidé", "{n} lidí"))
+        # Bez skriptu jsou videt jen tecky urovne 1× - ostatni mapa.js
+        # odkryje podle priblizeni.
+        skryta = ' display="none"' if tecka["od"] != 1 else ""
+        casti.append(
+            f'<circle class="mapa-bod" data-od="{tecka["od"]}" data-do="{tecka["do"]}" '
+            f'data-s="{int(shluk["sekund"] or 0)}" '
+            f'cx="{shluk["x"]:.4f}" cy="{shluk["y"]:.4f}" r="{polomer:.2f}" '
+            f'fill="url(#zare-mapa)" data-tip="{_e(tip)}"{skryta} />'
         )
 
-    casti.append("</g>")
     casti.append("</svg>")
     return "".join(casti)
 

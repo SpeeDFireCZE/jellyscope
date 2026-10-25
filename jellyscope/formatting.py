@@ -284,6 +284,25 @@ def datetime_human(value: Any) -> str:
     return local.strftime("%d.%m.%Y %H:%M")
 
 
+def tvar(n: int, jeden: str, par: str, mnoho: str, **dalsi: Any) -> str:
+    """Číslo se správným tvarem slova: „1 člověk", „3 lidé", „5 lidí".
+
+    Tři samostatné překladové klíče, vybrané podle češtiny (1 / 2-4 /
+    ostatní - i 0 a 22, jak to má CLDR). Angličtina si „lidé" a „lidí"
+    přeloží stejně („people"), španělština taky; jazyk s jinými pravidly
+    by potřeboval vlastní výběr, ale takový zatím nemáme.
+
+    `dalsi` jsou další zástupná místa věty („{misto} a {n} další místa").
+    """
+    if n == 1:
+        klic = jeden
+    elif 2 <= n <= 4:
+        klic = par
+    else:
+        klic = mnoho
+    return _t(klic).format(n=n, **dalsi)
+
+
 def relative_human(value: Any) -> str:
     """"pred 4 minutami" - u aktualnich udaju citelnejsi nez presny cas."""
     parsed = _parse_any(str(value or ""))

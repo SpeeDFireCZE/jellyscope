@@ -362,12 +362,25 @@ async def aktualizuj() -> dict[str, Any]:
                 "message": "Ve složce aplikace jsou vlastní úpravy. "
                            "Aktualizace by o ně přišla, tak jsem ji nespustil."}
 
+    # Jeden fetch a zapamatovany commit. Na nem se overi preklady i balicky
+    # a presne ten se pak stahne (`merge --ff-only <commit>`) - `git pull`
+    # by si stahl znovu, a co se mezitim na GitHubu objevilo, by proslo
+    # bez zkousky.
+    nedostupne = {"status": "error",
+                  "message": "Nepodařilo se zjistit, co by aktualizace stáhla. Zkus to za "
+                             "chvíli."}
+    if (await _git("fetch", "--quiet"))["kod"] != 0:
+        return nedostupne
+    overeny = (await _git("rev-parse", "@{u}"))["vystup"].strip()
+    if not re.fullmatch(r"[0-9a-f]{7,64}", overeny):
+        return nedostupne
+
     # Bez vydaneho noveho vydani se smi stahnout jen preklady. Kontrola
     # to hlidala uz pri porovnani, ale mezi kontrolou (rano) a kliknutim
     # (vecer) se main mohl pohnout - tak se to overi znovu, na tom, co by
-    # `git pull` doopravdy prinesl.
+    # se doopravdy stahlo.
     if not stav()["je_novejsi"]:
-        navic = await _co_prijde_mimo_preklady()
+        navic = await _co_prijde_mimo_preklady(overeny)
         if navic is None:
             return {"status": "error",
                     "message": "Nepodařilo se zjistit, co by aktualizace stáhla. Zkus to za "
@@ -378,11 +391,11 @@ async def aktualizuj() -> dict[str, Any]:
                                "(kód, který ještě nevyšel jako vydání). "
                                "Aktualizace počká, až vyjde."}
 
-    neprojde = await _overeni_balicku()
+    neprojde = await _overeni_balicku(overeny)
     if neprojde:
         return neprojde
 
-    pull = await _git("pull", "--ff-only")
+    pull = await _git("merge", "--ff-only", overeny)
     if pull["kod"] != 0:
         return {"status": "error", "message": pull["vystup"][-400:]}
 
@@ -397,7 +410,24 @@ async def aktualizuj() -> dict[str, Any]:
     return {"status": "ok", "vystup": pull["vystup"]}
 
 
-async def _overeni_balicku() -> dict[str, Any] | None:
+def _chyba_pythonu(potreba: str) -> dict[str, Any]:
+    return {"status": "error",
+            "message": "Nová verze potřebuje Python {potreba} nebo novější, tady běží "
+                       "{mame}. Nic jsem nestáhl, dál běží tahle verze. Doinstaluj "
+                       "Python {potreba} vedle stávajícího (Ubuntu: sudo apt install "
+                       "python{potreba} python{potreba}-venv), pak ve složce aplikace "
+                       "spusť git pull a bash deploy/install.sh a restartuj službu - "
+                       "prostředí se postaví na novém Pythonu, databáze i .env "
+                       "zůstanou.",
+            "parametry": {"potreba": potreba, "mame": "%d.%d" % sys.version_info[:2]}}
+
+
+# Kolik souborů smí requirements.txt nové verze přes -r / -c natáhnout -
+# pojistka proti odkazům v kruhu.
+MAX_VLOZENYCH = 10
+
+
+async def _overeni_balicku(overeny: str) -> dict[str, Any] | None:
     """Půjdou balíčky nové verze na tomhle serveru nainstalovat? None = ano.
 
     Zkusí se to nanečisto (`pip install --dry-run`) s `requirements.txt`
@@ -406,36 +436,53 @@ async def _overeni_balicku() -> dict[str, Any] | None:
     skončilo tlačítko hláškou, ze které příčina vidět nebyla. Takhle se
     nestáhne nic, dál běží tahle verze a hláška řekne, co udělat.
 
-    Když se to ověřit nedá (nejde fetch, starý pip bez --dry-run), nic se
-    nezdržuje - aktualizace proběhne jako dřív a případnou chybu ohlásí
-    pip sám. Beze změny `requirements.txt` (třeba jen překlady) se nezkouší
-    nic - balíčky jsou tytéž, které už běží.
+    Když se to ověřit nedá (starý pip bez --dry-run), nic se nezdržuje -
+    aktualizace proběhne jako dřív a případnou chybu ohlásí pip sám. Beze
+    změny `requirements.txt` (třeba jen překlady) se nezkouší nic -
+    balíčky jsou tytéž, které už běží.
+
+    Nejdřív minimum Pythonu z `deploy/python-minimum` nové verze: jasná
+    hláška bez luštění výpisu pipu. Všechno se bere z ověřeného commitu.
     """
-    if (await _git("fetch", "--quiet"))["kod"] != 0:
+    minimum = await _git_obsah("show", f"{overeny}:deploy/python-minimum")
+    potreba = minimum["vystup"].strip() if minimum["kod"] == 0 else ""
+    if re.fullmatch(r"3\.[0-9]{1,2}", potreba) and tuple(
+            int(x) for x in potreba.split(".")) > sys.version_info[:2]:
+        return _chyba_pythonu(potreba)
+    if (await _git("diff", "--quiet", "HEAD", overeny, "--", "requirements.txt"))["kod"] == 0:
         return None
-    if (await _git("diff", "--quiet", "HEAD", "@{u}", "--", "requirements.txt"))["kod"] == 0:
-        return None
-    nove = await _git_obsah("show", "@{u}:requirements.txt")
+    nove = await _git_obsah("show", f"{overeny}:requirements.txt")
     if nove["kod"] != 0:
         return None
     with tempfile.TemporaryDirectory() as slozka:
-        soubor = pathlib.Path(slozka) / "requirements.txt"
-        soubor.write_text(nove["vystup"], encoding="utf-8")
-        zkouska = await _pip("--dry-run", "-r", str(soubor))
+        koren = pathlib.Path(slozka)
+        (koren / "requirements.txt").write_text(nove["vystup"], encoding="utf-8")
+        # Odkazy na další soubory (-r base.txt, -c constraints.txt) - i ty
+        # z nové verze, jinak by je pip v dočasné složce nenašel.
+        fronta = [nove["vystup"]]
+        stazene: set[str] = set()
+        while fronta and len(stazene) < MAX_VLOZENYCH:
+            for cesta in re.findall(r"(?m)^\s*(?:-r|-c|--requirement|--constraint)[\s=]+(\S+)",
+                                    fronta.pop()):
+                cesta = pathlib.PurePosixPath(cesta).as_posix()
+                if (cesta in stazene or cesta.startswith(("/", "..")) or "/../" in cesta
+                        or "://" in cesta):
+                    continue
+                stazene.add(cesta)
+                vlozeny = await _git_obsah("show", f"{overeny}:{cesta}")
+                if vlozeny["kod"] != 0:
+                    continue
+                cil = koren / cesta
+                cil.parent.mkdir(parents=True, exist_ok=True)
+                cil.write_text(vlozeny["vystup"], encoding="utf-8")
+                fronta.append(vlozeny["vystup"])
+        zkouska = await _pip("--dry-run", "-r", str(koren / "requirements.txt"))
     vystup = zkouska["vystup"]
     if zkouska["kod"] == 0 or "no such option: --dry-run" in vystup:
         return None
     potreba = _potrebny_python(vystup)
     if potreba:
-        return {"status": "error",
-                "message": "Nová verze potřebuje Python {potreba} nebo novější, tady běží "
-                           "{mame}. Nic jsem nestáhl, dál běží tahle verze. Doinstaluj "
-                           "Python {potreba} vedle stávajícího (Ubuntu: sudo apt install "
-                           "python{potreba} python{potreba}-venv), pak ve složce aplikace "
-                           "spusť git pull a bash deploy/install.sh a restartuj službu - "
-                           "prostředí se postaví na novém Pythonu, databáze i .env "
-                           "zůstanou.",
-                "parametry": {"potreba": potreba, "mame": "%d.%d" % sys.version_info[:2]}}
+        return _chyba_pythonu(potreba)
     return {"status": "error",
             "message": "Balíčky nové verze se na tomhle serveru nedají nainstalovat, "
                        "tak jsem nic nestáhl a dál běží tahle verze. Co hlásí pip: {vystup}",
@@ -463,12 +510,10 @@ def _potrebny_python(vystup: str) -> str:
     return nejvyssi
 
 
-async def _co_prijde_mimo_preklady() -> list[str] | None:
-    """Soubory, které by `git pull` změnil a nejsou překlady. None = nevím."""
-    fetch = await _git("fetch", "--quiet")
-    if fetch["kod"] != 0:
-        return None
-    rozdil = await _git("diff", "--name-only", "HEAD", "@{u}")
+async def _co_prijde_mimo_preklady(overeny: str) -> list[str] | None:
+    """Soubory, které by stažení ověřeného commitu změnilo a nejsou
+    překlady. None = nevím."""
+    rozdil = await _git("diff", "--name-only", "HEAD", overeny)
     if rozdil["kod"] != 0:
         return None
     return [radek.strip() for radek in rozdil["vystup"].splitlines()
