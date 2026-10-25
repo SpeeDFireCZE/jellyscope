@@ -2848,9 +2848,10 @@ app.include_router(web_nastaveni.router)
 
 # Nástroje jen pro vývoj (jellyscope/vyvoj.py - datum pro sezónní výzdobu).
 # Do produ a dema se nekopírují (deploy/sync-do-produ.py, JEN_DEV), takže
-# tam soubor chybí a tady se jen přeskočí. find_spec, ne `except
-# ImportError`: chyba UVNITŘ vyvoj.py se nemá tiše spolknout.
-if importlib.util.find_spec(f"{__package__}.vyvoj") is not None:
+# tam soubor chybí a tady se jen přeskočí. Demo spuštěné z dev složky
+# (demo.py) ho sice má, ale přepínání data tam nepatří. find_spec, ne
+# `except ImportError`: chyba UVNITŘ vyvoj.py se nemá tiše spolknout.
+if not config.demo_mode and importlib.util.find_spec(f"{__package__}.vyvoj") is not None:
     from . import vyvoj  # noqa: E402
     vyvoj.zapoj(app, templates)
 else:
