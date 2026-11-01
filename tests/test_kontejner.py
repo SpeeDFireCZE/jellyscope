@@ -43,6 +43,10 @@ def check(condition: bool, label: str) -> None:
         failures += 1
 
 
+# Test sám může běžet v kontejneru (vývoj v code-serveru), proto se
+# „mimo kontejner" předstírá - stejně jako „cizí kontejner" níže.
+skutecny_kontejner = config._v_kontejneru
+config._v_kontejneru = lambda: False
 config.load_config(reload=True)
 db.init_db()
 
@@ -52,6 +56,7 @@ print("--- mimo kontejner se nenastavuje nic ---")
 check(config.load_config().in_docker is False, "aplikace ví, že v kontejneru není")
 check(db.predvyplnene_zalohy() == "", "nic nenastavila")
 check(db.get_setting("backup_path", "") == "", "a cesta zůstala prázdná")
+config._v_kontejneru = skutecny_kontejner
 
 print()
 print("--- v kontejneru si cestu nastaví ---")

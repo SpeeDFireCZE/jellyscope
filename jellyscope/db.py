@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from . import config as app_config
 from . import dialect
 from .config import BASE_DIR, load_config
 
@@ -443,7 +444,9 @@ def _proc_nejde_otevrit(cesta: Path, chyba: Exception) -> tuple[str, str]:
         radky_en.append(
             f"The application runs as UID {os.getuid()}:{os.getgid()}.")
 
-    if Path("/.dockerenv").exists() or os.environ.get("JELLYSCOPE_DOCKER"):
+    # Stejná otázka jako jinde v aplikaci, ne vlastní kopie podmínky:
+    # pozná i Podman a test si ji může podvrhnout.
+    if app_config._v_kontejneru():
         radky.append(
             "V kontejneru za to skoro vždycky může vlastník připojené "
             "složky: uvnitř běží uživatel s UID 10001, ale složka na "

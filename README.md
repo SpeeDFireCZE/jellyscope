@@ -292,7 +292,9 @@ nothing to match on. An archived item can then be **assigned to another
 title** by hand: its history and statistics move to the chosen title and
 the archived item is removed. This works for one item from its detail, or
 for many at once from the archive view, each with a search in the live
-library and a small poster beside every target. The bulk dialog first
+library and a small poster beside every target. The search takes words in
+any order and understands season and episode: `Girls S01E06`, or `S06` for
+a whole season. The bulk dialog first
 shows a summary of what will move, and changes nothing until that summary
 is confirmed.
 

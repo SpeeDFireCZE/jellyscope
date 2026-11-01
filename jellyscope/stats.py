@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -2993,6 +2994,14 @@ def nahled_polozky(row: dict[str, Any], sirka: int = 80) -> str:
     return f"/image/{kdo}?kind=Primary&w={sirka}" + (f"&tag={otisk}" if otisk else "")
 
 
+def jmeno_souboru(cesta: Any) -> str:
+    """Jen jméno souboru z cesty - i z windowsové (D:\\media\\…).
+
+    Celá cesta o disku serveru prozradí víc, než výběr potřebuje.
+    """
+    return str(cesta or "").replace("\\", "/").rsplit("/", 1)[-1]
+
+
 def popis_polozky(row: dict[str, Any]) -> str:
     """Název titulu tak, jak se ukazuje v nabídkách: seriál, S01E02, díl."""
     if row.get("series_name"):
@@ -3038,44 +3047,178 @@ def archivovane_polozky(library_id: str | None, limit: int = 500) -> list[dict[s
     # Bez plakátku: obrázek položky z archivu už v Jellyfinu není.
     for radek in radky:
         radek["popis"] = popis_polozky(radek)
+        radek["soubor"] = jmeno_souboru(radek["path"])
     return radky
 
 
-def hledej_existujici(dotaz: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Živé položky pro výběr cíle - podle názvu, seriálu nebo cesty.
+# Číslo dílu v hledání: S06E07, S6E7, S06 (celá řada) nebo 6x07.
+_KOD_DILU = re.compile(r"s(\d{1,3})(?:e(\d{1,4}))?|(\d{1,3})x(\d{1,4})", re.IGNORECASE)
+# Kus slova z ASCII písmen a číslic. LIKE ho najde bez ohledu na velikost
+# písmen v SQLite i v PostgreSQL (ILIKE); u „Č" nebo „Š" by to SQLite
+# nezvládlo, proto se jimi v SQL nefiltruje a dohlídá na ně Python.
+_ASCII_KUS = re.compile(r"[A-Za-z0-9]+")
+# Interpunkce na krajích slova („Zelenáč," „S06E07." „(2021)" „–") se nehledá.
+_OKRAJ_SLOVA = re.compile(r"^[\W_]+|[\W_]+$")
+# Kolik kandidátů nejvýš vybere SQL, než je Python projde slovo po slově.
+# SQL filtruje každým slovem, takže se sem dojde jen u hodně obecného
+# dotazu („S01") - a pak hledání řekne, že výsledků je víc. Hledá se při
+# psaní, takže víc řádků na jedno stisknutí klávesy nemá smysl tahat.
+HLEDANI_KANDIDATU = 1000
+
+
+def _pro_hledani(text: Any) -> str:
+    """Text pro porovnání: jedna podoba „é" (NFC) a malá písmena.
+
+    lower(), ne casefold(): casefold udělá z „ß" „ss", což LIKE v SQL
+    neumí - Python by pak pouštěl i to, co předběžný výběr nevybral.
+    """
+    return unicodedata.normalize("NFC", str(text or "")).lower()
+
+
+def _znacka_dilu(rada: int, dil: int | None) -> str:
+    """S06E07 (nebo S06) tak, jak bývá ve jménu souboru - malými písmeny."""
+    return f"s{rada:02d}" + ("" if dil is None else f"e{dil:02d}")
+
+
+def _samostatne(kus: str, text: str) -> bool:
+    """Je kód v textu jako samostatné slovo? „s06" v „show s06e07", ne v „bass06"."""
+    return re.search(rf"(?<![a-z0-9]){re.escape(kus)}(?![0-9])", text) is not None
+
+
+def _like_kdekoli(vzory: list[str], sloupce: tuple[str, ...] = ("i.name", "i.series_name", "i.path")
+                  ) -> tuple[str, list[str]]:
+    """Podmínka „některý vzor je v některém sloupci" a parametry k ní."""
+    casti = [f"{s} LIKE ?" for _ in vzory for s in sloupce]
+    return "(" + " OR ".join(casti) + ")", [v for v in vzory for _ in sloupce]
+
+
+def hledej_existujici(dotaz: str, limit: int = 50) -> dict[str, Any]:
+    """Živé položky pro výběr cíle - podle názvu, seriálu, cesty a čísla dílu.
 
     Cesta je tu schválně: když Jellyfin titul určil špatně a pak ho po
     opravě založil znovu, nesedí název ani id, ale soubor je pořád
     tentýž - a jeho jméno člověk zná.
+
+    Hledá se po slovech a na pořadí nezáleží: „Zelenáč S06E07" najde díl,
+    u kterého je „Zelenáč" v názvu seriálu a S06E07 v číslech řady a dílu.
+    Celý dotaz jako jeden kus textu by nenašel nic - ty dvě věci nejsou
+    v žádném sloupci vedle sebe, takhle je skládá až popisek.
+
+    Kód dílu (S06E07, S06, 6x07) sedí na čísla řady a dílu, nebo na text
+    v názvu (seriál „4x4 Garage"). U položky, která čísla v metadatech
+    nemá (film „4x4", soubor „Show 6x07.mkv"), se hledá i v cestě - jako
+    samostatné slovo, ne kus jiného.
+
+    Vrací `polozky` (nejvýš `limit`) a `dalsi` - jestli se jich našlo víc,
+    než se ukazuje. Kdo pak hledá šestou řadu, ví, že má dotaz upřesnit.
     """
-    dotaz = (dotaz or "").strip()[:100]
+    nic: dict[str, Any] = {"polozky": [], "dalsi": False}
+    dotaz = unicodedata.normalize("NFC", dotaz or "").strip()[:100]
     if len(dotaz) < 2:
-        return []
-    vzor = f"%{dotaz}%"
+        return nic
+
+    texty: list[str] = []
+    kody: list[tuple[int, int | None, str]] = []
+    for slovo in dotaz.split():
+        slovo = _OKRAJ_SLOVA.sub("", slovo)
+        if not slovo:
+            continue
+        kod = _KOD_DILU.fullmatch(slovo)
+        if kod:
+            rada, dil = (kod.group(1), kod.group(2)) if kod.group(1) else (kod.group(3), kod.group(4))
+            kody.append((int(rada), int(dil) if dil else None, slovo))
+        else:
+            texty.append(slovo)
+    if not texty and not kody:
+        return nic
+
+    # Předběžný výběr v SQL - nadmnožina toho, co pustí Python níž. Každé
+    # slovo musí být v názvu, seriálu, cestě nebo roce, takže tam je i jeho
+    # nejdelší ASCII kus. Slova se spojují přes AND: kandidátů je pak
+    # málo a strop HLEDANI_KANDIDATU se skoro nikdy neuplatní.
+    podminky = ["i.is_missing = 0"]
+    parametry: list[Any] = []
+    sloupce_slova = ("i.name", "i.series_name", "i.path", "CAST(i.production_year AS TEXT)")
+    for slovo in texty:
+        kusy = _ASCII_KUS.findall(slovo)
+        if kusy:
+            vzory = [f"%{max(kusy, key=len)}%"]
+        else:
+            # Bez ASCII (azbuka, řečtina): SQLite tu velikost písmen
+            # nesrovná, tak se hledají obvyklé podoby - jak je napsané,
+            # malými, Velkým na začátku a VELKÝMI.
+            vzory = [f"%{v}%" for v in dict.fromkeys((slovo, slovo.lower(), slovo.capitalize(), slovo.upper()))]
+        sql, par = _like_kdekoli(vzory, sloupce_slova)
+        podminky.append(sql)
+        parametry += par
+    for rada, dil, slovo in kody:
+        cisla = "i.parent_index_number = ?"
+        parametry.append(rada)
+        if dil is not None:
+            # Díl bez čísla epizody v metadatech řada pořád určuje.
+            cisla += " AND (i.index_number = ? OR i.index_number IS NULL)"
+            parametry.append(dil)
+        v_nazvu, par_nazvu = _like_kdekoli([f"%{slovo}%"], ("i.name", "i.series_name"))
+        bez_cisel, par_bez = _like_kdekoli([f"%{slovo}%", f"%{_znacka_dilu(rada, dil)}%"])
+        podminky.append(f"(({cisla}) OR {v_nazvu} OR (i.parent_index_number IS NULL AND {bez_cisel}))")
+        parametry += par_nazvu + par_bez
+
+    # Bez čísel (filmy) napřed, v SQLite i v PostgreSQL stejně: NULL by se
+    # v nich řadil jednou na začátek, jednou na konec.
     radky = db.query_all(
-        """
+        f"""
         SELECT i.id, i.name, i.type, i.series_name, i.parent_index_number,
                i.index_number, i.production_year, i.path,
                i.series_id, i.image_tag, i.series_image_tag,
                l.name AS library_name
         FROM items i
         LEFT JOIN libraries l ON l.id = i.library_id
-        WHERE i.is_missing = 0
-          AND (i.name LIKE ? OR i.series_name LIKE ? OR i.path LIKE ?)
-        ORDER BY COALESCE(i.series_name, i.name), i.parent_index_number,
-                 i.index_number, i.id
+        WHERE {' AND '.join(podminky)}
+        ORDER BY COALESCE(i.series_name, i.name), COALESCE(i.parent_index_number, -1),
+                 COALESCE(i.index_number, -1), i.id
         LIMIT ?
         """,
-        (vzor, vzor, vzor, int(limit)),
+        (*parametry, HLEDANI_KANDIDATU),
     )
-    return [{
-        "id": r["id"],
-        "popis": popis_polozky(r),
-        "typ": r["type"],
-        "knihovna": r["library_name"],
-        "soubor": str(r["path"] or "").replace("\\", "/").rsplit("/", 1)[-1],
-        "nahled": nahled_polozky(r),
-    } for r in radky]
+
+    hledane = [_pro_hledani(t) for t in texty]
+
+    def sedi(r: dict[str, Any]) -> bool:
+        nazev = _pro_hledani(f"{r['name'] or ''} {r['series_name'] or ''}")
+        kde = _pro_hledani(" ".join(str(x) for x in (r["name"], r["series_name"], r["path"],
+                                                     r["production_year"]) if x is not None))
+        if not all(t in kde for t in hledane):
+            return False
+        for rada, dil, slovo in kody:
+            kod = _pro_hledani(slovo)
+            if _samostatne(kod, nazev):
+                continue                    # „4x4 Garage" - kód je součást názvu
+            if r["parent_index_number"] is None:
+                if not (_samostatne(kod, kde) or _samostatne(_znacka_dilu(rada, dil), kde)):
+                    return False
+            elif int(r["parent_index_number"]) != rada or (
+                    dil is not None and r["index_number"] is not None and int(r["index_number"]) != dil):
+                return False
+        return True
+
+    nalezy: list[dict[str, Any]] = []
+    for r in radky:
+        if sedi(r):
+            nalezy.append(r)
+            if len(nalezy) > limit:
+                break
+    return {
+        "polozky": [{
+            "id": r["id"],
+            "popis": popis_polozky(r),
+            "typ": r["type"],
+            "knihovna": r["library_name"],
+            "soubor": jmeno_souboru(r["path"]),
+            "nahled": nahled_polozky(r),
+        } for r in nalezy[:limit]],
+        # Strop kandidátů: za ním můžou být další, které se neprošly.
+        "dalsi": len(nalezy) > limit or len(radky) >= HLEDANI_KANDIDATU,
+    }
 
 
 class PrirazeniError(ValueError):

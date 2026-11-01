@@ -1695,7 +1695,7 @@
                 seznam.hidden = true;
                 oznam();
             }
-            function vykresli(polozky) {
+            function vykresli(polozky, dalsi) {
                 seznam.textContent = "";
                 polozky.forEach(function (p) {
                     var li = document.createElement("li");
@@ -1718,11 +1718,21 @@
                     li.appendChild(tlacitko);
                     seznam.appendChild(li);
                 });
-                if (!polozky.length) {
+                /* Prázdný seznam s dalšími výsledky není „nic": prošel se jen
+                   strop kandidátů - pak stačí rada upřesnit hledání. */
+                if (!polozky.length && !dalsi) {
                     var nic = document.createElement("li");
                     nic.className = "prazdno";
                     nic.textContent = box.dataset.prazdno || "";
                     seznam.appendChild(nic);
+                }
+                /* Server vrací jen prvních pár; kdo hledá šestou řadu,
+                   má vědět, že ji najde upřesněním, ne posouváním. */
+                if (dalsi) {
+                    var vic = document.createElement("li");
+                    vic.className = "prazdno";
+                    vic.textContent = box.dataset.dalsi || "";
+                    seznam.appendChild(vic);
                 }
                 seznam.hidden = false;
             }
@@ -1732,7 +1742,7 @@
                       { credentials: "same-origin" })
                     .then(function (r) { return r.ok ? r.json() : { polozky: [] }; })
                     .then(function (data) {
-                        if (dotaz === posledni) { vykresli(data.polozky || []); }
+                        if (dotaz === posledni) { vykresli(data.polozky || [], data.dalsi); }
                     })
                     .catch(function () { /* vypadek site: nabidka zustane, jak byla */ });
             }

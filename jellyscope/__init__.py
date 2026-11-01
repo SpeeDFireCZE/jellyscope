@@ -1,3 +1,3 @@
 """Jellyscope - statistiky Jellyfinu spojene s technickou analyzou knihovny."""
 
-__version__ = "1.8.2"
+__version__ = "1.8.3"

@@ -373,7 +373,8 @@
 
    Hledá jen v živé knihovně (/archiv/hledat) - podle názvu, seriálu
    i jména souboru. Vybrané id jde ve skrytém poli `nazev`; prázdné
-   pole = nic nevybráno. Výsledky se do stránky skládají přes
+   pole = nic nevybráno. Hledá se po slovech v libovolném pořadí a S06E07
+   (nebo S06) najde řadu a díl. Výsledky se do stránky skládají přes
    textContent, takže název titulu se značkou nic nerozbije. Obsluha je
    v base.html (data-vyber-cile). #}
 {# Malý plakát vedle názvu v nabídkách přiřazení. Když obrázek není
@@ -385,7 +386,8 @@
 
 
 {% macro vyber_cile(nazev) %}
-<div class="vyber-cile" data-vyber-cile data-prazdno="{{ _('Nic nenalezeno.') }}">
+<div class="vyber-cile" data-vyber-cile data-prazdno="{{ _('Nic nenalezeno.') }}"
+     data-dalsi="{{ _('Výsledků je víc, než se vejde. Upřesni hledání, třeba řadou a dílem: Zelenáč S06E07.') }}">
     <input type="search" autocomplete="off"
            placeholder="{{ _('Hledat titul, seriál nebo soubor…') }}"
            aria-label="{{ _('Hledat titul, seriál nebo soubor…') }}">

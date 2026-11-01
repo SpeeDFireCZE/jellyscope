@@ -1908,7 +1908,7 @@ def archiv_hledat(q: str = "", account: dict[str, Any] = Depends(require_admin))
     okno ukáže: id, popis, knihovna a jméno souboru (ne celá cesta -
     ta o disku serveru prozradí víc, než výběr potřebuje).
     """
-    return JSONResponse({"polozky": stats.hledej_existujici(q)})
+    return JSONResponse(stats.hledej_existujici(q))
 
 
 @app.post("/item/{item_id}/priradit")

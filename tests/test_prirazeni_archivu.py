@@ -116,6 +116,18 @@ ctenar = TestClient(web.app)
 ctenar.post("/login", data={"username": "ctenar", "password": "dlouheheslo",
                             "zpusob": "mistni"})
 
+print("--- jméno souboru u archivu ---")
+# Počítá ho Python, ne šablona: i windowsová cesta (\) dá jen jméno souboru.
+polozka("win-cesta", "Stary film", archiv=1, path="D:\\media\\stare\\Stary.Film.2001.mkv")
+archiv = {r["id"]: r for r in stats.archivovane_polozky(None)}
+check(archiv["win-cesta"].get("soubor") == "Stary.Film.2001.mkv",
+      f"u archivované položky jen jméno souboru ({archiv['win-cesta'].get('soubor')})")
+sablona = (PROJECT / "jellyscope" / "templates" / "library_detail.html").read_text(encoding="utf-8")
+check(".split('/')" not in sablona and "p.soubor" in sablona, "šablona jméno souboru jen vypíše")
+with db.connect() as conn:
+    conn.execute("DELETE FROM items WHERE id = 'win-cesta'")
+
+print()
 print("--- hledání cíle ---")
 nalez = spravce.get("/archiv/hledat?q=Du").json()["polozky"]
 check([p["id"] for p in nalez] == ["duna"], f"jen živá Duna, archiv ne ({[p['id'] for p in nalez]})")
@@ -133,6 +145,86 @@ check(spravce.get("/archiv/hledat?q=Mike").json()["polozky"][0]["popis"]
       == "Mikeš S01E01 – Pilot", "díl je popsaný seriálem a číslem")
 check(ctenar.get("/archiv/hledat?q=Du", follow_redirects=False).status_code == 403,
       "čtenář hledat nesmí")
+
+print()
+print("--- hledání po slovech (seriál + S06E07) ---")
+# Český název seriálu, anglický soubor - jako u uživatele: „Zelenáč" je
+# The Rookie, číslo dílu je v metadatech a ve jménu souboru.
+for rada in range(1, 7):
+    for cislo in range(1, 23):
+        nazev = "Rozdrcený" if (rada, cislo) == (6, 7) else f"Díl {rada}-{cislo}"
+        polozka(f"zel-{rada}-{cislo}", nazev, typ="Episode", series="Zelenáč", rada=rada, dil=cislo,
+                lib="serialy",
+                path=f"/media/serialy/The Rookie/Season {rada:02d}/"
+                     f"The Rookie - S{rada:02d}E{cislo:02d} - Episode WEBDL-1080p.mkv")
+polozka("car-1-1", "Začátek", typ="Episode", series="Čarodějky", rada=1, dil=1, lib="serialy",
+        path="/media/serialy/Charmed/Season 01/Charmed - S01E01.mkv")
+
+
+def hledej(dotaz):
+    return spravce.get("/archiv/hledat", params={"q": dotaz}).json()
+
+
+def ids(dotaz):
+    return [p["id"] for p in hledej(dotaz)["polozky"]]
+
+
+for dotaz in ("Zelenáč S06E07", "zelenáč s06e07", "S06E07 Zelenáč", "Zelenáč Rozdrcený",
+              "Zelenáč S06E07 – Rozdrcený", "  Zelenáč   S06E07  "):
+    check(ids(dotaz) == ["zel-6-7"], f"„{dotaz.strip()}“ najde jen S06E07 ({ids(dotaz)[:3]})")
+rada6 = ids("Zelenáč S06")
+check(rada6 == [f"zel-6-{c}" for c in range(1, 23)],
+      f"„Zelenáč S06“ = celá 6. řada po pořadě ({len(rada6)} dílů)")
+check(ids("čarodějky s01e01") == ["car-1-1"], "malá písmena s diakritikou najdou „Čarodějky“")
+check(ids("Zelenáč S07E01") == [], "neexistující díl nenajde nic")
+check(ids("The Rookie S06E07") == ["zel-6-7"], "jde to i podle jména souboru po slovech")
+vse = hledej("Zelenáč")
+check(len(vse["polozky"]) == 50 and vse.get("dalsi") is True,
+      f"víc než 50 výsledků: ukáže se 50 a ví se, že je jich víc ({len(vse['polozky'])}, {vse.get('dalsi')})")
+check(hledej("Zelenáč S06").get("dalsi") is False, "když se vejdou všechny, další nejsou")
+print()
+print("--- hledání: okraje z revize ---")
+polozka("zona-2012", "Zóna 2012", path="/media/filmy/Zona/Zona.mkv")
+polozka("ctyri", "4x4", path="/media/filmy/4x4.mkv")
+polozka("bez-cisel", "Pilot", typ="Episode", series="Show", lib="serialy",
+        path="/media/serialy/Show/Show 6x07.mkv")
+polozka("bez-dilu", "Neúplný", typ="Episode", series="Bez čísla", rada=6, lib="serialy",
+        path="/media/serialy/Bez cisla/neco.mkv")
+check(ids("Zelenáč, S06E07.") == ["zel-6-7"], "čárka a tečka u slova nevadí")
+check(ids("Zelenáč S06E07") == ["zel-6-7"], "dotaz v rozložené podobě (NFD) najde totéž")
+check(set(ids("4x4")) == {"ctyri", "zel-4-4"},
+      f"„4x4“ najde film toho jména i díl S04E04 ({ids('4x4')})")
+check(ids("Show 6x07") == ["bez-cisel"], f"díl bez čísel v metadatech podle jména souboru 6x07 ({ids('Show 6x07')})")
+check(set(ids("S06E07")) == {"zel-6-7", "bez-dilu"},
+      f"samotný kód najde i díl, kterému chybí číslo dílu ({ids('S06E07')})")
+polozka("sherlock", "Шерлок", path="/media/filmy/Sherlock/Sherlock.mkv")
+for cislo in (1, 3):
+    polozka(f"garaz-{cislo}", f"Motor {cislo}", typ="Episode", series="4x4 Garage", rada=1, dil=cislo,
+            lib="serialy", path=f"/media/serialy/4x4 Garage/4x4 Garage - S01E{cislo:02d}.mkv")
+polozka("bass", "Basový koncert", path="/media/filmy/Bass06/koncert.mkv")
+check(ids("4x4 Garage") == ["garaz-1", "garaz-3"],
+      f"„4x4“ v názvu seriálu se hledá i jako text ({ids('4x4 Garage')})")
+check("bass" not in ids("S06"), f"kód S06 není kus jiného slova (Bass06) ({ids('S06')})")
+check(ids("Show 6x07") == ["bez-cisel"], "6x07 jako samostatné slovo v souboru pořád sedí")
+strop = stats.HLEDANI_KANDIDATU
+stats.HLEDANI_KANDIDATU = 10
+try:
+    check(ids("шерлок") == ["sherlock"], f"slovo bez ASCII písmen (azbuka) se najde i za stropem ({ids('шерлок')})")
+    check(ids("2012") == ["zona-2012"], f"čísla v názvu najdou film i za stropem kandidátů ({ids('2012')})")
+    vysledek = hledej("Zelenáč")
+    check(vysledek["dalsi"] is True,
+          f"když SQL narazí na strop kandidátů, ví se, že je jich víc ({len(vysledek['polozky'])}, {vysledek['dalsi']})")
+    check(ids("Zelenáč Rozdrcený") == ["zel-6-7"], "všechna slova se filtrují už v SQL, strop nevadí")
+finally:
+    stats.HLEDANI_KANDIDATU = strop
+
+okno = spravce.get("/item/bts").text
+check('data-dalsi="' in okno and "S06E07" in okno.split('data-dalsi="')[1].split('"')[0],
+      "výběr cíle má radu, jak upřesnit, když se výsledky nevejdou")
+skript = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+check("data.dalsi" in skript and "box.dataset.dalsi" in skript, "nabídka radu ukáže, když přijde dalsi")
+check("if (!polozky.length && !dalsi)" in skript,
+      "„Nic nenalezeno“ jen tehdy, když nejsou ani další výsledky (jinak by si hlášky odporovaly)")
 
 print()
 print("--- přiřazení z detailu ---")

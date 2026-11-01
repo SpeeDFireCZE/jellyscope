@@ -78,6 +78,7 @@ check(formatting.datetime_human("2026-07-15 08:00:00") == "15.07.2026 10:00",
 print()
 print("--- graf sítě mluví stejným časem jako historie ---")
 from datetime import datetime, timedelta, timezone  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
 
 from jellyscope import stats  # noqa: E402
 
@@ -94,7 +95,10 @@ with db.connect() as conn:
          (zacatek + timedelta(hours=1)).strftime(db.TIME_FORMAT),
          (zacatek + timedelta(hours=1)).strftime(db.TIME_FORMAT)))
 
-for zona, ocekavana_hodina in (("UTC", 18), ("Europe/Prague", 20), ("America/New_York", 14)):
+for zona in ("UTC", "Europe/Prague", "America/New_York"):
+    # Hodina podle pravidel zóny, ne natvrdo: Praha je v létě +2 a v zimě +1,
+    # takže pevné "20" padalo každou zimu (a New York po svém přechodu).
+    ocekavana_hodina = zacatek.astimezone(ZoneInfo(zona)).hour
     db.set_setting("app_timezone", zona)
     krivka = stats.bandwidth_prubeh(7, bodu=30)
     popisek = krivka[0]["popisek"] if krivka else ""

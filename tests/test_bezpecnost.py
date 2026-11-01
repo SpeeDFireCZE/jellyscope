@@ -464,8 +464,9 @@ print("--- texty v JavaScriptu jdou přes tojson ---")
 # prekladu), bez vydani a bez kontroly.
 def _vyrazy_v_js(text: str) -> list[str]:
     vyrazy = []
-    # re.I: na velikosti písmen tagu nezáleží (CodeQL py/bad-tag-filter).
-    for blok in re.findall(r"<script[^>]*>(.*?)</script>", text, re.S | re.I):
+    # re.I: na velikosti písmen tagu nezáleží, a koncový tag smí mít mezeru
+    # nebo atributy (</script >) - obojí hlídá CodeQL py/bad-tag-filter.
+    for blok in re.findall(r"<script\b[^>]*>(.*?)</script\b[^>]*>", text, re.S | re.I):
         vyrazy += re.findall(r"\{\{(.*?)\}\}", blok, re.S)
     for zacatek in re.finditer(r"\son[a-z]+=([\"'])", text):
         uvozovka, i, hodnota = zacatek.group(1), zacatek.end(), ""

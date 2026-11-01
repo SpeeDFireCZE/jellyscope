@@ -132,7 +132,9 @@ check(zdravi.status_code == 200 and OSM not in zdravi.headers.get("content-secur
       f"když nastavení nejde přečíst, /health běží s přísnou CSP ({zdravi.status_code})")
 
 mapa_js = (PROJECT / "jellyscope" / "static" / "mapa.js").read_text(encoding="utf-8")
-check("strict-origin" in mapa_js and "tile.openstreetmap.org" in mapa_js,
+# Celý kus kódu, kterým se skládá adresa dlaždice - ne jen jméno serveru
+# (to by CodeQL bral jako neúplnou kontrolu adresy, py/incomplete-url-substring-sanitization).
+check("strict-origin" in mapa_js and '"https://tile.openstreetmap.org/" + klic + ".png"' in mapa_js,
       "mapa.js stahuje dlaždice OSM s referrerpolicy strict-origin")
 
 print()

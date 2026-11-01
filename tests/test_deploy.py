@@ -619,6 +619,7 @@ print("--- databáze, kterou nejde otevřít ---")
 # vetu - "unable to open database file" - bez cesty, duvodu i rady.
 import tempfile as _tempfile  # noqa: E402
 
+from jellyscope import config as _config  # noqa: E402
 from jellyscope import db as _db  # noqa: E402
 from jellyscope import dialect as _dialect  # noqa: E402
 
@@ -627,6 +628,10 @@ _prekazka = _kam / "tohle-je-soubor"
 _prekazka.write_text("neni to slozka", encoding="utf-8")
 _nastaveni = _dialect.DatabaseConfig(path=str(_prekazka / "jellyscope.db"))
 
+# Prvni pokus je "mimo kontejner". Test sam ale muze bezet v kontejneru
+# (vyvoj v code-serveru), proto se to predstira - stejne jako v test_kontejner.
+_skutecny_kontejner = _config._v_kontejneru
+_config._v_kontejneru = lambda: False
 try:
     with _db.connect(_nastaveni):
         pass
@@ -638,6 +643,8 @@ except _db.DatabaseNedostupna as chyba:
 except Exception as chyba:  # noqa: BLE001
     hlaska = ""
     check(False, f"vyletěla holá {type(chyba).__name__}: {chyba}")
+finally:
+    _config._v_kontejneru = _skutecny_kontejner
 
 check(str(_prekazka) in hlaska, "hláška říká, o kterou cestu jde")
 check("nejde otevřít" in hlaska, "a co se stalo")

@@ -184,7 +184,7 @@
                         <span class="vyber-cile-text">
                             <strong>{{ p.popis }}</strong>
                             <small>
-                                {{ p.plays | number }} {{ _("přehrávání") }}{% if p.path %} &middot; {{ p.path.replace('\\', '/').split('/')[-1] }}{% endif %}
+                                {{ p.plays | number }} {{ _("přehrávání") }}{% if p.soubor %} &middot; {{ p.soubor }}{% endif %}
                             </small>
                         </span>
                         {{ vyber_cile('cil_' ~ p.id) }}
@@ -252,7 +252,7 @@
                             <span class="vyber-cile-text">
                                 <strong>{{ p.popis }}</strong>
                                 <small>
-                                    {{ p.plays | number }} {{ _("přehrávání") }}{% if p.path %} &middot; {{ p.path.replace('\\', '/').split('/')[-1] }}{% endif %}
+                                    {{ p.plays | number }} {{ _("přehrávání") }}{% if p.soubor %} &middot; {{ p.soubor }}{% endif %}
                                 </small>
                             </span>
                         </label>

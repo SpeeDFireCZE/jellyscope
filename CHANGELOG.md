@@ -10,6 +10,31 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.8.3
+
+### What is new
+
+The search in *Assign to another title* finds episodes again. Every word is matched on its own, so "The Rookie S06E07" or a translated series name with the episode number finds that one episode, in any season. FastAPI and Starlette are up to date, and the code scanning alerts on GitHub are resolved.
+
+### Before you upgrade
+
+- Nothing to do.
+
+### Fixed
+
+- **Assigning from the archive could not find most episodes.** The search box matched the whole query as one piece of text against the title, the series or the file path, so "Girls S01E06" found nothing: the series name and the episode number are never side by side in one field, only the label shown in the list puts them together. And with at most 20 results sorted from S01E01, later seasons could not be reached even by scrolling. Now:
+  - every word must match the title, series, file path or year, in any order (`girls return`, `S01E06 Girls`);
+  - `S06E07`, `S06` (a whole season) and `6x07` match the season and episode numbers; for items without them (a film called "4x4", a file `Show 6x07.mkv`) they are looked up as text, as a word of their own;
+  - letter case does not matter, accented capitals (Č, Š, Ž) and non-Latin scripts included, and punctuation around a word is ignored;
+  - up to 50 results; when there are more, the list says to narrow the search.
+- **The test suite failed in winter.** The time-zone test expected the summer offset and failed on every run after the end of daylight saving time. Container-related tests also assumed they never run inside a container.
+- The hint for a database that cannot be opened recognises Podman as a container too, like the rest of the application.
+
+### Changed
+
+- fastapi 0.162.0, starlette 1.9.0 (no known vulnerabilities in either the old or the new versions).
+- Code scanning: the four open CodeQL alerts were false positives - a Jinja expression read as JavaScript and two checks in tests. The code is now written so the scanner reads it right; the file name next to an archived item comes from the server instead of the template.
+
 ## 1.8.2
 
 ### What is new
