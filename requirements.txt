@@ -19,7 +19,7 @@ jinja2==3.1.6              # templating - turns HTML templates into pages
                            # (3.1.6 fixes CVE-2025-27516; Jellyscope does not
                            #  run templates in a sandbox, so it was a formality)
 itsdangerous==2.2.0        # signs the login cookie
-python-multipart==0.0.32   # reads HTML form data (POST)
+python-multipart==0.0.33   # reads HTML form data (POST)
 tzdata==2026.6             # time-zone database for the "Time zone" setting.
                            # Linux has one of its own and Python uses that
                            # first; Windows and minimal container images
