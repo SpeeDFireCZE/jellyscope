@@ -14,7 +14,7 @@ restart.
 
 ### What is new
 
-A code rework to best practice. The big modules are split into packages by area and the longest functions into short named steps, so the code is easier to read, test and change. Nothing changes in how Jellyscope looks or works, and your data and settings stay as they are.
+Permissions now cover what a page shows, not just which pages open, and the code is reworked to best practice: the big modules are split into packages by area and the longest functions into short named steps, so the code is easier to read, test and change. Your data and settings stay as they are.
 
 ### Before you upgrade
 
@@ -33,7 +33,8 @@ A code rework to best practice. The big modules are split into packages by area 
 
 ### Fixed
 
-- Permissions cover content, not just pages: an account without an area (for example "Now playing") no longer sees its data inside other pages, and a reader's History follows who watched it.
+- **Permissions cover content, not just pages.** A page of one area no longer shows another area's data: without "Now playing" the Overview, the sidebar, `/health` and `/api/v1/summary` show no streams; without "Library" the Overview has no "Recently added"; addresses need "Network". "...including who watched it" now governs a title's play history, a library's viewers and a reader's History.
+- With names hidden, the library "Viewers" chart no longer shows real names, and links are drawn only where the account may open them.
 - Summaries show one viewer per row, and imported names without an id stay apart in the library viewers chart.
 
 ## 1.8.3
