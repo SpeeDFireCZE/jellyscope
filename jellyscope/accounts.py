@@ -38,7 +38,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from . import db
@@ -134,7 +134,7 @@ def _do_kdy_sekund(cas_utc: str) -> int:
         konec = datetime.strptime(cas_utc[:19].replace("T", " "), db.TIME_FORMAT)
     except (TypeError, ValueError):
         return 0
-    return int((konec - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds())
+    return int((konec - datetime.now(UTC).replace(tzinfo=None)).total_seconds())
 
 
 def zapocitej_neuspech(ip: str) -> dict[str, Any] | None:
@@ -195,7 +195,7 @@ def _zablokuj(ip: str) -> dict[str, Any]:
 
 
 def _za_sekund(sekund: int) -> str:
-    return (datetime.now(timezone.utc).replace(tzinfo=None)
+    return (datetime.now(UTC).replace(tzinfo=None)
             + timedelta(seconds=sekund)).strftime(db.TIME_FORMAT)
 
 
@@ -255,7 +255,7 @@ def zablokuj_natrvalo(ip: str) -> None:
 
 def uklid_blokaci() -> int:
     """Smaze davno vyprsele zaznamy. Vola se pri startu."""
-    hranice = (datetime.now(timezone.utc).replace(tzinfo=None)
+    hranice = (datetime.now(UTC).replace(tzinfo=None)
                - timedelta(hours=ZAPOMENUT_PO_HODINACH)).strftime(db.TIME_FORMAT)
     with db.connect() as conn:
         cursor = conn.execute(

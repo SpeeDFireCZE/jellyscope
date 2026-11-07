@@ -26,7 +26,8 @@ import itertools
 import json
 import re
 import math
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 from .i18n import translate as _t
 
@@ -272,6 +273,7 @@ def hbar_chart(
     link_key: str = "id",
     poradi: bool = False,
     popisky_nad: bool = False,
+    smi: Callable[[str], bool] | None = None,
 ) -> str:
     """Porovnani hodnot mezi kategoriemi.
 
@@ -285,7 +287,8 @@ def hbar_chart(
     `link_prefix` udela z popisku odkaz: k predpone se pripoji hodnota
     z `link_key` daneho radku (napr. "/users/" + user_id). Radky bez te
     hodnoty zustanou obycejnym textem - odkaz, ktery nikam nevede, je
-    horsi nez zadny.
+    horsi nez zadny. Ze stejneho duvodu `smi` (funkce smi() ze sablony):
+    radek, na jehoz stranku ucet nesmi, zustane textem.
 
     `poradi=True` prida pred popisek cislo radku. Zapina se jen tam, kde
     je graf opravdu **zebricek** - u nejsledovanejsich titulu nebo
@@ -326,6 +329,8 @@ def hbar_chart(
         # pripad nejsledovanejsich titulu, kde serial vede na /series/
         # a film na /item/ - jedna spolecna predpona by tam nestacila.
         cil = row.get(link_key) if link_prefix is not None else None
+        if cil and smi is not None and not smi(f"{link_prefix}{cil}"):
+            cil = None
         popisek = _e(label)
         if cil:
             popisek = (f'<a class="hbar-link" href="{_e(link_prefix)}{_e(cil)}">'

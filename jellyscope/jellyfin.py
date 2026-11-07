@@ -231,7 +231,7 @@ class JellyfinClient:
             headers=hlavicky(api_key, self.verze),
         )
 
-    async def __aenter__(self) -> "JellyfinClient":
+    async def __aenter__(self) -> JellyfinClient:
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:

@@ -140,7 +140,7 @@ print("--- stránka zůstane u karty, neskočí nahoru ---")
 # Po kliknuti se stranka nacte znovu; bez kotvy by zacinala od zacatku
 # a clovek by hledal, kde to byl. Hlaska je plovouci okenko nahore,
 # takze o ni tim neprijde.
-# Polohu drzi `data-keep-scroll` (skript v base.html si ji pri kliknuti
+# Polohu drzi `data-keep-scroll` (skript ve static/js/app.js si ji pri kliknuti
 # zapamatuje a po nacteni vrati). Kotva v adrese je jen zachrana, kdyby
 # skript nedobehl - bez ni by clovek skoncil na zacatku stranky.
 # Zmereno v prohlizeci pres CDP: 1644 px pred i po zapomenuti,
@@ -154,8 +154,8 @@ check("data-keep-scroll" in sablona_karty[i_potvrzeni:i_potvrzeni + 200],
 i_vratit = sablona_karty.index("Vrátit zpět")
 check("data-keep-scroll" in sablona_karty[i_vratit - 200:i_vratit],
       "a tlačítko Vrátit zpět taky")
-check("[data-keep-scroll]" in (PROJECT / "jellyscope" / "templates"
-                               / "base.html").read_text(encoding="utf-8"),
+check("[data-keep-scroll]" in (PROJECT / "jellyscope" / "static" / "js"
+                               / "app.js").read_text(encoding="utf-8"),
       "obsluha, která polohu vrací, na stránce je")
 check(kam_to_vrati("/settings/historie/zapomen", {"user_id": "u-nikdo"})
       .endswith("#odklizeni"), "a bez skriptu se aspoň skočí ke kartě")

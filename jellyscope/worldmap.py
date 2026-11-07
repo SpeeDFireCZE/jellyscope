@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Obrys pevnin a hranice statu pro mapu na strance Sit.
 
 Odkud to je: Natural Earth, sady `ne_110m_land` a

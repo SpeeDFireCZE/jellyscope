@@ -537,6 +537,8 @@ api.zapis_pouziti = puvodni_zapis
 check(udalosti == ["odeslano", "zapis"],
       f"klient má odpověď dřív, než se zapisuje ({udalosti})")
 
+# Ve vstupních dveřích (api volá stats.overview) i v podmodulu, kde bydlí
+# (čte ho tam srovnani) - test_stats_balik, kontrola e.
 puvodni_prehled = api.stats.overview
 
 
@@ -544,12 +546,12 @@ def rozbity_prehled(*args, **kwargs):
     raise RuntimeError("rozbitý dotaz")
 
 
-api.stats.overview = rozbity_prehled
+api.stats.overview = api.stats.prehled.overview = rozbity_prehled
 logging.disable(logging.CRITICAL)
 odpoved = TestClient(web.app, raise_server_exceptions=False).get(
     "/api/v1/summary?days=29", headers={"Authorization": f"Bearer {serveru['token']}"})
 logging.disable(logging.NOTSET)
-api.stats.overview = puvodni_prehled
+api.stats.overview = api.stats.prehled.overview = puvodni_prehled
 check(odpoved.status_code == 500 and posledni_pouziti().get("cesta") == "/api/v1/summary?days=29"
       and posledni_pouziti().get("vysledek") == 500, "neodchycená chyba (500) se zapíše taky")
 

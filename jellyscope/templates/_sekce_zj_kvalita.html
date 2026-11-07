@@ -3,7 +3,7 @@
    Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
    klíč zj_kvalita) - jedna šablonka, ať se obě místa nerozejdou.
    Čeká `upgrades (insights.upgrade_candidates)`. #}
-{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka, odkaz with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Díváš se na to hodně, ale ve slabé kvalitě") }}</h2>
@@ -24,7 +24,7 @@
                    za soubor a kde leží. #}
                 <td class="truncate" title="{{ row.label }}">
                     {% if row.detail_url %}
-                        <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                        {% call odkaz(row.detail_url) %}{{ row.label }}{% endcall %}
                     {% else %}
                         {{ row.label }}
                     {% endif %}

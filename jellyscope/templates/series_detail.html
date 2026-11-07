@@ -51,8 +51,8 @@
                 {% for dil in series.archived %}
                 <li>
                     <a href="/item/{{ dil.id }}">
-                        {%- if dil.parent_index_number is not none and dil.index_number is not none -%}
-                            S{{ '%02d' | format(dil.parent_index_number) }}E{{ '%02d' | format(dil.index_number) }} &middot;
+                        {%- if dil | kod_dilu -%}
+                            {{ dil | kod_dilu }} &middot;
                         {% endif %}
                         {{ dil.name }}
                     </a>
@@ -90,7 +90,7 @@
     <div>
         <div class="item-poster {{ 'is-archived' if series.missing }}">
             <img src="/image/{{ series.id }}?kind=Primary&w=400{{ '&tag=' ~ series.image_tag if series.image_tag }}" alt="" loading="lazy"
-                 onerror="this.parentElement.style.display='none'">
+                 data-pri-chybe="skryt-rodice">
             {% if series.missing %}
                 <span class="media-archived">{{ _("Archivováno") }}</span>
             {% endif %}

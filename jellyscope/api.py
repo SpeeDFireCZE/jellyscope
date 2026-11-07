@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Čtecí API pro nástroje jako Grafana nebo Homepage.
 
 Je to **zdroj čísel, ne druhá cesta do dat**. Proto:
@@ -45,7 +44,7 @@ import hashlib
 import json
 import logging
 import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -153,8 +152,9 @@ def zabal_prava_klice(oblasti: Any, anonymizace: bool, historie: bool) -> str:
     """Práva root klíče do podoby, v jaké se ukládají (`api_tokens.prava`).
 
     Stejný tvar jako vlastní práva účtu (`pristup.zabal_prava`) a navíc
-    historie: u účtu je stránka Historie vidět vždy, root klíč pro widget
-    knihovny ji ale dostat nemá, dokud ji správce nezaškrtne.
+    historie: u účtu ji řídí pristup.vidi_historii (čtenář jen s „…včetně
+    kdo to sledoval"), root klíč pro widget knihovny ji dostat nemá, dokud
+    ji správce nezaškrtne.
     """
     return json.dumps({
         "oblasti": sorted({str(k) for k in oblasti if str(k) in pristup.PODLE_KLICE}),
@@ -259,8 +259,8 @@ def _oznac_pouziti(radek: dict[str, Any]) -> None:
     if naposledy:
         try:
             kdy = datetime.strptime(str(naposledy), db.TIME_FORMAT).replace(
-                tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) - kdy < ZAPIS_POUZITI_PO:
+                tzinfo=UTC)
+            if datetime.now(UTC) - kdy < ZAPIS_POUZITI_PO:
                 return
         except ValueError:
             pass
@@ -334,6 +334,9 @@ def over_token(request: Request) -> dict[str, Any]:
     historie = True
     if ucet:
         kdo = pristup.role(ucet)
+        # Historie klíče = historie účtu (čtenář jen s „…včetně kdo to
+        # sledoval"). Root klíč má vlastní zaškrtávátko, viz níž.
+        historie = pristup.vidi_historii(ucet)
     else:
         prava = prava_klice(radek["prava"])
         if prava is None:
@@ -363,8 +366,8 @@ def over_token(request: Request) -> dict[str, Any]:
 
 def _smi(token: dict[str, Any], cesta: str) -> bool:
     """Smí vlastník klíče na adresu s touhle cestou routy?"""
-    # Historie nemá oblast (u účtu je vidět vždy); root klíč s vybranými
-    # právy ji dostane jen se zaškrtnutím.
+    # Historie nemá vlastní oblast: u účtu platí pristup.vidi_historii
+    # (spočítané v over_token), root klíč s právy ji má jen se zaškrtnutím.
     if cesta == "/api/v1/history" and not token.get("historie", True):
         return False
     if token["role"] == pristup.SPRAVCE:
@@ -487,7 +490,7 @@ def _pro_vlastnika(token: dict[str, Any], data: Any) -> Any:
 def zapis_pouziti(klic: dict[str, Any], cesta: str, ip: str, vysledek: int) -> None:
     """Zapíše jeden požadavek do logu API (applog.zapis_api).
 
-    Volá ho middleware ve web.py až po odpovědi - jen tehdy je známý
+    Volá ho middleware ve web/__init__.py až po odpovědi - jen tehdy je známý
     výsledek. `klic` je to, co nechal v požadavku over_token(): id, jméno
     a vlastník (prázdný = root klíč). Jak dlouho se záznam drží, řídí
     úloha Rotace logů.
@@ -1165,8 +1168,13 @@ def titul(item_id: str,
 
 
 @router.get("/summary")
-def souhrn(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Sledovanost za období - to, co je na Přehledu nahoře."""
+def souhrn(token: dict[str, Any] = Depends(smi_adresu),
+           dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
+    """Sledovanost za období - to, co je na Přehledu nahoře.
+
+    `active_now` (kolik se sleduje teď) patří „Právě se hraje" - bez něj
+    v odpovědi chybí, stejně jako v /health a v panelu stránek.
+    """
     dny = _dny_dotazu(dotaz)
     prehled = stats.overview(dny)
     watched = int(prehled.get("watched_seconds") or 0)
@@ -1178,7 +1186,8 @@ def souhrn(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
         "users": int(prehled.get("users") or 0),
         "titles": int(prehled.get("item_count") or 0),
         "transcode_share_percent": round(float(prehled.get("transcode_share") or 0), 1),
-        "active_now": stats.active_session_count(),
+        **({"active_now": stats.active_session_count()}
+           if _smi(token, "/api/v1/now-playing") else {}),
     }
 
 

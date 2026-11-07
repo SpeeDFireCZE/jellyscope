@@ -96,8 +96,9 @@ check(stats.tok_ted()["streamu"] == 1, "Právě teče počítá jeden stream")
 
 print()
 print("--- na pozadí to hlídá úloha ukázky ---")
-zdroj = (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8")
-check("demodata.udrzuj_zive()" in zdroj, "web.py ji v ukázkovém režimu spouští")
+zdroj = "".join(p.read_text(encoding="utf-8")
+                for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")))
+check("demodata.udrzuj_zive()" in zdroj, "web/start.py ji v ukázkovém režimu spouští")
 
 print()
 print("HOTOVO - chyb:", failures)

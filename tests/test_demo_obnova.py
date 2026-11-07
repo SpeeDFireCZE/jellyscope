@@ -110,8 +110,9 @@ check(demodata.pripravit(tichy=True)["plays"] > 0, "a vyrobí se znovu")
 
 print()
 print("--- na pozadí to hlídá úloha ukázky ---")
-zdroj = (PROJECT / "jellyscope" / "web.py").read_text(encoding="utf-8")
-check("demodata.obnovuj()" in zdroj, "web.py ji v ukázkovém režimu spouští")
+zdroj = "".join(p.read_text(encoding="utf-8")
+                for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")))
+check("demodata.obnovuj()" in zdroj, "web/start.py ji v ukázkovém režimu spouští")
 check(hasattr(demodata, "obnovuj"), "a existuje")
 
 print()

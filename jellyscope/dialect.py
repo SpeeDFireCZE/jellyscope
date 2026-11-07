@@ -40,7 +40,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ class DatabaseConfig:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DatabaseConfig":
+    def from_dict(cls, data: dict[str, Any]) -> DatabaseConfig:
         kind = str(data.get("kind", SQLITE)).lower()
         return cls(
             kind=kind if kind in (SQLITE, POSTGRES) else SQLITE,

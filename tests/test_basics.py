@@ -207,15 +207,29 @@ with TestClient(app) as client:
 
 print("--- zachovani pozice pri zmene obdobi ---")
 # Filtr 7/30/90 dnu meni celou stranku, takze se nacita znovu - a nove
-# nacteni skoci na zacatek. Skript v base.html si pozici pamatuje.
+# nacteni skoci na zacatek. Skript ve static/js/app.js si pozici pamatuje.
 makra = (PROJECT / "jellyscope" / "templates" / "_macros.html").read_text(encoding="utf-8")
-base = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+# Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+base = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+        + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
 check("data-keep-scroll" in makra, "filtr obdobi je oznaceny data-keep-scroll")
-check("data-keep-scroll" in base, "base.html ma obsluhu, ktera pozici uklada")
+check("data-keep-scroll" in base, "skripty maji obsluhu, ktera pozici uklada")
 check("sessionStorage" in base and "scrollTo" in base,
       "pozice se uklada do sessionStorage a obnovuje scrollTo")
 check("localStorage.setItem(\"scroll" not in base,
       "pozice nezustava v localStorage navzdy")
+
+print("--- kód dílu ---")
+# Speciály jsou sezóna 0 - nula je platné číslo, ne „neznámo".
+for radek, want in [
+    ({"parent_index_number": 1, "index_number": 3}, "S01E03"),
+    ({"parent_index_number": 0, "index_number": 5}, "S00E05"),
+    ({"parent_index_number": 2, "index_number": None}, ""),
+    ({"parent_index_number": None, "index_number": 4}, ""),
+    ({}, ""),
+]:
+    got = formatting.kod_dilu(radek)
+    check(got == want, f"kod_dilu({radek}) = {got!r}, čekám {want!r}")
 
 print("--- formatovani cisel ---")
 for got, want in [

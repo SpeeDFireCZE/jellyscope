@@ -45,7 +45,7 @@ CTENI = re.compile(
 CIZI = {"PATH", "PYTHONIOENCODING", "TEMP", "TMP", "USERPROFILE", "HOME"}
 
 ctene: set[str] = set()
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     for nalez in CTENI.finditer(soubor.read_text(encoding="utf-8")):
         jmeno = next(g for g in nalez.groups() if g)
         if jmeno not in CIZI:

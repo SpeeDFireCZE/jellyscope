@@ -72,9 +72,10 @@ import shutil
 import sqlite3
 import subprocess
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
+from collections.abc import Awaitable, Callable
 
 from . import applog, db, odklizeni, scanner
 from .i18n import translate as _t
@@ -476,7 +477,7 @@ async def backup_database(duvod: str = "") -> dict[str, Any]:
         scanner.finish_task_log(scan_id, "error", message=str(exc))
         return {"status": "error", "message": f"Složku nelze vytvořit: {exc}"}
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     database = db.database_config()
 
     # Kazda databaze se zalohuje po svem. SQLite ma zalohovani vestavene,
@@ -700,7 +701,7 @@ def _dump_vlastni(destination: Path) -> int:
     with destination.open("w", encoding="utf-8") as soubor:
         soubor.write(
             "-- Záloha Jellyscope (vlastní export)\n"
-            f"-- vytvořeno: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+            f"-- vytvořeno: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
             "--\n"
             "-- Obnova:  psql -U <uživatel> -d <databáze> -f tento-soubor.sql\n"
             "--\n"
@@ -873,7 +874,7 @@ def list_backups() -> list[dict[str, Any]]:
                 "name": path.name,
                 "size_bytes": stat.st_size,
                 "created_at": datetime.fromtimestamp(
-                    stat.st_mtime, tz=timezone.utc
+                    stat.st_mtime, tz=UTC
                 ).strftime(db.TIME_FORMAT),
             })
     except OSError:
@@ -966,7 +967,7 @@ def restore_backup(name: str) -> dict[str, Any]:
 def _zaloha_pred_obnovou(config: Any) -> Path:
     """Uloží současný stav, než ho obnova přepíše."""
     slozka = Path(db.get_setting("backup_path", "").strip())
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     if config.is_postgres:
         cil = slozka / f"jellyscope-{stamp}-pred-obnovou.sql"
         _dump_postgres(config, cil)
@@ -1177,7 +1178,7 @@ def _mistni_cas(utc_text: str) -> datetime | None:
             str(utc_text).replace("T", " ")[:19], db.TIME_FORMAT)
     except (TypeError, ValueError):
         return None
-    return naive.replace(tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+    return naive.replace(tzinfo=UTC).astimezone().replace(tzinfo=None)
 
 
 def _dnesni_cil(task: Task, ted: datetime) -> datetime:

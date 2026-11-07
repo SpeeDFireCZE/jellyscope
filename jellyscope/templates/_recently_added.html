@@ -32,7 +32,7 @@
            plakátem, jednotlivé díly ten seznam. #}
         <div class="poster-frame">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
-                 loading="lazy" onerror="this.style.display='none'">
+                 loading="lazy" data-pri-chybe="skryt">
             {# Místo "epizoda" rovnou počet - ať je na první pohled vidět,
                že přišla celá dávka. Čeština chce jiný tvar pro 2-4 a jiný
                od 5 výš; dávka je vždycky aspoň dvě, takže stačí dva. #}
@@ -48,8 +48,8 @@
                 <span class="poster-episodes-head">{{ _("Přidané díly") }}</span>
                 {% for dil in row.episodes %}
                 <a href="/item/{{ dil.id }}" title="{{ dil.name }}">
-                    {%- if dil.parent_index_number is not none and dil.index_number is not none -%}
-                        <strong>S{{ '%02d' | format(dil.parent_index_number) }}E{{ '%02d' | format(dil.index_number) }}</strong>
+                    {%- if dil | kod_dilu -%}
+                        <strong>{{ dil | kod_dilu }}</strong>
                     {%- endif %}
                     {{ dil.name }}
                 </a>
@@ -64,7 +64,7 @@
            název je hned pod ním). #}
         <a class="poster-frame" href="/item/{{ row.id }}" tabindex="-1" aria-hidden="true">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
-                 loading="lazy" onerror="this.style.display='none'">
+                 loading="lazy" data-pri-chybe="skryt">
             {% if row.is_episode %}
                 <span class="poster-badge">{{ _("epizoda") }}</span>
             {% endif %}

@@ -33,7 +33,8 @@ os.environ["JELLYSCOPE_DEMO"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import accounts, db, geoip, web_zaklad  # noqa: E402
+from jellyscope import accounts, db, geoip  # noqa: E402
+from jellyscope.web import zaklad as web_zaklad  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
 failures = 0

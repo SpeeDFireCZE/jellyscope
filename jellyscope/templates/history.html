@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager, method_badge, transcode_popis %}
+{% from "_macros.html" import pager, method_badge, transcode_popis, odkaz with context %}
 {% block title %}{{ _("Historie") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -80,12 +80,10 @@
 
                 {# Proklik na detail uživatele. Odkaz vede na tutéž stránku,
                    kterou najdeš přes Uživatele - jen se k ní dá dostat
-                   rovnou odsud. #}
+                   rovnou odsud. Kdo na ni nesmí, dostane jen jméno. #}
                 <td class="strong">
-                    {% if row.user_id and not muj_divak %}
-                        <a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>
-                    {% elif row.user_id %}
-                        {{ row.user_name or '?' }}
+                    {% if row.user_id %}
+                        {% call odkaz("/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
                     {% else %}
                         {{ row.user_name or '?' }}
                     {% endif %}
@@ -93,10 +91,10 @@
 
                 <td class="truncate" title="{{ row.item_name }}">
                     {% if row.item_id %}
-                        <a href="/item/{{ row.item_id }}">
+                        {% call odkaz("/item/" ~ row.item_id) %}
                             {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
                             {{ row.item_name }}
-                        </a>
+                        {% endcall %}
                     {% else %}
                         {{ row.item_name }}
                     {% endif %}

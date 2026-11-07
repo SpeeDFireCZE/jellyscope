@@ -54,10 +54,11 @@ def prehrani(jmeno: str, od: str, do: str, mbit: float, sekund: int,
             "INSERT INTO playback (session_key, user_id, user_name, item_id,"
             " item_name, item_type, started_at, last_seen_at, ended_at,"
             " watched_seconds, bitrate, remote_address, play_method, client,"
-            " device_name) VALUES (?, 'u1', ?, 'i1', 'Film', 'Movie',"
+            " device_name) VALUES (?, ?, ?, 'i1', 'Film', 'Movie',"
             " datetime('now', ?), datetime('now', ?), datetime('now', ?),"
             " ?, ?, ?, ?, ?, 'Chrome')",
-            (f"s-{jmeno}-{od}", jmeno, od, do, do, sekund,
+            # Každý divák své id: stejné id = tentýž (přejmenovaný) člověk.
+            (f"s-{jmeno}-{od}", f"u-{jmeno.lower()}", jmeno, od, do, do, sekund,
              int(mbit * 1e6), adresa, metoda, klient),
         )
 

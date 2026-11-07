@@ -525,8 +525,8 @@ for name in ("base.html", "login.html", "setup.html", "error.html", "_macros.htm
           f"{name}: žádný odkaz na styl bez verze")
 
 web = "\n".join(p.read_text(encoding="utf-8")
-         for p in sorted((PROJECT / "jellyscope").glob("web*.py")))
-check('globals["asset_version"]' in web, "web.py verzi počítá a předává šablonám")
+         for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")))
+check('globals["asset_version"]' in web, "web/__init__.py verzi počítá a předává šablonám")
 
 print("--- .gitignore a .gitattributes ---")
 ignore = (PROJECT / ".gitignore").read_text(encoding="utf-8")
@@ -547,7 +547,7 @@ print("--- limit nahravaneho souboru sedi s proxy ---")
 import re as _re
 
 web_kod = "\n".join(p.read_text(encoding="utf-8")
-         for p in sorted((PROJECT / "jellyscope").glob("web*.py")))
+         for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")))
 strop = int(_re.search(r"MAX_UPLOAD_MB = (\d+)", web_kod).group(1))
 check(strop > 0, f"aplikace ma jeden strop pro nahravani ({strop} MB)")
 check(web_kod.count("* 1024 * 1024") == web_kod.count("MAX_UPLOAD_MB * 1024 * 1024"),

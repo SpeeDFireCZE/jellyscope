@@ -1214,7 +1214,7 @@
     "Co se na serveru hraje nejvíc, co leží ladem. O titulech, ne o lidech.": "Qué se reproduce más en el servidor y qué está sin usar. Sobre títulos, no sobre personas.",
     "Kolik je čeho, kodeky, rozlišení, chybějící data.": "Cuánto hay de cada cosa, códecs, resoluciones, datos que faltan.",
     "…včetně „kdo to sledoval“": "…incluido «quién lo vio»",
-    "V detailu titulu a knihovny se vypíšou i diváci. Jména lze skrýt anonymizací.": "En el detalle del título y de la biblioteca también aparecen los espectadores. Los nombres se pueden ocultar con la anonimización.",
+    "V detailu titulu a knihovny se vypíšou i diváci. Místní účet s tímhle právem vidí i Historii (u diváka z Jellyfinu je vždy jen jeho). Jména lze skrýt anonymizací.": "En el detalle del título y de la biblioteca también aparecen los espectadores. Una cuenta local con este permiso ve también el Historial (un espectador de Jellyfin siempre ve solo el suyo). Los nombres se pueden ocultar con la anonimización.",
     "Přehled serveru": "Resumen del servidor",
     "Souhrn za celý server: kolik se sledovalo, kdy, čím. Čísla jsou za všechny dohromady.": "El resumen de todo el servidor: cuánto se vio, cuándo y con qué. Las cifras son de todos juntos.",
     "Tentýž přehled za dvě období vedle sebe.": "El mismo resumen para dos periodos, uno al lado del otro.",

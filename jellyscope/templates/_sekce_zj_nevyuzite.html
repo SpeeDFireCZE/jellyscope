@@ -3,7 +3,7 @@
    Vkládá ji stránka Zjištění (insights.html) i přehled (sekce.py,
    klíč zj_nevyuzite) - jedna šablonka, ať se obě místa nerozejdou.
    Čeká `dead (insights.dead_storage)`. #}
-{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka with context %}
+{% from "_macros.html" import trida_radku, tlacitko_cela_tabulka, odkaz with context %}
 <div class="card" id="nevyuzite-misto">
     <div class="card-head">
         <h2>{{ _("Místo, které nikdo nevyužívá") }}</h2>
@@ -37,10 +37,10 @@
             {% for row in dead.rows %}
             <tr class="{{ trida_radku(loop.index) }}">
                 <td class="strong truncate" title="{{ row.name }}">
-                    <a href="/item/{{ row.id }}">
+                    {% call odkaz("/item/" ~ row.id) %}
                         {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
                         {{ row.name }}
-                    </a>
+                    {% endcall %}
                     {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
                 </td>
                 <td class="muted">{{ row.library_name or '-' }}</td>

@@ -167,7 +167,8 @@
         </ul>
 
         {# Ukázka je odpověď /summary - kdo na ni nesmí, tomu by jen
-           ukazovala něco, co sám nedostane. #}
+           ukazovala něco, co sám nedostane. Ze stejného důvodu active_now
+           jen s „Právě se hraje": bez něj v odpovědi chybí. #}
         {% if "/api/v1/summary" in povolene %}
         <h3 class="skupina">{{ _("Ukázka odpovědi") }}</h3>
         <pre><code>{
@@ -176,8 +177,8 @@
   "plays": 1066,
   "users": 11,
   "titles": 36,
-  "transcode_share_percent": 29.6,
-  "active_now": 1
+  "transcode_share_percent": 29.6{% if "/api/v1/now-playing" in povolene %},
+  "active_now": 1{% endif %}
 }</code></pre>
         {% endif %}
 

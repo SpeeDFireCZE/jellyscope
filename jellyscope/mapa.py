@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Shluky teček na mapě - pro každou úroveň přiblížení zvlášť.
 
 Z dálky má deset míst v jednom městě (a sousední města) splynout do

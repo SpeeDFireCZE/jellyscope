@@ -23,6 +23,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -108,7 +110,7 @@ check(db.query_value("SELECT COUNT(*) FROM items WHERE is_missing = 1") == 0,
 
 print()
 print("--- synchronizace, kterou uprostřed zastavíme ---")
-scanner.JellyfinClient = FalesnyKlient          # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 vysledek = asyncio.run(scanner.sync_library())
 
 check(vysledek.get("status") == "stopped", f"úloha hlásí zastavení: {vysledek}")
@@ -157,7 +159,7 @@ class KlientBezZastaveni(FalesnyKlient):
             }
 
 
-scanner.JellyfinClient = KlientBezZastaveni      # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", KlientBezZastaveni)
 vysledek = asyncio.run(scanner.sync_library())
 check(vysledek.get("status") == "ok", f"druhý běh proběhl celý: {vysledek.get('status')}")
 check(vysledek.get("items") == CELKEM, f"prošlo všech {CELKEM} položek ({vysledek.get('items')})")
@@ -168,7 +170,7 @@ print("--- zastavit nejde, když nic neběží ---")
 check(scanner.request_stop() is False, "request_stop() vrátí False")
 check(not scanner.stop_requested(), "a příznak nenastaví")
 # Kdyby ho nastavil, další spuštěná úloha by se rovnou ukončila.
-scanner.JellyfinClient = KlientBezZastaveni       # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", KlientBezZastaveni)
 vysledek = asyncio.run(scanner.sync_library())
 check(vysledek.get("status") == "ok", "další úloha se kvůli tomu neukončila")
 
@@ -224,7 +226,7 @@ print()
 print("--- stránka si počká a obnoví se sama ---")
 # Po restartu i po zastavení úlohy se dřív muselo obnovovat ručně - a co
 # hůř, nebylo poznat, kdy už to jde. `?wait=...` řekne stránce, na co má
-# počkat; obsluha je v base.html a ptá se /health.
+# počkat; obsluha je ve static/js/app.js a ptá se /health.
 from fastapi.testclient import TestClient  # noqa: E402
 
 from jellyscope import accounts  # noqa: E402

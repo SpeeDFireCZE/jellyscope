@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import charts, db, languages
+from . import charts, db, formatting, languages, stats
 from .i18n import translate as _t
 
 # Kratsi prehravani se do jazykovych statistik nepocita.
@@ -48,7 +48,7 @@ MIN_PLAY_SECONDS = 300
 # mensi vzorek, o kterem neco vime, nez velky, ktery lze.
 #
 # Odfiltrujeme je podle `session_key`: prevzate radky maji predponu
-# "import:", vlastni sber ma klic z relace Jellyfinu. Viz importers.py.
+# "import:", vlastni sber ma klic z relace Jellyfinu. Viz balik importers/.
 #
 # Tyka se to jen statistik postavenych na tabulce `playback` ("co se
 # sleduje"). Prehled toho, co je v knihovne k dispozici, cte tabulku
@@ -253,25 +253,30 @@ def languages_by_user(days: int, colours: dict[str, int]) -> list[dict[str, Any]
     ji potrebujeme "sirokou" - jeden radek na uzivatele. Tomuhle prevodu
     se rika **pivot** a v Pythonu je citelnejsi nez v SQL.
     """
+    # Jeden divák jednou, se současným jménem (viz stats.DIVAK_JMENO) -
+    # přejmenovaný by jinak měl každý jazyk dvakrát.
     rows = db.query_all(
         f"""
-        SELECT user_id,
-               user_name,
-               COALESCE(audio_language, 'und') AS code,
-               SUM(watched_seconds) / 3600.0   AS hours
-        FROM playback
-        WHERE started_at >= ? AND started_at < ?
-          AND watched_seconds >= ?
-          AND user_name IS NOT NULL
-          {SE_ZNAMYM_JAZYKEM}
-        GROUP BY user_id, user_name, code
+        SELECT p.user_id,
+               {stats.DIVAK_JMENO}               AS user_name,
+               COALESCE(p.audio_language, 'und') AS code,
+               SUM(p.watched_seconds) / 3600.0   AS hours
+        FROM playback p
+        LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.started_at >= ? AND p.started_at < ?
+          AND p.watched_seconds >= ?
+          AND p.user_name IS NOT NULL
+          {SE_ZNAMYM_JAZYKEM_P}
+        GROUP BY {stats.DIVAK_SKUPINA}, COALESCE(p.audio_language, 'und')
         """,
         (*_meze(days), MIN_PLAY_SECONDS),
     )
 
     people: dict[str, dict[str, Any]] = {}
     for row in rows:
-        person = people.setdefault(row["user_id"], {
+        # Bez user_id (import) je divák jen jméno - dva různé nesmí splynout.
+        klic = row["user_id"] or "jmeno:" + str(row["user_name"])
+        person = people.setdefault(klic, {
             "user_id": row["user_id"],
             "name": row["user_name"],
             "total": 0.0,
@@ -708,10 +713,9 @@ def _serialy_bez_stopy(vzor: str) -> set[str]:
 
 
 def _oznaceni_dilu(row: dict[str, Any]) -> str:
-    """"S01E03" - aby slo poznat, o ktery dil jde."""
-    if row.get("season") is None or row.get("episode") is None:
-        return ""
-    return f"S{int(row['season']):02d}E{int(row['episode']):02d}"
+    """"S01E03" - aby slo poznat, o ktery dil jde (radek ma season/episode)."""
+    return formatting.kod_dilu({"parent_index_number": row.get("season"),
+                                "index_number": row.get("episode")})
 
 
 def _slouc_do_radku(soubory: list[dict[str, Any]], cele_serialy: set[str],

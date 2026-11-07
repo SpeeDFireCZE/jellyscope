@@ -5,7 +5,7 @@ Akce v Nastavení se dělají uprostřed dlouhé stránky a každá z nich ji
 načte znovu. Bez pomoci by pokaždé začínala od začátku, takže po každém
 uložení následovalo hledání místa, kde člověk byl.
 
-`data-keep-scroll` (obsluha je v `base.html`) si při kliknutí polohu
+`data-keep-scroll` (obsluha je ve `static/js/app.js`) si při kliknutí polohu
 zapamatuje a po načtení ji vrátí. Tenhle test hlídá, že ten atribut má
 **každé** tlačítko, po kterém se stránka Nastavení načte znovu - jinak
 by se na jedno při příštím přidávání zapomnělo a chovalo by se jinak
@@ -39,11 +39,12 @@ def check(condition: bool, label: str) -> None:
 
 
 SEKCE = PROJECT / "jellyscope" / "templates" / "nastaveni"
-BASE = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(
-    encoding="utf-8")
+# Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+BASE = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+        + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
 
 print("--- obsluha na stránce je ---")
-check("[data-keep-scroll]" in BASE, "base.html poslouchá na data-keep-scroll")
+check("[data-keep-scroll]" in BASE, "skripty poslouchají na data-keep-scroll")
 check("sessionStorage" in BASE and "scrollTo" in BASE,
       "polohu si ukládá a po načtení ji vrací")
 check("10000" in BASE, "a po deseti vteřinách ji zahodí (kdyby se stránka "

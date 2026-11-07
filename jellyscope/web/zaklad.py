@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """Základ webu: co potřebuje každá stránka.
 
 Šablony, skládání kontextu, hlášky, závora přihlášení a pomocníci kolem
-období. Bydlí to tady, a ne ve `web.py`, z jediného důvodu: routy jsou
+období. Bydlí to tady, a ne v `__init__.py`, z jediného důvodu: routy jsou
 rozdělené do víc souborů a tyhle věci potřebují všechny. Kdyby zůstaly
 u rout, musely by se moduly importovat navzájem.
 
@@ -16,21 +15,25 @@ import logging
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException, Request, Response
 from fastapi.templating import Jinja2Templates
 
-from . import (accounts, collector, db, formatting, i18n, mapa_podrobna, pristup,
+from .. import (accounts, collector, db, formatting, i18n, mapa_podrobna, pristup,
                scanner, sekce, stats, udalosti, updates)
-from .config import load_config
-from .i18n import translate as _t
+from ..config import load_config
+from ..i18n import translate as _t
 
 
 log = logging.getLogger("jellyscope.web")
 
 
-PACKAGE_DIR = Path(__file__).resolve().parent
+# PROJECT_DIR je kořen projektu (tam, kde je run.py a složka data),
+# PACKAGE_DIR je balíček jellyscope/ (šablony, static). Nejsou totéž a plete
+# se to snadno - proto mají různá jména místo jednoho BASE_DIR. Tenhle
+# soubor leží o složku níž (web/), proto dvakrát parent.
+PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
 
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
@@ -42,7 +45,7 @@ config = load_config()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-def current_account(request: Request) -> Optional[dict[str, Any]]:
+def current_account(request: Request) -> dict[str, Any] | None:
     """Kdo je prihlaseny. Vrati None, kdyz nikdo.
 
     V cookie mame jen ID uctu (a to podepsane, takze ho nejde podvrhnout).
@@ -103,7 +106,7 @@ def require_login(request: Request) -> dict[str, Any]:
 
 
 # Pravidlo žije v pristup.py, kde ho sdílí i API klíče; odtud se jen
-# vystavuje pod jménem, pod kterým ho bere web.py.
+# vystavuje pod jménem, pod kterým ho bere web.
 muj_divak = pristup.muj_divak
 
 
@@ -271,6 +274,36 @@ def _podklad_mapy() -> str:
     return podklad if podklad in PODKLADY_MAPY else "kresleny"
 
 
+# Odkud si prohlizec bere dlazdice mapy, kdyz spravce zapne podklad z OSM.
+OSM_DLAZDICE = "https://tile.openstreetmap.org"
+
+
+def csp(osm: bool = False, nonce: str | None = None) -> str:
+    """Bezpecnostni hlavicka Content-Security-Policy.
+
+    Jedno misto, at se pravidla nerozejdou s tim, co stranky opravdu
+    delaji. Obrazky chodi vsechny pres /image (ani data: neni co
+    povolovat) - s jedinou vyjimkou: dlazdice mapy z OpenStreetMap, a ty
+    jen kdyz je spravce zapnul. Vypnuty podklad = hlavicka jako vzdycky.
+
+    `nonce` pusti vlozeny skript s timhle jednorazovym kodem - jen pro
+    cekarnu po aktualizaci (nastaveni._stranka_aktualizace), ktera se
+    bez nej obejit nemuze. Routa ho necha v `request.state.csp_nonce`.
+    """
+    return "; ".join((
+        "default-src 'self'",
+        f"img-src 'self' {OSM_DLAZDICE}" if osm else "img-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        f"script-src 'self' 'nonce-{nonce}'" if nonce else "script-src 'self'",
+        "connect-src 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+        "base-uri 'self'",
+        # Zadne <object>, <embed> ani applety - aplikace je nepouziva.
+        "object-src 'none'",
+    ))
+
+
 def _zoom_rezim() -> str:
     """Cim se priblizuje mapa - koleckem, nebo klikanim."""
     rezim = (db.get_setting("ui_map_zoom", "click") or "").strip()
@@ -400,20 +433,31 @@ def _flash(request: Request, message: str, level: str = "info",
     request.session["flash"] = {"message": text, "level": level}
 
 
-def _smi_pro(account: Optional[dict[str, Any]]):
+def _smi_pro(account: dict[str, Any] | None):
     """Funkce pro šablonu: smí tenhle účet otevřít tuhle adresu?
 
-    Správce smí všechno; nepřihlášený taky, protože pro něj se menu
-    stejně nekreslí a záporná odpověď by jen schovala odkazy na
-    přihlašovací stránce.
+    Totéž pravidlo, jakým stránky pouští middleware (pristup.smi_otevrit),
+    takže odkaz se vykreslí jen tam, kam opravdu vede. Šablona se ptá
+    u každého řádku tabulky, takže seznam povolených adres se spočítá
+    jednou za požadavek (a až když je potřeba), ne u každého odkazu.
     """
     kdo = pristup.role(account)
     if kdo in ("", pristup.SPRAVCE):
         return lambda cesta: True
-    return lambda cesta: pristup.smi_cestu(kdo, cesta, account)
+    povolene = functools.cache(lambda: pristup.povolene_cesty(kdo, account))
+    return functools.cache(lambda cesta: pristup.smi_otevrit(account, cesta, povolene()))
 
 
-def otisk_obrazku_uctu(account: Optional[dict[str, Any]]) -> str:
+def vidi_pro(account: dict[str, Any] | None):
+    """Funkce pro šablonu: vidí tenhle účet oblast stromu práv?
+
+    Viz pristup.vidi_ucet. Zapamatované na jeden požadavek: route, panel
+    i šablona se ptají na tutéž oblast několikrát.
+    """
+    return functools.cache(lambda oblast: pristup.vidi_ucet(account, oblast))
+
+
+def otisk_obrazku_uctu(account: dict[str, Any] | None) -> str:
     """Otisk profilového obrázku účtu z Jellyfinu, nebo prázdno.
 
     Jen účet z Jellyfinu (místní žádný obrázek nemá) a jen když ho
@@ -441,13 +485,13 @@ def otisk_obrazku_uctu(account: Optional[dict[str, Any]]) -> str:
     return "".join(c for c in otisk if c.isalnum())[:64]
 
 
-def adresa_obrazku_uctu(account: Optional[dict[str, Any]]) -> str:
+def adresa_obrazku_uctu(account: dict[str, Any] | None) -> str:
     """Adresa vlastního obrázku i s otiskem (nový obrázek = nová adresa)."""
     otisk = otisk_obrazku_uctu(account)
     return f"/account/obrazek?v={otisk}" if otisk else ""
 
 
-def _context(request: Request, account: Optional[dict[str, Any]] = None,
+def _context(request: Request, account: dict[str, Any] | None = None,
              **extra: Any) -> dict[str, Any]:
     """Spolecna data pro kazdou stranku (stav sberace, hlasky, kdo je prihlaseny)."""
     # Stranka se statistikami posila `days` - bud cislo, nebo vlastni
@@ -456,12 +500,15 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
     if "days" in extra:
         extra.setdefault("obdobi", _obdobi_do_sablony(extra["days"]))
 
+    vidi = vidi_pro(account)
     base = {
         "collector_status": db.get_setting(collector.STATUS_KEY, "unknown"),
         "collector_error": db.get_setting(collector.ERROR_KEY, ""),
         "last_poll": db.get_setting(collector.LAST_POLL_KEY, ""),
         "flash": request.session.pop("flash", None),
-        "active_count": stats.active_session_count(),
+        # Počet běžících přehrání v levém panelu - je to „kdo co sleduje
+        # teď", tedy jen s právem „Právě se hraje" (0 = řádek se nevypíše).
+        "active_count": stats.active_session_count() if vidi("prave_hraje") else 0,
         "account": account,
         # Podle tohohle se v sablonach schovava to, co je o jinych lidech.
         # `je_spravce` je jen zkratka - rozhoduje `muj_divak`, tedy jestli
@@ -474,10 +521,12 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
         # u výřezů obnovovaných každých pár vteřin.
         "obrazek_uctu": functools.cache(lambda: adresa_obrazku_uctu(account)),
         # Menu se kresli jen z toho, co clovek smi otevrit - tataz
-        # otazka, kterou si klade `rozsah_divaka` ve web.py, i s pravy
+        # otazka, kterou si klade `rozsah_divaka` ve web/__init__.py, i s pravy
         # jednoho uctu. Odkaz, za kterym ceka "sem nemas pristup", je
         # horsi nez zadny.
         "smi": _smi_pro(account),
+        # Totéž pro obsah z jiné oblasti a oblasti bez adresy (vidi_pro).
+        "vidi": vidi,
         # Jazyk, ve kterem se stranka kresli (vlastni volba uctu, jinak
         # serveru), a zvlast jazyk serveru pro Nastaveni -> Obecne. Kdyby
         # se vyber jazyka serveru predvyplnil tim prvnim, spravce s vlastni
@@ -563,7 +612,7 @@ def _context(request: Request, account: Optional[dict[str, Any]] = None,
     return {**pristup.anonymizuj_pro(base, account), **dokumentace}
 
 
-def _cesky_datum(iso: Optional[str]) -> str:
+def _cesky_datum(iso: str | None) -> str:
     """Opak: 2026-08-01 -> 1.8.2026, pro vypsání zpátky do formuláře.
 
     Vlastní práci dělá `formatting.cesky_datum` - potřebuje ho i sekce
@@ -584,7 +633,7 @@ def _clamp(raw: str, minimum: int, maximum: int, fallback: int) -> str:
     return str(max(minimum, min(maximum, value)))
 
 
-def _novy_klic(request: Request, klic: str) -> Optional[dict[str, Any]]:
+def _novy_klic(request: Request, klic: str) -> dict[str, Any] | None:
     """Čerstvě vyrobený API klíč z relace - jednou, a hned se zahodí.
 
     V relaci je {"id", "token"}; podle id se klíč ukáže celý v řádku

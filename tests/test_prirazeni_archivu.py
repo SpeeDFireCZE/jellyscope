@@ -206,8 +206,9 @@ check(ids("4x4 Garage") == ["garaz-1", "garaz-3"],
       f"„4x4“ v názvu seriálu se hledá i jako text ({ids('4x4 Garage')})")
 check("bass" not in ids("S06"), f"kód S06 není kus jiného slova (Bass06) ({ids('S06')})")
 check(ids("Show 6x07") == ["bez-cisel"], "6x07 jako samostatné slovo v souboru pořád sedí")
-strop = stats.HLEDANI_KANDIDATU
-stats.HLEDANI_KANDIDATU = 10
+# V podmodulu, kde bydlí - čte ho tam hledej_existujici (tests/test_stats_balik.py, kontrola e).
+strop = stats.archiv.HLEDANI_KANDIDATU
+stats.archiv.HLEDANI_KANDIDATU = 10
 try:
     check(ids("шерлок") == ["sherlock"], f"slovo bez ASCII písmen (azbuka) se najde i za stropem ({ids('шерлок')})")
     check(ids("2012") == ["zona-2012"], f"čísla v názvu najdou film i za stropem kandidátů ({ids('2012')})")
@@ -216,12 +217,14 @@ try:
           f"když SQL narazí na strop kandidátů, ví se, že je jich víc ({len(vysledek['polozky'])}, {vysledek['dalsi']})")
     check(ids("Zelenáč Rozdrcený") == ["zel-6-7"], "všechna slova se filtrují už v SQL, strop nevadí")
 finally:
-    stats.HLEDANI_KANDIDATU = strop
+    stats.archiv.HLEDANI_KANDIDATU = strop
 
 okno = spravce.get("/item/bts").text
 check('data-dalsi="' in okno and "S06E07" in okno.split('data-dalsi="')[1].split('"')[0],
       "výběr cíle má radu, jak upřesnit, když se výsledky nevejdou")
-skript = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+# Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+skript = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+          + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
 check("data.dalsi" in skript and "box.dataset.dalsi" in skript, "nabídka radu ukáže, když přijde dalsi")
 check("if (!polozky.length && !dalsi)" in skript,
       "„Nic nenalezeno“ jen tehdy, když nejsou ani další výsledky (jinak by si hlášky odporovaly)")

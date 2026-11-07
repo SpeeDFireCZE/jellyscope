@@ -126,7 +126,7 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
         stdout, stderr = await asyncio.wait_for(
             process.communicate(), timeout=PROBE_TIMEOUT_SECONDS
         )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise ProbeError(f"ffprobe neodpovedel do {PROBE_TIMEOUT_SECONDS} s") from exc
     except FileNotFoundError as exc:
         raise ProbeError(f"ffprobe nenalezen ({ffprobe_bin})") from exc

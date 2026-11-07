@@ -40,7 +40,8 @@ os.environ["JELLYSCOPE_DEMO"] = "0"
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import accounts, db, jellyfin, pristup, scanner, web, web_zaklad  # noqa: E402
+from jellyscope import accounts, db, jellyfin, pristup, scanner, web  # noqa: E402
+from jellyscope.web import zaklad as web_zaklad  # noqa: E402
 
 failures = 0
 
@@ -211,7 +212,8 @@ async def _spust_z_pozadavku() -> str:
 
 check(asyncio.run(_spust_z_pozadavku()) == "cs",
       "úloha spuštěná z požadavku běží v jazyce serveru, ne v jazyce účtu")
-zdroj = (PROJECT / "jellyscope" / "web_nastaveni.py").read_text(encoding="utf-8")
+zdroj = "".join(p.read_text(encoding="utf-8")
+                for p in sorted((PROJECT / "jellyscope" / "web" / "nastaveni").glob("*.py")))
 holé = [r for r in zdroj.splitlines()
         if "asyncio.create_task(" in r and "bez_jazyka_uctu" not in r and "_restart_soon" not in r]
 check(not holé, f"každá úloha z Nastavení se spouští bez jazyka účtu ({holé})")

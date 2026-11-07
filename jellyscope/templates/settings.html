@@ -12,7 +12,7 @@
        která je celá o Jellyfinu, by kratší popisek svedl k obavě, že se
        restartuje mediální server. Restartuje se jen tenhle proces. #}
     <form method="post" action="/settings/restart"
-          onsubmit='return confirm({{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.")|tojson }})'>
+          data-potvrdit="{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}">
         <button class="btn" type="submit"
                 title="{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}">
             &#8635; {{ _("Restartovat Jellyscope") }}
@@ -36,7 +36,7 @@
     {# `onchange` odešle formulář, takže se vybírá jedním tahem. Bez
        JavaScriptu zůstane tlačítko - v nastavení se člověk nesmí zaseknout
        kvůli skriptu. #}
-    <select id="vyber-sekce" name="section" onchange="this.form.submit()">
+    <select id="vyber-sekce" name="section" data-odeslat-pri-zmene>
         {% for klic, nazev in sekce_nabidka %}
             <option value="{{ klic }}" {{ 'selected' if section == klic }}>{{ nazev }}</option>
         {% endfor %}

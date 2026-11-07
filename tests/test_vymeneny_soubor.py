@@ -31,6 +31,7 @@ Spuštění:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import sys
 import tempfile
@@ -198,8 +199,8 @@ check(not klient.dotazy and vysledek["dvojniku"] == 0,
 
 print()
 print("--- rychlá synchronizace to volá sama ---")
-zdroj = (PROJECT / "jellyscope" / "scanner.py").read_text(encoding="utf-8")
-telo = zdroj[zdroj.index("async def sync_recent"):zdroj.index("async def _sync_libraries")]
+# Jen tělo sync_recent (ne výřez ze spojených souborů balíku).
+telo = inspect.getsource(scanner.sync_recent)
 check("srovnej_po_novych(client, nova_id)" in telo,
       "sync_recent po nových titulech srovnává knihovnu")
 i_volani = telo.index("srovnej_po_novych")

@@ -54,7 +54,7 @@
 
         <label>
             {{ _("Uživatel") }}
-            <select name="log_ucet" onchange="this.form.submit()">
+            <select name="log_ucet" data-odeslat-pri-zmene>
                 <option value="">{{ _("všichni") }}</option>
                 {% for vlastnik in api_log_vlastnici %}
                 <option value="{{ vlastnik }}" {% if vlastnik == log_ucet %}selected{% endif %}>
@@ -66,7 +66,7 @@
 
         <label>
             {{ _("Klíč") }}
-            <select name="log_klic" onchange="this.form.submit()">
+            <select name="log_klic" data-odeslat-pri-zmene>
                 <option value="">{{ _("všechny") }}</option>
                 {% for klic in api_log_klice %}
                 <option value="{{ klic.id }}" {% if klic.id == log_klic %}selected{% endif %}>
@@ -84,7 +84,7 @@
 
         <label>
             {{ _("Řádků") }}
-            <select name="log_lines" onchange="this.form.submit()">
+            <select name="log_lines" data-odeslat-pri-zmene>
                 {% for pocet in [100, 200, 500, 1000, 2000] %}
                 <option value="{{ pocet }}" {% if pocet == log_lines %}selected{% endif %}>{{ pocet }}</option>
                 {% endfor %}
@@ -166,7 +166,7 @@
 
         <label>
             {{ _("Soubor") }}
-            <select name="log_file" onchange="this.form.submit()">
+            <select name="log_file" data-odeslat-pri-zmene>
                 {% for soubor in log.files %}
                 <option value="{{ soubor.name }}"
                         {% if soubor.name == log.name %}selected{% endif %}>
@@ -179,7 +179,7 @@
 
         <label>
             {{ _("Řádků") }}
-            <select name="log_lines" onchange="this.form.submit()">
+            <select name="log_lines" data-odeslat-pri-zmene>
                 {% for pocet in [100, 200, 500, 1000, 2000] %}
                 <option value="{{ pocet }}" {% if pocet == log_lines %}selected{% endif %}>
                     {{ pocet }}
@@ -190,7 +190,7 @@
 
         <label>
             {{ _("Úroveň") }}
-            <select name="log_level" onchange="this.form.submit()">
+            <select name="log_level" data-odeslat-pri-zmene>
                 <option value="">{{ _("vše") }}</option>
                 {% for uroven in log_levels %}
                 <option value="{{ uroven }}" {% if uroven == log_level %}selected{% endif %}>
@@ -219,14 +219,7 @@
         <div class="log-line {{ radek.level | lower }}">{{ radek.text }}</div>
         {% endfor %}
     </div>
-    <script>
-        // Odrolovat na konec: nejnovější řádek je ten, kvůli kterému se sem
-        // člověk dívá. Bez tohohle by po otevření koukal na nejstarší.
-        (function () {
-            var box = document.getElementById("log-view");
-            if (box) { box.scrollTop = box.scrollHeight; }
-        })();
-    </script>
+    <script src="/static/js/nastaveni-log.js?v={{ asset_version }}" defer></script>
     {% endif %}
 
     {% if log.exists %}

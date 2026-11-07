@@ -350,7 +350,7 @@ def upgrade_candidates(days: int, limit: int = 15) -> list[dict[str, Any]]:
 
     Rozliseni **pod 1080p**, nebo nizky datovy tok. A pod 1080p se pozna
     z obou stran obrazu, ne jen z vysky - stejne jako `RESOLUTION_CASE`
-    v stats.py.
+    ve stats/technika.py.
 
     Drive tu stalo jen `i.height < 1000`, coz oznacilo za slabou kvalitu
     kazdy sirokouhly film: bezne 1080p vydani v pomeru scope ma rozmery

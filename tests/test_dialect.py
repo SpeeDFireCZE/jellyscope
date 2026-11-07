@@ -458,7 +458,7 @@ print("--- CASE WHEN s parametrem se nepoužívá ---")
 import ast as _ast  # noqa: E402
 
 nalezene = []
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     zdroj = soubor.read_text(encoding="utf-8")
     for uzel in _ast.walk(_ast.parse(zdroj)):
         if isinstance(uzel, _ast.Constant) and isinstance(uzel.value, str):
@@ -495,7 +495,7 @@ print("--- `IS ?` se nepoužívá ---")
 # Řešení je rozhodnout se v Pythonu: "account_id IS NULL" bez parametru,
 # nebo "account_id = ?" s ním.
 nalezene_is = []
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     zdroj = soubor.read_text(encoding="utf-8")
     for uzel in _ast.walk(_ast.parse(zdroj)):
         if isinstance(uzel, _ast.Constant) and isinstance(uzel.value, str):
@@ -556,7 +556,7 @@ def _cteni_podle_poradi(zdroj: str) -> list[int]:
 
 
 podle_poradi = []
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     for radek in _cteni_podle_poradi(soubor.read_text(encoding="utf-8")):
         podle_poradi.append(f"{soubor.name}:{radek}")
 
@@ -725,7 +725,7 @@ check(_stats.je_transcode().startswith("play_method LIKE 'Transcode"),
 # ho hledá podle začátku (kvůli importu "Transcode (v:h264 a:direct)")
 # a druhé pravidlo by znamenalo dvě různá čísla na jedné stránce.
 presna_shoda = []
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     for cislo, radek in enumerate(soubor.read_text(encoding="utf-8").splitlines(), 1):
         if re.search(r"play_method\s*=\s*'Transcode'", radek):
             presna_shoda.append(f"{soubor.name}:{cislo}")
@@ -734,7 +734,7 @@ check(not presna_shoda, f"nikde se nehledá přesnou shodou: {presna_shoda}")
 print()
 print("--- jeden řádek se nebere podle sloupce, který smí být NULL ---")
 spatne: list[str] = []
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     for nalez in _rizikova_razeni(soubor.read_text(encoding="utf-8")):
         spatne.append(f"{soubor.name} {nalez}")
 check(not spatne, "žádné rizikové řazení " + (", ".join(spatne) or "(čisto)"))

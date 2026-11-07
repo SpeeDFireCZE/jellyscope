@@ -16,6 +16,7 @@
    Spadne do ní všechno, co není film ani epizoda — typicky importovaná
    historie, ke které ještě není položka v knihovně, takže typ neznáme.
    Bez ní by takové hodiny z grafu zmizely, přestože v souhrnu jsou. #}
+{% from "_macros.html" import odkaz with context %}
 {% set ns = namespace(other=0) %}
 {% for row in daily %}{% set ns.other = ns.other + row.other_hours %}{% endfor %}
 
@@ -115,8 +116,9 @@
                     <tr>
                         <td>
                             {# Proklik do historie na ten den. Filtr typu se
-                               nese s sebou, ať se seznam shoduje s tabulkou. #}
-                            <a href="/history?day={{ row.day }}{% if kind != 'both' %}&kind={{ kind }}{% endif %}">{{ row.day }}</a>
+                               nese s sebou, ať se seznam shoduje s tabulkou.
+                               Jen kdo na Historii smí (čtenář s „…kdo to sledoval"). #}
+                            {% call odkaz("/history?day=" ~ row.day ~ ("&kind=" ~ kind if kind != 'both' else "")) %}{{ row.day }}{% endcall %}
                         </td>
                         {% if kind == 'both' %}
                             <td class="num">{{ row.movie_hours | hours }}</td>

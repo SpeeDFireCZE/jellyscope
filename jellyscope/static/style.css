@@ -1027,7 +1027,9 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .session-title a:hover { text-decoration: underline; }
 
 .session-facts { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; }
-.session-facts a { font-weight: 600; }
+/* Tučné jméno, ne odkaz: kdo nesmí na stránku diváka, dostane jméno
+   bez odkazu (makro odkaz) - a má vypadat stejně. */
+.session-kdo { font-weight: 600; }
 
 .session-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 
@@ -3483,6 +3485,10 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    stránkách. Karta uvnitř sekce si ale nese vlastní spodní okraj 18 px,
    takže bez tohohle byla mezera dvojnásobná proti Jazykům nebo Síti. */
 .dash-sekce > *:last-child { margin-bottom: 0; }
+/* Karta s živým obalem (_karta.html: Právě se hraje, Nedávno přidané,
+   Sledovanost po dnech) není přímý potomek buňky - okraj by jinak prošel
+   obalem a mezera byla zase dvojnásobná. */
+.dash-sekce > .karta-obal > :last-child { margin-bottom: 0; }
 
 @media (min-width: 900px) {
     .dash-plocha {

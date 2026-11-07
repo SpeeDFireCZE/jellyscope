@@ -98,7 +98,7 @@ print("--- rozepsané nastavení přežije test spojení ---")
 # hodnot by se formulář po každém testu vrátil k uloženému nastavení
 # a uživatel by server, port, uživatele i heslo vyplňoval znovu.
 from jellyscope import web  # noqa: E402
-from jellyscope import web_nastaveni  # noqa: E402
+from jellyscope.web import nastaveni as web_nastaveni  # noqa: E402
 
 ucet = {"id": 1, "username": "test", "is_admin": 1}
 web_nastaveni._draft_clear(ucet, "database")
@@ -117,11 +117,11 @@ check(nacteno.password == "tajne", "a hesla, aby se nemuselo psát znovu")
 # Heslo nesmí skončit v session - ta je u nás podepsaná cookie, kterou
 # si prohlížeč nese s sebou.
 check("_DB_DRAFT" in "\n".join(p.read_text(encoding="utf-8")
-         for p in sorted((PROJECT / "jellyscope").glob("web*.py"))),
+         for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py"))),
       "rozepsané se drží v paměti procesu")
 check("request.session[\"db_draft\"]" not in
       "\n".join(p.read_text(encoding="utf-8")
-         for p in sorted((PROJECT / "jellyscope").glob("web*.py"))),
+         for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py"))),
       "rozepsané NEJDE do session (byla by to cookie s heslem)")
 
 # Po druhém účtu se nesmí míchat.

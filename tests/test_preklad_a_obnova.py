@@ -23,6 +23,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
@@ -91,7 +93,7 @@ class FalesnyKlient:
         return [i for i in self.odpoved if i["Id"] in ids]
 
 
-scanner.JellyfinClient = FalesnyKlient  # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 
 vysledek = asyncio.run(scanner.refresh_item("film-1"))
 check(vysledek["status"] == "ok", f"obnovení proběhlo ({vysledek})")
@@ -125,7 +127,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import jellyscope.web as web  # noqa: E402
 
-web.scanner.JellyfinClient = FalesnyKlient  # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 
 spravce = TestClient(web.app)
 spravce.post("/login", data={"username": "spravce", "password": "dlouheheslo"})
@@ -241,7 +243,7 @@ applog.nastav_jazyk("cs")
 import ast  # noqa: E402
 
 ve_zdroji = set()
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     for uzel in ast.walk(ast.parse(soubor.read_text(encoding="utf-8"))):
         if (isinstance(uzel, ast.Call) and isinstance(uzel.func, ast.Attribute)
                 and uzel.func.attr in ("debug", "info", "warning", "error",

@@ -6,8 +6,32 @@
 {# Dlouhé tabulky (Zjištění). Řádek nad stropem se schová všude, nad
    mobilním stropem jen na úzké obrazovce. Stropy jsou v Nastavení →
    Rozhraní → Dlouhé seznamy; celou tabulku otevře tlačítko níž v okně
-   #okno-tabulka (JS v base.html). Řádky jsou seřazené od nejdůležitějšího,
+   #okno-tabulka (static/js/app.js). Řádky jsou seřazené od nejdůležitějšího,
    takže to podstatné zůstává vidět. #}
+{# Karta z registru na pevném místě stránky (Přehled, dashboard.html):
+   vykreslí se jen tehdy, když ji účet smí - o tom rozhodla routa podle
+   registru (`karty` = povolené karty, sekce.povolene), ne šablona. Kreslí
+   ji _karta.html, stejně jako vlastní přehled. Neznámý klíč (překlep) je
+   chyba (sekce.over_kartu), ne tiše chybějící karta. Import `with context`. #}
+{% macro karta(klic) -%}
+    {{ over_kartu(klic) }}
+    {%- if klic in karty %}{% set sekce = karty[klic] %}{% include "_karta.html" %}{% endif -%}
+{%- endmacro %}
+
+{# Odkaz jen tam, kam účet smí - podle smi(), tedy stejného pravidla, jakým
+   stránky pouští middleware. Kam nesmí, dostane obsah bez odkazu, se
+   stejnými atributy (plakát vypadá stejně, jen nikam nevede). Odkaz, za
+   kterým čeká „sem nemáš přístup", je horší než žádný. Volá se přes call:
+   {% call odkaz("/item/" ~ row.id) %}…{% endcall %}. Šablona ho musí
+   importovat `with context`, jinak by smi() neviděla. Prázdná adresa =
+   bez odkazu: `odkaz(row.user_id and "/users/" ~ row.user_id)` u řádku
+   bez diváka (import bez UserId) nevyrobí /users/None. #}
+{% macro odkaz(adresa, atributy={}) -%}
+    {%- if adresa and smi(adresa) %}<a href="{{ adresa }}"{{ atributy|xmlattr }}>{{ caller() }}</a>
+    {%- elif atributy %}<span{{ atributy|xmlattr }}>{{ caller() }}</span>
+    {%- else %}{{ caller() }}{% endif -%}
+{%- endmacro %}
+
 {% macro trida_radku(poradi) -%}
     {%- if poradi > strop_radku %}radek-navic{% elif poradi > strop_radku_mobil %}jen-desktop{% endif -%}
 {%- endmacro %}
@@ -43,7 +67,7 @@
 {# Změna období překreslí celou stránku - jiné období znamená jiná čísla
    ve všech grafech i v souhrnu, ne jen v jedné kartě. Načtení stránky ale
    vždycky skočí na začátek, což je u filtru dole na stránce otravné.
-   `data-keep-scroll` řekne skriptu v base.html, ať si pozici zapamatuje
+   `data-keep-scroll` řekne skriptu (static/js/app.js), ať si pozici zapamatuje
    a po načtení ji vrátí. #}
 {# Přepínač období nad statistikami.
 
@@ -338,17 +362,8 @@
     {# SVG ikona zůstane ostrá v každé velikosti - od 16px v panelu
        prohlížeče po velké dlaždice na mobilu. #}
     <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
-    <script>
-        // Nastavení tmavého/světlého režimu se čte co nejdřív, ještě před
-        // vykreslením stránky. Kdyby se to dělalo až později, stránka by
-        // na okamžik problikla ve špatných barvách.
-        (function () {
-            var saved = localStorage.getItem("jellyscope-theme");
-            if (saved === "dark" || saved === "light") {
-                document.documentElement.setAttribute("data-theme", saved);
-            }
-        })();
-    </script>
+    {# Bez defer: motiv se nastaví před vykreslením (jinak problikne). #}
+    <script src="/static/js/zaklad.js?v={{ asset_version }}"></script>
 {% endmacro %}
 
 
@@ -361,8 +376,7 @@
 {% macro file_picker(name, accept) %}
 <label class="file-picker">
     <input type="file" name="{{ name }}" accept="{{ accept }}" required
-           onchange='this.parentNode.querySelector(".file-name").textContent =
-                     this.files.length ? this.files[0].name : {{ _("Soubor nevybrán")|tojson }}'>
+           data-nazev-souboru="{{ _("Soubor nevybrán") }}">
     <span class="btn">{{ _("Vybrat soubor") }}</span>
     <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
 </label>
@@ -376,12 +390,12 @@
    pole = nic nevybráno. Hledá se po slovech v libovolném pořadí a S06E07
    (nebo S06) najde řadu a díl. Výsledky se do stránky skládají přes
    textContent, takže název titulu se značkou nic nerozbije. Obsluha je
-   v base.html (data-vyber-cile). #}
+   ve static/js/app.js (data-vyber-cile). #}
 {# Malý plakát vedle názvu v nabídkách přiřazení. Když obrázek není
    (archivovaný titul, který Jellyfin už nemá a v mezipaměti nebyl),
    zůstane šedé políčko stejné velikosti - řádky se nerozjedou. #}
 {% macro plakatek(adresa) -%}
-<span class="plakatek"><img src="{{ adresa }}" alt="" loading="lazy" onerror="this.remove()"></span>
+<span class="plakatek"><img src="{{ adresa }}" alt="" loading="lazy" data-pri-chybe="odebrat"></span>
 {%- endmacro %}
 
 
@@ -479,7 +493,7 @@
    tlačítkem Kopírovat. Po obnovení stránky z klíče zbyde začátek
    a hvězdičky - a tlačítko zmizí s ním, protože kopírovat už není co.
    Celý klíč je ve stránce jen jednou (žádný data-atribut navíc);
-   tlačítko si ho bere z <code> podle id. Viz [data-kopirovat] v base.html.
+   tlačítko si ho bere z <code> podle id. Viz [data-kopirovat] ve static/js/app.js.
 
    `novy` = {"id": ..., "token": ...} z relace, nebo nic. #}
 {% macro bunka_klice(klic, novy, hvezdicek=24) %}

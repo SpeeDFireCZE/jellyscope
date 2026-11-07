@@ -33,7 +33,9 @@ def check(condition: bool, label: str) -> None:
 
 
 BALICEK = PROJECT / "jellyscope"
-SOUBORY = ("jellyfin.py", "scanner.py", "collector.py", "importers.py")
+# scanner (3c) a importers (3d) jsou balíky - čtou se celé, soubor po souboru.
+SOUBORY = ("jellyfin.py", *sorted(f"scanner/{p.name}" for p in (BALICEK / "scanner").glob("*.py")),
+           "collector.py", *sorted(f"importers/{p.name}" for p in (BALICEK / "importers").glob("*.py")))
 
 
 def kod(nazev: str) -> str:
@@ -162,7 +164,7 @@ print()
 print("--- plugin Playback Reporting: jen SELECT ---")
 # Tohle je jediné místo s POST. POST sám o sobě nic nemění - mění to,
 # co se v něm pošle. Proto ta pojistka.
-importery = kod("importers.py")
+importery = "\n".join(kod(f"importers/{p.name}") for p in sorted((BALICEK / "importers").glob("*.py")))
 posty = re.findall(r"_client\.post\(", importery)
 check(len(posty) == 2, f"POST je jen na dvou místech (je {len(posty)})")
 check(importery.count("jen_cteni(") >= 3,

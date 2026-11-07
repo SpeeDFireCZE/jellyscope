@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis, vyber_cile %}
+{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis, vyber_cile, odkaz with context %}
 {% block title %}{{ item.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -18,8 +18,8 @@
         </h1>
         <p class="subtitle">
             {% if item.production_year %}{{ item.production_year }} &middot; {% endif %}
-            {% if item.parent_index_number and item.index_number %}
-                S{{ '%02d' | format(item.parent_index_number) }}E{{ '%02d' | format(item.index_number) }} &middot;
+            {% if item | kod_dilu %}
+                {{ item | kod_dilu }} &middot;
             {% endif %}
             {{ tech_badge(item.tech_source) }}
         </p>
@@ -96,7 +96,7 @@
             {% if summary.plays %}{{ _("Přesune se") }} {{ summary.plays | number }} {{ _("přehrávání.") }}{% endif %}
         </p>
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn" type="button" onclick="this.closest('dialog').close()">{{ _("Zrušit") }}</button>
+            <button class="btn" type="button" data-zavrit-okno>{{ _("Zrušit") }}</button>
             <button class="btn primary" type="submit" data-prirazeni-potvrdit disabled>
                 {{ _("Přiřadit a smazat z archivu") }}
             </button>
@@ -135,7 +135,7 @@
     <div>
         <div class="item-poster {{ 'is-archived' if item.is_missing }}">
             <img src="/image/{{ item.id }}?kind=Primary&w=400{{ '&tag=' ~ item.image_tag if item.image_tag }}" alt="" loading="lazy"
-                 onerror="this.parentElement.style.display='none'">
+                 data-pri-chybe="skryt-rodice">
             {% if item.is_missing %}
                 <span class="media-archived">{{ _("Archivováno") }}</span>
             {% endif %}
@@ -371,7 +371,9 @@
         {# --------------------------------------------------------- #}
         {# Kdo titul sledoval, je o jiných lidech - divákovi se to
            neukazuje. Jeho vlastní přehrávání najde ve svojí historii. #}
-        {% if not muj_divak %}
+        {# Kdo to sledoval (jména, zařízení) - podle oblasti knihovna_kdo,
+           u diváka i u čtenáře. Jména skryje anonymizace. #}
+        {% if vidi("knihovna_kdo") %}
         <div class="card">
             <div class="card-head">
                 <h2>{{ _("Historie přehrávání") }}</h2>
@@ -393,8 +395,7 @@
                     <tr>
                         <td class="nowrap muted">{{ row.started_at | datetime }}</td>
                         <td>
-                            {%- if muj_divak %}{{ row.user_name or '?' }}
-                            {%- else %}<a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>{% endif %}
+                            {%- call odkaz(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
                         </td>
                         <td>
                             {{ lang.display(row.audio_language) if row.audio_language else '-' }}
@@ -432,8 +433,8 @@
                     {% for s in siblings %}
                     <tr {{ 'style=font-weight:600' if s.id == item.id }}>
                         <td class="nowrap muted">
-                            {% if s.parent_index_number and s.index_number %}
-                                S{{ '%02d' | format(s.parent_index_number) }}E{{ '%02d' | format(s.index_number) }}
+                            {% if s | kod_dilu %}
+                                {{ s | kod_dilu }}
                             {% else %}-{% endif %}
                         </td>
                         <td><a href="/item/{{ s.id }}">{{ s.name }}</a></td>

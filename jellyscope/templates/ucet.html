@@ -14,7 +14,7 @@
     <div class="ucet-hlava">
         {% set obrazek = obrazek_uctu() %}
         <span class="ucet-avatar ucet-avatar-velky" aria-hidden="true">{{ account.username[:1] | upper }}
-            {%- if obrazek %}<img src="{{ obrazek }}" alt="" onerror="this.remove()">{% endif -%}
+            {%- if obrazek %}<img src="{{ obrazek }}" alt="" data-pri-chybe="odebrat">{% endif -%}
         </span>
         <div>
         <h1>{{ _("Můj účet") }}</h1>
@@ -193,7 +193,7 @@
                 </td>
                 <td>
                     <form method="post" action="/account/klic/zrusit"
-                          onsubmit='return confirm({{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.")|tojson }})'>
+                          data-potvrdit="{{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.") }}">
                         <input type="hidden" name="token_id" value="{{ klic.id }}">
                         <button data-keep-scroll class="btn danger" type="submit">{{ _("Zneplatnit") }}</button>
                     </form>

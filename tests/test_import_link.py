@@ -17,6 +17,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku importers
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -207,7 +209,7 @@ class JellyfinSPameti:
         ]
 
 
-importers.JellyfinClient = JellyfinSPameti  # type: ignore[assignment]
+podvrhni(importers, "JellyfinClient", JellyfinSPameti)
 
 check(importers.orphan_playback_count() == 4, "výchozí stav: čtyři osiřelé řádky")
 check(importers.orphan_items_count() == 2, "ale jen dva tituly")

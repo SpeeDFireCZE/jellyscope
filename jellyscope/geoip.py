@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Zeměpisné umístění veřejných adres podle databáze GeoLite2.
 
 K čemu to je: na stránce Síť ukázat, odkud se lidé dívají, když se
@@ -31,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config, db
+from datetime import UTC
 
 log = logging.getLogger("jellyscope.geoip")
 
@@ -73,8 +73,8 @@ def stari_databaze() -> str:
     soubor = cesta_k_databazi()
     if not soubor.is_file():
         return ""
-    from datetime import datetime, timezone
-    cas = datetime.fromtimestamp(soubor.stat().st_mtime, timezone.utc)
+    from datetime import datetime
+    cas = datetime.fromtimestamp(soubor.stat().st_mtime, UTC)
     return cas.strftime(db.TIME_FORMAT)
 
 

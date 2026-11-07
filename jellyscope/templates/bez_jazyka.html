@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager, tech_badge %}
+{% from "_macros.html" import pager, tech_badge, odkaz with context %}
 {% block title %}{{ _("Soubory bez jazyka") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -51,15 +51,15 @@
             <tr>
                 <td>
                     <div class="strong">
-                        <a href="/item/{{ row.id }}">
+                        {% call odkaz("/item/" ~ row.id) %}
                             {% if row.series_name %}
                                 <span class="muted">{{ row.series_name }}
-                                {%- if row.parent_index_number and row.index_number %}
-                                    S{{ '%02d' | format(row.parent_index_number) }}E{{ '%02d' | format(row.index_number) }}
+                                {%- if row | kod_dilu %}
+                                    {{ row | kod_dilu }}
                                 {%- endif %} &ndash;</span>
                             {% endif %}
                             {{ row.name }}
-                        </a>
+                        {% endcall %}
                     </div>
                     {# Cesta k souboru - kvůli ní tahle stránka je. #}
                     {% if row.path %}

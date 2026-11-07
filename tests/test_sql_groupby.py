@@ -155,6 +155,35 @@ check(problemy_v_dotazu(
 
 MARKER = "__VYRAZ__"
 
+# Řetězcové konstanty modulů (`DIVAK_SKUPINA = "p.user_id, …"`), které se
+# do dotazů dosazují - pod jménem i jako `modul.JMENO`. Ty se dosadí
+# doopravdy: jinak by kontrola u dotazu se sdíleným GROUP BY neviděla, co
+# se seskupuje, a hlásila by holé sloupce, které holé nejsou. Jen kousky,
+# ne celé dotazy: vnořený SELECT se svým GROUP BY by se připsal vnějšímu
+# výběru - a celé dotazy se tu kontrolují i samy o sobě.
+KONSTANTY: dict[str, str] = {}
+for _soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    for _uzel in ast.parse(_soubor.read_text(encoding="utf-8")).body:
+        if (isinstance(_uzel, ast.Assign) and len(_uzel.targets) == 1
+                and isinstance(_uzel.targets[0], ast.Name)
+                and isinstance(_uzel.value, ast.Constant) and isinstance(_uzel.value.value, str)
+                and not re.search(r"\bSELECT\b", _uzel.value.value, re.I)):
+            KONSTANTY[_uzel.targets[0].id] = _uzel.value.value
+            KONSTANTY[f"{_soubor.stem}.{_uzel.targets[0].id}"] = _uzel.value.value
+            # Podmodul balíku (jellyscope/stats/divaci.py) se volá i přes
+            # vstupní dveře balíku - `stats.DIVAK_SKUPINA`.
+            if _soubor.parent.name != "jellyscope":
+                KONSTANTY[f"{_soubor.parent.name}.{_uzel.targets[0].id}"] = _uzel.value.value
+
+
+def _konstanta(vyraz: ast.AST) -> str | None:
+    """Hodnota dosazené konstanty (JMENO nebo modul.JMENO), jinak None."""
+    if isinstance(vyraz, ast.Name):
+        return KONSTANTY.get(vyraz.id)
+    if isinstance(vyraz, ast.Attribute) and isinstance(vyraz.value, ast.Name):
+        return KONSTANTY.get(f"{vyraz.value.id}.{vyraz.attr}")
+    return None
+
 
 def text_dotazu(uzel: ast.AST) -> str | None:
     """Text SQL z uzlu — obyčejný řetězec i f-string.
@@ -173,6 +202,8 @@ def text_dotazu(uzel: ast.AST) -> str | None:
         for cast in uzel.values:
             if isinstance(cast, ast.Constant) and isinstance(cast.value, str):
                 kusy.append(cast.value)
+            elif isinstance(cast, ast.FormattedValue) and _konstanta(cast.value) is not None:
+                kusy.append(_konstanta(cast.value))
             else:
                 kusy.append(MARKER)
         return "".join(kusy)
@@ -183,7 +214,7 @@ print()
 print("--- všechny dotazy v projektu ---")
 celkem = 0
 dosazovane = 0
-for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
+for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
     strom = ast.parse(soubor.read_text(encoding="utf-8"))
     for uzel in ast.walk(strom):
         sql = text_dotazu(uzel)
@@ -201,6 +232,9 @@ for soubor in sorted((PROJECT / "jellyscope").glob("*.py")):
 
 check(celkem >= 5, f"našlo se dost agregačních dotazů ({celkem})")
 check(dosazovane >= 1, f"kontrolují se i skládané f-stringem ({dosazovane})")
+# Kontrola sebe: dotaz se sdíleným GROUP BY (stats.DIVAK_SKUPINA) se
+# posoudí celý, ne jako „nevíme".
+check("p.user_id IS NULL" in KONSTANTY.get("DIVAK_PORADI", ""), "konstanty dotazů se dosazují")
 
 
 print()

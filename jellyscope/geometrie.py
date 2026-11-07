@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Geometrie pro podrobnou mapu: zjednodušení čar a řezání do dlaždic.
 
 Podrobná mapa (Natural Earth 1:10M, viz mapa_podrobna.py) je pro celou
@@ -11,7 +10,7 @@ s prvním spojí sám, opakovat ho není potřeba), čára je lomená čára.
 """
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 Bod = tuple[float, float]
 Kus = list[Bod]

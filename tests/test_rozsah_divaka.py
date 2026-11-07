@@ -4,7 +4,7 @@ r"""Divák přihlášený přes Jellyfin vidí sebe - a nikoho jiného.
 Přihlášení jménem a heslem z Jellyfinu znamená, že do Jellyscope chodí
 i lidé, kterým do cizí historie nic není. Rozdělení dat proto nesmí
 stát na tom, že se na žádnou stránku nezapomnělo: **co není výslovně
-povolené, je zakázané** (viz `web.DIVAK_SMI`).
+povolené, je zakázané** (viz `web.DIVAK_SMI_POST`).
 
 Tenhle test je ta pojistka. Projde všechny routy aplikace jako divák
 a u každé odpovědi hledá stopy po druhém divákovi - jeho jméno i jeho
@@ -33,6 +33,7 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = _tmp
@@ -45,6 +46,7 @@ import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from jellyscope import accounts, db, jellyfin, web  # noqa: E402
+from _balik import routy_naplocho  # noqa: E402
 
 failures = 0
 
@@ -210,7 +212,7 @@ print("--- v odpovědích není po cizím divákovi ani stopa ---")
 # Tohle je ta pojistka: kdyz nekdo prida stranku a zapomene na rozsah,
 # spadne to tady. Prochazi se VSECHNY routy aplikace, ne vybrane.
 cesty = []
-for routa in web.app.routes:
+for routa in routy_naplocho(web.app.routes):
     cesta = getattr(routa, "path", "")
     if not cesta or "GET" not in (getattr(routa, "methods", None) or set()):
         continue
@@ -239,6 +241,10 @@ for cesta in sorted(set(cesty)):
     if CIZI_JMENO in text or CIZI_ID in text:
         prosakuje.append(f"{cesta} ({odpoved.status_code})")
 
+# Dolní mez: kdyby se routy přestaly procházet (include_router je schová
+# do _IncludedRouter - přesně to se stalo po rozdělení web.py), pojistka
+# by tiše prošla s jednou adresou.
+check(len(set(cesty)) >= 45, f"prochází se celá aplikace, ne pár adres ({len(set(cesty))})")
 check(not prosakuje,
       f"prošlo {len(set(cesty))} adres, cizí divák uniká na: {prosakuje}")
 

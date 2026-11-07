@@ -1,0 +1,35 @@
+{# Jedna karta z registru (jellyscope/sekce.py) i s jejím obalem.
+
+   Kreslí ji Přehled (makro karta() v dashboard.html) i vlastní přehled
+   (_dash_sekce.html) - jedna šablona, ať se obě místa nerozejdou. Dřív
+   měl Přehled obaly ručně a vlastní přehled žádné, takže tam Právě se
+   hraje stálo a přepínač Filmy/Seriály načítal celou stránku.
+
+   Čeká `sekce` (položka registru) a data karty v kontextu (sekce.data_pro).
+
+   Živý obal (viz sekce.Sekce):
+   * `obnova` - výřez se znovu vyzvedává v rytmu sběrače (data-refresh,
+     data-partial; obsluha ve static/js/app.js). Mění se po vteřinách,
+     kvůli tomu se sem člověk během dne vrací.
+   * `po_synchronizaci` - obsah se překresluje sám: když doběhne
+     synchronizace a něco přibylo, vymění se tenhle jeden kus bez obnovení
+     celé stránky. `data-version` je stav knihovny při načtení - podle něj
+     se pozná, že se od té doby něco změnilo.
+   * `obal_id` - podle něj kartu najde přepínač Filmy/Seriály (vymění jen
+     ji, ne stránku).
+
+   Komentář s klíčem před kartou: podle něj test pozná pořadí karet, aniž
+   by přibyl prvek, který by rozbil mřížku (.grid-2 > .card). #}
+<!-- karta: {{ sekce.klic }} -->
+{%- set obal %}{% if sekce.obal_id %} id="{{ sekce.obal_id }}"{% endif %}
+    {%- if sekce.obnova %} data-refresh="{{ poll_interval }}" data-partial="{{ sekce.obnova }}"{% endif %}
+    {%- if sekce.po_synchronizaci %} data-version="{{ library_version }}"{% endif %}{% endset %}
+{% if sekce.obal_karta %}
+<div class="card"{{ obal }}>{% include sekce.sablona %}</div>
+{% elif sekce.obal_id or sekce.obnova or sekce.po_synchronizaci %}
+{#- Třída kvůli vlastnímu přehledu: buňka tam nuluje spodní okraj svého
+    posledního prvku, a tím je teď obal, ne karta (viz .karta-obal). #}
+<div class="karta-obal"{{ obal }}>{% include sekce.sablona %}</div>
+{% else %}
+{% include sekce.sablona %}
+{% endif %}

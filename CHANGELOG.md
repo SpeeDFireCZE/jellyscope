@@ -10,6 +10,32 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.8.4
+
+### What is new
+
+A code rework to best practice. The big modules are split into packages by area and the longest functions into short named steps, so the code is easier to read, test and change. Nothing changes in how Jellyscope looks or works, and your data and settings stay as they are.
+
+### Before you upgrade
+
+- Nothing to do.
+
+### Changed
+
+- New code layout, one file per area inside each package:
+  - `jellyscope/stats/` - statistics (was `stats.py`)
+  - `jellyscope/web/` - pages and routes, Settings in `web/nastaveni/` (was `web.py`, `web_zaklad.py`, `web_nastaveni.py`)
+  - `jellyscope/scanner/` - library sync and file analysis (was `scanner.py`)
+  - `jellyscope/importers/` - history import (was `importers.py`)
+- The Settings page, the collector, the file analysis and the Jellystat import are short steps now. A test keeps every function under 150 lines.
+- Scripts moved to `static/js`, so the Content Security Policy no longer allows inline scripts.
+- starlette 1.10.0, tzdata 2026.6.
+
+### Fixed
+
+- Permissions cover content, not just pages: an account without an area (for example "Now playing") no longer sees its data inside other pages, and a reader's History follows who watched it.
+- Summaries show one viewer per row, and imported names without an id stay apart in the library viewers chart.
+
 ## 1.8.3
 
 ### What is new

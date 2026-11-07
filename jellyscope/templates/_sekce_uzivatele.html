@@ -10,5 +10,5 @@
         <p class="card-note">{{ _("v hodinách") }}</p>
     </div>
     {{ charts.hbar_chart(top_users, 'label', 'hours',
-                 link_prefix='/users/', link_key='user_id') | safe }}
+                 link_prefix='/users/', link_key='user_id', smi=smi) | safe }}
 </div>

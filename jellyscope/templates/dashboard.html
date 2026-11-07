@@ -1,8 +1,12 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile, method_badge, zmena with context %}
+{% from "_macros.html" import period_filter, tile, method_badge, zmena, karta with context %}
 {% block title %}{{ _("Přehled") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
+{# Karty přicházejí z registru (jellyscope/sekce.py, sekce.PREHLED): routa
+   pošle jen ty, které účet smí, s jejich daty, a karta() je nakreslí
+   i s živým obalem (_karta.html) - stejně jako vlastní přehled. Tady je jen
+   rozvržení: pořadí, dvojice a nadpis Statistiky. Žádné ruční vidi(). #}
 
 {# ================================================================== #}
 {# 1. Právě se hraje                                                   #}
@@ -10,21 +14,12 @@
 {# Nahoře, protože to je jediná část stránky, která se mění po vteřinách #}
 {# a kvůli které se sem člověk vrací během dne.                        #}
 {# ================================================================== #}
-<div id="now-playing" data-refresh="{{ poll_interval }}" data-partial="/partials/now-playing">
-    {% include "_now_playing.html" %}
-</div>
+{{ karta("prave_se_hraje") }}
 
 {# ================================================================== #}
-{# 2. Nedávno přidané                                                  #}
-{#                                                                     #}
-{# Obsah je ve vlastní šabloně, protože se překresluje sám: když      #}
-{# doběhne synchronizace a něco přibylo, vymění se tenhle jeden kus    #}
-{# bez obnovení celé stránky. `data-version` je stav knihovny při      #}
-{# načtení - podle něj se pozná, že se od té doby něco změnilo.        #}
+{# 2. Nedávno přidané (obnova po synchronizaci - viz _karta.html)      #}
 {# ================================================================== #}
-<div id="recently-added" data-version="{{ library_version }}">
-    {% include "_recently_added.html" %}
-</div>
+{{ karta("nedavno_pridane") }}
 
 {# ================================================================== #}
 {# 3. Souhrn statistik                                                 #}
@@ -50,27 +45,25 @@
    zabírala třetinu obrazovky, přestože nese jediný údaj a jeho vývoj.
    Vedle sebe se to čte jedním pohledem: kolik a jak to šlo. Na úzkém
    okně se to vrátí pod sebe - viz .hero-card ve style.css. #}
-{% include "_sekce_souhrn.html" %}
+{{ karta("souhrn") }}
 
-{% include "_sekce_dlazdice.html" %}
+{{ karta("dlazdice") }}
 
 {# Karta se vykresluje ze samostatné šablony - stejný kus vrací
    i /partials/daily při přepnutí filtru bez načtení stránky. #}
-<div id="daily-card">{% include "_daily_card.html" %}</div>
+{{ karta("sledovanost_po_dnech") }}
 
 <div class="grid-2">
-    {% include "_sekce_uzivatele.html" %}
+    {{ karta("nejaktivnejsi_uzivatele") }}
 
-    <div class="card" id="top-items-card">
-        {% include "_top_items.html" %}
-    </div>
+    {{ karta("nejsledovanejsi") }}
 </div>
 
 <div class="grid-2">
-    {% include "_sekce_doruceni.html" %}
+    {{ karta("doruceni") }}
 
-    {% include "_sekce_prehravace.html" %}
+    {{ karta("prehravace") }}
 </div>
 
-{% include "_sekce_heatmapa.html" %}
+{{ karta("kdy_se_sleduje") }}
 {% endblock %}

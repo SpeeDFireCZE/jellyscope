@@ -30,6 +30,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = _tmp
@@ -102,7 +104,7 @@ class FalesnyKlient:
     recent_items = JellyfinClient.recent_items
 
 
-scanner.JellyfinClient = FalesnyKlient          # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 
 
 def rychla() -> dict[str, Any]:

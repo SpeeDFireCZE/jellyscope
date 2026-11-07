@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Sekce, ze kterých si jde poskládat vlastní přehled.
 
 Každá stránka aplikace si dnes svá data spočítá v routě a šablona je
@@ -11,20 +10,24 @@ Dvě věci, na kterých to celé stojí:
 * **Šablonky jsou tytéž, které používají původní stránky.** Kdyby vznikla
   kopie, jednu z nich by časem někdo upravil a druhou zapomněl - a dvě
   místa v aplikaci by tvrdila každé něco jiného.
-* **Počítá se jen to, co je poskládané.** Přehled dnes spočítá deset
-  sekcí každému bez ohledu na to, jestli se na ně dívá; tady si člověk
-  vybere a zbytek se ani nespustí.
+* **Počítá se jen to, co je poskládané a smí se.** Co účet nevidí nebo
+  si nevybral, se ani nespustí.
+* **Přehled (`/`) jede stejnou cestou.** Rozvržení má pevné v šabloně
+  (`dashboard.html`), karty a jejich práva i data bere odsud (`PREHLED`,
+  makro `karta()`) - dřív je měl vložené ručně a hlídané ručně.
 
-Přidat sekci znamená doplnit jednu položku do `SEZNAM` - nic víc.
+Přidat sekci znamená doplnit jednu položku do `SEZNAM` - na Přehled navíc
+její klíč do `PREHLED` a `{{ karta("…") }}` do `dashboard.html`.
 """
 from __future__ import annotations
 
 import sys
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable, Mapping
 
-from . import db, formatting, geoip, i18n, insights, langstats, mapa_podrobna, pristup, stats
+from . import db, formatting, geoip, i18n, insights, langstats, mapa_podrobna, pristup, scanner, stats
 from .i18n import translate as _t
 
 # Paměť jednoho data_pro(): karty, které potřebují totéž (tabulka uživatelů
@@ -32,6 +35,20 @@ from .i18n import translate as _t
 # jednou. Kontextová proměnná, ne globální slovník: data_pro běží ve vláknech
 # souběžných požadavků a každý potřebuje svou.
 _pamet: ContextVar[dict[Any, Any] | None] = ContextVar("sekce_pamet", default=None)
+
+# Volby karet z relace (Filmy/Seriály u Sledovanosti po dnech
+# a Nejsledovanějších), které spočítala routa - viz data_pro a volba().
+_volby: ContextVar[Mapping[str, str] | None] = ContextVar("sekce_volby", default=None)
+
+
+def volba(klic: str, vychozi: str) -> str:
+    """Volba karty (`kind`, `top_kind`), kterou předala routa do data_pro.
+
+    Pamatuje si ji relace (web._kind), takže platí stejně na Přehledu
+    i ve vlastním přehledu - je to tatáž karta. Mimo data_pro, nebo když
+    routa nic nepředala, výchozí hodnota.
+    """
+    return str((_volby.get() or {}).get(klic) or vychozi)
 
 
 def _jednou(funkce: Callable[..., Any], *args: Any) -> Any:
@@ -212,19 +229,35 @@ class Sekce:
     # Má karta tlačítko „zobrazit celou tabulku"? Pak přehled potřebuje
     # společné okno okno_tabulka() (viz _macros.html), jako stránka Zjištění.
     okno_tabulka: bool = field(default=False, kw_only=True)
+    # Živý obal karty - kreslí ho _karta.html, stejně na Přehledu i ve
+    # vlastním přehledu. `obal_id` hledá static/js/app.js (přepínač
+    # Filmy/Seriály, Nedávno přidané); na stránce je karta nanejvýš jednou,
+    # takže id zůstává jedinečné. `obnova` = výřez, který se znovu
+    # vyzvedává v rytmu sběrače; `po_synchronizaci` = obal nese verzi
+    # knihovny a po synchronizaci se vymění.
+    obal_id: str | None = field(default=None, kw_only=True)
+    obnova: str | None = field(default=None, kw_only=True)
+    po_synchronizaci: bool = field(default=False, kw_only=True)
 
 
 SEZNAM: tuple[Sekce, ...] = (
+    # V rytmu, v jakém se sběrač ptá Jellyfinu, si stránka vyzvedne kartu
+    # znovu - rychleji by to nemělo smysl, novější data zatím nikde nejsou.
     Sekce("prave_se_hraje", "Právě se hraje",
           "Kdo se zrovna dívá a na čem. Stejná karta jako na Přehledu.",
-          "_now_playing.html", lambda o: {"active": stats.active_sessions()},
+          "_now_playing.html",
+          lambda o: {"active": stats.active_sessions(),
+                     "poll_interval": db.get_int_setting("poll_interval", 5, 300, 10)},
           obdobi=False,
-          oblast="prave_hraje"),
+          oblast="prave_hraje", obal_id="now-playing", obnova="/partials/now-playing"),
+    # Podle verze knihovny pozná stránka, že mezitím doběhla synchronizace
+    # a přibyly nové tituly - viz /partials/recently-added.
     Sekce("nedavno_pridane", "Nedávno přidané",
           "Pás plakátů toho, co do knihovny přibylo naposledy.",
-          "_recently_added.html", lambda o: {"recent": stats.recently_added()},
+          "_recently_added.html",
+          lambda o: {"recent": stats.recently_added(), "library_version": scanner.library_version()},
           obdobi=False,
-          oblast="knihovna"),
+          oblast="knihovna", obal_id="recently-added", po_synchronizaci=True),
     Sekce("souhrn", "Celkem odsledováno",
           "Hlavní číslo období, změna proti minulému a křivka vedle něj.",
           "_sekce_souhrn.html",
@@ -238,15 +271,18 @@ SEZNAM: tuple[Sekce, ...] = (
     Sekce("sledovanost_po_dnech", "Sledovanost po dnech",
           "Křivka filmů a seriálů den po dni, s tabulkou pod ní.",
           "_daily_card.html",
+          # `ostatni`: z čeho se skládá „Ostatní" - popisek pod grafem. Bez
+          # něj je ta série slepá skvrna: hodiny vidíš, ale nevíš, co to bylo.
           lambda o: {"daily": _jednou(stats.daily_activity_split, o),
-                     "ostatni": stats.rozpad_ostatnich(o)},
-          oblast="prehled"),
+                     "ostatni": stats.rozpad_ostatnich(o),
+                     "kind": volba("kind", stats.KIND_BOTH)},
+          oblast="prehled", obal_id="daily-card"),
     Sekce("nejsledovanejsi", "Nejsledovanější tituly",
           "Žebříček filmů a seriálů za zvolené období.",
           "_top_items.html",
-          lambda o: {"top_items": stats.top_items(o, kind="both"),
-                     "top_kind": "both"}, sirka="pul", obal_karta=True,
-          oblast="prehled"),
+          lambda o: {"top_items": stats.top_items(o, kind=volba("top_kind", stats.KIND_BOTH)),
+                     "top_kind": volba("top_kind", stats.KIND_BOTH)}, sirka="pul", obal_karta=True,
+          oblast="prehled", obal_id="top-items-card"),
     Sekce("nejaktivnejsi_uzivatele", "Nejaktivnější uživatelé",
           "Kdo za zvolené období odsledoval nejvíc hodin.",
           "_sekce_uzivatele.html", lambda o: {"top_users": stats.top_users(o)},
@@ -444,6 +480,32 @@ SEZNAM: tuple[Sekce, ...] = (
 
 PODLE_KLICE: dict[str, Sekce] = {s.klic: s for s in SEZNAM}
 
+# Karty Přehledu (/), v pořadí na stránce. Rozvržení (dvojice, nadpis
+# „Statistiky" s filtrem) je v dashboard.html - každé místo je tam
+# {{ karta("…") }}; routa podle tohohle seznamu počítá data a o tom, kdo
+# kterou kartu uvidí, rozhodne registr (smi). Že šablona kreslí přesně
+# tyhle karty v tomhle pořadí, hlídá tests/test_prehled_z_registru.py.
+PREHLED: tuple[str, ...] = (
+    "prave_se_hraje", "nedavno_pridane", "souhrn", "dlazdice",
+    "sledovanost_po_dnech", "nejaktivnejsi_uzivatele", "nejsledovanejsi",
+    "doruceni", "prehravace", "kdy_se_sleduje",
+)
+# Ne `assert`: ten Python s -O vynechá a chyba by se ukázala až na stránce.
+if not set(PREHLED) <= set(PODLE_KLICE):
+    raise RuntimeError(f"PREHLED zná jen karty z registru: {sorted(set(PREHLED) - set(PODLE_KLICE))}")
+
+
+def over_kartu(klic: str) -> str:
+    """Pro makro karta() v dashboard.html: cizí klíč je chyba, ne tiše chybějící karta.
+
+    Platí jen klíče z PREHLED - routa počítá data jen pro ně. Karta, která
+    je v registru, ale ne v PREHLED (překlep, nebo zapomenutý řádek tam),
+    by se nikomu nevykreslila, a to by si nikdo nevšiml.
+    """
+    if klic not in PREHLED:
+        raise KeyError(f"karta {klic!r} není v sekce.PREHLED (karty Přehledu)")
+    return ""
+
 # Šířky panelu. Mřížka má šest sloupců, aby vyšly třetiny i půlky;
 # značka je to, co stojí na přepínači šířky v okně s rozvržením.
 SIRKY: dict[str, str] = {"tretina": "⅓", "pul": "½", "cela": "1"}
@@ -468,12 +530,11 @@ def _podminka_uctu(account_id: int | None) -> tuple[str, list[Any]]:
 def smi(karta: Sekce, account: dict[str, Any] | None) -> bool:
     """Smí účet vidět tuhle kartu? Podle oblasti, jako stránku, odkud je.
 
-    Správce vidí všechno (pristup.vidi to ví sám). Ostatní podle stromu
-    práv - vlastního, nebo své skupiny. Bez toho by přehled byl zadní
-    vrátka: kdo smí na přehled, viděl by v něm i kartu ze stránky, kam
-    nesmí (třeba IP adresy ze Sítě).
+    Správce vidí všechno. Ostatní podle stromu práv - vlastního, nebo své
+    skupiny. Bez toho by přehled byl zadní vrátka: kdo smí na přehled,
+    viděl by v něm i kartu ze stránky, kam nesmí (třeba IP adresy ze Sítě).
     """
-    return pristup.vidi(pristup.role(account), karta.oblast, account)
+    return pristup.vidi_ucet(account, karta.oblast)
 
 
 def povolene(rozvrzeni: list[Sekce], account: dict[str, Any] | None) -> list[Sekce]:
@@ -496,7 +557,7 @@ def vidi_prehled(account: dict[str, Any] | None) -> bool:
     hned po přihlášení je nejhorší možné uvítání.
     """
     return (je_zapnuty()
-            and pristup.smi_cestu(pristup.role(account), "/dashboard", account)
+            and pristup.smi_otevrit(account, "/dashboard")
             and bool(povolene(nacti_rozvrzeni(), account)))
 
 
@@ -509,7 +570,7 @@ NAZEV_MAX = 40
 
 class NeplatnyNazev(ValueError):
     """Název, který nejde použít. `veta` je česká věta = klíč překladu,
-    `hodnoty` se do ní dosadí (viz web_zaklad._flash)."""
+    `hodnoty` se do ní dosadí (viz web.zaklad._flash)."""
 
     def __init__(self, veta: str, **hodnoty: Any) -> None:
         super().__init__(veta)
@@ -631,21 +692,24 @@ def uloz_rozvrzeni(polozky: Any, account_id: int | None = None) -> list[str]:
     return [klic for klic, _ in ulozene]
 
 
-def data_pro(rozvrzeni: list[Sekce], obdobi: Any) -> dict[str, Any]:
+def data_pro(rozvrzeni: list[Sekce], obdobi: Any,
+             volby: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Data všech poskládaných sekcí v jednom slovníku.
 
     Klíče se napříč sekcemi neopakují, takže se dají přisypat do kontextu
     šablony rovnou - a šablonky pak fungují stejně tady jako na svých
     původních stránkách. Co potřebuje víc karet, se spočítá jednou
-    (`_jednou`).
+    (`_jednou`). `volby` jsou volby karet z relace (viz volba()).
     """
     token = _pamet.set({})
+    token_voleb = _volby.set(dict(volby or {}))
     try:
         kontext: dict[str, Any] = {}
         for sekce in rozvrzeni:
             kontext.update(sekce.data(obdobi))
         return kontext
     finally:
+        _volby.reset(token_voleb)
         _pamet.reset(token)
 
 

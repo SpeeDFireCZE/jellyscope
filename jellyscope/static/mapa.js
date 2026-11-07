@@ -326,7 +326,7 @@
        referrerpolicy: OSM chce vědět, odkud požadavek je (Referer), ale
        aplikace jinak ven žádný neposílá. "strict-origin" pošle jen adresu
        serveru, ne stránku (a pro prohlížeče, které atribut u SVG neznají,
-       totéž říká hlavička stránky - viz web.py). Atribut se nastavuje dřív
+       totéž říká hlavička stránky - viz csp() ve web/zaklad.py). Atribut se nastavuje dřív
        než adresa. Pod dlaždicemi zůstává kreslená mapa: dokud se nenačtou,
        nebo když není internet, je vidět ona. */
     var vrstvaOsm = mapa.querySelector(".mapa-dlazdice");

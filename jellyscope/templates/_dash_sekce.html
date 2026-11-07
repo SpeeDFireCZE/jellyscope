@@ -20,9 +20,8 @@
                 {{ _("Nemáš oprávnění k oblasti „{oblast}“. Karta se ukáže, až ti ji správce povolí.").format(oblast=_(oblasti[sekce.oblast].nazev)) }}
             </p>
         </div>
-    {% elif sekce.obal_karta %}
-        <div class="card">{% include sekce.sablona %}</div>
     {% else %}
-        {% include sekce.sablona %}
+        {# Stejné kreslení jako na Přehledu, i s živým obalem karty. #}
+        {% include "_karta.html" %}
     {% endif %}
 </div>

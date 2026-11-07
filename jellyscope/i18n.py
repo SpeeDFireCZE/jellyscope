@@ -163,7 +163,7 @@ LANGUAGES: dict[str, str] = {
 
 # Jazyk přihlášeného účtu pro právě vyřizovaný požadavek (Můj účet).
 #
-# Nastavuje ho middleware ve web.py podle účtu z relace. ContextVar, ne
+# Nastavuje ho middleware ve web/__init__.py podle účtu z relace. ContextVar, ne
 # globální proměnná: požadavky běží souběžně a jazyk jednoho by jinak
 # přepsal jazyk druhého. Kde žádný účet není - přihlašovací stránka, úlohy
 # na pozadí, log, upozornění - zůstane prázdný a platí jazyk serveru.

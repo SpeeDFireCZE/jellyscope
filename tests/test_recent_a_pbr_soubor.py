@@ -22,6 +22,7 @@ skončil v archivu.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import sys
 import tempfile
@@ -31,6 +32,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -111,7 +114,7 @@ class FalesnyKlient:
     recent_items = JellyfinClient.recent_items
 
 
-scanner.JellyfinClient = FalesnyKlient          # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 
 # Starý titul, který v Jellyfinu pořád je - nesmí zmizet do archivu.
 with db.connect() as conn:
@@ -195,8 +198,9 @@ check(db.query_one("SELECT is_missing FROM items WHERE id = 'stary-0'")["is_miss
 
 # Kdyby někdo _mark_missing() do rychlé synchronizace přidal, tenhle test
 # by prošel dál - proto ještě kontrola zdrojáku.
-zdroj = (PROJECT / "jellyscope" / "scanner.py").read_text(encoding="utf-8")
-telo = zdroj[zdroj.index("async def sync_recent("):zdroj.index("async def sync_library(")]
+# Jen tělo sync_recent - ne výřez ze spojených souborů balíku, který by
+# závisel na tom, jak jdou soubory za sebou.
+telo = inspect.getsource(scanner.sync_recent)
 # Hledáme skutečné volání, ne zmínku v komentáři - ta tam být má.
 prikazy = [r for r in telo.splitlines()
            if r.strip() and not r.strip().startswith(("#", '"', "*", "-"))]

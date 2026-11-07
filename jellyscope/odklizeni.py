@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Odklízení historie: co se po čase smaže a jak zapomenout jednoho diváka.
 
 U nástroje, který si pamatuje, kdo co kdy viděl, to dřív nebo později
@@ -28,7 +27,7 @@ zapomněli.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
@@ -91,7 +90,7 @@ def hranice(dnu: int | None = None) -> str:
     tady se z čísla stává hranice, takže tady se musí hlídat.
     """
     dnu = retence_dnu() if dnu is None else v_mezich(dnu)
-    return (datetime.now(timezone.utc) - timedelta(days=dnu)).strftime(db.TIME_FORMAT)
+    return (datetime.now(UTC) - timedelta(days=dnu)).strftime(db.TIME_FORMAT)
 
 
 def prehled(dnu: int | None = None) -> dict[str, Any]:

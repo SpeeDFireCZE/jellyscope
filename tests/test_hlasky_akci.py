@@ -13,7 +13,7 @@ Kontrola má dvě části:
 
   1. **Mechanika** - `_flash()` opravdu překládá šablonu a teprve pak
      doplňuje hodnoty.
-  2. **Úplnost** - každá šablona, která se ve `web.py` používá, má
+  2. **Úplnost** - každá šablona, která se ve `web/` používá, má
      anglický protějšek. Tohle je ta část, která hlídá budoucnost:
      novou hlášku bez překladu test odhalí dřív, než ji někdo uvidí.
 
@@ -105,11 +105,11 @@ check("flash" in zadost.session, "překlep ve značce hlášku nezahodí")
 
 print()
 print("--- každá hláška má anglický protějšek ---")
-# Hlasky jsou ve vsech souborech webu, ne jen ve `web.py` - Nastaveni
+# Hlasky jsou ve vsech souborech webu, ne jen v jednom - Nastaveni
 # ma vlastni modul. Cist jen jeden by znamenalo, ze test prestane videt
 # vetsinu hlasek a jeho ticho uz nic nerika.
 stromy = [ast.parse(p.read_text(encoding="utf-8"))
-          for p in sorted((PROJECT / "jellyscope").glob("web*.py"))]
+          for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py"))]
 sablony: set[str] = set()
 fretezce: list[int] = []
 for uzel in [u for s in stromy for u in ast.walk(s)]:

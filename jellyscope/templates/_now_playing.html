@@ -4,7 +4,7 @@
    Vykresluje ji server, stejnou šablonou jako při běžném načtení Přehledu;
    kreslit ji podruhé v JavaScriptu by znamenalo dvě místa, která se časem
    rozejdou. #}
-{% from "_macros.html" import method_badge, transcode_popis %}
+{% from "_macros.html" import method_badge, transcode_popis, odkaz with context %}
 
 {# Jeden stream se vypisuje na několika místech (rovnou v kartě i v okně),
    takže je z něj makro - jinak by z toho byly dvě kopie, které se časem
@@ -13,27 +13,27 @@
     <div class="session" data-uzivatel="{{ row.user_id or '' }}">
         {# Obrázek vede tam, kam název vedle něj - pro klávesnici a čtečku
            je to jeden odkaz, viz _recently_added.html. #}
-        <a class="session-poster" href="/item/{{ row.item_id }}" tabindex="-1" aria-hidden="true">
+        {% call odkaz("/item/" ~ row.item_id, {"class": "session-poster", "tabindex": "-1", "aria-hidden": "true"}) %}
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=200{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
-                 loading="lazy" onerror="this.style.display='none'">
-        </a>
+                 loading="lazy" data-pri-chybe="skryt">
+        {% endcall %}
 
         <div class="session-body">
             <div class="session-title">
-                <a href="/item/{{ row.item_id }}">
+                {% call odkaz("/item/" ~ row.item_id) %}
                     {% if row.series_name %}
                         <span class="muted">{{ row.series_name }}</span><br>
                     {% endif %}
-                    {% if row.parent_index_number and row.index_number %}
-                        <span class="muted">S{{ '%02d' | format(row.parent_index_number) }}E{{ '%02d' | format(row.index_number) }}</span>
+                    {% if row | kod_dilu %}
+                        <span class="muted">{{ row | kod_dilu }}</span>
                     {% endif %}
                     {{ row.item_name }}
-                </a>
+                {% endcall %}
             </div>
 
             {# Kdo, na čem, jak - tři údaje, kvůli kterým se sem člověk dívá. #}
             <div class="session-facts">
-                <span><a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a></span>
+                <span class="session-kdo">{% call odkaz(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}</span>
                 <span class="muted">{{ row.device_name or '?' }}</span>
                 {% if row.client %}<span class="muted">{{ row.client }}</span>{% endif %}
             </div>

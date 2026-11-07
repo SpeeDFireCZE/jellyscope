@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import tile, pager, method_badge, transcode_popis, vyber_cile %}
-{% from "_macros.html" import period_filter with context %}
+{% from "_macros.html" import period_filter, odkaz with context %}
 {% block title %}{{ library.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -166,7 +166,7 @@
         <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
     </form>
     {# Dva kroky v jednom formuláři: výběr a potvrzení s rekapitulací.
-       První tlačítko jen ukáže rekapitulaci (skládá ji skript v base.html
+       První tlačítko jen ukáže rekapitulaci (skládá ji skript ve static/js/app.js
        z vybraných řádků) - odesílá až „Ano, přiřadit", které nese
        potvrzeno=1. Server bez toho nic nezmění. #}
     <form method="post" action="/library/{{ library.id }}/archiv/priradit"
@@ -196,7 +196,7 @@
                 {% endif %}
             </div>
             <div class="okno-pata">
-                <button class="btn" type="button" onclick="this.closest('dialog').close()">{{ _("Zrušit") }}</button>
+                <button class="btn" type="button" data-zavrit-okno>{{ _("Zrušit") }}</button>
                 <button class="btn primary" type="button" data-prirazeni-potvrdit data-krok-dal disabled>
                     <span>{{ _("Přiřadit") }} (<span data-prirazeni-pocet>0</span>)</span>
                 </button>
@@ -227,7 +227,7 @@
    se zaškrtávátkem a počtem přehrání, „Vybrat vše" zaškrtne všechny.
    Stejné dva kroky jako u přiřazení: „Smazat vybrané" jen ukáže, co
    zmizí - maže až „Ano, smazat", které nese potvrzeno=1. Skript je
-   v base.html (data-mazani-archivu). #}
+   ve static/js/app.js (data-mazani-archivu). #}
 <dialog class="okno okno-rozvrzeni" id="okno-mazani">
     <form method="dialog" class="okno-hlava">
         <h2>{{ _("Smazat z archivu") }}</h2>
@@ -264,7 +264,7 @@
                 {% endif %}
             </div>
             <div class="okno-pata">
-                <button class="btn" type="button" onclick="this.closest('dialog').close()">{{ _("Zrušit") }}</button>
+                <button class="btn" type="button" data-zavrit-okno>{{ _("Zrušit") }}</button>
                 <button class="btn danger" type="button" data-krok-dal disabled>
                     <span>{{ _("Smazat vybrané") }} (<span data-mazani-pocet>0</span>)</span>
                 </button>
@@ -298,7 +298,7 @@
        href="{{ '/series/' ~ row.id if row.is_series else '/item/' ~ row.id }}">
         <div class="media-poster">
             <img src="/image/{{ row.id }}?kind=Primary&w=300{{ '&tag=' ~ row.image_tag if row.image_tag }}" alt="" loading="lazy"
-                 onerror="this.style.display='none'">
+                 data-pri-chybe="skryt">
             {% if row.is_missing %}
                 {# Rozostřený plakát s přeškrtnutím: na první pohled je vidět,
                    že tenhle titul už na disku není, aniž bys musel číst text. #}
@@ -364,7 +364,10 @@
     {{ tile(_("Různých titulů"), activity.totals.item_count | number) }}
 </div>
 
-<div class="grid-2">
+{# Diváci a jejich poslední přehrání = „…včetně kdo to sledoval"
+   (knihovna_kdo). Bez něj zbydou jen tituly, přes celou šířku. #}
+{% set kdo_sledoval = vidi("knihovna_kdo") %}
+<div class="{{ 'grid-2' if kdo_sledoval }}">
     <div class="card">
         <div class="card-head">
             <h2>{{ _("Nejsledovanější") }}</h2>
@@ -373,6 +376,7 @@
         {{ charts.hbar_chart(activity.top_items, 'label', 'hours') | safe }}
     </div>
 
+    {% if kdo_sledoval %}
     <div class="card">
         <div class="card-head">
             <h2>{{ _("Diváci") }}</h2>
@@ -380,10 +384,10 @@
         </div>
         {{ charts.hbar_chart(activity.top_users, 'label', 'hours') | safe }}
     </div>
+    {% endif %}
 </div>
 
-{# Poslední přehrávání jsou cizí jména - jen pro správce. #}
-{% if not muj_divak %}
+{% if kdo_sledoval %}
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Poslední přehrávání") }}</h2>
@@ -402,8 +406,7 @@
             <tr>
                 <td class="nowrap muted">{{ row.started_at | datetime }}</td>
                 <td>
-                    {%- if muj_divak %}{{ row.user_name or '?' }}
-                    {%- else %}<a href="/users/{{ row.user_id }}">{{ row.user_name or '?' }}</a>{% endif %}
+                    {%- call odkaz(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
                 </td>
                 <td class="truncate">
                     <a href="/item/{{ row.item_id }}">

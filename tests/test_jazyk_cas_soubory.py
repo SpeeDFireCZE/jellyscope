@@ -130,7 +130,8 @@ print()
 print("--- filtr na den počítá stejný místní čas jako výpis ---")
 # Uložený čas je vždycky UTC. Den se musí počítat v místním čase - a to
 # na obou stranách stejně, jinak proklik na den ukáže cizí záznamy.
-zdroj = (PROJECT / "jellyscope" / "stats.py").read_text(encoding="utf-8")
+# Statistiky jsou balík podle témat (jellyscope/stats/) - čte se celý.
+zdroj = "\n".join(p.read_text(encoding="utf-8") for p in sorted((PROJECT / "jellyscope" / "stats").glob("*.py")))
 check(zdroj.count("date(p.started_at, 'localtime') = ?") == 1,
       "historie filtruje den v místním čase")
 check("date(started_at, 'localtime')" in zdroj,

@@ -170,5 +170,27 @@ check(kdo_v_historii(f"/api/v1/history?user={ADAM}", otevreny) == [ADAM] * 2,
       "klíč bez skrývání jmen hledá podle skutečného id dál")
 
 print()
+print("--- čtenář: řádek bez user_id je taky cizí ---")
+# Import z Playback Reporting může nést jméno bez UserId. Čtenář nemá
+# vlastního diváka, takže cizí je u něj každý řádek - i ten bez id.
+bez_id = pristup.anonymizuj({"user_name": "PetrBezId", "label": "x"}, "")
+check(bez_id["user_name"] != "PetrBezId", f"čtenáři se jméno bez user_id schová ({bez_id['user_name']})")
+divak_bez_id = pristup.anonymizuj({"user_name": "PetrBezId"}, "u-jana")
+check(divak_bez_id["user_name"] != "PetrBezId", "diváku taky (jak bylo)")
+
+print()
+print("--- knihovna s hodinami není divák ---")
+# Dlaždice knihovny má id, name i hours (délka obsahu). Kdyby to stačilo
+# na diváka, jmenovala by se knihovna „Divák ?" a odkaz by vedl do prázdna.
+knihovna = {"id": "filmy", "name": "Filmy", "collection_type": "movies", "item_count": 3, "hours": 4.0}
+for muj in ("", "u-jana"):
+    vystup = pristup.anonymizuj(dict(knihovna), muj)
+    check(vystup["id"] == "filmy" and vystup["name"] == "Filmy",
+          f"knihovna zůstane knihovnou (muj_id={muj!r}: {vystup['id']}, {vystup['name']})")
+divak_tabulka = {"id": "u-petr", "name": "PetrZQX", "is_administrator": 0, "hours": 2.0, "last_seen": "x"}
+vystup = pristup.anonymizuj(dict(divak_tabulka), "u-jana")
+check(vystup["name"] != "PetrZQX", "řádek z tabulky diváků se pořád schová")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

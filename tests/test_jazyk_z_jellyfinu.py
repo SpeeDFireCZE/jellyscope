@@ -25,6 +25,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
@@ -212,11 +214,11 @@ scanner.save_streams("film6", [stopa(1, "Audio", "und")])
 scanner.save_streams("film7", [stopa(1, "Audio", "und")])
 
 puvodni = scanner.JellyfinClient
-scanner.JellyfinClient = FalesnyKlient
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 try:
     doplneno = asyncio.run(scanner.doplnit_jazyky_z_jellyfinu(["film6", "film7"]))
 finally:
-    scanner.JellyfinClient = puvodni
+    podvrhni(scanner, "JellyfinClient", puvodni)
 
 check(doplneno == 2, f"doplnily se obě položky ({doplneno})")
 check(FalesnyKlient.dotazy == [["film6", "film7"]],

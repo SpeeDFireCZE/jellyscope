@@ -105,7 +105,7 @@
             <input type="hidden" name="days" value="{{ days }}">
             {% endif %}
             <label class="tile-label" for="preferred">{{ _("Preferovaný jazyk") }}</label>
-            <select id="preferred" name="code" onchange="this.form.submit()">
+            <select id="preferred" name="code" data-odeslat-pri-zmene>
                 {% for option in language_options %}
                 <option value="{{ option.code }}"
                         {% if option.code == preferred %}selected{% endif %}>

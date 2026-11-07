@@ -166,7 +166,8 @@ print("--- úlohy verze nepromažou ---")
 # odkazuji cizim klicem, takze se musi resit spolu s nimi - jinak na
 # PostgreSQL spadne cizi klic a na SQLite zustanou viset na id, ktere uz
 # neexistuje.
-zdroj = (PROJECT / "jellyscope" / "scanner.py").read_text(encoding="utf-8")
+zdroj = "".join(p.read_text(encoding="utf-8")
+                for p in sorted((PROJECT / "jellyscope" / "scanner").glob("*.py")))
 for jmeno, usek in (
         ("slučování podle tmdb", "_merge_by_tmdb"),
         ("přenos historie", "prenes_historii"),

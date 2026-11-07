@@ -273,7 +273,9 @@ check('data-filtr-okna="okno-jazyky"' in sablona, "i s filtrem")
 
 # Filtr smí platit jen v okně - proto se filtruje v prohlížeči a nikam
 # se neukládá. Kdyby šel do adresy, přežil by zavření okna.
-zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+# Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+zaklad = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+          + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
 check("data-filtr-okna" in zaklad, "obsluha filtru je v základní šabloně")
 check("bylOtevreny" in zaklad,
       "a otevřené okno přežije automatickou obnovu karty")

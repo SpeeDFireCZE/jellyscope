@@ -45,36 +45,7 @@
     </div>
 </div>
 
-<script>
-(function () {
-    var stav = document.getElementById("quick-stav");
-    var bezi = true;
-
-    function zeptej_se() {
-        if (!bezi) { return; }
-        fetch("/login/quick/stav", { credentials: "same-origin",
-                                     cache: "no-store" })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (data) {
-                if (!data) { return; }
-                if (data.hotovo) {
-                    bezi = false;
-                    window.location.href = "/";
-                    return;
-                }
-                if (data.konec) {
-                    bezi = false;
-                    stav.textContent = {{ _("Kód už neplatí. Zkus to znovu.")|tojson }};
-                }
-            })
-            .catch(function () { /* vypadek site neni duvod prestat */ });
-    }
-
-    document.getElementById("quick-ted").addEventListener("click", zeptej_se);
-    /* Po vterinach, ne po desetinach: potvrzuje to clovek v jine
-       aplikaci, takze rychlejsi ptani jen zatezuje Jellyfin. */
-    setInterval(zeptej_se, 2000);
-})();
-</script>
+<script type="application/json" id="texty-js">{{ {"kod_neplati": _("Kód už neplatí. Zkus to znovu.")} | tojson }}</script>
+<script src="/static/js/rychle-prihlaseni.js?v={{ asset_version }}" defer></script>
 </body>
 </html>

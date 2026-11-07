@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from . import db
@@ -61,7 +61,7 @@ MIN_LANGUAGE_SECONDS = 60
 
 def _parse(timestamp: str) -> datetime:
     """Opak db.utcnow() - z textu zpatky na datum a cas."""
-    return datetime.strptime(timestamp, db.TIME_FORMAT).replace(tzinfo=timezone.utc)
+    return datetime.strptime(timestamp, db.TIME_FORMAT).replace(tzinfo=UTC)
 
 
 def _session_key(session: dict[str, Any], item: dict[str, Any]) -> str:
@@ -339,6 +339,288 @@ async def poll_once(client: JellyfinClient, max_gap_seconds: int) -> dict[str, i
     return await asyncio.to_thread(_store_sessions, sessions, max_gap_seconds)
 
 
+def _najdi_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, Any],
+                  play_state: dict[str, Any], now: str) -> Any:
+    """Běžící záznam tohohle přehrávání - podle klíče, převzatý, nebo navázaný po pauze.
+
+    `None` = nic takového není a přehrávání se má založit jako nové.
+    """
+    existing = conn.execute(
+        "SELECT id, last_seen_at, watched_seconds,"
+        "       audio_language, subtitle_language,"
+        "       current_audio_language, current_subtitle_language,"
+        "       language_since, language_confirmed"
+        "  FROM playback WHERE session_key = ? AND is_active = 1",
+        (key,),
+    ).fetchone()
+
+    if existing is None:
+        existing = _prevzit_cizi_relaci(conn, key, session, item, now)
+
+    # Az kdyz nic nebezi: nenavazujeme na neco, co divak pred
+    # chvili pauznul? Musi to byt az tady - bezici zaznam ma
+    # prednost pred uzavrenym.
+    if existing is None:
+        existing = _navaz_na_prerusene(
+            conn, key, session, item, play_state.get("PositionTicks"), now)
+    return existing
+
+
+def _zaloz_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, Any],
+                  play_state: dict[str, Any], is_paused: bool, stream: dict[str, Any],
+                  chosen: dict[str, Any], vzorek_fps: float | None, now: str) -> None:
+    """Nové přehrávání: dohledá knihovnu položky a zapíše první snímek."""
+    library_row = conn.execute(
+        "SELECT library_id FROM items WHERE id = ?", (item.get("Id"),)
+    ).fetchone()
+
+    conn.execute(
+        """
+        INSERT INTO playback (
+            session_key, user_id, user_name,
+            item_id, item_name, item_type, series_name, library_id,
+            client, device_name, device_id, remote_address,
+            play_method, transcode_reasons, video_codec, audio_codec, bitrate,
+            transcode_video_direct, transcode_audio_direct, transcode_hw,
+            transcode_fps, transcode_fps_soucet, transcode_fps_vzorku,
+            video_fps,
+            audio_language, subtitle_language,
+            current_audio_language, current_subtitle_language,
+            language_since, language_confirmed,
+            media_runtime_ticks, video_width, video_height,
+            started_at, last_seen_at, watched_seconds, paused_seconds,
+            position_ticks, is_paused, is_active
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,1)
+        """,
+        (
+            key,
+            session.get("UserId"),
+            session.get("UserName"),
+            item.get("Id"),
+            item.get("Name"),
+            item.get("Type"),
+            item.get("SeriesName"),
+            library_row["library_id"] if library_row else None,
+            session.get("Client"),
+            session.get("DeviceName"),
+            session.get("DeviceId"),
+            session.get("RemoteEndPoint"),
+            play_state.get("PlayMethod"),
+            stream["transcode_reasons"],
+            stream["video_codec"],
+            stream["audio_codec"],
+            stream["bitrate"],
+            stream["video_direct"],
+            stream["audio_direct"],
+            stream["hw"],
+            vzorek_fps,
+            vzorek_fps or 0,
+            1 if vzorek_fps else 0,
+            stream["video_fps"],
+            # Do statistik zatim nic - jazyk se zapocita az po
+            # MIN_LANGUAGE_SECONDS, viz vyse. Prvni vteriny
+            # casto hraje stopa, kterou si divak hned prepne.
+            None,
+            None,
+            chosen["audio_language"],
+            chosen["subtitle_language"],
+            now,
+            0,
+            stream["runtime_ticks"],
+            stream["video_width"],
+            stream["video_height"],
+            now,
+            now,
+            play_state.get("PositionTicks"),
+            1 if is_paused else 0,
+        ),
+    )
+
+
+def _jazyk_do_statistik(
+        existing: Any, chosen: dict[str, Any], is_paused: bool, gap: int,
+        now: str, now_dt: datetime) -> tuple[str | None, str | None, str, bool]:
+    """Co zapsat jako jazyk přehrávání: (zvuk, titulky, language_since, potvrzeno).
+
+    Jen počítá, do databáze nesahá - rozhodnutí je celé tady, SQL ho jen uloží.
+    """
+    # Kdy se jazyk zapocita do statistik.
+    #
+    # Dokud se stopy meni, hodiny se resetuji - do statistik se
+    # dostane az kombinace, u ktere divak vydrzel aspon
+    # MIN_LANGUAGE_SECONDS. Jakmile se jednou zapocita, uz se
+    # nemeni: prehravani patri jazyku, se kterym se doopravdy
+    # sledovalo, i kdyz si ho nekdo na konci prepne.
+    #
+    # Pocitame to tady a ne v SQL zamerne - je to rozhodovani,
+    # ne ukladani, a v Pythonu je videt na prvni pohled.
+    zmena_stop = (
+        chosen["audio_language"] != existing["current_audio_language"]
+        or chosen["subtitle_language"] != existing["current_subtitle_language"]
+    )
+    potvrzeno = bool(existing["language_confirmed"])
+    jazyk_od = existing["language_since"] or now
+
+    # Prvni minuty prehravani se preskakuji - viz
+    # LANGUAGE_GRACE_SECONDS. Pocitame odsledovany cas, ne cas od
+    # spusteni: kdyz si divak film pusti a odejde na hodinu k
+    # obedu, pauza se do tech ctyr minut pocitat nema.
+    odsledovano = int(existing["watched_seconds"] or 0) + (0 if is_paused else gap)
+    po_uvodu = odsledovano >= LANGUAGE_GRACE_SECONDS
+
+    if not potvrzeno:
+        if zmena_stop or not po_uvodu:
+            # Behem uvodu hodiny porad resetujeme, takze se zacne
+            # merit az od prvniho snimku po nem.
+            jazyk_od = now
+        elif ((now_dt - _parse(jazyk_od)).total_seconds() >= MIN_LANGUAGE_SECONDS
+              and odsledovano >= LANGUAGE_GRACE_SECONDS + MIN_LANGUAGE_SECONDS):
+            # Dve podminky, ne jedna. Sama o sobe by prvni potvrdila
+            # jazyk driv: hodiny se resetuji pri kazdem snimku uvodu,
+            # takze posledni reset padne nekam TESNE PRED ctvrtou
+            # minutu - a minuta mereni pak skonci pred patou.
+            #
+            # Druha podminka rika prosty pozadavek: nez se jazyk
+            # zapocita, musi prehravani trvat aspon uvod plus tu
+            # minutu. Kolik snimku se mezitim stihlo, uz nehraje roli.
+            potvrzeno = True
+
+    # Co se zapise do statistik. Prave potvrzena kombinace, jinak
+    # to, co uz tam je.
+    #
+    # Drive to resil `CASE WHEN ? THEN ? ELSE ... END` primo v SQL.
+    # Fungovalo to na SQLite, ale PostgreSQL potrebuje ve WHEN
+    # pravdivostni hodnotu, ne cislo ("argument of CASE/WHEN must
+    # be type boolean, not type smallint"). Rozhodnuti stejne patri
+    # sem - SQL ma ukladat, ne rozhodovat.
+    prave_potvrzeno = potvrzeno and not existing["language_confirmed"]
+    zapsany_zvuk = (chosen["audio_language"] if prave_potvrzeno
+                    else existing["audio_language"])
+    zapsane_titulky = (chosen["subtitle_language"] if prave_potvrzeno
+                       else existing["subtitle_language"])
+    return zapsany_zvuk, zapsane_titulky, jazyk_od, potvrzeno
+
+
+def _pokracuj_v_relaci(conn: Any, existing: Any, play_state: dict[str, Any], is_paused: bool,
+                       stream: dict[str, Any], chosen: dict[str, Any], vzorek_fps: float | None,
+                       now: str, now_dt: datetime, max_gap_seconds: int) -> None:
+    """Známé přehrávání: přičte čas od minulého snímku a zapíše, co hraje teď."""
+    # Relaci uz znam - pricti cas, ktery uplynul od minuleho snimku.
+    gap = (now_dt - _parse(existing["last_seen_at"])).total_seconds()
+    # Orez: kdyz aplikace na hodinu vypadla, nechceme si tu hodinu
+    # zapsat jako "sledoval". Zapocteme jen rozumny interval.
+    gap = max(0, min(int(gap), max_gap_seconds))
+
+    zapsany_zvuk, zapsane_titulky, jazyk_od, potvrzeno = _jazyk_do_statistik(
+        existing, chosen, is_paused, gap, now, now_dt)
+
+    conn.execute(
+        """
+        UPDATE playback
+           SET last_seen_at      = ?,
+               watched_seconds   = watched_seconds + ?,
+               paused_seconds    = paused_seconds + ?,
+               position_ticks    = ?,
+               play_method       = COALESCE(?, play_method),
+               transcode_reasons = COALESCE(?, transcode_reasons),
+               bitrate           = COALESCE(?, bitrate),
+               -- Bez COALESCE: popisuji stav ted. Kdyz divak
+               -- prepne na stopu, ktera uz prepocet nepotrebuje,
+               -- ma znacka prestat tvrdit, ze se obraz prepocitava.
+               transcode_video_direct = ?,
+               transcode_audio_direct = ?,
+               transcode_hw           = ?,
+               -- Rychlost prevodu ted (bez COALESCE ze stejneho
+               -- duvodu jako o radek vys) a do prumeru vzorek -
+               -- jen kdyz nejaky je.
+               transcode_fps          = ?,
+               transcode_fps_soucet   = transcode_fps_soucet + ?,
+               transcode_fps_vzorku   = transcode_fps_vzorku + ?,
+               video_fps              = COALESCE(video_fps, ?),
+               -- Dve dvojice sloupcu, protoze jsou to dve ruzne
+               -- otazky a jedna hodnota by na obe odpovedet nemohla:
+               --
+               --   audio_language          "v cem to sledoval"
+               --   current_audio_language  "co hraje prave ted"
+               --
+               -- Prvni dvojice se zapise jednou - ve chvili, kdy
+               -- jazyk "vydrzel" dost dlouho (viz vypocet vyse).
+               -- Druha se prepisuje pri kazdem snimku, protoze
+               -- karta "Prave se hraje" ma ukazovat skutecnost.
+               --
+               -- Obe dvojice se zapisuji primo, bez COALESCE:
+               -- co se ma zapsat, uz je rozhodnute vyse. U druhe
+               -- dvojice je prepis navic zamer - vypnute titulky
+               -- se maji projevit tim, ze znacka zmizi, ne tim,
+               -- ze zustane viset posledni znamy jazyk.
+               audio_language    = ?,
+               subtitle_language = ?,
+               language_since    = ?,
+               language_confirmed = ?,
+               current_audio_language    = ?,
+               current_subtitle_language = ?,
+               -- Rozmery se doplni, jakmile je Jellyfin posle.
+               -- U prvniho snimku je nekdy jeste nema.
+               -- Delka se doplni, jakmile ji Jellyfin posle;
+               -- u prvniho snimku ji nekdy jeste nema.
+               media_runtime_ticks = COALESCE(media_runtime_ticks, ?),
+               video_width       = COALESCE(video_width, ?),
+               video_height      = COALESCE(video_height, ?),
+               -- Tenhle se naopak prepisuje pokazde: zajima nas
+               -- stav ted, ne ten pri spusteni.
+               is_paused         = ?
+         WHERE id = ?
+        """,
+        (
+            now,
+            0 if is_paused else gap,
+            gap if is_paused else 0,
+            play_state.get("PositionTicks"),
+            play_state.get("PlayMethod"),
+            stream["transcode_reasons"],
+            stream["bitrate"],
+            stream["video_direct"],
+            stream["audio_direct"],
+            stream["hw"],
+            vzorek_fps,
+            vzorek_fps or 0,
+            1 if vzorek_fps else 0,
+            stream["video_fps"],
+            zapsany_zvuk,
+            zapsane_titulky,
+            jazyk_od,
+            1 if potvrzeno else 0,
+            chosen["audio_language"],
+            chosen["subtitle_language"],
+            stream["runtime_ticks"],
+            stream["video_width"],
+            stream["video_height"],
+            1 if is_paused else 0,
+            existing["id"],
+        ),
+    )
+
+
+def _ukonci_zmizele(conn: Any, active_keys: list[str], now: str) -> int:
+    """Ukončí aktivní záznamy, které Jellyfin už nehlásí. Vrátí, kolik jich bylo."""
+    if active_keys:
+        placeholders = ",".join("?" for _ in active_keys)
+        cursor = conn.execute(
+            f"""
+            UPDATE playback
+               SET is_active = 0, ended_at = ?
+             WHERE is_active = 1 AND session_key NOT IN ({placeholders})
+            """,
+            (now, *active_keys),
+        )
+    else:
+        cursor = conn.execute(
+            "UPDATE playback SET is_active = 0, ended_at = ? WHERE is_active = 1",
+            (now,),
+        )
+    return cursor.rowcount
+
+
 def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dict[str, int]:
     """Zapis snimku do databaze. Bezi ve vlakne, ne na smycce udalosti."""
     now = db.utcnow()
@@ -365,258 +647,18 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
             # a prumer by tvrdil, ze server nestihal.
             vzorek_fps = stream["fps"] if stream["fps"] and not is_paused else None
 
-            existing = conn.execute(
-                "SELECT id, last_seen_at, watched_seconds,"
-                "       audio_language, subtitle_language,"
-                "       current_audio_language, current_subtitle_language,"
-                "       language_since, language_confirmed"
-                "  FROM playback WHERE session_key = ? AND is_active = 1",
-                (key,),
-            ).fetchone()
-
+            existing = _najdi_relaci(conn, key, session, item, play_state, now)
             if existing is None:
-                existing = _prevzit_cizi_relaci(conn, key, session, item, now)
-
-            # Az kdyz nic nebezi: nenavazujeme na neco, co divak pred
-            # chvili pauznul? Musi to byt az tady - bezici zaznam ma
-            # prednost pred uzavrenym.
-            if existing is None:
-                existing = _navaz_na_prerusene(
-                    conn, key, session, item, play_state.get("PositionTicks"), now)
-
-            if existing is None:
-                library_row = conn.execute(
-                    "SELECT library_id FROM items WHERE id = ?", (item.get("Id"),)
-                ).fetchone()
-
-                conn.execute(
-                    """
-                    INSERT INTO playback (
-                        session_key, user_id, user_name,
-                        item_id, item_name, item_type, series_name, library_id,
-                        client, device_name, device_id, remote_address,
-                        play_method, transcode_reasons, video_codec, audio_codec, bitrate,
-                        transcode_video_direct, transcode_audio_direct, transcode_hw,
-                        transcode_fps, transcode_fps_soucet, transcode_fps_vzorku,
-                        video_fps,
-                        audio_language, subtitle_language,
-                        current_audio_language, current_subtitle_language,
-                        language_since, language_confirmed,
-                        media_runtime_ticks, video_width, video_height,
-                        started_at, last_seen_at, watched_seconds, paused_seconds,
-                        position_ticks, is_paused, is_active
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,1)
-                    """,
-                    (
-                        key,
-                        session.get("UserId"),
-                        session.get("UserName"),
-                        item.get("Id"),
-                        item.get("Name"),
-                        item.get("Type"),
-                        item.get("SeriesName"),
-                        library_row["library_id"] if library_row else None,
-                        session.get("Client"),
-                        session.get("DeviceName"),
-                        session.get("DeviceId"),
-                        session.get("RemoteEndPoint"),
-                        play_state.get("PlayMethod"),
-                        stream["transcode_reasons"],
-                        stream["video_codec"],
-                        stream["audio_codec"],
-                        stream["bitrate"],
-                        stream["video_direct"],
-                        stream["audio_direct"],
-                        stream["hw"],
-                        vzorek_fps,
-                        vzorek_fps or 0,
-                        1 if vzorek_fps else 0,
-                        stream["video_fps"],
-                        # Do statistik zatim nic - jazyk se zapocita az po
-                        # MIN_LANGUAGE_SECONDS, viz vyse. Prvni vteriny
-                        # casto hraje stopa, kterou si divak hned prepne.
-                        None,
-                        None,
-                        chosen["audio_language"],
-                        chosen["subtitle_language"],
-                        now,
-                        0,
-                        stream["runtime_ticks"],
-                        stream["video_width"],
-                        stream["video_height"],
-                        now,
-                        now,
-                        play_state.get("PositionTicks"),
-                        1 if is_paused else 0,
-                    ),
-                )
+                _zaloz_relaci(conn, key, session, item, play_state, is_paused, stream,
+                              chosen, vzorek_fps, now)
                 started += 1
                 continue
 
-            # Relaci uz znam - pricti cas, ktery uplynul od minuleho snimku.
-            gap = (now_dt - _parse(existing["last_seen_at"])).total_seconds()
-            # Orez: kdyz aplikace na hodinu vypadla, nechceme si tu hodinu
-            # zapsat jako "sledoval". Zapocteme jen rozumny interval.
-            gap = max(0, min(int(gap), max_gap_seconds))
-
-            # Kdy se jazyk zapocita do statistik.
-            #
-            # Dokud se stopy meni, hodiny se resetuji - do statistik se
-            # dostane az kombinace, u ktere divak vydrzel aspon
-            # MIN_LANGUAGE_SECONDS. Jakmile se jednou zapocita, uz se
-            # nemeni: prehravani patri jazyku, se kterym se doopravdy
-            # sledovalo, i kdyz si ho nekdo na konci prepne.
-            #
-            # Pocitame to tady a ne v SQL zamerne - je to rozhodovani,
-            # ne ukladani, a v Pythonu je videt na prvni pohled.
-            zmena_stop = (
-                chosen["audio_language"] != existing["current_audio_language"]
-                or chosen["subtitle_language"] != existing["current_subtitle_language"]
-            )
-            potvrzeno = bool(existing["language_confirmed"])
-            jazyk_od = existing["language_since"] or now
-
-            # Prvni minuty prehravani se preskakuji - viz
-            # LANGUAGE_GRACE_SECONDS. Pocitame odsledovany cas, ne cas od
-            # spusteni: kdyz si divak film pusti a odejde na hodinu k
-            # obedu, pauza se do tech ctyr minut pocitat nema.
-            odsledovano = int(existing["watched_seconds"] or 0) + (0 if is_paused else gap)
-            po_uvodu = odsledovano >= LANGUAGE_GRACE_SECONDS
-
-            if not potvrzeno:
-                if zmena_stop or not po_uvodu:
-                    # Behem uvodu hodiny porad resetujeme, takze se zacne
-                    # merit az od prvniho snimku po nem.
-                    jazyk_od = now
-                elif ((now_dt - _parse(jazyk_od)).total_seconds() >= MIN_LANGUAGE_SECONDS
-                      and odsledovano >= LANGUAGE_GRACE_SECONDS + MIN_LANGUAGE_SECONDS):
-                    # Dve podminky, ne jedna. Sama o sobe by prvni potvrdila
-                    # jazyk driv: hodiny se resetuji pri kazdem snimku uvodu,
-                    # takze posledni reset padne nekam TESNE PRED ctvrtou
-                    # minutu - a minuta mereni pak skonci pred patou.
-                    #
-                    # Druha podminka rika prosty pozadavek: nez se jazyk
-                    # zapocita, musi prehravani trvat aspon uvod plus tu
-                    # minutu. Kolik snimku se mezitim stihlo, uz nehraje roli.
-                    potvrzeno = True
-
-            # Co se zapise do statistik. Prave potvrzena kombinace, jinak
-            # to, co uz tam je.
-            #
-            # Drive to resil `CASE WHEN ? THEN ? ELSE ... END` primo v SQL.
-            # Fungovalo to na SQLite, ale PostgreSQL potrebuje ve WHEN
-            # pravdivostni hodnotu, ne cislo ("argument of CASE/WHEN must
-            # be type boolean, not type smallint"). Rozhodnuti stejne patri
-            # sem - SQL ma ukladat, ne rozhodovat.
-            prave_potvrzeno = potvrzeno and not existing["language_confirmed"]
-            zapsany_zvuk = (chosen["audio_language"] if prave_potvrzeno
-                            else existing["audio_language"])
-            zapsane_titulky = (chosen["subtitle_language"] if prave_potvrzeno
-                               else existing["subtitle_language"])
-
-            conn.execute(
-                """
-                UPDATE playback
-                   SET last_seen_at      = ?,
-                       watched_seconds   = watched_seconds + ?,
-                       paused_seconds    = paused_seconds + ?,
-                       position_ticks    = ?,
-                       play_method       = COALESCE(?, play_method),
-                       transcode_reasons = COALESCE(?, transcode_reasons),
-                       bitrate           = COALESCE(?, bitrate),
-                       -- Bez COALESCE: popisuji stav ted. Kdyz divak
-                       -- prepne na stopu, ktera uz prepocet nepotrebuje,
-                       -- ma znacka prestat tvrdit, ze se obraz prepocitava.
-                       transcode_video_direct = ?,
-                       transcode_audio_direct = ?,
-                       transcode_hw           = ?,
-                       -- Rychlost prevodu ted (bez COALESCE ze stejneho
-                       -- duvodu jako o radek vys) a do prumeru vzorek -
-                       -- jen kdyz nejaky je.
-                       transcode_fps          = ?,
-                       transcode_fps_soucet   = transcode_fps_soucet + ?,
-                       transcode_fps_vzorku   = transcode_fps_vzorku + ?,
-                       video_fps              = COALESCE(video_fps, ?),
-                       -- Dve dvojice sloupcu, protoze jsou to dve ruzne
-                       -- otazky a jedna hodnota by na obe odpovedet nemohla:
-                       --
-                       --   audio_language          "v cem to sledoval"
-                       --   current_audio_language  "co hraje prave ted"
-                       --
-                       -- Prvni dvojice se zapise jednou - ve chvili, kdy
-                       -- jazyk "vydrzel" dost dlouho (viz vypocet vyse).
-                       -- Druha se prepisuje pri kazdem snimku, protoze
-                       -- karta "Prave se hraje" ma ukazovat skutecnost.
-                       --
-                       -- Obe dvojice se zapisuji primo, bez COALESCE:
-                       -- co se ma zapsat, uz je rozhodnute vyse. U druhe
-                       -- dvojice je prepis navic zamer - vypnute titulky
-                       -- se maji projevit tim, ze znacka zmizi, ne tim,
-                       -- ze zustane viset posledni znamy jazyk.
-                       audio_language    = ?,
-                       subtitle_language = ?,
-                       language_since    = ?,
-                       language_confirmed = ?,
-                       current_audio_language    = ?,
-                       current_subtitle_language = ?,
-                       -- Rozmery se doplni, jakmile je Jellyfin posle.
-                       -- U prvniho snimku je nekdy jeste nema.
-                       -- Delka se doplni, jakmile ji Jellyfin posle;
-                       -- u prvniho snimku ji nekdy jeste nema.
-                       media_runtime_ticks = COALESCE(media_runtime_ticks, ?),
-                       video_width       = COALESCE(video_width, ?),
-                       video_height      = COALESCE(video_height, ?),
-                       -- Tenhle se naopak prepisuje pokazde: zajima nas
-                       -- stav ted, ne ten pri spusteni.
-                       is_paused         = ?
-                 WHERE id = ?
-                """,
-                (
-                    now,
-                    0 if is_paused else gap,
-                    gap if is_paused else 0,
-                    play_state.get("PositionTicks"),
-                    play_state.get("PlayMethod"),
-                    stream["transcode_reasons"],
-                    stream["bitrate"],
-                    stream["video_direct"],
-                    stream["audio_direct"],
-                    stream["hw"],
-                    vzorek_fps,
-                    vzorek_fps or 0,
-                    1 if vzorek_fps else 0,
-                    stream["video_fps"],
-                    zapsany_zvuk,
-                    zapsane_titulky,
-                    jazyk_od,
-                    1 if potvrzeno else 0,
-                    chosen["audio_language"],
-                    chosen["subtitle_language"],
-                    stream["runtime_ticks"],
-                    stream["video_width"],
-                    stream["video_height"],
-                    1 if is_paused else 0,
-                    existing["id"],
-                ),
-            )
+            _pokracuj_v_relaci(conn, existing, play_state, is_paused, stream, chosen,
+                               vzorek_fps, now, now_dt, max_gap_seconds)
 
         # Cokoliv, co je v databazi aktivni, ale Jellyfin uz to nehlasi, skoncilo.
-        if active_keys:
-            placeholders = ",".join("?" for _ in active_keys)
-            cursor = conn.execute(
-                f"""
-                UPDATE playback
-                   SET is_active = 0, ended_at = ?
-                 WHERE is_active = 1 AND session_key NOT IN ({placeholders})
-                """,
-                (now, *active_keys),
-            )
-        else:
-            cursor = conn.execute(
-                "UPDATE playback SET is_active = 0, ended_at = ? WHERE is_active = 1",
-                (now,),
-            )
-        ended = cursor.rowcount
+        ended = _ukonci_zmizele(conn, active_keys, now)
 
     return {"active": len(active_keys), "started": started, "ended": ended}
 

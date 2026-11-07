@@ -212,5 +212,14 @@ check('id="divaci"' in spravce.get("/settings?section=jellyfin").text,
       "a cíl odkazu (karta #divaci v sekci Jellyfin) existuje")
 
 print()
+print("--- bez účtu se nevidí žádná oblast ---")
+# Souhrn bez přihlášení (e-mail, export) nesmí dostat karty z oblastí,
+# které má kdokoliv vypnuté - kde účet chybí, platí zavřeno.
+from jellyscope import sekce  # noqa: E402
+
+check(not any(pristup.vidi_ucet(None, o.klic) for o in pristup.OBLASTI), "vidi_ucet(None, …) je vždy ne")
+check(sekce.povolene(list(sekce.SEZNAM), None) == [], "bez účtu žádná karta přehledu")
+
+print()
 print("HOTOVO - chyb:", failures)
 sys.exit(1 if failures else 0)

@@ -27,6 +27,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -272,9 +274,9 @@ def _sleduj(kolik: int) -> None:
         procenta.append(stav["percent"])
 
 
-scanner._add_progress = _sleduj                          # type: ignore[assignment]
+podvrhni(scanner, "_add_progress", _sleduj)
 vysledek = asyncio.run(scanner.run_tech_scan(only_missing=False))
-scanner._add_progress = _puvodni_krok                    # type: ignore[assignment]
+podvrhni(scanner, "_add_progress", _puvodni_krok)
 
 check(vysledek["total"] == 10, f"analyzovalo se deset souborů ({vysledek['total']})")
 check(len(procenta) == 10,

@@ -32,7 +32,7 @@ def _rezim_poruchy(config, hlaska: str, hlaska_en: str = "") -> int:
 def main() -> int:
     config = load_config()
 
-    # Databázi připravíme už tady, ne až ve web.py. Díky tomu můžeme rovnou
+    # Databázi připravíme už tady, ne až ve web/start.py. Díky tomu můžeme rovnou
     # vypsat, v jakém stavu aplikace je - a případná chyba se objeví
     # v logu při startu, ne až u prvního požadavku.
     from jellyscope import accounts, db

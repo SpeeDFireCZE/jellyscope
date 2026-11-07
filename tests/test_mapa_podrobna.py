@@ -28,6 +28,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
@@ -277,10 +279,10 @@ with TestClient(app) as spravce:
         "SELECT status FROM scan_log WHERE kind = 'mapa' ORDER BY id DESC LIMIT 1") == "done",
         "úloha „mapa“ proběhla a je v záznamu úloh")
     puvodni_bezi = scanner.is_scan_running
-    scanner.is_scan_running = lambda: True
+    podvrhni(scanner, "is_scan_running", lambda: True)
     spravce.post("/network/mapa-podrobna", follow_redirects=False)
     time.sleep(0.3)
-    scanner.is_scan_running = puvodni_bezi
+    podvrhni(scanner, "is_scan_running", puvodni_bezi)
     check(volani == [1] and "už běží" in spravce.get("/network").text,
           "druhé spuštění během běžící úlohy se odmítne")
     sit = spravce.get("/network").text
@@ -289,9 +291,9 @@ with TestClient(app) as spravce:
     check(re.search(r'data-podrobna-verze="[0-9a-f]{8,}"', sit) is not None,
           "mapa nese verzi podrobné mapy (prohlížeč pak nebere dlaždice z mezipaměti po novém stažení)")
     puvodni_bezi = scanner.is_scan_running
-    scanner.is_scan_running = lambda: True
+    podvrhni(scanner, "is_scan_running", lambda: True)
     spravce.post("/network/mapa-podrobna/smazat", follow_redirects=False)
-    scanner.is_scan_running = puvodni_bezi
+    podvrhni(scanner, "is_scan_running", puvodni_bezi)
     check(mapa_podrobna.stav()["verze"] and "už běží" in spravce.get("/network").text,
           "Smazat během běžící úlohy se odmítne (úloha by mapu zase zapsala)")
     db.set_setting("mapa_podrobna_format", "0:16:128")

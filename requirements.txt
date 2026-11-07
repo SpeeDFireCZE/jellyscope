@@ -7,7 +7,7 @@
 # is 3.10), and Python 3.10 gets no security fixes after October 2026.
 
 fastapi==0.162.0           # web framework - routing, validation, async
-starlette==1.9.0           # what FastAPI is built on: routing, sessions,
+starlette==1.10.0          # what FastAPI is built on: routing, sessions,
                            # static files, multipart. Pinned explicitly even
                            # though FastAPI pulls it in, because the security
                            # fixes below live here, not in FastAPI - an
@@ -20,7 +20,7 @@ jinja2==3.1.6              # templating - turns HTML templates into pages
                            #  run templates in a sandbox, so it was a formality)
 itsdangerous==2.2.0        # signs the login cookie
 python-multipart==0.0.32   # reads HTML form data (POST)
-tzdata==2026.5             # time-zone database for the "Time zone" setting.
+tzdata==2026.6             # time-zone database for the "Time zone" setting.
                            # Linux has one of its own and Python uses that
                            # first; Windows and minimal container images
                            # (Alpine) have none, and without it every zone

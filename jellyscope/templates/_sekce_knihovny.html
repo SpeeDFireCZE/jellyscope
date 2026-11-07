@@ -13,7 +13,7 @@
                 {# loading="lazy" - obrázky mimo obrazovku se stáhnou až
                    ve chvíli, kdy k nim uživatel doroluje. #}
                 <img src="/image/{{ row.poster_id }}?kind=Backdrop&w=600"
-                     alt="" loading="lazy" onerror="this.remove()">
+                     alt="" loading="lazy" data-pri-chybe="odebrat">
             {% endif %}
             <span class="lib-cover-name">{{ row.name }}</span>
         </div>

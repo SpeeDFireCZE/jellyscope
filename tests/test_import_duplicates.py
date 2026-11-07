@@ -26,6 +26,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku importers
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -105,11 +107,11 @@ def naimportuj_pbr(min_seconds: int = 60) -> dict[str, Any]:
             return False
 
     puvodni = importers.JellyfinClient
-    importers.JellyfinClient = FalesnyKlient          # type: ignore[assignment]
+    podvrhni(importers, "JellyfinClient", FalesnyKlient)
     try:
         return asyncio.run(importers.import_playback_reporting(min_seconds))
     finally:
-        importers.JellyfinClient = puvodni            # type: ignore[assignment]
+        podvrhni(importers, "JellyfinClient", puvodni)
 
 
 db.init_db()

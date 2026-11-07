@@ -122,12 +122,17 @@ for _cesta in sorted((PROJECT / "jellyscope" / "templates").rglob("*.html")):
         break
 check(bool(sablona), "šablona s tlačítkem „Zapomenout“ se našla")
 
+# Obsluha je od přestavby na CSP bez vloženého kódu ve static/js/app.js
+# (tlačítko nese data-akce), ne v onclick= ve značce.
 spoustec = re.search(
-    r'<button class="btn danger"([^>]*?)onclick="(.*?)"\s*>\s*'
+    r'<button class="btn danger"([^>]*?)data-akce="zapomenout-divaka"\s*>\s*'
     r'\{\{ _\("Zapomenout"\) \}\}', sablona, re.S)
 check(spoustec is not None, "spouštěcí tlačítko se našlo")
+skripty = (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+i_akce = skripty.find('[data-akce="zapomenout-divaka"]')
+check(i_akce != -1, "a jeho obsluha je v app.js")
 if spoustec:
-    atributy, obsluha = spoustec.group(1), spoustec.group(2)
+    atributy, obsluha = spoustec.group(1), skripty[i_akce:i_akce + 600]
     # Tohle je ta podstatna pojistka: tlacitko, ktere neumi odeslat,
     # nemuze pri chybe skriptu nic smazat. Driv umelo - a smazalo.
     check('type="button"' in atributy,

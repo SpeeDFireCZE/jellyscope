@@ -4,6 +4,7 @@
    šablonka, ať se obě místa nerozejdou. V přehledu je navíc
    `v_prehledu` (True).
    Čeká `rows (stats.user_table)`. #}
+{% from "_macros.html" import odkaz with context %}
 <div class="card">
     <div class="card-head"><h2>{{ _("Uživatelé") if v_prehledu else _("Přehled") }}</h2></div>
     <div class="table-wrap">
@@ -19,7 +20,7 @@
             {% for row in rows %}
             <tr>
                 <td class="strong">
-                    <a href="/users/{{ row.id }}">{{ row.name }}</a>
+                    {% call odkaz("/users/" ~ row.id) %}{{ row.name }}{% endcall %}
                     {% if row.is_administrator %}
                         <span class="badge role"><span class="dot"></span>{{ _("správce") }}</span>
                     {% endif %}

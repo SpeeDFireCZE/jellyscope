@@ -111,8 +111,10 @@ check(len(web.DEMO_POVOLENO) == 2, f"a opravdu jediné ({sorted(web.DEMO_POVOLEN
 print()
 print("--- hláška se ukáže na místě, stránka se nikam nehne ---")
 # Přesměrování je až záloha pro případ, že by JavaScript nebyl. Prohlížeč
-# formulář vůbec neodešle - viz obsluha v base.html.
-zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+# formulář vůbec neodešle - viz obsluha ve static/js/app.js.
+# Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+zaklad = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+          + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
 check("hlaska-ukazky" in zaklad, "v šabloně je místo pro hlášku")
 check("event.preventDefault()" in zaklad and "POVOLENO" in zaklad,
       "a obsluha, která odeslání zastaví")

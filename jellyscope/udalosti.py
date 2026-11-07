@@ -16,7 +16,8 @@ import logging
 import os
 import re
 from datetime import date, timedelta
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from . import db
 

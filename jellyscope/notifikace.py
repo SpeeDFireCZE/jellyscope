@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Upozorneni: kdyz se neco pokazi, aplikace to ma komu rict.
 
 Jellyscope je pasivni - otevres ho, kdyz te neco zajima. Sberac se ale
@@ -30,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from . import db, i18n
@@ -375,7 +374,7 @@ def _sberac_nesbira() -> tuple[bool, str]:
         kdy = datetime.strptime(posledni, CAS_FORMAT)
     except ValueError:
         return False, ""
-    minut = (datetime.now(timezone.utc).replace(tzinfo=None) - kdy).total_seconds() / 60
+    minut = (datetime.now(UTC).replace(tzinfo=None) - kdy).total_seconds() / 60
     if minut >= ticho:
         return True, _ts("poslední úspěšný dotaz na Jellyfin byl před {minut} minutami"
                         ).format(minut=int(minut))

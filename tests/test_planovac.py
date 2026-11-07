@@ -26,6 +26,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
@@ -295,7 +297,7 @@ async def falesna_analyza(**kwargs: Any) -> dict[str, Any]:
 
 scanner_sync, scanner_tech = scanner.sync_library, scanner.run_tech_scan
 scanner.sync_library = falesny_sync            # type: ignore[assignment]
-scanner.run_tech_scan = falesna_analyza        # type: ignore[assignment]
+podvrhni(scanner, "run_tech_scan", falesna_analyza)
 try:
     db.set_setting("tech_source", "jellyfin")
     volani.clear()
@@ -322,7 +324,7 @@ try:
     check(volani == ["sync"], f"po zastavení se analýza nespouští ({volani})")
 finally:
     scanner.sync_library = scanner_sync        # type: ignore[assignment]
-    scanner.run_tech_scan = scanner_tech       # type: ignore[assignment]
+    podvrhni(scanner, "run_tech_scan", scanner_tech)
 
 check(tasks.TASKS.get("tech") is None, "samostatná úloha 'tech' už neexistuje")
 

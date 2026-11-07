@@ -4,6 +4,7 @@
    používají tuhle jednu šablonu, aby se seznam v okně nemohl lišit od
    toho na stránce. Řádek bez odkazu je titul, ke kterému už v knihovně
    nic nevede. #}
+{% from "_macros.html" import odkaz with context %}
 {% if not top_items %}
 <p class="hint">{{ _("Za tohle období se nic nehrálo.") }}</p>
 {% else %}
@@ -27,7 +28,7 @@
         <tr>
             <td class="num muted">{{ loop.index }}</td>
             <td class="strong">
-                {% if t.detail_url %}<a href="{{ t.detail_url }}">{{ t.label }}</a>{% else %}{{ t.label }}{% endif %}
+                {% if t.detail_url %}{% call odkaz(t.detail_url) %}{{ t.label }}{% endcall %}{% else %}{{ t.label }}{% endif %}
                 {% if t.is_series %}<span class="muted"> &middot; {{ _("seriál") }}</span>{% endif %}
             </td>
             <td class="num">{{ t.hours | hours }}</td>

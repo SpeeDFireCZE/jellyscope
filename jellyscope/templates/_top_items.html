@@ -29,11 +29,12 @@
    každý řádek nese celou adresu sám. Řádky bez ní (titul, který už
    v knihovně není) zůstanou textem - odkaz na 404 je horší než žádný. #}
 {{ charts.hbar_chart(top_items, 'label', 'hours',
-             link_prefix='', link_key='detail_url') | safe }}
+             link_prefix='', link_key='detail_url', smi=smi) | safe }}
 
 {# Graf ukazuje deset. Celý žebříček je za odkazem: s JavaScriptem se
    načte do okna, bez něj se otevře jako stránka - routa umí obojí. #}
-{% if top_items %}
+{# Celý žebříček patří Zjištěním - kdo je nesmí, odkaz nedostane. #}
+{% if top_items and smi("/top-items") %}
 <p class="card-note" style="margin-top:10px">
     <a href="/top-items?kind={{ top_kind }}" data-okno-nacist="okno-top-vse">
         {{ _("Celý žebříček") }} &rarr;

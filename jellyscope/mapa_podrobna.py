@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Podrobná offline mapa: Natural Earth 1:10M rozřezaná na dlaždice.
 
 Zabudovaný obrys pevnin (worldmap, 1:110M) stačí na celý svět, ale při
@@ -11,7 +10,7 @@ Celý soubor je na stránku moc velký (pevnina sama má 10 MB), a tak se
 po stažení rozřeže na dlaždice ve dvou podrobnostech (PODROBNOSTI) a
 uloží do hlavní databáze - zálohuje se s ní a převod SQLite -> PostgreSQL
 ji přenese. Prohlížeč si pak bere jen dlaždice výřezu, na který se člověk
-dívá (web.py, /network/mapa/dlazdice/...).
+dívá (web/sit.py, /network/mapa/dlazdice/...).
 
 Plochy (pevnina, jezera, města) se kreslí jen výplní, aby na hranách
 dlaždic nebyly vidět švy; čáry (řeky, hranice) se ořezávají jako úsečky.
@@ -24,7 +23,8 @@ import json
 import logging
 import math
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 from . import config, db
 from .i18n import translate as _t
@@ -233,7 +233,7 @@ async def stahni_a_zpracuj(klient: Any = None, zastavit: Any = None) -> dict[str
 async def spust_ulohu() -> None:
     """Stažení jako úloha na pozadí - pod zámkem úloh a se záznamem v logu úloh.
 
-    Spouští ji tlačítko na stránce Síť (web.py); stránka si pak počká
+    Spouští ji tlačítko na stránce Síť (web/sit.py); stránka si pak počká
     (`?wait=task`) a po dokončení se obnoví.
     """
     from . import scanner

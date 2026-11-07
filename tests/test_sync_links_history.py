@@ -21,6 +21,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -97,7 +99,7 @@ check(pred["item_type"] is None, "před synchronizací není znám typ položky"
 
 print()
 print("--- synchronizace knihovny ---")
-scanner.JellyfinClient = FalesnyKlient          # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 vysledek = asyncio.run(scanner.sync_library())
 check(vysledek.get("status") == "ok", f"synchronizace prošla: {vysledek}")
 check(vysledek.get("users") == 1 and vysledek.get("items") == 1,

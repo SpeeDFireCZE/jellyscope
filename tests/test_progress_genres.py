@@ -21,6 +21,8 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 # Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
@@ -88,7 +90,7 @@ check(scanner.progress() == {}, f"prázdné: {scanner.progress()}")
 
 print()
 print("--- synchronizace hlásí, kolik má hotovo ---")
-scanner.JellyfinClient = FalesnyKlient          # type: ignore[assignment]
+podvrhni(scanner, "JellyfinClient", FalesnyKlient)
 vysledek = asyncio.run(scanner.sync_library())
 check(vysledek.get("status") == "ok", f"proběhla: {vysledek.get('status')}")
 
@@ -115,10 +117,10 @@ scanner._start_progress("library", 0)
 scanner._add_progress(42)
 try:
     puvodni = scanner.is_scan_running
-    scanner.is_scan_running = lambda: True       # type: ignore[assignment]
+    podvrhni(scanner, "is_scan_running", lambda: True)
     stav = scanner.progress()
 finally:
-    scanner.is_scan_running = puvodni            # type: ignore[assignment]
+    podvrhni(scanner, "is_scan_running", puvodni)
 check(stav["percent"] is None, f"procenta jsou None, ne 0: {stav['percent']}")
 check(stav["done"] == 42, "ale hotové položky se počítají dál")
 scanner._clear_progress()

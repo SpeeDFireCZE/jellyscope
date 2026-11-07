@@ -152,7 +152,7 @@
             </form>
             {% if podrobna.verze %}
             <form method="post" action="/network/mapa-podrobna/smazat"
-                  onsubmit='return confirm({{ _("Smazat podrobnou mapu? Mapa se vrátí k hrubému obrysu, stáhnout jde kdykoliv znovu.")|tojson }})'>
+                  data-potvrdit="{{ _("Smazat podrobnou mapu? Mapa se vrátí k hrubému obrysu, stáhnout jde kdykoliv znovu.") }}">
                 <button class="btn danger" type="submit">{{ _("Smazat") }}</button>
             </form>
             {% endif %}

@@ -956,14 +956,35 @@ jellyscope/
     ├── probe.py            ffprobe
     ├── languages.py        unifying language codes
     ├── collector.py        background playback collection
-    ├── scanner.py          library sync + file analysis
+    ├── scanner/            library sync + file analysis, one file per area
+    │   ├── __init__.py     the entry point: every scanner.X used elsewhere
+    │   ├── beh.py          running tasks: lock, stop, progress, task log
+    │   ├── synchronizace.py  the full library sync
+    │   ├── obnova.py       one item, one series, recent changes
+    │   ├── zapis.py        writing items, versions, images, streams
+    │   ├── slouceni.py     merging by TMDB, duplicates, history transfer
+    │   ├── technika.py     file analysis (ffprobe or Jellyfin), video range
+    │   ├── jazyky.py       filling in stream languages
+    │   ├── misto.py        free space and the daily library snapshot
+    │   └── typy.py         which item types Jellyscope keeps
     ├── tasks.py            scheduler and backups
     ├── odklizeni.py        clearing out the history, forgetting a viewer
     ├── pristup.py          what a viewer signed in from Jellyfin sees
     ├── notifikace.py       SMTP, Discord, Telegram
     ├── updates.py          asking GitHub about a newer release
-    ├── importers.py        history import and its repairs
-    ├── stats.py            statistical SQL queries
+    ├── importers/          history import and its repairs, one file per area
+    │   ├── __init__.py     the entry point: every importers.X used elsewhere
+    │   ├── zaklad.py       shared helpers, the read-only guard, building a row
+    │   ├── shoda.py        the second duplicate guard: matching by content
+    │   ├── propojeni.py    linking imported history to items
+    │   ├── zalozeni.py     creating missing items from Jellyfin
+    │   ├── pbr.py          import from Playback Reporting (API or TSV file)
+    │   ├── jellystat.py    import from a Jellystat backup
+    │   ├── uklid.py        duplicates in our own history, absurd durations
+    │   ├── dvojice.py      duplicates between two import sources
+    │   ├── osirele.py      plays without an item: analysis, manual assignment
+    │   └── narovnani.py    tidying the data, the import summary
+    ├── stats/              statistical SQL queries, one file per topic
     ├── insights.py         behaviour meets technique ← the core idea
     ├── langstats.py        language statistics
     ├── sekce.py            the cards the dashboards are built from
@@ -981,9 +1002,31 @@ jellyscope/
     ├── porucha.py          the page shown when the database will not open
     ├── api.py              the read-only API and its keys
     ├── api_dotaz.py        filters, sorting and checks for API requests
-    ├── web.py              routes
-    ├── web_zaklad.py       what every page needs: context, flashes, guards
-    ├── web_nastaveni.py    the Settings routes, all thirty-six
+    ├── web/                the web app, one file per area of pages
+    │   ├── __init__.py     the app: middleware, error pages, connecting the routes
+    │   ├── start.py        what starts and stops with the server (lifespan)
+    │   ├── zaklad.py       what every page needs: context, flashes, guards, CSP
+    │   ├── obdobi.py       the period and kind choice shared by the pages
+    │   ├── prihlaseni.py   first run, sign-in, sign-out
+    │   ├── ucet.py         my account
+    │   ├── prehled.py      the dashboard, its cards, comparison, custom dashboards
+    │   ├── knihovna.py     library, titles, items, archive, images
+    │   ├── uzivatele.py    users
+    │   ├── historie.py     playback history
+    │   ├── jazyky.py       languages
+    │   ├── sit.py          the Network page and its map
+    │   ├── stav.py         /health and /api/now-playing
+    │   └── nastaveni/      the Settings routes (all forty-six), one file per area
+    │       ├── __init__.py   the entry point: one router for all of Settings
+    │       ├── stranka.py    the Settings page itself
+    │       ├── ucty.py       accounts, permissions, viewers, blocks, API keys
+    │       ├── pripojeni.py  connecting to Jellyfin and the database
+    │       ├── upozorneni.py notifications
+    │       ├── rozhrani.py   interface, update checks, language
+    │       ├── aktualizace.py  updating, restart, backups
+    │       ├── ulohy.py      sync, stop, scan, scheduled tasks, log
+    │       ├── historie.py   history import and tidying
+    │       └── spolecne.py   shared helpers
     ├── demodata.py         generator of made-up data for the demo
     ├── templates/          HTML templates
     └── static/style.css    styling

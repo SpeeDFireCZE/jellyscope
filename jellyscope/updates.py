@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Hlídání nové verze podle vydání na GitHubu.
 
 Tři věci, které o tom stojí za to vědět:
@@ -26,7 +25,7 @@ import pathlib
 import re
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from . import db
@@ -91,7 +90,7 @@ def je_novejsi(nalezena: Any, moje: Any) -> bool:
 
 
 def _ted() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _je_cas() -> bool:
@@ -100,7 +99,7 @@ def _je_cas() -> bool:
     if not posledni:
         return True
     try:
-        kdy = datetime.strptime(posledni, db.TIME_FORMAT).replace(tzinfo=timezone.utc)
+        kdy = datetime.strptime(posledni, db.TIME_FORMAT).replace(tzinfo=UTC)
     except ValueError:
         return True
     return _ted() - kdy >= timedelta(hours=INTERVAL_HODIN)
@@ -341,7 +340,7 @@ async def aktualizuj() -> dict[str, Any]:
     Deleji se presne dva kroky z `deploy/update.sh` - `git pull` a
     `pip install` - a pred nimi zkouska nanecisto, jestli pujdou balicky
     nove verze nainstalovat (`_overeni_balicku`). Restart si rika volajici
-    sam (viz web_nastaveni._naplanuj_restart),
+    sam (viz web.nastaveni._naplanuj_restart),
     protoze aplikace umi nahradit svuj proces a nepotrebuje k tomu
     spravce sluzby.
 

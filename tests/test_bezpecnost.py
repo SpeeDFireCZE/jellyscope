@@ -108,7 +108,8 @@ class FalesnyKlient:
 
 import jellyscope.web as web  # noqa: E402
 
-web.JellyfinClient = FalesnyKlient  # type: ignore[assignment]
+# Obrázky stahuje routa /image (web/knihovna.py) - podvrh musí být tam.
+web.knihovna.JellyfinClient = FalesnyKlient  # type: ignore[assignment]
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -280,7 +281,9 @@ bublina = charts.area_chart_multi(
 check(utok not in bublina and "&lt;img" in bublina,
       "název s HTML značkou je escapovaný i v bublině")
 
-zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+# Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+zaklad = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+          + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
 obsluha = zaklad[zaklad.index("function naplnBublinu"):]
 obsluha = obsluha[:obsluha.index("document.addEventListener")]
 check("innerHTML" not in obsluha,
@@ -338,7 +341,7 @@ print("--- strop na nahraný soubor platí během čtení ---")
 import asyncio  # noqa: E402
 
 from jellyscope import web as _web  # noqa: E402
-from jellyscope import web_nastaveni  # noqa: E402
+from jellyscope.web import nastaveni as web_nastaveni  # noqa: E402
 
 
 class NekonecnySoubor:
@@ -423,7 +426,7 @@ print("--- čekárna po aktualizaci a překlad s apostrofem ---")
 import json as _json  # noqa: E402
 import re  # noqa: E402
 
-from jellyscope import web_nastaveni as _wn  # noqa: E402
+from jellyscope.web import nastaveni as _wn  # noqa: E402
 
 UTOK_APOSTROF = "It's </p><img src=x onerror=alert(1)>"
 klice_cekarny = ["Aktualizuji…", "Trvá to déle, než je zdrávo.", "Zkusit to znovu",
@@ -436,7 +439,7 @@ puvodni_jazyk = db.get_setting("ui_language", "cs")
 db.set_setting("ui_language", "en")
 db.forget_settings()
 try:
-    cekarna = _wn._stranka_aktualizace()
+    cekarna = _wn._stranka_aktualizace("testovaci-nonce")
 finally:
     for klic, hodnota in puvodni.items():
         if hodnota is None:

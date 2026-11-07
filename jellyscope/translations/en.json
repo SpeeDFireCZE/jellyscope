@@ -1214,7 +1214,7 @@
     "Co se na serveru hraje nejvíc, co leží ladem. O titulech, ne o lidech.": "What gets played most on the server, what lies unused. About titles, not people.",
     "Kolik je čeho, kodeky, rozlišení, chybějící data.": "How much of what, codecs, resolutions, missing data.",
     "…včetně „kdo to sledoval“": "…including \"who watched it\"",
-    "V detailu titulu a knihovny se vypíšou i diváci. Jména lze skrýt anonymizací.": "The title and library pages then list viewers too. Names can be hidden by anonymising.",
+    "V detailu titulu a knihovny se vypíšou i diváci. Místní účet s tímhle právem vidí i Historii (u diváka z Jellyfinu je vždy jen jeho). Jména lze skrýt anonymizací.": "The title and library pages then list viewers too. A local account with this right also sees History (a Jellyfin viewer always sees only their own). Names can be hidden by anonymising.",
     "Přehled serveru": "Server overview",
     "Souhrn za celý server: kolik se sledovalo, kdy, čím. Čísla jsou za všechny dohromady.": "The summary for the whole server: how much was watched, when, on what. The numbers cover everybody together.",
     "Tentýž přehled za dvě období vedle sebe.": "The same overview for two periods side by side.",

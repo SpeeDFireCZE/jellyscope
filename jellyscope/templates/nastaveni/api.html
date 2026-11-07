@@ -154,7 +154,7 @@
                         </form>
                         {% endif %}
                         <form method="post" action="/settings/api/token/zrusit"
-                              onsubmit='return confirm({{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.")|tojson }})'>
+                              data-potvrdit="{{ _("Zneplatnit tenhle klíč? Nástroj, který ho používá, přestane dostávat data.") }}">
                             <input type="hidden" name="token_id" value="{{ token.id }}">
                             <button data-keep-scroll class="btn danger" type="submit">{{ _("Zneplatnit") }}</button>
                         </form>
@@ -214,21 +214,7 @@
 </dialog>
 {% endfor %}
 
-<script>
-/* U „Všechno" se strom a zaškrtávátka schovají - klíč smí všechno
-   bez ohledu na ně. Bez skriptu zůstane vidět všechno. */
-document.querySelectorAll("form.prava-klice").forEach(function (form) {
-    var vybrane = form.querySelector(".prava-vybrane");
-    function prepni() {
-        var rezim = form.querySelector('input[name="rezim"]:checked');
-        vybrane.hidden = !!(rezim && rezim.value === "vse");
-    }
-    form.querySelectorAll('input[name="rezim"]').forEach(function (r) {
-        r.addEventListener("change", prepni);
-    });
-    prepni();
-});
-</script>
+<script src="/static/js/nastaveni-api.js?v={{ asset_version }}" defer></script>
 
 {# Záznam použití je log API v Nastavení → Log: s filtry podle vlastníka,
    klíče a IP, ke stažení, a jak dlouho se drží, řídí úloha Rotace logů. #}

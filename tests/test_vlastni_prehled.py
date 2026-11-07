@@ -510,7 +510,7 @@ print("--- karta v přehledu dostane tatáž data jako na své stránce ---")
 # stránce, odkud karta pochází. Jinak se karta vykreslí, jen s cizími
 # čísly: „Celkem za všechny knihovny" dostávala pokrytí jazyků místo
 # technických dat a ukazovala samé nuly.
-from jellyscope import web_zaklad  # noqa: E402
+from jellyscope.web import zaklad as web_zaklad  # noqa: E402
 
 STRANKA_OBLASTI = {"prehled": "/", "prave_hraje": "/", "knihovna": "/library",
                    "sit": "/network", "jazyky": "/languages", "uzivatele": "/users",

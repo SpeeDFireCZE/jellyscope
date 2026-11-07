@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Co uvidí divák přihlášený svým jellyfinovým účtem.
 
 Tři věci, a každá se dá vypnout:
@@ -37,7 +36,8 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from . import accounts, db
 
@@ -158,11 +158,14 @@ OBLASTI: tuple[Oblast, ...] = (
            ("/library", "/item/", "/series/", "/partials/recently-added"),
            vychozi=True),
     Oblast("knihovna_kdo", "…včetně „kdo to sledoval“",
-           "V detailu titulu a knihovny se vypíšou i diváci. Jména lze skrýt anonymizací.",
+           "V detailu titulu a knihovny se vypíšou i diváci. Místní účet s tímhle právem vidí "
+           "i Historii (u diváka z Jellyfinu je vždy jen jeho). Jména lze skrýt anonymizací.",
            (), pod="knihovna"),
+    # /partials/top-items i tady: přepínač Filmy/Seriály u karty
+    # Nejsledovanější na Přehledu ji volá - je to tatáž karta.
     Oblast("prehled", "Přehled serveru",
            "Souhrn za celý server: kolik se sledovalo, kdy, čím. Čísla jsou za všechny dohromady.",
-           ("/", "/partials/daily")),
+           ("/", "/partials/daily", "/partials/top-items")),
     Oblast("dashboard", "Vlastní přehled",
            "Přehled poskládaný z vybraných karet. Co v něm je, určuje správce.",
            ("/dashboard",), pod="prehled"),
@@ -187,7 +190,7 @@ PODLE_KLICE = {oblast.klic: oblast for oblast in OBLASTI}
 
 # Cesty, které smí každý přihlášený - na nich není nic o nikom jiném.
 VZDY = (
-    "/history",          # vlastni historie; filtr se vnucuje v route
+    "/history",          # divak: vlastni historie (filtr vnucuje routa); ctenar viz vidi_historii
     "/account",          # Muj ucet: jazyk a heslo jednoho uctu, nic ciziho
     "/image/",
     "/static/",
@@ -204,11 +207,11 @@ def login_zapnuty() -> bool:
     return db.get_setting(LOGIN_KLIC, "0") == "1"
 
 
-def klic_oblasti(kdo: str, oblast: "Oblast") -> str:
+def klic_oblasti(kdo: str, oblast: Oblast) -> str:
     return f"{kdo}_vidi_{oblast.klic}"
 
 
-def _vychozi(kdo: str, oblast: "Oblast") -> bool:
+def _vychozi(kdo: str, oblast: Oblast) -> bool:
     """Co platí, dokud to správce neřešil.
 
     Čtenářský účet zakládá správce sám a skoro vždycky proto, aby někdo
@@ -360,20 +363,27 @@ def domovska(kdo: str, muj_divak: str = "",
                   "/network"):
         if smi_cestu(kdo, cesta, account):
             return cesta
-    return "/history"
+    # Můj účet je otevřený vždycky - Historie jen s „…včetně kdo to sledoval".
+    return "/history" if vidi_historii(account) else "/account"
 
 
 def smi_cestu(kdo: str, cesta: str,
-              account: dict[str, Any] | None = None) -> bool:
+              account: dict[str, Any] | None = None,
+              povolene: tuple[str, ...] | None = None) -> bool:
     """Smí tenhle člověk otevřít tuhle adresu?
 
     Kořen `/` se porovnává **přesně**. Jako předpona by odpovídal každé
     adrese na světě, takže by zapnutý Přehled potichu otevřel i Nastavení
     - a tenhle seznam by přestal cokoliv hlídat.
+
+    `povolene` = už spočítané povolene_cesty(kdo, account), když se ptá
+    šablona u každého řádku tabulky - jinak by se počítaly pokaždé znovu.
     """
     if kdo == SPRAVCE:
         return True
-    for povolena in povolene_cesty(kdo, account):
+    if povolene is None:
+        povolene = povolene_cesty(kdo, account)
+    for povolena in povolene:
         if povolena == "/":
             if cesta == "/":
                 return True
@@ -385,6 +395,68 @@ def smi_cestu(kdo: str, cesta: str,
         if not povolena.endswith("/") and cesta.startswith(povolena + "/"):
             return True
     return False
+
+
+def smi_otevrit(account: dict[str, Any] | None, cesta: str,
+                povolene: tuple[str, ...] | None = None) -> bool:
+    """Smí tenhle účet stránku otevřít (GET)? Celé pravidlo na jednom místě.
+
+    Ptá se ho middleware, když stránku pouští, i šablona, když kreslí
+    odkaz na ni - odkaz, za kterým čeká „sem nemáš přístup", je horší
+    než žádný. Dvě kopie pravidla by se časem rozešly a odkazy by lhaly.
+
+    Nepřihlášený smí: pro něj rozhoduje přihlášení, ne práva.
+    `povolene` viz smi_cestu.
+    """
+    kdo = role(account)
+    if kdo in ("", SPRAVCE):
+        return True
+    # Rozhoduje cesta, ne parametry: odkaz /history?day=… vede na /history.
+    cesta = cesta.split("?", 1)[0]
+    divak = muj_divak(account)
+    if divak and cesta.startswith("/users/"):
+        # Divák má jen svou stránku - cizí je zavřená, i když Seznam
+        # diváků smí (ten mu ukáže ostatní jen v souhrnu).
+        return cesta.rstrip("/") == f"/users/{divak}"
+    if cesta == "/history" or cesta.startswith("/history/"):
+        return vidi_historii(account)
+    return smi_cestu(kdo, cesta, account, povolene)
+
+
+def vidi_historii(account: dict[str, Any] | None) -> bool:
+    """Smí účet na Historii (stránku i /api/v1/history svého klíče)?
+
+    Správce ano. Divák vždycky - vidí jen svou (filtr vnucuje routa).
+    Čtenář nemá vlastního diváka, takže jeho Historie je celá cizí:
+    kdo co kdy sledoval, i se zařízeními. To je přesně „…včetně kdo to
+    sledoval" - bez něj by stačilo otevřít Historii a vyhledat titul.
+    Čtenář má ve výchozím stavu všechno, takže tohle zavře jen tam, kde
+    to správce vědomě vypnul.
+    """
+    kdo = role(account)
+    if not kdo:
+        return False
+    if kdo == SPRAVCE or muj_divak(account):
+        return True
+    return vidi(kdo, "knihovna_kdo", account)
+
+
+def vidi_ucet(account: dict[str, Any] | None, oblast: str) -> bool:
+    """Vidí účet oblast stromu práv? Pro obsah, ne pro adresu.
+
+    Na kartu, kterou stránka vloží z jiné oblasti (Přehled „Právě se
+    hraje"), a na oblasti bez vlastní adresy („…včetně kdo to sledoval").
+    Middleware hlídá jen adresy. Ptají se karty přehledů (sekce.smi -
+    Přehled i vlastní přehled) i šablony stránek (vidi()) - jedno
+    pravidlo, ne dvě kopie.
+
+    Bez účtu nic: obsah se kreslí jen přihlášeným, a kdyby ho někdy
+    chtěl i souhrn bez přihlášení (e-mail, export), má dostat zavřeno.
+    """
+    if not account:
+        return False
+    kdo = role(account)
+    return kdo == SPRAVCE or vidi(kdo, oblast, account)
 
 
 def strom(kdo: str, account: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -517,7 +589,9 @@ def anonymizuj(hodnota: Any, muj_id: str,
     if isinstance(hodnota, dict):
         vysledek = {}
         cizi_id = str(hodnota.get("user_id") or hodnota.get("id") or "")
-        cizi = cizi_id != muj_id
+        # Bez vlastního diváka (čtenář) je cizí každý řádek - i ten bez id,
+        # jinak by „" == „" pustilo jméno z importu, který UserId nemá.
+        cizi = not muj_id or cizi_id != muj_id
         je_divak = _je_divak(hodnota)
         # Zařízení bez diváka (souhrn přes víc lidí) je vždycky cizí.
         nazev_zarizeni = next((hodnota[k] for k in ZARIZENI
@@ -559,13 +633,15 @@ def _je_divak(radek: dict[str, Any]) -> bool:
 
     Rozhoduje se podle sloupců, které má jen divák - `name` samo o sobě
     má i titul, knihovna a spousta dalšího, a přejmenovat film na
-    „Divák 2" by bylo horší než ukázat jméno.
+    „Divák 2" by bylo horší než ukázat jméno. Proto ani `hours`: má ho
+    i dlaždice knihovny (délka obsahu) a řádky diváků mají vždycky ještě
+    něco z výčtu níž.
     """
     if "user_id" in radek:
         return True
     return any(klic in radek for klic in
                ("is_administrator", "is_disabled", "relaci", "last_seen",
-                "hours", "last_activity"))
+                "last_activity"))
 
 
 def _nahradni_id(user_id: str, poradi: dict[str, int] | None = None) -> str:
@@ -576,7 +652,3 @@ def _nahradni_id(user_id: str, poradi: dict[str, int] | None = None) -> str:
 def _je_adresa_radek(radek: dict[str, Any]) -> bool:
     """Je `adresa` v tomhle řádku IP adresa diváka, nebo odkaz?"""
     return any(klic in radek for klic in SOUSEDI_ADRESY)
-
-
-def klice_oblasti() -> Iterable[str]:
-    return (oblast.klic for oblast in OBLASTI)

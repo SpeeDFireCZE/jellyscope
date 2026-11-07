@@ -106,7 +106,10 @@ check(zeme.get("Czechia", {}).get("mist") == 3,
       f"tabulka zemí počítá města: Prague, Kladno, Czechia ({zeme.get('Czechia', {}).get('mist')})")
 
 volani_mist = []
-puvodni_mista = stats.mista
+# Ve vstupních dveřích (karta Mapa volá stats.mista) i v podmodulu, kde bydlí
+# (volají ho tam hotspoty a zeme_divaku) - jinak by se druhé počítání
+# nepoznalo (test_stats_balik, kontrola e).
+puvodni_mista = stats.odkud.mista
 
 
 def pocitana_mista(dni):
@@ -114,11 +117,11 @@ def pocitana_mista(dni):
     return puvodni_mista(dni)
 
 
-stats.mista = pocitana_mista
+stats.mista = stats.odkud.mista = pocitana_mista
 from jellyscope import sekce  # noqa: E402
 
 data_karty = sekce.PODLE_KLICE["mapa"].data(30)
-stats.mista = puvodni_mista
+stats.mista = stats.odkud.mista = puvodni_mista
 check(len(volani_mist) == 1 and len(data_karty["hotspoty"]) == 5
       and data_karty["zeme"][0]["mist"] == 3,
       f"karta Mapa spočítá místa jednou, ne zvlášť pro tabulku zemí ({len(volani_mist)}×)")

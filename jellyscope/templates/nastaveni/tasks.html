@@ -242,14 +242,14 @@
                            Proto důrazné potvrzení - a proto si Jellyscope
                            napřed uloží současný stav, viz restore_backup(). #}
                         <form method="post" action="/settings/backup/restore"
-                              onsubmit='return confirm({{ (_("Obnovit databázi ze zálohy") ~ " " ~ row.name ~ "?\n\n" ~ _("Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje."))|tojson }})'>
+                              data-potvrdit="{{ (_("Obnovit databázi ze zálohy") ~ " " ~ row.name ~ "?\n\n" ~ _("Přepíše to VŠECHNA současná data. Stav před obnovou se nejdřív uloží jako další záloha a aplikace se pak restartuje.")) }}">
                             <input type="hidden" name="name" value="{{ row.name }}">
                             <button data-keep-scroll class="btn" type="submit">{{ _("Obnovit") }}</button>
                         </form>
                         {# Potvrzení je tu schválně: smazaná záloha se nedá
                            vrátit a řádky jsou si na pohled podobné. #}
                         <form method="post" action="/settings/backup/delete"
-                              onsubmit='return confirm({{ (_("Opravdu smazat zálohu") ~ " " ~ row.name ~ "?")|tojson }})'>
+                              data-potvrdit="{{ (_("Opravdu smazat zálohu") ~ " " ~ row.name ~ "?") }}">
                             <input type="hidden" name="name" value="{{ row.name }}">
                             <button data-keep-scroll class="btn" type="submit">{{ _("Smazat") }}</button>
                         </form>
@@ -328,10 +328,7 @@
                jako rozbitá, chovala se, jako by tam nebyla. #}
             <button class="btn danger" type="button"
                     {{ 'disabled' if not divaci }}
-                    onclick="var v = document.getElementById('zapomenout_divaka');
-                             if (!v || !v.value) { return; }
-                             document.getElementById('koho-zapomenout').textContent = v.options[v.selectedIndex].text.trim();
-                             document.getElementById('okno-zapomenut').showModal();">
+                    data-akce="zapomenout-divaka">
                 {{ _("Zapomenout") }}
             </button>
             {# Objeví se, teprve když je co obnovovat - dokud nikdo
@@ -437,7 +434,7 @@
                 <button class="btn" type="submit" autofocus>{{ _("Zrušit") }}</button>
             </form>
             {# `data-keep-scroll`: po akci se stránka načte znovu a bez
-               tohohle by začínala od začátku. Skript v base.html si při
+               tohohle by začínala od začátku. Skript ve static/js/app.js si při
                kliknutí zapamatuje polohu a po načtení ji vrátí - člověk
                zůstane přesně tam, kde byl. Kotva `#odklizeni` v adrese
                je jen záchrana pro případ, že skript nedoběhne. #}

@@ -32,7 +32,7 @@
             <p class="card-note">{{ _("v hodinách, kliknutím na titul se otevře v knihovně") }}</p>
         </div>
         {{ charts.hbar_chart(top_items, 'label', 'hours',
-                     link_prefix='/item/', link_key='item_id') | safe }}
+                     link_prefix='/item/', link_key='item_id', smi=smi) | safe }}
     </div>
 
     <div class="card">
@@ -61,6 +61,7 @@
     </div>
 </div>
 
+{% if smi("/history") %}
 <div class="card">
     <div class="btn-row">
         <a class="btn" href="/history?user_id={{ user.id }}">
@@ -68,6 +69,7 @@
         </a>
     </div>
 </div>
+{% endif %}
 
 {# Žánry. Kruhový výseč se čte hůř než sloupce, ale otázka "jaký díl
    z celku" je přesně ta, kde se vyplatí - a dílů je málo. #}

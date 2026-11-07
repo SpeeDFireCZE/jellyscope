@@ -10,7 +10,7 @@ Registruji se jako filtry Jinja2, takze v sablone se pak pise:
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -309,7 +309,7 @@ def relative_human(value: Any) -> str:
     if parsed is None:
         return "-"
 
-    delta = datetime.now(timezone.utc) - parsed
+    delta = datetime.now(UTC) - parsed
     if delta < timedelta(0):
         return _t("za chvíli")
     seconds = int(delta.total_seconds())
@@ -356,7 +356,7 @@ def _parse_any(text: str) -> datetime | None:
         except ValueError:
             continue
         # Cas bez zony povazujeme za UTC - tak ho ukladame.
-        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+        return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
 
     return None
 
@@ -409,6 +409,19 @@ def duvody_prepoctu(text: Any) -> str:
     return vysledek[:1].upper() + vysledek[1:]
 
 
+def kod_dilu(radek: Any) -> str:
+    """„S01E03" z řádku s `parent_index_number` a `index_number`, jinak prázdno.
+
+    Na jednom místě, ne v každé šabloně: kopie se ptaly na pravdivost
+    a speciálům (sezóna 0) kód dílu potichu zmizel.
+    """
+    sezona = (radek or {}).get("parent_index_number")
+    dil = (radek or {}).get("index_number")
+    if sezona is None or dil is None:
+        return ""
+    return f"S{int(sezona):02d}E{int(dil):02d}"
+
+
 def register(env: Any) -> None:
     """Prida vsechny filtry do prostredi Jinja2."""
     env.filters.update({
@@ -429,4 +442,5 @@ def register(env: Any) -> None:
         "usek": usek,
         "video_range": video_range_human,
         "duvody": duvody_prepoctu,
+        "kod_dilu": kod_dilu,
     })

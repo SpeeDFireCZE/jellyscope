@@ -125,11 +125,39 @@ check(not spatne, f"všechny odkazy míří na existující sekci ({spatne})")
 print()
 print("--- soubory vypsané ve struktuře projektu ---")
 readme = TEXTY.get("README.md", "")
-zminene = set(re.findall(r"[├└]──\s+(\w+\.py)", readme))
-skutecne = {p.name for p in (PROJECT / "jellyscope").glob("*.py")
+# Řádek stromu: odsazení po čtyřech znacích („│   " nebo mezery) určí
+# hloubku. Hloubka 0-1 jsou kořen a jellyscope/, hloubka 2 jsou soubory
+# uvnitř balíku na řádku nad nimi (třeba web/__init__.py pod „web/"),
+# hloubka 3 soubory podbalíku (web/nastaveni/stranka.py pod „nastaveni/").
+zminene: set[str] = set()
+vnorene: dict[str, set[str]] = {}
+slozka = podslozka = None
+for radek in readme.splitlines():
+    shoda = re.match(r"^((?:│   |    )*)[├└]──\s+(\S+)", radek)
+    if not shoda:
+        continue
+    hloubka, jmeno = len(shoda.group(1)) // 4, shoda.group(2)
+    if hloubka <= 1:
+        slozka = jmeno[:-1] if jmeno.endswith("/") else None
+        podslozka = None
+        if re.fullmatch(r"\w+\.py", jmeno):
+            zminene.add(jmeno)
+    elif hloubka == 2 and slozka:
+        podslozka = jmeno[:-1] if jmeno.endswith("/") else None
+        if re.fullmatch(r"\w+\.py", jmeno):
+            vnorene.setdefault(slozka, set()).add(jmeno)
+    elif hloubka == 3 and slozka and podslozka and re.fullmatch(r"\w+\.py", jmeno):
+        vnorene.setdefault(f"{slozka}/{podslozka}", set()).add(jmeno)
+skutecne = {p.name for p in (PROJECT / "jellyscope").glob("*.py")  # jen horní úroveň: strom v README
             if p.name != "__init__.py"}
+# Balíky (jellyscope/stats/) strom vypisuje jako složku - „stats/".
+baliky = {p.parent.name for p in (PROJECT / "jellyscope").glob("*/__init__.py")}
+zminene_baliky = set(re.findall(r"[├└]──\s+(\w+)/", readme))
+check(baliky <= zminene_baliky, f"struktura zná všechny balíky (chybí: {sorted(baliky - zminene_baliky)})")
 chybi = sorted(skutecne - zminene)
 navic = sorted(zminene - skutecne - {"run.py", "demo.py", "manage.py"})
+navic += sorted(f"{s}/{j}" for s, jmena in vnorene.items() for j in jmena
+                if not (PROJECT / "jellyscope" / s / j).is_file())
 check(not chybi, f"struktura zná všechny moduly (chybí: {chybi})")
 check(not navic, f"a nevypisuje neexistující (přebývá: {navic})")
 

@@ -34,6 +34,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech souborech podbalíku web/nastaveni
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
@@ -176,7 +178,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from jellyscope import accounts  # noqa: E402
 from jellyscope.web import app  # noqa: E402
-from jellyscope import web_nastaveni  # noqa: E402
+from jellyscope.web import nastaveni as web_nastaveni  # noqa: E402
 
 db.set_setting("jellyfin_url", "http://jellyfin.doma:8096")
 db.set_setting("jellyfin_api_key", "TAJNY-KLIC")
@@ -253,11 +255,11 @@ class FalesnyKlient:
         return {"Version": "12.0.1", "ServerName": "falesny"}
 
 
-# Routa /settings/connection bydli ve `web_nastaveni` a ma vlastni
+# Routa /settings/connection bydli ve `web/nastaveni/pripojeni.py` a ma vlastni
 # jmeno `JellyfinClient`. Podstrcit klienta do `web` by nic neudelalo -
 # test by prosel, aniz by cokoliv zkousel.
 puvodni_klient = web_nastaveni.JellyfinClient
-web_nastaveni.JellyfinClient = FalesnyKlient
+podvrhni(web_nastaveni, "JellyfinClient", FalesnyKlient)
 try:
     db.set_setting(jellyfin.VERZE_KLIC, "")
     db.set_setting(jellyfin.GENERACE_KLIC, "auto")
@@ -277,7 +279,7 @@ try:
     check(FalesnyKlient.posledni_url == "http://jellyfin.doma:8096",
           "ptalo se to uložené adresy")
 finally:
-    web_nastaveni.JellyfinClient = puvodni_klient
+    podvrhni(web_nastaveni, "JellyfinClient", puvodni_klient)
 
 
 print()
@@ -328,7 +330,7 @@ check('f"/Users/{user_id}/Items" if user_id else "/Items"' in zdroj,
 print()
 print("--- v projektu nezůstalo nic zrušeného ---")
 # /emby/ a /mediabrowser/ dvanactka zrusila, api_key v adrese neparsuje.
-soubory = list((PROJECT / "jellyscope").glob("*.py"))
+soubory = list((PROJECT / "jellyscope").glob("**/*.py"))
 spatne = []
 for cesta in soubory:
     text = cesta.read_text(encoding="utf-8")

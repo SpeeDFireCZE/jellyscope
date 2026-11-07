@@ -25,9 +25,10 @@ import sqlite3
 import sys
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 from . import config as app_config
 from . import dialect
@@ -174,7 +175,7 @@ def utcnow() -> str:
     Formát "2026-08-12 09:47:00" (s mezerou, ne s T) není náhodný – rozumí
     mu SQLite i PostgreSQL, když se text přetypuje na časový údaj.
     """
-    return datetime.now(timezone.utc).strftime(TIME_FORMAT)
+    return datetime.now(UTC).strftime(TIME_FORMAT)
 
 
 # ---------------------------------------------------------------------------

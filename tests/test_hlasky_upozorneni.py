@@ -100,9 +100,11 @@ check(uroven == "error" and "Nepodařilo" in text,
 print()
 print("--- a nikde se neukládá holý text ---")
 # Presne to bylo pricinou prazdneho okenka: session["flash"] = "text".
+# Routy celého webu - bez zaklad.py, kde bydlí _flash() sám (ten do relace
+# zapisovat smí, je to jediné místo).
 zdroj = "".join(
-    (PROJECT / "jellyscope" / jmeno).read_text(encoding="utf-8")
-    for jmeno in ("web.py", "web_nastaveni.py"))
+    p.read_text(encoding="utf-8")
+    for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")) if p.name != "zaklad.py")
 check('session["flash"] =' not in zdroj,
       "hlášky chodí přes _flash(), ne rovnou do relace")
 

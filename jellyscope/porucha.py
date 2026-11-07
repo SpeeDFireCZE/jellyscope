@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Náhradní stránka, když aplikace nemá databázi.
 
 Bez databáze nejde udělat nic: účty, nastavení i přihlášení jsou v ní.

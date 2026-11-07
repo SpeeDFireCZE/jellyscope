@@ -4,6 +4,7 @@
    šablonka, ať se obě místa nerozejdou. V přehledu je navíc
    `v_prehledu` (True).
    Čeká `by_user (langstats.languages_by_user)` a kvůli legendě `watched`. #}
+{% from "_macros.html" import odkaz with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Kdo v jakém jazyce sleduje") }}</h2>
@@ -16,7 +17,7 @@
     <div style="margin-bottom:18px" data-uzivatel="{{ person.user_id or '' }}">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px">
             <strong>
-                <a href="/users/{{ person.user_id }}">{{ person.name }}</a>
+                {% call odkaz(person.user_id and "/users/" ~ person.user_id) %}{{ person.name }}{% endcall %}
             </strong>
             <span class="card-note">
                 {{ person.total | hours }}

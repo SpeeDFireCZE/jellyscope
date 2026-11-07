@@ -22,6 +22,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku scanner
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
@@ -244,12 +246,12 @@ class _FalesnyKlient:
 
 
 puvodni = scanner.JellyfinClient
-scanner.JellyfinClient = _FalesnyKlient
+podvrhni(scanner, "JellyfinClient", _FalesnyKlient)
 try:
     check(asyncio.run(scanner.doplnit_rozsah_z_jellyfinu(["an1"])) == 1,
           "analýza si rozsah od Jellyfinu vyžádá")
 finally:
-    scanner.JellyfinClient = puvodni
+    podvrhni(scanner, "JellyfinClient", puvodni)
 
 po = stats.item("an1")
 check(po["video_range"] == "HDR", "změřený údaj zůstává nedotčený")

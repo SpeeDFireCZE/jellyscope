@@ -193,7 +193,9 @@ with TestClient(app) as client:
     # probublalo k obsluze "kliknuto mimo", tlačítko už v dokumentu není
     # a `closest` na odpojeném uzlu vrátí null. Kalendář se tím zavíral
     # a měsíce nešly přepínat vůbec - proto zachycovací fáze.
-    zaklad = (PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+    # Skripty jsou od přestavby na CSP bez vloženého kódu ve static/js/app.js.
+    zaklad = ((PROJECT / "jellyscope" / "templates" / "base.html").read_text(encoding="utf-8")
+              + (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8"))
     obsluha = zaklad[zaklad.index("input[data-kalendar]"):]
     obsluha = obsluha[:obsluha.index("});") + 3]
     check(obsluha.rstrip().endswith("}, true);")

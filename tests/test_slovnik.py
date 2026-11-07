@@ -146,7 +146,7 @@ print("--- žádné heslo navíc ---")
 # "pokračování"), takže se hledá i ve slepené podobě. Bez toho by test
 # hlásil jako nepoužité skoro každou delší větu.
 zdroj_kodu = ""
-for cesta in (list((PROJECT / "jellyscope").glob("*.py"))
+for cesta in (list((PROJECT / "jellyscope").glob("**/*.py"))
               + [PROJECT / x for x in ("run.py", "manage.py", "demo.py")]):
     zdroj_kodu += cesta.read_text(encoding="utf-8") + "\n"
 for cesta in SABLONY:

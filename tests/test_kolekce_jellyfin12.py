@@ -149,7 +149,8 @@ check(scanner.uklid_fantomu() == 1 and db.query_value(
     "úklid se zbaví i druhu, na který se nemyslelo")
 check(db.query_value("SELECT COUNT(*) FROM items WHERE type = 'Video'") == 1,
       "a `Video` pořád nechává být")
-zdroj = (PROJECT / "jellyscope" / "scanner.py").read_text(encoding="utf-8")
+zdroj = "".join(p.read_text(encoding="utf-8")
+                for p in sorted((PROJECT / "jellyscope" / "scanner").glob("*.py")))
 telo = zdroj[zdroj.index("async def sync_library"):zdroj.index("async def _sync_users")]
 check("uklid_fantomu" in telo, "a úklid běží i na konci plné synchronizace, ne jen při startu")
 

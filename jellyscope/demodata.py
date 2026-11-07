@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 from . import accounts, db, languages
 
@@ -167,10 +167,10 @@ def stari_hodin() -> float | None:
     if not kdy:
         return None
     try:
-        okamzik = datetime.strptime(kdy, db.TIME_FORMAT).replace(tzinfo=timezone.utc)
+        okamzik = datetime.strptime(kdy, db.TIME_FORMAT).replace(tzinfo=UTC)
     except ValueError:
         return None
-    return (datetime.now(timezone.utc) - okamzik).total_seconds() / 3600
+    return (datetime.now(UTC) - okamzik).total_seconds() / 3600
 
 
 def je_zastarale() -> bool:
@@ -236,7 +236,7 @@ def udrz_zive(ted: datetime | None = None) -> None:
     nikdy nepreleze jeho delku a nezalezi na tom, jak dlouho uloha stala.
     Prvni a posledni minuta se vynechava, at ma ukazatel postupu co ukazat.
     """
-    ted = ted or datetime.now(timezone.utc)
+    ted = ted or datetime.now(UTC)
     delka = db.query_value(
         "SELECT i.runtime_ticks FROM playback p JOIN items i ON i.id = p.item_id"
         " WHERE p.session_key = ?", (ZIVY_KLIC,))
@@ -327,7 +327,7 @@ def seed() -> dict[str, int]:
     # Rychlost prevodu se losuje zvlast - pridala se pozdeji a nesmi
     # posunout nic z toho, co uz se losuje z `random` (viz nize).
     fps_random = random.Random(7)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     items: list[tuple] = []
     plays: list[tuple] = []

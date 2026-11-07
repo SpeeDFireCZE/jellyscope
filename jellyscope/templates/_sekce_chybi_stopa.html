@@ -4,6 +4,7 @@
    šablonka, ať se obě místa nerozejdou. V přehledu je navíc
    `v_prehledu` (True).
    Čeká `missing_preferred (langstats.missing_preferred)`. #}
+{% from "_macros.html" import odkaz with context %}
 <div class="card">
     <div class="card-head">
         {# Název jazyka je v prvním pádě ("Angličtina"), takže věta musí být
@@ -40,7 +41,7 @@
                    nebo jeden díl - pak je za názvem seriálu jeho označení
                    a pod ním název dílu, ať je co shánět jasné. #}
                 <td class="truncate strong" title="{{ row.label }}">
-                    <a href="{{ row.detail_url }}">{{ row.label }}</a>
+                    {% call odkaz(row.detail_url) %}{{ row.label }}{% endcall %}
                     {% if row.is_series %}
                         <span class="badge neutral"><span class="dot"></span>{{ _("celý seriál") }}</span>
                     {% elif row.episode_name %}

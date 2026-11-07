@@ -10,9 +10,10 @@ otázky.
 To je na tom to zákeřné: rozbitá pojistka se nechová jako rozbitá. Chová
 se, jako by tam nebyla, a pozná se to až na datech, která už nejsou.
 
-Kontrola je proto statická - projde šablony, najde každé volání funkce
-v `onclick`/`onsubmit`/`onchange` a ověří, že ta funkce je ve stejné
-šabloně (nebo ve společném základu) opravdu definovaná.
+Kontrola je proto statická. Od přestavby na CSP bez vloženého kódu
+(docs/superpowers/specs/2026-11-05-csp-skripty-design.md) obsluhu nesou
+atributy data-…: projde šablony a ověří, že každý použitý atribut a každá
+akce `data-akce` má obsluhu ve static/js.
 
 Spuštění:
     .\.venv\Scripts\python.exe tests\test_obsluha_tlacitek.py
@@ -36,42 +37,49 @@ def check(condition: bool, label: str) -> None:
         failures += 1
 
 
-# Vestavene funkce prohlizece, ktere se nikde definovat nemusi - a `_`,
-# coz je preklad v sablone. Ten Jinja dosadi jeste na serveru, takze do
-# prohlizece se dostane hotovy text, ne volani.
-VESTAVENE = {"confirm", "alert", "prompt", "print", "open", "reload",
-             "submit", "focus", "blur", "preventDefault", "returnValue",
-             "_",
-             # Klicova slova JS - vypadaji jako volani, ale nejsou.
-             "if", "for", "while", "switch", "return", "catch", "typeof"}
+# Obsluha prvků je od přestavby na CSP bez vloženého kódu deklarativní:
+# šablona napíše atribut data-…, skript ve static/js ví, co s ním (viz
+# tests/test_bez_vlozeneho_js.py - onclick= tam už být nesmí). Past je
+# tatáž jako dřív: atribut, který žádný skript neobsluhuje, se chová, jako
+# by tam nebyl. U data-potvrdit to znamená smazání bez jediné otázky.
+#
+# Atribut -> čím ho skript pozná (jméno atributu, nebo klíč v dataset).
+DEKLARATIVNI = {
+    "data-potvrdit": "potvrdit",
+    "data-pri-chybe": "priChybe",
+    "data-zavrit-okno": "data-zavrit-okno",
+    "data-zavrit-hlasku": "data-zavrit-hlasku",
+    "data-prepnout-motiv": "data-prepnout-motiv",
+    "data-otevrit-okno": "otevritOkno",
+    "data-odeslat-pri-zmene": "data-odeslat-pri-zmene",
+    "data-nazev-souboru": "data-nazev-souboru",
+}
+SKRIPTY = "\n".join(s.read_text(encoding="utf-8")
+                    for s in (PROJECT / "jellyscope" / "static" / "js").glob("*.js"))
+sablony = {s: s.read_text(encoding="utf-8") for s in SABLONY.rglob("*.html")}
 
-# `onclick="return neco(...)"` i `onclick="neco(...)"`. Tečka před jménem
-# znamená metodu na objektu (`this.closest(...)`) - tu prohlížeč zná sám
-# a definovat se nemusí.
-VOLANI = re.compile(r'on(?:click|submit|change|input)="[^"]*?'
-                    r'(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(')
-
-zaklad = (SABLONY / "base.html").read_text(encoding="utf-8")
-
-for soubor in sorted(SABLONY.glob("*.html")):
-    text = soubor.read_text(encoding="utf-8")
-    volane = {m for m in VOLANI.findall(text) if m not in VESTAVENE}
-    if not volane:
+pouzite = set()
+for atribut, znacka in DEKLARATIVNI.items():
+    kde = sorted(s.relative_to(SABLONY).as_posix() for s, text in sablony.items()
+                 if re.search(rf"\s{re.escape(atribut)}[\s=>]", text))
+    if not kde:
         continue
-    for jmeno in sorted(volane):
-        # Funkce muze byt v teze sablone nebo ve spolecnem zakladu.
-        vzor = re.compile(rf"(?:function\s+{re.escape(jmeno)}\s*\(|"
-                          rf"\b{re.escape(jmeno)}\s*=\s*(?:function|\())")
-        je = bool(vzor.search(text)) or bool(vzor.search(zaklad))
-        check(je, f"{soubor.name}: {jmeno}() je definovaná")
+    pouzite.add(atribut)
+    # Celé jméno, ne kus: "potvrdit" by se našlo i v "potvrditX".
+    vzor = (rf"dataset\.{znacka}\b" if not znacka.startswith("data-")
+            else rf"[\"\[]{re.escape(znacka)}[\"\]=]")
+    check(bool(re.search(vzor, SKRIPTY)), f"{atribut} (v {', '.join(kde[:3])}) má obsluhu ve static/js")
+
+# data-akce="…" nese jméno akce - každé musí skript znát.
+for sablona, text in sorted(sablony.items()):
+    for akce in sorted(set(re.findall(r'data-akce="([^"]+)"', text))):
+        pouzite.add(f"data-akce={akce}")
+        check(f'"{akce}"' in SKRIPTY,
+              f"{sablona.relative_to(SABLONY).as_posix()}: akce {akce} má obsluhu ve static/js")
 
 # Past: kdyby kontrola nic nenasla, jeji ticho by nic neznamenalo.
-vsechna = set()
-for soubor in SABLONY.glob("*.html"):
-    vsechna |= {m for m in VOLANI.findall(
-        soubor.read_text(encoding="utf-8")) if m not in VESTAVENE}
-check(len(vsechna) >= 1,
-      f"a kontrola opravdu nějaká volání našla ({len(vsechna)})")
+check(len(pouzite) >= 5, f"a kontrola opravdu nějaké atributy našla ({len(pouzite)})")
+check("data-potvrdit" in pouzite, "včetně potvrzení před nevratnou akcí")
 
 print()
 print("HOTOVO - chyb:", failures)
