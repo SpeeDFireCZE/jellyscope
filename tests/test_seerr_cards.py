@@ -213,8 +213,11 @@ check([z["request_id"] for z in latest] == expected and len(latest) == len(REQUE
 check(all("id" not in z for z in latest), "the request's id is under zadost_id (anonymising takes `id` for a viewer's id)")
 check({z["group"] for z in latest} >= {"waiting", "declined", "available", "approved"}, "the state of every request")
 check([z["request_id"] for z in stats.seerr_latest(365, limit=3)] == expected[:3], "the limit takes the newest ones")
-badges = re.findall(r'<span class="poster-badge"[^>]*>\s*([^<]+?)\s*</span>', latest_html)
+# Since 23. 11. 2026 the state is in the bottom badge; the top one says movie or series (as "Recently added").
+badges = re.findall(r'<span class="poster-badge bottom"[^>]*>\s*([^<]+?)\s*</span>', latest_html)
 check(len(badges) == len(REQUESTS) and {"čeká", "zamítnuto", "v knihovně", "schváleno"} <= set(badges), f"the state on the poster ({sorted(set(badges))})")
+kinds = re.findall(r'<span class="poster-badge"[^>]*>\s*([^<]+?)\s*</span>', latest_html)
+check(len(kinds) == len(REQUESTS) and set(kinds) <= {"film", "seriál"}, f"the type on the poster ({sorted(set(kinds))})")
 check(0 < latest_html.find("Seriál 95396") < latest_html.find("The Matrix") and "data-table-window" in latest_html
       and 'class="modal-only"' in latest_html and latest_html.count("<tr") == len(REQUESTS) + 1,
       "the strip from the newest and the same requests as a table for the dialog")

@@ -50,7 +50,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from _apps import no_network, not_responding, sonarr_client  # noqa: E402
 from _package import substitute  # noqa: E402
-from jellyscope import accounts, db, tasks, web  # noqa: E402
+from jellyscope import accounts, db, services, tasks, web  # noqa: E402
 from jellyscope.arr import sonarr  # noqa: E402
 
 RESPONSES = PROJECT / "tests" / "sonarr_responses"
@@ -291,6 +291,30 @@ check(answer.status_code == 303 and count() == 0, "Delete downloaded data delete
 check(len(tasks.list_backups()) == backups_before + 1, "a backup was made before the deletion")
 check(db.get_setting("arr_sonarr_last_sync", "") == "" and sonarr.sync_state()["at"] == "",
       "after the deletion the next sync starts from the beginning")
+
+print()
+print("--- the counts of missing and cutoff (refresh_counts, the *Arr task after the sync, 23. 11. 2026) ---")
+counted: list[tuple[str, object]] = []
+
+
+def with_counts(request: httpx.Request) -> httpx.Response:
+    path = request.url.path.split("/api/v3/", 1)[-1]
+    if path.startswith("wanted/"):
+        counted.append((path, request.extensions.get("timeout", {}).get("read")))
+        return httpx.Response(200, json={"totalRecords": {"wanted/missing": 41, "wanted/cutoff": 7}[path], "records": []})
+    if path == "history":
+        return httpx.Response(200, json={"page": 1, "pageSize": 1000, "totalRecords": 0, "records": []})
+    return httpx.Response(200, json=[])
+
+
+asyncio.run(sonarr.synchronize(transport=httpx.MockTransport(with_counts)))
+check(counted == [], f"the history sync itself counts nothing (Settings' button waits for it) ({counted})")
+asyncio.run(sonarr.refresh_counts(transport=httpx.MockTransport(with_counts)))
+stored = services.stored_counts("arr_sonarr", services.settings_fingerprint(
+    db.get_setting("arr_sonarr_url", ""), db.get_setting("arr_sonarr_api_key", "")))
+check(sorted(counted) == [("wanted/cutoff", 300.0), ("wanted/missing", 300.0)],
+      f"both counts, with the long limit ({counted})")
+check(stored["missing"] == 41 and stored["cutoff"] == 7 and stored["missing_at"], f"stored with their time ({stored})")
 
 print()
 print(f"DONE - failures: {failures}")

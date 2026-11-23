@@ -192,6 +192,16 @@
                reports nonsense about itself. A number in the unit that fits. #}
             <form method="post" action="/library/disks/capacity">
                 <input type="hidden" name="disk" value="{{ d.key }}">
+                {# The name: empty = after the libraries on the disk (the placeholder shows it). An emptied field
+                   arrives like a missing one (FastAPI gives a form's "" its default), so the window says it has
+                   the field - a tab opened before the field existed must keep the name. #}
+                <input type="hidden" name="name_field" value="1">
+                <div class="field">
+                    <label for="disk-{{ loop.index }}-name">{{ _("Name") }}</label>
+                    <input type="text" id="disk-{{ loop.index }}-name" name="name" maxlength="60"
+                           value="{{ d.custom_name }}" placeholder="{{ d.default_name }}">
+                    <p class="hint">{{ _("Leave empty to name the disk after its libraries.") }}</p>
+                </div>
                 <div class="field" role="radiogroup" aria-labelledby="disk-{{ loop.index }}-source">
                     <label id="disk-{{ loop.index }}-source">{{ _("Capacity") }}</label>
                     <div class="radio-set" style="margin:6px 0 10px">

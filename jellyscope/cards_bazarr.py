@@ -140,7 +140,7 @@ def for_account(state: dict[str, Any], admin: bool) -> dict[str, Any]:
     warnings there are.
     """
     result = {**state, "partly_loaded": bool(state["available"] and (state["error"] or None in (
-        state["episode_count"], state["movie_count"], state["limited_count"], state["warnings"], state["languages"], state["providers"])))}
+        state["episode_count"], state["movie_count"], state["limited_count"], state["warnings"], state["providers"])))}
     if not admin:
         result["error"] = ""
         result["health"] = [] if state["health"] is not None else None
@@ -181,7 +181,9 @@ def _d_live_numbers() -> dict[str, Any]:
 def _d_missing_languages() -> dict[str, Any]:
     state = _once(_live)
     rows = state["languages"]
+    # The languages come from the sync (state["languages_at"]), also when Bazarr does not answer now.
     return {"available": state["available"], "incomplete_list": state["languages_incomplete"], "most": bazarr.live.MISSING_LIMIT,
+            "counted_at": state["languages_at"],
             "rows": None if rows is None else [{**r, "label": language(r["language"], r["hi"], r["forced"])} for r in rows]}
 
 
@@ -280,9 +282,9 @@ CARDS: tuple[Card, ...] = (
     _card("missing_languages", "Missing subtitles by language",
           "How many episodes and movies are waiting for subtitles in which language.", live_data=_d_missing_languages, width="half"),
     _card("providers_now", "Providers now",
-          "Enabled subtitle providers and their state. Throttled ones come first, with the reason.", live_data=_d_providers_now, width="half"),
+          "Enabled subtitle providers and their state. Throttled ones come first, with the reason.", live_data=_d_providers_now, width="half", table_window=True),
     _card("health", "App warnings",
-          "What the app itself reports as a problem. Only an administrator sees the texts.", live_data=_d_health),
+          "What the app itself reports as a problem. Only an administrator sees the texts.", live_data=_d_health, table_window=True),
     # --- What was downloaded ---
     _card("numbers", "Subtitle numbers",
           "How many subtitles were obtained and how many of them automatically, manually and by upgrade.", _d_numbers),

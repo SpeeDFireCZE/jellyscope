@@ -157,6 +157,35 @@ check(0 < pending_part.find("Film 872585") < pending_part.find("Film 496243"),
       "the pending ones from the longest waiting, even though the application returns the newest first")
 check(">Seerr<" in menu(admin.get("/account").text), "the menu has Seerr")
 
+
+def card_html(page: str, title: str) -> str:
+    """The HTML of the card with the heading `title`, up to the next card."""
+    start = re.search(rf"{re.escape(title)}[^<]*</h2>", page).start()     # "Čeká na vyřízení (3)"
+    end = page.find('<div class="card', start)
+    return page[start:end if end != -1 else len(page)]
+
+
+def poster_badges(html: str, frame_class: str) -> list[list[tuple[str, str]]]:
+    """For every poster frame: its badges as (class, text)."""
+    frames = re.findall(rf'<(?:a|span) class="{frame_class}[^"]*"[^>]*>(.*?)</(?:a|span)>\s*(?:<a|<div|<span class="poster-name|$)',
+                        html, re.S)
+    return [re.findall(r'<span class="(poster-badge[^"]*)"[^>]*>([^<]+)</span>', frame) for frame in frames]
+
+
+# The type of the request on the poster, as "Recently added" marks an episode (the user, 23. 11. 2026): the badge in
+# the top left corner; the state of a request moves to the bottom one.
+KINDS = {"film", "seriál"}
+for title, frame in (("Poslední žádosti", "poster-frame"), ("Nikdo nepustil", "poster-frame"),
+                     ("Čeká na vyřízení", "session-poster")):
+    badges = poster_badges(card_html(s, title), frame)
+    check(badges and all(any(cls == "poster-badge" and text.strip() in KINDS for cls, text in b) for b in badges),
+          f"{title}: every poster has the badge film/seriál ({badges[:3]})")
+latest_badges = poster_badges(card_html(s, "Poslední žádosti"), "poster-frame")
+check(all(any(cls == "poster-badge bottom" for cls, _text in b) for b in latest_badges),
+      "Poslední žádosti: the state of the request in the bottom badge")
+check({text.strip() for b in latest_badges for cls, text in b if cls == "poster-badge"} == KINDS,
+      "the requests are movies and series, the badges say which")
+
 print()
 print("--- C) without “…kdo žádal” ---")
 # A reader account sees everything by default (access._default) - the "…kdo žádal" switched off by default

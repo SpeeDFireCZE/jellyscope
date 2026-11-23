@@ -1,4 +1,8 @@
-"""Readarr's live state: the queue, missing, cutoff, the calendar and health.
+"""Readarr's live state: the queue, the calendar and health - and the counts of missing and cutoff.
+
+Every request waits at most LIVE_TIMEOUT (3 s): the page waits for it. The counts of missing and cutoff are not
+asked here: a big library counts them for long (Sonarr took over 20 s, 23. 11. 2026), so the sync counts them
+(services.count_wanted) and this only adds the stored ones with their time, on every read.
 
 Unlike the history (sync.py) this is not stored: it is "how it looks right now" and in an hour it
 would not hold. The *Arr page asks when shown - but through a one-minute cache (`CACHE`), so
@@ -13,7 +17,6 @@ and carry the book's id in Readarr (`title_id`), by which the card finds the boo
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -21,7 +24,7 @@ from typing import Any
 import httpx
 
 from ... import db, i18n
-from ...services import integer, utc_time
+from ...services import LIVE_TIMEOUT, integer, settings_fingerprint, stored_counts, utc_time
 from .client import SETTINGS_PREFIX, ReadarrClient, ReadarrError
 
 TTL = 60.0          # seconds in the cache
@@ -91,7 +94,7 @@ def _empty() -> dict[str, Any]:
 
 async def _load(url: str, key: str,
                 transport: httpx.AsyncBaseTransport | None) -> tuple[dict[str, Any], ReadarrError | None]:
-    """Five requests at once. What fails stays None (unknown); if everything fails, Readarr is unavailable.
+    """Three requests at once. What fails stays None (unknown); if everything fails, Readarr is unavailable.
 
     None, not zero: "0 in the queue" or "nothing comes out" after a failed request would be a claim
     nobody checked. The returned error is the first one that happened - even when the rest loaded.
@@ -100,12 +103,11 @@ async def _load(url: str, key: str,
     now = datetime.now(UTC)
     start, end = now.strftime("%Y-%m-%dT%H:%M:%SZ"), (now + timedelta(days=CALENDAR_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        client = ReadarrClient(url, key, transport=transport)
+        client = ReadarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
     except ReadarrError as error:             # an invalid stored address
         return state, error
     async with client as c:
-        results = await asyncio.gather(c.queue(), c.record_count("wanted/missing"), c.record_count("wanted/cutoff"),
-                                       c.calendar(start, end), c.health(), return_exceptions=True)
+        results = await asyncio.gather(c.queue(), c.calendar(start, end), c.health(), return_exceptions=True)
     errors = [r for r in results if isinstance(r, BaseException)]
     for error in errors:
         if not isinstance(error, (ReadarrError, ValueError, TypeError, AttributeError)):
@@ -113,10 +115,9 @@ async def _load(url: str, key: str,
     first = next((e if isinstance(e, ReadarrError) else ReadarrError("{reason}", reason=i18n.error_text(e)) for e in errors), None)
     if len(errors) == len(results):
         return state, first
-    queue, missing, cutoff, calendar, health = (None if isinstance(r, BaseException) else r for r in results)
+    queue, calendar, health = (None if isinstance(r, BaseException) else r for r in results)
     state["available"] = True
     state["queue"] = _queue(queue) if isinstance(queue, dict) else None
-    state["missing"], state["cutoff"] = missing, cutoff
     state["calendar"] = _calendar(calendar) if isinstance(calendar, list) else None
     state["health"] = [{"type": str(h.get("type") or ""), "message": str(h.get("message") or "")}
                        for h in health if isinstance(h, dict)] if isinstance(health, list) else None
@@ -130,11 +131,11 @@ async def live_state(transport: httpx.AsyncBaseTransport | None = None) -> dict[
     to read it in their own language.
     """
     url, key = db.get_setting(f"{SETTINGS_PREFIX}_url", ""), db.get_setting(f"{SETTINGS_PREFIX}_api_key", "")
-    fingerprint = url + "|" + hashlib.sha256(key.encode()).hexdigest()
+    fingerprint = settings_fingerprint(url, key)
     cached = CACHE.get("readarr")
     if cached and cached[1] == fingerprint and time.monotonic() - cached[0] < TTL:
         _, _, state, error = cached
     else:
         state, error = await _load(url, key, transport)
         CACHE["readarr"] = (time.monotonic(), fingerprint, state, error)
-    return {**state, "error": error.translated() if error else ""}
+    return {**state, **stored_counts(SETTINGS_PREFIX, fingerprint), "error": error.translated() if error else ""}

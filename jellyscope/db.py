@@ -1405,6 +1405,9 @@ UNLOGGED_SETTINGS = ("_", "jellyfin_version", "notify_state_", "db_compaction_pe
                      "arr_bazarr_state", "arr_bazarr_last_sync",
                      "arr_prowlarr_state", "arr_prowlarr_last_id", "arr_prowlarr_last_event_at", "arr_prowlarr_counted",
                      "arr_sonarr_titles", "arr_radarr_titles", "arr_sonarr_titles_version", "arr_radarr_titles_version",
+                     # The counts of missing and cutoff and Bazarr's languages, stored with their time by every sync.
+                     "arr_sonarr_counts", "arr_radarr_counts", "arr_lidarr_counts", "arr_readarr_counts",
+                     "arr_bazarr_missing_languages",
                      "seerr_state", "seerr_last_sync",
                      # What Jellyscope finds out about Seerr by itself with every sync.
                      "seerr_images", "seerr_web", "seerr_posters_retry",

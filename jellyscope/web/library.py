@@ -37,6 +37,10 @@ def library_index(request: Request, days: int | None = None,
     growth); the tiles above it are a state, not a period, and say so themselves.
     """
     days = _days(request, days, since, until)
+    # The Disks card and Library growth ask for the same disks' forecasts: one computation per disk.
+    with stats.disk_growth_memo():
+        disks = stats.disks_overview(days, stats.library_growth, stats.disk_growth)
+        growth = cards.growth_data(days, _growth_disk(request, growth_disk))
     return templates.TemplateResponse(request, "library_index.html", _context(
         request, account,
         days=days,
@@ -47,8 +51,8 @@ def library_index(request: Request, days: int | None = None,
         codecs=stats.codec_breakdown(),
         resolutions=stats.resolution_breakdown(),
         ranges=stats.video_range_breakdown(),
-        disks=stats.disks_overview(days, stats.library_growth),
-        **cards.growth_data(days, _growth_disk(request, growth_disk)),
+        disks=disks,
+        **growth,
     ))
 
 

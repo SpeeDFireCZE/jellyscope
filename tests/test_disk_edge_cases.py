@@ -168,8 +168,11 @@ scanner.remember_space_from_jellyfin({"Libraries": [{"Name": "Serialy", "Folders
 db.forget_settings()
 expected = 4 * TB - 50 * GB
 check(rows()["dev-b"]["free"] == expected, "the card: the manual capacity is at the disk with the series")
+# Since 23. 11. 2026 the one number is the sum of the disks (the movies' disk has 500 GB free) - still with the
+# manual capacity, never the 1000 TB the mount reports.
+expected = expected + 500 * GB
 check(scanner.free_space_now() == expected,
-      f"the one number of free space is from the disk, not from Jellyfin ({(scanner.free_space_now() or 0) / TB} TB)")
+      f"the one number of free space is from the disks, not from Jellyfin's mount ({(scanner.free_space_now() or 0) / TB} TB)")
 scanner.write_daily_snapshots()
 check(db.query_value("SELECT free_space FROM library_snapshot ORDER BY day DESC") == expected,
       "the library's daily snapshot writes the same")

@@ -57,7 +57,10 @@ def check(condition: bool, label: str) -> None:
 NAME = r"-?[_a-zA-Z][\w-]*"
 JS_TOKEN = re.compile(r"""//[^\n]*|/\*.*?\*/|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`""", re.S)
 SELECTOR = re.compile(rf"\.({NAME})|#({NAME})|\[\s*data-([\w-]+)")
-TEMPLATE_ATTR = re.compile(r"""(?<![\w-])(class|id|for|form|list|aria-controls|aria-labelledby|aria-describedby|href|data-[\w-]+)\s*=\s*"((?:\{\{.*?\}\}|\{%.*?%\}|[^"])*)\"""", re.S)
+# An attribute's value: Jinja blocks ({{ ... }}, {% ... %}, which may hold a quote) and other characters. Every
+# character has one way in - a block ends at its first closing brackets and a lone brace is a plain character - so
+# a value full of braces does not backtrack exponentially (CodeQL py/redos).
+TEMPLATE_ATTR = re.compile(r"""(?<![\w-])(class|id|for|form|list|aria-controls|aria-labelledby|aria-describedby|href|data-[\w-]+)\s*=\s*"((?:\{\{(?:(?!\}\}).)*\}\}|\{%(?:(?!%\}).)*%\}|\{(?![{%])|[^"{])*)\"""", re.S)
 STRING_ATTR = re.compile(r"""(?<![\w-])(class|id|data-[\w-]+)\s*=\s*\\?["']([^"'\\]*)""")
 
 

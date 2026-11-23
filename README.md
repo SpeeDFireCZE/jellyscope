@@ -335,8 +335,12 @@ cards, one question per card:
 - **In the app right now**, live from the app and on top, because that is
   what gets stuck: tiles for the queue, missing and cutoff-unmet counts and
   warnings; queue items with an error or warning; what comes out in the
-  next 7 days; the app's health warnings. When the app does not answer,
-  these cards say so and the rest, which comes from the database, stays.
+  next 7 days; the app's health warnings. The page waits for the app at
+  most 3 seconds. The missing and cutoff-unmet counts (and Bazarr's missing
+  subtitles by language) change slowly and a big library takes long to
+  count them, so the *Arr sync counts them in the background and the tiles
+  say when ("counted 20 min ago"). When the app does not answer, these
+  cards say so and the rest, which comes from the database, stays.
   The **Downloading** card shows what the app is downloading at the
   moment: one block per title with its poster, state, a progress bar,
   downloaded of total, time left and the download client. A show with
@@ -713,9 +717,15 @@ and **how long the free space will last**. Free space comes from Jellyfin
 itself, because the data usually sits on a different machine than
 Jellyscope. The chart also shows what takes up the library disks besides
 the library (downloads, backups) wherever Jellyfin reports the disk. With
-two or more disks, chips above the chart switch from *All* to one disk: the
-library's files on it day by day (the past reconstructed from the files on
-that disk) and its own "space runs out", the same number as the Disks card.
+two or more disks, *All* is the whole storage: the free space of every disk
+together (two volumes that look like one disk count once until the admin
+answers) and how long it lasts at the growth of the library's files on
+those disks, and a tile **Fills first** names the disk whose space runs out
+first (the free-space notification watches that disk). Chips above the
+chart switch from *All* to one disk: the library's files on it day by day
+(the past reconstructed from the files on that disk) and its own "space
+runs out", the same number as the Disks card; until a disk has two daily
+snapshots, it comes from the growth of the files on the disk.
 
 **Disks** (a card on the Library page) shows which disk each library is on
 (Jellyfin 12 reports the device of every library folder), with capacity,
@@ -727,7 +737,8 @@ storage Jellyfin cannot tell apart, such as a cloud mount reporting
 nonsense: files under any of its paths count towards it, not towards the
 physical disk, and every file counts on exactly one disk (a path may also
 sit above several library folders, one quota for all of them). Every disk
-is set up in its own dialog (the Edit button at the end of its row). Two
+is set up in its own dialog (the Edit button at the end of its row), where
+a physical disk can also get its own name instead of its libraries'. Two
 volumes that look like one disk (Docker) are only flagged; the admin
 decides, and can take the answer back. On older Jellyfin without the
 per-folder report, one capacity entered by hand (in GB or TB) in *Settings
@@ -954,7 +965,7 @@ curl -H "Authorization: Bearer js_your_key" http://localhost:8097/api/v1/summary
 | `GET /api/v1/` | The version and the list of addresses. |
 | `GET /api/v1/summary?days=30` | Hours watched, plays, viewers, titles, transcode share, and how much is playing right now. |
 | `GET /api/v1/now-playing` | What is playing: who, what, on what, transcoded or not, how far in. |
-| `GET /api/v1/library` | Size of the library (music and books included), item counts (movies and episodes), free space, growth over a period. |
+| `GET /api/v1/library` | Size of the library (music and books included), item counts (movies and episodes), free space (all disks together), growth over a period. |
 | `GET /api/v1/libraries` | Every library on its own: items, size, hours of content. |
 | `GET /api/v1/top-items?days=30&limit=10&kind=both` | Most watched titles; episodes of a series add up. `kind` is `both`, `movies` or `series`. |
 | `GET /api/v1/least-played?days=365&limit=25&min_size_mb=0&order=size` | Files from the least played up, never played first, with the last time each was played. Within the same play count the largest come first; `order=oldest` or `order=newest` sorts them by date added instead. Without `order` nothing changes. |
@@ -1592,7 +1603,7 @@ jellyscope/
     │   │   ├── client.py       the API v3 client; errors never contain the key
     │   │   ├── settings.py     address and key, "connected", connection test
     │   │   ├── sync.py         history -> the database (upsert, one-hour overlap)
-    │   │   ├── live.py         the live state (queue, calendar, health), cached a minute
+    │   │   ├── live.py         the live state (queue, calendar, health; 3 s, cached a minute) plus the counts the sync stored
     │   │   ├── progress.py     live downloads: the queue grouped into series with progress, the refresh command only while downloading
     │   │   ├── posters.py      provisional posters for series that are still downloading, from Sonarr itself; posters for Seerr requests
     │   │   └── titles.py       the series with their TVDB/TMDB/IMDb ids, matched to Jellyfin series (links into the library)
@@ -1601,7 +1612,7 @@ jellyscope/
     │   │   ├── client.py       the API v3 client; errors never contain the key
     │   │   ├── settings.py     address and key, "connected", connection test
     │   │   ├── sync.py         history -> the database (upsert, one-hour overlap)
-    │   │   ├── live.py         the live state (queue, release calendar, health), cached a minute
+    │   │   ├── live.py         the live state (queue, release calendar, health; 3 s, cached a minute) plus the counts the sync stored
     │   │   ├── progress.py     live downloads: the queue grouped into movies with progress, the refresh command only while downloading
     │   │   ├── posters.py      provisional posters for movies that are still downloading, from Radarr itself; posters for Seerr requests
     │   │   └── titles.py       the movies with their TMDB/IMDb ids (links into the library)
@@ -1614,7 +1625,7 @@ jellyscope/
     │   │   ├── settings.py     address and key, "connected", connection test
     │   │   ├── times.py        the time of history events: recognising the text format, converting to UTC
     │   │   ├── sync.py         subtitle history into bazarr_event: pages from the newest, records told apart by a fingerprint
-    │   │   └── live.py         the live state: missing subtitles by language, providers, warnings; cached a minute
+    │   │   └── live.py         the live state: providers, warnings (3 s, cached a minute); missing subtitles by language from the sync
     │   └── prowlarr/       Prowlarr indexers: API client, settings, history sync, live state
     │       ├── __init__.py     the entry point: every prowlarr.X used elsewhere
     │       ├── client.py       the API client; query addresses and settings with keys are never read

@@ -34,6 +34,15 @@ def _capacity(number: str, unit: str) -> int:
     return int(value * CAPACITY_UNITS.get(unit, CAPACITY_UNITS["GB"]))
 
 
+def _rounding(number: int, unit: str) -> int:
+    """How far a capacity shown in a disk's window may be from the stored one only by its rounding.
+
+    The window shows four decimal places of the unit, in at most six significant digits ("%g") - half of the last
+    shown digit either way. Saving the window unchanged must not change the capacity (see _kept in scanner/disk_settings.py).
+    """
+    return max(CAPACITY_UNITS.get(unit, CAPACITY_UNITS["GB"]) // 20000, int(number) // 100000)
+
+
 def _back_after_change() -> RedirectResponse:
     """Rewrites today's disk snapshot and returns to the card."""
     try:
@@ -45,14 +54,22 @@ def _back_after_change() -> RedirectResponse:
 
 @router.post("/library/disks/capacity")
 def disks_capacity(request: Request, disk: str = Form(""), source: str = Form("jellyfin"),
-                   capacity: str = Form(""), unit: str = Form("GB"),
-                   account: dict[str, Any] = Depends(require_admin)):
-    """Jellyfin reports the disk's capacity, or the administrator enters it by hand."""
-    error = scanner.set_capacity(disk, source, _capacity(capacity, unit))
+                   capacity: str = Form(""), unit: str = Form("GB"), name: str | None = Form(None),
+                   name_field: str = Form(""), account: dict[str, Any] = Depends(require_admin)):
+    """The disk's window: its name, and the capacity Jellyfin reports or the administrator enters by hand.
+
+    `name_field` is sent by a window that has the Name field: then an empty `name` (FastAPI makes a form's "" its
+    default, None) means the default name after the libraries. Without it the form is from a tab opened before
+    the field existed, and the name stays.
+    """
+    number = _capacity(capacity, unit)
+    error = scanner.set_capacity(disk, source, number, _rounding(number, unit))
+    if not error and name_field:
+        error = scanner.set_disk_name(disk, name or "")
     if error:
         _flash(request, error, "error")
         return RedirectResponse(BACK, status_code=303)
-    _flash(request, "Disk capacity saved.", "success")
+    _flash(request, "Disk saved.", "success")
     return _back_after_change()
 
 
@@ -108,7 +125,8 @@ def disks_virtual_edit(request: Request, id: str = Form(""), name: str = Form(""
                        capacity: str = Form(""), unit: str = Form("GB"),
                        account: dict[str, Any] = Depends(require_admin)):
     """Changes the name, the path and the capacity of a virtual disk. The id and the history stay."""
-    error, values = scanner.edit_virtual(id, name, path, _capacity(capacity, unit))
+    number = _capacity(capacity, unit)
+    error, values = scanner.edit_virtual(id, name, path, number, _rounding(number, unit))
     if error:
         _flash(request, error, "error", **values)
         return RedirectResponse(BACK, status_code=303)

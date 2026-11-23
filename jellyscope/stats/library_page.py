@@ -8,7 +8,7 @@ from typing import Any
 from .. import db
 from ..i18n import translate as _t
 from .viewers import VIEWER_NAME, VIEWER_ORDER, VIEWER_GROUP
-from .kinds import watching_only, by_titles, video_library_sql
+from .kinds import NOT_LIBRARY_TYPES, watching_only, by_titles, video_library_sql
 from .periods import _bounds
 from .playback import transcode_description
 from .tech import RESOLUTION_CASE, RANGE_CASE
@@ -250,7 +250,7 @@ def _common_folder(paths: Any) -> str:
 # Labels of Jellyfin library types (translated when the tiles are built).
 LIBRARY_TYPE_LABELS = {
     "movies": "Movies", "tvshows": "TV shows", "homevideos": "Home videos", "mixed": "Mixed content",
-    "music": "Music", "books": "Books", "photos": "Photos", "musicvideos": "Music videos", "boxsets": "Collections",
+    "music": "Music", "books": "Books", "photos": "Photos", "musicvideos": "Music videos",
 }
 TICKS_PER_SECOND = 10_000_000
 # The music tiles' pieces (library_cards), one row per music library: present albums, present
@@ -345,11 +345,14 @@ def library_cards() -> list[dict[str, Any]]:
         ORDER BY l.name
         """
     )
+    # Collections and playlists are no library: a row 1.9.0 stored is not shown even before the next library
+    # sync deletes it (stats.kinds.NOT_LIBRARY_TYPES).
+    not_shown = ", ".join(f"'{kind}'" for kind in ("music", "books", *NOT_LIBRARY_TYPES))
     other = db.query_all(
         f"""
         SELECT l.id, l.name, l.collection_type
         FROM libraries l
-        WHERE l.missing_runs < 2 AND NOT {video_library_sql("l")} AND l.collection_type NOT IN ('music', 'books')
+        WHERE l.missing_runs < 2 AND NOT {video_library_sql("l")} AND l.collection_type NOT IN ({not_shown})
         ORDER BY l.name
         """
     )

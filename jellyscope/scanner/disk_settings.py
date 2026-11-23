@@ -20,9 +20,11 @@ from .. import db
 from .disks import (
     DIFFERENT_KEY,
     DISK_CAPACITY_KEY,
+    DISK_NAMES_KEY,
     LOCK,
     SAME_KEY,
     VIRTUAL_KEY,
+    _int,
     _json,
     disk_paths,
     is_inside,
@@ -36,11 +38,22 @@ def _save(key: str, value: Any) -> None:
     db.set_setting(key, json.dumps(value, ensure_ascii=False))
 
 
-def set_capacity(disk: str, source: str, capacity: int) -> str:
+def _kept(stored: Any, capacity: int, keep_within: int) -> int:
+    """The stored capacity when the new one differs only by the rounding of the form (`keep_within` bytes).
+
+    The disk's window shows a capacity rounded to four places: saving the window for a new name would otherwise
+    store the rounded number - a new capacity and a new fingerprint, and the pace would start over.
+    """
+    stored = _int(stored)
+    return stored if stored > 0 and abs(stored - int(capacity)) <= keep_within else int(capacity)
+
+
+def set_capacity(disk: str, source: str, capacity: int, keep_within: int = 0) -> str:
     """The source of a physical disk's capacity. Returns an error to show, or "".
 
     "manual" stores the capacity (in bytes), "jellyfin" goes back to what Jellyfin reports; another word (a tab
-    left open across the update to 1.9.0 sends the old one) changes nothing.
+    left open across the update to 1.9.0 sends the old one) changes nothing. A manual capacity within
+    `keep_within` bytes of the stored one keeps the stored one (see _kept).
     """
     found = next((d for d in physical_disks() if d["key"] == disk), None)
     if found is None:
@@ -51,6 +64,10 @@ def set_capacity(disk: str, source: str, capacity: int) -> str:
         return "Enter a capacity greater than zero."
     with LOCK:
         capacities = _json(DISK_CAPACITY_KEY, {})
+        stored = next((setting.get("capacity") for device in [disk, *found["device"]]
+                       if isinstance(setting := capacities.get(device), dict) and setting.get("source") == "manual"),
+                      0)
+        capacity = _kept(stored, capacity, keep_within)
         # Away with everything that belongs to the disk - the capacity stored at a device that joined it by a
         # merge too.
         for device in [disk, *found["device"]]:
@@ -58,6 +75,26 @@ def set_capacity(disk: str, source: str, capacity: int) -> str:
         if source == "manual":
             capacities[disk] = {"source": "manual", "capacity": int(capacity)}
         _save(DISK_CAPACITY_KEY, capacities)
+    return ""
+
+
+def set_disk_name(disk: str, name: str) -> str:
+    """The name of a physical disk; empty = the default name after its libraries. Returns an error to show, or "".
+
+    At most 60 characters, like a virtual disk's name. A name stored at a device that joined the disk by a merge
+    goes too, so that the disk has one name.
+    """
+    found = next((d for d in physical_disks() if d["key"] == disk), None)
+    if found is None:
+        return "No such disk here."
+    name = str(name or "").strip()[:60]
+    with LOCK:
+        names = _json(DISK_NAMES_KEY, {})
+        for device in [disk, *found["device"]]:
+            names.pop(device, None)
+        if name:
+            names[disk] = name
+        _save(DISK_NAMES_KEY, names)
     return ""
 
 
@@ -108,12 +145,13 @@ def add_virtual(name: str, paths: str | Sequence[str], capacity: int) -> tuple[s
 
 
 def edit_virtual(disk_id: str, name: str, paths: str | Sequence[str],
-                 capacity: int) -> tuple[str, dict[str, Any]]:
+                 capacity: int, keep_within: int = 0) -> tuple[str, dict[str, Any]]:
     """Change the name, path and capacity of a virtual disk. Returns (error, values for the message).
 
     The id stays, so the disk's history of snapshots goes on. When the path changes, the fingerprint of the
     disk's settings changes too and the pace is computed again from today (the numbers before and after the
-    change cannot be compared). The rules for the values as when adding, see _check_virtual().
+    change cannot be compared). The rules for the values as when adding, see _check_virtual(). A capacity
+    within `keep_within` bytes of the stored one keeps the stored one (see _kept).
     """
     with LOCK:
         disks = _json(VIRTUAL_KEY, [])
@@ -121,6 +159,7 @@ def edit_virtual(disk_id: str, name: str, paths: str | Sequence[str],
                        if isinstance(disk, dict) and str(disk.get("id")) == str(disk_id)), None)
         if edited is None:
             return "No such disk here.", {}
+        capacity = _kept(edited.get("capacity"), capacity, keep_within)
         error, values, name, path_list = _check_virtual(name, paths, capacity, except_id=str(disk_id))
         if error:
             return error, values

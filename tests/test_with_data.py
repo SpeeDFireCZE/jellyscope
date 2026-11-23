@@ -330,7 +330,7 @@ with TestClient(app) as client:
     # Czech text is looked for only in what a person really sees. Scripts and
     # comments may name a section in Czech (in quotes) - without this
     # the test would fall over every time somebody mentions a section's name in a comment.
-    visible = re.sub(r"<script\b.*?</script>", "", english, flags=re.S)
+    visible = re.sub(r"<script\b.*?</script>", "", english, flags=re.S | re.I)
     visible = re.sub(r"<!--.*?-->", "", visible, flags=re.S)
     check("Přehled" not in visible, "the Czech headings disappeared")
 

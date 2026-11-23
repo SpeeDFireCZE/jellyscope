@@ -265,7 +265,9 @@ check(s1["available"] and s1["live"] and s1["refresh"] == 5 and commands() == 0 
       and s1["error"] == "", f"the first read: something downloads, rhythm 5 s, no command is sent ({s1['refresh']}, {commands()})")
 move(5)
 read()
-check(commands() == 1 and queue_reads() == 2 and requests[-2][0] == "POST", "downloading: the next read sends the refresh command first, then reads the queue")
+# Since 23. 11. 2026 the command goes beside the read (a hung app must not cost two time limits): both in this read.
+check(commands() == 1 and queue_reads() == 2 and sorted(method for method, *_rest in requests[-2:]) == ["GET", "POST"],
+      "downloading: the next read sends the refresh command beside reading the queue")
 move(4.99)
 read()
 check(commands() == 2 and queue_reads() == 3, f"a request a hair under 5 s: the queue is read and the command goes with it ({commands()})")
@@ -299,6 +301,12 @@ s = read()
 check(s["available"] and len(s["blocks"]) == 7 and commands() == before_end + 2, f"an error of the command does not stop reading the queue ({commands()})")
 live_queues.update(command_fails=False, down=True)
 move(5)
+s = read()
+# Since 23. 11. 2026 the first error during a download is retried at the fast rhythm: a single answer slower than the
+# short limit must not stop the live card for a minute. A second error in a row is calm.
+check(not s["available"] and s["refresh"] == progress.FAST_REFRESH,
+      f"the first error during a download: one more try at the fast rhythm ({s['refresh']})")
+move(progress.FAST_REFRESH)
 s = read()
 attempts = commands()
 move(60)
@@ -337,8 +345,9 @@ live_instead: dict[str, httpx.Response] = {}
 restore_client = substitute(readarr, "ReadarrClient", readarr_client(readarr_handler(live_requests, live_instead)))
 readarr.live.CACHE.clear()
 state = asyncio.run(readarr.live_state())
-check(state["available"] and state["error"] == "" and state["queue"]["count"] == 3 and state["missing"] == 5 and state["cutoff"] == 2,
-      f"the live state: the queue, missing and cutoff counts ({state['queue']['count']}, {state['missing']}, {state['cutoff']})")
+# Missing and cutoff come from the sync since 23. 11. 2026 (none ran here): not part of the live state.
+check(state["available"] and state["error"] == "" and state["queue"]["count"] == 3 and state["missing"] is None and state["cutoff"] is None,
+      f"the live state: the queue; missing and cutoff wait for the sync ({state['queue']['count']}, {state['missing']}, {state['cutoff']})")
 errors = state["queue"]["with_error"]
 check([(e["title"], e["title_id"], e["state"]) for e in errors] == [("Karel Čapek - Válka s mloky", 11, "importPending"), ("Karel Čapek - Bílá nemoc", 12, "failedPending")]
       and errors[0]["message"] == "Has missing files" and errors[1]["message"] == "Download failed",
@@ -354,7 +363,7 @@ check(len(live_requests) == reads, "the second read within a minute comes from t
 readarr.live.CACHE.clear()
 live_instead["queue"] = httpx.Response(500, text=f"chyba {KEY}")
 state = asyncio.run(readarr.live_state())
-check(state["available"] and state["queue"] is None and state["missing"] == 5 and KEY not in state["error"] and "500" in state["error"],
+check(state["available"] and state["queue"] is None and state["calendar"] is not None and KEY not in state["error"] and "500" in state["error"],
       f"what fails is unknown (None), the rest loads, the error is without the key ({state['error']})")
 # An odd record (a number or a list where an object belongs) does not break the whole state: it is named by what is there.
 readarr.live.CACHE.clear()

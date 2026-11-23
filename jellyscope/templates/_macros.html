@@ -75,7 +75,10 @@
    in the tab order and a screen reader skips it: the name right beside it is the same
    link, otherwise Tab would be pressed twice at every poster. #}
 {# `placeholder`: the label instead of a missing image ("No cover" for an album), otherwise "No poster". #}
-{% macro poster(image_url, css_class="poster-frame", badge="", badge_label="", detail="", placeholder="") -%}
+{# `badge` sits in the top left corner (what the title is: an episode, a series...), `bottom_badge` in the bottom
+   left one (a state, e.g. of a Seerr request). #}
+{% macro poster(image_url, css_class="poster-frame", badge="", badge_label="", detail="", placeholder="",
+                bottom_badge="", bottom_badge_label="") -%}
 {%- set with_link = detail and may_open(detail) -%}
 <{{ 'a' if with_link else 'span' }} class="{{ css_class }}{{ '' if image_url else ' no-image' }}"
     {%- if with_link %} href="{{ detail }}" tabindex="-1" aria-hidden="true"{% endif %}>
@@ -89,6 +92,7 @@
         <span>{{ placeholder or _("No poster") }}</span>
     </span>
     {%- if badge %}<span class="poster-badge"{% if badge_label %} title="{{ badge_label }}"{% endif %}>{{ badge }}</span>{% endif -%}
+    {%- if bottom_badge %}<span class="poster-badge bottom"{% if bottom_badge_label %} title="{{ bottom_badge_label }}"{% endif %}>{{ bottom_badge }}</span>{% endif -%}
 </{{ 'a' if with_link else 'span' }}>
 {%- endmacro %}
 

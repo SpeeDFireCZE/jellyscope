@@ -12,6 +12,10 @@ from ..i18n import translate as _t
 # and the video lists over libraries (insights by library, import by paths) keep to them.
 # None = a library without a type ("mixed content" of older Jellyfin versions).
 VIDEO_LIBRARY_TYPES = (None, "movies", "tvshows", "homevideos", "mixed")
+# Folders Jellyfin lists among the libraries that are no library (23. 11. 2026): "boxsets" is
+# the Collections folder - every collection is an item inside it, made of items of real
+# libraries - and "playlists" the Playlists folder. The library sync does not store them.
+NOT_LIBRARY_TYPES = ("boxsets", "playlists")
 
 
 def is_video_library(collection_type: str | None) -> bool:

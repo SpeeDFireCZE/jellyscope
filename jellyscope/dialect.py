@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -134,6 +135,23 @@ def load_config(base_dir: Path, fallback_sqlite_path: str) -> DatabaseConfig:
     return DatabaseConfig(kind=SQLITE, path=fallback_sqlite_path)
 
 
+def write_private(path: Path, text: str) -> None:
+    """Writes a file only its owner may read (permissions 600) - from the first moment.
+
+    `Path.write_text` creates a file with the default permissions (usually 644, readable by everyone) and a
+    `chmod` after it leaves a moment when the file is readable - and where `chmod` does nothing it stays so. Opened
+    with mode 600 the file is private as it is born; the `chmod` after it narrows a file that existed before. On
+    Windows the file is protected by access to the folder.
+    """
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+        file.write(text)
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
 def save_config(base_dir: Path, config: DatabaseConfig) -> None:
     """Saves the choice of database to `data/database.json`.
 
@@ -146,18 +164,12 @@ def save_config(base_dir: Path, config: DatabaseConfig) -> None:
     """
     path = config_path(base_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    write_private(path, json.dumps(config.to_dict(), indent=2, ensure_ascii=False))
     # The password is not in the log, of course - only which database the
     # application switches to after a restart.
     log.info("database selected: %s (%s)", config.kind,
              f"{config.host}:{config.port}/{config.database}"
              if config.is_postgres else config.path)
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
 
 
 # ---------------------------------------------------------------------------

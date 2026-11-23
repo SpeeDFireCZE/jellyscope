@@ -233,9 +233,9 @@ CARDS: tuple[Card, ...] = (
           "How many indexers are enabled, how many Prowlarr has temporarily disabled because of errors, how many apps are connected and how many warnings it reports.",
           live_data=_d_live_numbers),
     _card("indexers_now", "Indexers now",
-          "Indexers and their state. Those Prowlarr has temporarily disabled because of errors come first.", live_data=_d_indexers_now, width="half"),
+          "Indexers and their state. Those Prowlarr has temporarily disabled because of errors come first.", live_data=_d_indexers_now, width="half", table_window=True),
     _card("health", "App warnings",
-          "What the app itself reports as a problem. Only an administrator sees the texts.", live_data=_d_health, width="half"),
+          "What the app itself reports as a problem. Only an administrator sees the texts.", live_data=_d_health, width="half", table_window=True),
     # --- Queries ---
     _card("numbers", "Query numbers",
           "How many searches and RSS queries went through Prowlarr, how many failed and how fast the indexers answer.", _d_numbers),
@@ -244,7 +244,7 @@ CARDS: tuple[Card, ...] = (
     _card("when", "When searches happen",
           "A grid of days and hours: when the apps search.", _d_when, width="half"),
     _card("who", "Who asks",
-          "Which apps search, read RSS and grab releases through Prowlarr.", _d_who, width="half"),
+          "Which apps search, read RSS and grab releases through Prowlarr.", _d_who, width="half", table_window=True),
     # --- Indexer performance ---
     _card("indexers", "Indexer performance",
           "Queries, failures, response time and search success per indexer.", _d_indexers, table_window=True),

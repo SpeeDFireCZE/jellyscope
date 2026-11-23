@@ -10,6 +10,38 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.9.1
+
+Disks get their own names and a forecast each, the *Arr pages load fast and keep the row limit, and Collections are no longer a library.
+
+**Before you upgrade:** `free_bytes` in `GET /api/v1/library` is now the free space of all the library's disks together, not of one disk - a widget that shows it gets a bigger number. The *Arr missing and cutoff counts show "not counted yet" until the *Arr sync task first runs (within an hour, or Run now in Tasks).
+
+### ✨ Features
+
+- Rename a physical disk in its window on the Disks card
+- Forecast when each disk runs out of space from its file growth
+- Add a "Fills first" tile to Library growth
+- Show a movie or series badge on Seerr request posters
+
+### 🐛 Fixes
+
+- Load the *Arr pages fast even when an app counts slowly
+- Keep the row limit in every live list on the *Arr pages
+- Don't show Jellyfin's Collections and Playlists folders as libraries
+- Show the free space of all disks under "All" in Library growth
+- Security: Create `database.json` and `secret_key` readable only by their owner
+
+### 🔧 Changes
+
+- Count *Arr missing, cutoff and missing subtitles in the *Arr sync task
+- Put at most two cards side by side on the *Arr pages
+
+### 📚 Documentation
+
+- Describe switching the Weblate source language in `TRANSLATING.md`
+
+**Full Changelog**: https://github.com/SpeeDFireCZE/jellyscope/compare/1.9.0...1.9.1
+
 ## 1.9.0
 
 Music, books and audiobooks get their own sections, the *Arr page arrives with Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr, Seerr gets a page, and the whole app speaks English inside - code, database and translation keys.

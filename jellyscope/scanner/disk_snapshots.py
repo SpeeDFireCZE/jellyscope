@@ -11,11 +11,10 @@ from typing import Any
 
 from .. import content_kinds, db, formatting
 from .disks import (
-    _assigner,
     convert_old_capacity,
     disk_state,
     physical_disks,
-    virtual_disks,
+    suspicions,
 )
 from .free_space import _library_free_space, write_snapshot
 
@@ -66,31 +65,42 @@ def write_disk_snapshot(day: str | None = None) -> int:
 
 
 def free_space_now() -> int | None:
-    """One number of free space for the library - for the API, the daily snapshot and the growth.
+    """One number of free space for the library - for the API, the daily snapshot and Library growth "All".
 
-    With the disks known, it is the free space of the disk the largest file lies on (the same
-    file as always), as the Disks card shows it - that is with a manual capacity. Otherwise,
-    after converting the old manual capacity to a disk, it would return the number Jellyfin
-    reports for the mount, the one the administrator entered a capacity because of. Without a
-    disk list (Jellyfin 10.x) the earlier sources apply.
+    With the disks known it is the sum of the free space of every disk, physical and virtual, as the Disks card
+    shows it (with manual capacities) - from the latest disk snapshot, which is rewritten after a sync and after
+    every change on the card; without one from the disks themselves. A disk whose free space is unknown is left
+    out, none known = None. Disks suspected of being one (Docker volumes with the same numbers) count once until
+    the admin answers "different disks" - a reader must not see twice the space; the card asks the admin. Until
+    23. 11. 2026 it was the disk the largest file lies on (the user: "All" is the whole storage). Without a disk
+    list (Jellyfin 10.x) the earlier sources apply.
     """
     disks = physical_disks()
     if not disks:
         return _library_free_space()
     convert_old_capacity()
-    row = db.query_one(
-        "SELECT path FROM items WHERE is_missing = 0 AND path IS NOT NULL AND path != ''"
-        " ORDER BY COALESCE(size_bytes, 0) DESC")
-    key = _assigner(disks, virtual_disks())(str((row or {}).get("path") or ""))
-    if not key:
-        return _library_free_space()     # the largest file lies on no known disk
-    # From the snapshot when there is one: it is rewritten after a sync and after every change
-    # in the card, and one number is not worth going through the whole library.
-    snapshot = db.query_one(
-        "SELECT free FROM library_disk_snapshot WHERE disk = ? ORDER BY day DESC", (key,))
-    if snapshot:
-        return int(snapshot["free"]) if snapshot["free"] is not None else None
-    return next((r["free"] for r in disk_state()["disks"] if r["key"] == key), None)
+    rows = [{"key": row["disk"], "kind": row["kind"], "free": row["free"]} for row in db.query_all(
+        "SELECT disk, kind, free FROM library_disk_snapshot WHERE day = (SELECT MAX(day) FROM library_disk_snapshot)")]
+    rows = [row for row in rows if row["kind"] in ("physical", "virtual")] \
+        or [row for row in disk_state()["disks"] if row["kind"] in ("physical", "virtual")]
+    counted = _one_per_group([str(row["key"]) for row in rows], suspicions(disks))
+    known = [int(row["free"]) for row in rows if str(row["key"]) in counted and row["free"] is not None]
+    return sum(known) if known else None
+
+
+def _one_per_group(keys: list[str], pairs: list[tuple[str, str]]) -> set[str]:
+    """The keys to count: one key of every group joined by suspected pairs (A~B, B~C), the others are left out."""
+    group = {key: key for key in keys}
+
+    def root(key: str) -> str:
+        while group[key] != key:
+            key = group[key]
+        return key
+
+    for first, second in pairs:
+        if first in group and second in group:
+            group[root(second)] = root(first)
+    return {key for key in keys if root(key) == key}
 
 
 def write_daily_snapshots() -> dict[str, Any] | None:

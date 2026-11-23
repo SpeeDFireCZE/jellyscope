@@ -22,7 +22,9 @@
         <div class="poster-card">
             {# A title that is in the library already leads to its detail (the poster and the name);
                the others are without a link - there is nowhere to go. #}
-            {{ poster(z.poster, "poster-frame", z.state, z.state_full, detail=z.detail_url) }}
+            {# What was requested in the top corner, as "Recently added" marks an episode; how it ended below. #}
+            {{ poster(z.poster, "poster-frame", _("series") if z.media_type == 'tv' else _("movie"), detail=z.detail_url,
+                      bottom_badge=z.state, bottom_badge_label=z.state_full) }}
             {% call link(z.detail_url, {"class": "poster-name", "title": z.title}) %}{{ z.title or "–" }}{% endcall %}
             <div class="poster-meta">
                 {%- if z.user_name is defined %}{{ requester(z) }} &middot; {% endif %}{{ z.created_at | relative -}}

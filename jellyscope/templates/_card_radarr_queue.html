@@ -4,7 +4,7 @@
    sees the message of an item (paths on the disk, clients' addresses) - others
    get it empty, the title and the state stay. Three different kinds of "nothing": the app
    does not answer, the queue did not load, or there really is nothing with an error in it. #}
-{% from "_macros.html" import link with context %}
+{% from "_macros.html" import link, row_class, whole_table_button with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ prefix }}{{ _(card.name) }}</h2>
@@ -18,7 +18,7 @@
     <div class="table-wrap"><table>
         <tbody>
         {% for f in d.queue.with_error %}
-            <tr>
+            <tr class="{{ row_class(loop.index, "arr") }}">
                 <td class="strong">{% call link(f.detail_url) %}{{ f.title }}{% endcall %}</td>
                 <td><span class="badge warning">{{ f.state }}</span></td>
                 <td class="muted">{{ f.message }}</td>
@@ -26,6 +26,7 @@
         {% endfor %}
         </tbody>
     </table></div>
+    {{ whole_table_button(d.queue.with_error | length, "arr") }}
     {% else %}
         <p class="chart-empty">{{ _("Nothing in the queue has an error.") }}</p>
     {% endif %}

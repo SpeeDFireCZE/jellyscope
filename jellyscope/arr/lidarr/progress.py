@@ -39,7 +39,7 @@ from typing import Any
 import httpx
 
 from ... import db
-from ...services import integer
+from ...services import LIVE_TIMEOUT, integer
 from .client import SETTINGS_PREFIX, LidarrClient, LidarrError
 
 log = logging.getLogger("jellyscope.arr")
@@ -194,30 +194,38 @@ async def _load(url: str, key: str, fingerprint: str, transport: httpx.AsyncBase
     now = _now()
     with _LOCK:
         when, downloading = _last
+        previous_error = _memory is not None and _memory[3] is not None
         # Only when something downloaded at the last read (and that was not long ago) - the first read
         # and reads after a calm go without the command. Otherwise with every read: thanks to the cache
         # they are at least TTL seconds apart, and the limit here only guards two reads at once (the
         # page's thread and the slice's loop). A FAST_REFRESH limit would not do: the browser asks every
         # FAST_REFRESH seconds measured on its side, the request arrives a few milliseconds earlier or
         # later - and every second command would drop out.
-        send = downloading and now - when <= CALM_REFRESH and now - _last_command >= TTL
+        downloading_lately = downloading and now - when <= CALM_REFRESH
+        send = downloading_lately and now - _last_command >= TTL
         if send:
             _last_command = now
     state: dict[str, Any] = {"available": False, "blocks": [], "more_count": 0, "incomplete": False, "live": False}
     error: LidarrError | None = None
     try:
-        client = LidarrClient(url, key, transport=transport)
+        client = LidarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
     except LidarrError as exception:               # an invalid stored address or key
         error = exception
     else:
         async with client as c:
-            if send:
+            # The command beside the read, not before it: the app refreshes in the background anyway (this read
+            # does not wait for it), and in a row a hung app would cost the card two time limits.
+            answers = await asyncio.gather(c.whole_queue(), *([c.refresh_downloads()] if send else []),
+                                           return_exceptions=True)
+            if len(answers) > 1 and isinstance(answers[1], BaseException):
                 try:
-                    await c.refresh_downloads()
+                    raise answers[1]       # an error of the program goes on; the app's error is only logged
                 except LidarrError as exception:   # the command is only a nudge - it does not stop reading the queue
                     log.debug("the command to refresh downloads in %s failed: %s", "lidarr", exception)
             try:
-                queue = await c.whole_queue()
+                if isinstance(answers[0], BaseException):
+                    raise answers[0]
+                queue = answers[0]
                 every = blocks(queue["records"])
             except LidarrError as exception:
                 error = exception
@@ -232,7 +240,9 @@ async def _load(url: str, key: str, fingerprint: str, transport: httpx.AsyncBase
                          "live": any(block["state"] == "downloading" for block in every)}
                 _albums = {block["title_id"] for block in every if block["title_id"] is not None}
     with _LOCK:
-        _last = (_now(), state["live"])
+        # The first error after a read that saw a download keeps the fast rhythm: one answer slower than the
+        # short limit must not stop the live card for a minute. A second error in a row is calm again.
+        _last = (_now(), state["live"] or (error is not None and downloading_lately and not previous_error))
     _memory = (_now(), fingerprint, state, error)
     return _memory
 
@@ -249,9 +259,11 @@ async def download_state(transport: httpx.AsyncBaseTransport | None = None) -> d
     fingerprint = url + "|" + hashlib.sha256(key.encode()).hexdigest()
     cached = _memory
     # A success holds TTL seconds. An error CALM_REFRESH: the card asks an unavailable app only once a
-    # minute anyway, and without it a stuck app would cost a wait on every page load. A change of the
+    # minute anyway, and without it a stuck app would cost a wait on every page load - except the first error
+    # during a download, which holds FAST_REFRESH (a single slow answer, see _load). A change of the
     # address or the key in Settings bypasses the cache at once (`fingerprint`).
-    if not (cached and cached[1] == fingerprint and _now() - cached[0] < (TTL if cached[3] is None else CALM_REFRESH)):
+    hold = TTL if cached is None or cached[3] is None else (FAST_REFRESH if _last[1] else CALM_REFRESH)
+    if not (cached and cached[1] == fingerprint and _now() - cached[0] < hold):
         loop = asyncio.get_running_loop()
         running = _RUNNING.get(fingerprint)
         if running is None or running[0] is not loop or running[1].done():
@@ -261,7 +273,8 @@ async def download_state(transport: httpx.AsyncBaseTransport | None = None) -> d
                 lambda done: _RUNNING.pop(fingerprint, None) if _RUNNING.get(fingerprint, (None, None))[1] is done else None)
         cached = await asyncio.shield(running[1])
     _, _, state, error = cached
-    return {**state, "error": error.translated() if error else "", "refresh": FAST_REFRESH if state["live"] else CALM_REFRESH}
+    fast = state["live"] or (error is not None and _last[1])      # downloading, or the first error during it
+    return {**state, "error": error.translated() if error else "", "refresh": FAST_REFRESH if fast else CALM_REFRESH}
 
 
 def in_queue(album_id: int) -> bool:

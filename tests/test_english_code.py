@@ -485,7 +485,7 @@ def js_czech_names(source: str) -> list[str]:
     return sorted(found)
 
 
-INLINE_SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.S)
+INLINE_SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.S | re.I)
 
 
 def inline_scripts(text: str) -> list[str]:
@@ -620,7 +620,7 @@ CLASS_FIELDS: dict[str, tuple[str, set[str]]] = {
         "key", "name", "stored_settings", "save_settings", "check_connection", "synchronize", "sync_running",
         "sync_state", "event_count", "delete_downloaded_data", "cards", "card_key", "sections", "template",
         "period", "sample_url", "key_hint", "already_running", "delete_note", "provisional_poster",
-        "downloading", "downloading_template", "detected_name", "shown_name"}),
+        "downloading", "downloading_template", "detected_name", "refresh_counts", "shown_name"}),
     "Area": ("jellyscope/access.py", {"key", "name", "description", "paths", "default", "parent", "section",
                                       "heading"}),
     "Message": ("jellyscope/notifications.py", {"key", "name", "subject", "text", "variables"}),

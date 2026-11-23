@@ -244,7 +244,7 @@ def comparison(first_spec: Any, second_spec: Any) -> dict[str, Any]:
     # The library stands on the daily snapshots, and those start only with the version that can write them. So they
     # are not there for older periods - and instead of a table of zeros it says why. "Nothing was added" and "we do
     # not know" are two different things.
-    growth_a, growth_b = library_growth(first_period), library_growth(second_period)
+    growth_a, growth_b = library_growth(first_period, forecast=False), library_growth(second_period, forecast=False)
     library_known = bool(growth_a.get("enough_data") and growth_b.get("enough_data"))
     library_backfilled = bool(growth_a.get("backfilled") or growth_b.get("backfilled"))
     if library_known:

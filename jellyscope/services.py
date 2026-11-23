@@ -22,7 +22,9 @@ The application packages (`arr/`, `seerr/`) derive their own client from
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import logging
 import re
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -35,6 +37,8 @@ from . import db
 from .i18n import TranslatableError
 from .jellyfin import QUICK_TIMEOUT
 from .images import MAX_BYTES
+
+log = logging.getLogger("jellyscope.arr")
 
 # Long messages (translation keys - each in one string, so test_translations_dictionary finds it).
 INVALID_ADDRESS = "The app address is not valid."
@@ -145,6 +149,66 @@ def write_state(key: str, result: str, new_count: int, error: Exception | None =
     state = {"at": db.utcnow(), "result": result, "new_count": new_count, "error": str(error) if error else "",
              "template": getattr(error, "template", ""), "values": getattr(error, "values", {})}
     db.set_setting(key, json.dumps(state, ensure_ascii=False, default=str))
+
+
+# The live state of an *Arr app (the queue, the calendar, health...) waits at most this long: a page waits for it
+# (the user, 23. 11. 2026: a page took 21 s because one answer did not come within 20 s).
+LIVE_TIMEOUT = httpx.Timeout(connect=3.0, read=3.0, write=3.0, pool=3.0)
+# The counts that change slowly are counted by the sync, in the background - a big library takes long.
+COUNT_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=10.0)
+# The paged lists of Sonarr, Radarr, Lidarr and Readarr whose count is stored: wanted/<name>.
+WANTED_COUNTS = ("missing", "cutoff")
+
+
+def settings_fingerprint(url: str, key: str) -> str:
+    """The app's address and a hash of its key: what the stored state belongs to (a change in Settings = another
+    app). The key itself is never kept a second time."""
+    return url + "|" + hashlib.sha256(key.encode()).hexdigest()
+
+
+def _stored(prefix: str) -> dict[str, Any]:
+    try:
+        stored = json.loads(db.get_setting(f"{prefix}_counts", "") or "{}")
+    except ValueError:
+        return {}
+    return stored if isinstance(stored, dict) else {}
+
+
+async def count_wanted(prefix: str, client: Any, fingerprint: str) -> dict[str, int | None]:
+    """Counts the wanted lists (WANTED_COUNTS) with COUNT_TIMEOUT and stores them with their time.
+
+    Called by the sync of the app, after its history: the pages only read the counts (stored_counts). A count that
+    fails keeps the last known one with its time - the sync goes on, a warning goes to the log. Returns what was
+    counted now, None for a failed one.
+    """
+    stored = _stored(prefix)
+    if stored.get("fingerprint") != fingerprint:
+        stored = {"fingerprint": fingerprint}
+    counted: dict[str, int | None] = {}
+    for name in WANTED_COUNTS:
+        try:
+            counted[name] = await client.record_count(f"wanted/{name}", timeout=COUNT_TIMEOUT)
+        except (httpx.HTTPError, TranslatableError, ValueError) as error:
+            counted[name] = None
+            log.warning("%s: could not count wanted/%s, the last known count stays: %s",
+                        prefix, name, type(error).__name__)
+            continue
+        stored[name] = {"count": counted[name], "at": db.utcnow()}
+    db.set_setting(f"{prefix}_counts", json.dumps(stored))
+    return counted
+
+
+def stored_counts(prefix: str, fingerprint: str) -> dict[str, Any]:
+    """The stored counts {"missing", "missing_at", "cutoff", "cutoff_at"}; None and "" = not counted yet (for this
+    address and key)."""
+    stored = _stored(prefix)
+    same = stored.get("fingerprint") == fingerprint
+    result: dict[str, Any] = {}
+    for name in WANTED_COUNTS:
+        entry = stored.get(name) if same and isinstance(stored.get(name), dict) else {}
+        result[name] = integer(entry.get("count"), None)
+        result[f"{name}_at"] = str(entry.get("at") or "") if result[name] is not None else ""
+    return result
 
 
 def read_state(key: str) -> dict[str, Any]:

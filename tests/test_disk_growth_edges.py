@@ -175,29 +175,54 @@ sys.path.insert(0, str(PROJECT / "tests"))
 from _package import substitute  # noqa: E402
 
 calls: dict[str, int] = {}
+series_disks: list[str] = []     # whose disk series was computed, in order
 
 
 def counting(name: str) -> Any:
-    original = getattr(stats, name)
+    original = getattr(stats.growth if name.startswith("_") else stats, name)
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         calls[name] = calls.get(name, 0) + 1
+        if name == "_disk_growth_series":
+            series_disks.append(str(args[1]))
         return original(*args, **kwargs)
     return wrapper
 
 
-restorers = [substitute(stats, name, counting(name)) for name in ("disk_growth_series", "disks_to_choose")]
+# A disk's curve is counted where it is computed: the public disk_growth_series answers from memory within one
+# page load (stats.disk_growth_memo) - the guard is about the work, not the calls.
+restorers = [substitute(stats, name, counting(name)) for name in ("_disk_growth_series", "disks_to_choose")]
 choice = re.findall(r'href="\?growth_disk=([^"#]+)"[^>]*>Filmy<', admin.get("/library").text)[0]
 calls.clear()
+series_disks.clear()
 admin.get(f"/library?growth_disk={choice}")
-library_calls = dict(calls)
+library_calls, library_series = dict(calls), list(series_disks)
 calls.clear()
 admin.get("/video/overview")       # the overview of watching (/ opens the default page since 16. 11. 2026)
 overview_calls = dict(calls)
+# A disk without a pace (the virtual one) gets its forecast from its files - computed once per load, however many
+# places ask for it (the Disks card, "All" with its tile; the space alert; not at all where no forecast is shown).
+series_disks.clear()
+admin.get("/library")
+all_series = list(series_disks)
+series_disks.clear()
+from jellyscope import notifications  # noqa: E402
+notifications._space_state()
+alert_series = list(series_disks)
+series_disks.clear()
+admin.get("/video/compare")
+compare_series = list(series_disks)
 for restore in restorers:
     restore()
-check(library_calls.get("disk_growth_series") == 1 and library_calls.get("disks_to_choose", 0) <= 2,
-      f"the Library with a chosen disk computes the disk's series once ({library_calls})")
+# The chosen disk's series once (the chart). Since 23. 11. 2026 the Disks card also computes the series of a
+# disk whose snapshots give no pace yet (its forecast from the file growth) - another disk, never one twice.
+check(library_series.count(DEVICE) == 1 and len(library_series) == len(set(library_series))
+      and library_calls.get("disks_to_choose", 0) <= 2,
+      f"the Library with a chosen disk computes each disk's series once ({library_series}, {library_calls})")
+check(all_series and len(all_series) == len(set(all_series)),
+      f"the Library under All computes a disk's series once, the card and the tile share it ({all_series})")
+check(len(alert_series) == len(set(alert_series)), f"the space alert computes a disk's series once ({alert_series})")
+check(not compare_series, f"the comparison of periods shows no forecast and computes no disk series ({compare_series})")
 check(not overview_calls.get("disks_to_choose"),
       f"the Overview without the Library growth card does not ask for disks ({overview_calls})")
 

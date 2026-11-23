@@ -102,6 +102,7 @@ from .stream_languages import (
 from .copies import recount_copies, recount_copies_after_sync
 from .disks import (
     DISK_CAPACITY_KEY,
+    DISK_NAMES_KEY,
     CONVERTED_KEY,
     DIFFERENT_KEY,
     FOLDERS_TIME_KEY,
@@ -125,6 +126,7 @@ from .disks import (
 )
 from .disk_settings import (
     set_capacity,
+    set_disk_name,
     add_virtual,
     decide_same,
     delete_virtual,
@@ -186,6 +188,7 @@ __all__ = [
     "CONVERTED_KEY",
     "DIFFERENT_KEY",
     "DISK_CAPACITY_KEY",
+    "DISK_NAMES_KEY",
     "FOLDERS_KEY",
     "FOLDERS_TIME_KEY",
     "JF_FREE_KEY",
@@ -288,6 +291,7 @@ __all__ = [
     "run_tech_scan",
     "save_streams",
     "set_capacity",
+    "set_disk_name",
     "space_from_jellyfin",
     "stale_since",
     "start_task_log",

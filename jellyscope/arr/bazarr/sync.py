@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -51,8 +52,9 @@ import httpx
 
 from ... import db, i18n
 from ...services import SYNC_ALREADY_RUNNING as ALREADY_RUNNING
-from ...services import integer, read_state, write_state
+from ...services import COUNT_TIMEOUT, integer, read_state, settings_fingerprint, write_state
 from .client import NAME, BazarrClient, BazarrError
+from .live import LANGUAGES_KEY, MISSING_LIMIT, _languages
 from .times import FUTURE_MARGIN, detect_format, to_utc
 
 log = logging.getLogger("jellyscope.arr")
@@ -240,6 +242,37 @@ async def _history(client: BazarrClient, kind: str, zone: str, first_run: bool, 
             break
         overlap = min(OVERLAP, PAGE_SIZE // 2) if len(records) >= PAGE_SIZE else 0
         start = end - overlap
+
+
+async def _store_missing_languages(client: BazarrClient, fingerprint: str) -> None:
+    """The languages episodes and movies miss subtitles in, for the card of missing subtitles (live.LANGUAGES_KEY).
+
+    Two big lists (thousands of items): read here with a long limit, not on every page view. A list that does not
+    come keeps the last stored languages - the sync goes on, a warning goes to the log.
+    """
+    try:
+        pages = await asyncio.gather(client.missing("episode", MISSING_LIMIT, timeout=COUNT_TIMEOUT),
+                                     client.missing("movie", MISSING_LIMIT, timeout=COUNT_TIMEOUT))
+    except (httpx.HTTPError, BazarrError, ValueError) as error:
+        log.warning("bazarr: could not read the missing subtitles, the last known languages stay: %s",
+                    type(error).__name__)
+        return
+    languages, incomplete = _languages(list(pages))
+    db.set_setting(LANGUAGES_KEY, json.dumps({"fingerprint": fingerprint, "languages": languages,
+                                              "incomplete": incomplete, "at": db.utcnow()}, ensure_ascii=False))
+
+
+async def refresh_counts(transport: httpx.AsyncBaseTransport | None = None) -> None:
+    """Read the lists of the missing and store the languages for the card of missing subtitles.
+
+    Called by the *Arr sync task after the history (registry.synchronize_all), in the background - not by "Sync now"
+    in Settings, which waits for its result: two big lists take long (23. 11. 2026).
+    """
+    url, key = db.get_setting("arr_bazarr_url", ""), db.get_setting("arr_bazarr_api_key", "")
+    if not url or not key:
+        return
+    async with BazarrClient(url, key, transport=transport) as client:
+        await _store_missing_languages(client, settings_fingerprint(url, key))
 
 
 async def _fetch(transport: httpx.AsyncBaseTransport | None) -> dict[str, int]:

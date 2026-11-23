@@ -14,6 +14,7 @@
 
    Only two columns: the times stand under the state. The card is often at half width (a 1024 px
    window = a 320 px card) and the indexers' names are long. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ prefix }}{{ _(card.name) }}</h2>
@@ -34,7 +35,7 @@
         </tr></thead>
         <tbody>
         {% for r in d.rows %}
-            <tr>
+            <tr class="{{ row_class(loop.index, "arr") }}">
                 <td class="strong break-anywhere">{{ r.name }}
                     {% if r.protocol %}<div class="cell-sub">{{ r.protocol }}</div>{% endif %}</td>
                 <td>{% if r.blocked_until %}<span class="badge warning"><span class="dot"></span>{{ _("temporarily disabled") }}</span>
@@ -48,6 +49,7 @@
         {% endfor %}
         </tbody>
     </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
     {% else %}
         <p class="chart-empty">{{ _("There is no indexer in Prowlarr.") }}</p>
     {% endif %}

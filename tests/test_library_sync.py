@@ -74,8 +74,12 @@ MADE_UP = [folder("lib-books", "Knihy z poličky", "books", "/media/books"),
            folder("lib-photos", "Fotky", "photos", "/media/photos"),
            folder("lib-musicvideos", "Klipy", "musicvideos", "/media/clips"),
            folder("lib-boxsets", "Kolekce", "boxsets", "/media/collections"),
+           folder("lib-playlists", "Playlisty", "playlists", "/media/playlists"),
            folder("lib-untyped", "Bez typu", None, "/media/mixed")]
 FOLDERS = RECORDED + MADE_UP
+# Jellyfin lists its Collections and Playlists folders among the libraries; they hold no
+# content of their own (23. 11. 2026).
+NOT_LIBRARIES = {"lib-boxsets", "lib-playlists"}
 VIDEO_IDS = {f["ItemId"] for f in RECORDED if f["CollectionType"] in ("movies", "tvshows")} | {"lib-untyped"}
 
 
@@ -91,7 +95,8 @@ def card_ids() -> set[str]:
 print("--- every library is stored, items are read from video libraries only ---")
 returned = sync(FOLDERS)
 stored = {row["id"]: row for row in db.query_all("SELECT * FROM libraries")}
-check(set(stored) == {f["ItemId"] for f in FOLDERS}, f"every library is in the table ({len(stored)} of {len(FOLDERS)})")
+check(set(stored) == {f["ItemId"] for f in FOLDERS} - NOT_LIBRARIES,
+      f"every library is in the table, collections and playlists are not ({len(stored)})")
 check(stored[MUSIC["ItemId"]]["collection_type"] == "music" and stored["lib-books"]["name"] == "Knihy z poličky"
       and "/media/books" in stored["lib-books"]["paths"], "with its name, type and paths")
 check({lib["id"] for lib in returned} == VIDEO_IDS,
@@ -147,7 +152,7 @@ without_books = [f for f in FOLDERS if f["ItemId"] != "lib-books"]
 # often it comes - the frequent "recently added" sync can get it twice within minutes.
 sync([])
 sync([])
-check(card_ids() >= {f["ItemId"] for f in FOLDERS}
+check(card_ids() >= {f["ItemId"] for f in FOLDERS} - NOT_LIBRARIES
       and db.query_value("SELECT MAX(missing_runs) FROM libraries") == 0,
       "empty answers from Jellyfin hide nothing and count nothing")
 sync(without_books)
@@ -169,7 +174,19 @@ sync([])
 sync([])
 check(not card_ids(), f"empty answers for over an hour count: every library is hidden ({sorted(card_ids())[:3]})")
 sync(FOLDERS)
-check(card_ids() >= {f["ItemId"] for f in FOLDERS}, "and they come back with Jellyfin")
+check(card_ids() >= {f["ItemId"] for f in FOLDERS} - NOT_LIBRARIES, "and they come back with Jellyfin")
+
+print()
+print("--- collections and playlists are not libraries (23. 11. 2026) ---")
+# Version 1.9.0 stored Jellyfin's Collections folder as a library; the next sync removes it.
+with db.connect() as conn:
+    conn.execute("INSERT INTO libraries (id, name, collection_type, paths, synced_at, missing_runs)"
+                 " VALUES ('old-boxsets', 'Collections', 'boxsets', '[]', ?, 0)", (db.utcnow(),))
+check("old-boxsets" not in card_ids(), "the 1.9.0 row is not shown even before the next sync")
+sync(FOLDERS)
+check(db.query_value("SELECT COUNT(*) FROM libraries WHERE collection_type IN ('boxsets', 'playlists')") == 0,
+      "a sync removes stored collections and playlists folders")
+check("old-boxsets" not in card_ids() and not card_ids() & NOT_LIBRARIES, "and the Library page has no tile for them")
 
 print()
 print("--- demo data ---")

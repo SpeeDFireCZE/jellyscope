@@ -21,7 +21,7 @@
     <div class="poster-strip">
         {% for z in d.rows %}
         <div class="poster-card">
-            {{ poster(z.poster, "poster-frame", detail=z.detail_url) }}
+            {{ poster(z.poster, "poster-frame", _("series") if z.media_type == 'tv' else _("movie"), detail=z.detail_url) }}
             {% call link(z.detail_url, {"class": "poster-name", "title": z.title}) %}{{ z.title or "–" }}{% endcall %}
             <div class="poster-meta">
                 {%- if z.user_name is defined %}{{ requester(z) }}{% endif -%}

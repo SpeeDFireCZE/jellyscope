@@ -15,7 +15,7 @@
 <div class="flash warning">
     <span class="dot"></span>
     <span>
-        {{ _("The app is not responding; the queue, missing items, calendar and health cannot be loaded right now. The statistics from the database still hold.") }}
+        {{ _("The app is not responding; the queue, calendar and health cannot be loaded right now. The counts are from the last sync and the statistics from the database still hold.") }}
         {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
     </span>
 </div>
@@ -30,7 +30,9 @@
 {% endif %}
 <div class="kpi-row">
     {{ tile(_("In the queue"), d.queue.count | number if d.queue is not none else "–") }}
-    {{ tile(_("Missing"), d.missing | number if d.missing is not none else "–") }}
-    {{ tile(_("Cutoff unmet"), d.cutoff | number if d.cutoff is not none else "–") }}
+    {{ tile(_("Missing"), d.missing | number if d.missing is not none else "–",
+            note=_("counted {when}").format(when=d.missing_at | relative) if d.missing is not none else _("not counted yet")) }}
+    {{ tile(_("Cutoff unmet"), d.cutoff | number if d.cutoff is not none else "–",
+            note=_("counted {when}").format(when=d.cutoff_at | relative) if d.cutoff is not none else _("not counted yet")) }}
     {{ tile(_("App warnings"), d.health_count | number if d.health_count is not none else "–") }}
 </div>

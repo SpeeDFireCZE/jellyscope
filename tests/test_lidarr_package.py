@@ -34,7 +34,7 @@ PACKAGE = PROJECT / "jellyscope" / "arr" / "lidarr"
 SUBMODULES: dict[str, list[str]] = {
     "client": ["NAME", "LidarrError", "LidarrClient"],
     "settings": ["stored_settings", "is_connected", "save_settings", "check_connection"],
-    "sync": ["event_from_history", "synchronize", "sync_running", "sync_state", "event_count",
+    "sync": ["event_from_history", "synchronize", "refresh_counts", "sync_running", "sync_state", "event_count",
              "delete_data", "delete_downloaded_data"],
     "live": ["live_state"],
     # The live downloads for the card "Stahuje se" (downloading).

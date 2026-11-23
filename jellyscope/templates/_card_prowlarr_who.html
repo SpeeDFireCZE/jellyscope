@@ -3,6 +3,7 @@
    From the database (cards_prowlarr.py, `d.radky`: the app's name, searches, RSS,
    grabbed releases). Prowlarr knows an app by how it introduces
    itself; "Prowlarr" is a manual search in Prowlarr itself. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ prefix }}{{ _(card.name) }}</h2>
@@ -18,7 +19,7 @@
         </tr></thead>
         <tbody>
         {% for r in d.rows %}
-            <tr>
+            <tr class="{{ row_class(loop.index, "arr") }}">
                 <td class="strong break-anywhere">{{ r.name }}</td>
                 <td class="num">{{ r.searches | number }}</td>
                 <td class="num">{{ r.rss | number }}</td>
@@ -27,5 +28,6 @@
         {% endfor %}
         </tbody>
     </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
     {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
 </div>

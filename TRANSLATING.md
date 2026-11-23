@@ -146,11 +146,12 @@ stand behind the wording.
 ## For the maintainer: the Weblate component
 
 Since 1.9.0 the files are in the **i18next JSON file v4** format with
-`en.json` as the monolingual base. The switch is done once, together with the
-release that brings the new files:
+`en.json` as the monolingual base. Weblate cannot change the source language
+of a component, so the switch (done at the 1.9.0 release) deletes the
+components and creates them again:
 
 1. In Weblate, settle the suggestions, the "needs editing" marks and the
-   comments, commit and push everything pending, and **lock** the component.
+   comments, commit and push everything pending, and **lock** the components.
    Suggestions and comments live only in Weblate's database and hang on the old
    keys, which disappear; the history stays in git, and the translation memory
    offers the old texts as suggestions.
@@ -159,14 +160,21 @@ release that brings the new files:
    `deploy/convert-translations.py merge deploy/translation-keys-map.json --prod <prod> --dev <dev>`
    (three-way against the recorded baselines; a conflict writes nothing and
    lists what to decide), commit in dev, and only then sync and push.
-3. In the component's settings (the interface and the log): file format
-   "i18next JSON file v4"; monolingual base file
-   `jellyscope/translations/en.json` (`…/log/en.json` for the log); source
-   language English; template for new translations `en.json`; check flag
-   `python-brace-format` (for `{n}`, `{name}`).
-4. Pull the changes from the repository, check the counts of translated
-   strings and, on one text with a count (`{n} records`), the forms: Czech 3,
-   Spanish 3, German and English 2. Unlock the component.
+3. A component with the old settings that reads the new files can commit a
+   "cleanup" to the push branch `weblate` (with a Czech template it drops the
+   Spanish `_many` forms). Merge nothing from that branch; delete it on GitHub
+   before the new components exist.
+4. Delete the log component (it is linked to the interface), then the
+   interface, and create them again with the same repository, push URL, push
+   branch `weblate`, licence and commit message, and: file format
+   "i18next JSON file v4"; monolingual base file and template for new
+   translations `jellyscope/translations/en.json` (`…/log/en.json` for the
+   log); source language English; check flag `python-brace-format` for the
+   interface (`{n}`, `{name}`) and `python-format` for the log (`%s`, `%r`).
+   The log uses the interface's repository (`weblate://jellyscope/interface`).
+5. Check the counts of translated strings and, on one text with a count
+   (`{n} records`), the forms: Czech 3, Spanish 3, German and English 2; and
+   that nothing was committed to the push branch.
 
 A translation that arrives in the old shape later (Czech sentences as keys) is
 converted with `deploy/convert-translations.py convert` (see its docstring).

@@ -38,7 +38,7 @@ SUBMODULES: dict[str, list[str]] = {
     "client": ["NAME", "BazarrError", "BazarrClient", "ACTIONS", "ACQUIRED"],
     "settings": ["stored_settings", "is_connected", "save_settings", "check_connection"],
     "times": ["FORMATS", "detect_format", "to_utc"],
-    "sync": ["event_from_history", "fingerprint", "synchronize", "sync_running", "sync_state", "event_count",
+    "sync": ["event_from_history", "fingerprint", "synchronize", "refresh_counts", "sync_running", "sync_state", "event_count",
              "delete_data", "delete_downloaded_data"],
     "live": ["live_state"],
 }

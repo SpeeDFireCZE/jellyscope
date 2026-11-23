@@ -31,7 +31,7 @@ from typing import Any
 import httpx
 
 from ... import db, i18n
-from ...services import utc_time, integer
+from ...services import LIVE_TIMEOUT, integer, utc_time
 from .client import ProwlarrClient, ProwlarrError
 
 TTL = 60.0             # seconds in the cache
@@ -116,7 +116,7 @@ async def _load(url: str, key: str, transport: httpx.AsyncBaseTransport | None) 
     """
     state = _empty()
     try:
-        client = ProwlarrClient(url, key, transport=transport)
+        client = ProwlarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
     except ProwlarrError as error:           # an invalid stored address or key
         return state, error
     async with client as c:

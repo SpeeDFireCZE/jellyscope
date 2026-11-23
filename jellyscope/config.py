@@ -14,6 +14,8 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
+from .dialect import write_private
+
 log = logging.getLogger("jellyscope.config")
 
 # The folder the whole project lives in (one level above this file).
@@ -178,11 +180,7 @@ def _generated_secret_key() -> str:
 
         new_key = secrets.token_hex(32)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(new_key, encoding="utf-8")
-        try:
-            path.chmod(0o600)
-        except OSError:
-            pass
+        write_private(path, new_key)     # 600 from the first moment (see dialect.write_private)
         log.warning(
             "SECRET_KEY was not set, so a random one was generated and "
             "stored in %s. Sign-in stays safe; set it in .env to "

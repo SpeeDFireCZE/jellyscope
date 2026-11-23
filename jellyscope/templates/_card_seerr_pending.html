@@ -29,12 +29,11 @@
     <div class="session">
         {# A pending title is usually not in the library (then it has no link); if it is
            (a request for 4K, another season of a series), the poster and the name lead to its detail. #}
-        {{ poster(z.poster, "session-poster", detail=z.detail_url) }}
+        {{ poster(z.poster, "session-poster", _("series") if z.media_type == 'tv' else _("movie"), detail=z.detail_url) }}
         <div class="session-body">
             <div class="session-title">{% call link(z.detail_url) %}{{ z.title }}{% endcall %}</div>
             <div class="session-facts">
                 {% if z.user_name is defined %}<span class="session-who">{{ requester(z) }}</span>{% endif %}
-                <span class="muted">{{ _("series") if z.media_type == 'tv' else _("movie") }}</span>
             </div>
             <div class="session-tags">
                 <span class="badge warning"><span class="dot"></span>

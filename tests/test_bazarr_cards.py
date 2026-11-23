@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import html as html_lib
 import json
+import asyncio
 import os
 import re
 import sys
@@ -102,7 +103,8 @@ check([i18n.translate(n, "cs") if n else "" for n, _ in cards_bazarr.SECTIONS] =
 check(all(k.area == "arr" and k.group == "Bazarr" for k in CARDS), "the *Arr area, the Bazarr group")
 check({k.key for k in CARDS if not k.uses_period} == {f"bazarr_{j}" for j in NAMES[:4]}, "without a period only four live cards")
 check(all(k in cards.ALL_CARDS for k in CARDS) and len(cards.ALL_CARDS) == 206, f"they are in the registry; there are 206 cards ({len(cards.ALL_CARDS)})")
-check({k.key for k in CARDS if k.has_table_window} == {"bazarr_languages", "bazarr_providers", "bazarr_changed"},
+check({k.key for k in CARDS if k.has_table_window} == {"bazarr_languages", "bazarr_providers", "bazarr_changed",
+                                                  "bazarr_providers_now", "bazarr_health"},
       "the cards with a table for the window")
 missing_template = sorted(k.template for k in CARDS if not (PROJECT / "jellyscope" / "templates" / k.template).exists())
 check(not missing_template and [k.template for k in CARDS] == [f"_card_bazarr_{j}.html" for j in NAMES],
@@ -131,6 +133,7 @@ def handler(request: httpx.Request) -> httpx.Response:
 restore = substitute(bazarr, "BazarrClient", bazarr_client(handler))
 connect_bazarr(KEY)
 fill_bazarr()
+asyncio.run(bazarr.refresh_counts())     # the *Arr task reads the lists of the missing (23. 11. 2026)
 bazarr.live.CACHE.clear()
 queries.clear()
 limits.clear()
@@ -206,37 +209,38 @@ check(tile(everything.text, "Dílů bez titulků") == str(BADGES["episodes"]) an
 check('class="heatmap"' in card_html(everything.text, "bazarr_when") and THROTTLED[0] in card_html(everything.text, "bazarr_providers_now"),
       "the heatmap and the providers in their cards")
 admin.get("/dashboard?days=30")
-check(sum(q.startswith("badges?") for q in queries) == 1 and len(queries) == 5, f"two pages within a minute = one read of the live state, five queries ({queries})")
-check(limits and max(limits) <= 20, f"the live state reads with a short timeout ({sorted(set(limits))})")
+check(sum(q.startswith("badges?") for q in queries) == 1 and len(queries) == 3,
+      f"two pages within a minute = one read of the live state, three cheap queries ({queries})")
+check(limits and max(limits) <= 3, f"the live state reads with the short limit, 3 s ({sorted(set(limits))})")
 check(KEY not in everything.text and 'id="table-window"' in everything.text, "the key nowhere; the dashboard has the window for the whole table")
-# The missing subtitles by language are the most expensive part of the live state (up to 2,000 episodes and 2,000 movies)
-# and change slowly: they are kept ten minutes, the rest a minute.
+# The missing subtitles by language are the most expensive part (up to 2,000 episodes and 2,000 movies) and change
+# slowly: since 23. 11. 2026 the *Arr sync reads them (fill_bazarr above) and the live state only adds them.
 bazarr.live.CACHE.pop("bazarr")
 queries.clear()
 after_a_minute = data()
 check(sorted(q.split("?")[0] for q in queries) == ["badges", "providers", "system/health"]
-      and after_a_minute["bazarr_missing_languages"]["rows"] and after_a_minute["bazarr_live_numbers"]["episode_count"] == BADGES["episodes"],
-      f"after a minute only three cheap queries are read, the languages of the missing stay from memory ({queries})")
-# As soon as the number of episodes or movies without subtitles changes, the languages from memory no longer hold - otherwise
-# the breakdown by language would not match the numbers right beside it for up to ten minutes.
+      and after_a_minute["bazarr_missing_languages"]["rows"] and after_a_minute["bazarr_missing_languages"]["counted_at"]
+      and after_a_minute["bazarr_live_numbers"]["episode_count"] == BADGES["episodes"],
+      f"after a minute only the three cheap queries, the languages from the sync with their time ({queries})")
 bazarr.live.CACHE.pop("bazarr")
 space["badges"] = {**BADGES, "episodes": BADGES["episodes"] + 1}
 queries.clear()
 after_change = data()
-check(len(queries) == 5 and after_change["bazarr_live_numbers"]["episode_count"] == BADGES["episodes"] + 1 and after_change["bazarr_missing_languages"]["rows"],
-      f"the number of missing changed: the languages are read again at once ({sorted(q.split('?')[0] for q in queries)})")
+check(len(queries) == 3 and after_change["bazarr_live_numbers"]["episode_count"] == BADGES["episodes"] + 1
+      and after_change["bazarr_missing_languages"]["rows"],
+      f"a changed count is not read live from the lists: the languages wait for the next sync ({sorted(q.split('?')[0] for q in queries)})")
 space.clear()
-bazarr.live.CACHE.clear()
-queries.clear()
-data()
-check(len(queries) == 5, f"after ten minutes (or a change of the settings) all five are read ({len(queries)})")
-# A failed read of the missing is not remembered for ten minutes: it is tried again next time.
-bazarr.live.CACHE.clear()
+counted_at = data()["bazarr_missing_languages"]["counted_at"]
 space["movies/wanted"] = httpx.Response(500)
-check(data()["bazarr_missing_languages"]["rows"] is None, "the missing movies do not load: the languages are unknown")
+asyncio.run(bazarr.refresh_counts())
+bazarr.live.CACHE.clear()
+check(data()["bazarr_missing_languages"]["rows"] and data()["bazarr_missing_languages"]["counted_at"] == counted_at,
+      "the missing movies do not load in the task: the last languages stay with their time")
 space.clear()
-bazarr.live.CACHE.pop("bazarr")
-check(data()["bazarr_missing_languages"]["rows"], "and the next read (after a minute) tries them again")
+asyncio.run(bazarr.refresh_counts())
+bazarr.live.CACHE.clear()
+check(data()["bazarr_missing_languages"]["counted_at"] >= counted_at and data()["bazarr_missing_languages"]["rows"],
+      "and the next run reads them again")
 bazarr.live.CACHE.clear()
 # The texts Bazarr writes instead of "in N hours", and its own language codes.
 AGAIN = {"in 12 hours": "za 12 h", "in a minute": "za 1 min", "in an hour": "za 1 h", "in 45 minutes": "za 45 min", "tomorrow": "zítra",
@@ -253,7 +257,9 @@ restore()
 restore = substitute(bazarr, "BazarrClient", bazarr_client(not_responding()))
 bazarr.live.CACHE.clear()
 r = admin.get("/dashboard?days=0").text
-check(all("Aplikace neodpovídá" in card_html(r, f"bazarr_{j}") for j in NAMES[:4]), "all four live cards say so")
+check(all("Aplikace neodpovídá" in card_html(r, f"bazarr_{j}") for j in ("live_numbers", "providers_now", "health")),
+      "the three live cards say so")
+check("spočítáno" in card_html(r, "bazarr_missing_languages"), "the languages from the last sync stay, with their time")
 check(tile(r, "Získané titulky") == str(len(ACQUIRED)) and 'class="heatmap"' in card_html(r, "bazarr_when"), "the cards from the database go on")
 check("Connection refused" in card_html(r, "bazarr_live_numbers") and KEY not in r, "the administrator sees the error's detail, the key nowhere")
 r_reader = reader.get("/dashboard?days=0").text
@@ -266,6 +272,7 @@ print()
 print("--- E) more missing than is read; a part does not load ---")
 bazarr.live.CACHE.clear()
 space["episodes/wanted"] = {"data": recorded_response(BAZARR_RESPONSES, "episodes_wanted")["data"], "total": bazarr.live.MISSING_LIMIT + 500}
+asyncio.run(bazarr.refresh_counts())     # the *Arr task reads the lists of the missing (23. 11. 2026)
 r = admin.get("/dashboard?days=0").text
 check(data()["bazarr_missing_languages"]["incomplete_list"] is True and "ve skutečnosti jich chybí víc" in card_html(r, "bazarr_missing_languages"),
       "more missing than 2,000: the card says it counts the languages from the first part only")

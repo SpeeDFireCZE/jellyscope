@@ -1,8 +1,13 @@
-"""Sonarr's live state: the queue, missing, cutoff, the calendar and health.
+"""Sonarr's live state: the queue, the calendar and health - and the counts of missing and cutoff.
 
 Unlike the history (sync.py) this is not stored: it is "how it looks right now" and in an hour it
 would not hold. The *Arr page asks when shown - but through a one-minute cache (`CACHE`), so
-reloading the page or switching the period does not flood Sonarr with requests.
+reloading the page or switching the period does not flood Sonarr with requests, and every request waits
+at most LIVE_TIMEOUT (3 s): the page waits for it.
+
+The counts of missing and cutoff are not asked here: a big Sonarr counts them for long (the cutoff took
+over 20 s, 23. 11. 2026), so the sync counts them (services.count_wanted) and this only adds the stored
+ones with their time, on every read.
 
 An unavailable Sonarr does not bring the page down: `live_state` returns `dostupna: False` and the
 error (without the key, translated), the statistics from the database still show.
@@ -10,7 +15,6 @@ error (without the key, translated), the statistics from the database still show
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,7 +22,7 @@ from typing import Any
 import httpx
 
 from ... import db, i18n
-from ...services import utc_time, integer
+from ...services import LIVE_TIMEOUT, integer, settings_fingerprint, stored_counts, utc_time
 from .client import SETTINGS_PREFIX, SonarrClient, SonarrError
 
 TTL = 60.0          # seconds in the cache
@@ -83,7 +87,7 @@ def _empty() -> dict[str, Any]:
 
 async def _load(url: str, key: str,
                 transport: httpx.AsyncBaseTransport | None) -> tuple[dict[str, Any], SonarrError | None]:
-    """Five requests at once. What fails stays None (unknown); if everything fails, Sonarr is unavailable.
+    """Three requests at once. What fails stays None (unknown); if everything fails, Sonarr is unavailable.
 
     None, not zero: "0 in the queue" or "nothing airs" after a failed request would be a claim nobody
     checked. The returned error is the first one that happened - even when the rest loaded.
@@ -92,12 +96,11 @@ async def _load(url: str, key: str,
     now = datetime.now(UTC)
     start, end = now.strftime("%Y-%m-%dT%H:%M:%SZ"), (now + timedelta(days=CALENDAR_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        client = SonarrClient(url, key, transport=transport)
+        client = SonarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
     except SonarrError as error:             # an invalid stored address
         return state, error
     async with client as c:
-        results = await asyncio.gather(c.queue(), c.record_count("wanted/missing"), c.record_count("wanted/cutoff"),
-                                       c.calendar(start, end), c.health(), return_exceptions=True)
+        results = await asyncio.gather(c.queue(), c.calendar(start, end), c.health(), return_exceptions=True)
     errors = [r for r in results if isinstance(r, BaseException)]
     for error in errors:
         if not isinstance(error, (SonarrError, ValueError, TypeError, AttributeError)):
@@ -105,10 +108,9 @@ async def _load(url: str, key: str,
     first = next((e if isinstance(e, SonarrError) else SonarrError("{reason}", reason=i18n.error_text(e)) for e in errors), None)
     if len(errors) == len(results):
         return state, first
-    queue, missing, cutoff, calendar, health = (None if isinstance(r, BaseException) else r for r in results)
+    queue, calendar, health = (None if isinstance(r, BaseException) else r for r in results)
     state["available"] = True
     state["queue"] = _queue(queue) if isinstance(queue, dict) else None
-    state["missing"], state["cutoff"] = missing, cutoff
     state["calendar"] = _calendar(calendar) if isinstance(calendar, list) else None
     state["health"] = [{"type": str(h.get("type") or ""), "message": str(h.get("message") or "")}
                        for h in health if isinstance(h, dict)] if isinstance(health, list) else None
@@ -119,14 +121,15 @@ async def live_state(transport: httpx.AsyncBaseTransport | None = None) -> dict[
     """Sonarr's state now (from the cache, if it is younger than a minute).
 
     The error is translated only here, on every read: the cache is shared by everyone and everyone is
-    to read it in their own language.
+    to read it in their own language. The counts of missing and cutoff come from the last sync
+    (`missing`, `missing_at`, `cutoff`, `cutoff_at`; None and "" = not counted yet).
     """
     url, key = db.get_setting(f"{SETTINGS_PREFIX}_url", ""), db.get_setting(f"{SETTINGS_PREFIX}_api_key", "")
-    fingerprint = url + "|" + hashlib.sha256(key.encode()).hexdigest()
+    fingerprint = settings_fingerprint(url, key)
     cached = CACHE.get("sonarr")
     if cached and cached[1] == fingerprint and time.monotonic() - cached[0] < TTL:
         _, _, state, error = cached
     else:
         state, error = await _load(url, key, transport)
         CACHE["sonarr"] = (time.monotonic(), fingerprint, state, error)
-    return {**state, "error": error.translated() if error else ""}
+    return {**state, **stored_counts(SETTINGS_PREFIX, fingerprint), "error": error.translated() if error else ""}

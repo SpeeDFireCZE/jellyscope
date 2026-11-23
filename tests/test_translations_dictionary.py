@@ -274,7 +274,10 @@ print("--- a text with a count is never looked up without its form ---")
 # `_("{n} records")` would find nothing (the file has "{n} records_one", "_few", "_other")
 # and show the key itself; `_n()`, `plural()`, `translate_plural()` or a message by key and
 # values (_flash, the error classes, a task's parts - translate_with) pick the form.
-PLAIN_LOOKUP = re.compile(r"(?<![\w.])(?:_|_t|translate|i18n\.translate)\(\s*([\"'])((?:\\.|(?!\1).)*)\1\s*[,)]")
+# A character after the opening quote is an escape (a backslash and any character) or one that is neither the
+# quote nor a backslash: with `.` in the second branch a backslash could go either way and a long run of them
+# backtracked exponentially (CodeQL py/redos).
+PLAIN_LOOKUP = re.compile(r"(?<![\w.])(?:_|_t|translate|i18n\.translate)\(\s*([\"'])((?:\\.|(?!\1)[^\\])*)\1\s*[,)]")
 
 
 def plain_lookups(text: str) -> list[str]:

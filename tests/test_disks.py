@@ -266,9 +266,14 @@ check(outside[TEN_DAYS_AGO]["outside"] == (370 + 945) * GB and outside[TEN_DAYS_
 first = stats.runs_out_first(90)
 check(first is not None and first["key"] == "dev-a" and first["days_left"] == 90 and first["name"] == "Filmy",
       f"the forecast only from the snapshots (without walking the files) ({first})")
-growth = stats.library_growth(90)
+# Since 23. 11. 2026 Library growth "All" counts the whole storage and names the disk that runs out first in a
+# tile of its own; the space alert (space_forecast) still takes that disk.
+growth = stats.space_forecast(90)
 check(growth["days_left"] == 90 and growth["free_space"] == 90 * GB and growth.get("disk_name") == "Filmy",
-      f"Library growth takes the disk that runs out first ({growth.get('days_left')}, {growth.get('disk_name')})")
+      f"the space alert takes the disk that runs out first ({growth.get('days_left')}, {growth.get('disk_name')})")
+all_disks = stats.library_growth(90)
+check((all_disks.get("fills_first") or {}).get("name") == "Filmy" and all_disks["fills_first"]["days_left"] == 90,
+      f"Library growth “All” names it in the tile “Fills first” ({all_disks.get('fills_first')})")
 
 db.set_setting("notify_space_days", "100")
 db.forget_settings()

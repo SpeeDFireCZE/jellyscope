@@ -112,7 +112,8 @@ check(all(k in cards.ALL_CARDS for k in CARDS) and len(cards.ALL_CARDS) == 206, 
 order = [k.key for k in cards.ALL_CARDS]
 check(order.index("prowlarr_live_numbers") == max(i for i, k in enumerate(order) if k.startswith("bazarr_")) + 1,
       "in the card offer they stand right after Bazarr's cards")
-check({k.key for k in CARDS if k.has_table_window} == {"prowlarr_indexers", "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest"},
+check({k.key for k in CARDS if k.has_table_window} == {"prowlarr_indexers", "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest",
+                                                  "prowlarr_indexers_now", "prowlarr_who", "prowlarr_health"},
       "cards with a table for the dialog")
 missing_templates = sorted(k.template for k in CARDS if not (PROJECT / "jellyscope" / "templates" / k.template).exists())
 check(not missing_templates and [k.template for k in CARDS] == [f"_card_prowlarr_{j}.html" for j in NAMES],
@@ -271,7 +272,7 @@ del overrides["health"]
 def indexer_row(page: str, name: str) -> str:
     """The row of the table "Indexery teď" with the given indexer."""
     card = card_html(page, "prowlarr_indexers_now")
-    return next((row for row in re.findall(r"<tr>.*?</tr>", card, re.S) if f">{name}" in row), "")
+    return next((row for row in re.findall(r"<tr[ >].*?</tr>", card, re.S) if f">{name}" in row), "")
 
 
 # The block expired (Prowlarr tries the indexer at the next query), but Prowlarr still reports it in a warning -

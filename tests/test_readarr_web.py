@@ -240,7 +240,7 @@ handlers["readarr"] = readarr_handler(asked, instead={"queue": httpx.Response(50
 readarr.live.CACHE.clear()
 partial = asyncio.run(readarr.live_state())
 check(partial["available"] is True and partial["queue"] is None and partial["calendar"] is None
-      and partial["missing"] is not None and bool(partial["error"]),
+      and partial["health"] is not None and bool(partial["error"]),
       "what did not load is None (unknown), not zero; the error is not thrown away")
 s = admin.get("/arr/readarr?days=365").text
 tile = re.search(r'Ve frontě</p>\s*<div class="tile-value">([^<]+)</div>', s)

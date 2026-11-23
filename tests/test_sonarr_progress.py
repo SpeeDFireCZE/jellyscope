@@ -328,7 +328,9 @@ check(s1["available"] and s1["live"] and s1["refresh"] == 5 and commands() == 0 
       f"the first read: something downloads, rhythm 5 s, no command is sent ({s1['refresh']}, {commands()})")
 move(5)
 read()
-check(commands() == 1 and queue_reads() == 2 and requests[-2][0] == "POST", "downloading: the next read sends the refresh command first, then reads the queue")
+# Since 23. 11. 2026 the command goes beside the read (a hung app must not cost two time limits): both in this read.
+check(commands() == 1 and queue_reads() == 2 and sorted(method for method, *_rest in requests[-2:]) == ["GET", "POST"],
+      "downloading: the next read sends the refresh command beside reading the queue")
 # The final review: the browser asks every 5 s measured on its side; the request arrives at the server
 # a few ms earlier or later. With a limit of exactly 5 s every second command dropped out and the
 # progress moved every 10 s. So the command goes with every real read of the queue - and thanks to the
@@ -370,6 +372,12 @@ s = read()
 check(s["available"] and len(s["blocks"]) == 4 and commands() == before_end + 2, f"an error of the command does not stop reading the queue ({commands()})")
 live_queues.update(command_fails=False, down=True)
 move(5)
+s = read()
+# Since 23. 11. 2026 the first error during a download is retried at the fast rhythm: a single answer slower than the
+# short limit must not stop the live card for a minute. A second error in a row is calm.
+check(not s["available"] and s["refresh"] == progress.FAST_REFRESH,
+      f"the first error during a download: one more try at the fast rhythm ({s['refresh']})")
+move(progress.FAST_REFRESH)
 s = read()
 attempts = commands()
 move(60)

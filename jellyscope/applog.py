@@ -222,6 +222,7 @@ UI_NAME_VALUES: dict[str, tuple[int, ...]] = {"scheduled task: %s": (0,)}
 ERROR_VALUES: dict[str, tuple[int, ...]] = {
     "could not read Seerr's public settings: %s": (0,),
     '%s sync failed: %s': (1,),
+    '%s: the counts were not updated: %s': (1,),
     'address %s could not be located: %s': (1,),
     'aligning the imported history failed: %s': (0,),
     'backup %s could not be deleted: %s': (1,),

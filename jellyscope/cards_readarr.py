@@ -35,6 +35,7 @@ templates. Adding a card means adding a line to `CARDS` and its name to `SECTION
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
 
@@ -100,9 +101,10 @@ def for_account(state: dict[str, Any], admin: bool) -> dict[str, Any]:
     internal network.
     """
     health = state["health"]
+    # The counts of missing and cutoff come from the sync (None = not counted yet): no part of the live load.
     result = {**state, "health_count": len(health) if health is not None else None,
               "partly_loaded": bool(state["available"] and (state["error"] or None in (
-                  state["queue"], state["calendar"], health, state["missing"], state["cutoff"])))}
+                  state["queue"], state["calendar"], health)))}
     if admin:
         return result
     result["error"] = ""
@@ -203,13 +205,23 @@ def downloading(state: dict[str, Any], admin: bool) -> dict[str, Any]:
             "more_count": more, "incomplete": state["incomplete"], "refresh": state["refresh"]}
 
 
+async def _right_now() -> tuple[dict[str, Any], dict[str, Any]]:
+    """The live state and the downloads at once: a page waits for the slower of the two, not for both in a row.
+
+    Both keep their own caches and in-flight guards; the cards read them through one live() call (cards_base: one
+    computation per page).
+    """
+    state, downloads = await asyncio.gather(readarr.live_state(), readarr.download_state())
+    return state, downloads
+
+
 def _d_downloading() -> dict[str, Any]:
-    return downloading(live(readarr.download_state), current_is_admin())
+    return downloading(live(_right_now)[1], current_is_admin())
 
 
 def _live() -> dict[str, Any]:
     """Readarr's live state for the account it is computed for - books with a link into the library."""
-    state = for_account(live(readarr.live_state), current_is_admin())
+    state = for_account(live(_right_now)[0], current_is_admin())
     if state["queue"] is not None:
         state["queue"] = {**state["queue"], "with_error": with_details(state["queue"]["with_error"])}
     if state["calendar"] is not None:
@@ -362,11 +374,11 @@ CARDS: tuple[Card, ...] = (
     _card("downloading", "Downloading",
           "What the app is downloading right now and how far it is. It refreshes by itself, without reloading the page.", live_data=_d_downloading),
     _card("queue", "Queue items with an error or warning",
-          "What got stuck while downloading or importing into the library.", width="half"),
+          "What got stuck while downloading or importing into the library.", width="half", table_window=True),
     _card("calendar", "Coming in the next 7 days",
-          "The app's calendar: what comes out this week and which of it is already in the library.", width="half"),
+          "The app's calendar: what comes out this week and which of it is already in the library.", width="half", table_window=True),
     _card("health", "App warnings",
-          "What the app itself reports as a problem. Only an administrator sees the texts."),
+          "What the app itself reports as a problem. Only an administrator sees the texts.", table_window=True),
     # --- What was added ---
     _card("numbers", "Numbers for the period",
           "How many books were imported into the library, how many new, how many upgrades and how many downloads failed.", _d_numbers),

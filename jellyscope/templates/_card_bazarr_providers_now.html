@@ -8,6 +8,7 @@
    Only two columns: when Bazarr tries again stands under the state. The names
    of providers and errors are long and do not wrap - a third column would not fit
    into a card at half width (a 1024 px window = a 320 px card). #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ prefix }}{{ _(card.name) }}</h2>
@@ -25,7 +26,7 @@
         </tr></thead>
         <tbody>
         {% for p in d.rows %}
-            <tr>
+            <tr class="{{ row_class(loop.index, "arr") }}">
                 <td class="strong">{{ p.name }}</td>
                 <td>{% if p.fine %}<span class="badge good">{{ _("OK") }}</span>
                     {% else %}<span class="badge warning">{{ p.state or _("throttled") }}</span>
@@ -34,6 +35,7 @@
         {% endfor %}
         </tbody>
     </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
     {% else %}
         <p class="chart-empty">{{ _("No subtitle provider is enabled in Bazarr.") }}</p>
     {% endif %}

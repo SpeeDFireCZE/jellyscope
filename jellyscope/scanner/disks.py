@@ -30,6 +30,7 @@ DISK_CAPACITY_KEY = "disks_capacity"  # {DeviceId: {"source": "jellyfin"|"manual
 SAME_KEY = "disks_same"              # groups of DeviceIds the admin confirmed as one disk
 DIFFERENT_KEY = "disks_different"    # pairs they confirmed as different disks
 VIRTUAL_KEY = "disks_virtual"        # [{"id", "name", "paths", "capacity"}]
+DISK_NAMES_KEY = "disks_names"       # {DeviceId: the name the admin gave a physical disk}
 SINGLE_DISK = "library"              # the disk key of the one row of a Jellyfin without the disks broken down
 CONVERTED_KEY = "disks_converted"    # "1" = the earlier manual capacity is at a disk already
 
@@ -407,14 +408,30 @@ def _manual_capacity(disk: dict[str, Any], capacities: dict[str, Any]) -> int:
     return 0
 
 
+def _custom_name(disk: dict[str, Any], names: dict[str, Any]) -> str:
+    """The name the admin gave a physical disk, "" = none (the disk is named after its libraries).
+
+    Looked up under the disk's key and under every one of its devices, like _manual_capacity(): after a merge the
+    disk has the key of only one device, and a name given at the other must not disappear.
+    """
+    for device in [disk["key"], *disk["device"]]:
+        name = str(names.get(device) or "").strip()
+        if name:
+            return name
+    return ""
+
+
 def _physical_row(disk: dict[str, Any], files: dict[str, dict[str, int]], capacities: dict[str, Any],
                   suspected: list[tuple[str, str]], virtual: list[dict[str, Any]],
-                  stale: bool = False) -> dict[str, Any]:
+                  stale: bool = False, names: dict[str, Any] | None = None) -> dict[str, Any]:
     """The card's row for a physical disk: a manual capacity, or the numbers from Jellyfin.
 
     `stale` = the numbers from Jellyfin are of an older date (see stale_since()): then they are not taken as
-    today's, a manual capacity still holds.
+    today's, a manual capacity still holds. `names` = the names the admin gave the disks (DISK_NAMES_KEY); the
+    name is no part of the fingerprint, so renaming a disk does not start its pace over.
     """
+    default_name = ", ".join(disk["libraries"])
+    custom_name = _custom_name(disk, names or {})
     on_disk = files.get(disk["key"], {"bytes": 0, "file_count": 0})
     library = on_disk["bytes"]
     manual = _manual_capacity(disk, capacities)
@@ -430,7 +447,8 @@ def _physical_row(disk: dict[str, Any], files: dict[str, dict[str, int]], capaci
     return {
         "fingerprint": _fingerprint(_old("physical"), _old(source), manual, disk["device"],
                               sorted(path for v in virtual for path in v["paths"])),
-        "key": disk["key"], "name": ", ".join(disk["libraries"]), "kind": "physical", "type": disk["type"],
+        "key": disk["key"], "name": custom_name or default_name, "default_name": default_name,
+        "custom_name": custom_name, "kind": "physical", "type": disk["type"],
         "source": source, "total": total, "free": free, "library": library, "outside": outside,
         "libraries": disk["libraries"], "paths": disk["folders"], "device": disk["device"],
         "suspicions": [b if a == disk["key"] else a for a, b in suspected if disk["key"] in (a, b)],
@@ -479,7 +497,8 @@ def disk_state() -> dict[str, Any]:
     capacities = _json(DISK_CAPACITY_KEY, {})
     suspected = suspicions(disks)
     stale = stale_since()
-    rows = [_physical_row(disk, files, capacities, suspected, virtual, bool(stale)) for disk in disks]
+    names = _json(DISK_NAMES_KEY, {})
+    rows = [_physical_row(disk, files, capacities, suspected, virtual, bool(stale), names) for disk in disks]
     # The admin can take back the answer to "the same disk?" - the button only where there is some answer (a
     # merged disk, or "different disks").
     answered = {str(x) for pair in _json(DIFFERENT_KEY, []) if isinstance(pair, list) for x in pair}

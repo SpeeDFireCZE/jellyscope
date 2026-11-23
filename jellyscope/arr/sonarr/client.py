@@ -122,10 +122,10 @@ class SonarrClient(HttpClient):
         """
         await self._post("command", {"name": "RefreshMonitoredDownloads"}, timeout=COMMAND_TIMEOUT)
 
-    async def record_count(self, path: str) -> int:
+    async def record_count(self, path: str, timeout: httpx.Timeout | None = None) -> int:
         """The count of records of a paged list (`wanted/missing`, `wanted/cutoff`) - only one item is
         fetched, `totalRecords` is enough."""
-        answer = await self._object(path, {"pageSize": 1})
+        answer = await self._object(path, {"pageSize": 1}, timeout)
         return integer(answer.get("totalRecords")) or 0
 
     async def calendar(self, start: str, end: str) -> list[dict[str, Any]]:

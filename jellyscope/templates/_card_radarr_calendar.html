@@ -3,7 +3,7 @@
    Live from Radarr (cards_radarr.py, `d` = the live state for the account). The date
    carries the kind of release too (digital, on disc, in cinemas); "in the library" = Radarr
    has the file already. #}
-{% from "_macros.html" import link with context %}
+{% from "_macros.html" import link, row_class, whole_table_button with context %}
 <div class="card">
     <div class="card-head">
         <h2>{{ prefix }}{{ _(card.name) }}</h2>
@@ -17,7 +17,7 @@
     <div class="table-wrap"><table>
         <tbody>
         {% for c in d.calendar %}
-            <tr>
+            <tr class="{{ row_class(loop.index, "arr") }}">
                 <td>{{ c.at | datetime }}</td>
                 <td class="strong">{% call link(c.detail_url) %}{{ c.title }}{% endcall %}</td>
                 <td class="muted">
@@ -28,6 +28,7 @@
         {% endfor %}
         </tbody>
     </table></div>
+    {{ whole_table_button(d.calendar | length, "arr") }}
     {% else %}
         <p class="chart-empty">{{ _("Nothing comes out in the next 7 days.") }}</p>
     {% endif %}

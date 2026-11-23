@@ -318,7 +318,7 @@ ALL_CARDS: tuple[Card, ...] = (
          area="library"),
     Card("disks", "Disks",
          "Which disk each library is on, how much space is left and in how many days it runs out.",
-         "_card_disks.html", lambda o: {"disks": stats.disks_overview(o, stats.library_growth)},
+         "_card_disks.html", lambda o: {"disks": stats.disks_overview(o, stats.library_growth, stats.disk_growth)},
          area="library"),
     Card("library_growth", "Library growth",
          "The size of the library day by day, and where it is heading.",
@@ -756,8 +756,10 @@ def data_for(layout: list[Card], period: Any,
     account_token = _account.set(account)
     try:
         context: dict[str, Any] = {}
-        for card in layout:
-            context.update(card.data(period))
+        # The Disks card and Library growth in one dashboard share the disks' curves (stats.disk_growth_memo).
+        with stats.disk_growth_memo():
+            for card in layout:
+                context.update(card.data(period))
         return context
     finally:
         _account.reset(account_token)

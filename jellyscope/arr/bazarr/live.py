@@ -1,29 +1,23 @@
-"""Bazarr's live state: what is missing, the providers and the warnings.
+"""Bazarr's live state: the counts of what is missing, the providers and the warnings - and the languages.
 
 It is not stored - it is "how it looks right now". The Bazarr tab asks when shown, but through a
 one-minute cache (`CACHE`), so reloading the page or switching the period does not flood Bazarr with
-requests. The cache notices a change of the address and of the key (the key only as a fingerprint):
-fixed settings load at once.
+requests, and every request waits at most LIVE_TIMEOUT (3 s): the page waits for it. The cache notices a
+change of the address and of the key (the key only as a fingerprint): fixed settings load at once.
 
-Five requests at once: the counts from Bazarr's header (`badges`), the enabled providers, the warnings
-and the first `MISSING_LIMIT` episodes and movies without subtitles - of those only the languages they
-lack. When more are missing, the state says so (`languages_incomplete`): the counts by language are then only
-from the first part.
-
-The two lists of the missing are the most expensive part (thousands of items) and change slowly: so
-the languages are kept longer (`LANGUAGES_TTL`) and after a minute only three cheap requests are read.
-They hold only as long as the counts of episodes and movies without subtitles they were read with
-still match, though - as soon as a count changes, they are read again at once, so the breakdown by
-language does not contradict the numbers next to it. A failed read is not kept - it is tried again
-next time.
+Three cheap requests at once: the counts from Bazarr's header (`badges`), the enabled providers and the warnings.
+The languages missing subtitles come from the first `MISSING_LIMIT` episodes and movies without subtitles - two
+big lists (thousands of items) that change slowly, so the *Arr sync reads them (sync.py, with a long limit) and
+stores the languages; this only adds them with their time (`stored_languages`). When more are missing, the state
+says so (`languages_incomplete`): the counts by language are then only from the first part.
 
 An unavailable Bazarr does not bring the page down: `dostupna: False` and the error (without the key,
-translated on every read); the statistics from the database still show.
+translated on every read); the statistics from the database and the stored languages still show.
 """
 from __future__ import annotations
 
 import asyncio
-import hashlib
+import json
 import time
 from collections import Counter
 from typing import Any
@@ -31,16 +25,15 @@ from typing import Any
 import httpx
 
 from ... import db, i18n
-from ...services import integer
+from ...services import LIVE_TIMEOUT, integer, settings_fingerprint
 from .client import BazarrClient, BazarrError
 
 TTL = 60.0             # seconds in the cache
-LANGUAGES_TTL = 600.0  # how long the languages of the missing hold (two big lists)
+# The languages missing subtitles, stored by the sync: {"fingerprint", "languages", "incomplete", "at"}.
+LANGUAGES_KEY = "arr_bazarr_missing_languages"
 MISSING_LIMIT = 2000   # how many episodes and how many movies without subtitles are read at most for the languages
 GOOD = "Good"          # the state of a provider that is not throttled
 # Under the key "bazarr": (when loaded - time.monotonic(), the address and the key's fingerprint, state, error).
-# Under the key "languages": (when, the address and the key's fingerprint, (the languages of the missing, whether
-# there are more than read, (episodes, movies without subtitles at the time of the read))).
 CACHE: dict[str, tuple[Any, ...]] = {}
 
 
@@ -81,37 +74,41 @@ def _providers(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda r: (r["fine"], r["name"]))
 
 
-async def _load(url: str, key: str, transport: httpx.AsyncBaseTransport | None,
-                in_memory: tuple[Any, ...] | None = None) -> tuple[dict[str, Any], BazarrError | None, bool]:
-    """Three cheap requests at once and after them the two lists of the missing - those only when the languages
-    are not in memory (`in_memory`) or the count of episodes or movies without subtitles changed since they were
-    read. What fails stays None (unknown); if everything fails, Bazarr is unavailable.
+def stored_languages(fingerprint: str) -> dict[str, Any]:
+    """The languages the sync stored: {"languages": rows or None (not counted yet), "languages_incomplete",
+    "languages_at"} - only for the same address and key."""
+    try:
+        stored = json.loads(db.get_setting(LANGUAGES_KEY, "") or "{}")
+    except ValueError:
+        stored = {}
+    if not isinstance(stored, dict) or stored.get("fingerprint") != fingerprint or not isinstance(stored.get("languages"), list):
+        return {"languages": None, "languages_incomplete": False, "languages_at": ""}
+    return {"languages": stored["languages"], "languages_incomplete": bool(stored.get("incomplete")),
+            "languages_at": str(stored.get("at") or "")}
+
+
+async def _load(url: str, key: str,
+                transport: httpx.AsyncBaseTransport | None) -> tuple[dict[str, Any], BazarrError | None]:
+    """Three cheap requests at once. What fails stays None (unknown); if everything fails, Bazarr is unavailable.
 
     None, not zero: "without subtitles 0" after a failed request would be a claim nobody checked.
-    Returns (the state, the first error, whether the languages are freshly loaded).
+    Returns (the state, the first error).
     """
     state = _empty()
     try:
-        client = BazarrClient(url, key, transport=transport)
+        client = BazarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
     except BazarrError as error:             # an invalid stored address or key
-        return state, error, False
+        return state, error
     async with client as c:
         results = list(await asyncio.gather(c.badges(), c.providers(), c.health(), return_exceptions=True))
-        first_badges = results[0] if isinstance(results[0], dict) else {}
-        counts = (integer(first_badges.get("episodes"), None), integer(first_badges.get("movies"), None))
-        from_memory = in_memory is not None and in_memory[2] == counts
-        # When not even one of the cheap requests answered, the two expensive ones are not waited for.
-        if not from_memory and not all(isinstance(r, BaseException) for r in results):
-            results += await asyncio.gather(c.missing("episode", MISSING_LIMIT), c.missing("movie", MISSING_LIMIT),
-                                            return_exceptions=True)
     errors = [r for r in results if isinstance(r, BaseException)]
     for error in errors:
         if not isinstance(error, (BazarrError, ValueError, TypeError, AttributeError)):
             raise error            # an error in the program, not in the app: let it show
     first = next((e if isinstance(e, BazarrError) else BazarrError("{reason}", reason=i18n.error_text(e)) for e in errors), None)
     if len(errors) == len(results):
-        return state, first, False
-    badges, providers, health, *missing = (None if isinstance(r, BaseException) else r for r in results)
+        return state, first
+    badges, providers, health = (None if isinstance(r, BaseException) else r for r in results)
     badges = badges if isinstance(badges, dict) else {}
     state["available"] = True
     state["episode_count"], state["movie_count"] = integer(badges.get("episodes"), None), integer(badges.get("movies"), None)
@@ -125,32 +122,21 @@ async def _load(url: str, key: str, transport: httpx.AsyncBaseTransport | None,
         state["warnings"] = len(state["health"])
     else:
         state["warnings"] = integer(badges.get("status"), None)
-    fresh = False
-    if from_memory:
-        state["languages"], state["languages_incomplete"] = in_memory[0], in_memory[1]
-    elif len(missing) == 2 and all(listing is not None for listing in missing):
-        state["languages"], state["languages_incomplete"] = _languages(missing)
-        fresh = True
-    return state, first, fresh
+    return state, first
 
 
 async def live_state(transport: httpx.AsyncBaseTransport | None = None) -> dict[str, Any]:
-    """Bazarr's state now (from the cache, if it is younger than a minute).
+    """Bazarr's state now (from the cache, if it is younger than a minute), with the languages the sync stored.
 
     The error is translated only here, on every read: the cache is shared by everyone and everyone is
     to read it in their own language.
     """
     url, key = db.get_setting("arr_bazarr_url", ""), db.get_setting("arr_bazarr_api_key", "")
-    fingerprint = url + "|" + hashlib.sha256(key.encode()).hexdigest()
+    fingerprint = settings_fingerprint(url, key)
     cached = CACHE.get("bazarr")
     if cached and cached[1] == fingerprint and time.monotonic() - cached[0] < TTL:
         _, _, state, error = cached
     else:
-        languages = CACHE.get("languages")
-        in_memory = languages[2] if languages and languages[1] == fingerprint and time.monotonic() - languages[0] < LANGUAGES_TTL else None
-        state, error, fresh = await _load(url, key, transport, in_memory)
+        state, error = await _load(url, key, transport)
         CACHE["bazarr"] = (time.monotonic(), fingerprint, state, error)
-        if fresh:
-            CACHE["languages"] = (time.monotonic(), fingerprint,
-                               (state["languages"], state["languages_incomplete"], (state["episode_count"], state["movie_count"])))
-    return {**state, "error": error.translated() if error else ""}
+    return {**state, **stored_languages(fingerprint), "error": error.translated() if error else ""}

@@ -10,7 +10,9 @@ The pace is taken by what can be measured about the disk:
 * a disk with a manual capacity and a virtual disk - **from the growth of the library's files** on it. We do not
   know the real free space there, only what we computed.
 
-A disk standing still or freeing up has no forecast.
+A disk standing still or freeing up has no forecast. Until a disk has two snapshots with the same settings (its
+first day, the day after its settings changed) the forecast comes from the growth of its files over the period
+(files_forecast) - the caller passes stats.disk_growth, because growth.py imports from here.
 
 An older Jellyfin (10.x) does not break the disks down: its one row "Library" has a forecast as before, from the
 Library growth (see disks_overview).
@@ -127,6 +129,30 @@ def _pace(source: str, free: Any, series: list[dict[str, Any]]) -> tuple[float |
     return daily, int(int(free) / daily)
 
 
+def files_forecast(free: Any, growth: dict[str, Any] | None) -> int | None:
+    """In how many days the space runs out at the growth of the disk's files: free / bytes a day. None = none.
+
+    The forecast while the disk's snapshots cannot give a pace (a single one - the first day of the disks, or the
+    day after the disk's settings changed). `growth` is stats.disk_growth() of the disk: its daily growth over the
+    period is the one the chart's curve shows. A disk that does not grow, or whose free space is unknown, has none.
+    """
+    if free is None or not growth or not growth.get("enough_data"):
+        return None
+    daily = growth.get("daily") or 0
+    if daily <= 0:
+        return None
+    return int(int(free) / daily)
+
+
+def _files_pace(days: Any, key: str, free: Any,
+                disk_growth: Callable[[Any, str], dict[str, Any]]) -> tuple[float | None, int | None]:
+    """(bytes per day, days left) from the disk's file growth - the fallback of _pace (see files_forecast)."""
+    growth = disk_growth(days, key)
+    if not growth.get("enough_data"):
+        return None, None
+    return growth["daily"], files_forecast(free, growth)
+
+
 def disks_to_choose() -> list[dict[str, str]]:
     """The disks to choose in the Library growth: [{"key", "name", "choice"}] with the names from the Disks card.
 
@@ -165,7 +191,8 @@ def outside_series(days: Any = 90) -> list[dict[str, Any]]:
 
 
 def disks_overview(days: Any = 90,
-                   growth: Callable[[Any], dict[str, Any]] | None = None) -> dict[str, Any]:
+                   growth: Callable[[Any], dict[str, Any]] | None = None,
+                   disk_growth: Callable[[Any, str], dict[str, Any]] | None = None) -> dict[str, Any]:
     """The Disks card: today's state of the disks with the pace, the forecast and a series for the chart.
 
     To `scanner.disk_state()` it adds `daily` and `days_left` for every disk, and also `earliest` (the disk whose
@@ -173,7 +200,9 @@ def disks_overview(days: Any = 90,
 
     `growth` is stats.library_growth - the caller passes it, because growth.py takes the disks' forecast from here
     and an import the other way would be a cycle. It is used only with a Jellyfin that does not break the disks
-    down: its one row "Library" shows the same forecast as the Library growth, not another.
+    down: its one row "Library" shows the same forecast as the Library growth, not another. `disk_growth` is
+    stats.disk_growth, for the same reason: a disk whose snapshots give no pace yet gets the forecast from its
+    file growth (files_forecast), the same number as the Library growth chart for that disk.
     """
     # `scanner` only here: it pulls in stats itself, so at the top it would make a cycle.
     from .. import scanner
@@ -186,26 +215,35 @@ def disks_overview(days: Any = 90,
             row["daily"] = growth_result.get("daily") if growth_result.get("enough_data") else None
             row["days_left"] = growth_result.get("days_left")
             continue
-        row["daily"], row["days_left"] = _pace(
+        daily, days_left = _pace(
             str(row["source"] or ""), row["free"], _segment(series_by_disk.get(row["key"], []), row["fingerprint"]))
+        # The fallback only for a disk measured in the period: a past period before its first snapshot has no free
+        # space of its own (the chart says nothing there), today's would be a number for another time.
+        if daily is None and disk_growth is not None and row["free"] is not None and series_by_disk.get(row["key"]):
+            daily, days_left = _files_pace(days, row["key"], row["free"], disk_growth)
+        row["daily"], row["days_left"] = daily, days_left
     with_forecast = [row for row in state["disks"] if row["days_left"] is not None]
     state["earliest"] = min(with_forecast, key=lambda row: row["days_left"]) if with_forecast else None
     return state
 
 
-def runs_out_first(days: Any = 90) -> dict[str, Any] | None:
-    """The disk whose space runs out first - only from the snapshots, without walking the files.
+def runs_out_first(days: Any = 90,
+                   disk_growth: Callable[[Any, str], dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """The disk whose space runs out first - from the disks' snapshots.
 
-    For the Overview and the notifications: walking all the library's files there on every load would delay. The
-    snapshot is written after the sync and after a change of capacity, so it is fresh. Only the disks of the last
-    snapshot count - a deleted virtual disk plays no role any more.
+    For Library growth "All" (the tile "Fills first") and the space alert. The snapshot is written after the sync
+    and after a change of capacity, so it is fresh. Only the disks of the last snapshot count - a deleted virtual
+    disk plays no role any more.
 
-    Returns {klic, nazev, volne, denne, dnu_do_konce, disku}, or None:
+    Returns {key, name, free, daily, days_left, disk_count}, or None:
 
     * None - the disks have nothing to say yet (no snapshots, Jellyfin 10.x without the disks broken down, or only
       one day of measuring). Then the estimate from the library's growth holds as before.
     * `days_left` None (and `key` None) - the disks are measured, but none is filling. The estimate from the
       library's growth would contradict the Disks card here.
+
+    `disk_growth` (stats.disk_growth, passed by the caller - growth.py imports from here) gives a disk whose
+    snapshots have no pace yet the forecast from its file growth; it walks the disk's files, so only for such disks.
     """
     series_by_disk = disk_snapshots(days)
     if not series_by_disk:
@@ -217,6 +255,8 @@ def runs_out_first(days: Any = 90) -> dict[str, Any] | None:
     for disk, series in current.items():
         last_row = series[-1]
         daily, days_left = _pace(str(last_row["source"] or ""), last_row["free"], _segment(series))
+        if daily is None and disk_growth is not None and last_row["free"] is not None:
+            daily, days_left = _files_pace(days, disk, last_row["free"], disk_growth)
         measured = measured or daily is not None
         if days_left is not None and (best is None or days_left < best["days_left"]):
             best = {"key": disk, "name": last_row["name"], "free": last_row["free"],

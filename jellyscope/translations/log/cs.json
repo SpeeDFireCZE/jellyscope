@@ -204,5 +204,8 @@
     "books: libraries disappeared from Jellyfin (%s), %s books missing": "knihy: knihovny zmizely z Jellyfinu (%s), chybi %s knih",
     "database converted to English names: %s tables, %s columns, %s indexes, %s settings, %s values, %s JSON cells, %s tables dropped, %s rows checked": "databaze prevedena na anglicka jmena: tabulek %s, sloupcu %s, indexu %s, nastaveni %s, hodnot %s, bunek JSON %s, odstranenych tabulek %s, overeno radku %s",
     "conversion to English names: %s.%s has %s cells that are no JSON - kept as they are": "prevod na anglicka jmena: %s.%s ma %s bunek, ktere nejsou JSON - zustavaji, jak jsou",
-    "rolling back the conversion failed": "vraceni prevodu zpet se nepovedlo"
+    "rolling back the conversion failed": "vraceni prevodu zpet se nepovedlo",
+    "%s: could not count wanted/%s, the last known count stays: %s": "%s: wanted/%s se nepodařilo spočítat, zůstává poslední známý počet: %s",
+    "bazarr: could not read the missing subtitles, the last known languages stay: %s": "bazarr: chybějící titulky se nepodařilo načíst, zůstávají poslední známé jazyky: %s",
+    "%s: the counts were not updated: %s": "%s: počty se nepodařilo aktualizovat: %s"
 }

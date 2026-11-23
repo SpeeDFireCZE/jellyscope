@@ -99,7 +99,8 @@ WIDTHS = {"live_numbers": "full", "downloading": "full", "queue": "half", "calen
           "upgraded": "half"}
 wrong = [(k.key, k.width) for j, k in zip(NAMES, CARDS, strict=True) if k.width != WIDTHS[j]]
 check(not wrong, f"the widths by the spec ({wrong[:3]})")
-with_table = {"largest", "indexers", "groups", "clients", "protocols", "qualities", "resolutions", "transitions", "upgraded"}
+with_table = {"largest", "indexers", "groups", "clients", "protocols", "qualities", "resolutions", "transitions", "upgraded",
+              "queue", "calendar", "health"}   # the live lists too (23. 11. 2026)
 check({j for j, k in zip(NAMES, CARDS, strict=True) if k.has_table_window} == with_table,
       "cards with a long table want the dialog for the whole table")
 CARD_NAMES = {"live_numbers": "Čísla teď", "downloading": "Stahuje se", "queue": "Fronta s chybou nebo varováním", "calendar": "Vyjde v příštích 7 dnech",
@@ -272,7 +273,7 @@ db.set_setting("ui_max_rows_arr", "1")
 db.forget_settings()
 tab = admin.get("/arr/radarr?days=365").text
 tables = {j: card_html(tab, f"arr_radarr_{j}") for j in sorted(with_table)}
-card_rows = {j: (h.count("<tr") - 1, h.count('class="extra-row"')) for j, h in tables.items() if "<table" in h}
+card_rows = {j: (h.count("<tr") - h.count("<thead"), h.count('class="extra-row"')) for j, h in tables.items() if "<table" in h}
 long_ones = {j: r for j, r in card_rows.items() if r[0] >= 2}
 check(len(long_ones) >= 4 and all(extra == rows - 1 for rows, extra in long_ones.values()),
       f"the *Arr limit holds for all of Radarr's tables ({card_rows})")
@@ -328,7 +329,8 @@ error500 = httpx.Response(500)
 handlers["radarr"] = radarr_handler(asked, instead={"queue": error500, "calendar": error500})
 radarr.live.CACHE.clear()
 s = admin.get("/arr/radarr?days=365").text
-check(tile(s, "Ve frontě") == "–" and tile(s, "Chybí") not in (None, "–"), "what did not load is a dash, not zero")
+# Missing and cutoff come from the *Arr task (23. 11. 2026, none ran here); a live part that loaded is health.
+check(tile(s, "Ve frontě") == "–" and tile(s, "Varování aplikace") not in (None, "–"), "what did not load is a dash, not zero")
 check("nepodařilo načíst" in card_html(s, "arr_radarr_live_numbers"), "the card with the numbers says part did not load")
 check("Frontu se z aplikace nepodařilo načíst." in card_html(s, "arr_radarr_queue")
       and "Kalendář se z aplikace nepodařilo načíst." in card_html(s, "arr_radarr_calendar")

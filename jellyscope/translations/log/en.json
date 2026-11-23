@@ -204,5 +204,8 @@
     "books: libraries disappeared from Jellyfin (%s), %s books missing": "books: libraries disappeared from Jellyfin (%s), %s books missing",
     "database converted to English names: %s tables, %s columns, %s indexes, %s settings, %s values, %s JSON cells, %s tables dropped, %s rows checked": "database converted to English names: %s tables, %s columns, %s indexes, %s settings, %s values, %s JSON cells, %s tables dropped, %s rows checked",
     "conversion to English names: %s.%s has %s cells that are no JSON - kept as they are": "conversion to English names: %s.%s has %s cells that are no JSON - kept as they are",
-    "rolling back the conversion failed": "rolling back the conversion failed"
+    "rolling back the conversion failed": "rolling back the conversion failed",
+    "%s: could not count wanted/%s, the last known count stays: %s": "%s: could not count wanted/%s, the last known count stays: %s",
+    "bazarr: could not read the missing subtitles, the last known languages stay: %s": "bazarr: could not read the missing subtitles, the last known languages stay: %s",
+    "%s: the counts were not updated: %s": "%s: the counts were not updated: %s"
 }

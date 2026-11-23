@@ -24,7 +24,7 @@ import httpx
 from ... import db, i18n
 from ...jellyfin import digits_only
 from ...services import SYNC_ALREADY_RUNNING as ALREADY_RUNNING
-from ...services import utc_time, integer, read_state, write_state
+from ...services import count_wanted, integer, read_state, settings_fingerprint, utc_time, write_state
 from .client import NAME, SETTINGS_PREFIX, RadarrClient, RadarrError
 from .posters import clean_up_posters
 from .titles import delete_titles, sync_titles
@@ -232,6 +232,19 @@ async def _fetch(transport: httpx.AsyncBaseTransport | None) -> dict[str, int]:
     _write_state("ok", new)
     log.info("%s sync: %s new records of %s", NAME, new, total)
     return {"new_count": new, "total": total}
+
+
+async def refresh_counts(transport: httpx.AsyncBaseTransport | None = None) -> None:
+    """Count missing and cutoff for the live card (services.count_wanted, with the long limit) and store them.
+
+    Called by the *Arr sync task after the history (registry.synchronize_all), in the background - not by "Sync now"
+    in Settings, which waits for its result: a big library counts them for minutes (23. 11. 2026).
+    """
+    url, key = db.get_setting(_key("url"), ""), db.get_setting(_key("api_key"), "")
+    if not url or not key:
+        return
+    async with RadarrClient(url, key, transport=transport) as client:
+        await count_wanted(SETTINGS_PREFIX, client, settings_fingerprint(url, key))
 
 
 async def synchronize(transport: httpx.AsyncBaseTransport | None = None) -> dict[str, int]:

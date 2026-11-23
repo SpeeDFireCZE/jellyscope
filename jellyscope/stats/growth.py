@@ -3,13 +3,17 @@
 Part of the statistics package (see jellyscope/stats/__init__.py)."""
 from __future__ import annotations
 
-from collections.abc import Callable
+import copy
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from .. import content_kinds, db, formatting
 from .content_history import Changes, all_changes, complete_library_rows, kind_changes, series_from_changes
-from .disks import _pace, _segment, complete_disks, disk_changes, runs_out_first, disk_snapshots
+from .disks import (DISK_KINDS, _pace, _segment, complete_disks, disk_changes, files_forecast, runs_out_first,
+                    disk_snapshots)
 from .periods import _local_day, _as_period
 from .tech import RESOLUTION_CASE, RANGE_CASE
 
@@ -269,7 +273,7 @@ def _free_space_now(from_snapshot: Any) -> int | None:
     return now_free if now_free is not None else from_snapshot
 
 
-def library_growth(days: Any = 90) -> dict[str, Any]:
+def library_growth(days: Any = 90, forecast: bool = True) -> dict[str, Any]:
     """Where the library is heading: how much it grew in the period and what follows from it.
 
     The estimate has two forms, because we know the free space only where the app sees the files:
@@ -277,7 +281,8 @@ def library_growth(days: Any = 90) -> dict[str, Any]:
     * if we know it, it answers "how long until it runs out";
     * otherwise it says how big the library will be in a year.
 
-    Promising the first where only the second holds would be worse than staying silent.
+    Promising the first where only the second holds would be worse than staying silent. `forecast` False = only
+    the growth (the comparison of periods shows no forecast; a disk's forecast can walk the disk's files).
     """
     rows = snapshots(days)
     result = _growth_base(rows)
@@ -286,12 +291,14 @@ def library_growth(days: Any = 90) -> dict[str, Any]:
     first_row, last_row = rows[0], rows[-1]
     daily = result["daily"]
     result["item_count"] = int(last_row["item_count"]) - int(first_row["item_count"])
+    if not forecast:
+        return result
     result["free_space"] = _free_space_now(last_row.get("free_space"))
 
-    # A shrinking or standing library needs no estimate - and dividing by zero even less. But the disk can fill up
+    # A shrinking or standing library needs no estimate - and dividing by zero even less. But a disk can fill up
     # anyway (downloads, data outside Jellyfin), so the disks' forecast is asked here too.
     if daily <= 0:
-        return _by_disk(result, days)
+        return _all_disks(result, days)
 
     result["per_year"] = int(last_row["size_bytes"] + daily * 365)
     # The same value as a bit above, not again from the snapshot: otherwise a capacity entered by hand would show in
@@ -300,7 +307,64 @@ def library_growth(days: Any = 90) -> dict[str, Any]:
     free = result["free_space"]
     if free:
         result["days_left"] = int(free / daily)
-    return _by_disk(result, days)
+    return _all_disks(result, days)
+
+
+def _all_disks(result: dict[str, Any], days: Any) -> dict[str, Any]:
+    """"All" when Jellyscope knows the library's disks (the user, 23. 11. 2026, variant B).
+
+    The free space is the sum of the disks (scanner.free_space_now) and "the space runs out in" the sum / the
+    library's growth - the whole storage. Beside it `fills_first` names the disk whose space runs out first
+    ({"name", "days_left", "free"}, with at least two disks and one of them filling): a full disk takes no file,
+    however much space is left elsewhere. A single disk is the whole storage: its own forecast holds (the measured
+    drop of free space catches downloads too), as before. Without the disks' snapshots nothing changes.
+    """
+    result["fills_first"] = None
+    first_out = runs_out_first(days, disk_growth)
+    if first_out is None:
+        return result
+    if first_out["disk_count"] == 1:
+        return _by_disk(result, first_out)
+    _without_unknown_disks(result, days)
+    if first_out["days_left"] is not None:
+        result["fills_first"] = {"name": first_out["name"], "days_left": first_out["days_left"],
+                                 "free": first_out["free"]}
+    return result
+
+
+def _without_unknown_disks(result: dict[str, Any], days: Any) -> None:
+    """"All"'s forecast without the files on disks whose free space is unknown (in place).
+
+    The sum of free space leaves such a disk out (Jellyfin cannot measure it, old numbers, a cloud without a
+    capacity), so the growth of its files must not shorten the forecast either: the known free space takes only
+    the growth of the files on the known disks. A disk without a curve (too little data) takes nothing away.
+    """
+    unknown = [str(row["disk"]) for row in db.query_all(
+        "SELECT disk, kind, free FROM library_disk_snapshot WHERE day = (SELECT MAX(day) FROM library_disk_snapshot)")
+        if row["kind"] in DISK_KINDS and row["free"] is None]
+    if not unknown or result.get("days_left") is None:
+        return
+    growths = [disk_growth(days, key) for key in unknown]
+    daily = result["daily"] - sum(growth["daily"] for growth in growths if growth.get("enough_data"))
+    result["days_left"] = int(result["free_space"] / daily) if result.get("free_space") and daily > 0 else None
+
+
+def space_forecast(days: Any = 90) -> dict[str, Any]:
+    """The library's forecast as the space alert watches it: the disk whose space runs out first.
+
+    library_growth() with "All" for the whole storage, and over it the forecast, the free space and (with more
+    disks) the name of the disk that fills first - a full disk is the trouble even with space elsewhere. Without
+    the disks' snapshots the library's own estimate holds. `first_out` carries runs_out_first() itself, so that
+    the alert need not ask again (a disk without a pace walks its files).
+    """
+    with disk_growth_memo():
+        result = library_growth(days)
+        if not result.get("enough_data"):
+            return result
+        first_out = runs_out_first(days, disk_growth)
+    result = _by_disk(result, first_out)
+    result["first_out"] = first_out
+    return result
 
 
 def _growth_base(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -350,7 +414,43 @@ def _segment_start(key: str) -> tuple[str, int] | None:
     return (str(segment[0]["day"]), int(segment[0]["library"] or 0)) if segment else None
 
 
+# The disks' curves computed within one page load or one check of the alerts (see disk_growth_memo):
+# {(first day, last day, disk): rows}. None = outside such a block, nothing is kept.
+_SERIES_MEMO: ContextVar[dict[tuple[str, str, str], list[dict[str, Any]]] | None] = \
+    ContextVar("disk_series_memo", default=None)
+
+
+@contextmanager
+def disk_growth_memo() -> Iterator[None]:
+    """Within the block every disk's curve is computed once per period - one page load, one alert check.
+
+    A disk whose snapshots give no pace yet gets its forecast from its file curve, and several places ask for it on
+    one page: the Disks card, the Library growth tile "Fills first", the chart of a chosen disk. The curve walks the
+    library's items, so it is kept for the block. A nested block shares the outer one's memory.
+    """
+    if _SERIES_MEMO.get() is not None:
+        yield
+        return
+    token = _SERIES_MEMO.set({})
+    try:
+        yield
+    finally:
+        _SERIES_MEMO.reset(token)
+
+
 def disk_growth_series(days: Any, key: str) -> list[dict[str, Any]]:
+    """Jellyfin's data on one disk day by day - see _disk_growth_series; kept within disk_growth_memo()."""
+    memo = _SERIES_MEMO.get()
+    if memo is None:
+        return _disk_growth_series(days, key)
+    memo_key = (*_period_days(days), str(key))
+    if memo_key not in memo:
+        memo[memo_key] = _disk_growth_series(days, key)
+    # A copy: the chart's caller adds its own fields to the rows.
+    return copy.deepcopy(memo[memo_key])
+
+
+def _disk_growth_series(days: Any, key: str) -> list[dict[str, Any]]:
     """Jellyfin's data on one disk day by day - the Library growth curve for a disk.
 
     Rows {"day", "size_bytes", "outside", "free", "backfilled"}. The measured days are `library` from the disk's
@@ -404,22 +504,24 @@ def disk_growth(days: Any, key: str, series: list[dict[str, Any]] | None = None)
     result["item_count"] = None
     result["free_space"] = last_snapshot["free"] if last_snapshot else None
     if last_snapshot:
-        _daily, result["days_left"] = _pace(str(last_snapshot["source"] or ""), last_snapshot["free"],
-                                               _segment(snapshot_series))
+        pace, result["days_left"] = _pace(str(last_snapshot["source"] or ""), last_snapshot["free"],
+                                          _segment(snapshot_series))
+        if pace is None:
+            # The snapshots give no pace yet (a single one in the segment): the curve's own growth.
+            result["days_left"] = files_forecast(result["free_space"], result)
     if result["free_space"] is None and result["daily"] > 0:
         result["per_year"] = int(result["size"] + result["daily"] * 365)
     return result
 
 
-def _by_disk(result: dict[str, Any], days: Any) -> dict[str, Any]:
-    """When Jellyscope knows the library's disks, the forecast of the disk that runs out first holds.
+def _by_disk(result: dict[str, Any], first_out: dict[str, Any] | None) -> dict[str, Any]:
+    """The forecast of the disk that runs out first (`first_out` = runs_out_first()) over the library's.
 
     For disks Jellyfin measures it counts with the drop of the real free space - i.e. with what someone else writes
-    to the disk too. Without the disks' snapshots (an old Jellyfin, the first days) the estimate from the library's
-    growth stays. When the disks are measured but none is filling, there is no forecast - as on the Disks card.
-    With more disks the name of the one in question is added too.
+    to the disk too. Without the disks' snapshots (an old Jellyfin) the estimate from the library's growth stays.
+    When the disks are measured but none is filling, there is no forecast - as on the Disks card. With more disks
+    the name of the one in question is added too.
     """
-    first_out = runs_out_first(days)
     if first_out is None:
         return result
     result["days_left"] = first_out["days_left"]

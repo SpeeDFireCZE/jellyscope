@@ -68,6 +68,9 @@ class App:
     downloading_template: str = ""                          # the template of that slice
     # The name of the app that really answers when it can differ from `name` (Readarr, Chaptarr or Bookshelf).
     detected_name: Callable[[], str] | None = None
+    # The slow counts of the live card (missing, cutoff; Bazarr's missing subtitles), counted by the *Arr sync task
+    # after the history - not by "Sync now" in Settings, which waits for its result (23. 11. 2026).
+    refresh_counts: Callable[[], Awaitable[None]] | None = None
 
     def shown_name(self) -> str:
         """The name people see - in the *Arr menu, on the tab and in Settings: the app that answers, else `name`
@@ -99,6 +102,7 @@ def _sonarr_app() -> App:
         save_settings=_later(sonarr, "save_settings"),
         check_connection=_later(sonarr, "check_connection"),
         synchronize=_later(sonarr, "synchronize"),
+        refresh_counts=_later(sonarr, "refresh_counts"),
         sync_running=_later(sonarr, "sync_running"),
         sync_state=_later(sonarr, "sync_state"),
         event_count=_later(sonarr, "event_count"),
@@ -124,6 +128,7 @@ def _radarr_app() -> App:
         save_settings=_later(radarr, "save_settings"),
         check_connection=_later(radarr, "check_connection"),
         synchronize=_later(radarr, "synchronize"),
+        refresh_counts=_later(radarr, "refresh_counts"),
         sync_running=_later(radarr, "sync_running"),
         sync_state=_later(radarr, "sync_state"),
         event_count=_later(radarr, "event_count"),
@@ -149,6 +154,7 @@ def _lidarr_app() -> App:
         save_settings=_later(lidarr, "save_settings"),
         check_connection=_later(lidarr, "check_connection"),
         synchronize=_later(lidarr, "synchronize"),
+        refresh_counts=_later(lidarr, "refresh_counts"),
         sync_running=_later(lidarr, "sync_running"),
         sync_state=_later(lidarr, "sync_state"),
         event_count=_later(lidarr, "event_count"),
@@ -174,6 +180,7 @@ def _readarr_app() -> App:
         save_settings=_later(readarr, "save_settings"),
         check_connection=_later(readarr, "check_connection"),
         synchronize=_later(readarr, "synchronize"),
+        refresh_counts=_later(readarr, "refresh_counts"),
         sync_running=_later(readarr, "sync_running"),
         sync_state=_later(readarr, "sync_state"),
         event_count=_later(readarr, "event_count"),
@@ -200,6 +207,7 @@ def _bazarr_app() -> App:
         save_settings=_later(bazarr, "save_settings"),
         check_connection=_later(bazarr, "check_connection"),
         synchronize=_later(bazarr, "synchronize"),
+        refresh_counts=_later(bazarr, "refresh_counts"),
         sync_running=_later(bazarr, "sync_running"),
         sync_state=_later(bazarr, "sync_state"),
         event_count=_later(bazarr, "event_count"),
@@ -279,4 +287,17 @@ async def synchronize_all() -> dict[str, dict[str, Any]]:
         except Exception as error:   # noqa: BLE001 - one app must not bring the others down
             log.warning("%s sync failed: %s", app.name, error)
             results[key] = {"error": str(error)}
+        else:
+            await _refresh_counts(app)
     return results
+
+
+async def _refresh_counts(app: App) -> None:
+    """The app's slow counts after its history. A failure is no failure of the sync: the counts wait for the next
+    run (a count that does not come keeps its last value anyway, services.count_wanted)."""
+    if app.refresh_counts is None:
+        return
+    try:
+        await app.refresh_counts()
+    except Exception as error:   # noqa: BLE001 - the history is in; the counts wait for the next run
+        log.warning("%s: the counts were not updated: %s", app.name, error)

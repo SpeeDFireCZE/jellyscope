@@ -16,9 +16,10 @@ from ..jellyfin import (
     extract_streams,
     extract_tech_from_item,
     extract_versions,
+    id_without_dashes,
     video_range_of,
 )
-from ..stats.kinds import is_video_library
+from ..stats.kinds import NOT_LIBRARY_TYPES, is_video_library
 from .copies import recount_copies_after_sync
 from .disk_snapshots import write_daily_snapshots
 from .disks import remember_folders
@@ -106,7 +107,7 @@ async def sync_library() -> dict[str, Any]:
                 # written only afterwards and is synchronous. When it does not work out (an older Jellyfin lacks the
                 # endpoint), it goes on - it is extra information, not a condition of the work.
                 try:
-                    answer = await client.storage()
+                    answer = _only_libraries(await client.storage())
                     remember_space_from_jellyfin(answer)
                     # The library folders with the disk's id - the Disks card tells from them which library lies on
                     # which disk.
@@ -217,6 +218,25 @@ async def _sync_users(client: JellyfinClient) -> int:
 EMPTY_ANSWER_COUNTS_AFTER = timedelta(hours=1)
 
 
+def _only_libraries(answer: Any) -> Any:
+    """Jellyfin's storage answer without the folders that are no library (Collections, Playlists).
+
+    /System/Info/Storage lists the libraries from the same place as /Library/VirtualFolders - the Collections
+    folder too (verified on 12.1.0: the same Id, its own DeviceId, the configuration folder). The library sync
+    stores no such folder (stats.kinds.NOT_LIBRARY_TYPES), so a storage library whose Id the `libraries` table
+    does not know is left out: it would become a disk and its free space would enter the sum. The Ids are
+    compared without dashes and case. A library without an Id, or no library stored at all, changes nothing.
+    """
+    if not isinstance(answer, dict) or not isinstance(answer.get("Libraries"), list):
+        return answer
+    known = {id_without_dashes(row["id"]) for row in db.query_all("SELECT id FROM libraries")}
+    if not known:
+        return answer
+    kept = [library for library in answer["Libraries"]
+            if not isinstance(library, dict) or not library.get("Id") or id_without_dashes(library["Id"]) in known]
+    return {**answer, "Libraries": kept}
+
+
 async def _sync_libraries(client: JellyfinClient) -> list[dict[str, Any]]:
     """Store every Jellyfin library; return the video ones, whose items the caller reads.
 
@@ -237,8 +257,13 @@ async def _sync_libraries(client: JellyfinClient) -> list[dict[str, Any]]:
     seen: list[str] = []
 
     with db.connect() as conn:
+        # Collections and playlists are no library (stats.kinds.NOT_LIBRARY_TYPES); 1.9.0 stored them.
+        marks = ",".join("?" * len(NOT_LIBRARY_TYPES))
+        conn.execute(f"DELETE FROM libraries WHERE collection_type IN ({marks})", NOT_LIBRARY_TYPES)
         for folder in folders:
             collection_type = folder.get("CollectionType")
+            if collection_type in NOT_LIBRARY_TYPES:
+                continue
             library = {
                 "id": folder.get("ItemId"),
                 "name": folder.get("Name") or "?",

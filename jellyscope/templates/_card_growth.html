@@ -85,6 +85,15 @@
                 {{ tile(_("In a year it grows to"), growth.per_year | bytes,
                         note=_("the application cannot see the free space")) }}
             {% endif %}
+            {% if growth.fills_first %}
+                {# With more disks "All" counts the whole storage; this tile names the disk whose space runs
+                   out first - a full disk takes no file, however much space is left elsewhere. #}
+                {{ tile(_("Fills first"),
+                        _n("{n} days", growth.fills_first.days_left),
+                        note=_("disk “{disk}”").format(disk=growth.fills_first.name)
+                             ~ ((', ' ~ _("free space") ~ ': ' ~ (growth.fills_first.free | bytes))
+                                if growth.fills_first.free is not none else '')) }}
+            {% endif %}
         </div>
     {% else %}
         <p class="card-note">

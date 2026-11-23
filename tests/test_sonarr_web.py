@@ -30,6 +30,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
@@ -47,8 +48,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from _apps import no_network, sonarr_client  # noqa: E402
 from _package import substitute  # noqa: E402
-from jellyscope import accounts, db, web  # noqa: E402
-from jellyscope.arr import sonarr  # noqa: E402
+from jellyscope import accounts, db, services, web  # noqa: E402
+from jellyscope.arr import registry, sonarr  # noqa: E402
+from jellyscope.arr.sonarr.client import SETTINGS_PREFIX  # noqa: E402
 
 RESPONSES = PROJECT / "tests" / "sonarr_responses"
 failures = 0
@@ -90,6 +92,17 @@ def recorded_sonarr(request: httpx.Request) -> httpx.Response:
     if path not in names:
         return httpx.Response(404)
     return httpx.Response(200, json=recorded(names[path]))
+
+
+def tile_note(html: str, label: str) -> tuple[str, str]:
+    """(the value, the note) of the tile with the label."""
+    found = re.search(rf'{re.escape(label)}</p>\s*<div class="tile-value">([^<]*)</div>\s*(?:<div class="delta flat">([^<]*)</div>)?',
+                      html)
+    return (found.group(1).strip(), (found.group(2) or "").strip()) if found else ("", "")
+
+
+def sonarr_counts() -> dict[str, Any]:
+    return services.stored_counts(SETTINGS_PREFIX, services.settings_fingerprint("http://sonarr.test", "opraveny-klic"))
 
 
 def not_answering(request: httpx.Request) -> httpx.Response:
@@ -218,7 +231,7 @@ restore = substitute(sonarr, "SonarrClient", sonarr_client(without_queue_and_cal
 sonarr.live.CACHE.clear()
 partial = asyncio.run(sonarr.live_state())
 check(partial["available"] is True and partial["queue"] is None and partial["calendar"] is None
-      and partial["missing"] is not None and bool(partial["error"]),
+      and partial["health"] is not None and bool(partial["error"]),
       "what did not load is None (unknown), not zero; the error is not thrown away")
 s = admin.get("/arr/sonarr?days=365").text
 tile = re.search(r'Ve frontě</p>\s*<div class="tile-value">([^<]+)</div>', s)
@@ -244,6 +257,60 @@ check("Aplikace neodpovídá" in s_reader and "Connection refused" not in s_read
 state = asyncio.run(sonarr.live_state())
 check(state["available"] is False and state["error"] and "tajny-klic" not in state["error"],
       f"live_state: unavailable, with an error without the key ({state['error']})")
+restore()
+
+print()
+print("--- G) the counts from the sync, live data with a short limit (23. 11. 2026) ---")
+# A big Sonarr did not count the cutoff within 20 s and every page load after a minute waited for it (21 s). The
+# sync counts missing and cutoff now, the page only reads them; the queue, calendar and health stay live, 3 s.
+limits: list[tuple[str, Any]] = []
+
+
+def recorded_with_limits(request: httpx.Request) -> httpx.Response:
+    limits.append((request.url.path.split("/api/v3/", 1)[-1], request.extensions.get("timeout", {}).get("read")))
+    return recorded_sonarr(request)
+
+
+restore = substitute(sonarr, "SonarrClient", sonarr_client(recorded_with_limits))
+asyncio.run(registry.synchronize_all())   # the *Arr sync task counts (with the key D set)
+sonarr.live.CACHE.clear()
+sonarr.progress._memory = None      # the Downloading card reads the queue again
+asked.clear()
+limits.clear()
+s = admin.get("/arr/sonarr?days=365").text
+check(not any(path.startswith("wanted/") for path in asked), f"the page asks the app for no count ({sorted(set(asked))})")
+check(limits and all(read == 3.0 for _path, read in limits),
+      f"every live request of the page (the queue, Downloading too) waits at most 3 s ({sorted(set(limits))})")
+check(tile_note(s, "Chybí")[0] == "73" and tile_note(s, "Nesplněný cutoff")[0] == "5"
+      and "spočítáno" in tile_note(s, "Chybí")[1], f"the counts from the sync, with their time ({tile_note(s, 'Chybí')})")
+counted_at = sonarr_counts()["cutoff_at"]
+restore()
+restore = substitute(sonarr, "SonarrClient", sonarr_client(not_answering))
+sonarr.live.CACHE.clear()
+s = admin.get("/arr/sonarr?days=365").text
+check("Aplikace neodpovídá" in s and tile_note(s, "Chybí")[0] == "73",
+      "the app does not answer: the stored counts stay visible with their time")
+
+
+def slow_cutoff(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/wanted/cutoff"):
+        raise httpx.ReadTimeout("Sonarr counts the cutoff for minutes", request=request)
+    return recorded_sonarr(request)
+
+
+restore()
+restore = substitute(sonarr, "SonarrClient", sonarr_client(slow_cutoff))
+asyncio.run(registry.synchronize_all())
+check(sonarr.sync_state()["result"] == "ok", "a count that does not come in time does not spoil the sync")
+check(sonarr_counts()["cutoff"] == 5 and sonarr_counts()["cutoff_at"] == counted_at,
+      "the cutoff stays the last known one with its time")
+restore()
+db.set_setting(f"{SETTINGS_PREFIX}_counts", "")
+sonarr.live.CACHE.clear()
+restore = substitute(sonarr, "SonarrClient", sonarr_client(recorded_sonarr))
+s = admin.get("/arr/sonarr?days=365").text
+check(tile_note(s, "Chybí") == ("–", "zatím nespočítáno") and "nepodařilo načíst" not in s,
+      f"before the first count: “zatím nespočítáno”, no warning about a part that did not load ({tile_note(s, 'Chybí')})")
 restore()
 
 print()

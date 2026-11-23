@@ -84,13 +84,12 @@ class BazarrClient(HttpClient):
         """
         return await self._page(HISTORY_PATHS[kind], HISTORY_FIELDS, start, length, timeout=DEFAULT_TIMEOUT)
 
-    async def missing(self, kind: str, length: int) -> dict[str, Any]:
+    async def missing(self, kind: str, length: int, timeout: httpx.Timeout | None = None) -> dict[str, Any]:
         """The first `length` episodes or movies without subtitles - only the languages they lack - and `total`.
 
-        Read for the live card a page waits for: with the client's short timeout, not the long one of
-        the history during a sync.
+        Read by the sync for the card of missing subtitles, with a long `timeout` (two big lists).
         """
-        return await self._page(MISSING_PATHS[kind], MISSING_FIELDS, 0, length)
+        return await self._page(MISSING_PATHS[kind], MISSING_FIELDS, 0, length, timeout=timeout)
 
     async def badges(self) -> dict[str, Any]:
         """The counts for Bazarr's header: `episodes` and `movies` (subtitles missing), `providers` (throttled), `status` (warnings)."""

@@ -445,7 +445,7 @@ def _collector_stalled() -> tuple[bool, str]:
 def _space_state() -> dict[str, Any]:
     """What the space watch knows: the forecast of the library's growth and the values of the message's variables.
 
-    Returns {"growth": library_growth(90), "threshold": days from the settings,
+    Returns {"growth": stats.space_forecast(90), "threshold": days from the settings,
     "values": {disk, days, free, per_day, threshold}} - the values already as
     text, as they are filled into an own wording (see SPACE_VARIABLES). The pace
     is the one the forecast comes from: for a disk Jellyfin reports space about,
@@ -453,8 +453,8 @@ def _space_state() -> dict[str, Any]:
     """
     from . import formatting, stats
 
-    growth = stats.library_growth(90)
-    first_out = stats.runs_out_first(90) or {}
+    growth = stats.space_forecast(90)
+    first_out = growth.get("first_out") or {}
     threshold = db.get_int_setting("notify_space_days", 1, 365, DEFAULT_SPACE_DAYS)
     days_left, free = growth.get("days_left"), growth.get("free_space")
     per_day = first_out["daily"] if first_out.get("days_left") is not None else growth.get("daily")

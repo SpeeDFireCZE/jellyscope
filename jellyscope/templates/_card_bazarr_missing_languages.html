@@ -1,7 +1,7 @@
 {# The Bazarr card "Missing subtitles by language": how many episodes and films wait for which language.
 
-   Live from Bazarr (cards_bazarr.py, `d.radky` with a ready label of the language;
-   None = it could not be loaded). Bazarr returns the missing ones by items, so
+   Counted by the *Arr sync (two big lists), shown with the time (cards_bazarr.py, `d.radky` with a ready label of
+   the language; None = not counted yet). Bazarr returns the missing ones by items, so
    the languages are counted from the first `d.nejvic` episodes and films; when more
    are missing (`d.neuplne`), the card says so - the columns are then only a part. #}
 <div class="card">
@@ -9,10 +9,8 @@
         <h2>{{ prefix }}{{ _(card.name) }}</h2>
         <p class="card-note">{{ _("episodes and movies together") }}</p>
     </div>
-    {% if not d.available %}
-        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
-    {% elif d.rows is none %}
-        <p class="chart-empty">{{ _("Missing subtitles could not be loaded from the app.") }}</p>
+    {% if d.rows is none %}
+        <p class="chart-empty">{{ _("Not counted yet - the *Arr sync counts the missing subtitles.") }}</p>
     {% elif d.rows %}
         {{ charts.hbar_chart(d.rows, 'label', 'count', unit='', labels_above=True) | safe }}
         {% if d.incomplete_list %}
@@ -22,5 +20,8 @@
         {% endif %}
     {% else %}
         <p class="chart-empty">{{ _("No subtitles are missing right now.") }}</p>
+    {% endif %}
+    {% if d.rows is not none %}
+        <p class="card-note" style="margin-top:8px">{{ _("counted {when}").format(when=d.counted_at | relative) }}</p>
     {% endif %}
 </div>

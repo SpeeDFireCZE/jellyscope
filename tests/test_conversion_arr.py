@@ -221,8 +221,9 @@ since = (datetime.strptime(MARK, db.TIME_FORMAT) - timedelta(hours=1)).strftime(
 for name, package in (("sonarr", sonarr), ("radarr", radarr)):
     asked.clear()
     asyncio.run(package.synchronize(transport=httpx.MockTransport(app_since)))
-    check(asked == [f"since {since}"], f"{name}: the next sync asks since the mark, not the whole history,"
-                                       f" and not for the title list ({asked})")
+    # Since 23. 11. 2026 the sync also counts missing and cutoff (services.count_wanted) - not the history.
+    check([a for a in asked if "/wanted/" not in a] == [f"since {since}"],
+          f"{name}: the next sync asks since the mark, not the whole history, and not for the title list ({asked})")
 check(db.query_value("SELECT COUNT(*) FROM sonarr_event") == 1 and db.query_value("SELECT COUNT(*) FROM radarr_event") == 1,
       "and doubles nothing")
 
