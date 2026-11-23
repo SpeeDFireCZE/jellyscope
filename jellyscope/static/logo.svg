@@ -2,23 +2,23 @@
      aria-label="Jellyscope">
     <title>Jellyscope</title>
     <!--
-        Zaměřovač se sloupcovým grafem uvnitř.
+        A sight with a bar chart inside.
 
-        Kroužek a čtyři rysky = "scope" z názvu: dívám se na jedno místo
-        a zvětšuji ho. Sloupce uvnitř říkají, co v tom hledáčku je - data.
+        The ring and four ticks = the "scope" of the name: I look at one place
+        and magnify it. The bars inside say what is in that viewfinder - data.
 
-        Přechod z fialové do modré je značkový přechod Jellyfinu
-        (#AA5CC3 -> #00A4DC). Logo se tím hlásí k tomu, čeho je nástavbou;
-        vlastní barvy grafů v aplikaci s ním schválně nesouvisí.
+        The gradient from purple to blue is Jellyfin's brand gradient
+        (#AA5CC3 -> #00A4DC). The logo thus claims what it builds on;
+        the app's own chart colours deliberately have nothing to do with it.
 
-        POZOR na tvar okraje. Zkoušel jsem variantu, kde je kroužek
-        přerušený a z konců oblouků vybíhají ramena ven. Vzniknou tím
-        čtyři háky s rotační symetrií kolem středu - a to je struktura
-        hákového kříže. Kroužek proto zůstává souvislý a rysky jsou
-        od něj oddělené: čtyři samostatné čárky nemají rotační smysl.
+        CAREFUL with the shape of the rim. I tried a variant where the ring is
+        broken and arms run outwards from the ends of the arcs. That makes
+        four hooks with rotational symmetry around the centre - and that is the
+        structure of a swastika. So the ring stays continuous and the ticks are
+        separate from it: four separate strokes have no rotational sense.
 
-        Kreslí se do čtverce 64x64 a je celé z kruhů, čar a obdélníků,
-        takže zůstane ostré v jakékoliv velikosti.
+        It is drawn into a 64x64 square and is made entirely of circles, lines and
+        rectangles, so it stays sharp at any size.
     -->
     <defs>
         <linearGradient id="js-brand" x1="8" y1="6" x2="56" y2="58"
@@ -29,13 +29,13 @@
     </defs>
 
     <g fill="none" stroke="url(#js-brand)" stroke-width="5" stroke-linecap="round">
-        <!-- souvislý kroužek hledáčku -->
+        <!-- the viewfinder's continuous ring -->
         <circle cx="32" cy="32" r="19"/>
-        <!-- čtyři oddělené rysky vně kroužku -->
+        <!-- four separate ticks outside the ring -->
         <path d="M32 2v6M32 56v6M2 32h6M56 32h6"/>
     </g>
 
-    <!-- sloupcový graf uvnitř: tři vzestupné sloupce na společné základně -->
+    <!-- a bar chart inside: three rising bars on a common base -->
     <g fill="url(#js-brand)">
         <rect x="22.5" y="32" width="5" height="10" rx="2.5"/>
         <rect x="29.5" y="26" width="5" height="16" rx="2.5"/>

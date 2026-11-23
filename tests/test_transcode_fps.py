@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-r"""Rychlost převodu (fps) v bublině u značky transcode.
+r"""The transcode speed (fps) in the bubble by the transcode mark.
 
-Jellyfin posílá v `TranscodingInfo.Framerate`, kolik snímků za vteřinu
-převod zvládá. Samo číslo nic neříká - 30 fps u filmu (24) stačí, u
-sportu (50) ne - proto se ukládá i snímkování videa a bublina řekne,
-když převod nestíhá.
+Jellyfin sends in `TranscodingInfo.Framerate` how many frames per second
+the transcode manages. The number by itself says nothing - 30 fps is enough for a movie (24), for
+sport (50) not - that is why the video's frame rate is stored too and the bubble says
+when the transcode cannot keep up.
 
-U běžícího přehrávání platí stav teď, u historie průměr za celé
-přehrávání. Pauza se do průměru nepočítá: ffmpeg při ní stojí a průměr
-by tvrdil, že server nestíhal.
+For a running play the state now holds, for the history the average over the whole
+play. A pause does not count into the average: ffmpeg stands still during it and the average
+would claim the server could not keep up.
 
-Bublina je na čtyřech místech: Právě se hraje, Historie, detail titulu
-a detail knihovny.
+The bubble is in four places: Now playing, History, the title's detail
+and the library's detail.
 
-Spuštění:
-    .\.venv\Scripts\python.exe tests\test_transcode_fps.py
+Run:
+    .venv/bin/python tests/test_transcode_fps.py
 """
 from __future__ import annotations
 
@@ -43,28 +43,29 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
 db.init_db()
-accounts.create("spravce", "dlouheheslo", is_admin=True)
+db.set_setting("ui_language", "cs")  # the checks read Czech (English is the default)
+accounts.create("admin", "longpassword", is_admin=True)
 with db.connect() as conn:
     conn.execute("INSERT INTO libraries (id, name, collection_type) VALUES ('lib', 'Filmy', 'movies')")
     conn.execute("INSERT INTO items (id, name, type, library_id, video_codec, audio_codec, is_missing)"
                  " VALUES ('film', 'Duna', 'Movie', 'lib', 'hevc', 'eac3', 0)")
     conn.commit()
 
-print("--- čtení čísla ---")
-check(collector._fps(23.976) == 24, "23,976 je 24")
-check(collector._fps("96.4") == 96, "text z JSONu se přečte")
-for nesmysl in (None, 0, "", "abc", -5, 99999):
-    check(collector._fps(nesmysl) is None, f"{nesmysl!r} -> nic")
+print("--- reading the number ---")
+check(collector._fps(23.976) == 24, "23,976 is 24")
+check(collector._fps("96.4") == 96, "text from JSON is read")
+for nonsense in (None, 0, "", "abc", -5, 99999):
+    check(collector._fps(nonsense) is None, f"{nonsense!r} -> nothing")
 
 
-def relace(fps, pauza=False, prevod=True):
-    """Relace tak, jak ji posílá Jellyfin."""
+def session(fps, paused=False, transcoding=True):
+    """A session the way Jellyfin sends it."""
     item = {"Id": "film", "Name": "Duna", "Type": "Movie", "RunTimeTicks": 90_000_000_000,
             "MediaStreams": [{"Type": "Video", "Codec": "hevc", "Width": 3840,
                               "Height": 2160, "RealFrameRate": 23.976},
@@ -72,9 +73,9 @@ def relace(fps, pauza=False, prevod=True):
     s = {"Id": "s1", "UserId": "u1", "UserName": "Jana", "DeviceId": "d1",
          "Client": "Jellyfin Web", "DeviceName": "Chrome",
          "NowPlayingItem": item,
-         "PlayState": {"PlayMethod": "Transcode" if prevod else "DirectPlay",
-                       "IsPaused": pauza, "PositionTicks": 600_000_000}}
-    if prevod:
+         "PlayState": {"PlayMethod": "Transcode" if transcoding else "DirectPlay",
+                       "IsPaused": paused, "PositionTicks": 600_000_000}}
+    if transcoding:
         s["TranscodingInfo"] = {"VideoCodec": "h264", "AudioCodec": "aac",
                                 "IsVideoDirect": False, "IsAudioDirect": False,
                                 "HardwareAccelerationType": "qsv",
@@ -83,95 +84,95 @@ def relace(fps, pauza=False, prevod=True):
     return s
 
 
-def radek():
+def row():
     return dict(db.query_one("SELECT * FROM playback WHERE item_id = 'film'"))
 
 
 print()
-print("--- sběrač ---")
-collector._store_sessions([relace(96.3)], 30)
-r = radek()
+print("--- the collector ---")
+collector._store_sessions([session(96.3)], 30)
+r = row()
 check(r["transcode_fps"] == 96 and r["video_fps"] == 24,
-      f"první snímek: převod 96, video 24 ({r['transcode_fps']}, {r['video_fps']})")
-check(r["transcode_fps_soucet"] == 96 and r["transcode_fps_vzorku"] == 1, "a je to první vzorek")
+      f"the first snapshot: transcode 96, video 24 ({r['transcode_fps']}, {r['video_fps']})")
+check(r["transcode_fps_sum"] == 96 and r["transcode_fps_samples"] == 1, "and it is the first sample")
 
-collector._store_sessions([relace(120)], 30)
-r = radek()
-check(r["transcode_fps"] == 120 and r["transcode_fps_vzorku"] == 2
-      and r["transcode_fps_soucet"] == 216, "druhý vzorek se přičte")
+collector._store_sessions([session(120)], 30)
+r = row()
+check(r["transcode_fps"] == 120 and r["transcode_fps_samples"] == 2
+      and r["transcode_fps_sum"] == 216, "the second sample is added")
 
-collector._store_sessions([relace(3, pauza=True)], 30)
-r = radek()
-check(r["transcode_fps_vzorku"] == 2 and r["transcode_fps"] is None,
-      "pauza se nepočítá a stav teď zmizí - ffmpeg stojí, to není nestíhání")
-
-print()
-print("--- bublina u běžícího ---")
-zive = stats.active_sessions()[0]
-fakt = next((f for f in zive["prepocet"] if f.get("fps")), None)
-check(fakt is not None and fakt["fps"] == 108 and fakt["prumer"],
-      f"během pauzy ukáže průměr ({fakt})")
-collector._store_sessions([relace(18)], 30)
-zive = stats.active_sessions()[0]
-fakt = next(f for f in zive["prepocet"] if f.get("fps"))
-check(fakt["fps"] == 18 and not fakt["prumer"] and fakt["nestiha"],
-      "teď 18 při 24 fps videa: nestíhá")
-poradi = [f["co"] for f in zive["prepocet"]]
-check(poradi.index("Snímky") == poradi.index("Zvuk") + 1
-      and poradi.index("Snímky") < poradi.index("Hardware"),
-      f"pod Zvukem, nad Hardwarem ({poradi})")
-
-klient = TestClient(web.app)
-klient.post("/login", data={"username": "spravce", "password": "dlouheheslo",
-                            "zpusob": "mistni"})
-prave = klient.get("/partials/now-playing").text
-check("Převod: 18 fps (video má 24) – nestíhá" in prave,
-      "karta Právě se hraje to říká v bublině")
+collector._store_sessions([session(3, paused=True)], 30)
+r = row()
+check(r["transcode_fps_samples"] == 2 and r["transcode_fps"] is None,
+      "a pause does not count and the state now disappears - ffmpeg stands still, that is not falling behind")
 
 print()
-print("--- historie: průměr ---")
-collector._store_sessions([], 30)          # relace skončila
-# Test běží ve vteřinách, takže se nic „neodsledovalo" - a stránky
-# ukazují jen přehrávání, která nějaký čas mají.
+print("--- the bubble by a running one ---")
+live = stats.active_sessions()[0]
+fact = next((f for f in live["recount"] if f.get("fps")), None)
+check(fact is not None and fact["fps"] == 108 and fact["average"],
+      f"during a pause it shows the average ({fact})")
+collector._store_sessions([session(18)], 30)
+live = stats.active_sessions()[0]
+fact = next(f for f in live["recount"] if f.get("fps"))
+check(fact["fps"] == 18 and not fact["average"] and fact["too_slow"],
+      "now 18 at 24 fps of video: it cannot keep up")
+order = [f["what"] for f in live["recount"]]
+check(order.index("Frames") == order.index("Audio") + 1
+      and order.index("Frames") < order.index("Hardware"),
+      f"under Audio, above Hardware ({order})")
+
+client = TestClient(web.app)
+client.post("/login", data={"username": "admin", "password": "longpassword",
+                            "method": "local"})
+now_playing = client.get("/partials/now-playing").text
+check("Převod: 18 fps (video má 24) – nestíhá" in now_playing,
+      "the Now playing card says so in the bubble")
+
+print()
+print("--- the history: the average ---")
+collector._store_sessions([], 30)          # the session ended
+# The test runs in seconds, so nothing was "watched" - and the pages
+# show only plays that have some time.
 with db.connect() as conn:
     conn.execute("UPDATE playback SET watched_seconds = 3600 WHERE item_id = 'film'")
     conn.commit()
-r = radek()
-check(r["is_active"] == 0, "přehrávání je uzavřené")
-ulozene = stats.rychlost_prevodu(r)
-check(ulozene["fps"] == 78 and ulozene["prumer"] and not ulozene["nestiha"],
-      f"v historii průměr (96+120+18)/3 = 78 ({ulozene})")
-for adresa, kde in (("/history", "Historie"), ("/item/film", "detail titulu"),
-                    ("/library/lib?tab=activity", "detail knihovny")):
-    html = klient.get(adresa).text
-    check("Převod: v průměru 78 fps (video má 24)" in html, f"{kde} ukazuje průměr")
+r = row()
+check(r["is_active"] == 0, "the play is closed")
+stored = stats.transcode_speed(r)
+check(stored["fps"] == 78 and stored["average"] and not stored["too_slow"],
+      f"in the history the average (96+120+18)/3 = 78 ({stored})")
+for address, where in (("/history", "History"), ("/item/film", "the title's detail"),
+                       ("/library/lib?tab=activity", "the library's detail")):
+    html = client.get(address).text
+    check("Převod: v průměru 78 fps (video má 24)" in html, f"{where} shows the average")
 
 print()
-print("--- převod jen zvuku: obraz se kopíruje, rychlost se nezapisuje ---")
-s_kopii = relace(640)
-s_kopii["Id"] = "s2"
-s_kopii["DeviceId"] = "d2"
-# Jiny divak: u tehoz diváka a filmu by sberac spravne navazal na
-# predchozi prehravani (pokracovani po pauze) a novy radek by nevznikl.
-s_kopii["UserId"] = "u2"
-s_kopii["TranscodingInfo"]["IsVideoDirect"] = True
-s_kopii["TranscodingInfo"]["TranscodeReasons"] = ["AudioCodecNotSupported"]
-collector._store_sessions([s_kopii], 30)
-kopie = dict(db.query_one("SELECT * FROM playback WHERE device_id = 'd2'"))
-check(kopie["transcode_fps"] is None and kopie["transcode_fps_vzorku"] == 0,
-      "640 fps kopírování obrazu se nezapsalo jako rychlost převodu")
-check(stats.rychlost_prevodu({**kopie, "transcode_fps_soucet": 640,
-                              "transcode_fps_vzorku": 1}) is None,
-      "a bublina ho neukáže ani u dat uložených dřív")
+print("--- a transcode of the audio only: the video is copied, the speed is not written ---")
+copying = session(640)
+copying["Id"] = "s2"
+copying["DeviceId"] = "d2"
+# Another viewer: for the same viewer and movie the collector would rightly continue
+# the previous play (continuing after a pause) and no new row would be created.
+copying["UserId"] = "u2"
+copying["TranscodingInfo"]["IsVideoDirect"] = True
+copying["TranscodingInfo"]["TranscodeReasons"] = ["AudioCodecNotSupported"]
+collector._store_sessions([copying], 30)
+copy_row = dict(db.query_one("SELECT * FROM playback WHERE device_id = 'd2'"))
+check(copy_row["transcode_fps"] is None and copy_row["transcode_fps_samples"] == 0,
+      "640 fps of copying the video was not written as the transcode speed")
+check(stats.transcode_speed({**copy_row, "transcode_fps_sum": 640,
+                             "transcode_fps_samples": 1}) is None,
+      "and the bubble does not show it even for data stored before")
 collector._store_sessions([], 30)
 
 print()
-print("--- bez převodu obrazu nic ---")
-check(stats.rychlost_prevodu({"is_active": 0, "transcode_fps_vzorku": 0}) is None,
-      "bez vzorků žádný řádek")
-check(stats.rychlost_prevodu({"is_active": 1, "transcode_fps": 30, "video_fps": None})["nestiha"] is False,
-      "bez snímkování videa se nestíhání netvrdí")
+print("--- without a video transcode nothing ---")
+check(stats.transcode_speed({"is_active": 0, "transcode_fps_samples": 0}) is None,
+      "without samples no row")
+check(stats.transcode_speed({"is_active": 1, "transcode_fps": 30, "video_fps": None})["too_slow"] is False,
+      "without the video's frame rate falling behind is not claimed")
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

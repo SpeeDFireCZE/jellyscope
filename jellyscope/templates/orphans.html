@@ -1,79 +1,77 @@
 {% extends "base.html" %}
-{% block title %}{{ _("Nezařazené záznamy") }} &middot; Jellyscope{% endblock %}
+{% block title %}{{ _("Unplaced records") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
-{# Seznam se nikam neukládá - počítá se při každém otevření znovu.
-   Uložený by ukazoval stav po posledním úklidu, tedy něco, co už
-   nemusí platit: mezitím mohla proběhnout synchronizace nebo import. #}
+{# The list is not stored anywhere - it is computed again at every opening.
+   A stored one would show the state after the last cleanup, that is something that
+   may no longer hold: a sync or an import may have run meanwhile. #}
 <div class="page-head">
     <div>
         <p class="subtitle" style="margin-bottom:2px">
-            <a href="/settings?section=import">&larr; {{ _("Import historie") }}</a>
+            <a href="/settings?section=import">&larr; {{ _("History import") }}</a>
         </p>
-        <h1>{{ _("Nezařazené záznamy") }}</h1>
+        <h1>{{ _("Unplaced records") }}</h1>
         <p class="subtitle">
-            {{ _("historie, ke které se nepodařilo najít titul v knihovně") }}
+            {{ _("history with no matching title in the library") }}
         </p>
     </div>
-    {# Totéž tlačítko jako v Nastavení - kdo se dostal až sem, chce to
-       zkusit znovu, aniž by se vracel o stránku zpátky. #}
+    {# The same button as in Settings - whoever got this far wants to
+       try again without going a page back. #}
     <form method="post" action="/settings/history/tidy">
         <button class="btn" type="submit" {{ 'disabled' if not orphans }}>
-            {{ _("Narovnat data") }}
+            {{ _("Tidy the data") }}
         </button>
     </form>
 </div>
 
 {% if not orphans %}
 <div class="card">
-    <p class="chart-empty">{{ _("Všechno je zařazené. To je vzácné, gratuluji.") }}</p>
+    <p class="chart-empty">{{ _("Everything is placed, which is rare. Congratulations.") }}</p>
 </div>
 {% else %}
 
-{# Vybraný titul: napřed se hledá, pak se klikne na cíl. Dva kroky
-   schválně - přiřadit historii k cizímu titulu jde těžko vzít zpět. #}
-{% if vybrany %}
+{# The chosen title: first search, then click the target. Two steps
+   on purpose - assigning history to a foreign title is hard to take back. #}
+{% if chosen %}
 <div class="card" style="margin-bottom:18px; border-color: var(--series-1)">
     <div class="card-head">
-        <h2>{{ _("Ruční přiřazení") }}</h2>
+        <h2>{{ _("Manual assignment") }}</h2>
         <p class="card-note">
-            {{ vybrany.radku | number }}
-            {{ _("záznam") if vybrany.radku == 1
-               else (_("záznamy") if vybrany.radku < 5 else _("záznamů")) }}
+            {{ _n("{n} records", chosen.row_count) }}
         </p>
     </div>
     <p style="margin:0 0 12px">
-        <span class="strong">{{ vybrany.item_name }}</span>
-        {% if vybrany.series_name %}<span class="muted">&middot; {{ vybrany.series_name }}</span>{% endif %}
+        <span class="strong">{{ chosen.item_name }}</span>
+        {% if chosen.series_name %}<span class="muted">&middot; {{ chosen.series_name }}</span>{% endif %}
         <br>
         <span class="card-note">
-            {{ _("naposledy") }} {{ vybrany.do | relative }} &middot;
-            <code style="font-size:12px">{{ vybrany.item_id }}</code>
+            {{ _("last time") }} {{ chosen.until | relative }} &middot;
+            <code style="font-size:12px">{{ chosen.item_id }}</code>
         </span>
     </p>
 
     <form method="get" action="/settings/history/orphans" class="btn-row">
-        <input type="hidden" name="priradit" value="{{ vybrany.item_id }}">
-        <input type="search" name="q" value="{{ hledat }}" style="max-width:360px"
-               placeholder="{{ _('Název titulu nebo seriálu…') }}" autofocus>
-        <button class="btn primary" type="submit">{{ _("Hledat v knihovně") }}</button>
-        <a class="btn" href="/settings/history/orphans">{{ _("Zrušit") }}</a>
+        <input type="hidden" name="assign" value="{{ chosen.item_id }}">
+        <input type="search" name="q" value="{{ search_text }}" style="max-width:360px"
+               placeholder="{{ _('Title or series name...') }}" autofocus>
+        <button class="btn primary" type="submit">{{ _("Search the library") }}</button>
+        <a class="btn" href="/settings/history/orphans">{{ _("Cancel") }}</a>
     </form>
 
-    {% if hledat and not kandidati %}
+    {% if search_text and not candidates %}
         <p class="card-note" style="margin-top:12px">
-            {{ _("Nic takového v knihovně není. Zkus kratší text nebo název seriálu.") }}
+            {{ _("Nothing like that is in the library. Try a shorter text or the series name.") }}
         </p>
-    {% elif kandidati %}
+    {% elif candidates %}
     <div class="table-wrap" style="margin-top:14px">
         <table>
             <thead>
             <tr>
-                <th>{{ _("Titul") }}</th><th>{{ _("Knihovna") }}</th><th></th>
+                <th>{{ _("Title") }}</th><th>{{ _("Library") }}</th><th></th>
             </tr>
             </thead>
             <tbody>
-            {% for item in kandidati %}
+            {% for item in candidates %}
             <tr>
                 <td>
                     <div class="strong">
@@ -81,21 +79,21 @@
                         {{ item.name }}
                     </div>
                     <div class="card-note">
-                        {% if item | kod_dilu %}
-                            {{ item | kod_dilu }} &middot;
+                        {% if item | episode_code %}
+                            {{ item | episode_code }} &middot;
                         {% endif %}
                         {% if item.production_year %}{{ item.production_year }} &middot; {% endif %}
                         {{ item.type }}
-                        {% if item.is_missing %}&middot; {{ _("v archivu") }}{% endif %}
+                        {% if item.is_missing %}&middot; {{ _("archived") }}{% endif %}
                     </div>
                 </td>
                 <td class="muted nowrap">{{ item.library_name or '–' }}</td>
                 <td class="num nowrap">
                     <form method="post" action="/settings/history/assign"
-                          data-potvrdit="{{ _("Přiřadit tyhle záznamy k vybranému titulu?") }}">
-                        <input type="hidden" name="item_id" value="{{ vybrany.item_id }}">
+                          data-confirm="{{ _("Assign these records to the selected title?") }}">
+                        <input type="hidden" name="item_id" value="{{ chosen.item_id }}">
                         <input type="hidden" name="target_id" value="{{ item.id }}">
-                        <button class="btn primary" type="submit">{{ _("Přiřadit sem") }}</button>
+                        <button class="btn primary" type="submit">{{ _("Assign here") }}</button>
                     </form>
                 </td>
             </tr>
@@ -107,58 +105,56 @@
 </div>
 {% endif %}
 
-{# Po skupinách podle důvodu. Nahoře to, s čím se dá něco dělat. #}
-{% for klic, popis in duvody.items() %}
-{% set skupina = orphans | selectattr('duvod', 'equalto', klic) | list %}
-{% if skupina %}
+{# By groups by reason. At the top what can be acted on. #}
+{% for key_name, description in reason_labels.items() %}
+{% set reason_group = orphans | selectattr('reason', 'equalto', key_name) | list %}
+{% if reason_group %}
 <div class="card" style="margin-bottom:18px">
     <div class="card-head">
         <h2>
-            {{ _(popis.nadpis) }}
-            {% if not popis.resitelne %}
-                <span class="badge neutral"><span class="dot"></span>{{ _("nemá řešení") }}</span>
+            {{ _(description.heading) }}
+            {% if not description.solvable %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("no way around it") }}</span>
             {% endif %}
         </h2>
-        {# Čeština chce tři tvary: 1 titul, 2-4 tituly, 5+ titulů.
-           Bez toho stránka hlásí "1 titulů", což bije do očí. #}
-        {% set titulu = skupina | length %}
-        {% set zaznamu = skupina | sum(attribute='radku') %}
+        {# Czech wants three forms: `1 titul`, `2-4 tituly`, `5+ titulů`.
+           Without that the page says "1 titulů", which hurts the eyes. #}
+        {% set title_count = reason_group | length %}
+        {% set record_count = reason_group | sum(attribute='row_count') %}
         <p class="card-note">
-            {{ titulu }}
-            {{ _("titul") if titulu == 1 else (_("tituly") if titulu < 5 else _("titulů")) }}
+            {{ _n("{n} titles", title_count) }}
             &middot;
-            {{ zaznamu | number }}
-            {{ _("záznam") if zaznamu == 1 else (_("záznamy") if zaznamu < 5 else _("záznamů")) }}
+            {{ _n("{n} records", record_count) }}
         </p>
     </div>
-    <p class="card-note" style="margin-bottom:12px">{{ _(popis.popis) }}</p>
+    <p class="card-note" style="margin-bottom:12px">{{ _(description.description) }}</p>
 
     <div class="table-wrap">
         <table>
             <thead>
             <tr>
-                <th>{{ _("Název ze záznamu") }}</th>
-                <th>{{ _("Seriál") }}</th>
-                <th class="num">{{ _("Záznamů") }}</th>
-                <th>{{ _("Naposledy") }}</th>
+                <th>{{ _("Name from the record") }}</th>
+                <th>{{ _("Series") }}</th>
+                <th class="num">{{ _("Records") }}</th>
+                <th>{{ _("Last seen") }}</th>
                 <th></th>
             </tr>
             </thead>
             <tbody>
-            {% for radek in skupina %}
+            {% for line in reason_group %}
             <tr>
                 <td>
-                    <div class="strong">{{ radek.item_name }}</div>
-                    <div class="card-note"><code style="font-size:12px">{{ radek.item_id }}</code></div>
+                    <div class="strong">{{ line.item_name }}</div>
+                    <div class="card-note"><code style="font-size:12px">{{ line.item_id }}</code></div>
                 </td>
                 <td class="muted">
-                    {{ radek.series_name or radek.serial_z_nazvu or '–' }}
+                    {{ line.series_name or line.series_from_name or '–' }}
                 </td>
-                <td class="num strong">{{ radek.radku | number }}</td>
-                <td class="muted nowrap">{{ radek.do | relative }}</td>
+                <td class="num strong">{{ line.row_count | number }}</td>
+                <td class="muted nowrap">{{ line.until | relative }}</td>
                 <td class="num nowrap">
-                    <a class="btn" href="/settings/history/orphans?priradit={{ radek.item_id }}&amp;q={{ (radek.series_name or radek.serial_z_nazvu or radek.item_name) | urlencode }}">
-                        {{ _("Přiřadit ručně") }}
+                    <a class="btn" href="/settings/history/orphans?assign={{ line.item_id }}&amp;q={{ (line.series_name or line.series_from_name or line.item_name) | urlencode }}">
+                        {{ _("Assign manually") }}
                     </a>
                 </td>
             </tr>

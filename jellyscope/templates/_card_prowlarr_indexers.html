@@ -1,0 +1,47 @@
+{# The Prowlarr card "Indexer performance": queries, failures, response and search success by indexer.
+
+   From the database (cards_prowlarr.py, `d.radky`; shares and the response are ready
+   text, "–" = nothing to compute from). "Selhalo" is the share of queries (from the
+   column beside) an indexer answered with an error; failed sign-ins to an indexer
+   are not queries and stand under the name, only when there were some.
+   "Něco našlo" is the share of searches with at least
+   one release of all the indexer answered. An indexer that is
+   no longer in Prowlarr has "removed" at its name. A long table as on Insights: the first rows in the card, the whole one in the window.
+
+   The table follows the card's width, not the window's (wrapper-by-width, see style.css):
+   on a narrow card "Něco našlo" and "Grabbed" hide and the same numbers are under
+   the name. The window with the whole table has all the columns. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("failures are queries the indexer answered with an error") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Indexer") }}</th>
+            <th class="num">{{ _("Queries#count") }}</th>
+            <th class="num">{{ _("Failed") }}</th>
+            <th class="num">{{ _("Average response") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Searches with results") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Grabbed") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong break-anywhere">{{ r.name }}{% if r.removed %} <span class="muted">{{ _("removed") }}</span>{% endif %}
+                    {% if r.login_failed %}<div class="cell-sub">{{ _("failed logins: {n}×").format(n=r.login_failed | number) }}</div>{% endif %}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Searches with results") }} {{ r.found_share }} &middot; {{ _("Grabbed") }} {{ r.grabs | number }}</div></td>
+                <td class="num">{{ r.query_count | number }}</td>
+                <td class="num">{{ r.failure_share }}</td>
+                <td class="num">{{ r.response }}</td>
+                <td class="num wide-wrapper-only">{{ r.found_share }}</td>
+                <td class="num wide-wrapper-only">{{ r.grabs | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

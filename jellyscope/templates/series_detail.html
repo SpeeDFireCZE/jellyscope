@@ -10,20 +10,20 @@
             {% if library %}
                 <a href="/library/{{ library.id }}?tab=media">{{ library.name }}</a> &middot;
             {% endif %}
-            {{ series.episode_count }} {{ _("dílů") }}
+            {{ _n("{n} episodes", series.episode_count) }}
             {% if series.season_count > 1 %}
-                {{ _("v {n} řadách").format(n=series.season_count) }}
+                {{ _n("in {n} seasons", series.season_count) }}
             {% endif %}
         </p>
     </div>
-    {# Obnova metadat celého seriálu. U jednotlivého dílu je totéž
-       tlačítko - jenže když se v Jellyfinu opraví špatně určený seriál,
-       změní se všechny díly naráz a klikat je po jednom nemá smysl.
-       Zahodí se přitom i jejich obrázky, takže se opravený plakát
-       objeví hned. #}
+    {# Refreshing the metadata of the whole series. A single episode has the same
+       button - but when a wrongly identified series is fixed in Jellyfin,
+       all episodes change at once and clicking them one by one makes no sense.
+       Their images are dropped too, so the fixed poster
+       appears at once. #}
     {% if account.is_admin %}
     <form method="post" action="/series/{{ series.id }}/refresh">
-        <button class="btn" type="submit">{{ _("Načíst metadata znovu") }}</button>
+        <button class="btn" type="submit">{{ _("Reload metadata") }}</button>
     </form>
     {% endif %}
 </div>
@@ -31,30 +31,30 @@
 {% if series.missing %}
 <div class="flash warning">
     <span class="dot"></span>
-    <span>{{ _("Tenhle seriál už v Jellyfinu není. Jellyscope ho nemaže, protože na něj odkazuje historie přehrávání.") }}</span>
+    <span>{{ _("This series is no longer in Jellyfin. Jellyscope does not delete it, because playback history points to it.") }}</span>
 </div>
 {% endif %}
 
-{# Archivované díly se do počtu výše nepočítají. Právě rozdíl mezi
-   „kolik jich je v Jellyfinu" a „kolik jich vidím tady" jinak nejde
-   vysvětlit - a vypadá to jako chyba v součtu. #}
+{# Archived episodes do not count into the number above. The difference between
+   "how many are in Jellyfin" and "how many I see here" cannot be
+   explained otherwise - and it looks like a mistake in the sum. #}
 {% if series.archived_count %}
 <div class="flash info">
     <span class="dot"></span>
     <span>
-        {{ _("V archivu je navíc") }} {{ series.archived_count | number }}
-        {{ _("dílů, které už v Jellyfinu nejsou") }} –
-        {{ _("do počtu nahoře se nepočítají. Historie přehrávání u nich zůstává.") }}
+        {{ _("The archive holds an extra") }} {{ series.archived_count | number }}
+        {{ _("episodes that are no longer in Jellyfin") }} –
+        {{ _("they are not included in the count above. Their playback history is kept.") }}
         <details style="margin-top:6px">
-            <summary style="cursor:pointer">{{ _("Zobrazit je") }}</summary>
+            <summary style="cursor:pointer">{{ _("Show them") }}</summary>
             <ul style="margin:8px 0 0 18px">
-                {% for dil in series.archived %}
+                {% for ep in series.archived %}
                 <li>
-                    <a href="/item/{{ dil.id }}">
-                        {%- if dil | kod_dilu -%}
-                            {{ dil | kod_dilu }} &middot;
+                    <a href="/item/{{ ep.id }}">
+                        {%- if ep | episode_code -%}
+                            {{ ep | episode_code }} &middot;
                         {% endif %}
-                        {{ dil.name }}
+                        {{ ep.name }}
                     </a>
                 </li>
                 {% endfor %}
@@ -65,47 +65,47 @@
 {% endif %}
 
 <div class="kpi-row">
-    {{ tile(_("Dílů"), series.episode_count | number) }}
-    {{ tile(_("Řad"), series.season_count | number) }}
-    {# Kolik hodin je to celé dohromady - typická otázka před tím, než se
-       do seriálu člověk pustí. Sčítají se jen živé díly, archiv ne. #}
-    {{ tile(_("Délka celkem"), series.runtime_ticks | ticks | seconds) }}
-    {{ tile(_("Velikost"), series.size_bytes | bytes) }}
-    {{ tile(_("Spuštění"), series.plays | number) }}
+    {{ tile(_("Episodes"), series.episode_count | number) }}
+    {{ tile(_("Seasons"), series.season_count | number) }}
+    {# How many hours it is altogether - a typical question before
+       starting a series. Only live episodes are summed, not the archive. #}
+    {{ tile(_("Total length"), series.runtime_ticks | ticks | seconds) }}
+    {{ tile(_("Size"), series.size_bytes | bytes) }}
+    {{ tile(_("Plays#starts"), series.plays | number) }}
 </div>
 
-{# Souhrn o seriálu - totéž, co u filmu ukazuje karta „Soubor". Seriál
-   žádný jeden soubor nemá, takže se místo cesty k souboru ukazuje
-   složka, ve které jeho díly leží.
+{# A summary of the series - the same as the card "File" shows for a film. A series
+   has no single file, so instead of the path to the file it shows
+   the folder its episodes lie in.
 
-   Plakát vedle: bere se přes /image/<id serialu>, tedy stejnou cestou
-   jako u filmu. Položku pro samotný seriál si Jellyscope nevede (nemá
-   soubor), ale Jellyfin obrázek pod tím id zná - a proxy se ptá jeho.
-   Když ho nemá, `onerror` celý sloupec schová, takže po něm nezůstane
-   šedivé místo. #}
+   The poster beside it: taken through /image/<series id>, that is the same way
+   as for a film. Jellyscope keeps no item for the series itself (it has no
+   file), but Jellyfin knows an image under that id - and the proxy asks it.
+   When it has none, `onerror` hides the whole column, so no grey
+   place is left behind. #}
 <div class="item-layout" style="margin-bottom:18px">
-    {# Obal navíc není nadbytečný: když Jellyfin plakát nemá, `onerror`
-       schová .item-poster - a bez obalu by karta spadla do úzkého
-       sloupce pro plakát. Takhle sloupec zůstane a karta sedí vedle. #}
+    {# The extra wrapper is not superfluous: when Jellyfin has no poster, `onerror`
+       hides .item-poster - and without the wrapper the card would fall into the narrow
+       column for the poster. This way the column stays and the card sits beside it. #}
     <div>
         <div class="item-poster {{ 'is-archived' if series.missing }}">
             <img src="/image/{{ series.id }}?kind=Primary&w=400{{ '&tag=' ~ series.image_tag if series.image_tag }}" alt="" loading="lazy"
-                 data-pri-chybe="skryt-rodice">
+                 data-on-error="hide-parent">
             {% if series.missing %}
-                <span class="media-archived">{{ _("Archivováno") }}</span>
+                <span class="media-archived">{{ _("Archived") }}</span>
             {% endif %}
         </div>
     </div>
 
 <div class="card" style="margin-bottom:0">
     <div class="card-head">
-        <h2>{{ _("O seriálu") }}</h2>
+        <h2>{{ _("About the series") }}</h2>
     </div>
     <div class="table-wrap">
         <table class="facts">
             <tbody>
             <tr>
-                <th>{{ _("Knihovna") }}</th>
+                <th>{{ _("Library") }}</th>
                 <td>
                     {% if library %}
                         <a href="/library/{{ library.id }}?tab=media">{{ library.name }}</a>
@@ -114,34 +114,34 @@
                     {% endif %}
                 </td>
             </tr>
-            <tr><th>{{ _("Dílů") }}</th><td>{{ series.episode_count | number }}</td></tr>
-            <tr><th>{{ _("Řad") }}</th><td>{{ series.season_count | number }}</td></tr>
-            <tr><th>{{ _("Velikost") }}</th><td>{{ series.size_bytes | bytes }}</td></tr>
-            <tr><th>{{ _("Délka celkem") }}</th><td>{{ series.runtime_ticks | ticks | seconds }}</td></tr>
+            <tr><th>{{ _("Episodes") }}</th><td>{{ series.episode_count | number }}</td></tr>
+            <tr><th>{{ _("Seasons") }}</th><td>{{ series.season_count | number }}</td></tr>
+            <tr><th>{{ _("Size") }}</th><td>{{ series.size_bytes | bytes }}</td></tr>
+            <tr><th>{{ _("Total length") }}</th><td>{{ series.runtime_ticks | ticks | seconds }}</td></tr>
             <tr>
-                <th>{{ _("Průměrně na díl") }}</th>
+                <th>{{ _("Average per episode") }}</th>
                 <td>
                     {% if series.episode_count %}
                         {{ (series.size_bytes // series.episode_count) | bytes }}
                     {% else %}-{% endif %}
                 </td>
             </tr>
-            <tr><th>{{ _("Spuštění") }}</th><td>{{ series.plays | number }}</td></tr>
+            <tr><th>{{ _("Plays#starts") }}</th><td>{{ series.plays | number }}</td></tr>
             <tr>
-                <th>{{ _("Přidáno") }}</th>
-                <td>{{ series.pridano | datetime if series.pridano else '-' }}</td>
+                <th>{{ _("Added") }}</th>
+                <td>{{ series.added | datetime if series.added else '-' }}</td>
             </tr>
             <tr>
-                <th>{{ _("Poslední přibyl díl") }}</th>
-                <td>{{ series.posledni_dil | datetime if series.posledni_dil else '-' }}</td>
+                <th>{{ _("Latest episode added") }}</th>
+                <td>{{ series.last_episode | datetime if series.last_episode else '-' }}</td>
             </tr>
             <tr>
-                <th>{{ _("Data změřena") }}</th>
-                <td>{{ series.zmereno | relative if series.zmereno else '-' }}</td>
+                <th>{{ _("Data measured") }}</th>
+                <td>{{ series.measured | relative if series.measured else '-' }}</td>
             </tr>
             {% if series.path %}
             <tr>
-                <th>{{ _("Umístění") }}</th>
+                <th>{{ _("Location") }}</th>
                 <td><code style="font-size:12px; word-break:break-all">{{ series.path }}</code></td>
             </tr>
             {% endif %}
@@ -152,17 +152,17 @@
 
 </div>
 
-{# Každá řada zvlášť a všechny zavřené. Dřív byla první rozbalená, jenže
-   pak byl první, co člověk po otevření seriálu viděl, seznam dílů -
-   a souhrn o seriálu mu utekl nahoru. #}
+{# Each season apart and all closed. The first used to be expanded, but
+   then the first thing a person saw after opening a series was the list of episodes -
+   and the summary of the series escaped upwards. #}
 {% for season in series.seasons %}
 <details class="card" style="margin-bottom:14px">
     <summary style="cursor:pointer; display:flex; justify-content:space-between; gap:12px; align-items:baseline">
         <strong>{{ season.name }}</strong>
         <span class="card-note">
-            {{ season.episodes | length }} {{ _("dílů") }}
+            {{ _n("{n} episodes", season.episodes | length) }}
             &middot; {{ season.size_bytes | bytes }}
-            {% if season.plays %}&middot; {{ season.plays }}&times; {{ _("přehráno") }}{% endif %}
+            {% if season.plays %}&middot; {{ season.plays }}&times; {{ _("played") }}{% endif %}
         </span>
     </summary>
 
@@ -171,13 +171,13 @@
             <thead>
             <tr>
                 <th class="num">#</th>
-                <th>{{ _("Název") }}</th>
-                <th class="num">{{ _("Rozlišení") }}</th>
-                <th>{{ _("Kodek") }}</th>
-                <th class="num">{{ _("Délka") }}</th>
-                <th class="num">{{ _("Velikost") }}</th>
-                <th class="num">{{ _("Spuštění") }}</th>
-                <th>{{ _("Zdroj dat") }}</th>
+                <th>{{ _("Name") }}</th>
+                <th class="num">{{ _("Resolution") }}</th>
+                <th>{{ _("Codec") }}</th>
+                <th class="num">{{ _("Duration") }}</th>
+                <th class="num">{{ _("Size") }}</th>
+                <th class="num">{{ _("Plays#starts") }}</th>
+                <th>{{ _("Data source") }}</th>
             </tr>
             </thead>
             <tbody>
@@ -189,7 +189,7 @@
                 <td class="strong">
                     <a href="/item/{{ episode.id }}">{{ episode.name }}</a>
                     {% if episode.is_missing %}
-                        <span class="badge warning"><span class="dot"></span>{{ _("Archivováno") }}</span>
+                        <span class="badge warning"><span class="dot"></span>{{ _("Archived") }}</span>
                     {% endif %}
                 </td>
                 <td class="num">{{ episode.height | resolution(episode.width) }}</td>

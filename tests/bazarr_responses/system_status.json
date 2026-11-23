@@ -1,0 +1,17 @@
+{
+ "data": {
+  "bazarr_version": "1.6.2",
+  "package_version": "",
+  "sonarr_version": "4.0.20.3014",
+  "radarr_version": "6.4.4.10685",
+  "operating_system": "Linux-6.8.0-147-generic-x86_64-with-glibc2.41",
+  "python_version": "3.13.5",
+  "database_engine": "Sqlite 3.46.1",
+  "database_migration": "unknown",
+  "bazarr_directory": "/home/coder/projects/arr-test/bazarr/app",
+  "bazarr_config_directory": "/home/coder/projects/arr-test/bazarr/data",
+  "start_time": 1794678881.7772264,
+  "timezone": "Etc/UTC",
+  "cpu_cores": 4
+ }
+}

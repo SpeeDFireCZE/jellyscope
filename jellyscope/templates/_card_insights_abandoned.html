@@ -1,0 +1,34 @@
+{# The card "Started and abandoned" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_postponed`) - one template, so the two places do not drift apart.
+   Expects `abandoned (insights.never_finished)`. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Started and abandoned") }}</h2>
+        <p class="card-note">{{ _("nobody got past 15 % of the runtime") }}</p>
+    </div>
+    {% if abandoned %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Title") }}</th><th class="num">{{ _("Attempts") }}</th>
+                <th class="num">{{ _("Furthest") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in abandoned %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="truncate" title="{{ row.label }}">{{ row.label }}</td>
+                <td class="num">{{ row.attempts }}</td>
+                <td class="num muted">{{ row.best_percent | percent }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ whole_table_button(abandoned | length) }}
+    {% else %}
+    <p class="chart-empty">{{ _("Nothing abandoned.") }}</p>
+    {% endif %}
+</div>

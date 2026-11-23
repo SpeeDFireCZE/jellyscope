@@ -1,18 +1,18 @@
-"""Sberac prehravani - srdce historie.
+"""The playback collector - the heart of the history.
 
-Jellyfin ti rekne jen to, co se deje **prave ted**. Zadnou historii si
-nepamatuje. Kdyz chces vedet, kdo se na co dival minuly tyden, musis si tu
-historii postavit sam.
+Jellyfin tells you only what is happening **right now**. It remembers no
+history. When you want to know who watched what last week, you have to build
+that history yourself.
 
-Princip je jednoduchy a stoji za to ho pochopit, protoze stejne funguje
-Jellystat i Tautulli:
+The principle is simple and worth understanding, because Jellystat and Tautulli
+work the same way:
 
-    kazdych N sekund se zeptej "co se hraje?"
-    -> nova relace, kterou jsem drive nevidel  = zacatek prehravani
-    -> relace, kterou uz znam                  = pricti uplynuly cas
-    -> relace, ktera zmizela                   = konec prehravani
+    every N seconds ask "what is playing?"
+    -> a new session I did not see before  = a playback starts
+    -> a session I already know            = add the elapsed time
+    -> a session that vanished             = a playback ends
 
-Z posloupnosti okamzitych snimku tak vznikne souvisly zaznam.
+A continuous record thus comes out of a sequence of instant snapshots.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import logging
 from datetime import datetime, timedelta, UTC
 from typing import Any
 
-from . import db
+from . import db, i18n
 from .jellyfin import QUICK_TIMEOUT, JellyfinClient, JellyfinError
 from .jellyfin import media_streams as jellyfin_streams
 from .jellyfin import selected_languages as jellyfin_languages
@@ -31,82 +31,103 @@ from .jellyfin import video_dimensions as jellyfin_dimensions
 
 log = logging.getLogger("jellyscope.collector")
 
-# Klice, pod kterymi si do tabulky settings ukladame provozni stav.
-# Podtrzitko na zacatku je nase znameni "tohle neni uzivatelske nastaveni".
+# Keys under which we store the operating state in the settings table.
+# The underscore at the start is our sign "this is no user setting".
 STATUS_KEY = "_collector_status"
 ERROR_KEY = "_collector_error"
+# The values of the error's key (i18n.message_parts): the side panel reads it in the reader's language.
+ERROR_VALUES_KEY = "_collector_error_values"
 LAST_POLL_KEY = "_collector_last_poll"
 
-# Kolik prvnich minut prehravani se pri urcovani jazyka ignoruje.
+# How many first minutes of a playback are ignored when the language is determined.
 #
-# Zacatek filmu jsou loga distributoru, znelky a upoutavky - a divak
-# behem nich stopu teprve hleda. Cokoliv, co hraje v tehle dobe, o jeho
-# volbe nevypovida.
+# The start of a movie is distributors' logos, jingles and trailers - and the
+# viewer only looks for the track during them. Anything that plays at that time
+# says nothing about their choice.
 #
-# Odsledovany cas se tim neztraci: k jazyku se pripocita cele prehravani
-# vcetne techto minut. Ignoruje se jen pri ROZHODOVANI, ktery jazyk to byl.
+# The watched time is not lost by it: the whole playback including these minutes
+# is added to the language. It is ignored only when DECIDING which language it was.
 LANGUAGE_GRACE_SECONDS = 240
 
-# Jak dlouho musi stopa hrat, nez se zapocita do jazykovych statistik.
+# How long a track must play before it counts into the language statistics.
 #
-# Duvod je z praxe: soubor se casto spusti se spatnou stopou a divak ji
-# hned prepne. Bez teto lhuty by se do statistik dostal jazyk, ktery nikdo
-# neposlouchal - a "60 % anglicky" by rikalo neco jineho, nez se doopravdy
-# stalo. Zapocita se az kombinace, u ktere divak zustal.
+# The reason is from practice: a file is often started with the wrong track and
+# the viewer switches it right away. Without this period a language nobody
+# listened to would get into the statistics - and "60 % English" would say
+# something else than what really happened. Only the combination the viewer
+# stayed with counts.
 #
-# Pocita se cela kombinace (zvuk + titulky) najednou: kdo si opravuje
-# jazyk, obvykle rovnou srovna i titulky, takze davaji smysl spolu.
+# The whole combination (audio + subtitles) counts at once: whoever fixes the
+# language usually sorts out the subtitles right away too, so they make sense together.
 MIN_LANGUAGE_SECONDS = 60
 
 
+def store_error(error: BaseException | i18n.Message) -> None:
+    """The collector failed: its error as a key and its values (i18n.message_parts), read in each reader's language."""
+    template, values = i18n.message_parts(error)
+    db.set_setting(STATUS_KEY, "error")
+    db.set_setting(ERROR_KEY, template)
+    db.set_setting(ERROR_VALUES_KEY, values or "")
+
+
+def clear_error() -> None:
+    db.set_setting(ERROR_KEY, "")
+    db.set_setting(ERROR_VALUES_KEY, "")
+
+
+def error_text(language: str | None = None) -> str:
+    """The stored error in a language - the reader's when None."""
+    return i18n.stored_text(db.get_setting(ERROR_KEY, ""), db.get_setting(ERROR_VALUES_KEY, ""), language)
+
+
 def _parse(timestamp: str) -> datetime:
-    """Opak db.utcnow() - z textu zpatky na datum a cas."""
+    """The opposite of db.utcnow() - from text back to a date and time."""
     return datetime.strptime(timestamp, db.TIME_FORMAT).replace(tzinfo=UTC)
 
 
 def _session_key(session: dict[str, Any], item: dict[str, Any]) -> str:
-    """Jednoznacne oznaceni "tahle relace hraje tuhle polozku".
+    """An unambiguous mark "this session plays this item".
 
-    Proc ne jen id relace? Protoze kdyz ti dobehne epizoda a spusti se dalsi,
-    Jellyfin pouzije **stejnou** relaci. Bez id polozky v klici by nam obe
-    epizody splynuly do jednoho zaznamu.
+    Why not just the session's id? Because when an episode ends and the next
+    one starts, Jellyfin uses **the same** session. Without the item's id in the
+    key both episodes would merge into one record.
     """
     return f"{session.get('Id')}::{item.get('Id')}"
 
 
-# Jak daleko zpatky se hleda uz bezici zaznam tehoz prehravani. Musi to
-# byt vic nez interval dotazovani, ale ne tolik, aby se za pokracovani
-# povazovalo prehravani od vcerejska.
-PREVZETI_MINUT = 15
+# How far back an already running record of the same playback is looked for. It
+# must be more than the polling interval, but not so much that a playback from
+# yesterday would count as a continuation.
+TAKEOVER_MINUTES = 15
 
 
-def _prevzit_cizi_relaci(conn: Any, key: str, session: dict[str, Any],
-                         item: dict[str, Any], now: str) -> Any:
-    """Nebeži uz tohle prehravani pod jinym klicem? Pak ho prevezmi.
+def _take_over_session(conn: Any, key: str, session: dict[str, Any],
+                       item: dict[str, Any], now: str) -> Any:
+    """Does this playback not run under another key already? Then take it over.
 
-    Proc to tu je: proti jedne databazi muze omylem bezet **vic sberacu
-    naraz** - typicky kdyz zustane spustena stara verze aplikace vedle
-    nove. Kazdy si zalozi vlastni radek pro tentyz film a v historii
-    vzniknou duplicity, ktere uz nikdo nerozplete.
+    Why it is here: **more collectors at once** can by mistake run against one
+    database - typically when an old version of the application stays running
+    next to the new one. Each creates its own row for the same movie and
+    duplicates arise in the history that nobody untangles any more.
 
-    Klic relace na to nestaci: kazda verze si ho muze skladat jinak
-    a prave proto se ty dva radky nepotkaly. Hledame proto podle toho,
-    co je na obou stranach stejne - **kdo** co hraje a **co** hraje.
+    The session key is not enough for that: every version can put it together
+    differently, and exactly that is why those two rows did not meet. So we look
+    by what is the same on both sides - **who** plays and **what** plays.
 
-    Kdyz se takovy zaznam najde, prepiseme mu klic na nas a pokracujeme
-    v nem. Duplicita tim nevznikne vubec, misto aby se pak uklizela.
+    When such a record is found, we rewrite its key to ours and continue in it.
+    A duplicate thus does not arise at all, instead of being cleaned up later.
     """
-    uzivatel = session.get("UserId")
-    polozka = item.get("Id")
-    if not uzivatel or not polozka:
+    user = session.get("UserId")
+    item_id = item.get("Id")
+    if not user or not item_id:
         return None
 
-    # Hranici pocitame v Pythonu, ne v SQL. `datetime(?, ?)` je funkce
-    # SQLite; PostgreSQL ji nezna a prekladac dialektu resi jen tvar
-    # `datetime('now', ?)`. Hotovy cas jako parametr funguje v obou.
-    od = (_parse(now) - timedelta(minutes=PREVZETI_MINUT)).strftime(db.TIME_FORMAT)
+    # We compute the boundary in Python, not in SQL. `datetime(?, ?)` is a
+    # function of SQLite; PostgreSQL does not know it and the dialect translator
+    # handles only the shape `datetime('now', ?)`. A finished time as a parameter works in both.
+    since = (_parse(now) - timedelta(minutes=TAKEOVER_MINUTES)).strftime(db.TIME_FORMAT)
 
-    radek = conn.execute(
+    row = conn.execute(
         """SELECT id, last_seen_at, watched_seconds,
                   audio_language, subtitle_language,
                   current_audio_language, current_subtitle_language,
@@ -117,58 +138,60 @@ def _prevzit_cizi_relaci(conn: Any, key: str, session: dict[str, Any],
               AND last_seen_at >= ?
          ORDER BY last_seen_at DESC
             LIMIT 1""",
-        (str(uzivatel), str(polozka), od),
+        (str(user), str(item_id), since),
     ).fetchone()
 
-    if radek is None:
+    if row is None:
         return None
 
     conn.execute("UPDATE playback SET session_key = ? WHERE id = ?",
-                 (key, radek["id"]))
-    log.info("prevzat bezici zaznam %s (jiny klic relace) - duplicita nevznikla",
-             radek["id"])
-    return radek
+                 (key, row["id"]))
+    log.info("took over a running record %s (different session key), no duplicate created",
+             row["id"])
+    return row
 
 
-# Jak dlouho po prerusení se prehravani jeste povazuje za totez.
+# How long after an interruption a playback still counts as the same.
 #
-# Pulhodina je kompromis: pauza na kafe nebo na uspani televize se vejde,
-# ale film puštěný vecer a znovu pred spanim uz jsou dve ruzne podivane.
-NAVAZANI_MINUT = 30
+# Half an hour is a compromise: a break for coffee or for the TV going to sleep
+# fits, but a movie played in the evening and again before sleep are already two
+# different viewings.
+RESUME_MINUTES = 30
 
-# Od jake pozice ma smysl rozlisovat "pokracuje" a "zacal znovu".
-# Pod peti minutami je to jedno - kdo si film pusti od zacatku po dvou
-# minutach, ten ho spis jen restartoval.
-ZNOVU_OD_ZACATKU_TIKY = 5 * 60 * 10_000_000
+# From which position it makes sense to tell "continues" from "started again".
+# Below five minutes it does not matter - whoever plays a movie from the start
+# after two minutes has rather just restarted it.
+RESTART_TICKS = 5 * 60 * 10_000_000
 
 
-def _navaz_na_prerusene(conn: Any, key: str, session: dict[str, Any],
-                        item: dict[str, Any], pozice: Any, now: str) -> Any:
-    """Nepokracuje tenhle divak v tom, co pred chvili prerusil?
+def _resume_interrupted(conn: Any, key: str, session: dict[str, Any],
+                        item: dict[str, Any], position: Any, now: str) -> Any:
+    """Is this viewer not continuing what they interrupted a moment ago?
 
-    Proc to tu je: nektere prehravace pri pauze z `/Sessions` zmizi
-    uplne. Sberac takovy zaznam uzavre - a kdyz se prehravani rozjede
-    dal, zalozi novy. Jedno sledovani je pak v historii dvakrat a ve
-    statistikach jako dve spusteni.
+    Why it is here: some players vanish from `/Sessions` completely on a pause.
+    The collector closes such a record - and when the playback goes on, it
+    creates a new one. One viewing is then in the history twice and in the
+    statistics as two plays.
 
-    Za pokracovani se to povazuje, kdyz sedi vsechno tohle:
+    It counts as a continuation when all of this fits:
 
-      * tentyz divak a tentyz titul,
-      * od posledniho snimku uplynulo min nez NAVAZANI_MINUT,
-      * a **nezacalo se od zacatku** - kdyz je prehravac na nule, kdezto
-        predtim byl v pulce filmu, je to nove sledovani, ne pokracovani.
+      * the same viewer and the same title,
+      * less than RESUME_MINUTES passed since the last snapshot,
+      * and **it did not start from the beginning** - when the player is at
+        zero, whereas before it was in the middle of the movie, it is a new
+        viewing, not a continuation.
 
-    Odsledovany cas se tim nenafoukne: mezera mezi snimky je oriznuta na
-    nekolikanasobek intervalu dotazovani (viz max_gap_seconds), takze se
-    doba pauzy nikam nezapocita.
+    The watched time does not inflate by it: the gap between snapshots is cut
+    to a few times the polling interval (see max_gap_seconds), so the pause's
+    time counts nowhere.
     """
-    uzivatel = session.get("UserId")
-    polozka = item.get("Id")
-    if not uzivatel or not polozka:
+    user = session.get("UserId")
+    item_id = item.get("Id")
+    if not user or not item_id:
         return None
 
-    od = (_parse(now) - timedelta(minutes=NAVAZANI_MINUT)).strftime(db.TIME_FORMAT)
-    radek = conn.execute(
+    since = (_parse(now) - timedelta(minutes=RESUME_MINUTES)).strftime(db.TIME_FORMAT)
+    row = conn.execute(
         """SELECT id, last_seen_at, watched_seconds, position_ticks,
                   audio_language, subtitle_language,
                   current_audio_language, current_subtitle_language,
@@ -179,93 +202,94 @@ def _navaz_na_prerusene(conn: Any, key: str, session: dict[str, Any],
               AND last_seen_at >= ?
          ORDER BY last_seen_at DESC
             LIMIT 1""",
-        (str(uzivatel), str(polozka), od),
+        (str(user), str(item_id), since),
     ).fetchone()
 
-    if radek is None:
+    if row is None:
         return None
 
     try:
-        nova_pozice = int(pozice or 0)
-        stara_pozice = int(radek["position_ticks"] or 0)
+        new_position = int(position or 0)
+        old_position = int(row["position_ticks"] or 0)
     except (TypeError, ValueError):
-        nova_pozice = stara_pozice = 0
+        new_position = old_position = 0
 
-    # Zacal znovu od zacatku? Pak je to druhe sledovani teho z filmu.
-    if stara_pozice > ZNOVU_OD_ZACATKU_TIKY and nova_pozice < stara_pozice / 2:
+    # Started again from the beginning? Then it is a second viewing of the same movie.
+    if old_position > RESTART_TICKS and new_position < old_position / 2:
         return None
 
     conn.execute(
         """UPDATE playback
               SET is_active = 1, ended_at = NULL, session_key = ?
             WHERE id = ?""",
-        (key, radek["id"]),
+        (key, row["id"]),
     )
-    log.info("navazano na prerusene prehravani %s - pauza, ne nove spusteni",
-             radek["id"])
-    return radek
+    log.info("continued the interrupted playback %s (a pause, not a new start)",
+             row["id"])
+    return row
 
 
-def _bit(hodnota: Any) -> int | None:
-    """Ano/ne od Jellyfinu na 1/0 - a nevim necha nevimem.
+def _bit(value: Any) -> int | None:
+    """Yes/no from Jellyfin to 1/0 - and leaves I-do-not-know as I-do-not-know.
 
-    Zamerne nepouzivame bool(): kdyz udaj v odpovedi chybi, je to jina
-    situace nez "neni primy". Nula by tvrdila, ze se obraz prepocitava,
-    i kdyz o tom ve skutecnosti nic nevime.
+    On purpose we do not use bool(): when the detail is missing in the answer,
+    it is a different situation than "not direct". Zero would claim the picture
+    is transcoded, even though we in fact know nothing about it.
     """
-    if hodnota is None:
+    if value is None:
         return None
-    return 1 if hodnota else 0
+    return 1 if value else 0
 
 
-def _fps(hodnota: Any) -> int | None:
-    """Snimku za vterinu jako cele cislo. None u nesmyslu a u nuly.
+def _fps(value: Any) -> int | None:
+    """Frames per second as a whole number. None for nonsense and for zero.
 
-    Zaokrouhluje se: na otazku "stiha prevod video?" desetiny vliv
-    nemaji a 23,976 se lidem stejne cte jako 24. Nula znamena "Jellyfin
-    to jeste nevi" (prvni vteriny prevodu, pauza), ne "nula snimku" -
-    do prumeru nepatri. Strop chrani prumer pred jednim ulitlym cislem.
+    It is rounded: for the question "does the transcode keep up with the video?"
+    the tenths do not matter and 23.976 reads to people as 24 anyway. Zero means
+    "Jellyfin does not know yet" (the first seconds of a transcode, a pause), not
+    "zero frames" - it does not belong in the average. The ceiling guards the
+    average against one runaway number.
     """
     try:
-        cislo = float(hodnota)
+        number = float(value)
     except (TypeError, ValueError):
         return None
-    if not 0.5 <= cislo <= 2000:
+    if not 0.5 <= number <= 2000:
         return None
-    return int(round(cislo))
+    return int(round(number))
 
 
-def _snimkovani_videa(item: dict[str, Any]) -> int | None:
-    """Snimkovani zdrojoveho videa - to, s cim se rychlost prevodu meri."""
+def _video_frame_rate(item: dict[str, Any]) -> int | None:
+    """The source video's frame rate - what the transcode speed is measured against."""
     video = next((s for s in jellyfin_streams(item) if s.get("Type") == "Video"), {})
     return _fps(video.get("RealFrameRate")) or _fps(video.get("AverageFrameRate"))
 
 
 def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
-    """Co konkretne tece k prehravaci - kodeky a bitrate.
+    """What exactly flows to the player - codecs and bitrate.
 
-    Kdyz server transcoduje, zajima nas vysledny (prepocitany) tok.
-    Kdyz hraje primo, je to kodek puvodniho souboru.
+    When the server transcodes, we care about the resulting (transcoded) flow.
+    When it plays directly, it is the original file's codec.
     """
-    # Rozmery bereme ze zdroje i pri prepoctu: `TranscodingInfo` je hlasi
-    # jen nekdy a rozliseni zdroje je pro cloveka uzitecnejsi informace
-    # ("mam 4K film") nez to, na co ho server zrovna zmensuje.
-    sirka, vyska = jellyfin_dimensions(item)
-    # Delku bereme z relace, ne z knihovny: u epizody, kterou jsme jeste
-    # nesynchronizovali, by se ukazatel postupu nemel z ceho spocitat.
-    delka = item.get("RunTimeTicks")
-    video_fps = _snimkovani_videa(item)
+    # We take the dimensions from the source even when transcoding: `TranscodingInfo`
+    # reports them only sometimes and the source's resolution is the more useful
+    # information for a person ("I have a 4K movie") than what the server shrinks it to right now.
+    width, height = jellyfin_dimensions(item)
+    # We take the length from the session, not from the library: for an episode
+    # we did not synchronise yet, the progress indicator would have nothing to compute from.
+    length = item.get("RunTimeTicks")
+    video_fps = _video_frame_rate(item)
 
     transcoding = session.get("TranscodingInfo") or {}
     if transcoding:
         reasons = transcoding.get("TranscodeReasons") or []
         if isinstance(reasons, str):
             reasons = [reasons]
-        # Co presne se prepocitava. Samotne "transcode" totiz nerika skoro
-        # nic: prepocet obrazu vytizi server nasobne vic nez prepocet
-        # zvuku a clovek, ktery se pta "proc server topi", potrebuje
-        # videt prave tenhle rozdil. Jellyfin to rekne sam, hadat se to
-        # z kodeku nemusi.
+        # What exactly is transcoded. A bare "transcode" says almost nothing:
+        # transcoding the picture loads the server many times more than
+        # transcoding the audio, and a person asking "why does the server heat"
+        # needs to see exactly this difference. Jellyfin says it itself, it need
+        # not be guessed from the codecs.
         return {
             "video_codec": transcoding.get("VideoCodec"),
             "audio_codec": transcoding.get("AudioCodec"),
@@ -274,18 +298,18 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
             "video_direct": _bit(transcoding.get("IsVideoDirect")),
             "audio_direct": _bit(transcoding.get("IsAudioDirect")),
             "hw": transcoding.get("HardwareAccelerationType") or None,
-            # Rychlost prevodu, jak ji hlasi ffmpeg (snimku za vterinu).
-            # Pomalejsi nez video samo = prevod nestiha a obraz seka.
-            # Jen kdyz se obraz opravdu prevadi: pri prevodu jen zvuku
-            # se obraz kopiruje a ffmpeg hlasi rychlost kopirovani -
-            # klidne stovky snimku, ktere by se ve statistice tvarily
-            # jako "nejrychlejsi prevod".
+            # The transcode speed as ffmpeg reports it (frames per second).
+            # Slower than the video itself = the transcode does not keep up and
+            # the picture stutters. Only when the picture really is transcoded:
+            # when only the audio is, the picture is copied and ffmpeg reports
+            # the copying speed - easily hundreds of frames that would look like
+            # "the fastest transcode" in the statistics.
             "fps": (None if transcoding.get("IsVideoDirect") is True
                     else _fps(transcoding.get("Framerate"))),
             "video_fps": video_fps,
-            "video_width": sirka,
-            "video_height": vyska,
-            "runtime_ticks": delka,
+            "video_width": width,
+            "video_height": height,
+            "runtime_ticks": length,
         }
 
     streams = jellyfin_streams(item)
@@ -296,24 +320,24 @@ def _describe_stream(session: dict[str, Any], item: dict[str, Any]) -> dict[str,
         "audio_codec": audio.get("Codec"),
         "bitrate": jellyfin_bitrate(item),
         "transcode_reasons": None,
-        # Nic se neprepocitava, takze neni co popisovat.
+        # Nothing is transcoded, so there is nothing to describe.
         "video_direct": None,
         "audio_direct": None,
         "hw": None,
         "fps": None,
         "video_fps": video_fps,
-        "video_width": sirka,
-        "video_height": vyska,
-        "runtime_ticks": delka,
+        "video_width": width,
+        "video_height": height,
+        "runtime_ticks": length,
     }
 
 
 def close_orphans() -> int:
-    """Uzavre zaznamy, ktere zustaly viset po predchozim behu aplikace.
+    """Closes records left hanging after the application's previous run.
 
-    Kdyz Jellyscope spadne nebo ho vypnes uprostred filmu, zustane v databazi
-    zaznam s is_active = 1. Pri dalsim startu ho uzavreme casem, kdy jsme ho
-    naposled videli - to je nejpoctivejsi odhad, jaky mame.
+    When Jellyscope falls or you turn it off in the middle of a movie, a record
+    with is_active = 1 stays in the database. On the next start we close it with
+    the time we last saw it - that is the most honest estimate we have.
     """
     with db.connect() as conn:
         cursor = conn.execute(
@@ -328,22 +352,22 @@ def close_orphans() -> int:
 
 
 async def poll_once(client: JellyfinClient, max_gap_seconds: int) -> dict[str, int]:
-    """Jeden snimek: nacti aktivni relace a promitni je do databaze.
+    """One snapshot: load the active sessions and project them into the database.
 
-    Cekani na Jellyfin je asynchronni, ale zapis do databaze uz ne -
-    sqlite3 zadne `await` nema. Kdyby se zapisovalo primo tady, zmrazil by
-    na tu dobu celou aplikaci: nikdo by si nenacetl stranku, dokud sberac
-    nedopise. Proto jde zapis do vlakna (`asyncio.to_thread`).
+    Waiting for Jellyfin is asynchronous, but writing to the database is not -
+    sqlite3 has no `await`. Were it written right here, it would freeze the
+    whole application for that time: nobody would load a page until the
+    collector finished writing. So the writing goes to a thread (`asyncio.to_thread`).
     """
     sessions = await client.sessions()
     return await asyncio.to_thread(_store_sessions, sessions, max_gap_seconds)
 
 
-def _najdi_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, Any],
+def _find_session(conn: Any, key: str, session: dict[str, Any], item: dict[str, Any],
                   play_state: dict[str, Any], now: str) -> Any:
-    """Běžící záznam tohohle přehrávání - podle klíče, převzatý, nebo navázaný po pauze.
+    """The running record of this playback - by the key, taken over, or resumed after a pause.
 
-    `None` = nic takového není a přehrávání se má založit jako nové.
+    `None` = there is no such thing and the playback is to be created as new.
     """
     existing = conn.execute(
         "SELECT id, last_seen_at, watched_seconds,"
@@ -355,21 +379,20 @@ def _najdi_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, 
     ).fetchone()
 
     if existing is None:
-        existing = _prevzit_cizi_relaci(conn, key, session, item, now)
+        existing = _take_over_session(conn, key, session, item, now)
 
-    # Az kdyz nic nebezi: nenavazujeme na neco, co divak pred
-    # chvili pauznul? Musi to byt az tady - bezici zaznam ma
-    # prednost pred uzavrenym.
+    # Only when nothing runs: are we not resuming something the viewer paused a
+    # moment ago? It has to be only here - a running record wins over a closed one.
     if existing is None:
-        existing = _navaz_na_prerusene(
+        existing = _resume_interrupted(
             conn, key, session, item, play_state.get("PositionTicks"), now)
     return existing
 
 
-def _zaloz_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, Any],
-                  play_state: dict[str, Any], is_paused: bool, stream: dict[str, Any],
-                  chosen: dict[str, Any], vzorek_fps: float | None, now: str) -> None:
-    """Nové přehrávání: dohledá knihovnu položky a zapíše první snímek."""
+def _create_session(conn: Any, key: str, session: dict[str, Any], item: dict[str, Any],
+                    play_state: dict[str, Any], is_paused: bool, stream: dict[str, Any],
+                    chosen: dict[str, Any], fps_sample: float | None, now: str) -> None:
+    """A new playback: looks up the item's library and writes the first snapshot."""
     library_row = conn.execute(
         "SELECT library_id FROM items WHERE id = ?", (item.get("Id"),)
     ).fetchone()
@@ -382,7 +405,7 @@ def _zaloz_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, 
             client, device_name, device_id, remote_address,
             play_method, transcode_reasons, video_codec, audio_codec, bitrate,
             transcode_video_direct, transcode_audio_direct, transcode_hw,
-            transcode_fps, transcode_fps_soucet, transcode_fps_vzorku,
+            transcode_fps, transcode_fps_sum, transcode_fps_samples,
             video_fps,
             audio_language, subtitle_language,
             current_audio_language, current_subtitle_language,
@@ -413,13 +436,13 @@ def _zaloz_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, 
             stream["video_direct"],
             stream["audio_direct"],
             stream["hw"],
-            vzorek_fps,
-            vzorek_fps or 0,
-            1 if vzorek_fps else 0,
+            fps_sample,
+            fps_sample or 0,
+            1 if fps_sample else 0,
             stream["video_fps"],
-            # Do statistik zatim nic - jazyk se zapocita az po
-            # MIN_LANGUAGE_SECONDS, viz vyse. Prvni vteriny
-            # casto hraje stopa, kterou si divak hned prepne.
+            # Nothing into the statistics yet - the language counts only after
+            # MIN_LANGUAGE_SECONDS, see above. The first seconds often
+            # play a track the viewer switches right away.
             None,
             None,
             chosen["audio_language"],
@@ -437,81 +460,80 @@ def _zaloz_relaci(conn: Any, key: str, session: dict[str, Any], item: dict[str, 
     )
 
 
-def _jazyk_do_statistik(
+def _language_for_stats(
         existing: Any, chosen: dict[str, Any], is_paused: bool, gap: int,
         now: str, now_dt: datetime) -> tuple[str | None, str | None, str, bool]:
-    """Co zapsat jako jazyk přehrávání: (zvuk, titulky, language_since, potvrzeno).
+    """What to write as the playback's language: (audio, subtitles, language_since, confirmed).
 
-    Jen počítá, do databáze nesahá - rozhodnutí je celé tady, SQL ho jen uloží.
+    It only computes, it does not touch the database - the decision is all here, SQL only stores it.
     """
-    # Kdy se jazyk zapocita do statistik.
+    # When the language counts into the statistics.
     #
-    # Dokud se stopy meni, hodiny se resetuji - do statistik se
-    # dostane az kombinace, u ktere divak vydrzel aspon
-    # MIN_LANGUAGE_SECONDS. Jakmile se jednou zapocita, uz se
-    # nemeni: prehravani patri jazyku, se kterym se doopravdy
-    # sledovalo, i kdyz si ho nekdo na konci prepne.
+    # As long as the tracks change, the clock resets - only the combination
+    # the viewer stayed with for at least MIN_LANGUAGE_SECONDS gets into the
+    # statistics. Once it counts, it no longer changes: the playback belongs
+    # to the language it was really watched in, even when somebody switches it
+    # at the end.
     #
-    # Pocitame to tady a ne v SQL zamerne - je to rozhodovani,
-    # ne ukladani, a v Pythonu je videt na prvni pohled.
-    zmena_stop = (
+    # We compute it here and not in SQL on purpose - it is deciding, not
+    # storing, and in Python it is visible at first glance.
+    tracks_changed = (
         chosen["audio_language"] != existing["current_audio_language"]
         or chosen["subtitle_language"] != existing["current_subtitle_language"]
     )
-    potvrzeno = bool(existing["language_confirmed"])
-    jazyk_od = existing["language_since"] or now
+    confirmed = bool(existing["language_confirmed"])
+    language_since = existing["language_since"] or now
 
-    # Prvni minuty prehravani se preskakuji - viz
-    # LANGUAGE_GRACE_SECONDS. Pocitame odsledovany cas, ne cas od
-    # spusteni: kdyz si divak film pusti a odejde na hodinu k
-    # obedu, pauza se do tech ctyr minut pocitat nema.
-    odsledovano = int(existing["watched_seconds"] or 0) + (0 if is_paused else gap)
-    po_uvodu = odsledovano >= LANGUAGE_GRACE_SECONDS
+    # The first minutes of a playback are skipped - see LANGUAGE_GRACE_SECONDS.
+    # We count the watched time, not the time since the start: when a viewer
+    # starts a movie and leaves for an hour for lunch, the pause is not to count
+    # into those four minutes.
+    watched = int(existing["watched_seconds"] or 0) + (0 if is_paused else gap)
+    past_intro = watched >= LANGUAGE_GRACE_SECONDS
 
-    if not potvrzeno:
-        if zmena_stop or not po_uvodu:
-            # Behem uvodu hodiny porad resetujeme, takze se zacne
-            # merit az od prvniho snimku po nem.
-            jazyk_od = now
-        elif ((now_dt - _parse(jazyk_od)).total_seconds() >= MIN_LANGUAGE_SECONDS
-              and odsledovano >= LANGUAGE_GRACE_SECONDS + MIN_LANGUAGE_SECONDS):
-            # Dve podminky, ne jedna. Sama o sobe by prvni potvrdila
-            # jazyk driv: hodiny se resetuji pri kazdem snimku uvodu,
-            # takze posledni reset padne nekam TESNE PRED ctvrtou
-            # minutu - a minuta mereni pak skonci pred patou.
+    if not confirmed:
+        if tracks_changed or not past_intro:
+            # During the intro we keep resetting the clock, so it starts
+            # measuring only from the first snapshot after it.
+            language_since = now
+        elif ((now_dt - _parse(language_since)).total_seconds() >= MIN_LANGUAGE_SECONDS
+              and watched >= LANGUAGE_GRACE_SECONDS + MIN_LANGUAGE_SECONDS):
+            # Two conditions, not one. By itself the first would confirm the
+            # language earlier: the clock resets at every snapshot of the
+            # intro, so the last reset falls somewhere JUST BEFORE the fourth
+            # minute - and the minute of measuring then ends before the fifth.
             #
-            # Druha podminka rika prosty pozadavek: nez se jazyk
-            # zapocita, musi prehravani trvat aspon uvod plus tu
-            # minutu. Kolik snimku se mezitim stihlo, uz nehraje roli.
-            potvrzeno = True
+            # The second condition says a plain requirement: before the
+            # language counts, the playback must last at least the intro plus
+            # that minute. How many snapshots fit in meanwhile no longer matters.
+            confirmed = True
 
-    # Co se zapise do statistik. Prave potvrzena kombinace, jinak
-    # to, co uz tam je.
+    # What is written into the statistics. The combination just confirmed,
+    # otherwise what is there already.
     #
-    # Drive to resil `CASE WHEN ? THEN ? ELSE ... END` primo v SQL.
-    # Fungovalo to na SQLite, ale PostgreSQL potrebuje ve WHEN
-    # pravdivostni hodnotu, ne cislo ("argument of CASE/WHEN must
-    # be type boolean, not type smallint"). Rozhodnuti stejne patri
-    # sem - SQL ma ukladat, ne rozhodovat.
-    prave_potvrzeno = potvrzeno and not existing["language_confirmed"]
-    zapsany_zvuk = (chosen["audio_language"] if prave_potvrzeno
+    # It used to be handled by `CASE WHEN ? THEN ? ELSE ... END` right in SQL.
+    # It worked on SQLite, but PostgreSQL needs a truth value in WHEN, not a
+    # number ("argument of CASE/WHEN must be type boolean, not type smallint").
+    # The decision belongs here anyway - SQL is to store, not to decide.
+    just_confirmed = confirmed and not existing["language_confirmed"]
+    stored_audio = (chosen["audio_language"] if just_confirmed
                     else existing["audio_language"])
-    zapsane_titulky = (chosen["subtitle_language"] if prave_potvrzeno
-                       else existing["subtitle_language"])
-    return zapsany_zvuk, zapsane_titulky, jazyk_od, potvrzeno
+    stored_subtitles = (chosen["subtitle_language"] if just_confirmed
+                        else existing["subtitle_language"])
+    return stored_audio, stored_subtitles, language_since, confirmed
 
 
-def _pokracuj_v_relaci(conn: Any, existing: Any, play_state: dict[str, Any], is_paused: bool,
-                       stream: dict[str, Any], chosen: dict[str, Any], vzorek_fps: float | None,
-                       now: str, now_dt: datetime, max_gap_seconds: int) -> None:
-    """Známé přehrávání: přičte čas od minulého snímku a zapíše, co hraje teď."""
-    # Relaci uz znam - pricti cas, ktery uplynul od minuleho snimku.
+def _continue_session(conn: Any, existing: Any, play_state: dict[str, Any], is_paused: bool,
+                      stream: dict[str, Any], chosen: dict[str, Any], fps_sample: float | None,
+                      now: str, now_dt: datetime, max_gap_seconds: int) -> None:
+    """A known playback: adds the time since the last snapshot and writes what plays now."""
+    # I know the session already - add the time that passed since the last snapshot.
     gap = (now_dt - _parse(existing["last_seen_at"])).total_seconds()
-    # Orez: kdyz aplikace na hodinu vypadla, nechceme si tu hodinu
-    # zapsat jako "sledoval". Zapocteme jen rozumny interval.
+    # A cut: when the application dropped out for an hour, we do not want to
+    # write that hour as "watched". We count only a reasonable interval.
     gap = max(0, min(int(gap), max_gap_seconds))
 
-    zapsany_zvuk, zapsane_titulky, jazyk_od, potvrzeno = _jazyk_do_statistik(
+    stored_audio, stored_subtitles, language_since, confirmed = _language_for_stats(
         existing, chosen, is_paused, gap, now, now_dt)
 
     conn.execute(
@@ -524,50 +546,50 @@ def _pokracuj_v_relaci(conn: Any, existing: Any, play_state: dict[str, Any], is_
                play_method       = COALESCE(?, play_method),
                transcode_reasons = COALESCE(?, transcode_reasons),
                bitrate           = COALESCE(?, bitrate),
-               -- Bez COALESCE: popisuji stav ted. Kdyz divak
-               -- prepne na stopu, ktera uz prepocet nepotrebuje,
-               -- ma znacka prestat tvrdit, ze se obraz prepocitava.
+               -- Without COALESCE: they describe the state now. When the viewer
+               -- switches to a track that no longer needs a transcode,
+               -- the badge is to stop claiming the picture is transcoded.
                transcode_video_direct = ?,
                transcode_audio_direct = ?,
                transcode_hw           = ?,
-               -- Rychlost prevodu ted (bez COALESCE ze stejneho
-               -- duvodu jako o radek vys) a do prumeru vzorek -
-               -- jen kdyz nejaky je.
+               -- The transcode speed now (without COALESCE for the same
+               -- reason as a line above) and a sample into the average -
+               -- only when there is one.
                transcode_fps          = ?,
-               transcode_fps_soucet   = transcode_fps_soucet + ?,
-               transcode_fps_vzorku   = transcode_fps_vzorku + ?,
+               transcode_fps_sum   = transcode_fps_sum + ?,
+               transcode_fps_samples   = transcode_fps_samples + ?,
                video_fps              = COALESCE(video_fps, ?),
-               -- Dve dvojice sloupcu, protoze jsou to dve ruzne
-               -- otazky a jedna hodnota by na obe odpovedet nemohla:
+               -- Two pairs of columns, because these are two different
+               -- questions and one value could not answer both:
                --
-               --   audio_language          "v cem to sledoval"
-               --   current_audio_language  "co hraje prave ted"
+               --   audio_language          "what they watched it in"
+               --   current_audio_language  "what plays right now"
                --
-               -- Prvni dvojice se zapise jednou - ve chvili, kdy
-               -- jazyk "vydrzel" dost dlouho (viz vypocet vyse).
-               -- Druha se prepisuje pri kazdem snimku, protoze
-               -- karta "Prave se hraje" ma ukazovat skutecnost.
+               -- The first pair is written once - at the moment the
+               -- language "lasted" long enough (see the computation above).
+               -- The second is rewritten at every snapshot, because
+               -- the "Now playing" card is to show reality.
                --
-               -- Obe dvojice se zapisuji primo, bez COALESCE:
-               -- co se ma zapsat, uz je rozhodnute vyse. U druhe
-               -- dvojice je prepis navic zamer - vypnute titulky
-               -- se maji projevit tim, ze znacka zmizi, ne tim,
-               -- ze zustane viset posledni znamy jazyk.
+               -- Both pairs are written directly, without COALESCE:
+               -- what is to be written is decided above already. For the second
+               -- pair the rewrite is moreover intended - turned-off subtitles
+               -- are to show by the badge vanishing, not by
+               -- the last known language staying hanging.
                audio_language    = ?,
                subtitle_language = ?,
                language_since    = ?,
                language_confirmed = ?,
                current_audio_language    = ?,
                current_subtitle_language = ?,
-               -- Rozmery se doplni, jakmile je Jellyfin posle.
-               -- U prvniho snimku je nekdy jeste nema.
-               -- Delka se doplni, jakmile ji Jellyfin posle;
-               -- u prvniho snimku ji nekdy jeste nema.
+               -- The dimensions are filled in as soon as Jellyfin sends them.
+               -- At the first snapshot it sometimes does not have them yet.
+               -- The length is filled in as soon as Jellyfin sends it;
+               -- at the first snapshot it sometimes does not have it yet.
                media_runtime_ticks = COALESCE(media_runtime_ticks, ?),
                video_width       = COALESCE(video_width, ?),
                video_height      = COALESCE(video_height, ?),
-               -- Tenhle se naopak prepisuje pokazde: zajima nas
-               -- stav ted, ne ten pri spusteni.
+               -- This one on the contrary is rewritten every time: we care about
+               -- the state now, not the one at the start.
                is_paused         = ?
          WHERE id = ?
         """,
@@ -582,14 +604,14 @@ def _pokracuj_v_relaci(conn: Any, existing: Any, play_state: dict[str, Any], is_
             stream["video_direct"],
             stream["audio_direct"],
             stream["hw"],
-            vzorek_fps,
-            vzorek_fps or 0,
-            1 if vzorek_fps else 0,
+            fps_sample,
+            fps_sample or 0,
+            1 if fps_sample else 0,
             stream["video_fps"],
-            zapsany_zvuk,
-            zapsane_titulky,
-            jazyk_od,
-            1 if potvrzeno else 0,
+            stored_audio,
+            stored_subtitles,
+            language_since,
+            1 if confirmed else 0,
             chosen["audio_language"],
             chosen["subtitle_language"],
             stream["runtime_ticks"],
@@ -601,8 +623,8 @@ def _pokracuj_v_relaci(conn: Any, existing: Any, play_state: dict[str, Any], is_
     )
 
 
-def _ukonci_zmizele(conn: Any, active_keys: list[str], now: str) -> int:
-    """Ukončí aktivní záznamy, které Jellyfin už nehlásí. Vrátí, kolik jich bylo."""
+def _close_vanished(conn: Any, active_keys: list[str], now: str) -> int:
+    """Ends the active records Jellyfin no longer reports. Returns how many there were."""
     if active_keys:
         placeholders = ",".join("?" for _ in active_keys)
         cursor = conn.execute(
@@ -622,7 +644,7 @@ def _ukonci_zmizele(conn: Any, active_keys: list[str], now: str) -> int:
 
 
 def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dict[str, int]:
-    """Zapis snimku do databaze. Bezi ve vlakne, ne na smycce udalosti."""
+    """Writing the snapshot to the database. It runs in a thread, not on the event loop."""
     now = db.utcnow()
     now_dt = _parse(now)
 
@@ -633,7 +655,7 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
         for session in sessions:
             item = session.get("NowPlayingItem")
             if not item:
-                continue  # relace je pripojena, ale nic nehraje
+                continue  # the session is connected, but plays nothing
 
             key = _session_key(session, item)
             active_keys.append(key)
@@ -642,36 +664,36 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
             is_paused = bool(play_state.get("IsPaused"))
             stream = _describe_stream(session, item)
             chosen = jellyfin_languages(session, item)
-            # Vzorek do prumeru rychlosti prevodu - jen kdyz se doopravdy
-            # prevadi a nestoji to. Behem pauzy ffmpeg zpomali nebo stoji
-            # a prumer by tvrdil, ze server nestihal.
-            vzorek_fps = stream["fps"] if stream["fps"] and not is_paused else None
+            # A sample for the transcode speed average - only when it really
+            # transcodes and does not stand. During a pause ffmpeg slows down or
+            # stands and the average would claim the server did not keep up.
+            fps_sample = stream["fps"] if stream["fps"] and not is_paused else None
 
-            existing = _najdi_relaci(conn, key, session, item, play_state, now)
+            existing = _find_session(conn, key, session, item, play_state, now)
             if existing is None:
-                _zaloz_relaci(conn, key, session, item, play_state, is_paused, stream,
-                              chosen, vzorek_fps, now)
+                _create_session(conn, key, session, item, play_state, is_paused, stream,
+                                chosen, fps_sample, now)
                 started += 1
                 continue
 
-            _pokracuj_v_relaci(conn, existing, play_state, is_paused, stream, chosen,
-                               vzorek_fps, now, now_dt, max_gap_seconds)
+            _continue_session(conn, existing, play_state, is_paused, stream, chosen,
+                              fps_sample, now, now_dt, max_gap_seconds)
 
-        # Cokoliv, co je v databazi aktivni, ale Jellyfin uz to nehlasi, skoncilo.
-        ended = _ukonci_zmizele(conn, active_keys, now)
+        # Anything active in the database that Jellyfin no longer reports has ended.
+        ended = _close_vanished(conn, active_keys, now)
 
     return {"active": len(active_keys), "started": started, "ended": ended}
 
 
 async def run_forever() -> None:
-    """Nekonecna smycka, ktera bezi na pozadi po celou dobu behu aplikace.
+    """An endless loop running in the background for the whole time the application runs.
 
-    Nesmi nikdy spadnout. Kdyz Jellyfin vypadne, zapiseme chybu, pockame
-    a zkusime to znovu - aplikace jako celek bezi dal.
+    It must never fall. When Jellyfin drops out, we write the error, wait and
+    try again - the application as a whole runs on.
     """
     close_orphans()
 
-    backoff = 0  # kolik sekund navic cekat po chybe
+    backoff = 0  # how many seconds extra to wait after an error
 
     while True:
         interval = db.get_int_setting("poll_interval", minimum=2, maximum=300, fallback=10)
@@ -679,18 +701,18 @@ async def run_forever() -> None:
         try:
             async with JellyfinClient(*db.jellyfin_connection(),
                                       timeout=QUICK_TIMEOUT) as client:
-                # Uvnitr jednoho spojeni odbehneme vic snimku - navazovat
-                # HTTP spojeni pokazde znovu je zbytecna prace.
+                # Within one connection we run more snapshots - opening the
+                # HTTP connection again every time is needless work.
                 for _ in range(60):
                     result = await poll_once(client, max_gap_seconds=interval * 3)
                     db.set_setting(STATUS_KEY, "ok")
-                    db.set_setting(ERROR_KEY, "")
+                    clear_error()
                     db.set_setting(LAST_POLL_KEY, db.utcnow())
                     backoff = 0
 
                     if result["started"] or result["ended"]:
                         log.info(
-                            "prehravani: %d aktivnich, %d zacalo, %d skoncilo",
+                            "playbacks: %d active, %d started, %d ended",
                             result["active"], result["started"], result["ended"],
                         )
 
@@ -698,20 +720,18 @@ async def run_forever() -> None:
                     await asyncio.sleep(interval)
 
         except asyncio.CancelledError:
-            # Aplikace se vypina - uklidime po sobe a skoncime.
+            # The application shuts down - we clean up after ourselves and end.
             close_orphans()
             raise
         except JellyfinError as exc:
-            db.set_setting(STATUS_KEY, "error")
-            db.set_setting(ERROR_KEY, str(exc))
-            log.warning("sberac: %s", exc)
-        except Exception as exc:  # noqa: BLE001 - smycka nesmi umrit na nicem
-            db.set_setting(STATUS_KEY, "error")
-            db.set_setting(ERROR_KEY, f"Neočekávaná chyba: {exc}")
-            log.exception("sberac: neocekavana chyba")
+            store_error(exc)
+            log.warning("collector: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - the loop must not die of anything
+            store_error(i18n.Message("Unexpected error: {error}", error=exc))
+            log.exception("collector: unexpected error")
 
-        # Po chybe cekame postupne dele (2, 4, 8 ... max 60 s). Tomuhle se
-        # rika exponencialni backoff a je to slusne chovani vuci serveru,
-        # ktery ma zrovna problem.
+        # After an error we wait gradually longer (2, 4, 8 ... max 60 s). This is
+        # called exponential backoff and it is polite behaviour towards a server
+        # that has a problem right now.
         backoff = min(60, (backoff * 2) or 2)
         await asyncio.sleep(backoff)

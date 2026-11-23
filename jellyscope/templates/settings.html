@@ -1,98 +1,102 @@
 {% extends "base.html" %}
 {% from "_macros.html" import running_task, file_picker %}
-{% block title %}{{ _("Nastavení") }} &middot; Jellyscope{% endblock %}
+{% block title %}{{ _("Settings") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div>
-        <h1>{{ _("Nastavení") }}</h1>
+        <h1>{{ _("Settings") }}</h1>
     </div>
     {% if account.is_admin %}
-    {# Záměrně "Restartovat Jellyscope", ne jen "Restartovat" - u aplikace,
-       která je celá o Jellyfinu, by kratší popisek svedl k obavě, že se
-       restartuje mediální server. Restartuje se jen tenhle proces. #}
+    {# On purpose "Restart Jellyscope", not just "Restartovat" - in an app
+       that is all about Jellyfin, the shorter label would suggest that the
+       media server restarts. Only this process restarts. #}
     <form method="post" action="/settings/restart"
-          data-potvrdit="{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}">
+          data-confirm="{{ _("Only Jellyscope restarts, not Jellyfin. Playback on the server is not interrupted.") }}">
         <button class="btn" type="submit"
-                title="{{ _("Restartuje se jen Jellyscope, ne Jellyfin. Přehrávání na serveru to nijak nepřeruší.") }}">
-            &#8635; {{ _("Restartovat Jellyscope") }}
+                title="{{ _("Only Jellyscope restarts, not Jellyfin. Playback on the server is not interrupted.") }}">
+            &#8635; {{ _("Restart Jellyscope") }}
         </button>
     </form>
     {% endif %}
 </div>
 
-{# Rozcestník sekcí. Každá má vlastní adresu, takže funguje zpětné
-   tlačítko i posílání odkazu - a načítá se jen to, co je vidět. #}
-{# Na mobilu rozbalovací seznam, na desktopu záložky.
+{# The index of the sections. Each has its own address, so the back
+   button and sending a link work - and only what is visible loads. #}
+{# A drop-down list on a phone, tabs on the desktop.
 
-   Jedenáct záložek se na úzkou obrazovku vejde jen zalomením do šesti
-   řádků - 207 px odkazů, než člověk uvidí první nastavení. Seznam zabere
-   jeden řádek.
+   Eleven tabs fit on a narrow screen only by wrapping into six
+   rows - 207 px of links before a person sees the first setting. The list takes
+   one row.
 
-   Obojí se kreslí z `sekce_nabidka`, kterou skládá routa: dva ručně psané
-   seznamy by se časem rozešly a v jednom by nová sekce chyběla. #}
-<form method="get" action="/settings" class="tabs-vyber">
-    <label for="vyber-sekce">{{ _("Sekce") }}</label>
-    {# `onchange` odešle formulář, takže se vybírá jedním tahem. Bez
-       JavaScriptu zůstane tlačítko - v nastavení se člověk nesmí zaseknout
-       kvůli skriptu. #}
-    <select id="vyber-sekce" name="section" data-odeslat-pri-zmene>
-        {% for klic, nazev in sekce_nabidka %}
-            <option value="{{ klic }}" {{ 'selected' if section == klic }}>{{ nazev }}</option>
+   Both are drawn from `section_menu`, which the route builds: two hand-written
+   lists would drift apart in time and a new section would be missing in one. #}
+<form method="get" action="/settings" class="tabs-select">
+    <label for="section-select">{{ _("Section") }}</label>
+    {# `onchange` sends the form, so the choice takes one move. Without
+       JavaScript the button stays - a person must not get stuck in the settings
+       because of a script. #}
+    <select id="section-select" name="section" data-submit-on-change>
+        {% for key_name, section_label in section_menu %}
+            <option value="{{ key_name }}" {{ 'selected' if section == key_name }}>{{ section_label }}</option>
         {% endfor %}
     </select>
-    <noscript><button class="btn" type="submit">{{ _("Přejít") }}</button></noscript>
+    <noscript><button class="btn" type="submit">{{ _("Go") }}</button></noscript>
 </form>
 
 <div class="tabs">
-    {% for klic, nazev in sekce_nabidka %}
-        <a href="/settings?section={{ klic }}"
-           class="{{ 'active' if section == klic }}">{{ nazev }}</a>
+    {% for key_name, section_label in section_menu %}
+        <a href="/settings?section={{ key_name }}"
+           class="{{ 'active' if section == key_name }}">{{ section_label }}</a>
     {% endfor %}
 </div>
 
 {% if not account.is_admin %}
 <div class="flash info">
     <span class="dot"></span>
-    <span>{{ _("Tvůj účet vidí statistiky, ale nastavení měnit nemůže. Heslo si změníš níže.") }}</span>
+    <span>{{ _("Your account can see statistics but cannot change settings. You can change your password below.") }}</span>
 </div>
 {% endif %}
 
 
 {# ================================================================== #}
 {% if demo_mode %}
-{# Ať je to jasné dřív, než člověk začne vyplňovat. #}
+{# So it is clear before a person starts filling in. #}
 <div class="flash info" style="margin-bottom:18px">
     <span class="dot"></span>
     <span>
-        {{ _("V ukázce je nastavení jen na koukání: tlačítka fungují, ale nic neuloží. Data jsou vymyšlená a stejná pro všechny návštěvníky.") }}
+        {{ _("In the demo the settings are for looking at: the buttons work, they just save nothing. The data is made up and the same for every visitor.") }}
     </span>
 </div>
 {% endif %}
 
 {% if section == 'jellyfin' %}
-{%- include "nastaveni/jellyfin.html" -%}
+{%- include "settings/jellyfin.html" -%}
 {% elif section == 'data' %}
-{%- include "nastaveni/data.html" -%}
+{%- include "settings/data.html" -%}
 {% elif section == 'tasks' %}
-{%- include "nastaveni/tasks.html" -%}
+{%- include "settings/tasks.html" -%}
 {% elif section == 'import' %}
-{%- include "nastaveni/import.html" -%}
+{%- include "settings/import.html" -%}
 {% elif section == 'database' %}
-{%- include "nastaveni/database.html" -%}
+{%- include "settings/database.html" -%}
 {% elif section == 'accounts' %}
-{%- include "nastaveni/accounts.html" -%}
+{%- include "settings/accounts.html" -%}
 {% elif section == 'api' %}
-{%- include "nastaveni/api.html" -%}
+{%- include "settings/api.html" -%}
 {% elif section == 'blocks' %}
-{%- include "nastaveni/blocks.html" -%}
+{%- include "settings/blocks.html" -%}
 {% elif section == 'log' %}
-{%- include "nastaveni/log.html" -%}
+{%- include "settings/log.html" -%}
 {% elif section == 'notifications' %}
-{%- include "nastaveni/notifications.html" -%}
+{%- include "settings/notifications.html" -%}
+{% elif section == 'arr' %}
+{%- include "settings/arr.html" -%}
+{% elif section == 'seerr' %}
+{%- include "settings/seerr.html" -%}
 {% elif section == 'interface' %}
-{%- include "nastaveni/interface.html" -%}
+{%- include "settings/interface.html" -%}
 {% elif section == 'general' %}
-{%- include "nastaveni/general.html" -%}
+{%- include "settings/general.html" -%}
 {% endif %}
 {% endblock %}

@@ -1,0 +1,34 @@
+{# The Bazarr card "How fast subtitles arrive": from a file's import to the first subtitles.
+
+   From the database (cards_bazarr.py). The first subtitles of an episode or a film in each
+   language after its file's import minus that import in the history of Sonarr
+   or Radarr - hence the card exists only with one of them connected. Counted
+   after every import: subtitles for a file replaced by a better version too. Two things
+   are not counted and the card says how many: a title without a known import and a title
+   whose file was in the library before Bazarr started (it got subtitles in the
+   first bulk search - that would tell nothing about speed). #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("from the file's import to the first subtitles") }}</p>
+    </div>
+    <div class="kpi-row">
+        {{ tile(_("Median"), d.median) }}
+        {{ tile(_("90% within"), d.p90) }}
+    </div>
+    {# What is not counted and why - two different things, each in a sentence of its own. Sentences with
+       the number after a colon: "první titulky dílu v jazyce" cannot be declined by the number. #}
+    {% if d.before_bazarr %}
+    <p class="card-note">{{ _("Not counted when the file was in the library before Bazarr started: {n}×.").format(n=d.before_bazarr | number) }}</p>
+    {% endif %}
+    {% if d.not_imported %}
+    <p class="card-note">{{ _("Not counted when there is no file import in Sonarr's or Radarr's history: {n}×.").format(n=d.not_imported | number) }}</p>
+    {% endif %}
+    {% if d.count %}
+        {{ charts.hbar_chart(d.buckets, 'label', 'count', unit='', limit=5) | safe }}
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("The first subtitles of an episode or movie in each language are counted after every import of its file by Sonarr or Radarr - also after it is replaced by a better version. Counted: {n}×.").format(n=d.count | number) }}
+    </p>
+</div>

@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Agregační dotazy musí projít i na PostgreSQL.
+"""Aggregate queries must pass on PostgreSQL too.
 
-SQLite má úlevu, kterou skoro nikdo nezná: v dotazu s `GROUP BY` smí být
-ve výběru i sloupec, který se neseskupuje ani neagreguje. Hodnotu si pak
-vezme z **libovolného** řádku skupiny. PostgreSQL to odmítne:
+SQLite has a leniency almost nobody knows: in a query with `GROUP BY` the selection
+may contain a column that is neither grouped nor aggregated. It then takes the value
+from **any** row of the group. PostgreSQL refuses it:
 
     ERROR: column "i.audio_languages" must appear in the GROUP BY clause
            or be used in an aggregate function
 
-Takový dotaz tedy na SQLite roky funguje a v okamžiku, kdy někdo přepne
-databázi na PostgreSQL, spadne celá stránka na "internal server error" —
-přesně tohle se stalo záložce Jazyky.
+Such a query therefore works on SQLite for years and the moment somebody switches
+the database to PostgreSQL, the whole page falls over with "internal server error" -
+exactly this happened to the Languages tab.
 
-Zkontrolovat se to dá jen čtením dotazů, ne jejich spuštěním: bez
-PostgreSQL serveru se ta chyba nikdy neprojeví. Proto tenhle test.
+It can be checked only by reading the queries, not by running them: without
+a PostgreSQL server the error never shows. Hence this test.
 
-Nehledá obecně platné SQL — hledá jednu konkrétní past, o které víme,
-že se do projektu vloudí snadno a projeví se pozdě.
+It does not look for generally valid SQL - it looks for one particular trap we know
+slips into the project easily and shows late.
 """
 from __future__ import annotations
 
@@ -33,16 +33,16 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
-AGREGACE = re.compile(
+AGGREGATE = re.compile(
     r"\b(SUM|COUNT|AVG|MIN|MAX|TOTAL|GROUP_CONCAT|STRING_AGG)\s*\(", re.I)
 
-# Slova, která ve výběru nejsou odkaz na sloupec.
-KLICOVA = {
+# Words that are not a column reference in the selection.
+KEYWORDS = {
     "case", "when", "then", "else", "end", "as", "and", "or", "not", "null",
     "is", "in", "like", "cast", "integer", "real", "text", "distinct", "on",
     "coalesce", "select", "from", "where", "group", "by", "order", "limit",
@@ -50,193 +50,193 @@ KLICOVA = {
 }
 
 
-def rozdel_cárkami(text: str) -> list[str]:
-    """Rozdělí seznam na položky - čárky uvnitř závorek se nepočítají."""
-    kusy: list[str] = []
-    hloubka = 0
-    akt = ""
-    for znak in text:
-        if znak == "(":
-            hloubka += 1
-        elif znak == ")":
-            hloubka -= 1
-        if znak == "," and hloubka == 0:
-            kusy.append(akt)
-            akt = ""
+def split_by_commas(text: str) -> list[str]:
+    """Splits a list into items - commas inside parentheses do not count."""
+    pieces: list[str] = []
+    depth = 0
+    current = ""
+    for char in text:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if char == "," and depth == 0:
+            pieces.append(current)
+            current = ""
         else:
-            akt += znak
-    if akt.strip():
-        kusy.append(akt)
-    return [k.strip() for k in kusy if k.strip()]
+            current += char
+    if current.strip():
+        pieces.append(current)
+    return [k.strip() for k in pieces if k.strip()]
 
 
-def alias_a_vyraz(polozka: str) -> tuple[str, str]:
-    """Oddělí `výraz AS alias`. Hlídá AS uvnitř závorek (CAST(x AS INTEGER))."""
-    hloubka = 0
-    for shoda in re.finditer(r"\s+AS\s+", polozka, re.I):
-        hloubka = (polozka[:shoda.start()].count("(")
-                   - polozka[:shoda.start()].count(")"))
-        if hloubka == 0:
-            return polozka[:shoda.start()].strip(), polozka[shoda.end():].strip()
-    return polozka.strip(), ""
+def alias_and_expression(item: str) -> tuple[str, str]:
+    """Separates `expression AS alias`. Watches for AS inside parentheses (CAST(x AS INTEGER))."""
+    depth = 0
+    for match in re.finditer(r"\s+AS\s+", item, re.I):
+        depth = (item[:match.start()].count("(")
+                 - item[:match.start()].count(")"))
+        if depth == 0:
+            return item[:match.start()].strip(), item[match.end():].strip()
+    return item.strip(), ""
 
 
-def sloupce(vyraz: str) -> set[str]:
-    """Odkazy na sloupce ve výrazu - bez klíčových slov, čísel a řetězců."""
-    bez_retezcu = re.sub(r"'[^']*'", " ", vyraz)
-    nalezene = re.findall(r"[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)?",
-                          bez_retezcu)
-    return {n for n in nalezene
-            if n.lower() not in KLICOVA and not re.match(r"^\d", n)}
+def columns(expression: str) -> set[str]:
+    """Column references in an expression - without keywords, numbers and strings."""
+    without_strings = re.sub(r"'[^']*'", " ", expression)
+    found = re.findall(r"[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)?",
+                       without_strings)
+    return {n for n in found
+            if n.lower() not in KEYWORDS and not re.match(r"^\d", n)}
 
 
-def problemy_v_dotazu(sql: str) -> list[str]:
-    """Vrátí položky výběru, které by PostgreSQL odmítl."""
-    jednoradkove = " ".join(re.sub(r"--[^\n]*", " ", sql).split())
-    if not re.search(r"\bGROUP BY\b", jednoradkove, re.I):
+def query_problems(sql: str) -> list[str]:
+    """Returns the selection's items PostgreSQL would refuse."""
+    one_line = " ".join(re.sub(r"--[^\n]*", " ", sql).split())
+    if not re.search(r"\bGROUP BY\b", one_line, re.I):
         return []
 
-    vyber = re.search(r"\bSELECT\b(.*?)\bFROM\b", jednoradkove, re.I)
-    skupina = re.search(r"\bGROUP BY\b(.*?)(?:\bORDER BY\b|\bHAVING\b|\bLIMIT\b|$)",
-                        jednoradkove, re.I)
-    if not vyber or not skupina:
+    selection = re.search(r"\bSELECT\b(.*?)\bFROM\b", one_line, re.I)
+    grouping = re.search(r"\bGROUP BY\b(.*?)(?:\bORDER BY\b|\bHAVING\b|\bLIMIT\b|$)",
+                         one_line, re.I)
+    if not selection or not grouping:
         return []
 
-    seskupene: set[str] = set()
-    for polozka in rozdel_cárkami(skupina.group(1)):
-        seskupene.add(polozka.strip().lower())
-        seskupene |= {s.lower() for s in sloupce(polozka)}
+    grouped: set[str] = set()
+    for item in split_by_commas(grouping.group(1)):
+        grouped.add(item.strip().lower())
+        grouped |= {s.lower() for s in columns(item)}
 
-    nalezene: list[str] = []
-    for polozka in rozdel_cárkami(vyber.group(1)):
-        vyraz, alias = alias_a_vyraz(polozka)
+    found: list[str] = []
+    for item in split_by_commas(selection.group(1)):
+        expression, alias = alias_and_expression(item)
 
-        if AGREGACE.search(vyraz):
-            continue                       # agregace je vždycky v pořádku
-        if re.search(r"\bSELECT\b", vyraz, re.I):
-            continue                       # poddotaz má vlastní pravidla
-        if alias and alias.lower() in seskupene:
-            continue                       # seskupuje se podle aliasu
-        if vyraz.lower() in seskupene:
-            continue                       # seskupuje se podle celého výrazu
+        if AGGREGATE.search(expression):
+            continue                       # an aggregate is always fine
+        if re.search(r"\bSELECT\b", expression, re.I):
+            continue                       # a subquery has its own rules
+        if alias and alias.lower() in grouped:
+            continue                       # grouped by the alias
+        if expression.lower() in grouped:
+            continue                       # grouped by the whole expression
 
-        # Zbytek je v pořádku jen tehdy, když každý sloupec, na který
-        # sahá, je sám seskupený (třeba `i.runtime_ticks / 600.0`).
-        chybejici = {s for s in sloupce(vyraz) if s.lower() not in seskupene}
-        if chybejici:
-            nalezene.append(f"{polozka.strip()}   (chybí: {', '.join(sorted(chybejici))})")
+        # The rest is fine only when every column it touches
+        # is grouped itself (say `i.runtime_ticks / 600.0`).
+        missing = {s for s in columns(expression) if s.lower() not in grouped}
+        if missing:
+            found.append(f"{item.strip()}   (missing: {', '.join(sorted(missing))})")
 
-    return nalezene
+    return found
 
 
-print("--- kontrola sama sebe ---")
-# Kdyby kontrola přestala hledat, mlčela by a tvářila se, že je vše v pořádku.
-SPATNY = """
+print("--- the check of itself ---")
+# If the check stopped looking, it would stay silent and pretend everything is fine.
+BAD = """
     SELECT COALESCE(i.series_name, i.name) AS label, i.audio_languages,
            SUM(p.watched_seconds) AS hours
       FROM playback p JOIN items i ON i.id = p.item_id
      GROUP BY label
 """
-DOBRY = """
+GOOD = """
     SELECT COALESCE(i.series_name, i.name) AS label,
            MAX(i.audio_languages) AS audio_languages,
            SUM(p.watched_seconds) AS hours
       FROM playback p JOIN items i ON i.id = p.item_id
      GROUP BY label
 """
-check(len(problemy_v_dotazu(SPATNY)) == 1, "holý sloupec kontrola najde")
-check(problemy_v_dotazu(DOBRY) == [], "stejný dotaz s MAX() už projde")
-check(problemy_v_dotazu("SELECT a, b FROM t") == [], "dotaz bez GROUP BY se neřeší")
-check(problemy_v_dotazu(
+check(len(query_problems(BAD)) == 1, "the check finds a bare column")
+check(query_problems(GOOD) == [], "the same query with MAX() passes")
+check(query_problems("SELECT a, b FROM t") == [], "a query without GROUP BY is not dealt with")
+check(query_problems(
     "SELECT CAST(strftime('%H', x) AS INTEGER) AS hour, COUNT(*) AS n"
     " FROM t GROUP BY hour") == [],
-    "AS uvnitř CAST() nezmate hledání aliasu")
+    "AS inside CAST() does not confuse the search for the alias")
 
 
-MARKER = "__VYRAZ__"
+MARKER = "__EXPR__"
 
-# Řetězcové konstanty modulů (`DIVAK_SKUPINA = "p.user_id, …"`), které se
-# do dotazů dosazují - pod jménem i jako `modul.JMENO`. Ty se dosadí
-# doopravdy: jinak by kontrola u dotazu se sdíleným GROUP BY neviděla, co
-# se seskupuje, a hlásila by holé sloupce, které holé nejsou. Jen kousky,
-# ne celé dotazy: vnořený SELECT se svým GROUP BY by se připsal vnějšímu
-# výběru - a celé dotazy se tu kontrolují i samy o sobě.
-KONSTANTY: dict[str, str] = {}
-for _soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    for _uzel in ast.parse(_soubor.read_text(encoding="utf-8")).body:
-        if (isinstance(_uzel, ast.Assign) and len(_uzel.targets) == 1
-                and isinstance(_uzel.targets[0], ast.Name)
-                and isinstance(_uzel.value, ast.Constant) and isinstance(_uzel.value.value, str)
-                and not re.search(r"\bSELECT\b", _uzel.value.value, re.I)):
-            KONSTANTY[_uzel.targets[0].id] = _uzel.value.value
-            KONSTANTY[f"{_soubor.stem}.{_uzel.targets[0].id}"] = _uzel.value.value
-            # Podmodul balíku (jellyscope/stats/divaci.py) se volá i přes
-            # vstupní dveře balíku - `stats.DIVAK_SKUPINA`.
-            if _soubor.parent.name != "jellyscope":
-                KONSTANTY[f"{_soubor.parent.name}.{_uzel.targets[0].id}"] = _uzel.value.value
+# String constants of modules (`VIEWER_GROUP = "p.user_id, …"`) that are
+# substituted into queries - under their name and as `module.NAME`. These are substituted
+# for real: otherwise the check would not see what is grouped in a query with a shared GROUP BY,
+# and would report bare columns that are not bare. Only pieces,
+# not whole queries: a nested SELECT with its own GROUP BY would be credited to the outer
+# selection - and the whole queries are checked here on their own too.
+CONSTANTS: dict[str, str] = {}
+for _source_file in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    for _node in ast.parse(_source_file.read_text(encoding="utf-8")).body:
+        if (isinstance(_node, ast.Assign) and len(_node.targets) == 1
+                and isinstance(_node.targets[0], ast.Name)
+                and isinstance(_node.value, ast.Constant) and isinstance(_node.value.value, str)
+                and not re.search(r"\bSELECT\b", _node.value.value, re.I)):
+            CONSTANTS[_node.targets[0].id] = _node.value.value
+            CONSTANTS[f"{_source_file.stem}.{_node.targets[0].id}"] = _node.value.value
+            # A package's submodule (jellyscope/stats/viewers.py) is called through
+            # the package's front door too - `stats.VIEWER_GROUP`.
+            if _source_file.parent.name != "jellyscope":
+                CONSTANTS[f"{_source_file.parent.name}.{_node.targets[0].id}"] = _node.value.value
 
 
-def _konstanta(vyraz: ast.AST) -> str | None:
-    """Hodnota dosazené konstanty (JMENO nebo modul.JMENO), jinak None."""
-    if isinstance(vyraz, ast.Name):
-        return KONSTANTY.get(vyraz.id)
-    if isinstance(vyraz, ast.Attribute) and isinstance(vyraz.value, ast.Name):
-        return KONSTANTY.get(f"{vyraz.value.id}.{vyraz.attr}")
+def _constant(expression: ast.AST) -> str | None:
+    """The value of a substituted constant (NAME or module.NAME), otherwise None."""
+    if isinstance(expression, ast.Name):
+        return CONSTANTS.get(expression.id)
+    if isinstance(expression, ast.Attribute) and isinstance(expression.value, ast.Name):
+        return CONSTANTS.get(f"{expression.value.id}.{expression.attr}")
     return None
 
 
-def text_dotazu(uzel: ast.AST) -> str | None:
-    """Text SQL z uzlu — obyčejný řetězec i f-string.
+def query_text(node: ast.AST) -> str | None:
+    """The SQL text from a node - a plain string and an f-string too.
 
-    Část dotazů se skládá f-stringem, protože se v nich liší funkce podle
-    dialektu (`group_concat_distinct`). Kdyby se f-stringy přeskakovaly,
-    kontrola by mlčky vynechala právě ty nejzajímavější dotazy — mimo jiné
-    ten, kvůli kterému tenhle test vznikl. Dosazované výrazy nahradíme
-    značkou; položky, které ji obsahují, se pak posoudit nedají, ale
-    zbytek dotazu se zkontroluje normálně.
+    Part of the queries is put together with an f-string, because a function in them differs by
+    the dialect (`group_concat_distinct`). If f-strings were skipped,
+    the check would silently leave out exactly the most interesting queries - among others
+    the one this test was made for. Substituted expressions are replaced by
+    a marker; items that contain it cannot be judged then, but
+    the rest of the query is checked normally.
     """
-    if isinstance(uzel, ast.Constant) and isinstance(uzel.value, str):
-        return uzel.value
-    if isinstance(uzel, ast.JoinedStr):
-        kusy = []
-        for cast in uzel.values:
-            if isinstance(cast, ast.Constant) and isinstance(cast.value, str):
-                kusy.append(cast.value)
-            elif isinstance(cast, ast.FormattedValue) and _konstanta(cast.value) is not None:
-                kusy.append(_konstanta(cast.value))
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        pieces = []
+        for part in node.values:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                pieces.append(part.value)
+            elif isinstance(part, ast.FormattedValue) and _constant(part.value) is not None:
+                pieces.append(_constant(part.value))
             else:
-                kusy.append(MARKER)
-        return "".join(kusy)
+                pieces.append(MARKER)
+        return "".join(pieces)
     return None
 
 
 print()
-print("--- všechny dotazy v projektu ---")
-celkem = 0
-dosazovane = 0
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    strom = ast.parse(soubor.read_text(encoding="utf-8"))
-    for uzel in ast.walk(strom):
-        sql = text_dotazu(uzel)
+print("--- all the queries in the project ---")
+total = 0
+substituted = 0
+for source_file in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        sql = query_text(node)
         if sql is None or "GROUP BY" not in sql.upper():
             continue
-        celkem += 1
+        total += 1
         if MARKER in sql:
-            dosazovane += 1
-        # Položky s dosazeným výrazem posoudit nejdou - nevíme, co v nich
-        # bude. Ostatní ano.
-        nalezene = [p for p in problemy_v_dotazu(sql) if MARKER not in p]
-        for popis in nalezene:
-            print(f"       {soubor.name}:{uzel.lineno}  {popis}")
-        check(not nalezene, f"{soubor.name}:{uzel.lineno}")
+            substituted += 1
+        # Items with a substituted expression cannot be judged - we do not know what will
+        # be in them. The others can.
+        found = [p for p in query_problems(sql) if MARKER not in p]
+        for problem in found:
+            print(f"       {source_file.name}:{node.lineno}  {problem}")
+        check(not found, f"{source_file.name}:{node.lineno}")
 
-check(celkem >= 5, f"našlo se dost agregačních dotazů ({celkem})")
-check(dosazovane >= 1, f"kontrolují se i skládané f-stringem ({dosazovane})")
-# Kontrola sebe: dotaz se sdíleným GROUP BY (stats.DIVAK_SKUPINA) se
-# posoudí celý, ne jako „nevíme".
-check("p.user_id IS NULL" in KONSTANTY.get("DIVAK_PORADI", ""), "konstanty dotazů se dosazují")
+check(total >= 5, f"enough aggregate queries were found ({total})")
+check(substituted >= 1, f"the ones put together with an f-string are checked too ({substituted})")
+# The check of itself: a query with a shared GROUP BY (stats.VIEWER_GROUP) is
+# judged whole, not as "we do not know".
+check("p.user_id IS NULL" in CONSTANTS.get("VIEWER_ORDER", ""), "the queries' constants are substituted")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

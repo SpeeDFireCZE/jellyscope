@@ -1,0 +1,199 @@
+{# The window "How to use it" for the read API. It is needed in Settings
+   → API (the admin) and on the My account page (a user with a key of their own)
+   alike, so it is here once - two copied guides would drift apart in time.
+
+   Context:
+     api_guide_paths     - the addresses the signed-in account's key may use
+                           (api.allowed_paths; an admin gets all of them).
+                           Required: without it the window shows no address -
+                           better an empty table than the whole API for a reader
+                           whose page forgot to pass the list.
+     api_sample          - the address for the curl example. Without it /api/v1/summary.
+     api_guide_fields    - the list fields of the allowed addresses (api.path_fields) for
+                           the expandable "Fields for filters and sorting" at an address.
+     api_guide_operators - operators by the field's type (api_query.OPERATORS).
+
+   The table is a list (address, sample call, description): it is filtered by the first
+   column, so the user does not see addresses that would return 403 to them.
+   It is written by hand because of the descriptions; test_api_keys checks that every
+   address of api.ADDRESS_AREAS is in it.
+
+   Sentences only for readers and viewers ("jen adresy, na které tvůj klíč smí",
+   "správce vidí použití") follow the role, not the page they are on -
+   an admin on the My account page is still an admin. #}
+{% set allowed = api_guide_paths or [] %}
+{% set for_reader = not (account and account.is_admin) %}
+{% set sample = api_sample or "/api/v1/summary" %}
+{% set endpoint_fields = api_guide_fields or {} %}
+{% set field_types = {"text": _("text"), "number": _("number"), "time": _("time"),
+                    "bool": _("yes/no")} %}
+{% set endpoint_rows = [
+    ("/api/v1/", "GET /api/v1/",
+     _("An index: the version and the list of addresses.")),
+    ("/api/v1/summary", "GET /api/v1/summary?days=30",
+     _("Watching over a period: hours watched, plays, viewers, titles, the transcode share and how much is playing right now.")),
+    ("/api/v1/now-playing", "GET /api/v1/now-playing",
+     _("Playback running right now: who, what, on what, whether it is being transcoded and how far in it is.")),
+    ("/api/v1/library", "GET /api/v1/library",
+     _("The size of the library, item counts, free space and the growth over a period.")),
+    ("/api/v1/libraries", "GET /api/v1/libraries",
+     _("Every library on its own: items, size, hours of content.")),
+    ("/api/v1/top-items", "GET /api/v1/top-items?days=30&limit=10&kind=both",
+     _("Most watched titles; episodes of a series add up. kind = both / movies / series.")),
+    ("/api/v1/least-played", "GET /api/v1/least-played?days=365&limit=25&min_size_mb=0&order=size",
+     _("Files from the least played up, never played first. With the same play count the largest first, or by date added: order = oldest / newest. With the last time each was played, over the whole history.")),
+    ("/api/v1/unwatched", "GET /api/v1/unwatched?days=365&limit=25",
+     _("What nobody watched over the period and how much space it takes, as a share of the library too.")),
+    ("/api/v1/users", "GET /api/v1/users?days=30",
+     _("Viewers and their watching over the period: hours, plays, titles, transcodes.")),
+    ("/api/v1/history", "GET /api/v1/history?days=30&limit=50&kind=both",
+     _("Recent playbacks, newest first. No IP addresses; the API never hands those out.")),
+    ("/api/v1/recently-added", "GET /api/v1/recently-added?limit=18",
+     _("What came into the library last.")),
+    ("/api/v1/play-methods", "GET /api/v1/play-methods?days=30",
+     _("Direct play against transcoding, and what people watch with.")),
+    ("/api/v1/insights", "GET /api/v1/insights?days=30&limit=15",
+     _("The Insights page in numbers: what gets transcoded most, what deserves better quality, large and rarely watched, never finished, and the conversion speed in frames per second.")),
+    ("/api/v1/bandwidth", "GET /api/v1/bandwidth?days=30",
+     _("Data sent out, the peak, transcode share, home against internet and by country. Without addresses.")),
+    ("/api/v1/item/{id}", "GET /api/v1/item/<id>",
+     _("One title: the file, its versions and who watched it.")),
+] %}
+<dialog class="modal modal-wide" id="modal-api-docs">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("API for tools") }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+
+    <div class="modal-body">
+        <p>
+            {{ _("The API hands finished numbers to the tools that build dashboards out of them: Grafana, Homepage, a script of your own. It only reads: everything under /api/ is a GET, and anything else ends in an error.") }}
+        </p>
+
+        <h3 class="group">{{ _("Authentication") }}</h3>
+        <p class="card-note">
+            {{ _("The key goes in a header. It does not belong in the address, which ends up in the proxy log, in the browser history and in the link somebody passes on.") }}
+        </p>
+        <pre style="overflow-x:auto"><code>curl -H "Authorization: Bearer {{ _("YOUR_KEY") }}" \
+     {{ request.base_url }}{{ sample[1:] }}</code></pre>
+
+        <h3 class="group">{{ _("What you can ask for") }}</h3>
+        {% if for_reader %}
+        <p class="card-note">{{ _("Only the addresses your key may use. The key may do exactly what you may.") }}</p>
+        {% endif %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Address") }}</th>
+                    <th>{{ _("What it returns") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for endpoint, calls, description in endpoint_rows if endpoint in allowed %}
+                <tr>
+                    <td class="nowrap"><code>{{ calls }}</code></td>
+                    <td>
+                        {{ description }}
+                        {# The fields are taken from api.LISTS - the same description
+                           the query is checked by. `.items()` is the
+                           dict's method here, not the list key "items". #}
+                        {% set endpoint_lists = endpoint_fields.get(endpoint) %}
+                        {% if endpoint_lists %}
+                        <details class="api-fields" data-endpoint-fields="{{ endpoint }}">
+                            <summary>{{ _("Fields for filters and sorting") }}</summary>
+                            {% for list_name, fields in endpoint_lists.items() %}
+                            <p>
+                                {% if endpoint_lists | length > 1 %}<strong>{{ list_name }}.</strong>{% endif %}
+                                {% for field_name, field_type in fields.items() %}<code>{{ field_name }}</code>&nbsp;<span class="api-type">{{ field_types[field_type] }}</span>{{ ", " if not loop.last }}{% endfor %}
+                            </p>
+                            {% endfor %}
+                        </details>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="card-note">{{ _("Every item that is one file (least played, unwatched, recently added, one title, and oversized in Insights) carries its full path and tmdb_id. For an episode tmdb_id is the series' TMDB id, and season and episode say which one.") }}</p>
+
+        {# Filters, sorting and the limit (api_query). Examples only for addresses
+           the key may use - the same as the table above. #}
+        <h3 class="group">{{ _("Filtering and sorting") }}</h3>
+        <p class="card-note">
+            {{ _("Every list can be narrowed with a filter field[operator]=value, sorted with sort and cut with limit. You can use several filters and all of them must match. The order is always filters, then sorting, then limit, so the limit never cuts off what the filter is looking for.") }}
+        </p>
+        {% set examples = [
+            ("/api/v1/least-played",
+             "GET /api/v1/least-played?path[starts_with]=/media/filmy&sort=plays,added_at&limit=5",
+             _("The 5 least played files in a folder, the oldest added first when the play count is the same.")),
+            ("/api/v1/unwatched",
+             "GET /api/v1/unwatched?path[starts_with]=/media/serialy",
+             _("How much space the unwatched files in one folder take. The totals count only the chosen files.")),
+            ("/api/v1/history",
+             "GET /api/v1/history?is_transcode[equals]=true&sort=-watched_seconds&limit=10",
+             _("The 10 longest transcoded playbacks. A minus in sort sorts descending.")),
+            ("/api/v1/insights",
+             "GET /api/v1/insights?never_finished.best_percent[lt]=50&sort=-never_finished.attempts",
+             _("Addresses with several lists (insights, play-methods) want the list name before the field. Without a filter they return every list as before.")),
+        ] %}
+        <ul class="api-examples">
+            {% for endpoint, calls, description in examples if endpoint in allowed %}
+            <li><code>{{ calls }}</code><span class="card-note">{{ description }}</span></li>
+            {% endfor %}
+        </ul>
+        <div class="table-wrap">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Field type") }}</th>
+                    <th>{{ _("Operators") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for field_type, operators in (api_guide_operators or {}).items() %}
+                <tr>
+                    <td class="nowrap">{{ field_types[field_type] }}</td>
+                    <td>{% for op in operators %}<code>{{ op }}</code>{{ " " if not loop.last }}{% endfor %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <ul class="card-note" style="margin:0; padding-left:18px">
+            <li>{{ _("Text ignores upper and lower case. in takes values separated by commas, empty=true finds fields without a value.") }}</li>
+            <li>{{ _("Time is written 2026-10-01 or 2026-10-01 18:30:00, in UTC like in the response.") }}</li>
+            <li>{{ _("sort=field,-field sorts by at most three fields, empty values always come last.") }}</li>
+            <li>{{ _("A malformed request (unknown parameter, field, operator or value) returns 400 with an error code in the body, such as unknown_field. Default data never come back instead.") }}</li>
+            <li>{{ _("The index /api/v1/ also returns the fields and types of every address.") }}</li>
+        </ul>
+
+        {# The sample is the answer of /summary - for whoever may not use it, it would only
+           show something they do not get themselves. For the same reason active_now
+           only with "Now playing": without it the answer lacks it. #}
+        {% if "/api/v1/summary" in allowed %}
+        <h3 class="group">{{ _("A sample answer") }}</h3>
+        <pre><code>{
+  "days": 30,
+  "watched_hours": 647.0,
+  "plays": 1066,
+  "users": 11,
+  "titles": 36,
+  "transcode_share_percent": 29.6{% if "/api/v1/now-playing" in allowed %},
+  "active_now": 1{% endif %}
+}</code></pre>
+        {% endif %}
+
+        <h3 class="group">{{ _("What to watch out for") }}</h3>
+        <ul class="card-note" style="margin:0; padding-left:18px">
+            <li>{{ _("A key is shown once, when it is made. After that only the first few characters remain, because what is stored is a hash, not the key.") }}</li>
+            <li>{{ _("A lost key is not recovered; revoke it and make a new one. No other key is affected.") }}</li>
+            <li>{{ _('There can be several keys, one per tool. The "last used" column then shows which one nobody uses any more.') }}</li>
+            <li>{{ _("A key may do exactly what its owner may: whoever lacks the Network area does not get /api/v1/bandwidth either, and the API hides other people's names from them just like the pages do.") }}</li>
+            {% if for_reader %}
+            {# The user is to know their queries are written down - with the address
+               they came from. Otherwise it would be silent tracking. #}
+            <li>{{ _("The admin sees when and from where (IP address included) your key was used, and can disable it.") }}</li>
+            {% endif %}
+            <li>{{ _("The answers carry no CORS headers, so no other site can read them in a browser. The API is for tools on a server.") }}</li>
+        </ul>
+    </div>
+</dialog>

@@ -1,0 +1,32 @@
+{# The books card "Readers and listeners": who reads and listens how much and which book the most.
+
+   All about people, hence it has an area of its own "...including who read and listened" (books_who): whoever does
+   not have it does not get the card and the data are not computed. Names are guarded by anonymisation (the rows carry
+   user_id). A reader is a link to their page only for whoever may open it (the link macro). A long table: the first
+   rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Reader") }}</th>
+            <th class="num">{{ _("Time") }}</th>
+            <th class="wide-wrapper-only">{{ _("Book") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for p in d.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{% call link("/users/" ~ p.user_id if p.user_id else "") %}{{ p.user_name or "–" }}{% endcall %}
+                    <div class="narrow-wrapper-only cell-sub">{% call link(p.work_link) %}{{ p.work or "–" }}{% endcall %}</div></td>
+                <td class="num strong">{{ p.seconds | seconds }}</td>
+                <td class="wide-wrapper-only break-anywhere">{% call link(p.work_link) %}{{ p.work or "–" }}{% endcall %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length) }}
+    {% else %}<p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>{% endif %}
+</div>

@@ -1,0 +1,51 @@
+{# Music's overview - laid out like the overview of Movies & series (video/overview.html, the user, 22. 11. 2026):
+   the newly added albums at the top, then one heading "Statistics" with the period, the numbers, listening by day,
+   the listeners beside the short chart, how it is played, the data sent, and when people listen. The full charts
+   are on Insights (music/insights.html), the library's cards on the Library page.
+
+   The cards are from the registry (jellyscope/cards_music.py, PAGES["overview"]) - the same ones that can be added
+   to a custom dashboard; which of them the account sees was decided by the route (web/music/overview.py, `cards`):
+   without the area "...including who listened" the card "Listeners" is not here. #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}{{ _("Overview") }} &middot; {{ _("Music") }} &middot; Jellyscope{% endblock %}
+
+{# A music card by its name ("albums" -> music_albums). #}
+{% macro c(card_name) %}{{ show_card("music_" ~ card_name) }}{% endmacro %}
+
+{% block content %}
+{# At the top the albums added to the library last, like "Recently added" of Movies & series. #}
+{{ c("new") }}
+
+<div class="section-head" style="margin-top:34px">
+    <div>
+        <h2>{{ _("Statistics") }}</h2>
+        <p class="card-note">
+            {% if period.own %}{{ _("Listening in the selected period.") }}
+            {% elif days == 365 %}{{ _("Listening over the last year.") }}
+            {% else %}{{ _("Listening over the last {period}.").format(period=_(day_labels[days])) }}
+            {% endif %}
+        </p>
+    </div>
+    {{ period_filter(period, '/music/overview') }}
+</div>
+
+{{ c("numbers") }}
+{{ c("by_day") }}
+
+<div class="grid-2 align-top">
+    {{ c("listeners") }}
+    {{ c("most_played") }}
+</div>
+
+<div class="grid-2 align-top">
+    {{ c("method") }}
+    {{ c("clients") }}
+</div>
+
+{{ c("network") }}
+{{ c("when") }}
+
+{# One window for the whole table of any card (whole_table_button, data-table-window). #}
+{{ table_window() }}
+{% endblock %}

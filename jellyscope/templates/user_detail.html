@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile with context %}
+{% from "_macros.html" import period_filter, tile, link with context %}
 {% block title %}{{ user.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -7,45 +7,57 @@
     <div>
         <h1>{{ user.name }}</h1>
         <p class="subtitle">
-            <a href="/users">&larr; {{ _("zpět na uživatele") }}</a>
-            {# Stejné tři podoby jako na seznamu uživatelů (users.html). #}
+            <a href="/users">&larr; {{ _("back to users") }}</a>
+            {# The same three forms as on the list of users (users.html). #}
             &middot;
-            {% if obdobi.vlastni %}{{ _("ve vybraném období") }}
-            {% elif days == 365 %}{{ _("za poslední rok") }}
-            {% else %}{{ _("za posledních {obdobi}").format(obdobi=_(day_labels[days])) }}
+            {% if period.own %}{{ _("in the selected period#alt") }}
+            {% elif days == 365 %}{{ _("over the last year") }}
+            {% else %}{{ _("over the last {period}").format(period=_(day_labels[days])) }}
             {% endif %}
         </p>
     </div>
-    {{ period_filter(obdobi, '/users/' ~ user.id) }}
+    {{ period_filter(period, '/users/' ~ user.id) }}
 </div>
 
 <div class="kpi-row">
-    {{ tile(_("Odsledováno"), totals.hours | hours) }}
-    {{ tile(_("Spuštění"), totals.plays | number) }}
-    {{ tile(_("Různých titulů"), totals.item_count | number) }}
+    {{ tile(_("Watched"), totals.hours | hours) }}
+    {{ tile(_("Plays#starts"), totals.plays | number) }}
+    {{ tile(_("Distinct titles"), totals.item_count | number) }}
 </div>
+
+{# Music listening apart: it does not count into the watching above. Only with the Music
+   area (the route sends None otherwise) and only when the viewer listened to something in the period. #}
+{% if music_listening and music_listening.seconds %}
+<div class="kpi-row">
+    {{ tile(_("Music listening"), music_listening.seconds | seconds, note=_("not counted as watching")) }}
+    {{ tile(_("Track plays"), music_listening.plays | number) }}
+    {# The artist leads to their page (the `set` block is ready HTML, the tile just inserts it). #}
+    {% set artist %}{% call link("/music/artist/" ~ music_listening.artist_id if music_listening.artist_id else "") %}{{ music_listening.artist or "–" }}{% endcall %}{% endset %}
+    {{ tile(_("Most played artist"), artist) }}
+</div>
+{% endif %}
 
 <div class="grid-2">
     <div class="card">
         <div class="card-head">
-            <h2>{{ _("Nejsledovanější") }}</h2>
-            <p class="card-note">{{ _("v hodinách, kliknutím na titul se otevře v knihovně") }}</p>
+            <h2>{{ _("Most watched") }}</h2>
+            <p class="card-note">{{ _("in hours, click a title to open it in the library") }}</p>
         </div>
         {{ charts.hbar_chart(top_items, 'label', 'hours',
-                     link_prefix='/item/', link_key='item_id', smi=smi) | safe }}
+                     link_prefix='/item/', link_key='item_id', may_open=may_open) | safe }}
     </div>
 
     <div class="card">
         <div class="card-head">
-            <h2>{{ _("Zařízení") }}</h2>
-            <p class="card-note">{{ _("v hodinách") }}</p>
+            <h2>{{ _("Device") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
         </div>
         {{ charts.hbar_chart(devices, 'label', 'hours') | safe }}
         <div class="table-wrap" style="margin-top:14px">
             <table>
                 <thead><tr>
-                    <th>{{ _("Zařízení") }}</th><th>{{ _("Přehrávače") }}</th>
-                    <th class="num">{{ _("Hodiny") }}</th>
+                    <th>{{ _("Device") }}</th><th>{{ _("Players") }}</th>
+                    <th class="num">{{ _("Hours") }}</th>
                 </tr></thead>
                 <tbody>
                 {% for row in devices %}
@@ -61,31 +73,31 @@
     </div>
 </div>
 
-{% if smi("/history") %}
+{% if may_open("/history") %}
 <div class="card">
     <div class="btn-row">
         <a class="btn" href="/history?user_id={{ user.id }}">
-            {{ _("Zobrazit celou historii tohoto uživatele") }}
+            {{ _("Show this user's full history") }}
         </a>
     </div>
 </div>
 {% endif %}
 
-{# Žánry. Kruhový výseč se čte hůř než sloupce, ale otázka "jaký díl
-   z celku" je přesně ta, kde se vyplatí - a dílů je málo. #}
+{# Genres. A pie is read worse than bars, but the question "what part
+   of the whole" is exactly where it pays off - and there are few parts. #}
 <div class="card" style="margin-top:18px">
     <div class="card-head">
-        <h2>{{ _("Jaké žánry sleduje") }}</h2>
-        <p class="card-note">{{ _("podle odsledovaného času") }}</p>
+        <h2>{{ _("Which genres they watch") }}</h2>
+        <p class="card-note">{{ _("by watched time") }}</p>
     </div>
     {% if genres %}
         {{ charts.donut_chart(genres, 'label', 'hours') | safe }}
         <p class="card-note" style="margin-top:14px">
-            {{ _("Jeden titul má obvykle žánrů víc, takže se jeho čas počítá do každého z nich. Procenta se proto nesčítají na sto. Žánry hlásí Jellyfin tak, jak je má u titulů vyplněné.") }}
+            {{ _("A title usually has several genres, so its time counts towards each of them and the percentages do not add up to a hundred. Genres come from Jellyfin exactly as they are filled in there.") }}
         </p>
     {% else %}
         <p class="card-note">
-            {{ _("Zatím nevíme. Žánry se doplní při další synchronizaci knihovny.") }}
+            {{ _("Not known yet. Genres get filled in during the next library sync.") }}
         </p>
     {% endif %}
 </div>

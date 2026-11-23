@@ -1,22 +1,24 @@
-"""Kresleni grafu.
+"""Drawing charts.
 
-Grafy se tu kresli dvema zpusoby a vyber mezi nimi neni nahodny:
+Charts are drawn here in two ways and the choice between them is not random:
 
-* **HTML + CSS** - vodorovne sloupce, deleny pruh, teplotni mapa.
-  Vsechno, co je v podstate obdelnik s popiskem. Prohlizec to sam
-  prizpusobi sirce okna, text zustane citelny a nic se nemusi posouvat.
+* **HTML + CSS** - horizontal bars, a split bar, a heat map.
+  Everything that is essentially a rectangle with a label. The browser fits
+  it to the window's width by itself, the text stays readable and nothing
+  has to scroll.
 
-* **SVG** - carove a plosne grafy, minigrafy.
-  Tam, kde je potreba skutecna krivka, kterou z obdelniku neposkladas.
+* **SVG** - line and area charts, sparklines.
+  Where a real curve is needed that you cannot put together from rectangles.
 
-Puvodne bylo v SVG uplne vsechno a melo to jednu nepekou vlastnost: obrazek
-mel pevnou sirku, takze se na uzsim okne musel posouvat do strany. To je
-u statistiky, kterou chces prelet ocima, spatne. HTML tuhle potiz nema -
-proto se vetsina grafu presunula tam.
+Originally absolutely everything was in SVG and it had one unpleasant
+property: the picture had a fixed width, so on a narrower window it had to
+scroll sideways. That is bad for statistics you want to run your eyes over.
+HTML does not have this trouble - so most charts moved there.
 
-Barvy se nikde nepisou primo. Kreslime pomoci CSS promennych
-(var(--series-1)), ktere jsou ve style.css - diky tomu maji grafy spravne
-barvy ve svetlem i tmavem rezimu, aniz by o tom tenhle soubor musel vedet.
+Colours are never written directly. We draw with CSS variables
+(var(--series-1)), which are in style.css - thanks to that the charts have the
+right colours in the light and the dark mode, without this file having to know
+about it.
 """
 
 from __future__ import annotations
@@ -31,169 +33,171 @@ from collections.abc import Callable, Sequence
 
 from .i18n import translate as _t
 
-# Slot barev pro rozliseni serii. Poradi je zamerne - je vybrane tak, aby
-# sousedni dvojice rozeznal i clovek s poruchou barvocitu. Nikdy ho nemen
-# a nikdy nepridavej devatou barvu; radeji zbytek sluc do "Ostatni".
+# Colour slots for telling series apart. The order is on purpose - it is picked
+# so that even a person with a colour vision deficiency tells neighbouring pairs
+# apart. Never change it and never add a ninth colour; rather merge the rest into "Other".
 SERIES_SLOTS = 8
 
 
-# Pocitadlo pro jmena prechodu (gradientu). Dva grafy na jedne strance
-# nesmi sahat po stejnem "id": prohlizec by druhemu podstrcil vypln toho
-# prvniho. Staci rostouci cislo - v ramci jedne stranky je jedinecne.
-_PORADI_PRECHODU = itertools.count(1)
+# A counter for the names of gradients. Two charts on one page must not reach
+# for the same "id": the browser would hand the second the fill of the first.
+# A growing number is enough - within one page it is unique.
+_TRANSITION_ORDER = itertools.count(1)
 
 
-def _prechod(slot: int, jmeno: str, sila: float = 0.34,
-             barva: str | None = None) -> str:
-    """Svisly prechod z barvy serie do prazdna.
+def _transition(slot: int, name: str, strength: float = 0.34,
+                colour: str | None = None) -> str:
+    """A vertical gradient from the series' colour to nothing.
 
-    Plna poloprusvitna vypln ma dve vady. U prekryvu dvou serii vznikne
-    treti, kalna barva, ve ktere se obe ztrati. A u zeme je nejvic
-    inkoustu prave tam, kde zadna informace neni - dulezity je horni
-    okraj plochy, tedy sama cara.
+    A full semi-transparent fill has two flaws. Where two series overlap a
+    third, murky colour appears, in which both get lost. And at the bottom
+    there is the most ink exactly where there is no information - what matters
+    is the area's top edge, that is the line itself.
 
-    Prechod obojiho zbavi: nahore drzi barvu serie, dole mizi.
+    The gradient gets rid of both: at the top it holds the series' colour, at
+    the bottom it fades.
     """
-    barva = barva or f"var(--series-{slot})"
+    colour = colour or f"var(--series-{slot})"
     return (
-        f'<linearGradient id="{jmeno}" x1="0" y1="0" x2="0" y2="1">'
-        f'<stop offset="0%" stop-color="{_barva(barva)}" '
-        f'stop-opacity="{sila:.2f}" />'
-        f'<stop offset="100%" stop-color="{_barva(barva)}" '
+        f'<linearGradient id="{name}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0%" stop-color="{_colour(colour)}" '
+        f'stop-opacity="{strength:.2f}" />'
+        f'<stop offset="100%" stop-color="{_colour(colour)}" '
         f'stop-opacity="0.015" />'
         f"</linearGradient>"
     )
 
 
-def _cesta_schody(body: Sequence[tuple[float, float]]) -> str:
-    """Schodovita cara - drzi hodnotu, pak skoci na dalsi.
+def _step_path(points: Sequence[tuple[float, float]]) -> str:
+    """A stepped line - holds the value, then jumps to the next.
 
-    Pro veliciny, ktere se **nemeni plynule**. Soubezny tok ze serveru je
-    presne takovy: dokud nikdo nezacne ani neskonci, je porad stejny, a v
-    okamziku, kdy stream nabehne, skoci. Hlazena krivka by mezi dvema
-    body dokreslila naberh, ktery nikdy nenastal - a hlavne by z desiti
-    minut prehravani udelala mekky kopec pres pul hodiny.
+    For quantities that **do not change smoothly**. The concurrent flow from
+    the server is exactly such: as long as nobody starts or ends, it stays the
+    same, and the moment a stream starts it jumps. A smoothed curve would draw a
+    rise between two points that never happened - and above all it would make
+    a soft hill over half an hour out of ten minutes of playback.
 
-    Rozdil proti _cesta(): tam je krivka tvar (kolik hodin se kdy divalo),
-    tady je to zaznam stavu.
+    The difference from _path(): there the curve is a shape (how many hours
+    were watched when), here it is a record of a state.
     """
-    if not body:
+    if not points:
         return ""
-    kusy = [f"M{body[0][0]:.1f},{body[0][1]:.1f}"]
-    for (x1, y1), (x2, y2) in zip(body, body[1:]):
-        kusy.append(f"H{x2:.1f}")
+    pieces = [f"M{points[0][0]:.1f},{points[0][1]:.1f}"]
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        pieces.append(f"H{x2:.1f}")
         if abs(y2 - y1) > 0.01:
-            kusy.append(f"V{y2:.1f}")
-    return " ".join(kusy)
+            pieces.append(f"V{y2:.1f}")
+    return " ".join(pieces)
 
 
-def _cesta(body: Sequence[tuple[float, float]]) -> str:
-    """Plynula cara pres zadane body - jako `d` pro <path>.
+def _path(points: Sequence[tuple[float, float]]) -> str:
+    """A smooth line through the given points - as `d` for <path>.
 
-    Prokladame **monotonni kubikou** (Fritsch-Carlson), ne volnym
-    splinem. Rozdil je podstatny a je to duvod, proc tu ta matematika je:
+    We interpolate with a **monotone cubic** (Fritsch-Carlson), not a free
+    spline. The difference is essential and it is the reason this maths is here:
 
-    * Volny spline si mezi body "rozmachne" - vyleti nad nejvyssi
-      namerenou hodnotu a pod nejnizsi. Graf pak ukazuje spicku, ktera
-      nikdy nenastala, a nula uprostred tydne vypada jako zaporne cislo.
-    * Monotonni kubika ma zaruceno, ze mezi dvema body zustane mezi
-      jejich hodnotami. Kdyz jde rada nahoru, krivka jde nahoru; kdyz je
-      bod maximum, krivka nad nej nevystoupa.
+    * A free spline "swings out" between points - it shoots above the highest
+      measured value and below the lowest. The chart then shows a peak that
+      never happened, and a zero in the middle of the week looks like a
+      negative number.
+    * A monotone cubic is guaranteed to stay between two points' values
+      between them. When the series goes up, the curve goes up; when a point is
+      the maximum, the curve does not rise above it.
 
-    Zbyva jedna vyhrada, kterou zadna interpolace neodstrani: mezi
-    ctvrtkem a patkem zadne meziden neexistuje, takze oblouk mezi nimi
-    je dokresleny. Presna cisla proto vzdycky nese bublina a tabulka
-    pod grafem - krivka je tvar, ne zdroj hodnot.
+    One reservation remains that no interpolation removes: there is no
+    in-between day between Thursday and Friday, so the arc between them is
+    drawn in. So the exact numbers are always carried by the tooltip and the
+    table under the chart - the curve is a shape, not a source of values.
     """
-    n = len(body)
+    n = len(points)
     if n == 0:
         return ""
     if n == 1:
-        return f"M{body[0][0]:.1f},{body[0][1]:.1f}"
+        return f"M{points[0][0]:.1f},{points[0][1]:.1f}"
 
-    dx = [body[i + 1][0] - body[i][0] for i in range(n - 1)]
-    dy = [body[i + 1][1] - body[i][1] for i in range(n - 1)]
-    # Smernice mezi sousedy. Nulova vzdalenost by delila nulou - takovy
-    # bod jen preskocime (dva body na stejnem x nemaji smysl).
-    smernice = [(dy[i] / dx[i]) if dx[i] else 0.0 for i in range(n - 1)]
+    dx = [points[i + 1][0] - points[i][0] for i in range(n - 1)]
+    dy = [points[i + 1][1] - points[i][1] for i in range(n - 1)]
+    # The slopes between neighbours. A zero distance would divide by zero - such
+    # a point we just skip (two points on the same x make no sense).
+    slopes = [(dy[i] / dx[i]) if dx[i] else 0.0 for i in range(n - 1)]
 
-    tecny = [smernice[0]]
+    tangents = [slopes[0]]
     for i in range(1, n - 1):
-        if smernice[i - 1] * smernice[i] <= 0:
-            # Zmena smeru = vrchol nebo dul. Vodorovna tecna je presne to,
-            # co drzi krivku pod (resp. nad) namerenym bodem.
-            tecny.append(0.0)
+        if slopes[i - 1] * slopes[i] <= 0:
+            # A change of direction = a peak or a valley. A horizontal tangent is
+            # exactly what keeps the curve below (or above) the measured point.
+            tangents.append(0.0)
         else:
             w1 = 2 * dx[i] + dx[i - 1]
             w2 = dx[i] + 2 * dx[i - 1]
-            tecny.append((w1 + w2) / (w1 / smernice[i - 1] + w2 / smernice[i]))
-    tecny.append(smernice[-1])
+            tangents.append((w1 + w2) / (w1 / slopes[i - 1] + w2 / slopes[i]))
+    tangents.append(slopes[-1])
 
-    casti = [f"M{body[0][0]:.1f},{body[0][1]:.1f}"]
+    parts = [f"M{points[0][0]:.1f},{points[0][1]:.1f}"]
     for i in range(n - 1):
         h = dx[i] / 3
-        casti.append(
-            f"C{body[i][0] + h:.1f},{body[i][1] + tecny[i] * h:.1f} "
-            f"{body[i + 1][0] - h:.1f},{body[i + 1][1] - tecny[i + 1] * h:.1f} "
-            f"{body[i + 1][0]:.1f},{body[i + 1][1]:.1f}"
+        parts.append(
+            f"C{points[i][0] + h:.1f},{points[i][1] + tangents[i] * h:.1f} "
+            f"{points[i + 1][0] - h:.1f},{points[i + 1][1] - tangents[i + 1] * h:.1f} "
+            f"{points[i + 1][0]:.1f},{points[i + 1][1]:.1f}"
         )
-    return " ".join(casti)
+    return " ".join(parts)
 
 
-# Co smí projít do atributu jako barva: proměnná motivu, hex, jméno
-# barvy nebo funkce rgb()/hsl(). Schválně úzké - barvy si určuje
-# aplikace, ne data.
-_BARVA = re.compile(
+# What may pass into an attribute as a colour: a theme variable, hex, a
+# colour name or a function rgb()/hsl(). Narrow on purpose - the colours are
+# decided by the application, not by the data.
+_COLOUR = re.compile(
     r"^(?:var\(--[a-z0-9-]{1,40}\)|#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}"
     r"|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/-]{1,40}\))$")
 
-# Když barva neprojde, kreslí se tímhle. Nespadne to a je vidět, že něco
-# nesedí - lepší než prázdné místo nebo rozbitý graf.
-NAHRADNI_BARVA = "var(--text-muted)"
+# When a colour does not pass, this is drawn. It does not fail and it is visible
+# that something is off - better than an empty space or a broken chart.
+FALLBACK_COLOUR = "var(--text-muted)"
 
 
-def _vypln_pruhu(barva: Any) -> str:
-    """Přechod po délce sloupce, složený z ověřené barvy.
+def _bar_fill(colour: Any) -> str:
+    """A gradient along a bar, made of a checked colour.
 
-    Skládá se tady, ne v grafu, aby bylo na jednom místě vidět obojí:
-    že barva je ověřená, a že hotový přechod už ověřovat nemá smysl -
-    `linear-gradient(...)` žádná barva není a `_barva()` by ho zahodila.
-    Přesně tím kdysi všechny pruhy zešedly.
+    It is put together here, not in the chart, so both can be seen in one
+    place: that the colour is checked, and that checking the finished gradient
+    makes no sense any more - `linear-gradient(...)` is no colour and
+    `_colour()` would throw it away. Exactly that once made all bars grey.
     """
-    barva = _barva(barva)
+    colour = _colour(colour)
     return (f"linear-gradient(90deg, "
-            f"color-mix(in oklab, {barva} 62%, var(--surface-1)), "
-            f"{barva})")
+            f"color-mix(in oklab, {colour} 62%, var(--surface-1)), "
+            f"{colour})")
 
 
-def _barva(hodnota: Any) -> str:
-    """Barva do atributu `style` nebo `stop-color`.
+def _colour(value: Any) -> str:
+    """A colour for the `style` or `stop-color` attribute.
 
-    Do atributu se nikdy nevkládá text tak, jak přišel: `" onmouseover="`
-    by z něj vyskočil a stal se z něj spustitelný kód. Projde jen to, co
-    barvou doopravdy je; ostatní se nahradí.
+    Text is never put into an attribute as it came: `" onmouseover="` would
+    jump out of it and become executable code. Only what really is a colour
+    passes; the rest is replaced.
     """
-    text = str(hodnota or "").strip()
-    return text if _BARVA.match(text) else NAHRADNI_BARVA
+    text = str(value or "").strip()
+    return text if _COLOUR.match(text) else FALLBACK_COLOUR
 
 
 def _e(value: Any) -> str:
-    """Escapovani textu do HTML.
+    """Escaping text into HTML.
 
-    Kdyz se do stranky dostane nazev filmu obsahujici "<", rozbije to
-    dokument - a v horsim pripade umozni vlozit cizi znacku. Proto kazdy
-    text, ktery nepochazi od nas, projde tudy.
+    When a movie's name containing "<" gets into the page, it breaks the
+    document - and in a worse case it lets somebody else's tag in. So every
+    text that does not come from us goes through here.
     """
     return html.escape(str(value), quote=True)
 
 
 def _slot_of(segment: dict[str, Any], index: int) -> int:
-    """Ktery barevny slot serii pouzit.
+    """Which series colour slot to use.
 
-    Kdyz segment nese vlastni klic "slot", ridime se jim. To je dulezitejsi,
-    nez se zda: barva musi patrit **veci**, ne jejimu poradi. Kdyby se
-    barvilo podle poradi, mela by cestina u jednoho uzivatele modrou
-    a u druheho oranzovou - a graf by lhal.
+    When the segment carries its own "slot" key, we follow it. That matters
+    more than it seems: the colour must belong to **the thing**, not to its
+    order. Were it coloured by the order, Czech would be blue for one user and
+    orange for another - and the chart would lie.
     """
     slot = segment.get("slot")
     if isinstance(slot, int) and 1 <= slot <= SERIES_SLOTS:
@@ -202,7 +206,7 @@ def _slot_of(segment: dict[str, Any], index: int) -> int:
 
 
 def _fmt(value: float) -> str:
-    """Cislo pro popisek - bez zbytecnych desetinnych mist."""
+    """A number for a label - without needless decimal places."""
     if value >= 100:
         return f"{value:,.0f}".replace(",", " ")
     if value >= 10:
@@ -212,45 +216,45 @@ def _fmt(value: float) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
-# Jednotky, u kterych jeden dilek znamena hodne. `_fmt` zahazuje nad
-# desitkou desetinne misto - u hodin je to spravne ("29 h"), u terabajtu
-# to je pulterabajtova chyba: knihovna o 28,8 TB se v bubline hlasila
-# jako "29 TB", zatimco dlazdice vedle grafu psala "28,8 TB". Dve cisla
-# o tomtez, lisici se o 200 GB, a obe "spravne".
-VELKE_JEDNOTKY = ("TB", "GB", "MB", "PB")
+# Units where one step means a lot. `_fmt` drops the decimal place above ten -
+# for hours that is right ("29 h"), for terabytes it is a half-terabyte error:
+# a library of 28.8 TB showed in the tooltip as "29 TB", while the tile next to
+# the chart wrote "28,8 TB". Two numbers about the same thing, differing by
+# 200 GB, and both "right".
+LARGE_UNITS = ("TB", "GB", "MB", "PB")
 
 
-def _udaj(value: float, unit: str = "") -> str:
-    """Hodnota i s jednotkou tak, jak ji clovek cte.
+def _value_label(value: float, unit: str = "") -> str:
+    """A value with its unit the way a person reads it.
 
-    Jedno misto pro vsechny bubliny a cisla u pruhu - popisky os sem
-    nepatri. Na ose je "40" spravne (je to znacka meritka), kdezto
-    v bubline je to konkretni udaj, a ten muze byt na minuty presny.
-    Viz formatting.presny_cas().
+    One place for all tooltips and the numbers by the bars - axis labels do
+    not belong here. On an axis "40" is right (it is a mark of the scale),
+    whereas in a tooltip it is a concrete detail, and that can be exact to the
+    minute. See formatting.exact_time().
     """
-    from . import formatting             # az tady, at nevznikne kruh
+    from . import formatting             # only here, so no cycle comes about
 
-    if unit == "h" and formatting.presny_cas():
-        return formatting.hodiny_hhmm(value)
-    if unit in VELKE_JEDNOTKY:
-        # Tataz funkce, jakou pouziva dlazdice - jinak se ta dve cisla
-        # o tomtez rozejdou. Viz formatting.cislo_v_jednotce().
-        return f"{formatting.cislo_v_jednotce(value)} {unit}".strip()
+    if unit == "h" and formatting.exact_time():
+        return formatting.hours_hhmm(value)
+    if unit in LARGE_UNITS:
+        # The same function the tile uses - otherwise the two numbers about the
+        # same thing drift apart. See formatting.number_in_unit().
+        return f"{formatting.number_in_unit(value)} {unit}".strip()
     return f"{_fmt(value)} {unit}".strip()
 
 
-def _bublina(nadpis: str, radky: Sequence[dict[str, Any]]) -> str:
-    """Atributy bubliny: nadpis a radky, kazdy ve sve barve.
+def _tooltip(title: str, lines: Sequence[dict[str, Any]]) -> str:
+    """The tooltip's attributes: a title and lines, each in its colour.
 
-    Posila se jako JSON, ne jako hotove HTML: bublinu sklada prohlizec
-    pres textContent (viz base.html), takze se do stranky nemuze dostat
-    znacka z nazvu filmu. `data-tip` zustava jako prosty text - kdyby
-    JSON z jakehokoli duvodu nedosel, bublina porad neco ukaze.
+    It is sent as JSON, not as finished HTML: the tooltip is put together by the
+    browser through textContent (see base.html), so no tag from a movie's name
+    can get into the page. `data-tip` stays as plain text - should the JSON for
+    whatever reason not arrive, the tooltip still shows something.
     """
-    # V prostem textu je i nadpis - je to zaloha pro pripad, ze by JSON
-    # nedosel, a bez data by "2 h" nikomu nic nereklo.
-    text = " · ".join([nadpis] + [str(radek["text"]) for radek in radky]).strip(" ·")
-    data = json.dumps({"nadpis": nadpis, "radky": list(radky)},
+    # The plain text has the title too - it is a fallback for the case the JSON
+    # did not arrive, and without the date "2 h" would tell nobody anything.
+    text = " · ".join([title] + [str(line["text"]) for line in lines]).strip(" ·")
+    data = json.dumps({"heading": title, "rows": list(lines)},
                       ensure_ascii=False, separators=(",", ":"))
     return f'data-tip="{_e(text)}" data-tip-json="{_e(data)}"'
 
@@ -260,7 +264,7 @@ def _empty(message: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Vodorovne sloupce - porovnani velikosti
+# Horizontal bars - comparing sizes
 # ---------------------------------------------------------------------------
 
 def hbar_chart(
@@ -271,91 +275,93 @@ def hbar_chart(
     limit: int = 12,
     link_prefix: str | None = None,
     link_key: str = "id",
-    poradi: bool = False,
-    popisky_nad: bool = False,
-    smi: Callable[[str], bool] | None = None,
+    ranked: bool = False,
+    labels_above: bool = False,
+    may_open: Callable[[str], bool] | None = None,
 ) -> str:
-    """Porovnani hodnot mezi kategoriemi.
+    """Comparing values between categories.
 
-    Vsechny sloupce maji **stejnou barvu**, pokud radek nerekne jinak
-    (klicem "slot"). Odstinovat je podle velikosti je castá chyba: delka
-    sloupce velikost uz rika, a barva by tim prisla o svuj vlastni vyznam.
+    All bars have **the same colour**, unless the row says otherwise (with the
+    key "slot"). Shading them by size is a common mistake: the bar's length
+    already says the size, and the colour would lose its own meaning by that.
 
-    Cely graf je mrizka o trech sloupcich - popisek, drazka, hodnota.
-    Sirku si rozdeli prohlizec sam, takze se nic nikdy neposouva do strany.
+    The whole chart is a grid of three columns - the label, the groove, the
+    value. The browser divides the width by itself, so nothing ever scrolls
+    sideways.
 
-    `link_prefix` udela z popisku odkaz: k predpone se pripoji hodnota
-    z `link_key` daneho radku (napr. "/users/" + user_id). Radky bez te
-    hodnoty zustanou obycejnym textem - odkaz, ktery nikam nevede, je
-    horsi nez zadny. Ze stejneho duvodu `smi` (funkce smi() ze sablony):
-    radek, na jehoz stranku ucet nesmi, zustane textem.
+    `link_prefix` makes a link of the label: the value of `link_key` of the
+    given row is appended to the prefix (e.g. "/users/" + user_id). Rows
+    without that value stay plain text - a link leading nowhere is worse than
+    none. For the same reason `may_open` (the template's may_open() function):
+    a row whose page the account may not open stays text.
 
-    `poradi=True` prida pred popisek cislo radku. Zapina se jen tam, kde
-    je graf opravdu **zebricek** - u nejsledovanejsich titulu nebo
-    nejaktivnejsich uzivatelu. Kde se jen porovnavaji kategorie mezi
-    sebou (kodeky, jazyky), by cislo lhalo o poradi, ktere zadne neni.
+    `ranked=True` adds the row's number before the label. It is turned on only
+    where the chart really is a **ranking** - for the most watched titles or
+    the most active users. Where categories are only compared with each other
+    (codecs, languages), the number would lie about an order that is not there.
 
-    `popisky_nad=True` da popisek na vlastni radek nad pruh, v cele delce.
-    Pro popisky, ktere jsou cela veta (duvody prepoctu): v tretine karty
-    by se usekly a zbyl by z nich zacatek, ktery nic nerika. S poradim
-    se nesnese - cislo by si vzalo prvni sloupec a mrizka by se rozsypala.
+    `labels_above=True` puts the label on its own line above the bar, in full
+    length. For labels that are a whole sentence (transcode reasons): in a
+    third of the card they would be cut and only a start that says nothing
+    would remain. It does not go with ranked - the number would take the first
+    column and the grid would fall apart.
     """
-    if popisky_nad and poradi:
-        raise ValueError("hbar_chart: popisky_nad a poradi spolu nejdou")
+    if labels_above and ranked:
+        raise ValueError("hbar_chart: labels_above and ranked do not go together")
     rows = [row for row in rows if row is not None][:limit]
     if not rows:
-        return _empty(_t("Zatím žádná data"))
+        return _empty(_t("No data yet"))
 
     maximum = max(float(row.get(value_key) or 0) for row in rows) or 1.0
 
-    parts = ['<div class="hbars popisky-nad">' if popisky_nad else '<div class="hbars">']
+    parts = ['<div class="hbars labels-above">' if labels_above else '<div class="hbars">']
     for index, row in enumerate(rows):
         value = float(row.get(value_key) or 0)
         label = str(row.get(label_key, ""))
         percent = value / maximum * 100
-        # Kdyz radek nerekne "slot", neni to serie - je to jedna velicina
-        # merena u ruznych kategorii (hodiny u uzivatelu, u prehravacu).
-        # Takovy graf dostane barvu aplikace; paleta serii je na to, kdyz
-        # se ma poznat, ktera cara je ktera.
-        vlastni_slot = bool(row.get("slot"))
-        slot = _slot_of(row, index) if vlastni_slot else 1
-        title = f"{label}: {_udaj(value, unit)}"
+        # When the row does not say "slot", it is no series - it is one quantity
+        # measured for different categories (hours for users, for players).
+        # Such a chart gets the application's colour; the series palette is for
+        # when it is to be told which line is which.
+        own_slot = bool(row.get("slot"))
+        slot = _slot_of(row, index) if own_slot else 1
+        title = f"{label}: {_value_label(value, unit)}"
 
-        # Popisek je odkaz jen tehdy, kdyz opravdu vede na existujici
-        # zaznam. Jinak by uzivatel klikal a nic by se nedelo.
+        # The label is a link only when it really leads to an existing record.
+        # Otherwise the user would click and nothing would happen.
         #
-        # `is not None` schvalne, ne prosta pravdivost: prazdna predpona je
-        # platna volba pro radky, ktere si nesou celou adresu samy. To je
-        # pripad nejsledovanejsich titulu, kde serial vede na /series/
-        # a film na /item/ - jedna spolecna predpona by tam nestacila.
-        cil = row.get(link_key) if link_prefix is not None else None
-        if cil and smi is not None and not smi(f"{link_prefix}{cil}"):
-            cil = None
-        popisek = _e(label)
-        if cil:
-            popisek = (f'<a class="hbar-link" href="{_e(link_prefix)}{_e(cil)}">'
-                       f'{popisek}</a>')
+        # `is not None` on purpose, not plain truthiness: an empty prefix is a
+        # valid choice for rows that carry the whole address themselves. That
+        # is the case of the most watched titles, where a series leads to
+        # /series/ and a movie to /item/ - one shared prefix would not do there.
+        target = row.get(link_key) if link_prefix is not None else None
+        if target and may_open is not None and not may_open(f"{link_prefix}{target}"):
+            target = None
+        label_html = _e(label)
+        if target:
+            label_html = (f'<a class="hbar-link" href="{_e(link_prefix)}{_e(target)}">'
+                          f'{label_html}</a>')
 
-        # Prechod po delce sloupce: u zakladny je barva o neco tlumenejsi,
-        # na konci plna. Cislo stoji prave tam, takze oko jde po sloupci
-        # k nemu. Delku to nemeni - hodnotu porad nese jen ona.
-        # Prechod po delce sloupce. U serie jde od tlumene k plne barve
-        # (jina barva by pletla identitu); u jednobarevneho grafu jde
-        # rovnou fialova -> modra, tedy prechod znacky.
-        if vlastni_slot:
-            vypln = _vypln_pruhu(f"var(--series-{slot})")
+        # A gradient along the bar: at the base the colour is a bit muted, at
+        # the end full. The number stands exactly there, so the eye goes along
+        # the bar to it. It does not change the length - only the length carries the value.
+        # A gradient along the bar. For a series it goes from a muted to the full
+        # colour (another colour would confuse the identity); for a one-colour
+        # chart it goes right purple -> blue, that is the brand's gradient.
+        if own_slot:
+            fill = _bar_fill(f"var(--series-{slot})")
         else:
-            vypln = "linear-gradient(90deg, var(--barva-dat-2), var(--barva-dat))"
-        cislo = (f'<div class="hbar-rank">{index + 1}</div>') if poradi else ""
+            fill = "linear-gradient(90deg, var(--data-color-2), var(--data-color))"
+        rank = (f'<div class="hbar-rank">{index + 1}</div>') if ranked else ""
         parts.append(
-            f'<div class="hbar-row{" is-ranked" if poradi else ""}" data-tip="{_e(title)}">'
-            f'{cislo}'
-            f'<div class="hbar-label">{popisek}</div>'
+            f'<div class="hbar-row{" is-ranked" if ranked else ""}" data-tip="{_e(title)}">'
+            f'{rank}'
+            f'<div class="hbar-label">{label_html}</div>'
             f'<div class="hbar-track">'
             f'<div class="hbar-fill" style="width: {percent:.2f}%; '
-            f'background: {vypln}"></div>'
+            f'background: {fill}"></div>'
             f"</div>"
-            f'<div class="hbar-value">{_e(_udaj(value, unit))}</div>'
+            f'<div class="hbar-value">{_e(_value_label(value, unit))}</div>'
             f"</div>"
         )
     parts.append("</div>")
@@ -363,19 +369,19 @@ def hbar_chart(
 
 
 # ---------------------------------------------------------------------------
-# Deleny pruh - podil na celku
+# A split bar - a share of the whole
 # ---------------------------------------------------------------------------
 
-# Kdyz casti pruhu nejsou libovolne kategorie, ale STAVY s poradim,
-# nesou klic "role" a barvu si vezmou podle vyznamu. Priklad je "jak
-# server obsah dorucuje": prime prehravani server nestoji nic (zelena),
-# prebaleni neco malo (barva aplikace), prepocet boli (jantarova).
+# When the bar's parts are not arbitrary categories but STATES with an order,
+# they carry the key "role" and take their colour by the meaning. An example is
+# "how the server delivers the content": direct play costs the server nothing
+# (green), remuxing a little (the application's colour), transcoding hurts (amber).
 #
-# Barva pak rika totez co odznak u prehravani nad tim - a jantarovy
-# prouzek na konci je varovani, ne treti barva v poradi.
-ROLE_BARVY = {
+# The colour then says the same as the badge at the playback above - and the
+# amber strip at the end is a warning, not a third colour in a row.
+ROLE_COLOURS = {
     "good": "var(--good)",
-    "info": "var(--barva-dat)",
+    "info": "var(--data-color)",
     "warning": "var(--warning)",
     "serious": "var(--serious)",
     "critical": "var(--critical)",
@@ -383,67 +389,68 @@ ROLE_BARVY = {
 }
 
 
-def _barva_segmentu(segment: dict[str, Any], index: int) -> str:
-    # Vlastni barva ma prednost pred rolí. Pouziva to rozpad prepoctu:
-    # prvni varianta si nechava barvu role (aby bylo poznat, ze jde
-    # o prepocet), dalsi dostavaji vlastni odstiny z palety serii.
+def _segment_colour(segment: dict[str, Any], index: int) -> str:
+    # An own colour wins over the role. The transcode breakdown uses it: the
+    # first variant keeps the role's colour (so it can be told it is a
+    # transcode), the next ones get their own shades from the series palette.
     #
-    # Drive se druha a dalsi varianta ztmavovala michanim s podkladem.
-    # Vypadalo to spravne v tabulce barev, ale v grafu ne: casti byvaji
-    # uzke par pixelu a tri odstiny tehoz hneda od sebe na takove plose
-    # nikdo nerozezna.
-    vlastni = str(segment.get("barva") or "").strip()
-    if vlastni:
-        return vlastni
+    # The second and further variants used to be darkened by mixing with the
+    # background. It looked right in the colour table, but not in the chart:
+    # the parts tend to be a few pixels narrow and nobody tells three shades of
+    # the same brown apart on such an area.
+    own = str(segment.get("color") or "").strip()
+    if own:
+        return own
 
     role = str(segment.get("role") or "").strip()
-    if role not in ROLE_BARVY:
+    if role not in ROLE_COLOURS:
         return f"var(--series-{_slot_of(segment, index)})"
-    return ROLE_BARVY[role]
+    return ROLE_COLOURS[role]
 
 
-def _inkoust(barva: str) -> str:
-    """Barva písma, které je na podkladu `barva` čitelné.
+def _ink(colour: str) -> str:
+    """The colour of text that is readable on the `colour` background.
 
-    Bílá nesedí všude: v tmavém motivu měla na tyrkysovém dílku 1,9 : 1.
-    Barvy dílků jsou proměnné motivu (var(--series-3), var(--good)) a ke
-    každé patří v CSS inkoust var(--ink-series-3), spočítaný pro každý
-    motiv zvlášť; hlídá ho tests/test_kontrast.py. Barva aplikace má svůj
-    inkoust odjakživa jako --accent-ink.
+    White does not fit everywhere: in the dark theme it had 1.9 : 1 on the
+    turquoise part. The parts' colours are theme variables (var(--series-3),
+    var(--good)) and each has an ink var(--ink-series-3) in CSS, computed for
+    every theme apart; tests/test_contrast.py guards it. The application's
+    colour has had its ink as --accent-ink since ever.
     """
-    promenna = re.fullmatch(r"var\(--([a-z0-9-]+)\)", barva)
-    if not promenna:
+    variable = re.fullmatch(r"var\(--([a-z0-9-]+)\)", colour)
+    if not variable:
         return "#fff"
-    if promenna.group(1) == "accent":
+    if variable.group(1) == "accent":
         return "var(--accent-ink)"
-    return f"var(--ink-{promenna.group(1)}, #fff)"
+    return f"var(--ink-{variable.group(1)}, #fff)"
 
 
 def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
-    """Jeden pruh rozdeleny na casti - "z ceho se sklada celek".
+    """One bar split into parts - "what the whole is made of".
 
-    Mezi castmi je 2px mezera v barve podkladu. Delame to mezerou, ne
-    obrysem: obrys prida inkoust, ktery neni data, a graf zhoustne.
+    There is a 2px gap in the background's colour between the parts. We do it
+    with a gap, not an outline: an outline adds ink that is not data, and the
+    chart gets denser.
     """
     segments = [s for s in segments if float(s.get("value") or 0) > 0][:SERIES_SLOTS]
     total = sum(float(s.get("value") or 0) for s in segments)
     if total <= 0:
-        return _empty(_t("Zatím žádná data"))
+        return _empty(_t("No data yet"))
 
     parts = ['<div class="stack">']
     for index, segment in enumerate(segments):
         value = float(segment.get("value") or 0)
         share = value / total * 100
         label = segment.get("label", "")
-        title = f"{label}: {_udaj(value, unit)} ({share:.0f} %)"
+        title = f"{label}: {_value_label(value, unit)} ({share:.0f} %)"
 
-        # Popisek dovnitr jen tehdy, kdyz je cast dost siroka. Orezany text
-        # uvnitr pruhu je horsi nez zadny - legenda ho stejne nese.
+        # The label inside only when the part is wide enough. Cut text inside
+        # the bar is worse than none - the legend carries it anyway.
         inner = f"{share:.0f} %" if share >= 9 else ""
-        barva = _barva(_barva_segmentu(segment, index))
+        colour = _colour(_segment_colour(segment, index))
         parts.append(
             f'<div class="stack-seg" style="flex-grow: {share:.4f}; '
-            f'background: {barva}; color: {_inkoust(barva)}"'
+            f'background: {colour}; color: {_ink(colour)}"'
             f' data-tip="{_e(title)}">'
             f'<span>{inner}</span></div>'
         )
@@ -458,92 +465,92 @@ def donut_chart(
     unit: str = "h",
     size: int = 220,
 ) -> str:
-    """Koláčový graf s dírou uprostřed.
+    """A pie chart with a hole in the middle.
 
-    Kruhový výseč je tvar, který se čte hůř než sloupce - plochy se
-    porovnávají špatně. Vyplatí se jen tam, kde je otázka "jaký díl
-    z celku", a dílů je málo. Přesně to je otázka "co ten člověk sleduje".
+    A circular sector is a shape that reads worse than bars - areas compare
+    badly. It pays off only where the question is "what part of the whole", and
+    there are few parts. That is exactly the question "what does this person watch".
 
-    Díra uprostřed není ozdoba: prstenec se čte podle **délky oblouku**,
-    a to je pro oko snazší úloha než odhadovat plochu klínu. Navíc se do
-    ní vejde celkové číslo, které jinak nemá kam.
+    The hole in the middle is no decoration: a ring is read by the **length of
+    the arc**, and that is an easier task for the eye than estimating a wedge's
+    area. Moreover the total number fits into it, which otherwise has nowhere to go.
 
-    Kreslí se jedním kruhem a `stroke-dasharray`: každý díl je kus obvodu.
-    Bez jediné cesty s ručně počítanými souřadnicemi - a bez chyby, která
-    se do nich vloudí u dílu většího než půlkruh.
+    It is drawn with one circle and `stroke-dasharray`: every part is a piece of
+    the circumference. Without a single path with hand-computed coordinates -
+    and without the mistake that creeps into them for a part bigger than a half circle.
     """
     rows = [row for row in rows if float(row.get(value_key) or 0) > 0]
     if not rows:
-        return _empty(_t("Zatím žádná data"))
+        return _empty(_t("No data yet"))
 
-    celkem = sum(float(row.get(value_key) or 0) for row in rows)
-    if celkem <= 0:
-        return _empty(_t("Zatím žádná data"))
+    total = sum(float(row.get(value_key) or 0) for row in rows)
+    if total <= 0:
+        return _empty(_t("No data yet"))
 
-    polomer = size / 2 - 18
-    obvod = 2 * math.pi * polomer
-    stred = size / 2
+    radius = size / 2 - 18
+    circumference = 2 * math.pi * radius
+    centre = size / 2
 
     parts = [
         '<div class="donut-wrap">',
         f'<svg class="donut" viewBox="0 0 {size} {size}" width="{size}" height="{size}" '
-        f'role="img" aria-label="{_e(_t("Podíl žánrů"))}">',
+        f'role="img" aria-label="{_e(_t("Genre share"))}">',
     ]
 
-    posun = 0.0
+    offset = 0.0
     for index, row in enumerate(rows[:SERIES_SLOTS + 1]):
-        hodnota = float(row.get(value_key) or 0)
-        dil = hodnota / celkem
-        popisek = str(row.get(label_key, ""))
-        procenta = dil * 100
-        # Mezi dily necháváme 2px mezeru v barvě podkladu - stejně jako
-        # u děleného pruhu. U jednoho jediného dílu se vynechá: kroužek
-        # by měl zbytečnou dírku.
-        mezera = 2.0 if len(rows) > 1 else 0.0
-        delka = max(1.0, dil * obvod - mezera)
+        value = float(row.get(value_key) or 0)
+        share = value / total
+        label = str(row.get(label_key, ""))
+        percent = share * 100
+        # Between the parts we leave a 2px gap in the background's colour - just
+        # like for the split bar. With a single part it is left out: the ring
+        # would have a needless hole.
+        gap = 2.0 if len(rows) > 1 else 0.0
+        length = max(1.0, share * circumference - gap)
         parts.append(
-            f'<circle class="donut-seg" cx="{stred}" cy="{stred}" r="{polomer:.2f}" '
+            f'<circle class="donut-seg" cx="{centre}" cy="{centre}" r="{radius:.2f}" '
             f'stroke="var(--series-{_slot_of(row, index)})" '
-            f'stroke-dasharray="{delka:.3f} {obvod:.3f}" '
-            f'stroke-dashoffset="{-posun:.3f}" '
-            f'data-tip="{_e(popisek)}: {_e(_udaj(hodnota, unit))} '
-            f'({procenta:.0f} %)"></circle>'
+            f'stroke-dasharray="{length:.3f} {circumference:.3f}" '
+            f'stroke-dashoffset="{-offset:.3f}" '
+            f'data-tip="{_e(label)}: {_e(_value_label(value, unit))} '
+            f'({percent:.0f} %)"></circle>'
         )
-        posun += dil * obvod
+        offset += share * circumference
 
     parts.append(
-        f'<text class="donut-total" x="{stred}" y="{stred - 4}" '
-        f'text-anchor="middle">{_fmt(celkem)}</text>'
-        f'<text class="donut-unit" x="{stred}" y="{stred + 14}" '
+        f'<text class="donut-total" x="{centre}" y="{centre - 4}" '
+        f'text-anchor="middle">{_fmt(total)}</text>'
+        f'<text class="donut-unit" x="{centre}" y="{centre + 14}" '
         f'text-anchor="middle">{_e(unit)}</text>'
     )
     parts.append("</svg>")
 
-    # Legenda s čísly. U koláče je povinná dvakrát: barva sama identitu
-    # nenese a z výseče se přesná hodnota vyčíst nedá.
+    # A legend with numbers. For a pie it is mandatory twice: the colour alone
+    # carries no identity and the exact value cannot be read from a sector.
     parts.append('<ul class="donut-legend">')
     for index, row in enumerate(rows[:SERIES_SLOTS + 1]):
-        hodnota = float(row.get(value_key) or 0)
+        value = float(row.get(value_key) or 0)
         parts.append(
             f'<li><span class="legend-swatch" '
             f'style="background: var(--series-{_slot_of(row, index)})"></span>'
             f'<span class="donut-name">{_e(row.get(label_key, ""))}</span>'
-            f'<span class="donut-value">{hodnota / celkem * 100:.0f} %</span></li>'
+            f'<span class="donut-value">{value / total * 100:.0f} %</span></li>'
         )
     parts.append("</ul></div>")
     return "".join(parts)
 
 
 def legend(items: Sequence[dict[str, Any]]) -> str:
-    """Legenda. U dvou a vice serii je povinna.
+    """A legend. With two or more series it is mandatory.
 
-    Text legendy je v bezne barve pisma, identitu nese barevny ctverecek
-    vedle nej. Obarvovat samotny text je spatne - svetle odstiny (zluta,
-    tyrkysova) jsou jako pismo na svetlem podkladu necitelne.
+    The legend's text is in the usual text colour, the identity is carried by
+    the coloured square next to it. Colouring the text itself is wrong - light
+    shades (yellow, turquoise) are unreadable as text on a light background.
 
-    Kdyz serie nese klic "tip", polozka legendy dostane bublinu. Je to
-    pro pripady, kdy nazev sam o sobe nestaci - treba "Ostatní", pod
-    kterym se skryva vic druhu zaznamu najednou.
+    When a series carries the key "tip", the legend item gets a tooltip. It is
+    for cases where the name by itself is not enough - say "Ostatní", under
+    which more kinds of records hide at once.
     """
     items = [item for item in items if item is not None][:SERIES_SLOTS]
     if not items:
@@ -552,13 +559,13 @@ def legend(items: Sequence[dict[str, Any]]) -> str:
     parts = ['<ul class="legend">']
     for index, item in enumerate(items):
         tip = str(item.get("tip") or "").strip()
-        atribut = f' data-tip="{_e(tip)}"' if tip else ""
-        # Stejna barva jako v grafu, vcetne barvy podle vyznamu - legenda,
-        # ktera ma jiny odstin nez pruh, je horsi nez zadna.
-        barva = item.get("barva") or _barva_segmentu(item, index)
+        attribute = f' data-tip="{_e(tip)}"' if tip else ""
+        # The same colour as in the chart, the colour by meaning included - a
+        # legend with another shade than the bar is worse than none.
+        colour = item.get("color") or _segment_colour(item, index)
         parts.append(
-            f'<li{atribut}><span class="legend-swatch" '
-            f'style="background: {_barva(barva)}">'
+            f'<li{attribute}><span class="legend-swatch" '
+            f'style="background: {_colour(colour)}">'
             f'</span>{_e(item.get("label", ""))}</li>'
         )
     parts.append("</ul>")
@@ -566,30 +573,30 @@ def legend(items: Sequence[dict[str, Any]]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Teplotni mapa - kdy se sleduje
+# A heat map - when it is watched
 # ---------------------------------------------------------------------------
 
-DAY_NAMES = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-# Odstupnovana jedna barva, od svetle po tmavou. Jedna barva, ne duha:
-# duhova skala nema poradi, ktere by clovek dokazal precist.
+# One colour in steps, from light to dark. One colour, not a rainbow: a rainbow
+# scale has no order a person could read.
 HEAT_STEPS = ["var(--seq-250)", "var(--seq-350)", "var(--seq-450)",
               "var(--seq-550)", "var(--seq-650)"]
 
 
 def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
-    """Mrizka den x hodina - kdy se na serveru nejvic sleduje.
+    """A grid day x hour - when the server is watched most.
 
-    Postavena na CSS gridu s 24 stejne sirokymi sloupci. Bunky se tim
-    prizpusobi sirce okna samy a mrizka se nikdy nemusi posouvat.
+    Built on a CSS grid with 24 equally wide columns. The cells thus fit the
+    window's width by themselves and the grid never has to scroll.
     """
     maximum = max((max(row) for row in grid if row), default=0.0)
     if maximum <= 0:
-        return _empty(_t("Zatím žádná data"))
+        return _empty(_t("No data yet"))
 
     parts = ['<div class="heatmap">']
 
-    # Hlavicka s hodinami - popisek jen kazde tri hodiny, jinak by se slily.
+    # The header with hours - a label only every three hours, otherwise they would merge.
     parts.append('<div class="heatmap-corner"></div><div class="heatmap-hours">')
     for hour in range(24):
         text = str(hour) if hour % 3 == 0 else ""
@@ -597,9 +604,9 @@ def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
     parts.append("</div>")
 
     for day_index, row in enumerate(grid):
-        # Prelozeny text jde do stranky jen pres _e(): preklady pisou
-        # lide zvenku (viz TRANSLATING.md) a znacka v nich by jinak
-        # skoncila jako spustitelny kod - graf se vklada pres | safe.
+        # A translated text goes into the page only through _e(): translations are
+        # written by people from outside (see TRANSLATING.md) and a tag in them
+        # would otherwise end as executable code - the chart is put in through | safe.
         parts.append(
             f'<div class="heatmap-day">{_e(_t(DAY_NAMES[day_index]))}</div>')
         parts.append('<div class="heatmap-cells">')
@@ -607,12 +614,12 @@ def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
             if value <= 0:
                 colour = "var(--grid)"
             else:
-                # Do ktereho z peti stupnu hodnota patri.
+                # Which of the five steps the value belongs to.
                 bucket = min(len(HEAT_STEPS) - 1, int(value / maximum * len(HEAT_STEPS)))
                 colour = HEAT_STEPS[bucket]
-            title = f"{_t(DAY_NAMES[day_index])} {hour}:00 - {_udaj(value, unit)}"
+            title = f"{_t(DAY_NAMES[day_index])} {hour}:00 - {_value_label(value, unit)}"
             parts.append(
-                f'<i style="background: {_barva(colour)}"'
+                f'<i style="background: {_colour(colour)}"'
                 f' data-tip="{_e(title)}"></i>'
             )
         parts.append("</div>")
@@ -622,34 +629,39 @@ def heatmap(grid: Sequence[Sequence[float]], unit: str = "h") -> str:
 
 
 # ---------------------------------------------------------------------------
-# Plosny graf - vyvoj v case (jedine, co zustava v SVG)
+# An area chart - the development in time (the only thing that stays in SVG)
 # ---------------------------------------------------------------------------
 
-def _nice_ticks(maximum: float, count: int = 4) -> list[float]:
-    """Kulate hodnoty pro osu Y.
+def _nice_ticks(maximum: float, count: int = 4, whole: bool = False) -> list[float]:
+    """Round values for the Y axis.
 
-    Osa s popisky 0 / 2,5 / 5 / 7,5 se cte lip nez 0 / 2,37 / 4,74 / 7,11.
-    Postup: spocitej "syrovy" krok (maximum deleno poctem dilku), zaokrouhli
-    ho nahoru na nejblizsi hezky nasobek mocniny desiti (1, 2, 2,5 nebo 5)
-    a od nuly po nem kracej az za maximum.
+    An axis labelled 0 / 2.5 / 5 / 7.5 reads better than 0 / 2.37 / 4.74 / 7.11.
+    The way: compute the "raw" step (the maximum divided by the number of
+    steps), round it up to the nearest nice multiple of a power of ten (1, 2,
+    2.5 or 5) and walk by it from zero until past the maximum.
+
+    `whole=True` is for count axes (queries, subtitles, requests): the step is a
+    whole number, at least 1 - "1.5 queries" do not exist.
     """
     if maximum <= 0:
         return [0.0, 1.0]
 
     raw_step = maximum / max(1, count)
+    if whole:
+        raw_step = max(1.0, raw_step)
     magnitude = 10 ** math.floor(math.log10(raw_step))
 
-    step = magnitude * 10  # zaloha, kdyby zadny nasobek nevyhovel
-    for multiplier in (1, 2, 2.5, 5, 10):
+    step = magnitude * 10  # a fallback, should no multiple fit
+    for multiplier in ((1, 2, 5, 10) if whole else (1, 2, 2.5, 5, 10)):
         if magnitude * multiplier >= raw_step:
             step = magnitude * multiplier
             break
 
-    # Osa musi maximum vzdycky **prekrocit**, ne se u nej zastavit. Puvodni
-    # podminka `while value <= maximum` koncila u posledniho dilku, ktery se
-    # jeste vesel pod maximum: pri maximu 3,4 vysla osa 0-3 a krivka pak
-    # vylezla nad graf do zahlavi karty. Proto se dilek pripoji vzdy jako
-    # prvni a teprve pak se testuje, jestli uz jsme za maximem.
+    # The axis must always **pass** the maximum, not stop at it. The original
+    # condition `while value <= maximum` ended at the last step that still fit
+    # below the maximum: with a maximum of 3.4 the axis came out 0-3 and the
+    # curve then climbed over the chart into the card's header. So the step is
+    # always appended first and only then is it tested whether we are past the maximum.
     ticks: list[float] = []
     value = 0.0
     while len(ticks) < 12:
@@ -660,10 +672,10 @@ def _nice_ticks(maximum: float, count: int = 4) -> list[float]:
     return ticks or [0.0, 1.0]
 
 
-# Kolik nejvys plosek pro najeti mysi jeden graf dostane. Nad tim uz je
-# kazda uzsi nez prst a HTML roste o stovky kilobajtu - viz komentar
-# u jejich generovani.
-NEJVIC_PLOSEK = 200
+# How many hover areas one chart gets at most. Above that each is narrower than
+# a finger and the HTML grows by hundreds of kilobytes - see the comment at
+# their generation.
+MAX_AREAS = 200
 
 
 def area_chart_multi(
@@ -672,33 +684,36 @@ def area_chart_multi(
     series: Sequence[dict[str, Any]],
     unit: str = "h",
     height: int = 240,
-    schody: bool = False,
-    vyber: bool = False,
+    steps: bool = False,
+    selectable: bool = False,
+    whole_ticks: bool = False,
 ) -> str:
-    """Vic serii v jednom case, prekryte pres sebe.
+    """More series in one time, overlaid over each other.
 
-    `series` je seznam slovniku {"key": "movie_hours", "label": "Filmy",
-    "slot": 1}. Kazda serie ma vlastni barevny slot a ten se **nemeni**,
-    kdyz nektera serie zmizi - barva patri veci, ne poradi. Kdyby se
-    barvilo podle indexu, prepnuti filtru by prebarvilo to, co zbylo,
-    a graf by lhal.
+    `whole_ticks=True` for count charts: the Y axis has whole numbers only.
 
-    Proc prekryt a ne naskladat na sebe: prekryv umozni porovnat filmy
-    a serialy navzajem ("cteme cistou vysku obou car"). Skladany graf
-    umi jen soucet - horni serie se cte spatne, protoze jeji zaklad
-    skace podle spodni.
+    `series` is a list of dictionaries {"key": "movie_hours", "label": "Filmy",
+    "slot": 1}. Every series has its own colour slot and that **does not
+    change** when some series vanishes - the colour belongs to the thing, not
+    to the order. Were it coloured by the index, switching a filter would
+    recolour what remained, and the chart would lie.
 
-    Vypln je proto poloprusvitna: tam, kde se serie prekryvaji, je videt
-    obe. Cara zustava plna, aby se dala sledovat i v prekryvu.
+    Why overlaid and not stacked on each other: the overlay allows comparing
+    movies and series with each other ("we read the clean height of both
+    lines"). A stacked chart can do only the sum - the upper series reads
+    badly, because its base jumps with the lower one.
+
+    The fill is therefore semi-transparent: where the series overlap, both are
+    visible. The line stays full, so it can be followed in the overlay too.
     """
     if not points or not series:
-        return _empty(_t("Zatím žádná data"))
+        return _empty(_t("No data yet"))
 
     width = 760
-    # Levý okraj je na popisky osy. Musí se do něj vejít i tehdy, když
-    # jsou na úzké obrazovce v jednotkách viewBoxu větší (viz .axis-label
-    # v mobilní části stylu) - jinak popisek uteče mimo graf a ořízne se.
-    # Na desktopu to z 760 jednotek ubere dvě procenta plochy.
+    # The left margin is for the axis labels. They must fit into it even when on
+    # a narrow screen they are bigger in viewBox units (see .axis-label in the
+    # mobile part of the style) - otherwise a label runs out of the chart and is
+    # cut. On a desktop it takes two percent of the area out of 760 units.
     margin_left, margin_right = 80, 22
     margin_top, margin_bottom = 16, 30
     plot_width = width - margin_left - margin_right
@@ -709,7 +724,7 @@ def area_chart_multi(
         for entry in series for point in points
     ]
     maximum = max(all_values) if all_values else 0.0
-    ticks = _nice_ticks(maximum or 1.0)
+    ticks = _nice_ticks(maximum or 1.0, whole=whole_ticks)
     scale_max = max(ticks[-1], maximum) or 1.0
 
     def px(index: int) -> float:
@@ -720,79 +735,79 @@ def area_chart_multi(
     def py(value: float) -> float:
         return margin_top + plot_height * (1 - value / scale_max)
 
-    # Kazda serie ma vlastni prechod a jeho jmeno musi byt na strance
-    # jedinecne - viz _prechod().
-    cislo = next(_PORADI_PRECHODU)
-    prechody = {
-        entry.get("slot", 1): f"prechod-{cislo}-{index}"
+    # Every series has its own gradient and its name must be unique on the
+    # page - see _transition().
+    number = next(_TRANSITION_ORDER)
+    gradients = {
+        entry.get("slot", 1): f"prechod-{number}-{index}"
         for index, entry in enumerate(series)
     }
-    # Serie muze nest vlastni barvu misto cisla slotu. Pouziva to graf
-    # na Prehledu, kde jsou dve az tri cary a maji drzet barvy aplikace;
-    # tam, kde je kategorii vic (jazyky), zustava paleta serii, protoze
-    # ta je stavena tak, aby se navzajem nepletly.
-    barvy = {entry.get("slot", 1): entry.get("barva")
-             for entry in series if entry.get("barva")}
+    # A series can carry its own colour instead of a slot number. The chart on
+    # the Overview uses it, where there are two to three lines that are to keep
+    # the application's colours; where there are more categories (languages),
+    # the series palette stays, because it is built so they do not get mixed up.
+    colours = {entry.get("slot", 1): entry.get("color")
+               for entry in series if entry.get("color")}
 
-    def barva_serie(slot: int) -> str:
-        # Barvu urcuje ten, kdo graf vola, ale do atributu jde jen pres
-        # _barva() - jedno misto pro vsechna jeji pouziti (cara, tecka,
-        # prechod, legenda), aby na zadne nesla zapomenout.
-        return _barva(barvy.get(slot) or f"var(--series-{slot})")
+    def series_colour(slot: int) -> str:
+        # The colour is decided by whoever calls the chart, but into an attribute
+        # it goes only through _colour() - one place for all its uses (the line,
+        # the dot, the gradient, the legend), so none can be forgotten.
+        return _colour(colours.get(slot) or f"var(--series-{slot})")
 
-    # Vyber tazenim: graf rekne, kde na ose lezi jaky okamzik, a zbytek
-    # uz zvladne prohlizec. Souradnice jsou ve viewBoxu, ne v pixelech -
-    # SVG se skaluje podle sirky stranky, takze prepocet dela JS.
+    # Selecting by dragging: the chart says where on the axis which moment lies,
+    # and the browser manages the rest. The coordinates are in the viewBox, not
+    # in pixels - the SVG scales with the page's width, so JS does the conversion.
     #
-    # Dva rezimy podle toho, co je na ose:
-    #   "cas" - bod je okamzik (ziva krivka). Vybrat jde libovolny usek.
-    #   "dny" - bod je cely den. Vyber se **zaokrouhli na dny**, protoze
-    #           jemneji graf stejne nic nevi; kdyby posilal cas, tvaril by
-    #           se presneji, nez ve skutecnosti je.
-    lze_vybirat = vyber and len(points) > 1
-    dny = [str(b.get("den") or b.get("day") or "") for b in points]
-    ma_cas = lze_vybirat and all(b.get("cas") for b in points)
-    ma_dny = lze_vybirat and all(re.match(r"^\d{4}-\d{2}-\d{2}$", d) for d in dny)
-    lze_vybirat = ma_cas or ma_dny
+    # Two modes depending on what is on the axis:
+    #   "time" - a point is a moment (the live curve). Any stretch can be selected.
+    #   "days" - a point is a whole day. The selection is **rounded to days**,
+    #           because the chart knows nothing finer anyway; were it to send a
+    #           time, it would look more exact than it really is.
+    can_select = selectable and len(points) > 1
+    days = [str(b.get("day") or "") for b in points]
+    has_time = can_select and all(b.get("time") for b in points)
+    has_days = can_select and all(re.match(r"^\d{4}-\d{2}-\d{2}$", d) for d in days)
+    can_select = has_time or has_days
 
-    vyber_atributy = ""
-    if lze_vybirat:
-        osa = (f' data-x-od="{margin_left}" data-x-do="{margin_left + plot_width}"'
-               f' data-y-od="{margin_top}" data-y-do="{margin_top + plot_height}"')
-        if ma_cas:
-            vyber_atributy = (f' data-vyber="cas"{osa}'
-                              f' data-cas-od="{int(points[0]["cas"])}"'
-                              f' data-cas-do="{int(points[-1]["cas"])}"')
+    select_attributes = ""
+    if can_select:
+        axis = (f' data-x-from="{margin_left}" data-x-to="{margin_left + plot_width}"'
+                f' data-y-from="{margin_top}" data-y-to="{margin_top + plot_height}"')
+        if has_time:
+            select_attributes = (f' data-selection="time"{axis}'
+                                 f' data-time-from="{int(points[0]["time"])}"'
+                                 f' data-time-to="{int(points[-1]["time"])}"')
         else:
-            vyber_atributy = f' data-vyber="dny"{osa} data-dny="{",".join(dny)}"' 
+            select_attributes = f' data-selection="days"{axis} data-days="{",".join(days)}"' 
 
     parts: list[str] = [
-        f'<svg class="chart{" chart-lze-vybirat" if lze_vybirat else ""}" '
-        f'viewBox="0 0 {width} {height}" role="img"{vyber_atributy} '
+        f'<svg class="chart{" chart-selectable" if can_select else ""}" '
+        f'viewBox="0 0 {width} {height}" role="img"{select_attributes} '
         f'aria-label="Vyvoj v case, {len(series)} serii">',
         "<defs>",
-        # Cim vic serii, tim slabsi vypln. U jedne krivky plocha pomaha -
-        # ukazuje objem. U dvou se plochy prekryvaji a vznika treti, kalna
-        # barva, ve ktere se obe ztrati; tam uz nese informaci hlavne
-        # sama cara. Proto se u dvou a vic serii vypln stahuje.
-        *(_prechod(slot, jmeno, sila=0.34 if len(series) == 1 else 0.16,
-                   barva=barvy.get(slot))
-          for slot, jmeno in prechody.items()),
+        # The more series, the weaker the fill. With one curve the area helps -
+        # it shows the volume. With two the areas overlap and a third, murky
+        # colour appears, in which both get lost; there the information is
+        # carried mainly by the line itself. So with two or more series the fill fades.
+        *(_transition(slot, name, strength=0.34 if len(series) == 1 else 0.16,
+                      colour=colours.get(slot))
+          for slot, name in gradients.items()),
         "</defs>",
     ]
 
     baseline = margin_top + plot_height
     for tick in ticks:
         y = py(tick)
-        # Nulova cara je osa, od ktere se vsechno meri - ta zustava plna.
-        # Ostatni jsou jen voditka, aby sla vyska odhadnout; tecky staci
-        # a neberou grafu pozornost.
-        je_zaklad = abs(y - baseline) < 0.5
+        # The zero line is the axis everything is measured from - that one stays
+        # full. The others are only guides so the height can be estimated; dots
+        # are enough and do not take the chart's attention.
+        is_base = abs(y - baseline) < 0.5
         parts.append(
             f'<line x1="{margin_left}" y1="{y:.1f}" x2="{margin_left + plot_width}" '
-            f'y2="{y:.1f}" stroke="var({"--axis" if je_zaklad else "--grid"})" '
+            f'y2="{y:.1f}" stroke="var({"--axis" if is_base else "--grid"})" '
             f'stroke-width="1"'
-            + ("" if je_zaklad else ' stroke-dasharray="1 5" stroke-linecap="round"')
+            + ("" if is_base else ' stroke-dasharray="1 5" stroke-linecap="round"')
             + " />"
         )
         parts.append(
@@ -801,128 +816,130 @@ def area_chart_multi(
         )
 
     for entry in series:
-        # `None` ZNAMENA "tady serie neplati", ne nulu. Kreslit z toho nulu
-        # by byl propad k ose, ktery se nestal - u kridky rustu knihovny
-        # jsou to dve serie, ktere se stridaji (dopoctena minulost a
-        # zmerene snimky), a jedna vzdycky nekde konci.
+        # `None` MEANS "the series does not apply here", not zero. Drawing a
+        # zero of it would be a drop to the axis that did not happen - for the
+        # library's growth curve there are two series that alternate (the
+        # computed past and the measured snapshots), and one always ends somewhere.
         #
-        # Chybejici klic je porad nula: vsechny ostatni grafy spolehaji
-        # na to, ze serie bez hodnoty pro dany den kresli nulu.
-        useky: list[list[tuple[float, float]]] = []
-        usek: list[tuple[float, float]] = []
+        # A missing key is still zero: all other charts rely on a series without
+        # a value for a given day drawing a zero.
+        runs: list[list[tuple[float, float]]] = []
+        run: list[tuple[float, float]] = []
         for index, point in enumerate(points):
-            hodnota = point.get(entry["key"], 0)
-            if hodnota is None:
-                if usek:
-                    useky.append(usek)
-                usek = []
+            value = point.get(entry["key"], 0)
+            if value is None:
+                if run:
+                    runs.append(run)
+                run = []
                 continue
-            usek.append((px(index), py(float(hodnota))))
-        if usek:
-            useky.append(usek)
+            run.append((px(index), py(float(value))))
+        if run:
+            runs.append(run)
 
         slot = entry.get("slot", 1)
-        for coordinates in useky:
-            # Jeden bod nema delku, takze by z nej byla cara o nulove sirce -
-            # graf vypadal prazdny, i kdyz se ten den koukalo. Stava se to
-            # u obdobi kratsiho nez dva dny (treba useku vybraneho tazenim).
-            # Rozpustime ho na sirku grafu: cte se to jako "tuhle celou dobu
-            # to bylo takhle", coz je presne, co jeden bod znamena.
+        for coordinates in runs:
+            # One point has no length, so it would make a line of zero width -
+            # the chart looked empty, even though there was watching that day. It
+            # happens for a period shorter than two days (say a stretch selected by
+            # dragging). We spread it over the chart's width: it reads as "the whole
+            # time it was like this", which is exactly what one point means.
             #
-            # Plati jen pro serii, ktera JE jeden bod. Osamely bod uprostred
-            # rozdelene serie zadnou takovou vypoved nenese, tak se z nej
-            # udela tecka.
+            # It applies only to a series that IS one point. A lonely point in the
+            # middle of a split series carries no such statement, so a dot is made of it.
             if len(coordinates) == 1:
-                if len(useky) == 1:
-                    vyska = coordinates[0][1]
-                    coordinates = [(margin_left, vyska),
-                                   (margin_left + plot_width, vyska)]
+                if len(runs) == 1:
+                    level = coordinates[0][1]
+                    coordinates = [(margin_left, level),
+                                   (margin_left + plot_width, level)]
                 else:
                     parts.append(
                         f'<circle cx="{coordinates[0][0]:.1f}" '
                         f'cy="{coordinates[0][1]:.1f}" r="2.5" '
-                        f'fill="{barva_serie(slot)}" />')
+                        f'fill="{series_colour(slot)}" />')
                     continue
-            # Cara i plocha jdou po tomtez tvaru - jinak by vypln vykukovala
-            # zpod cary. Viz _cesta() a _cesta_schody().
-            line = _cesta_schody(coordinates) if schody else _cesta(coordinates)
+            # The line and the area follow the same shape - otherwise the fill would
+            # peek out from under the line. See _path() and _step_path().
+            line = _step_path(coordinates) if steps else _path(coordinates)
             area = (
                 f"M{coordinates[0][0]:.1f},{baseline:.1f} L"
                 + line[1:]
                 + f" L{coordinates[-1][0]:.1f},{baseline:.1f} Z"
             )
-            parts.append(f'<path d="{area}" fill="url(#{prechody[slot]})" />')
+            parts.append(f'<path d="{area}" fill="url(#{gradients[slot]})" />')
             parts.append(
-                f'<path d="{line}" fill="none" stroke="{barva_serie(slot)}" '
+                f'<path d="{line}" fill="none" stroke="{series_colour(slot)}" '
                 f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
             )
 
     step = max(1, len(points) // 6)
     for index in range(0, len(points), step):
-        # Datum z databaze zacina rokem ("2026-08-14"). Rok na ose nikoho
-        # nezajima a bere misto, tak ho ukrojime - ale jen kdyz tam opravdu
-        # je. Drive se rezalo vzdycky, takze popisek "02.08. 22:11" se
-        # zmenil na ". 22:11".
-        surovy = str(points[index].get(x_key, ""))
-        label = surovy[5:] if re.match(r"^\d{4}-", surovy) else surovy
+        # A date from the database starts with the year ("2026-08-14"). Nobody
+        # cares about the year on the axis and it takes space, so we cut it off -
+        # but only when it really is there. It used to be cut always, so the
+        # label "02.08. 22:11" turned into ". 22:11".
+        raw = str(points[index].get(x_key, ""))
+        label = raw[5:] if re.match(r"^\d{4}-", raw) else raw
         parts.append(
             f'<text x="{px(index):.1f}" y="{height - 10}" text-anchor="middle" '
             f'class="axis-label">{_e(label)}</text>'
         )
 
-    # Jedna ploska nese hodnoty vsech serii najednou - clovek se pta
-    # "co bylo tenhle den", ne "co byly tenhle den filmy".
+    # One area carries the values of all series at once - a person asks "what
+    # was there that day", not "what were the movies that day".
     #
-    # Plosek je nejvys NEJVIC_PLOSEK, i kdyz bodu je tisic. Kazda z nich
-    # je vlastni <g> s bublinou v atributu, takze u jemne krivky (zivy tok
-    # ma bod na pet minut) by z toho bylo skoro megabajt HTML - a mys
-    # stejne neni schopna trefit ploshu uzsi nez par pixelu.
-    krok_plosek = max(1, len(points) // NEJVIC_PLOSEK + (1 if len(points) % NEJVIC_PLOSEK else 0))
-    hit_width = (plot_width / max(1, len(points) - 1) * krok_plosek
+    # There are at most MAX_AREAS areas, even when there are a thousand
+    # points. Each of them is its own <g> with the tooltip in an attribute, so
+    # for a fine curve (the live flow has a point every five minutes) it would
+    # make almost a megabyte of HTML - and the mouse cannot hit an area
+    # narrower than a few pixels anyway.
+    area_step = max(1, len(points) // MAX_AREAS + (1 if len(points) % MAX_AREAS else 0))
+    hit_width = (plot_width / max(1, len(points) - 1) * area_step
                  if len(points) > 1 else plot_width)
-    for index in range(0, len(points), krok_plosek):
-        # Ploska muze zastupovat vic bodu - a pak nesmi ukazovat hodnotu
-        # toho prvniho, ale **nejvyssi v tom pasmu**. Spicka byva jeden
-        # bod siroka; kdyby bublina hlasila jejiho souseda, byl by graf
-        # k necemu jen na pohled a presne cislo by se z nej vycist nedalo.
-        pasmo = points[index:index + krok_plosek]
-        vrcholy = {}
+    for index in range(0, len(points), area_step):
+        # An area can stand for more points - and then it must not show the
+        # first one's value, but **the highest in that band**. A peak tends to be
+        # one point wide; were the tooltip to report its neighbour, the chart
+        # would be good only to look at and the exact number could not be read from it.
+        band = points[index:index + area_step]
+        peaks = {}
         for entry in series:
-            klic = entry["key"]
-            # Dny, kde serie neplati (None), se do vrcholu nepocitaji -
-            # jinak by bublina u dopoctene casti krivky hlasila "0 GB"
-            # u serie, ktera tam vubec nema co rict.
-            platne = [b for b in pasmo if b.get(klic, 0) is not None]
-            if not platne:
+            key = entry["key"]
+            # Days where the series does not apply (None) do not count in the peaks -
+            # otherwise the tooltip at the computed part of the curve would report
+            # "0 GB" for a series that has nothing to say there at all.
+            valid = [b for b in band if b.get(key, 0) is not None]
+            if not valid:
                 continue
-            nejvyssi = max(platne, key=lambda b: float(b.get(klic) or 0))
-            vrcholy[klic] = (float(nejvyssi.get(klic) or 0), nejvyssi)
+            highest = max(valid, key=lambda b: float(b.get(key) or 0))
+            peaks[key] = (float(highest.get(key) or 0), highest)
 
-        # Cas bereme od te serie, ktera v pasmu vrcholi nejvys - to je ten
-        # okamzik, na ktery se clovek pta.
-        hlavni = (max(vrcholy.values(), key=lambda dvojice: dvojice[0])[1]
-                  if vrcholy else pasmo[0])
+        # The time is taken from the series that peaks highest in the band - that
+        # is the moment a person asks about.
+        main = (max(peaks.values(), key=lambda pair: pair[0])[1]
+                if peaks else band[0])
         x = px(index)
 
-        # Nadpis je cas, pod nim kazda serie na svem radku a ve sve barve -
-        # v prekryvu dvou car je to jediny zpusob, jak poznat, ktere cislo
-        # patri ktere.
-        radky_bubliny = [
-            {"text": f'{entry["label"]}: {_udaj(vrcholy[entry["key"]][0], unit)}',
-             "barva": barva_serie(entry.get("slot", 1))}
-            for entry in series if entry["key"] in vrcholy
+        # The title is the time, under it every series on its line and in its
+        # colour - in the overlay of two lines it is the only way to tell which
+        # number belongs to which.
+        tooltip_lines = [
+            {"text": f'{entry["label"]}: {_value_label(peaks[entry["key"]][0], unit)}',
+             "color": series_colour(entry.get("slot", 1))}
+            for entry in series if entry["key"] in peaks
         ]
-        if hlavni.get("streamu"):
-            radky_bubliny.append(
-                {"text": _t("souběžných streamů: {n}").format(n=hlavni["streamu"])})
-        tip = _bublina(str(hlavni.get(x_key, "")), radky_bubliny)
+        if main.get("stream_count"):
+            tooltip_lines.append(
+                {"text": _t("streams at once: {n}").format(n=main["stream_count"])})
+        # Lines a point brings itself, already translated ("z toho hudba 120 GB" in the growth).
+        tooltip_lines.extend({"text": str(line)} for line in main.get("tip_lines") or [])
+        tip = _tooltip(str(main.get(x_key, "")), tooltip_lines)
 
         body = "".join(
             f'<circle cx="{x:.1f}" '
-            f'cy="{py(vrcholy[entry["key"]][0]):.1f}" r="4" '
-            f'fill="{barva_serie(entry.get("slot", 1))}" '
+            f'cy="{py(peaks[entry["key"]][0]):.1f}" r="4" '
+            f'fill="{series_colour(entry.get("slot", 1))}" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
-            for entry in series if entry["key"] in vrcholy
+            for entry in series if entry["key"] in peaks
         )
         parts.append(
             f'<g class="chart-hit" {tip}>'
@@ -933,23 +950,24 @@ def area_chart_multi(
             f"{body}</g>"
         )
 
-    if lze_vybirat:
-        # Obdelnik vyberu kresli JS, ale patri do dokumentu uz ted - takhle
-        # ho styluje CSS jako vsechno ostatni a JS jen meni souradnice.
-        # `pointer-events: none`, aby nesebral bubliny pod sebou.
+    if can_select:
+        # The selection rectangle is drawn by JS, but it belongs in the document
+        # already now - this way CSS styles it like everything else and JS only
+        # changes the coordinates. `pointer-events: none`, so it does not take
+        # the tooltips under it.
         parts.append(
-            f'<rect class="chart-vyber" x="0" y="{margin_top}" width="0" '
+            f'<rect class="chart-selection" x="0" y="{margin_top}" width="0" '
             f'height="{plot_height}" hidden />'
         )
 
     parts.append("</svg>")
-    if lze_vybirat:
-        # Funkce, o ktere se neni jak dozvedet, neexistuje. Kurzor sice
-        # naznaci, ze se s grafem da neco delat, ale co, uz ne - stejne
-        # jako u mapy pod tim je proto pod grafem jedna radka.
+    if can_select:
+        # A feature there is no way to learn about does not exist. The cursor
+        # hints that something can be done with the chart, but not what - so,
+        # just like for the map below, there is one line under the chart.
         parts.append(
-            f'<p class="card-note chart-napoveda">'
-            f'{_e(_t("Tažením v grafu vybereš rozmezí."))}</p>'
+            f'<p class="card-note chart-hint">'
+            f'{_e(_t("Drag across the chart to pick a range."))}</p>'
         )
     return "".join(parts)
 
@@ -962,32 +980,33 @@ def sparkline(
     width: int = 760,
     height: int = 64,
 ) -> str:
-    """Minigraf pod hlavnim cislem.
+    """A sparkline under the main number.
 
-    Bere stejna data jako velky graf nize a chova se stejne: po najeti mysi
-    ukaze, kolik bylo ktery den. Drive to byl jen ozdobny tvar bez hodnot -
-    jenze co vypada jako graf, to clovek zkusi pouzit jako graf. Bud tedy
-    interaktivni byt ma, nebo tam nema byt vubec.
+    It takes the same data as the big chart below and behaves the same: on
+    hover it shows how much there was which day. It used to be only a
+    decorative shape without values - but what looks like a chart, a person
+    tries to use as a chart. So either it is to be interactive, or it is not to
+    be there at all.
 
-    Osy a popisky tu nejsou zamerne: presna cisla nese graf pod tim a jeho
-    tabulka. Tohle je rychly tvar, ne nahrada.
+    Axes and labels are not here on purpose: the exact numbers are carried by
+    the chart below and its table. This is a quick shape, not a replacement.
     """
     values = [float(p.get(y_key) or 0) for p in points]
     if not values or max(values) <= 0:
         return ""
-    # Jeden bod neni vyvoj. Stava se to u vlastniho obdobi kratsiho nez
-    # dva dny (treba useku vybraneho tazenim v grafu) - a kreslila se pak
-    # prazdna plocha pod hlavnim cislem, ktera vypadala jako chybejici graf.
+    # One point is no development. It happens for an own period shorter than two
+    # days (say a stretch selected by dragging in the chart) - and an empty area
+    # was then drawn under the main number, which looked like a missing chart.
     if len(values) < 2:
         return ""
 
     maximum = max(values)
-    # Odsazeni musi pokryt polomer bodu i s prstencem (3,5 + 2). Bez nej
-    # by se bod na kraji nebo na vrcholu kreslil pulkou ven z obrazku -
-    # SVG tu neni orezane, takze by prelezl pres okraj karty.
+    # The padding must cover the dot's radius with its ring (3.5 + 2). Without it
+    # a dot at the edge or at the peak would be drawn half out of the picture -
+    # the SVG is not clipped here, so it would climb over the card's edge.
     #
-    # Plati to i po tom, co koncovy bod zmizel: body se sice ukazuji az
-    # po najeti mysi, ale kresli se na tomtez miste.
+    # It holds even after the end dot vanished: the dots show only on hover,
+    # but they are drawn in the same place.
     padding = 5
     pad_x = 6
     step = (width - pad_x * 2) / max(1, len(values) - 1)
@@ -997,43 +1016,43 @@ def sparkline(
          height - padding - (value / maximum) * (height - padding * 2))
         for index, value in enumerate(values)
     ]
-    line = _cesta(coordinates)
+    line = _path(coordinates)
     area = (
         f"M{coordinates[0][0]:.1f},{height} L"
         + line[1:]
         + f" L{coordinates[-1][0]:.1f},{height} Z"
     )
-    # Plosky pro najeti mysi se orezavaji na sirku obrazku - krajni by jinak
-    # trcely o pul dilku ven a chytaly mys mimo graf.
+    # The hover areas are clipped to the picture's width - the outer ones would
+    # otherwise stick out half a step and catch the mouse outside the chart.
     def _hit(x: float, half: float) -> tuple[float, float]:
         left = max(0.0, x - half)
         return left, min(float(width), x + half) - left
 
-    jmeno = f"prechod-mini-{next(_PORADI_PRECHODU)}"
+    name = f"prechod-mini-{next(_TRANSITION_ORDER)}"
     parts = [
         f'<svg class="sparkline" viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Vyvoj v case, {len(points)} dnu">',
-        f"<defs>{_prechod(1, jmeno, sila=0.28, barva='var(--barva-dat)')}</defs>",
-        f'<path d="{area}" fill="url(#{jmeno})" />',
-        f'<path d="{line}" fill="none" stroke="var(--barva-dat)" '
+        f"<defs>{_transition(1, name, strength=0.28, colour='var(--data-color)')}</defs>",
+        f'<path d="{area}" fill="url(#{name})" />',
+        f'<path d="{line}" fill="none" stroke="var(--data-color)" '
         f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />',
     ]
 
-    # Zadny trvaly bod na konci.
+    # No permanent dot at the end.
     #
-    # Drive tu jeden byl - jako zvyrazneni posledniho dne. Jenze vsechny
-    # ostatni body se objevuji az po najeti mysi, takze ten koncovy vypadal
-    # jako bod, ktery se "zasekl". Velky graf pod tim (area_chart_multi)
-    # ho taky nema; dva tvary tehoz grafu se maji chovat stejne.
+    # There used to be one - as a highlight of the last day. But all the other
+    # dots appear only on hover, so the end one looked like a dot that "got
+    # stuck". The big chart below (area_chart_multi) does not have it either; two
+    # shapes of the same chart are to behave the same.
 
-    # Neviditelne plosky pro najeti mysi - jedna na kazdy den. Musi byt
-    # dost siroke, aby se do nich dalo trefit; samotny bod je maly cil.
+    # Invisible hover areas - one for every day. They must be wide enough to
+    # hit; the dot itself is a small target.
     hit_width = step if len(coordinates) > 1 else width
     for index, (x, y) in enumerate(coordinates):
-        tip = _bublina(
+        tip = _tooltip(
             str(points[index].get(x_key, "")),
-            [{"text": _udaj(values[index], unit),
-              "barva": "var(--barva-dat)"}])
+            [{"text": _value_label(values[index], unit),
+              "color": "var(--data-color)"}])
         hit_x, hit_w = _hit(x, hit_width / 2)
         parts.append(
             f'<g class="chart-hit" {tip}>'
@@ -1041,7 +1060,7 @@ def sparkline(
             f'width="{hit_w:.1f}" height="{height}" fill="transparent" />'
             f'<line x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="{height}" '
             f'stroke="var(--axis)" stroke-width="1" />'
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="var(--barva-dat)" '
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="var(--data-color)" '
             f'stroke="var(--surface-1)" stroke-width="2" />'
             f"</g>"
         )
@@ -1050,145 +1069,144 @@ def sparkline(
     return "".join(parts)
 
 # ---------------------------------------------------------------------------
-# Mapa sveta - odkud se divaji
+# A world map - where they watch from
 # ---------------------------------------------------------------------------
 
-def mapa_sveta(mista: Sequence[dict[str, Any]], rezim: str = "click",
-               podklad: str = "kresleny", podrobna: bool = False,
-               podrobna_otisk: str = "") -> str:
-    """Mapa světa s tečkami podle toho, odkud se přehrávalo.
+def world_map(places: Sequence[dict[str, Any]], mode: str = "click",
+              basemap: str = "drawn", detailed: bool = False,
+              detailed_tag: str = "") -> str:
+    """A world map with dots by where playback came from.
 
-    Kreslí se stejnou rukou jako zbytek grafů: jedno SVG, žádná knihovna.
-    Obrys pevnin je ve `worldmap` (Natural Earth 1:110M) ve Web Mercatoru,
-    stejně jako tečky, takže stačí jedno `viewBox`.
+    It is drawn by the same hand as the rest of the charts: one SVG, no
+    library. The land's outline is in `worldmap` (Natural Earth 1:110M) in Web
+    Mercator, like the dots, so one `viewBox` is enough.
 
-    **Úrovně.** Shluky jsou spočítané pro úrovně přiblížení 1×, 2×, 4× …
-    (mapa.shluky). Každá tečka nese, od které do které úrovně platí
-    (`data-od`, `data-do`), a skript (static/mapa.js) ukazuje ty, které
-    patří k aktuálnímu přiblížení; bez skriptu je vidět jen 1×. Pod tečkami jsou vrstvy
-    podkladu - zabudovaný obrys, podrobná offline mapa a dlaždice OSM;
-    ty dvě plní až skript.
+    **Levels.** Clusters are computed for the zoom levels 1×, 2×, 4× …
+    (map_clusters.clusters). Every dot carries from which to which level it
+    holds (`data-from`, `data-to`), and the script (static/map.js) shows those
+    that belong to the current zoom; without the script only 1× is visible.
+    Under the dots are the basemap layers - the built-in outline, the detailed
+    offline map and the OSM tiles; the script fills those two.
 
-    `rezim` říká, čím se mapa přibližuje ("wheel" kolečkem, "click"
-    klikáním), `podklad` je "kresleny" nebo "osm" a `podrobna` říká, jestli
-    je stažená podrobná mapa - všechno jen atributy pro skript.
+    `mode` says how the map zooms ("wheel" with the wheel, "click" by
+    clicking), `basemap` is "drawn" or "osm" and `detailed` says whether
+    the detailed map is downloaded - all only attributes for the script.
 
-    Velikost tečky roste s **odmocninou** odsledovaného času a počítá se
-    v rámci úrovně, na které se tečka objeví: největší shluk tam má plnou
-    velikost. Oko
-    porovnává plochy, takže dvojnásobný čas má dvojnásobnou plochu.
+    A dot's size grows with the **square root** of the watched time and is
+    computed within the level on which the dot appears: the biggest cluster
+    there has the full size. The eye compares areas, so double the time has
+    double the area.
     """
-    from . import formatting, mapa
-    from .mapa_podrobna import PODROBNOSTI
-    from .worldmap import HRANICE, PEVNINY, SIRKA, VYCHOZI, VYSKA
+    from . import formatting, map_clusters
+    from .detailed_map import DETAIL_LEVELS
+    from .worldmap import BORDERS, LAND, WIDTH, DEFAULT_VIEW, HEIGHT
 
-    if not mista:
-        return _empty(_t("Zatím žádná data"))
+    if not places:
+        return _empty(_t("No data yet"))
 
-    urovne = mapa.shluky(list(mista))
-    # Jak daleko jde přiblížit. S holou kreslenou mapou do úrovně, kde se
-    # rozdělí poslední shluk (aspoň 20×) - hrubý obrys dál nic neukáže.
-    # S podrobnou mapou nebo OSM je pod tečkami co vidět i tam, kde se už
-    # nic nerozpadá, takže vždy až na nejvyšší úroveň.
-    if podrobna or podklad == "osm":
-        max_priblizeni = mapa.MAX_UROVEN
+    levels = map_clusters.clusters(list(places))
+    # How far it can zoom. With the bare drawn map to the level where the last
+    # cluster splits (at least 20×) - the coarse outline shows nothing further.
+    # With the detailed map or OSM there is something to see under the dots even
+    # where nothing falls apart any more, so always up to the highest level.
+    if detailed or basemap == "osm":
+        zoom_limit = map_clusters.MAX_LEVEL
     else:
-        max_priblizeni = mapa.max_priblizeni(urovne, len(mista))
-    vychozi = " ".join(f"{v:g}" for v in VYCHOZI)
+        zoom_limit = map_clusters.max_zoom(levels, len(places))
+    default_view = " ".join(f"{v:g}" for v in DEFAULT_VIEW)
 
-    casti = [
-        f'<svg class="mapa" viewBox="{vychozi}" '
-        f'data-vychozi="{vychozi}" data-svet="0 0 {SIRKA} {VYSKA}" '
-        f'data-max="{max_priblizeni}" '
-        f'data-urovne="{" ".join(str(u["uroven"]) for u in urovne)}" '
-        # Nejvic odsledovaneho casu na kazde urovni - skript z nej pocita
-        # velikost tecky v ramci urovne, ktera je zrovna videt.
-        f'data-maxima="{" ".join(str(max(int(s["sekund"] or 0) for s in u["shluky"])) for u in urovne)}" '
-        f'data-zoom="{_e(rezim if rezim in ("click", "wheel") else "click")}" '
-        f'data-podklad="{_e(podklad if podklad in ("kresleny", "osm") else "kresleny")}" '
-        f'data-podrobna="{"1" if podrobna else "0"}" '
-        f'data-podrobna-verze="{_e(podrobna_otisk)}" '
-        f'data-site="{" ".join(str(PODROBNOSTI[p]["n"]) for p in sorted(PODROBNOSTI))}" '
+    parts = [
+        f'<svg class="map" viewBox="{default_view}" '
+        f'data-default="{default_view}" data-world="0 0 {WIDTH} {HEIGHT}" '
+        f'data-max="{zoom_limit}" '
+        f'data-levels="{" ".join(str(u["level"]) for u in levels)}" '
+        # The most watched time on every level - the script computes the dot's
+        # size from it within the level that is visible right now.
+        f'data-maxima="{" ".join(str(max(int(s["seconds"] or 0) for s in u["clusters"])) for u in levels)}" '
+        f'data-zoom="{_e(mode if mode in ("click", "wheel") else "click")}" '
+        f'data-basemap="{_e(basemap if basemap in ("drawn", "osm") else "drawn")}" '
+        f'data-detailed="{"1" if detailed else "0"}" '
+        f'data-detailed-version="{_e(detailed_tag)}" '
+        f'data-grids="{" ".join(str(DETAIL_LEVELS[p]["n"]) for p in sorted(DETAIL_LEVELS))}" '
         f'preserveAspectRatio="xMidYMid meet" role="img" '
-        f'aria-label="{_e(_t("Odkud se dívají"))}">',
-        # Zare kolem bodu. Jeden pruhledny prechod pro vsechny tecky:
-        # gradient se pocita v souradnicich prvku, takze se sam prizpusobi
-        # jeho velikosti a nemusi se definovat pro kazdou zvlast.
-        # Tecky na mape nejsou serie - je to jedna velicina na ruznych
-        # mistech. Barva aplikace, stejna jako u krivky na Prehledu.
-        # Ostre bile jadro je soucasti prechodu (prvnich 15 %) - jedna
-        # kruznice na tecku misto dvou, stranka s tisicem shluku je tak
-        # o polovinu mensi.
-        '<defs><radialGradient id="zare-mapa">'
+        f'aria-label="{_e(_t("Where they watch from"))}">',
+        # A glow around the point. One transparent gradient for all dots: a
+        # gradient is computed in the element's coordinates, so it fits its size
+        # by itself and need not be defined for each apart.
+        # The dots on the map are no series - it is one quantity in different
+        # places. The application's colour, the same as the curve on the Overview.
+        # A sharp white core is part of the gradient (the first 15 %) - one
+        # circle per dot instead of two, a page with a thousand clusters is half the size.
+        '<defs><radialGradient id="map-glow">'
         '<stop offset="0%" stop-color="#fff" stop-opacity="0.9" />'
         '<stop offset="15%" stop-color="#fff" stop-opacity="0.85" />'
-        '<stop offset="19%" stop-color="var(--barva-dat)" stop-opacity="0.95" />'
-        '<stop offset="45%" stop-color="var(--barva-dat)" stop-opacity="0.35" />'
-        '<stop offset="100%" stop-color="var(--barva-dat)" stop-opacity="0" />'
+        '<stop offset="19%" stop-color="var(--data-color)" stop-opacity="0.95" />'
+        '<stop offset="45%" stop-color="var(--data-color)" stop-opacity="0.35" />'
+        '<stop offset="100%" stop-color="var(--data-color)" stop-opacity="0" />'
         '</radialGradient></defs>',
-        f'<rect x="0" y="0" width="{SIRKA}" height="{VYSKA}" '
+        f'<rect x="0" y="0" width="{WIDTH}" height="{HEIGHT}" '
         f'fill="var(--surface-2)" />',
-        # Podklad zespodu nahoru: zabudovany obrys (vzdycky), podrobna
-        # offline mapa a dlazdice OSM (obe plni skript). Podrobna mapa
-        # zabudovany obrys pri priblizeni schova - jinak by hruba pevnina
-        # vylezala do more.
-        f'<g class="mapa-podklad-zakladni"><path d="{PEVNINY}" fill="var(--axis)" '
+        # The basemap from the bottom up: the built-in outline (always), the
+        # detailed offline map and the OSM tiles (both filled by the script). The
+        # detailed map hides the built-in outline when zoomed in - otherwise the
+        # coarse land would climb into the sea.
+        f'<g class="map-base"><path d="{LAND}" fill="var(--axis)" '
         f'fill-opacity="0.35" stroke="var(--axis)" stroke-width="0.2" /></g>',
-        '<g class="mapa-podrobna"></g>',
-        '<g class="mapa-dlazdice"></g>',
-        # Hranice statu se kresli az po priblizeni - pri pohledu na cely
-        # svet by z nich byla jen sit car pres kontinenty. Sirka cary se
-        # pri priblizeni zmensuje spolu s vyrezem, aby zustala vlasova.
-        # Hranice kreslime barvou textu, ne carou grafu: --axis ma skoro
-        # tentyz odstin jako vypln pevnin, takze v ni hranice splyvaly.
+        '<g class="map-detailed"></g>',
+        '<g class="map-tile"></g>',
+        # The countries' borders are drawn only after zooming in - looking at the
+        # whole world they would be just a net of lines over the continents. The
+        # line's width shrinks with the view when zooming, so it stays hairline.
+        # We draw the borders in the text colour, not the chart line's: --axis has
+        # almost the same shade as the land's fill, so the borders blended into it.
     ]
-    # Pres skutecnou mapu z OSM by hrube hranice 1:110M lezely kilometry
-    # vedle tech skutecnych - pri OSM se nekresli vubec.
-    if podklad != "osm":
-        casti.append(
-            f'<path class="mapa-hranice" d="{HRANICE}" fill="none" '
+    # Over a real map from OSM the coarse 1:110M borders would lie kilometres
+    # next to the real ones - with OSM they are not drawn at all.
+    if basemap != "osm":
+        parts.append(
+            f'<path class="map-borders" d="{BORDERS}" fill="none" '
             f'stroke="var(--text-muted)" stroke-width="0.16" '
             f'stroke-opacity="0" stroke-linejoin="round" />')
 
-    # Shluk, ktery se pres nekolik urovni nemeni (tataz mista), je ve
-    # strance jednou - s rozsahem data-od / data-do. Kazda uroven zvlast by
-    # u par stovek mist dala megabajt SVG, protoze vzdalena mesta jsou
-    # samostatnou teckou skoro na vsech urovnich.
-    tecky: list[dict[str, Any]] = []
-    zive: dict[tuple[int, ...], dict[str, Any]] = {}
-    for uroven in urovne:
-        nejvic = max(float(s["sekund"] or 0) for s in uroven["shluky"]) or 1.0
-        dalsi: dict[tuple[int, ...], dict[str, Any]] = {}
-        for shluk in uroven["shluky"]:
-            tecka = zive.get(shluk["clenove"])
-            if tecka is None:
-                tecka = {"shluk": shluk, "od": uroven["uroven"], "nejvic": nejvic}
-                tecky.append(tecka)
-            tecka["do"] = uroven["uroven"]
-            dalsi[shluk["clenove"]] = tecka
-        zive = dalsi
+    # A cluster that does not change over several levels (the same places) is
+    # in the page once - with the range data-from / data-to. Every level apart
+    # would make a megabyte of SVG for a few hundred places, because distant
+    # cities are a standalone dot on almost all levels.
+    dots: list[dict[str, Any]] = []
+    alive: dict[tuple[int, ...], dict[str, Any]] = {}
+    for level_entry in levels:
+        largest = max(float(s["seconds"] or 0) for s in level_entry["clusters"]) or 1.0
+        next_alive: dict[tuple[int, ...], dict[str, Any]] = {}
+        for cluster in level_entry["clusters"]:
+            dot = alive.get(cluster["members"])
+            if dot is None:
+                dot = {"cluster": cluster, "since": level_entry["level"], "most": largest}
+                dots.append(dot)
+            dot["until"] = level_entry["level"]
+            next_alive[cluster["members"]] = dot
+        alive = next_alive
 
-    for tecka in tecky:
-        shluk = tecka["shluk"]
-        # Velikost bez skriptu: v ramci urovne, na ktere se tecka objevi.
-        # Skript ji prepocita podle urovne, ktera je zrovna videt
-        # (data-s, data-maxima) - jinak by tecka prenesena z nizsi urovne
-        # mela meritko te nizsi a vetsi cas mohl vypadat mensi.
-        podil = (float(shluk["sekund"] or 0) / tecka["nejvic"]) ** 0.5
-        polomer = (1.2 + podil * 4.0) * 2.2
-        tip = _t("{misto}: {n}× · {lidi}").format(
-            misto=shluk["popis"], n=shluk["plays"],
-            lidi=formatting.tvar(shluk["lidi"], "{n} člověk", "{n} lidé", "{n} lidí"))
-        # Bez skriptu jsou videt jen tecky urovne 1× - ostatni mapa.js
-        # odkryje podle priblizeni.
-        skryta = ' display="none"' if tecka["od"] != 1 else ""
-        casti.append(
-            f'<circle class="mapa-bod" data-od="{tecka["od"]}" data-do="{tecka["do"]}" '
-            f'data-s="{int(shluk["sekund"] or 0)}" '
-            f'cx="{shluk["x"]:.4f}" cy="{shluk["y"]:.4f}" r="{polomer:.2f}" '
-            f'fill="url(#zare-mapa)" data-tip="{_e(tip)}"{skryta} />'
+    for dot in dots:
+        cluster = dot["cluster"]
+        # The size without the script: within the level on which the dot appears.
+        # The script recomputes it by the level that is visible right now
+        # (data-s, data-maxima) - otherwise a dot carried over from a lower level
+        # would have the lower one's scale and a bigger time could look smaller.
+        share = (float(cluster["seconds"] or 0) / dot["most"]) ** 0.5
+        radius = (1.2 + share * 4.0) * 2.2
+        tip = _t("{place}: {n}× · {people}").format(
+            place=cluster["description"], n=cluster["plays"],
+            people=formatting.plural("{n} people", cluster["people"]))
+        # Without the script only the dots of the level 1× are visible - map.js
+        # uncovers the rest by the zoom.
+        hidden = ' display="none"' if dot["since"] != 1 else ""
+        parts.append(
+            f'<circle class="map-point" data-from="{dot["since"]}" data-to="{dot["until"]}" '
+            f'data-s="{int(cluster["seconds"] or 0)}" '
+            f'cx="{cluster["x"]:.4f}" cy="{cluster["y"]:.4f}" r="{radius:.2f}" '
+            f'fill="url(#map-glow)" data-tip="{_e(tip)}"{hidden} />'
         )
 
-    casti.append("</svg>")
-    return "".join(casti)
+    parts.append("</svg>")
+    return "".join(parts)
 

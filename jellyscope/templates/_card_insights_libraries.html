@@ -1,0 +1,43 @@
+{# The card "Library utilisation" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_libraries`) - one template, so the two places do not drift apart.
+   Expects `efficiency (insights.storage_efficiency)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Library utilisation") }}</h2>
+        <p class="card-note">{{ _("how much space they take versus how much gets watched") }}</p>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Library") }}</th><th class="num">{{ _("Titles") }}</th>
+                <th class="num">{{ _("Size") }}</th><th class="num">{{ _("Watched") }}</th>
+                <th class="num">{{ _("Watched titles") }}</th><th class="num">{{ _("Utilisation") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in efficiency %}
+            {% set usage = (row.watched_items / row.item_count * 100) if row.item_count else 0 %}
+            <tr>
+                <td class="strong">{{ row.label }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.watched_items | number }}</td>
+                <td class="num">
+                    {% if usage >= 40 %}
+                        <span class="badge good"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% elif usage >= 15 %}
+                        <span class="badge warning"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% else %}
+                        <span class="badge critical"><span class="dot"></span>{{ usage | percent }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

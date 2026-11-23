@@ -1,0 +1,31 @@
+{# The books card "Most read authors": authors with the most hours of reading and listening.
+
+   From the database (cards_books.py, `d.rows` = stats.books_authors). There is no author page: the author is text.
+   An author Jellyfin does not know is one group "unknown author". A long table: the first rows in the card, the whole
+   one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Author") }}</th>
+            <th class="num">{{ _("Time") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Books") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for a in d.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{{ a.name or _("unknown author") }}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Books") }} {{ a.work_count | number }}</div></td>
+                <td class="num strong">{{ a.seconds | seconds }}</td>
+                <td class="num wide-wrapper-only">{{ a.work_count | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length) }}
+    {% else %}<p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>{% endif %}
+</div>

@@ -1,0 +1,37 @@
+{# The card with the key `resolutions`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Resolution") }}</h2>
+        <p class="card-note">{{ _("share of library size") }}</p>
+    </div>
+    {% set res_segments = [] %}
+    {% for row in resolutions %}
+        {# the groups are names (4K, 1080p, ...); only "unknown" - no width and height - is a word to translate #}
+        {% set _x = res_segments.append({'label': _(row.label) if row.label == 'unknown' else row.label, 'value': row.size_bytes}) %}
+    {% endfor %}
+    {{ charts.stacked_bar(res_segments, unit='B') | safe }}
+    {{ charts.legend(res_segments) | safe }}
+
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Resolution") }}</th><th class="num">{{ _("Items") }}</th>
+                <th class="num">{{ _("Size") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in resolutions %}
+            <tr>
+                <td>{{ _(row.label) if row.label == 'unknown' else row.label }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

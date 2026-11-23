@@ -1,12 +1,12 @@
-"""Technicka analyza souboru pomoci ffprobe.
+"""Technical analysis of files with ffprobe.
 
-Tohle je ta cast, kterou umi MediaLyze a Jellystat ne: podivat se na soubor
-primo na disku a zjistit, co v nem doopravdy je.
+This is the part MediaLyze can do and Jellystat cannot: look at a file right
+on the disk and find out what really is in it.
 
-`ffprobe` je nastroj z balicku ffmpeg. Zavolame ho jako externi program,
-rekneme mu "vypis, co vidis, ve formatu JSON", a odpoved si prectem.
+`ffprobe` is a tool from the ffmpeg package. We call it as an external
+program, tell it "print what you see, as JSON", and read the answer.
 
-Dulezite: ffprobe soubory jen **cte**. Nic neprepisuje, nic nemaze.
+Important: ffprobe only **reads** files. It rewrites nothing, deletes nothing.
 """
 
 from __future__ import annotations
@@ -18,27 +18,28 @@ from pathlib import Path
 from typing import Any
 
 from . import languages
+from .i18n import TranslatableError
 
-# Kdyz jeden soubor trva dele nez tohle, vzdame ho a jdeme dal.
-# Bez limitu by jedna vadna nahravka dokazala zastavit cely scan.
+# When one file takes longer than this, we give it up and go on.
+# Without a limit one faulty recording could stop the whole scan.
 PROBE_TIMEOUT_SECONDS = 60
 
 
-class ProbeError(RuntimeError):
-    """Analyza jednoho souboru se nepovedla."""
+class ProbeError(TranslatableError):
+    """Analysing one file failed - a key and its values (i18n.TranslatableError), stored with the item."""
 
 
 def find_ffprobe(configured_path: str = "") -> str | None:
-    """Najde spustitelny ffprobe.
+    """Finds an executable ffprobe.
 
-    Nejdriv zkusi cestu z nastaveni, pak systemovou PATH, pak par mist,
-    kam se ffmpeg na Windows obvykle rozbaluje.
+    It tries the path from the settings first, then the system PATH, then a
+    few places ffmpeg is usually unpacked to on Windows.
     """
     if configured_path:
         candidate = Path(configured_path)
         if candidate.is_file():
             return str(candidate)
-        # Uzivatel mohl zadat slozku misto souboru - zkusime to domyslet.
+        # The user may have given a folder instead of a file - we try to work it out.
         if candidate.is_dir():
             for name in ("ffprobe.exe", "ffprobe"):
                 if (candidate / name).is_file():
@@ -61,14 +62,14 @@ def find_ffprobe(configured_path: str = "") -> str | None:
 
 
 def apply_path_mappings(path: str, mappings: list[dict[str, str]]) -> str:
-    """Prelozi cestu, kterou hlasi Jellyfin, na cestu platnou tady.
+    """Translates a path Jellyfin reports to a path valid here.
 
-    K cemu to je: Jellyfin bezici v Dockeru vidi film jako
-    `/media/filmy/Duna.mkv`, ale na hostiteli to je `D:\\media\\filmy\\Duna.mkv`.
-    Mapovani prepise zacatek cesty z prvniho tvaru na druhy.
+    What it is for: Jellyfin running in Docker sees a movie as
+    `/media/filmy/Duna.mkv`, but on the host it is `D:\\media\\filmy\\Duna.mkv`.
+    A mapping rewrites the start of the path from the first shape to the second.
 
-    Kdyz Jellyscope bezi na stejnem stroji a bez Dockeru, seznam mapovani
-    je prazdny a funkce vrati cestu beze zmeny.
+    When Jellyscope runs on the same machine and without Docker, the list of
+    mappings is empty and the function returns the path unchanged.
     """
     if not path:
         return path
@@ -78,42 +79,42 @@ def apply_path_mappings(path: str, mappings: list[dict[str, str]]) -> str:
         target = (mapping.get("to") or "").strip()
         if not source:
             continue
-        # Porovnavame bez ohledu na velikost pismen a na smer lomitek -
-        # Windows a Linux se v obojim lisi.
+        # Compared regardless of case and of the direction of slashes -
+        # Windows and Linux differ in both.
         normalised = path.replace("\\", "/")
         normalised_source = source.replace("\\", "/")
         if normalised.lower().startswith(normalised_source.lower()):
             rest = normalised[len(normalised_source):].lstrip("/")
-            # Oddelovac bereme z CILOVE cesty, ne ze systemu (os.sep).
-            # Cil popisuje, jak vypada cesta na stroji, kam se mapuje -
-            # a to nemusi byt ten, na kterem zrovna bezime. Podle os.sep
-            # by z mapovani na "D:\\media" vyslo na Linuxu
-            # "D:\\media/filmy/Duna.mkv", tedy pomichane lomitka.
-            oddelovac = "\\" if ("\\" in target and "/" not in target) else "/"
-            return target.rstrip("/\\") + oddelovac + rest.replace("/", oddelovac)
+            # The separator is taken from the TARGET path, not from the system
+            # (os.sep). The target describes what a path looks like on the
+            # machine it maps to - and that need not be the one we run on.
+            # By os.sep a mapping to "D:\\media" would give on Linux
+            # "D:\\media/filmy/Duna.mkv", that is mixed slashes.
+            separator = "\\" if ("\\" in target and "/" not in target) else "/"
+            return target.rstrip("/\\") + separator + rest.replace("/", separator)
 
     return path
 
 
 async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
-    """Spusti ffprobe na jeden soubor a vrati technicke udaje.
+    """Runs ffprobe on one file and returns the technical data.
 
-    Pouzivame `create_subprocess_exec`, ne `shell=True`. Rozdil je zasadni:
-    exec preda argumenty programu primo, kdezto shell by je nejdriv poslal
-    interpretu prikazove radky - a nazev souboru s uvozovkou nebo strednikem
-    by se stal prikazem. Tomuhle se rika command injection a je to jedna
-    z nejcastejsich bezpecnostnich der vubec.
+    We use `create_subprocess_exec`, not `shell=True`. The difference is
+    essential: exec passes the arguments to the program directly, whereas a
+    shell would first send them to the command-line interpreter - and a file
+    name with a quote or a semicolon would become a command. This is called
+    command injection, and it is one of the most common security holes of all.
     """
     file_path = Path(path)
     if not file_path.is_file():
-        raise ProbeError("soubor neexistuje nebo na nej nevidim")
+        raise ProbeError("The file does not exist or cannot be seen from here.")
 
     args = [
         ffprobe_bin,
-        "-v", "error",              # nic nevypisuj, krome skutecnych chyb
+        "-v", "error",              # print nothing but real errors
         "-print_format", "json",
-        "-show_format",             # udaje o kontejneru (velikost, delka, bitrate)
-        "-show_streams",            # jednotlive stopy (video, zvuk, titulky)
+        "-show_format",             # data about the container (size, length, bitrate)
+        "-show_streams",            # the single streams (video, sound, subtitles)
         str(file_path),
     ]
 
@@ -127,20 +128,22 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
             process.communicate(), timeout=PROBE_TIMEOUT_SECONDS
         )
     except TimeoutError as exc:
-        raise ProbeError(f"ffprobe neodpovedel do {PROBE_TIMEOUT_SECONDS} s") from exc
+        raise ProbeError("ffprobe did not answer within {seconds} s.", seconds=PROBE_TIMEOUT_SECONDS) from exc
     except FileNotFoundError as exc:
-        raise ProbeError(f"ffprobe nenalezen ({ffprobe_bin})") from exc
+        raise ProbeError("ffprobe was not found ({path}).", path=ffprobe_bin) from exc
     except OSError as exc:
-        raise ProbeError(f"ffprobe se nepodarilo spustit: {exc}") from exc
+        raise ProbeError("ffprobe could not be started: {error}", error=exc) from exc
 
     if process.returncode != 0:
         detail = stderr.decode("utf-8", errors="replace").strip()[:200]
-        raise ProbeError(detail or f"ffprobe skoncil s kodem {process.returncode}")
+        if detail:
+            raise ProbeError("ffprobe reported an error: {detail}", detail=detail)
+        raise ProbeError("ffprobe ended with code {code}.", code=process.returncode)
 
     try:
         data = json.loads(stdout.decode("utf-8", errors="replace"))
     except ValueError as exc:
-        raise ProbeError("ffprobe vratil neplatny JSON") from exc
+        raise ProbeError("ffprobe returned invalid JSON.") from exc
 
     summary = _summarise(data, file_path)
     summary["streams"] = extract_streams(data)
@@ -148,7 +151,7 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
 
 
 def _summarise(data: dict[str, Any], file_path: Path) -> dict[str, Any]:
-    """Z ukecane odpovedi ffprobe vytahne jen to, co nas zajima."""
+    """Takes out of ffprobe's verbose answer only what interests us."""
     fmt = data.get("format") or {}
     streams = data.get("streams") or []
 
@@ -167,8 +170,8 @@ def _summarise(data: dict[str, Any], file_path: Path) -> dict[str, Any]:
         "width": None,
         "height": None,
         "video_range": None,
-        # ffprobe hlasi jazyk trojpismenne ("ces"), Jellyfin nekdy jinak.
-        # Sjednotime to hned tady, aby databaze mela jen jeden tvar.
+        # ffprobe reports the language in three letters ("ces"), Jellyfin sometimes
+        # otherwise. It is unified right here, so the database has one shape only.
         "audio_languages": languages.pack(_language_of(s) for s in audio_streams),
         "subtitle_languages": languages.pack(_language_of(s) for s in subtitle_streams),
         "default_audio_language": (
@@ -177,7 +180,7 @@ def _summarise(data: dict[str, Any], file_path: Path) -> dict[str, Any]:
     }
 
     if result["size_bytes"] is None:
-        # Kdyz ffprobe velikost neuvedl, zeptame se rovnou souboroveho systemu.
+        # When ffprobe did not state the size, we ask the file system directly.
         try:
             result["size_bytes"] = file_path.stat().st_size
         except OSError:
@@ -199,11 +202,12 @@ def _summarise(data: dict[str, Any], file_path: Path) -> dict[str, Any]:
 
 
 def extract_streams(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Jednotlive stopy z odpovedi ffprobe, ve stejnem tvaru jako z Jellyfinu.
+    """The single streams from ffprobe's answer, in the same shape as from Jellyfin.
 
-    Dulezite je to "ve stejnem tvaru": zbytek aplikace pak nemusi vedet,
-    odkud data prisla. Prevod na spolecny tvar patri sem, k okraji - ne
-    doprostred, kde by o nem musel vedet kazdy.
+    What matters is "in the same shape": the rest of the application then
+    need not know where the data came from. The conversion to the common
+    shape belongs here, at the edge - not in the middle, where everybody
+    would have to know about it.
     """
     result = []
     for index, stream in enumerate(data.get("streams") or []):
@@ -232,60 +236,61 @@ def extract_streams(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _language_of(stream: dict[str, Any] | None) -> str | None:
-    """Vytahne jazyk stopy z metadat ffprobe.
+    """Takes the stream's language out of ffprobe's metadata.
 
-    ffprobe je schovava do vnoreneho slovniku "tags", ktery casto chybi
-    uplne - u domacich nahravek nebo starych souboru jazyk nikdo nevyplnil.
+    ffprobe hides it in a nested dictionary "tags", which is often missing
+    altogether - nobody filled the language in for home recordings or old files.
     """
     if not stream:
         return None
     return (stream.get("tags") or {}).get("language")
 
 
-# Znacky kodeku, kterymi se Dolby Vision hlasi v kontejneru: dvh1/dvhe
-# je HEVC s DV, dvav/dva1 totez pro H.264 a dav1 pro AV1. Obycejne
-# hev1/hvc1 tuhle znacku nemaji, takze planou detekci nehrozi.
-DV_ZNACKY = {"dvh1", "dvhe", "dvav", "dva1", "dav1"}
+# Codec tags Dolby Vision announces itself with in the container: dvh1/dvhe
+# is HEVC with DV, dvav/dva1 the same for H.264 and dav1 for AV1. Plain
+# hev1/hvc1 do not have this tag, so there is no risk of a false detection.
+DV_MARKS = {"dvh1", "dvhe", "dvav", "dva1", "dav1"}
 
 
-def _je_dolby_vision(video: dict[str, Any]) -> bool:
-    """Nese video stopa Dolby Vision?
+def _is_dolby_vision(video: dict[str, Any]) -> bool:
+    """Does the video stream carry Dolby Vision?
 
-    Ptame se na tri veci, protoze ruzne verze ffprobe a ruzne kontejnery
-    to hlasi jinak - a staci, aby se minula jedna, a DV soubor se zapsal
-    jako obycejne HDR:
+    We ask about three things, because different versions of ffprobe and
+    different containers report it differently - and it is enough to miss
+    one for a DV file to be stored as plain HDR:
 
-    * **postranni data** - hlavni cesta ("DOVI configuration record").
-      Nazev se ale mezi verzemi lisil, tak se hleda podretezec, a jako
-      pojistka staci i to, ze blok nese pole `dv_profile`.
-    * **znacka kodeku** ("dvh1", "dvhe") - u MP4 a MOV je v kontejneru
-      i tehdy, kdyz ffprobe postranni data nevypise.
-    * **jmeno profilu** - nektere sestaveni pisou "Dolby Vision" rovnou
-      do `profile`.
+    * **side data** - the main road ("DOVI configuration record"). The name
+      differed between versions, though, so a substring is looked for, and
+      as a safeguard it is enough that the block carries a `dv_profile` field.
+    * **the codec tag** ("dvh1", "dvhe") - in MP4 and MOV it is in the
+      container even when ffprobe does not print the side data.
+    * **the profile name** - some builds write "Dolby Vision" right into
+      `profile`.
 
-    Co tohle nechyti, je stary ffmpeg nad MKV: cist DV z Matrosky umi az
-    novejsi verze, a starsi o nem nerekne vubec nic.
+    What this does not catch is an old ffmpeg over MKV: reading DV from
+    Matroska needs a newer version, and an older one says nothing about it.
     """
-    for blok in (video.get("side_data_list") or []):
-        typ = str(blok.get("side_data_type") or "").lower()
-        if "dovi" in typ or "dolby vision" in typ:
+    for block in (video.get("side_data_list") or []):
+        kind = str(block.get("side_data_type") or "").lower()
+        if "dovi" in kind or "dolby vision" in kind:
             return True
-        if any(str(klic).startswith("dv_") for klic in blok):
+        if any(str(key).startswith("dv_") for key in block):
             return True
 
-    if str(video.get("codec_tag_string") or "").strip().lower() in DV_ZNACKY:
+    if str(video.get("codec_tag_string") or "").strip().lower() in DV_MARKS:
         return True
 
     return "dolby vision" in str(video.get("profile") or "").lower()
 
 
 def _detect_video_range(video: dict[str, Any]) -> str:
-    """Odhadne, jestli je video SDR, HDR nebo Dolby Vision.
+    """Estimates whether the video is SDR, HDR or Dolby Vision.
 
-    Jde o odhad podle barevnych metadat. Presnejsi klasifikace by chtela
-    hlubsi rozbor, ale pro statistiku "kolik mam HDR obsahu" tohle staci.
+    It is an estimate from the colour metadata. A more precise classification
+    would want a deeper analysis, but for the statistic "how much HDR content
+    do I have" this is enough.
     """
-    if _je_dolby_vision(video):
+    if _is_dolby_vision(video):
         return "DOVI"
 
     transfer = (video.get("color_transfer") or "").lower()
@@ -300,7 +305,7 @@ def _detect_video_range(video: dict[str, Any]) -> str:
 
 
 def _to_int(value: Any) -> int | None:
-    """Bezpecny prevod na cele cislo. ffprobe vraci cisla casto jako text."""
+    """A safe conversion to a whole number. ffprobe often returns numbers as text."""
     if value is None:
         return None
     try:

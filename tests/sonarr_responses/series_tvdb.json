@@ -1,0 +1,27 @@
+[
+ {
+  "id": 4,
+  "title": "The Expanse",
+  "tvdbId": 280619,
+  "tmdbId": 63639,
+  "year": 2015,
+  "images": [
+   {
+    "coverType": "banner",
+    "url": "/MediaCover/4/banner.jpg?lastWrite=639301481289482722"
+   },
+   {
+    "coverType": "poster",
+    "url": "/MediaCover/4/poster.jpg?lastWrite=639301481289602724"
+   },
+   {
+    "coverType": "fanart",
+    "url": "/MediaCover/4/fanart.jpg?lastWrite=639301481289722726"
+   },
+   {
+    "coverType": "clearlogo",
+    "url": "/MediaCover/4/clearlogo.png?lastWrite=639301481289782727"
+   }
+  ]
+ }
+]

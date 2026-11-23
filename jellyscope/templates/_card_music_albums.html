@@ -1,0 +1,50 @@
+{# The music card "Most played albums": a strip of covers and the same albums as a table in the window.
+
+   From the database (cards_music.py, `d.radky` = stats.music_albums with the address of the cover
+   and of the album's page). The cover is from Jellyfin (/image/); an album without a cover has
+   a placeholder. Listening to a track the sync does not know yet is under
+   an unknown album (without a link). #}
+{% from "_macros.html" import poster, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for a in d.rows[:24] %}
+        <div class="poster-card">
+            {{ poster(a.cover, "poster-frame album-cover", detail=a.link, placeholder=_("No cover")) }}
+            {% call link(a.link, {"class": "poster-name", "title": a.name}) %}{{ a.name or _("unknown album") }}{% endcall %}
+            <div class="poster-meta">{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %} &middot; {{ a.seconds | seconds }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="modal-only">
+        <table>
+            <thead><tr>
+                <th>{{ _("Album") }}</th>
+                <th>{{ _("Artist") }}</th>
+                <th class="num">{{ _("Listening") }}</th>
+                <th class="num">{{ _("Plays") }}</th>
+                <th class="num">{{ _("Listeners#count") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for a in d.rows %}
+                <tr>
+                    <td class="strong">{% call link(a.link) %}{{ a.name or _("unknown album") }}{% endcall %}</td>
+                    <td>{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %}</td>
+                    <td class="num">{{ a.seconds | seconds }}</td>
+                    <td class="num">{{ a.plays | number }}</td>
+                    <td class="num">{{ a.listener_count | number }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>
+    {% endif %}
+</div>

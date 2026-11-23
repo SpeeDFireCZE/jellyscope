@@ -1,0 +1,14 @@
+{# The music card "Music library numbers": what the library holds now.
+
+   From the database (cards_music.py, `d` = stats.music_library_summary), without what
+   vanished from Jellyfin. The period does not concern the card. A row of tiles without a heading;
+   in a dashboard it carries a small label "Hudba · …". #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Artists"), d.artist_count | number) }}
+    {{ tile(_("Albums#count"), d.album_count | number) }}
+    {{ tile(_("Tracks#count"), d.track_count | number) }}
+    {{ tile(_("Size"), d.size_bytes | bytes) }}
+    {{ tile(_("Total length#alt"), d.seconds | seconds) }}
+</div>

@@ -1,0 +1,107 @@
+{# A Settings section: taking over the history from another tool
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("History import") }}</h2>
+        <p class="card-note">{{ _("taking over data from another tool") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("Jellyscope records playbacks only from the moment it runs. If you already have history elsewhere, it can be taken over. The import can be run repeatedly; records already imported are not duplicated. Feel free to use both sources, and periods Jellyscope already collected itself: whatever is in the database is recognised by user, title and time, so only the rest is imported.") }}
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:20px">
+        <table>
+            <tbody>
+            <tr><td>{{ _("Own records") }}</td>
+                <td class="num strong">{{ import_stats.own | number }}</td></tr>
+            <tr><td>{{ _("From Playback Reporting") }}</td>
+                <td class="num strong">{{ import_stats.playback_reporting | number }}</td></tr>
+            <tr><td>{{ _("From Jellystat") }}</td>
+                <td class="num strong">{{ import_stats.jellystat | number }}</td></tr>
+            <tr><td>{{ _("Oldest record") }}</td>
+                <td class="num muted">{{ import_stats.oldest | datetime }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="group">{{ _("Playback Reporting (Jellyfin plugin)") }}</h3>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("Data is taken directly through Jellyfin, so you do not have to upload any file. You will find the plugin in Jellyfin: Dashboard -> Plugins -> Catalogue.") }}
+    </p>
+    <form method="post" action="/settings/import/playback-reporting" class="btn-row">
+        <label class="card-note">{{ _("Ignore playbacks shorter than") }}</label>
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <span class="card-note">{{ _("seconds") }}</span>
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Import") }}</button>
+    </form>
+    <form method="post" action="/settings/import/detect" style="margin-top:8px">
+        <button data-keep-scroll class="btn" type="submit">{{ _("Check whether the plugin is available") }}</button>
+    </form>
+
+    {# A fallback for when the plugin does not work through the API. It happens
+       with mismatched versions: a plugin built against an older Jellyfin crashes
+       before it gets to its data and returns just an error 500. Its data are
+       in a plain file all the same, which can be copied. #}
+    {# The expander is set apart from the notes around it on purpose - it is
+       an offer of another way, not a note to the first one. In the grey of the notes
+       it blended in and nobody noticed it. #}
+    <details class="fallback" style="margin-top:14px">
+        <summary>
+            {{ _("API import not working? Upload a backup from the plugin") }}
+        </summary>
+        <p class="card-note" style="margin:10px 0">
+            {{ _("The plugin can make a backup itself and saves it as a TSV file. In Jellyfin go to:") }}
+        </p>
+        <p class="card-note" style="margin-bottom:10px">
+            <code>{{ _("Dashboard → Playback Reporting → Backup → Save backup") }}</code>
+        </p>
+        <p class="card-note" style="margin-bottom:10px">
+            {{ _("Then upload the file here. It bypasses the broken API and does not touch Jellyfin at all; only your copy is read.") }}
+        </p>
+        <form method="post" action="/settings/import/playback-reporting-file"
+              enctype="multipart/form-data" class="btn-row">
+            {{ file_picker("backup", ".tsv,.txt,text/tab-separated-values") }}
+            <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+            <span class="card-note">{{ _("seconds min.") }}</span>
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Upload and import") }}</button>
+        </form>
+    </details>
+
+    <h3 class="group">{{ _("Jellystat (JSON backup)") }}</h3>
+    <p class="card-note" style="margin-bottom:12px">
+        {{ _("Export a JSON backup from Jellystat and upload it here.") }}
+    </p>
+    {# enctype is required for uploading a file - without it only the name arrives. #}
+    <form method="post" action="/settings/import/jellystat"
+          enctype="multipart/form-data" class="btn-row">
+        {{ file_picker("backup", ".json,application/json") }}
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <span class="card-note">{{ _("seconds min.") }}</span>
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Upload and import") }}</button>
+    </form>
+
+    {% if last_import %}
+    <p class="card-note" style="margin-top:16px">
+        {{ _("Last import") }}: {{ last_import.started_at | relative }}
+        &middot; {{ last_import.status }}
+        {% if last_import.message %}<br>{{ stored_text(last_import.message, last_import.message_values) }}{% endif %}
+    </p>
+    {% endif %}
+
+    <div class="flash warning" style="margin-top:16px">
+        <span class="dot"></span>
+        <span>{{ _("Imported data need not contain the audio language or the transcode reason. Playback Reporting does send the language sometimes, and such a record counts towards the language statistics. Jellystat never sends it. Whatever the import lacks is filled in by playbacks Jellyscope records itself.") }}</span>
+    </div>
+</div>
+
+{# ================================================================== #}

@@ -1,0 +1,12 @@
+{# The Seerr card "Requested and watched?": who played the title they requested.
+
+   From the database (cards_seerr.py, `d` = counts from stats.seerr_watching). A row
+   of tiles without a heading; in a dashboard it carries a small label with the name Seerr. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Requested titles in the library"), d.available_count | number) }}
+    {{ tile(_("Watched by the requester"), d.requester | number) }}
+    {{ tile(_("Only someone else"), d.other | number) }}
+    {{ tile(_("Nobody"), d.nobody | number) }}
+</div>

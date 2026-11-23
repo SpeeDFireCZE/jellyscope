@@ -1,0 +1,31 @@
+{# The Prowlarr card "Who asks": which apps search and take releases through Prowlarr.
+
+   From the database (cards_prowlarr.py, `d.radky`: the app's name, searches, RSS,
+   grabbed releases). Prowlarr knows an app by how it introduces
+   itself; "Prowlarr" is a manual search in Prowlarr itself. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("“Prowlarr” is a manual search in Prowlarr itself") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("App") }}</th>
+            <th class="num">{{ _("Searches") }}</th>
+            <th class="num">{{ _("RSS") }}</th>
+            <th class="num">{{ _("Grabbed") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr>
+                <td class="strong break-anywhere">{{ r.name }}</td>
+                <td class="num">{{ r.searches | number }}</td>
+                <td class="num">{{ r.rss | number }}</td>
+                <td class="num">{{ r.grabs | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

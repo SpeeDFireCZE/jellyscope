@@ -1,0 +1,40 @@
+{# The Bazarr card "Providers now": the subtitle providers switched on and their state.
+
+   Live from Bazarr (cards_bazarr.py, `d.radky`: name, v_poradku, stav,
+   znovu; None = it could not be loaded). The limited ones come first: a provider
+   that returned an error or went over a limit, and Bazarr does not ask it
+   for a while. `state` is the error's name as Bazarr writes it ("TooManyRequests").
+
+   Only two columns: when Bazarr tries again stands under the state. The names
+   of providers and errors are long and do not wrap - a third column would not fit
+   into a card at half width (a 1024 px window = a 320 px card). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("Bazarr skips throttled ones for a while") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.rows is none %}
+        <p class="chart-empty">{{ _("Providers could not be loaded from the app.") }}</p>
+    {% elif d.rows %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Provider") }}</th>
+            <th>{{ _("State") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for p in d.rows %}
+            <tr>
+                <td class="strong">{{ p.name }}</td>
+                <td>{% if p.fine %}<span class="badge good">{{ _("OK") }}</span>
+                    {% else %}<span class="badge warning">{{ p.state or _("throttled") }}</span>
+                    {% if p.again %}<div class="cell-sub">{{ _("retries {when}").format(when=p.again) }}</div>{% endif %}{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+        <p class="chart-empty">{{ _("No subtitle provider is enabled in Bazarr.") }}</p>
+    {% endif %}
+</div>

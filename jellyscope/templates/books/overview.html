@@ -1,0 +1,50 @@
+{# The overview of Books - laid out like the overview of Music and of Movies & series: the newly added books at the
+   top, then one heading "Statistics" with the period, the numbers, reading and listening by day, the readers beside
+   the short chart, how audiobooks are played, and when people read. The full charts are on Insights
+   (books/insights.html), the library's cards on the Library page.
+
+   The cards are from the registry (jellyscope/cards_books.py, PAGES["overview"]) - the same ones that can be added to
+   a custom dashboard; which of them the account sees was decided by the route (web/books/overview.py, `cards`):
+   without the area "...including who read and listened" the card "Readers and listeners" is not here. #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}{{ _("Overview") }} &middot; {{ _("Books") }} &middot; Jellyscope{% endblock %}
+
+{# A books card by its name ("works" -> books_works). #}
+{% macro c(card_name) %}{{ show_card("books_" ~ card_name) }}{% endmacro %}
+
+{% block content %}
+{# At the top the books added to the library last, like "Recently added" of Movies & series. #}
+{{ c("new") }}
+
+<div class="section-head" style="margin-top:34px">
+    <div>
+        <h2>{{ _("Statistics") }}</h2>
+        <p class="card-note">
+            {% if period.own %}{{ _("Reading and listening in the selected period.") }}
+            {% elif days == 365 %}{{ _("Reading and listening over the last year.") }}
+            {% else %}{{ _("Reading and listening over the last {period}.").format(period=_(day_labels[days])) }}
+            {% endif %}
+        </p>
+    </div>
+    {{ period_filter(period, '/books/overview') }}
+</div>
+
+{{ c("numbers") }}
+{{ c("by_day") }}
+
+<div class="grid-2 align-top">
+    {{ c("readers") }}
+    {{ c("most_read") }}
+</div>
+
+<div class="grid-2 align-top">
+    {{ c("method") }}
+    {{ c("clients") }}
+</div>
+
+{{ c("when") }}
+
+{# One window for the whole table of any card (whole_table_button, data-table-window). #}
+{{ table_window() }}
+{% endblock %}

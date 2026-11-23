@@ -1,0 +1,20 @@
+{# The music card "Direct or transcoded": hours of listening by the playback method.
+
+   From the database (cards_music.py, `d` = stats.music_play_method). Direct streaming
+   (DirectStream: only another container of the file) counts as direct play -
+   the sound is not converted. The reasons for transcoding are reported by Jellyfin, several at once. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.direct or d.transcoded %}
+        {{ charts.donut_chart([{'label': _('direct#adverb'), 'value': d.direct / 3600},
+                               {'label': _('transcoded'), 'value': d.transcoded / 3600}]) | safe }}
+        {% if d.reasons %}
+        <p class="card-note">{{ _("Why it was transcoded") }}</p>
+        <ul class="flash-list">
+            {% for r in d.reasons[:5] %}<li>{{ r.reason | transcode_reasons }} <span class="muted">({{ r.count | number }}×)</span></li>{% endfor %}
+        </ul>
+        {% endif %}
+    {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+</div>

@@ -1,0 +1,100 @@
+{
+ "data": [
+  {
+   "seriesTitle": "The Expanse",
+   "episode_number": "1x2",
+   "episodeTitle": "The Big Empty",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "sonarrSeriesId": 4,
+   "sonarrEpisodeId": 230,
+   "sceneName": "The.Expanse.S01E02.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "tags": [],
+   "seriesType": "standard"
+  },
+  {
+   "seriesTitle": "The Expanse",
+   "episode_number": "1x1",
+   "episodeTitle": "Dulcinea",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "sonarrSeriesId": 4,
+   "sonarrEpisodeId": 229,
+   "sceneName": "The.Expanse.S01E01.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "tags": [],
+   "seriesType": "standard"
+  },
+  {
+   "seriesTitle": "Dark",
+   "episode_number": "1x2",
+   "episodeTitle": "Lies",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "sonarrSeriesId": 3,
+   "sonarrEpisodeId": 147,
+   "sceneName": "Dark.S01E02.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "tags": [],
+   "seriesType": "standard"
+  },
+  {
+   "seriesTitle": "Dark",
+   "episode_number": "1x1",
+   "episodeTitle": "Secrets",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "sonarrSeriesId": 3,
+   "sonarrEpisodeId": 146,
+   "sceneName": "Dark.S01E01.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "tags": [],
+   "seriesType": "standard"
+  },
+  {
+   "seriesTitle": "Chernobyl",
+   "episode_number": "1x1",
+   "episodeTitle": "1:23:45",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "sonarrSeriesId": 2,
+   "sonarrEpisodeId": 141,
+   "sceneName": "Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb",
+   "tags": [],
+   "seriesType": "standard"
+  }
+ ],
+ "total": 5
+}

@@ -1,0 +1,63 @@
+{# The card "Conversion speed" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_speed`) - one template, so the two places do not drift apart.
+   Expects `speed (insights.transcode_speeds)`. #}
+{% from "_macros.html" import tile, link with context %}
+<div class="card" id="transcode-speed">
+    <div class="card-head">
+        <h2>{{ _("Conversion speed") }}</h2>
+        <p class="card-note">{{ _("frames per second, the average of each playback") }}</p>
+    </div>
+    {% if speed.playbacks %}
+    <div class="kpi-row">
+        {{ tile(_("Average"), speed.average ~ " fps",
+                note=speed.playbacks | number ~ " " ~ _("playbacks with the picture converted")) }}
+        {# The note under the number is the title it is about - with a link to its
+           detail. The {% set %} block hands the macro tile ready HTML (a link only where
+           the account may go, and only for a title the library knows). #}
+        {# `or ""`: a play without a name (an import without pairing) has nothing to write -
+           an empty note is not drawn, "None" would be written. #}
+        {% set slowest %}{% call link(speed.least.detail_url) %}{{ speed.least.label or "" }}{% endcall %}{% endset %}
+        {% set fastest %}{% call link(speed.most.detail_url) %}{{ speed.most.label or "" }}{% endcall %}{% endset %}
+        {{ tile(_("Slowest"), speed.least.fps ~ " fps", note=slowest) }}
+        {{ tile(_("Fastest"), speed.most.fps ~ " fps", note=fastest) }}
+        {{ tile(_("Fell behind"), speed.too_slow | number,
+                note=(speed.too_slow_share | percent(0)) ~ " " ~ _("of playbacks were slower than the video")) }}
+    </div>
+
+    {% if speed.by_hw | length > 1 or (speed.by_hw and speed.by_hw[0].hw) %}
+    <div class="table-wrap" style="margin-top:16px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Converted by") }}</th>
+                <th class="num">{{ _("Plays") }}</th>
+                <th class="num">{{ _("Average") }}</th>
+                <th class="num">{{ _("Lowest") }}</th>
+                <th class="num">{{ _("Highest") }}</th>
+                <th class="num">{{ _("Fell behind") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for s in speed.by_hw %}
+            <tr>
+                <td class="strong">{{ s.hw | upper if s.hw else _("processor") }}</td>
+                <td class="num">{{ s.playbacks | number }}</td>
+                <td class="num strong">{{ s.average }} fps</td>
+                <td class="num" title="{{ s.least.label }}">{{ s.least.fps }} fps</td>
+                <td class="num" title="{{ s.most.label }}">{{ s.most.fps }} fps</td>
+                <td class="num">{{ s.too_slow | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("A conversion slower than the video's frame rate means the picture stutters. Video usually has 24 to 30 frames, sport and phone recordings 50 to 60.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("No picture conversion with a measured speed yet. Jellyscope records it since version 1.7.3.") }}</p>
+    {% endif %}
+</div>

@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-r"""Čtecí API: pustí dovnitř jen token a nic tudy nejde změnit.
+r"""The read-only API: lets in only a token and nothing can be changed through it.
 
-API je jediná cesta do Jellyscope, která nevede přes přihlášení. Proto
-tenhle test hlídá hlavně to, co se stát NESMÍ:
+The API is the only way into Jellyscope that does not go through signing in. So
+this test watches mainly what must NOT happen:
 
-* **Bez tokenu se nedozví nikdo nic.** Ani „kolik je uživatelů", ani jak
-  se jmenuje knihovna.
-* **Token se nepředává v adrese.** Adresa se objeví v logu proxy,
-  v historii prohlížeče a v odkazu, který někdo pošle dál - a token by
-  s ní. Kdo ho zkusí poslat jako `?token=`, dostane 401 jako každý jiný.
-* **V databázi je otisk, ne token.** Kdo si přečte databázi (třeba
-  ze zálohy), přístup tím nezíská.
-* **Nic se přes API nemění.** Pod `/api/` jsou samá GET; POST musí
-  skončit na 405, ne na „metoda se ignoruje a stránka se načte".
-* **Zneplatněný token přestane platit hned**, a ostatních se to nedotkne.
+* **Without a token nobody learns anything.** Not "how many users there are",
+  not what a library is called.
+* **The token is not passed in the address.** The address shows up in a proxy's
+  log, in the browser's history and in a link somebody passes on - and the token
+  with it. Whoever tries to send it as `?token=` gets 401 like anybody else.
+* **The database holds a fingerprint, not the token.** Whoever reads the database
+  (from a backup, say) gains no access by it.
+* **Nothing changes through the API.** Under `/api/` there are only GETs; a POST must
+  end at 405, not at "the method is ignored and the page loads".
+* **A revoked token stops working at once**, and the others are not touched.
 
-Spuštění:
-    .\\.venv\\Scripts\\python.exe tests\\test_api.py
+Run:
+    .venv/bin/python tests/test_api.py
 """
 from __future__ import annotations
 
@@ -42,17 +42,17 @@ from jellyscope import api, db  # noqa: E402
 failures = 0
 
 
-def check(podminka: bool, popis: str, detail: str = "") -> None:
+def check(condition: bool, label: str, detail: str = "") -> None:
     global failures
-    print(f"{'OK    ' if podminka else 'CHYBA '} {popis} {detail}")
-    if not podminka:
+    print(f"{'OK    ' if condition else 'FAIL  '} {label} {detail}")
+    if not condition:
         failures += 1
 
 
 db.init_db()
 
-# Trocha dat, at maji odpovedi co ukazat.
-zacatek = datetime.now(timezone.utc) - timedelta(days=2)
+# A little data, so the answers have something to show.
+start = datetime.now(timezone.utc) - timedelta(days=2)
 with db.connect() as conn:
     conn.execute(
         "INSERT INTO items (id, name, type, size_bytes, tech_source, is_missing)"
@@ -62,7 +62,7 @@ with db.connect() as conn:
         " item_name, started_at, last_seen_at, watched_seconds, paused_seconds,"
         " is_paused, is_active, play_method)"
         " VALUES ('s1','u1','Jana','i1','Duna',?,?,3600,0,0,1,'Transcode (v)')",
-        (zacatek.strftime(db.TIME_FORMAT), zacatek.strftime(db.TIME_FORMAT)))
+        (start.strftime(db.TIME_FORMAT), start.strftime(db.TIME_FORMAT)))
     conn.commit()
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -70,180 +70,180 @@ from fastapi.testclient import TestClient  # noqa: E402
 from jellyscope import accounts  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
-klient = TestClient(app)
+client = TestClient(app)
 
-print("--- bez tokenu se nedozví nikdo nic ---")
-for cesta in ("/api/v1/", "/api/v1/summary", "/api/v1/now-playing",
-              "/api/v1/library"):
-    odpoved = klient.get(cesta)
-    check(odpoved.status_code == 401, f"{cesta} -> 401 ({odpoved.status_code})")
-check("Bearer" in klient.get("/api/v1/summary").headers.get("www-authenticate", ""),
-      "a odpověď řekne, čím se prokázat")
+print("--- without a token nobody learns anything ---")
+for path in ("/api/v1/", "/api/v1/summary", "/api/v1/now-playing",
+             "/api/v1/library"):
+    response = client.get(path)
+    check(response.status_code == 401, f"{path} -> 401 ({response.status_code})")
+check("Bearer" in client.get("/api/v1/summary").headers.get("www-authenticate", ""),
+      "and the answer says how to prove oneself")
 
 print()
-print("--- s tokenem ano ---")
-vyrobeny = api.vytvor("Grafana")
-TOKEN = vyrobeny["token"]
-hlavicka = {"Authorization": f"Bearer {TOKEN}"}
+print("--- with a token, yes ---")
+created = api.create_token("Grafana")
+TOKEN = created["token"]
+header = {"Authorization": f"Bearer {TOKEN}"}
 
-odpoved = klient.get("/api/v1/summary?days=30", headers=hlavicka)
-check(odpoved.status_code == 200, f"souhrn projde ({odpoved.status_code})")
-data = odpoved.json()
-check(data["plays"] == 1, f"a nese čísla ({data['plays']} přehrávání)")
-check(data["watched_hours"] == 1.0, f"v hodinách ({data['watched_hours']})")
-check(data["active_now"] == 1, "i počet právě běžících")
+response = client.get("/api/v1/summary?days=30", headers=header)
+check(response.status_code == 200, f"the summary passes ({response.status_code})")
+data = response.json()
+check(data["plays"] == 1, f"and carries numbers ({data['plays']} plays)")
+check(data["watched_hours"] == 1.0, f"in hours ({data['watched_hours']})")
+check(data["active_now"] == 1, "the number playing right now too")
 check(data["transcode_share_percent"] == 100.0,
-      f"a podíl přepočtů ({data['transcode_share_percent']} %)")
+      f"and the share of transcodes ({data['transcode_share_percent']} %)")
 
-hraje = klient.get("/api/v1/now-playing", headers=hlavicka).json()
-check(hraje["count"] == 1, f"právě se hraje: {hraje['count']}")
-check(hraje["sessions"][0]["user"] == "Jana", "se jménem diváka")
-check(hraje["sessions"][0]["is_transcode"] is True, "a poznáním přepočtu")
+playing = client.get("/api/v1/now-playing", headers=header).json()
+check(playing["count"] == 1, f"playing right now: {playing['count']}")
+check(playing["sessions"][0]["user"] == "Jana", "with the viewer's name")
+check(playing["sessions"][0]["is_transcode"] is True, "and the transcode recognised")
 
-knihovna = klient.get("/api/v1/library", headers=hlavicka).json()
-check(knihovna["items"] == 1 and knihovna["size_bytes"] == 1024 ** 3,
-      f"knihovna: {knihovna['items']} položek, {knihovna['size_human']}")
+library = client.get("/api/v1/library", headers=header).json()
+check(library["items"] == 1 and library["size_bytes"] == 1024 ** 3,
+      f"library: {library['items']} items, {library['size_human']}")
 
-rozcestnik = klient.get("/api/v1/", headers=hlavicka).json()
-check("/api/v1/summary" in rozcestnik["endpoints"], "rozcestník vypíše adresy")
+index = client.get("/api/v1/", headers=header).json()
+check("/api/v1/summary" in index["endpoints"], "the index lists the addresses")
 
 print()
-print("--- token patří do hlavičky, ne do adresy ---")
-# Adresa se objevi v logu proxy i v historii prohlizece. Kdyby API token
-# z adresy prijalo, bylo by to nejpohodlnejsi a nejhorsi reseni zaroven.
-check(klient.get(f"/api/v1/summary?token={TOKEN}").status_code == 401,
-      "token v adrese neplatí")
-check(klient.get("/api/v1/summary",
+print("--- the token belongs in the header, not in the address ---")
+# The address shows up in a proxy's log and in the browser's history. If the API took the
+# token from the address, it would be the most convenient and the worst solution at once.
+check(client.get(f"/api/v1/summary?token={TOKEN}").status_code == 401,
+      "a token in the address does not count")
+check(client.get("/api/v1/summary",
                  headers={"Authorization": TOKEN}).status_code == 401,
-      "ani bez slova Bearer")
-check(klient.get("/api/v1/summary",
+      "nor without the word Bearer")
+check(client.get("/api/v1/summary",
                  headers={"Authorization": "Bearer js_takovy_neexistuje"}).status_code == 401,
-      "vymyšlený token taky ne")
+      "a made-up token not either")
 
 print()
-print("--- v databázi je otisk, ne token ---")
-ulozene = db.query_all("SELECT token_hash, ukazka FROM api_tokens")
-check(all(TOKEN not in str(r["token_hash"]) for r in ulozene),
-      "token samotný v databázi není")
-check(ulozene[0]["ukazka"] == TOKEN[:5],
-      f"jen prvních pět znaků ({ulozene[0]['ukazka']})")
-check(len(ulozene[0]["ukazka"]) == api.UKAZKA_ZNAKU,
-      f"a ani o znak víc ({len(ulozene[0]['ukazka'])})")
-check(len(TOKEN) > 40, f"a je dost dlouhý na to, aby se nedal uhodnout ({len(TOKEN)})")
+print("--- the database holds a fingerprint, not the token ---")
+stored = db.query_all("SELECT token_hash, preview FROM api_tokens")
+check(all(TOKEN not in str(r["token_hash"]) for r in stored),
+      "the token itself is not in the database")
+check(stored[0]["preview"] == TOKEN[:5],
+      f"only the first five characters ({stored[0]['preview']})")
+check(len(stored[0]["preview"]) == api.PREVIEW_CHARS,
+      f"and not a character more ({len(stored[0]['preview'])})")
+check(len(TOKEN) > 40, f"and it is long enough not to be guessed ({len(TOKEN)})")
 
 print()
-print("--- přes API nejde nic změnit ---")
-for cesta in ("/api/v1/summary", "/api/v1/library", "/api/v1/now-playing"):
-    odpoved = klient.post(cesta, headers=hlavicka, json={"neco": 1})
-    check(odpoved.status_code == 405,
-          f"POST {cesta} -> 405 ({odpoved.status_code})")
-    odpoved = klient.delete(cesta, headers=hlavicka)
-    check(odpoved.status_code == 405,
-          f"DELETE {cesta} -> 405 ({odpoved.status_code})")
+print("--- nothing can be changed through the API ---")
+for path in ("/api/v1/summary", "/api/v1/library", "/api/v1/now-playing"):
+    response = client.post(path, headers=header, json={"neco": 1})
+    check(response.status_code == 405,
+          f"POST {path} -> 405 ({response.status_code})")
+    response = client.delete(path, headers=header)
+    check(response.status_code == 405,
+          f"DELETE {path} -> 405 ({response.status_code})")
 
 print()
-print("--- naposledy použit ---")
-radek = db.query_one("SELECT last_used_at FROM api_tokens LIMIT 1")
-check(bool(radek["last_used_at"]), "použití se zapsalo")
+print("--- last used ---")
+row = db.query_one("SELECT last_used_at FROM api_tokens LIMIT 1")
+check(bool(row["last_used_at"]), "the use was written down")
 
 print()
-print("--- zneplatnění platí hned a jen pro ten jeden ---")
-druhy = api.vytvor("Homepage")
-check(len(api.seznam()) == 2, f"tokeny jsou dva ({len(api.seznam())})")
+print("--- revoking holds at once and only for that one ---")
+second = api.create_token("Homepage")
+check(len(api.list_tokens()) == 2, f"there are two tokens ({len(api.list_tokens())})")
 
-zruseny = api.zrus(db.query_value("SELECT id FROM api_tokens WHERE name = 'Grafana'"))
-check(zruseny == "Grafana", f"zrušil se ten správný ({zruseny})")
-check(klient.get("/api/v1/summary", headers=hlavicka).status_code == 401,
-      "zrušený token přestal platit")
-check(klient.get("/api/v1/summary",
-                 headers={"Authorization": f"Bearer {druhy['token']}"}
+revoked = api.revoke_token(db.query_value("SELECT id FROM api_tokens WHERE name = 'Grafana'"))
+check(revoked == "Grafana", f"the right one was revoked ({revoked})")
+check(client.get("/api/v1/summary", headers=header).status_code == 401,
+      "the revoked token stopped working")
+check(client.get("/api/v1/summary",
+                 headers={"Authorization": f"Bearer {second['token']}"}
                  ).status_code == 200,
-      "druhý token platí dál")
+      "the second token still works")
 
 print()
-print("--- nesmysl v ?days= vrátí 400, nic nerozbije ---")
-# `days` prichazi z adresy, tedy od kohokoliv, a konci v dotazu do
-# databaze. Nemusi to byt cislo a nemusi to byt rozumne cislo: prazdno,
-# pismena, zaporna hodnota, kus SQL. Dřív se to tiše srovnalo na rozumný
-# počet dní a vrátila se data; teď je to 400 - a pořád nic nespadne a nic
-# neodejde do dotazu.
-for zlobivy in ("999999999999999999999", "-1", "abc", "", "1;DROP TABLE playback",
+print("--- nonsense in ?days= returns 400 and breaks nothing ---")
+# `days` comes from the address, so from anybody, and ends in a query to the
+# database. It need not be a number, and it need not be a sensible number: empty,
+# letters, a negative value, a piece of SQL. It used to be quietly evened out to a
+# sensible number of days and the data came back; now it is 400 - and still nothing
+# falls over and nothing goes into the query.
+for naughty in ("999999999999999999999", "-1", "abc", "", "1;DROP TABLE playback",
                 "1 OR 1=1", "0", "1e400", "../../etc/passwd", "NaN"):
-    odpoved = klient.get(f"/api/v1/summary?days={zlobivy}",
-                         headers={"Authorization": f"Bearer {druhy['token']}"})
-    check(odpoved.status_code == 400 and odpoved.json().get("error") == "invalid_value",
-          f"days={zlobivy[:24]!r} -> 400 invalid_value ({odpoved.status_code})")
-odpoved = klient.get("/api/v1/summary?days=30",
-                     headers={"Authorization": f"Bearer {druhy['token']}"})
-check(odpoved.status_code == 200 and odpoved.json().get("days") == 30, "days=30 projde")
+    response = client.get(f"/api/v1/summary?days={naughty}",
+                          headers={"Authorization": f"Bearer {second['token']}"})
+    check(response.status_code == 400 and response.json().get("error") == "invalid_value",
+          f"days={naughty[:24]!r} -> 400 invalid_value ({response.status_code})")
+response = client.get("/api/v1/summary?days=30",
+                      headers={"Authorization": f"Bearer {second['token']}"})
+check(response.status_code == 200 and response.json().get("days") == 30, "days=30 passes")
 
-# Tabulka, kterou se utok pokousel zahodit, tam porad je.
+# The table the attack tried to drop is still there.
 check(db.query_value("SELECT COUNT(*) FROM playback") is not None,
-      "a tabulka playback útok přežila")
+      "and the playback table survived the attack")
 
 print()
-print("--- klíče spravuje jen správce, a to ve své sekci ---")
+print("--- keys are managed only by the administrator, in their section ---")
 import re  # noqa: E402
 
-accounts.create("spravce", "dlouheheslo", is_admin=True)
-accounts.create("ctenar", "dlouheheslo", is_admin=False)
+accounts.create("admin", "longpassword", is_admin=True)
+accounts.create("reader", "longpassword", is_admin=False)
 
-with TestClient(app) as ctenar:
-    ctenar.post("/login", data={"username": "ctenar", "password": "dlouheheslo"},
+with TestClient(app) as reader:
+    reader.post("/login", data={"username": "reader", "password": "longpassword"},
                 follow_redirects=False)
-    # Nastaveni je jen pro spravce, takze se ctenar nedostane ani
-    # k sekci API - a o klicich se nedozvi nic.
-    stranka = ctenar.get("/settings?section=api")
-    check(stranka.status_code == 403, "čtenář se do Nastavení nedostane")
-    check("okno-api-dokumentace" not in stranka.text,
-          "a sekci API nevidí")
-    check("Vyrobit klíč" not in stranka.text, "ani tlačítko na výrobu klíče")
-    odpoved = ctenar.post("/settings/api/token", data={"name": "podvrh", "rezim": "vse"},
+    # Settings are for the administrator only, so a reader does not even get to
+    # the API section - and learns nothing about the keys.
+    page = reader.get("/settings?section=api")
+    check(page.status_code == 403, "a reader does not get into Settings")
+    check("modal-api-docs" not in page.text,
+          "and does not see the API section")
+    check("Vyrobit klíč" not in page.text, "nor the button that makes a key")
+    response = reader.post("/settings/api/token", data={"name": "podvrh", "mode": "all"},
+                           follow_redirects=False)
+    check(response.status_code == 403, f"and may not make a key ({response.status_code})")
+
+with TestClient(app) as admin:
+    admin.post("/login", data={"username": "admin", "password": "longpassword"},
+               follow_redirects=False)
+    page = admin.get("/settings?section=api")
+    check(page.status_code == 200, "the administrator sees the API section")
+    check("modal-api-docs" in page.text,
+          "and it has the button with the documentation")
+    check("/api/v1/summary" in page.text, "which lists the addresses")
+
+    before = len(api.list_tokens())
+    response = admin.post("/settings/api/token", data={"name": "Ze stránky", "mode": "all"},
                           follow_redirects=False)
-    check(odpoved.status_code == 403, f"a vyrobit klíč nesmí ({odpoved.status_code})")
+    check(response.status_code == 303, "making a key redirects")
+    check(len(api.list_tokens()) == before + 1, "and the key was added")
 
-with TestClient(app) as spravce:
-    spravce.post("/login", data={"username": "spravce", "password": "dlouheheslo"},
-                 follow_redirects=False)
-    stranka = spravce.get("/settings?section=api")
-    check(stranka.status_code == 200, "správce sekci API vidí")
-    check("okno-api-dokumentace" in stranka.text,
-          "a je v ní tlačítko s dokumentací")
-    check("/api/v1/summary" in stranka.text, "která vypisuje adresy")
+    # The key is shown ONCE. That is the most important property of the whole
+    # screen: the second time the page has nowhere to take it from, because only
+    # the fingerprint is stored.
+    page = admin.get("/settings?section=api").text
+    whole = re.findall(r"js_[A-Za-z0-9_-]{20,}", page)
+    check(len(whole) == 1, f"the key is shown whole once ({len(whole)}x)")
 
-    pred = len(api.seznam())
-    odpoved = spravce.post("/settings/api/token", data={"name": "Ze stránky", "rezim": "vse"},
-                           follow_redirects=False)
-    check(odpoved.status_code == 303, "vyrobení přesměruje")
-    check(len(api.seznam()) == pred + 1, "a klíč přibyl")
+    again = admin.get("/settings?section=api").text
+    check(not re.findall(r"js_[A-Za-z0-9_-]{20,}", again),
+          "on the next load it is no longer there whole")
+    check(whole[0][:5] in again, "its first five characters are left")
+    check("*" * 24 in again, "and the rest are asterisks")
 
-    # Klic se ukazuje JEDNOU. Tohle je ta nejdulezitejsi vlastnost cele
-    # obrazovky: podruhe uz ho stranka nema odkud vzit, protoze ulozeny
-    # je jen otisk.
-    stranka = spravce.get("/settings?section=api").text
-    cely = re.findall(r"js_[A-Za-z0-9_-]{20,}", stranka)
-    check(len(cely) == 1, f"klíč se jednou ukáže celý ({len(cely)}x)")
+    # And nowhere else on the pages at all.
+    for path in ("/settings?section=accounts", "/settings?section=general", "/"):
+        check(not re.findall(r"js_[A-Za-z0-9_-]{20,}", admin.get(path).text),
+              f"the whole key is not shown elsewhere either: {path}")
 
-    znovu = spravce.get("/settings?section=api").text
-    check(not re.findall(r"js_[A-Za-z0-9_-]{20,}", znovu),
-          "při dalším načtení už tam celý není")
-    check(cely[0][:5] in znovu, "zbyde z něj prvních pět znaků")
-    check("*" * 24 in znovu, "a zbytek jsou hvězdičky")
-
-    # A jinde na strankach uz vubec.
-    for cesta in ("/settings?section=accounts", "/settings?section=general", "/"):
-        check(not re.findall(r"js_[A-Za-z0-9_-]{20,}", spravce.get(cesta).text),
-              f"celý klíč není ani na {cesta}")
-
-    # Zneplatneni ze stranky.
-    posledni = api.seznam()[0]
-    odpoved = spravce.post("/settings/api/token/zrusit",
-                           data={"token_id": posledni["id"]},
-                           follow_redirects=False)
-    check(odpoved.status_code == 303, "zneplatnění přesměruje")
-    check(all(r["id"] != posledni["id"] for r in api.seznam()),
-          "a klíč je pryč ze seznamu")
+    # Revoking from the page.
+    last = api.list_tokens()[0]
+    response = admin.post("/settings/api/token/revoke",
+                          data={"token_id": last["id"]},
+                          follow_redirects=False)
+    check(response.status_code == 303, "revoking redirects")
+    check(all(r["id"] != last["id"] for r in api.list_tokens()),
+          "and the key is gone from the list")
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

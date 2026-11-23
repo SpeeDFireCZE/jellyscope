@@ -1,0 +1,1842 @@
+[
+ {
+  "movieId": 1,
+  "sourceTitle": "Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:21:39Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/big.buck.bunny.2008.720p.web-dl.dd5.1.h.264-ntb",
+   "releaseGroup": "NTb",
+   "age": "0",
+   "ageHours": "1.0007900218333334",
+   "ageMinutes": "60.047401655",
+   "publishedDate": "2026-11-12T21:21:37Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "524288000",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=big.buck.bunny.2008.720p.web-dl.dd5.1.h.264-ntb",
+   "guid": "http://127.0.0.1:8990/details/big.buck.bunny.2008.720p.web-dl.dd5.1.h.264-ntb",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "Rss",
+   "indexerFlags": "0",
+   "indexerId": "1"
+  },
+  "movie": {
+   "title": "Big Buck Bunny",
+   "originalTitle": "Big Buck Bunny",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "big buck bunny",
+   "status": "released",
+   "overview": "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them. After the deaths of two of Bunny's favorite butterflies, and an offensive attack on Bunny himself, Bunny sets aside his gentle nature and orchestrates a complex plan for revenge.",
+   "inCinemas": "2008-04-10T00:00:00Z",
+   "digitalRelease": "2008-04-10T00:00:00Z",
+   "releaseDate": "2008-04-10T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/i9jJzvoXET4D9pOkoEwncSdNNER.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/xtdybjRRZ15mCrPOvEld305myys.jpg"
+    }
+   ],
+   "website": "https://peach.blender.org/",
+   "year": 2008,
+   "youTubeTrailerId": "yUQM7H4Swgw",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "qualityProfileId": 1,
+   "movieFileId": 5,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "runtime": 8,
+   "cleanTitle": "bigbuckbunny",
+   "imdbId": "tt1254207",
+   "tmdbId": 10378,
+   "titleSlug": "10378",
+   "certification": "G",
+   "genres": [
+    "Animation",
+    "Comedy",
+    "Family"
+   ],
+   "keywords": [
+    "blender",
+    "bunny",
+    "conejo",
+    "hilarious",
+    "mobbing",
+    "open source",
+    "repayment",
+    "revenge",
+    "short film",
+    "squirrel"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 2268,
+     "value": 6.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 201,
+     "value": 6.473,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 329,
+     "value": 7.04863,
+     "type": "user"
+    }
+   },
+   "popularity": 2.8155,
+   "lastSearchTime": "2026-11-12T22:30:38Z",
+   "id": 1
+  },
+  "id": 1
+ },
+ {
+  "movieId": 1,
+  "sourceTitle": "Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:23:06Z",
+  "downloadId": "Blackhole_Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb_639301189028250499",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "1",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb/Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)/Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "NTb",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0"
+  },
+  "movie": {
+   "title": "Big Buck Bunny",
+   "originalTitle": "Big Buck Bunny",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "big buck bunny",
+   "status": "released",
+   "overview": "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them. After the deaths of two of Bunny's favorite butterflies, and an offensive attack on Bunny himself, Bunny sets aside his gentle nature and orchestrates a complex plan for revenge.",
+   "inCinemas": "2008-04-10T00:00:00Z",
+   "digitalRelease": "2008-04-10T00:00:00Z",
+   "releaseDate": "2008-04-10T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/i9jJzvoXET4D9pOkoEwncSdNNER.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/xtdybjRRZ15mCrPOvEld305myys.jpg"
+    }
+   ],
+   "website": "https://peach.blender.org/",
+   "year": 2008,
+   "youTubeTrailerId": "yUQM7H4Swgw",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "qualityProfileId": 1,
+   "movieFileId": 5,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "runtime": 8,
+   "cleanTitle": "bigbuckbunny",
+   "imdbId": "tt1254207",
+   "tmdbId": 10378,
+   "titleSlug": "10378",
+   "certification": "G",
+   "genres": [
+    "Animation",
+    "Comedy",
+    "Family"
+   ],
+   "keywords": [
+    "blender",
+    "bunny",
+    "conejo",
+    "hilarious",
+    "mobbing",
+    "open source",
+    "repayment",
+    "revenge",
+    "short film",
+    "squirrel"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 2268,
+     "value": 6.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 201,
+     "value": 6.473,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 329,
+     "value": 7.04863,
+     "type": "user"
+    }
+   },
+   "popularity": 2.8155,
+   "lastSearchTime": "2026-11-12T22:30:38Z",
+   "id": 1
+  },
+  "id": 2
+ },
+ {
+  "movieId": 4,
+  "sourceTitle": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:23:10Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/elephants.dream.2006.720p.web-dl.dd5.1.h.264-ntb",
+   "releaseGroup": "NTb",
+   "age": "0",
+   "ageHours": "1.000594695",
+   "ageMinutes": "60.035681878333335",
+   "publishedDate": "2026-11-12T21:23:08Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "524288000",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=elephants.dream.2006.720p.web-dl.dd5.1.h.264-ntb",
+   "guid": "http://127.0.0.1:8990/details/elephants.dream.2006.720p.web-dl.dd5.1.h.264-ntb",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "Search",
+   "indexerFlags": "0",
+   "indexerId": "1"
+  },
+  "movie": {
+   "title": "Elephants Dream",
+   "originalTitle": "Elephants Dream",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "elephants dream",
+   "status": "released",
+   "overview": "Elephants Dream is the story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo. As their journey unfolds we discover signs that the machine is not all Proog thinks it is, and his guiding takes on a more desperate aspect.  Elephants Dream is a story about communication and fiction, made purposefully open-ended as the world’s first 3D animated “Open movie”. The film itself is released under the Creative Commons license, along with the entirety of the production files used to make it (roughly 7 Gigabytes of data). The software used to make the movie is the free/open source animation suite Blender along with other open source software, thus allowing the movie to be remade, remixed and re-purposed with only a computer and the data on the DVD or download.",
+   "digitalRelease": "2006-03-24T00:00:00Z",
+   "releaseDate": "2006-03-24T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/9zROtU9TkpZQrOuEaMAp68FOWLK.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/9bJDwuhza19HQcYA99FeslLYmUm.jpg"
+    }
+   ],
+   "website": "http://www.elephantsdream.org/",
+   "year": 2006,
+   "youTubeTrailerId": "_0wxP7EWsOc",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+   "qualityProfileId": 1,
+   "movieFileId": 2,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+   "runtime": 11,
+   "cleanTitle": "elephantsdream",
+   "imdbId": "tt0807840",
+   "tmdbId": 9761,
+   "titleSlug": "9761",
+   "certification": "NR",
+   "genres": [
+    "Animation",
+    "Science Fiction"
+   ],
+   "keywords": [
+    "blender",
+    "dreams",
+    "future"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:23:08Z",
+   "ratings": {
+    "imdb": {
+     "votes": 1397,
+     "value": 5.6,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 71,
+     "value": 5.8,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 86,
+     "value": 5.98837,
+     "type": "user"
+    }
+   },
+   "popularity": 1.8026,
+   "lastSearchTime": "2026-11-12T22:23:08Z",
+   "id": 4
+  },
+  "id": 3
+ },
+ {
+  "movieId": 4,
+  "sourceTitle": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:26:06Z",
+  "downloadId": "Blackhole_Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb_639301189930934627",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "2",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "NTb",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0"
+  },
+  "movie": {
+   "title": "Elephants Dream",
+   "originalTitle": "Elephants Dream",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "elephants dream",
+   "status": "released",
+   "overview": "Elephants Dream is the story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo. As their journey unfolds we discover signs that the machine is not all Proog thinks it is, and his guiding takes on a more desperate aspect.  Elephants Dream is a story about communication and fiction, made purposefully open-ended as the world’s first 3D animated “Open movie”. The film itself is released under the Creative Commons license, along with the entirety of the production files used to make it (roughly 7 Gigabytes of data). The software used to make the movie is the free/open source animation suite Blender along with other open source software, thus allowing the movie to be remade, remixed and re-purposed with only a computer and the data on the DVD or download.",
+   "digitalRelease": "2006-03-24T00:00:00Z",
+   "releaseDate": "2006-03-24T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/9zROtU9TkpZQrOuEaMAp68FOWLK.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/9bJDwuhza19HQcYA99FeslLYmUm.jpg"
+    }
+   ],
+   "website": "http://www.elephantsdream.org/",
+   "year": 2006,
+   "youTubeTrailerId": "_0wxP7EWsOc",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+   "qualityProfileId": 1,
+   "movieFileId": 2,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+   "runtime": 11,
+   "cleanTitle": "elephantsdream",
+   "imdbId": "tt0807840",
+   "tmdbId": 9761,
+   "titleSlug": "9761",
+   "certification": "NR",
+   "genres": [
+    "Animation",
+    "Science Fiction"
+   ],
+   "keywords": [
+    "blender",
+    "dreams",
+    "future"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:23:08Z",
+   "ratings": {
+    "imdb": {
+     "votes": 1397,
+     "value": 5.6,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 71,
+     "value": 5.8,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 86,
+     "value": 5.98837,
+     "type": "user"
+    }
+   },
+   "popularity": 1.8026,
+   "lastSearchTime": "2026-11-12T22:23:08Z",
+   "id": 4
+  },
+  "id": 4
+ },
+ {
+  "movieId": 2,
+  "sourceTitle": "Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:26:10Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/sintel.2010.720p.web-dl.dd5.1.h.264-flux",
+   "releaseGroup": "FLUX",
+   "age": "0",
+   "ageHours": "1.0006435735833332",
+   "ageMinutes": "60.038614535",
+   "publishedDate": "2026-11-12T21:26:08Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "524288000",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=sintel.2010.720p.web-dl.dd5.1.h.264-flux",
+   "guid": "http://127.0.0.1:8990/details/sintel.2010.720p.web-dl.dd5.1.h.264-flux",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "UserInvokedSearch",
+   "indexerFlags": "0",
+   "indexerId": "1"
+  },
+  "movie": {
+   "title": "Sintel",
+   "originalTitle": "Sintel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "sintel",
+   "status": "released",
+   "overview": "A wandering warrior finds an unlikely friend in the form of a young dragon. The two develop a close bond, until one day the dragon is snatched away. She then sets out on a relentless quest to reclaim her friend, finding in the end that her quest exacts a far greater price than she had ever imagined.",
+   "inCinemas": "2010-09-30T00:00:00Z",
+   "releaseDate": "2010-12-29T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/l98Zns4oQe1BSvbF4hJ8oL6VSf0.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"
+    }
+   ],
+   "website": "http://durian.blender.org/",
+   "year": 2010,
+   "youTubeTrailerId": "HOfdboHvshg",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "qualityProfileId": 1,
+   "movieFileId": 3,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "runtime": 14,
+   "cleanTitle": "sintel",
+   "imdbId": "tt1727587",
+   "tmdbId": 45745,
+   "titleSlug": "45745",
+   "certification": "PG",
+   "genres": [
+    "Animation",
+    "Fantasy",
+    "Adventure"
+   ],
+   "keywords": [
+    "blender",
+    "dragon",
+    "pet",
+    "short film"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 3803,
+     "value": 7.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 180,
+     "value": 7.3,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 280,
+     "value": 7.47857,
+     "type": "user"
+    }
+   },
+   "popularity": 2.9502,
+   "lastSearchTime": "2026-11-12T22:32:11Z",
+   "id": 2
+  },
+  "id": 5
+ },
+ {
+  "movieId": 2,
+  "sourceTitle": "Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:29:06Z",
+  "downloadId": "Blackhole_Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX_639301191733203060",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "3",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX/Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/movies/Sintel (2010)/Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "FLUX",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0"
+  },
+  "movie": {
+   "title": "Sintel",
+   "originalTitle": "Sintel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "sintel",
+   "status": "released",
+   "overview": "A wandering warrior finds an unlikely friend in the form of a young dragon. The two develop a close bond, until one day the dragon is snatched away. She then sets out on a relentless quest to reclaim her friend, finding in the end that her quest exacts a far greater price than she had ever imagined.",
+   "inCinemas": "2010-09-30T00:00:00Z",
+   "releaseDate": "2010-12-29T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/l98Zns4oQe1BSvbF4hJ8oL6VSf0.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"
+    }
+   ],
+   "website": "http://durian.blender.org/",
+   "year": 2010,
+   "youTubeTrailerId": "HOfdboHvshg",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "qualityProfileId": 1,
+   "movieFileId": 3,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "runtime": 14,
+   "cleanTitle": "sintel",
+   "imdbId": "tt1727587",
+   "tmdbId": 45745,
+   "titleSlug": "45745",
+   "certification": "PG",
+   "genres": [
+    "Animation",
+    "Fantasy",
+    "Adventure"
+   ],
+   "keywords": [
+    "blender",
+    "dragon",
+    "pet",
+    "short film"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 3803,
+     "value": 7.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 180,
+     "value": 7.3,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 280,
+     "value": 7.47857,
+     "type": "user"
+    }
+   },
+   "popularity": 2.9502,
+   "lastSearchTime": "2026-11-12T22:32:11Z",
+   "id": 2
+  },
+  "id": 6
+ },
+ {
+  "movieId": 3,
+  "sourceTitle": "Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:29:08Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "CAKES",
+   "age": "0",
+   "ageHours": "0.0001699318611111111",
+   "ageMinutes": "0.010196038333333334",
+   "publishedDate": "2026-11-12T22:29:08Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=tears.of.steel.2012.720p.web-dl.dd5.1.h.264-cakes",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=tears.of.steel.2012.720p.web-dl.dd5.1.h.264-cakes",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "indexerId": "0"
+  },
+  "movie": {
+   "title": "Tears of Steel",
+   "originalTitle": "Tears of Steel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "tears of steel",
+   "status": "released",
+   "overview": "The film’s premise is about a group of warriors and scientists, who gathered at the “Oude Kerk” in Amsterdam to stage a crucial event from the past, in a desperate attempt to rescue the world from destructive robots.",
+   "inCinemas": "2012-09-25T00:00:00Z",
+   "releaseDate": "2012-12-24T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/8qy3jRmaHR7f8VZh3iXCqCWfFsH.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/fOy6SL5Zs2PFcNXwqEPIDPrLB1q.jpg"
+    }
+   ],
+   "website": "http://www.tearsofsteel.org/",
+   "year": 2012,
+   "youTubeTrailerId": "",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+   "qualityProfileId": 1,
+   "movieFileId": 4,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+   "runtime": 12,
+   "cleanTitle": "tearssteel",
+   "imdbId": "tt2285752",
+   "tmdbId": 133701,
+   "titleSlug": "133701",
+   "genres": [
+    "Science Fiction",
+    "Animation"
+   ],
+   "keywords": [
+    "amsterdam, netherlands",
+    "fictional war",
+    "killer robot",
+    "man vs machine",
+    "saving the world"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:10:34Z",
+   "ratings": {
+    "imdb": {
+     "votes": 1572,
+     "value": 5.5,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 63,
+     "value": 5.659,
+     "type": "user"
+    }
+   },
+   "popularity": 1.9987,
+   "id": 3
+  },
+  "id": 7
+ },
+ {
+  "movieId": 3,
+  "sourceTitle": "Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:30:36Z",
+  "downloadId": "Blackhole_Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES_639301193486200933",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "4",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES/Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)/Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "CAKES",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0"
+  },
+  "movie": {
+   "title": "Tears of Steel",
+   "originalTitle": "Tears of Steel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "tears of steel",
+   "status": "released",
+   "overview": "The film’s premise is about a group of warriors and scientists, who gathered at the “Oude Kerk” in Amsterdam to stage a crucial event from the past, in a desperate attempt to rescue the world from destructive robots.",
+   "inCinemas": "2012-09-25T00:00:00Z",
+   "releaseDate": "2012-12-24T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/8qy3jRmaHR7f8VZh3iXCqCWfFsH.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/fOy6SL5Zs2PFcNXwqEPIDPrLB1q.jpg"
+    }
+   ],
+   "website": "http://www.tearsofsteel.org/",
+   "year": 2012,
+   "youTubeTrailerId": "",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+   "qualityProfileId": 1,
+   "movieFileId": 4,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+   "runtime": 12,
+   "cleanTitle": "tearssteel",
+   "imdbId": "tt2285752",
+   "tmdbId": 133701,
+   "titleSlug": "133701",
+   "genres": [
+    "Science Fiction",
+    "Animation"
+   ],
+   "keywords": [
+    "amsterdam, netherlands",
+    "fictional war",
+    "killer robot",
+    "man vs machine",
+    "saving the world"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:10:34Z",
+   "ratings": {
+    "imdb": {
+     "votes": 1572,
+     "value": 5.5,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 63,
+     "value": 5.659,
+     "type": "user"
+    }
+   },
+   "popularity": 1.9987,
+   "id": 3
+  },
+  "id": 8
+ },
+ {
+  "movieId": 1,
+  "sourceTitle": "Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "webdl",
+    "resolution": 1080,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:30:40Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/big.buck.bunny.2008.1080p.web-dl.dd5.1.h.264-flux",
+   "releaseGroup": "FLUX",
+   "age": "0",
+   "ageHours": "1.0007960975833334",
+   "ageMinutes": "60.047766038333336",
+   "publishedDate": "2026-11-12T21:30:38Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "734003200",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=big.buck.bunny.2008.1080p.web-dl.dd5.1.h.264-flux",
+   "guid": "http://127.0.0.1:8990/details/big.buck.bunny.2008.1080p.web-dl.dd5.1.h.264-flux",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "InteractiveSearch",
+   "indexerFlags": "0",
+   "indexerId": "1"
+  },
+  "movie": {
+   "title": "Big Buck Bunny",
+   "originalTitle": "Big Buck Bunny",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "big buck bunny",
+   "status": "released",
+   "overview": "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them. After the deaths of two of Bunny's favorite butterflies, and an offensive attack on Bunny himself, Bunny sets aside his gentle nature and orchestrates a complex plan for revenge.",
+   "inCinemas": "2008-04-10T00:00:00Z",
+   "digitalRelease": "2008-04-10T00:00:00Z",
+   "releaseDate": "2008-04-10T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/i9jJzvoXET4D9pOkoEwncSdNNER.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/xtdybjRRZ15mCrPOvEld305myys.jpg"
+    }
+   ],
+   "website": "https://peach.blender.org/",
+   "year": 2008,
+   "youTubeTrailerId": "yUQM7H4Swgw",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "qualityProfileId": 1,
+   "movieFileId": 5,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "runtime": 8,
+   "cleanTitle": "bigbuckbunny",
+   "imdbId": "tt1254207",
+   "tmdbId": 10378,
+   "titleSlug": "10378",
+   "certification": "G",
+   "genres": [
+    "Animation",
+    "Comedy",
+    "Family"
+   ],
+   "keywords": [
+    "blender",
+    "bunny",
+    "conejo",
+    "hilarious",
+    "mobbing",
+    "open source",
+    "repayment",
+    "revenge",
+    "short film",
+    "squirrel"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 2268,
+     "value": 6.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 201,
+     "value": 6.473,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 329,
+     "value": 7.04863,
+     "type": "user"
+    }
+   },
+   "popularity": 2.8155,
+   "lastSearchTime": "2026-11-12T22:30:38Z",
+   "id": 1
+  },
+  "id": 9
+ },
+ {
+  "movieId": 1,
+  "sourceTitle": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)/Big.Buck.Bunny.2008.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "webdl",
+    "resolution": 720,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:06Z",
+  "eventType": "movieFileDeleted",
+  "data": {
+   "reason": "Upgrade",
+   "releaseGroup": "NTb",
+   "size": "203381",
+   "indexerFlags": "0"
+  },
+  "movie": {
+   "title": "Big Buck Bunny",
+   "originalTitle": "Big Buck Bunny",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "big buck bunny",
+   "status": "released",
+   "overview": "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them. After the deaths of two of Bunny's favorite butterflies, and an offensive attack on Bunny himself, Bunny sets aside his gentle nature and orchestrates a complex plan for revenge.",
+   "inCinemas": "2008-04-10T00:00:00Z",
+   "digitalRelease": "2008-04-10T00:00:00Z",
+   "releaseDate": "2008-04-10T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/i9jJzvoXET4D9pOkoEwncSdNNER.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/xtdybjRRZ15mCrPOvEld305myys.jpg"
+    }
+   ],
+   "website": "https://peach.blender.org/",
+   "year": 2008,
+   "youTubeTrailerId": "yUQM7H4Swgw",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "qualityProfileId": 1,
+   "movieFileId": 5,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "runtime": 8,
+   "cleanTitle": "bigbuckbunny",
+   "imdbId": "tt1254207",
+   "tmdbId": 10378,
+   "titleSlug": "10378",
+   "certification": "G",
+   "genres": [
+    "Animation",
+    "Comedy",
+    "Family"
+   ],
+   "keywords": [
+    "blender",
+    "bunny",
+    "conejo",
+    "hilarious",
+    "mobbing",
+    "open source",
+    "repayment",
+    "revenge",
+    "short film",
+    "squirrel"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 2268,
+     "value": 6.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 201,
+     "value": 6.473,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 329,
+     "value": 7.04863,
+     "type": "user"
+    }
+   },
+   "popularity": 2.8155,
+   "lastSearchTime": "2026-11-12T22:30:38Z",
+   "id": 1
+  },
+  "id": 10
+ },
+ {
+  "movieId": 1,
+  "sourceTitle": "Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "webdl",
+    "resolution": 1080,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:06Z",
+  "downloadId": "Blackhole_Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX_639301194408875668",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "5",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX/Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)/Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "FLUX",
+   "customFormatScore": "0",
+   "size": "230822",
+   "indexerFlags": "0"
+  },
+  "movie": {
+   "title": "Big Buck Bunny",
+   "originalTitle": "Big Buck Bunny",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "big buck bunny",
+   "status": "released",
+   "overview": "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them. After the deaths of two of Bunny's favorite butterflies, and an offensive attack on Bunny himself, Bunny sets aside his gentle nature and orchestrates a complex plan for revenge.",
+   "inCinemas": "2008-04-10T00:00:00Z",
+   "digitalRelease": "2008-04-10T00:00:00Z",
+   "releaseDate": "2008-04-10T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/i9jJzvoXET4D9pOkoEwncSdNNER.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/xtdybjRRZ15mCrPOvEld305myys.jpg"
+    }
+   ],
+   "website": "https://peach.blender.org/",
+   "year": 2008,
+   "youTubeTrailerId": "yUQM7H4Swgw",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "qualityProfileId": 1,
+   "movieFileId": 5,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+   "runtime": 8,
+   "cleanTitle": "bigbuckbunny",
+   "imdbId": "tt1254207",
+   "tmdbId": 10378,
+   "titleSlug": "10378",
+   "certification": "G",
+   "genres": [
+    "Animation",
+    "Comedy",
+    "Family"
+   ],
+   "keywords": [
+    "blender",
+    "bunny",
+    "conejo",
+    "hilarious",
+    "mobbing",
+    "open source",
+    "repayment",
+    "revenge",
+    "short film",
+    "squirrel"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 2268,
+     "value": 6.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 201,
+     "value": 6.473,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 329,
+     "value": 7.04863,
+     "type": "user"
+    }
+   },
+   "popularity": 2.8155,
+   "lastSearchTime": "2026-11-12T22:30:38Z",
+   "id": 1
+  },
+  "id": 11
+ },
+ {
+  "movieId": 2,
+  "sourceTitle": "Sintel.2010.1080p.WEB-DL.DD5.1.H.264-BROKEN",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "webdl",
+    "resolution": 1080,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:11Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "BROKEN",
+   "age": "0",
+   "ageHours": "2.642825E-05",
+   "ageMinutes": "0.0015860716666666666",
+   "publishedDate": "2026-11-12T22:32:11Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=sintel.2010.1080p.web-dl.dd5.1.h.264-broken",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=sintel.2010.1080p.web-dl.dd5.1.h.264-broken",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "indexerId": "0"
+  },
+  "movie": {
+   "title": "Sintel",
+   "originalTitle": "Sintel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "sintel",
+   "status": "released",
+   "overview": "A wandering warrior finds an unlikely friend in the form of a young dragon. The two develop a close bond, until one day the dragon is snatched away. She then sets out on a relentless quest to reclaim her friend, finding in the end that her quest exacts a far greater price than she had ever imagined.",
+   "inCinemas": "2010-09-30T00:00:00Z",
+   "releaseDate": "2010-12-29T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/l98Zns4oQe1BSvbF4hJ8oL6VSf0.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"
+    }
+   ],
+   "website": "http://durian.blender.org/",
+   "year": 2010,
+   "youTubeTrailerId": "HOfdboHvshg",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "qualityProfileId": 1,
+   "movieFileId": 3,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "runtime": 14,
+   "cleanTitle": "sintel",
+   "imdbId": "tt1727587",
+   "tmdbId": 45745,
+   "titleSlug": "45745",
+   "certification": "PG",
+   "genres": [
+    "Animation",
+    "Fantasy",
+    "Adventure"
+   ],
+   "keywords": [
+    "blender",
+    "dragon",
+    "pet",
+    "short film"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 3803,
+     "value": 7.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 180,
+     "value": 7.3,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 280,
+     "value": 7.47857,
+     "type": "user"
+    }
+   },
+   "popularity": 2.9502,
+   "lastSearchTime": "2026-11-12T22:32:11Z",
+   "id": 2
+  },
+  "id": 12
+ },
+ {
+  "movieId": 2,
+  "sourceTitle": "Sintel.2010.1080p.WEB-DL.DD5.1.H.264-BROKEN",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "webdl",
+    "resolution": 1080,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:11Z",
+  "eventType": "downloadFailed",
+  "data": {
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": null,
+   "message": "Manually marked as failed",
+   "releaseGroup": "BROKEN",
+   "size": "0",
+   "indexer": null
+  },
+  "movie": {
+   "title": "Sintel",
+   "originalTitle": "Sintel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "sintel",
+   "status": "released",
+   "overview": "A wandering warrior finds an unlikely friend in the form of a young dragon. The two develop a close bond, until one day the dragon is snatched away. She then sets out on a relentless quest to reclaim her friend, finding in the end that her quest exacts a far greater price than she had ever imagined.",
+   "inCinemas": "2010-09-30T00:00:00Z",
+   "releaseDate": "2010-12-29T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/l98Zns4oQe1BSvbF4hJ8oL6VSf0.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"
+    }
+   ],
+   "website": "http://durian.blender.org/",
+   "year": 2010,
+   "youTubeTrailerId": "HOfdboHvshg",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "qualityProfileId": 1,
+   "movieFileId": 3,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "runtime": 14,
+   "cleanTitle": "sintel",
+   "imdbId": "tt1727587",
+   "tmdbId": 45745,
+   "titleSlug": "45745",
+   "certification": "PG",
+   "genres": [
+    "Animation",
+    "Fantasy",
+    "Adventure"
+   ],
+   "keywords": [
+    "blender",
+    "dragon",
+    "pet",
+    "short film"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 3803,
+     "value": 7.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 180,
+     "value": 7.3,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 280,
+     "value": 7.47857,
+     "type": "user"
+    }
+   },
+   "popularity": 2.9502,
+   "lastSearchTime": "2026-11-12T22:32:11Z",
+   "id": 2
+  },
+  "id": 13
+ },
+ {
+  "movieId": 2,
+  "sourceTitle": "Sintel.2010.1080p.WEB-DL.DD5.1.H.264-BROKEN",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "webdl",
+    "resolution": 1080,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:13Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/sintel.2010.1080p.web-dl.dd5.1.h.264-broken",
+   "releaseGroup": "BROKEN",
+   "age": "0",
+   "ageHours": "1.0005912055",
+   "ageMinutes": "60.035472463333335",
+   "publishedDate": "2026-11-12T21:32:11Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "734003200",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=sintel.2010.1080p.web-dl.dd5.1.h.264-broken",
+   "guid": "http://127.0.0.1:8990/details/sintel.2010.1080p.web-dl.dd5.1.h.264-broken",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "Search",
+   "indexerFlags": "0",
+   "indexerId": "1"
+  },
+  "movie": {
+   "title": "Sintel",
+   "originalTitle": "Sintel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "sintel",
+   "status": "released",
+   "overview": "A wandering warrior finds an unlikely friend in the form of a young dragon. The two develop a close bond, until one day the dragon is snatched away. She then sets out on a relentless quest to reclaim her friend, finding in the end that her quest exacts a far greater price than she had ever imagined.",
+   "inCinemas": "2010-09-30T00:00:00Z",
+   "releaseDate": "2010-12-29T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/l98Zns4oQe1BSvbF4hJ8oL6VSf0.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"
+    }
+   ],
+   "website": "http://durian.blender.org/",
+   "year": 2010,
+   "youTubeTrailerId": "HOfdboHvshg",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "qualityProfileId": 1,
+   "movieFileId": 3,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+   "runtime": 14,
+   "cleanTitle": "sintel",
+   "imdbId": "tt1727587",
+   "tmdbId": 45745,
+   "titleSlug": "45745",
+   "certification": "PG",
+   "genres": [
+    "Animation",
+    "Fantasy",
+    "Adventure"
+   ],
+   "keywords": [
+    "blender",
+    "dragon",
+    "pet",
+    "short film"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:09Z",
+   "ratings": {
+    "imdb": {
+     "votes": 3803,
+     "value": 7.4,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 180,
+     "value": 7.3,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 280,
+     "value": 7.47857,
+     "type": "user"
+    }
+   },
+   "popularity": 2.9502,
+   "lastSearchTime": "2026-11-12T22:32:11Z",
+   "id": 2
+  },
+  "id": 14
+ },
+ {
+  "movieId": 4,
+  "sourceTitle": "Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "webdl",
+    "resolution": 1080,
+    "modifier": "none"
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:35Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "PENDING",
+   "age": "0",
+   "ageHours": "0.000258442",
+   "ageMinutes": "0.015506618333333333",
+   "publishedDate": "2026-11-12T22:32:35Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=elephants.dream.2006.1080p.web-dl.dd5.1.h.264-pending",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=elephants.dream.2006.1080p.web-dl.dd5.1.h.264-pending",
+   "tmdbId": "0",
+   "imdbId": "0",
+   "protocol": "1",
+   "customFormatScore": "0",
+   "movieMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "indexerId": "0"
+  },
+  "movie": {
+   "title": "Elephants Dream",
+   "originalTitle": "Elephants Dream",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "elephants dream",
+   "status": "released",
+   "overview": "Elephants Dream is the story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo. As their journey unfolds we discover signs that the machine is not all Proog thinks it is, and his guiding takes on a more desperate aspect.  Elephants Dream is a story about communication and fiction, made purposefully open-ended as the world’s first 3D animated “Open movie”. The film itself is released under the Creative Commons license, along with the entirety of the production files used to make it (roughly 7 Gigabytes of data). The software used to make the movie is the free/open source animation suite Blender along with other open source software, thus allowing the movie to be remade, remixed and re-purposed with only a computer and the data on the DVD or download.",
+   "digitalRelease": "2006-03-24T00:00:00Z",
+   "releaseDate": "2006-03-24T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/9zROtU9TkpZQrOuEaMAp68FOWLK.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/9bJDwuhza19HQcYA99FeslLYmUm.jpg"
+    }
+   ],
+   "website": "http://www.elephantsdream.org/",
+   "year": 2006,
+   "youTubeTrailerId": "_0wxP7EWsOc",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+   "qualityProfileId": 1,
+   "movieFileId": 2,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+   "runtime": 11,
+   "cleanTitle": "elephantsdream",
+   "imdbId": "tt0807840",
+   "tmdbId": 9761,
+   "titleSlug": "9761",
+   "certification": "NR",
+   "genres": [
+    "Animation",
+    "Science Fiction"
+   ],
+   "keywords": [
+    "blender",
+    "dreams",
+    "future"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:23:08Z",
+   "ratings": {
+    "imdb": {
+     "votes": 1397,
+     "value": 5.6,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 71,
+     "value": 5.8,
+     "type": "user"
+    },
+    "trakt": {
+     "votes": 86,
+     "value": 5.98837,
+     "type": "user"
+    }
+   },
+   "popularity": 1.8026,
+   "lastSearchTime": "2026-11-12T22:23:08Z",
+   "id": 4
+  },
+  "id": 15
+ }
+]

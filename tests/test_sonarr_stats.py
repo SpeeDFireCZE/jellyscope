@@ -1,0 +1,223 @@
+# -*- coding: utf-8 -*-
+r"""Sonarr's statistics (stats/sonarr.py) over a hand-made history with a known result.
+
+The data (the period Sat 31. 10. - Mon 2. 11. 2026, the app's zone UTC):
+
+    g1 grab      10-31 20:00  A  ep 11  WEBDL-720p   2 GB  RSS, NZBgeek, NTb, SAB, usenet
+    i1 import    10-31 20:30  A  ep 11  WEBDL-720p   2 GB  the episode aired 10-31 18:00
+    g2 grab      11-01 10:00  B  ep 11  WEBDL-1080p  4 GB  manual pick, DrunkenSlug, FLUX
+    d1 delete    11-01 11:00     ep 11  WEBDL-720p         reason Upgrade
+    i2 import    11-01 11:02  B  ep 11  WEBDL-1080p  4 GB  the episode aired 10-31 18:00
+    g3 grab      11-01 12:00  C  ep 12  WEBDL-1080p  3 GB  search, NZBgeek, NTb, qBit, torrent
+    f1 failure   11-01 13:00  C  ep 12
+    i3 import    11-02 08:00  D  ep 13  Bluray-1080p 6 GB  the episode airs only 11-03 (before the release)
+
+What follows from it and the test guards:
+- additions by day: three days with one import each, 1. 11. is an upgrade (i2 replaced the file deleted by d1 two
+  minutes earlier), not a new episode;
+- the download speed (grab -> import by download_id): 30 min and 62 min, the median 46 min (2760 s), p90 by linear
+  interpolation 3528 s; i3 has no grab;
+- since the release: only the episode's first import - i1 after 2.5 h (9000 s); i2 is an upgrade of the same episode
+  (17 h after the release) and does not belong to "how soon the episode was added", i3 is before the release,
+  separately (a finding of the final review: upgrades moved the median and the buckets later);
+- sources: an import's indexer is from its grab, i3 without a grab is "–";
+- upgrades: one, 720p -> 1080p, a manual pick brought it; all grabs in the period: two automatic (RSS, search), one
+  manual;
+- failures: one.
+Finally Review Focus 5: midnight in the app's zone - an import at 10-31 23:30 UTC belongs to Sunday 1. 11. in Prague
+(UTC+1), hour 0.
+
+Run:
+    .venv/bin/python tests/test_sonarr_stats.py
+"""
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT))
+
+_tmp = tempfile.mkdtemp()
+os.environ["JELLYSCOPE_HOME"] = _tmp
+os.environ["DATABASE_PATH"] = str(Path(_tmp) / "sonarr-test.db")
+os.environ["SECRET_KEY"] = "test-key"
+os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
+os.environ["JELLYFIN_API_KEY"] = "test-key"
+
+from jellyscope import db, stats  # noqa: E402
+
+GB = 1024 ** 3
+failures = 0
+db.init_db()
+
+
+def check(condition: bool, label: str) -> None:
+    global failures
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
+    if not condition:
+        failures += 1
+
+
+def set_zone(name: str) -> None:
+    db.set_setting("app_timezone", name)
+    db.forget_settings()
+
+
+def insert(arr_id: int, kind: str, date: str, download_id: str | None, item: int, quality: str = "",
+           size: int | None = None, released: str | None = None, **columns: str) -> None:
+    """One event of Sonarr's history; `columns` are further columns of the table by their names."""
+    row = {"arr_id": arr_id, "event_type": kind, "happened_at": date, "title": "Series", "episode": f"S01E{item:02d}",
+           "item_id": item, "title_id": 1, "quality": quality, "resolution": 1080 if "1080" in quality else 720,
+           "size_bytes": size, "indexer": "", "release_group": "", "client": "", "protocol": "", "source": "",
+           "reason": "", "download_id": download_id, "released_at": released, "cf_score": 0, **columns}
+    with db.connect() as conn:
+        conn.execute(f"INSERT INTO sonarr_event ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})",
+                     tuple(row.values()))
+        conn.commit()
+
+
+set_zone("UTC")
+insert(1, "grabbed", "2026-10-31 20:00:00", "A", 11, "WEBDL-720p", 2 * GB, source="Rss", indexer="NZBgeek",
+       release_group="NTb", client="SAB", protocol="usenet")
+insert(2, "downloadFolderImported", "2026-10-31 20:30:00", "A", 11, "WEBDL-720p", 2 * GB, released="2026-10-31 18:00:00")
+insert(3, "grabbed", "2026-11-01 10:00:00", "B", 11, "WEBDL-1080p", 4 * GB, source="InteractiveSearch",
+       indexer="DrunkenSlug", release_group="FLUX", client="SAB", protocol="usenet")
+insert(4, "episodeFileDeleted", "2026-11-01 11:00:00", None, 11, "WEBDL-720p", reason="Upgrade")
+insert(5, "downloadFolderImported", "2026-11-01 11:02:00", "B", 11, "WEBDL-1080p", 4 * GB, released="2026-10-31 18:00:00")
+insert(6, "grabbed", "2026-11-01 12:00:00", "C", 12, "WEBDL-1080p", 3 * GB, source="Search", indexer="NZBgeek",
+       release_group="NTb", client="qBit", protocol="torrent")
+insert(7, "downloadFailed", "2026-11-01 13:00:00", "C", 12)
+insert(8, "downloadFolderImported", "2026-11-02 08:00:00", "D", 13, "Bluray-1080p", 6 * GB, released="2026-11-03 00:00:00")
+
+PERIOD = stats.period_between("2026-10-31", "2026-11-02")
+
+print("--- When Sonarr imported an episode's file (for Bazarr's subtitle speed) ---")
+check(stats.sonarr_imports({11, 12, 13, 99}) == {11: ["2026-10-31 20:30:00", "2026-11-01 11:02:00"], 13: ["2026-11-02 08:00:00"]},
+      "import times from the oldest; an episode without an import (12) and an unknown episode (99) are not in the result")
+check(stats.sonarr_imports([]) == {} and stats.sonarr_imports(set()) == {}, "nothing without items")
+
+print("--- What was added and when ---")
+p = stats.sonarr_additions(PERIOD)
+check([(r["day"], r["count"], r["new_count"], r["upgrade_count"]) for r in p] ==
+      [("2026-10-31", 1, 1, 0), ("2026-11-01", 1, 0, 1), ("2026-11-02", 1, 1, 0)],
+      f"additions by day: new, upgrade, new ({[(r['day'], r['count'], r['new_count'], r['upgrade_count']) for r in p]})")
+check([r["size_bytes"] for r in p] == [2 * GB, 4 * GB, 6 * GB], "the size imported per day")
+h = stats.sonarr_heatmap(PERIOD)
+check(len(h) == 7 and all(len(r) == 24 for r in h), "heatmap 7 × 24 (as charts.heatmap)")
+check(h[5][20] == 1 and h[6][11] == 1 and h[0][8] == 1 and sum(map(sum, h)) == 3,
+      "heatmap: Sat 20 h, Sun 11 h, Mon 8 h (row 0 = Monday)")
+n = stats.sonarr_largest(PERIOD, 1)
+check(len(n) == 1 and n[0]["size_bytes"] == 6 * GB and n[0]["quality"] == "Bluray-1080p" and n[0]["episode"] == "S01E13",
+      "the largest imported file")
+check(len(stats.sonarr_largest(PERIOD)) == 3, "the largest: only imports (three), the default limit 10")
+
+print()
+print("--- Speed ---")
+
+
+def add_title(title_id: int, added: str | None) -> None:
+    """A series in Sonarr's list with the time it was added to it (the column `added_at`)."""
+    with db.connect() as conn:
+        conn.execute("INSERT INTO sonarr_title (title_id, name, added_at) VALUES (?, ?, ?)", (title_id, f"Title {title_id}", added))
+        conn.commit()
+
+
+# The series (title 1) is in the app since January - its episodes were waited for.
+add_title(1, "2026-01-01 00:00:00")
+r = stats.sonarr_speed(PERIOD)
+check(r["downloads"] == {"median": 2760, "p90": 3528, "count": 2}, f"grab -> import: the median and p90 ({r['downloads']})")
+since = r["since_release"]
+check(since["median"] == 9000 and since["count"] == 1 and since["before_release"] == 1 and since["not_counted"] == 0
+      and since["unknown"] == 0,
+      f"since the release: only the first import (the upgrade i2 does not count), before the release separately ({since})")
+check(since["buckets"] == {"1h": 0, "6h": 1, "1d": 0, "7d": 0, "longer": 0}, f"since the release by bucket ({since['buckets']})")
+# "Since the release" measures waiting - and one can wait only for what was in the app already when it came out.
+# A movie or series added years after the release would otherwise drag the numbers to years (a 30 year old movie = 30
+# years).
+add_title(2, "2026-11-01 14:00:00")          # a thirty year old title added today
+add_title(3, "2026-10-01 00:00:00")          # a new title, added before the episode's release
+add_title(4, None)                           # a title the app did not say when it was added
+insert(20, "downloadFolderImported", "2026-11-01 15:00:00", "S", 21, "Bluray-1080p", 8 * GB, released="1996-05-01 00:00:00", title_id=2)
+insert(21, "downloadFolderImported", "2026-11-02 12:00:00", "N", 31, "WEBDL-1080p", 3 * GB, released="2026-10-31 12:00:00", title_id=3)
+insert(22, "downloadFolderImported", "2026-11-02 13:00:00", "U", 41, "WEBDL-1080p", 3 * GB, released="2026-11-02 12:00:00", title_id=4)
+insert(23, "downloadFolderImported", "2026-11-02 14:00:00", "Z", 51, "WEBDL-1080p", 3 * GB, released="2026-11-02 12:00:00", title_id=99)
+since = stats.sonarr_speed(PERIOD)["since_release"]
+check(since["count"] == 2 and since["buckets"] == {"1h": 0, "6h": 1, "1d": 0, "7d": 1, "longer": 0}
+      and since["median"] == (9000 + 2 * 86400) / 2 and since["before_release"] == 1,
+      f"since the release: only titles that were in the app when the episode came out ({since})")
+# Review: "added after the release" and "we do not know when it was added" are two different things - and the card says
+# them so.
+check(since["not_counted"] == 1 and since["unknown"] == 2,
+      f"added only after the release separately, titles without a time added (or no longer in the app) separately ({since['not_counted']}, {since['unknown']})")
+with db.connect() as conn:
+    conn.execute("DELETE FROM sonarr_event WHERE arr_id >= 20")
+    conn.commit()
+empty = stats.sonarr_speed(stats.period_between("2026-01-01", "2026-01-02"))
+check(empty["downloads"] == {"median": None, "p90": None, "count": 0} and empty["since_release"]["median"] is None,
+      "an empty period: None, not zero")
+
+print()
+print("--- Sources and quality ---")
+sources = stats.sonarr_sources(PERIOD)
+check(set(sources) == {"indexers", "groups", "clients", "protocols", "qualities", "resolutions"}, "all groups of sources")
+check([(x["name"], x["count"]) for x in sources["indexers"]] == [("–", 1), ("DrunkenSlug", 1), ("NZBgeek", 1)],
+      f"an import's indexer = its grab's indexer, without a grab \"–\"; on a tie the larger first ({sources['indexers']})")
+check([x["size_bytes"] for x in sources["indexers"]] == [6 * GB, 4 * GB, 2 * GB], "the size at a source = the imported files")
+check([(x["name"], x["count"]) for x in sources["qualities"]] == [("Bluray-1080p", 1), ("WEBDL-1080p", 1), ("WEBDL-720p", 1)],
+      f"the qualities of the imported files ({sources['qualities']})")
+check({x["name"]: x["count"] for x in sources["protocols"]} == {"–": 1, "usenet": 2}, f"protocols ({sources['protocols']})")
+
+print()
+print("--- Upgrades and activity ---")
+u = stats.sonarr_upgrades(PERIOD)
+check(u["count"] == 1 and u["item_count"] == 1 and u["per_item"] == 1, f"one upgrade of one episode ({u['count']}, {u['item_count']})")
+check(u["transitions"] == [{"z": "WEBDL-720p", "to": "WEBDL-1080p", "count": 1}], f"the quality transition ({u['transitions']})")
+# `titul_id` = the title's id in the app: by it the card finds the title in the library (stats.sonarr_detail_links).
+check(u["titles"] == [{"title": "Series", "count": 1, "title_id": 1}], f"titles with upgrades ({u['titles']})")
+check(u["how"] == {"manual": 1}, f"a manual pick brought the upgrade ({u['how']})")
+check(u["how_all"] == {"automatic": 2, "manual": 1}, f"all grabs: 2 automatic, 1 manual ({u['how_all']})")
+check(stats.sonarr_failures(PERIOD) == 1, "failures: one")
+
+print()
+print("--- Blackhole: a grab without download_id ---")
+insert(20, "grabbed", "2026-11-02 10:00:00", None, 14, "WEBDL-720p", GB, source="ReleasePush", indexer="Other")
+insert(21, "downloadFolderImported", "2026-11-02 10:10:00", "Blackhole_x", 14, "WEBDL-720p", GB)
+sources = stats.sonarr_sources(PERIOD)
+check(("Other", 1) in [(x["name"], x["count"]) for x in sources["indexers"]],
+      "an import without a grab of the same download_id pairs with the last grab of the same item without download_id")
+check(stats.sonarr_speed(PERIOD)["downloads"]["count"] == 3, "... and counts into the download speed (10 min)")
+with db.connect() as conn:
+    conn.execute("DELETE FROM sonarr_event WHERE arr_id IN (20, 21)")
+    conn.commit()
+
+print()
+print("--- Code review: the same download_id twice ---")
+# The same release (the same torrent hash = the same download_id) grabbed again: the import must pair with the last
+# grab before it, not with the first in the window - otherwise "downloading" takes weeks.
+insert(30, "grabbed", "2026-12-01 10:00:00", "R", 20, "WEBDL-720p", GB, source="Rss")
+insert(31, "downloadFolderImported", "2026-12-01 10:20:00", "R", 20, "WEBDL-720p", GB)
+insert(32, "grabbed", "2026-12-10 10:00:00", "R", 20, "WEBDL-720p", GB, source="Search")
+insert(33, "downloadFolderImported", "2026-12-10 10:30:00", "R", 20, "WEBDL-720p", GB)
+december = stats.sonarr_speed(stats.period_between("2026-12-10", "2026-12-11"))
+check(december["downloads"] == {"median": 1800, "p90": 1800, "count": 1},
+      f"the import pairs with the last grab before it ({december['downloads']})")
+with db.connect() as conn:
+    conn.execute("DELETE FROM sonarr_event WHERE arr_id BETWEEN 30 AND 33")
+    conn.commit()
+
+print()
+print("--- Review Focus 5: midnight in the app's zone ---")
+insert(9, "downloadFolderImported", "2026-10-31 23:30:00", "E", 15, "WEBDL-720p", GB)
+set_zone("Europe/Prague")
+PERIOD = stats.period_between("2026-10-31", "2026-11-02")
+p = {r["day"]: r["count"] for r in stats.sonarr_additions(PERIOD)}
+check(p.get("2026-11-01") == 2 and p.get("2026-10-31") == 1, f"an import at 23:30 UTC is on Sunday 1. 11. in Prague ({p})")
+h = stats.sonarr_heatmap(PERIOD)
+check(h[6][0] == 1 and h[5][21] == 1, "the heatmap in the app's zone: Sunday 0 h; i1 Saturday 21 h (20:30 UTC + 1)")
+
+print()
+print(f"DONE - failures: {failures}")
+sys.exit(1 if failures else 0)

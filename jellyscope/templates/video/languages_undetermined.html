@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, tech_badge, link with context %}
+{% block title %}{{ _("Files without a language") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Files with no language set") }}</h1>
+        <p class="subtitle">
+            <a href="/video/languages">{{ _("Languages") }}</a> &middot;
+            {{ _n("{n} files", total) }}
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("These files have no language on the audio track: Jellyfin reports it as und (undefined), or not at all. They therefore do not enter the language statistics, where they would only show up as Unknown.") }}
+    </p>
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("The fix belongs in the file, not in Jellyfin: the track is missing its language code. For MKV you can add it with mkvpropedit (it only rewrites the header, no re-encoding), then refresh the title metadata in Jellyfin and run a sync in Jellyscope.") }}
+    </p>
+
+    {# The path is the main thing here - without it the list would say "something is
+       wrong" and leave the search to you. That is why one can search by it too. #}
+    <form method="get" action="/video/languages/undetermined" class="btn-row">
+        <input type="search" name="search" value="{{ search }}"
+               placeholder="{{ _('Search name or path...') }}" style="width:320px">
+        <button class="btn primary" type="submit">{{ _("Show") }}</button>
+        {% if search %}
+            <a class="btn" href="/video/languages/undetermined">{{ _("Clear search") }}</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if files %}
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Title") }}</th>
+                <th>{{ _("Library") }}</th>
+                <th class="num">{{ _("Size") }}</th>
+                <th>{{ _("Codec") }}</th>
+                <th>{{ _("Data source") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in files %}
+            <tr>
+                <td>
+                    <div class="strong">
+                        {% call link("/item/" ~ row.id) %}
+                            {% if row.series_name %}
+                                <span class="muted">{{ row.series_name }}
+                                {%- if row | episode_code %}
+                                    {{ row | episode_code }}
+                                {%- endif %} &ndash;</span>
+                            {% endif %}
+                            {{ row.name }}
+                        {% endcall %}
+                    </div>
+                    {# The path to the file - this page exists for it. #}
+                    {% if row.path %}
+                        <div class="card-note" style="word-break:break-all">{{ row.path }}</div>
+                    {% else %}
+                        <div class="card-note">{{ _("path unknown, run a library sync") }}</div>
+                    {% endif %}
+                </td>
+                <td class="muted">{{ row.library_name or '–' }}</td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td>{{ row.video_codec | upper if row.video_codec else '–' }}</td>
+                <td>{{ tech_badge(row.tech_source) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% set extra %}{% if search %}&search={{ search }}{% endif %}{% endset %}
+{{ pager(page, pages, total, '/video/languages/undetermined', extra) }}
+{% else %}
+<div class="card">
+    <p class="chart-empty">
+        {% if search %}
+            {{ _("Nothing found.") }}
+        {% else %}
+            {{ _("Every file has its language filled in, which is rare. Congratulations.") }}
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+{% endblock %}

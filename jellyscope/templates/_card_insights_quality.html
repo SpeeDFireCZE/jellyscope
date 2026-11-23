@@ -1,0 +1,45 @@
+{# The card "Watched a lot, but in poor quality" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_quality`) - one template, so the two places do not drift apart.
+   Expects `upgrades (insights.upgrade_candidates)`. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Watched a lot, but in poor quality") }}</h2>
+        <p class="card-note">{{ _("below 1080p or below 3 Mbps") }}</p>
+    </div>
+    {% if upgrades %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr><th>{{ _("Title") }}</th><th class="num">{{ _("Watched") }}</th>
+                <th class="num">{{ _("Resolution") }}</th><th class="num">Bitrate</th></tr>
+            </thead>
+            <tbody>
+            {% for row in upgrades %}
+            <tr class="{{ row_class(loop.index) }}">
+                {# A link to the detail: for a series to the series, for a film
+                   to the file - where one can find out at once what file it is
+                   and where it lies. #}
+                <td class="truncate" title="{{ row.label }}">
+                    {% if row.detail_url %}
+                        {% call link(row.detail_url) %}{{ row.label }}{% endcall %}
+                    {% else %}
+                        {{ row.label }}
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="num muted">{{ row.bitrate | bitrate }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ whole_table_button(upgrades | length) }}
+    <p class="card-note" style="margin-top:12px">{{ _("Candidates for a better copy.") }}</p>
+    {% else %}
+    <p class="chart-empty">{{ _("Everything you watch is in decent quality.") }}</p>
+    {% endif %}
+</div>

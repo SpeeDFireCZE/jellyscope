@@ -1,0 +1,31 @@
+{# Music's insights: the full charts and what nobody listens to - laid out like the insights of Movies & series.
+
+   The cards are from the registry (jellyscope/cards_music.py, PAGES["insights"]); which of them the account sees
+   was decided by the route (web/music/insights.py, `cards`). #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}{{ _("Insights") }} &middot; {{ _("Music") }} &middot; Jellyscope{% endblock %}
+
+{# A music card by its name ("albums" -> music_albums). #}
+{% macro c(card_name) %}{{ show_card("music_" ~ card_name) }}{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Insights") }}</h1>
+        <p class="subtitle">{{ _("Artists, albums, tracks and genres with the most hours of listening in the period - and what nobody listens to.") }}</p>
+    </div>
+    {{ period_filter(period, '/music/insights') }}
+</div>
+
+{{ c("albums") }}
+<div class="grid-2 align-top">
+    {{ c("artists") }}
+    {{ c("tracks") }}
+</div>
+{{ c("genres") }}
+{{ c("unplayed") }}
+
+{# One window for the whole table of any card (whole_table_button, data-table-window). #}
+{{ table_window() }}
+{% endblock %}

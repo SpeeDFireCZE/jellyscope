@@ -1,0 +1,33 @@
+{# The music card "Apps and devices": what people listen in.
+
+   From the database (cards_music.py, `d.radky` = stats.music_apps). The app
+   is what Jellyfin reports as the client (Finamp, Jellyfin Web…); devices
+   is the number of different devices with that app. A long table: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("App") }}</th>
+            <th class="num">{{ _("Listening") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Plays") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Device") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for a in d.rows %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{{ a.app or _("unknown#feminine") }}
+                    <div class="narrow-wrapper-only cell-sub">{{ a.plays | number }}× &middot; {{ _("Device") }} {{ a.device | number }}</div></td>
+                <td class="num strong">{{ a.seconds | seconds }}</td>
+                <td class="num wide-wrapper-only">{{ a.plays | number }}</td>
+                <td class="num wide-wrapper-only">{{ a.device | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+</div>

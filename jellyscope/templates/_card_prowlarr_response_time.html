@@ -1,0 +1,14 @@
+{# The Prowlarr card "Indexer response time": the average answer time, the slowest at the top.
+
+   From the database (cards_prowlarr.py, `d.radky`: name, response in ms). Only
+   successful queries that did not come from Prowlarr's cache count - the cache answers
+   at once and would skew the average. An indexer without a single such answer is not here. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("average in milliseconds, slowest on top") }}</p>
+    </div>
+    {% if d.rows %}
+        {{ charts.hbar_chart(d.rows, 'name', 'response', unit='ms', limit=12, labels_above=True) | safe }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

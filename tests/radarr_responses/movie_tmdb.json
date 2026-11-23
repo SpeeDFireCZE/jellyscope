@@ -1,0 +1,18 @@
+[
+ {
+  "id": 8,
+  "title": "Arrival",
+  "tmdbId": 329865,
+  "year": 2016,
+  "images": [
+   {
+    "coverType": "poster",
+    "url": "/MediaCover/8/poster.jpg?h=8664108df23b9cc166a5"
+   },
+   {
+    "coverType": "fanart",
+    "url": "/MediaCover/8/fanart.jpg?h=900934e1f1309ea2390a"
+   }
+  ]
+ }
+]

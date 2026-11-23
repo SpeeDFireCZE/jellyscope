@@ -1,0 +1,17 @@
+{# The Lidarr card "Imports per day": new albums and upgrades day by day.
+
+   From the database (cards_lidarr.py, `d.body` = stats.chart_days: days with nothing
+   added are in the chart as zero, not as a gap). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("new and upgrades, number of albums") }}</p>
+    </div>
+    {% if d.body %}
+        {{ charts.area_chart_multi(d.body, 'day',
+               [{'key': 'new_count', 'label': _('new'), 'slot': 1},
+                {'key': 'upgrade_count', 'label': _('upgrades'), 'slot': 2}], unit='', whole_ticks=True) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("Nothing was added to the library in this period.") }}</p>
+    {% endif %}
+</div>

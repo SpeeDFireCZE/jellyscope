@@ -1,0 +1,30 @@
+{# The Prowlarr card "Grabbed release numbers": how many releases apps took through Prowlarr.
+
+   From the database (cards_prowlarr.py, `d` = stats.prowlarr_grabbed; `failed_count`
+   and `response` are ready text). Prowlarr either downloads a release from the indexer itself
+   (torrents - it knows the result and the time), or only redirects the app to the indexer
+   (usenet always - it does not know the result). Failures and time are therefore only from the
+   downloaded ones; where there was none, it is "–", not zero. The sentences under the tiles
+   say so with counts ("N×" - no declension by the number). #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("releases the apps grabbed from the indexers") }}</p>
+    </div>
+    <div class="kpi-row">
+        {{ tile(_("Grabbed releases"), d.grab_count | number) }}
+        {{ tile(_("Failed"), d.failed_count) }}
+        {{ tile(_("Average download time"), d.response) }}
+    </div>
+    {% if d.grab_count %}
+    <p class="card-note">
+        {% if d.being_grabbed %}
+            {{ _("Failures and time come from the releases Prowlarr downloaded from the indexer itself: {n}×.").format(n=d.being_grabbed | number) }}
+            {% if d.redirected %}{{ _("It only redirected the app to the indexer: {n}× - it does not know how those downloads ended.").format(n=d.redirected | number) }}{% endif %}
+        {% else %}
+            {{ _("Prowlarr only redirected the apps to the indexer ({n}×), as is usual with usenet: it does not know whether the download succeeded or how long it took.").format(n=d.grab_count | number) }}
+        {% endif %}
+    </p>
+    {% endif %}
+</div>

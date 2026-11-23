@@ -1,0 +1,36 @@
+{# The Sonarr card "Numbers right now": the queue, missing, unmet cutoff and warnings.
+
+   The app's state right now, the period does not concern it. Drawn by the page
+   /arr/sonarr and by dashboards (cards_sonarr.py). Expects `d` = the app's live state for
+   the account (cards_sonarr.for_account): what did not load is None and shows as "–",
+   not as zero - "ve frontě 0" would be a claim nobody checked.
+   Only the admin gets the error's detail (`d.chyba`).
+
+   The only live card that says in a whole sentence what happened; the others
+   (queue, calendar, warnings) have just a short note. In a dashboard it carries
+   a small label with the app (`prefix`) - a row of tiles has no heading of its own. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+{% if not d.available %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("The app is not responding; the queue, missing items, calendar and health cannot be loaded right now. The statistics from the database still hold.") }}
+        {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
+    </span>
+</div>
+{% elif d.partly_loaded %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("Part of the data could not be loaded from the app - a dash means unknown, not zero.") }}
+        {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
+    </span>
+</div>
+{% endif %}
+<div class="kpi-row">
+    {{ tile(_("In the queue"), d.queue.count | number if d.queue is not none else "–") }}
+    {{ tile(_("Missing"), d.missing | number if d.missing is not none else "–") }}
+    {{ tile(_("Cutoff unmet"), d.cutoff | number if d.cutoff is not none else "–") }}
+    {{ tile(_("App warnings"), d.health_count | number if d.health_count is not none else "–") }}
+</div>

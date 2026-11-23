@@ -1,21 +1,22 @@
-"""Prace s jazyky zvukovych stop a titulku.
+"""Working with the languages of audio and subtitle streams.
 
-Problem, ktery tenhle soubor resi: **stejny jazyk ma vic ruznych kodu**.
-Cestina se muze objevit jako "ces" (ISO 639-2/T), "cze" (ISO 639-2/B),
-"cs" (ISO 639-1) nebo "Czech". Kdyby se to nesjednotilo, statistika by
-misto jedne cestiny ukazala ctyri ruzne jazyky, kazdy s ctvrtinou.
+The problem this file solves: **the same language has several different
+codes**. Czech can show up as "ces" (ISO 639-2/T), "cze" (ISO 639-2/B),
+"cs" (ISO 639-1) or "Czech". Were that not unified, the statistics would
+show four different languages instead of one Czech, each with a quarter.
 
-Reseni je vzdycky stejne: hned na vstupu prevest vsechny podoby na jeden
-**kanonicky tvar** a dal uz pracovat jen s nim. Tomuhle se rika normalizace
-a potkas ji vsude - u telefonnich cisel, e-mailu, nazvu mest.
+The solution is always the same: turn every shape into one **canonical
+form** right at the input and work only with that from then on. This is
+called normalisation, and you meet it everywhere - phone numbers, e-mails,
+city names.
 """
 
 from __future__ import annotations
 
 import re
 
-# Kanonicky tvar je dvoupismenny kod (ISO 639-1). Vlevo jsou vsechny
-# podoby, ktere muze poslat Jellyfin nebo ffprobe.
+# The canonical form is a two-letter code (ISO 639-1). On the left are all
+# the shapes Jellyfin or ffprobe can send.
 _ALIASES: dict[str, str] = {}
 
 
@@ -25,7 +26,7 @@ def _register(canonical: str, *aliases: str) -> None:
         _ALIASES[alias] = canonical
 
 
-# Jazyky, ktere se v ceskych knihovnach potkavaji nejcasteji, jsou nahore.
+# The languages met most often in Czech libraries are at the top.
 _register("cs", "ces", "cze", "czech", "cesky", "cestina")
 _register("sk", "slk", "slo", "slovak", "slovensky")
 _register("en", "eng", "english", "en-us", "en-gb", "anglicky")
@@ -62,59 +63,59 @@ _register("sl", "slv", "slovenian")
 _register("ca", "cat", "catalan")
 _register("fa", "fas", "per", "persian")
 
-# Nazvy pro zobrazeni. Jsou cesky - do anglictiny je prelozi display()
-# pres i18n, stejne jako kazdy jiny text v aplikaci.
+# Names for display. They are Czech - display() translates them through
+# i18n, the same as any other text of the application.
 _NAMES: dict[str, str] = {
-    "cs": "Čeština",
-    "sk": "Slovenština",
-    "en": "Angličtina",
-    "de": "Němčina",
-    "fr": "Francouzština",
-    "es": "Španělština",
-    "it": "Italština",
-    "pl": "Polština",
-    "ru": "Ruština",
-    "uk": "Ukrajinština",
-    "hu": "Maďarština",
-    "ja": "Japonština",
-    "ko": "Korejština",
-    "zh": "Čínština",
-    "pt": "Portugalština",
-    "nl": "Nizozemština",
-    "sv": "Švédština",
-    "da": "Dánština",
-    "no": "Norština",
-    "fi": "Finština",
-    "tr": "Turečtina",
-    "ar": "Arabština",
-    "hi": "Hindština",
-    "ro": "Rumunština",
-    "el": "Řečtina",
-    "he": "Hebrejština",
-    "th": "Thajština",
-    "vi": "Vietnamština",
-    "id": "Indonéština",
-    "bg": "Bulharština",
-    "hr": "Chorvatština",
-    "sr": "Srbština",
-    "sl": "Slovinština",
-    "ca": "Katalánština",
-    "fa": "Perština",
+    "cs": "Czech",
+    "sk": "Slovak",
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "it": "Italian",
+    "pl": "Polish",
+    "ru": "Russian",
+    "uk": "Ukrainian",
+    "hu": "Hungarian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "zh": "Chinese",
+    "pt": "Portuguese",
+    "nl": "Dutch",
+    "sv": "Swedish",
+    "da": "Danish",
+    "no": "Norwegian",
+    "fi": "Finnish",
+    "tr": "Turkish",
+    "ar": "Arabic",
+    "hi": "Hindi",
+    "ro": "Romanian",
+    "el": "Greek",
+    "he": "Hebrew",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "id": "Indonesian",
+    "bg": "Bulgarian",
+    "hr": "Croatian",
+    "sr": "Serbian",
+    "sl": "Slovenian",
+    "ca": "Catalan",
+    "fa": "Persian",
 }
 
-# Kod pro "nevime". Pouziva se, kdyz stopa jazyk vubec neuvadi -
-# coz je u domacich knihoven pomerne bezne.
+# The code for "we do not know". Used when a stream does not state a
+# language at all - which is fairly common in home libraries.
 UNKNOWN = "und"
 
 
 def normalize(raw: str | None) -> str:
-    """Prevede jakykoliv zapis jazyka na kanonicky dvoupismenny kod.
+    """Turns any notation of a language into the canonical two-letter code.
 
         normalize("ces")   -> "cs"
         normalize("cze")   -> "cs"
         normalize("CS")    -> "cs"
         normalize("")      -> "und"
-        normalize("klingon") -> "klingon"  (nezname necháme, jak jsou)
+        normalize("klingon") -> "klingon"  (unknown ones are left as they are)
     """
     if not raw:
         return UNKNOWN
@@ -126,69 +127,70 @@ def normalize(raw: str | None) -> str:
     if key in _ALIASES:
         return _ALIASES[key]
 
-    # Nekdy prijde "cs-CZ" nebo "en_US" - vezmeme cast pred oddelovacem.
+    # Sometimes "cs-CZ" or "en_US" comes - we take the part before the separator.
     for separator in ("-", "_"):
         if separator in key:
             head = key.split(separator, 1)[0]
             if head in _ALIASES:
                 return _ALIASES[head]
 
-    # Neznamy jazyk nezahazujeme. Radeji at je ve statistice videt pod
-    # svym kodem, nez aby tise splynul s "nezname".
+    # An unknown language is not thrown away. Better it shows in the statistics
+    # under its own code than quietly merge with "unknown".
     return key
 
 
 def display(code: str | None) -> str:
-    """Nazev jazyka pro zobrazeni, v jazyce rozhrani.
+    """The name of a language for display, in the interface language.
 
-    Zdrojovy tvar je cesky ("Cestina") a projde prekladem stejne jako
-    kterykoliv jiny text v aplikaci. Kdyz preklad chybi, zustane cesky -
-    to je porad lepsi nez prazdno.
+    The source form is Czech ("Cestina") and goes through translation the
+    same as any other text of the application. When the translation is
+    missing, it stays Czech - that is still better than nothing.
 
-    Import je uvnitr funkce zamerne: i18n si sahne do databaze pro
-    nastaveny jazyk, a `languages` je jinak cisty modul bez zavislosti,
-    ktery pouziva i scanner. Takhle si tu vazbu bere jen ten, kdo ji
-    opravdu potrebuje.
+    The import is inside the function on purpose: i18n reaches into the
+    database for the set language, and `languages` is otherwise a clean
+    module without dependencies, used by the scanner too. This way only
+    whoever really needs that link takes it.
     """
     from .i18n import translate
 
     canonical = normalize(code)
     if canonical == UNKNOWN:
-        return translate("Neuvedeno")
+        return translate("Not specified")
     return translate(_NAMES.get(canonical, canonical.upper()))
 
 
 # ---------------------------------------------------------------------------
-# Jazyk podle názvu souboru
+# The language by the file name
 #
-# Poslední záchrana, když jazyk nezná ani soubor, ani Jellyfin: hodně
-# knihoven ho má v názvu ("Duna.2021.CZ.SK.EN.1080p.mkv").
+# The last resort, when neither the file nor Jellyfin knows the language:
+# many libraries have it in the name ("Duna.2021.CZ.SK.EN.1080p.mkv").
 #
-# Celé to stojí na jednom pravidle: hledá se **celý úsek mezi oddělovači**,
-# ne výskyt písmen. "Czechacek" ani "enigma" proto nikdy neprojdou - jako
-# úsek to jsou slova, která v seznamu nejsou. Kdyby se hledal podřetězec,
-# byla by to loterie.
+# It all stands on one rule: a **whole part between separators** is looked
+# for, not an occurrence of letters. So "Czechacek" or "enigma" never pass -
+# as parts they are words that are not on the list. Looking for a substring
+# would be a lottery.
 #
-# Druhá pojistka je u dvoupísmenných značek: berou se **jen velkými**.
-# Malé "de", "es" nebo "ja" jsou běžná slova v názvech filmů (Casa de
-# Papel, Já, Olga Hepnarová), zatímco značka jazyka se píše velkými.
+# The second safeguard is for two-letter marks: they are taken **in upper
+# case only**. Lower-case "de", "es" or "ja" are common words in movie names
+# ("Casa de Papel", "Já", "Olga Hepnarová"), while a language mark is written in
+# upper case.
 #
-# Třetí pojistka je seznam sám: schválně v něm nejsou zkratky, které jsou
-# zároveň slovy nebo jmény - "no" (Norwegian, ale i No Time To Die),
-# "it" (Italian, ale i film IT), "el" (Greek, ale i El Camino), "dan",
-# "fin", "nor", "por". Radši jazyk nenajít než ho určit špatně.
+# The third safeguard is the list itself: on purpose it has no shortcuts
+# that are also words or names - "no" (Norwegian, but also No Time To Die),
+# "it" (Italian, but also the movie IT), "el" (Greek, but also El Camino),
+# "dan", "fin", "nor", "por". Better not to find a language than to get it wrong.
 # ---------------------------------------------------------------------------
 
-# Dvoupísmenné jen VELKÝMI. To, co v ISO neexistuje (JP, KR, CN), se
-# v názvech běžně píše, tak to přeložíme.
-_ZNACKY_VELKE: dict[str, str] = {
+# Two-letter marks in UPPER case only. What does not exist in ISO (JP, KR,
+# CN) is commonly written in names, so we translate it.
+_UPPER_MARKS: dict[str, str] = {
     "CZ": "cs", "SK": "sk", "EN": "en", "DE": "de", "FR": "fr", "ES": "es",
     "PL": "pl", "HU": "hu", "RU": "ru", "UA": "uk", "PT": "pt", "NL": "nl",
     "JP": "ja", "KR": "ko", "CN": "zh",
 }
 
-# Delší značky projdou i malými písmeny - záměna se slovem je nepravděpodobná.
-_ZNACKY_DELSI: dict[str, str] = {
+# Longer marks pass in lower case too - mistaking them for a word is unlikely.
+_LONGER_MARKS: dict[str, str] = {
     "cze": "cs", "ces": "cs", "czech": "cs", "cesky": "cs", "cestina": "cs",
     "slk": "sk", "svk": "sk", "slovak": "sk", "slovensky": "sk",
     "eng": "en", "english": "en", "anglicky": "en",
@@ -208,133 +210,138 @@ _ZNACKY_DELSI: dict[str, str] = {
     "tur": "tr", "turkish": "tr",
 }
 
-# Slova, po kterých jazyk patří titulkům, ne zvuku. "CZ tit" jsou české
-# titulky u anglického filmu - vzít to jako zvuk by statistiku otočilo.
-_TITULKY = {"tit", "titulky", "tits", "sub", "subs", "subbed", "subtitle",
-            "subtitles", "sk-tit", "cz-tit", "forced"}
+# Words after which the language belongs to subtitles, not to the sound. "CZ tit"
+# are Czech subtitles of an English movie - taking it as sound would turn the
+# statistics upside down.
+_SUBTITLES = {"tit", "titulky", "tits", "sub", "subs", "subbed", "subtitle",
+              "subtitles", "sk-tit", "cz-tit", "forced"}
 
-# "CZdab", "SKdabing" - jedno slovo, ve kterém je značka slepená s dabingem.
-_DABING = re.compile(r"^(cz|sk|en|de|hu|pl|ru)[-_.]?dab(ing|ovan[eyá])?$",
-                     re.IGNORECASE)
-
-
-# Podle čeho se pozná, že název filmu skončil a začaly značky.
-_HRANICE = re.compile(r"^(?:(?:19|20)\d{2}|[Ss]\d{1,2}[Ee]\d{1,3}"
-                      r"|\d{3,4}[pi]|4K|HD|SD|FullHD"
-                      r"|Blu[Rr]ay|BDRip|BRRip|DVD|DVDRip|DVDScr|WEB|WEBRip"
-                      r"|WEBDL|HDTV|TVRip|TvRip|SATRip|REMUX|XviD|DivX"
-                      r"|x26[45]|h26[45]|HEVC|AVC|AC3|DTS|AAC)$",
+# "CZdab", "SKdabing" - one word with the mark glued to the dubbing.
+_DUBBING = re.compile(r"^(cz|sk|en|de|hu|pl|ru)[-_.]?dab(ing|ovan[eyá])?$",
                       re.IGNORECASE)
 
 
-# Rok nebo rozliseni slepene se znackou: "2003CZ", "1080pCZ".
-_SLEPENE = re.compile(r"^((?:19|20)\d{2}|\d{3,4}[pi])([A-Za-z]{2,3})$",
-                      re.IGNORECASE)
+# What tells that the movie's name has ended and the marks have started.
+_BOUNDARY = re.compile(r"^(?:(?:19|20)\d{2}|[Ss]\d{1,2}[Ee]\d{1,3}"
+                       r"|\d{3,4}[pi]|4K|HD|SD|FullHD"
+                       r"|Blu[Rr]ay|BDRip|BRRip|DVD|DVDRip|DVDScr|WEB|WEBRip"
+                       r"|WEBDL|HDTV|TVRip|TvRip|SATRip|REMUX|XviD|DivX"
+                       r"|x26[45]|h26[45]|HEVC|AVC|AC3|DTS|AAC)$",
+                       re.IGNORECASE)
 
 
-def _rozdel_slepene(usek: str) -> list[str]:
-    """Z "2003CZ" udělá ["2003", "CZ"]. Z "x264" nechá ["x264"].
+# A year or a resolution glued to a mark: "2003CZ", "1080pCZ".
+_GLUED = re.compile(r"^((?:19|20)\d{2}|\d{3,4}[pi])([A-Za-z]{2,3})$",
+                    re.IGNORECASE)
 
-    Dělíme hned při krájení názvu, ne až při porovnávání: kdyby zůstalo
-    "2003CZ" vcelku, nenašla by se v názvu ani hranice - a bez ní se
-    značka za ní neuzná. Přesně tak propadlo "Film-2003CZ.mp4".
 
-    Dělí se jen rok nebo rozlišení slepené s dvou až třípísmennou
-    značkou. Kdyby se dělilo cokoliv, rozpadl by se i "x264" nebo "C4U".
+def _split_glued(part: str) -> list[str]:
+    """Makes ["2003", "CZ"] of "2003CZ". Leaves ["x264"] of "x264".
+
+    It is split right when the name is cut up, not only when comparing:
+    were "2003CZ" to stay whole, not even the boundary would be found in the
+    name - and without it the mark after it is not accepted. Exactly so
+    "Film-2003CZ.mp4" fell through.
+
+    Only a year or a resolution glued to a two- to three-letter mark is
+    split. Were anything split, "x264" or "C4U" would fall apart too.
     """
-    nalez = _SLEPENE.match(usek)
-    return [nalez.group(1), nalez.group(2)] if nalez else [usek]
+    match = _GLUED.match(part)
+    return [match.group(1), match.group(2)] if match else [part]
 
 
-def _konec_nazvu(useky: list[str]) -> int:
-    """Index prvního úseku, který už není součástí názvu filmu.
+def _name_end(parts: list[str]) -> int:
+    """The index of the first part that is no longer part of the movie's name.
 
-    Bereme **první** takový, ne poslední: značky jazyka stojí za rokem,
-    ale klidně před rozlišením ("Serial.S01E03.CZdab.720p").
+    We take the **first** such, not the last: language marks stand after the
+    year, but can well stand before the resolution ("Serial.S01E03.CZdab.720p").
     """
-    for i, usek in enumerate(useky):
-        if _HRANICE.match(usek):
+    for i, part in enumerate(parts):
+        if _BOUNDARY.match(part):
             return i
-    return -1         # rok ani rozlišení tam nejsou
+    return -1         # neither a year nor a resolution is there
 
 
-def z_nazvu(cesta: str | None) -> dict[str, list[str]]:
-    """Jazyky, které slibuje název souboru. Zvlášť zvuk, zvlášť titulky.
+def from_name(path: str | None) -> dict[str, list[str]]:
+    """The languages the file name promises. The sound separately, the subtitles separately.
 
-        z_nazvu("Duna.2021.CZ.SK.EN.1080p.mkv")
-            -> {"zvuk": ["cs", "sk", "en"], "titulky": []}
-        z_nazvu("Enigma.2001.1080p.mkv")      -> prázdné
-        z_nazvu("Czechacek.2020.mkv")         -> prázdné
+        from_name("Duna.2021.CZ.SK.EN.1080p.mkv")
+            -> {"audio": ["cs", "sk", "en"], "subtitles": []}
+        from_name("Enigma.2001.1080p.mkv")      -> empty
+        from_name("Czechacek.2020.mkv")         -> empty
 
-    Vrací pořadí, v jakém se značky v názvu objevily. Neříká to ale, která
-    značka patří které stopě - o tom rozhoduje ten, kdo výsledek použije.
+    It returns the order in which the marks appeared in the name. It does not
+    say which mark belongs to which stream, though - whoever uses the result
+    decides that.
     """
-    if not cesta:
-        return {"zvuk": [], "titulky": []}
+    if not path:
+        return {"audio": [], "subtitles": []}
 
-    nazev = str(cesta).replace("\\", "/").rsplit("/", 1)[-1]
-    nazev = nazev.rsplit(".", 1)[0] if "." in nazev else nazev
+    name = str(path).replace("\\", "/").rsplit("/", 1)[-1]
+    name = name.rsplit(".", 1)[0] if "." in name else name
 
-    # Oddělovačem je cokoliv, co není písmeno ani číslice. Tím se z názvu
-    # stanou úseky, které porovnáváme celé - o to tu jde.
-    useky = [rozdeleny
-             for u in re.split(r"[^0-9A-Za-zÀ-ž]+", nazev) if u
-             for rozdeleny in _rozdel_slepene(u)]
+    # The separator is anything that is not a letter or a digit. That turns the
+    # name into parts that are compared whole - which is the point here.
+    parts = [split
+             for u in re.split(r"[^0-9A-Za-zÀ-ž]+", name) if u
+             for split in _split_glued(u)]
 
-    # Kde končí název filmu a začínají značky. Skoro každý název má někde
-    # rok, číslo dílu nebo rozlišení - a co je před ním, je titul.
+    # Where the movie's name ends and the marks start. Nearly every name has a
+    # year, an episode number or a resolution somewhere - and what is before
+    # it is the title.
     #
-    # Je to potřeba kvůli názvům jako "The Italian Job" nebo "Polish
-    # Wedding": anglické jméno jazyka je běžné slovo v názvu filmu. Za
-    # rokem už tam nikdo film nepojmenovává.
-    hranice = _konec_nazvu(useky)
+    # It is needed because of names like "The Italian Job" or "Polish
+    # Wedding": the English name of a language is a common word in a movie's
+    # name. After the year nobody names the movie any more.
+    boundary = _name_end(parts)
 
-    zvuk: list[str] = []
-    titulky: list[str] = []
+    sound: list[str] = []
+    subtitles: list[str] = []
 
-    for i, usek in enumerate(useky):
-        kod = None
-        za_hranici = 0 <= hranice < i
+    for i, part in enumerate(parts):
+        code = None
+        after_boundary = 0 <= boundary < i
 
-        if usek in _ZNACKY_VELKE:                 # velkými kdekoliv
-            kod = _ZNACKY_VELKE[usek]
-        elif za_hranici and usek.upper() in _ZNACKY_VELKE:
-            # Za rokem nebo rozlišením už je zóna značek, ne názvu -
-            # tam projde i "cz" malými. Před hranicí ne: tam by se chytlo
-            # "de" z Casa de Papel nebo "es" z názvu.
-            kod = _ZNACKY_VELKE[usek.upper()]
-        elif usek.lower() in _ZNACKY_DELSI:
-            # Celá slova ("italian", "cesky") bereme jen za hranicí názvu.
-            # Zkratky (CZ, ENG) můžou být kdekoliv - ty se jako slovo
-            # v názvu filmu neobjeví.
+        if part in _UPPER_MARKS:                 # upper case anywhere
+            code = _UPPER_MARKS[part]
+        elif after_boundary and part.upper() in _UPPER_MARKS:
+            # After the year or the resolution it is the zone of marks, not of
+            # the name - there "cz" in lower case passes too. Not before the
+            # boundary: there "de" from Casa de Papel or "es" from a name
+            # would be caught.
+            code = _UPPER_MARKS[part.upper()]
+        elif part.lower() in _LONGER_MARKS:
+            # Whole words ("italian", "cesky") are taken only after the
+            # boundary of the name. Shortcuts (CZ, ENG) can be anywhere -
+            # they do not appear as a word in a movie's name.
             #
-            # Když v názvu žádná hranice není ("The Italian Job.mkv"),
-            # celá slova neuznáváme vůbec: nemáme podle čeho poznat, že
-            # nejsou součástí názvu.
-            if len(usek) > 3 and not za_hranici:
+            # When the name has no boundary at all ("The Italian Job.mkv"),
+            # whole words are not accepted at all: there is nothing to tell
+            # that they are not part of the name.
+            if len(part) > 3 and not after_boundary:
                 continue
-            kod = _ZNACKY_DELSI[usek.lower()]
-        elif _DABING.match(usek):
-            kod = _ZNACKY_VELKE.get(usek[:2].upper())
+            code = _LONGER_MARKS[part.lower()]
+        elif _DUBBING.match(part):
+            code = _UPPER_MARKS.get(part[:2].upper())
 
-        if kod is None:
+        if code is None:
             continue
 
-        # Sousední slovo rozhoduje, jestli jde o zvuk, nebo o titulky.
-        okoli = {useky[i - 1].lower() if i else "",
-                 useky[i + 1].lower() if i + 1 < len(useky) else ""}
-        kam = titulky if okoli & _TITULKY else zvuk
-        if kod not in kam:
-            kam.append(kod)
+        # The neighbouring word decides whether it is sound or subtitles.
+        around = {parts[i - 1].lower() if i else "",
+                  parts[i + 1].lower() if i + 1 < len(parts) else ""}
+        target = subtitles if around & _SUBTITLES else sound
+        if code not in target:
+            target.append(code)
 
-    return {"zvuk": zvuk, "titulky": titulky}
+    return {"audio": sound, "subtitles": subtitles}
 
 
 def pack(codes) -> str:
-    """Seznam jazyku slozi do jednoho retezce pro ulozeni do databaze.
+    """Puts a list of languages into one string for storing in the database.
 
-    Ukladame jako "cs,en,de" - setridene a bez duplicit, aby se dva
-    stejne sestavene tituly ulozily stejne a daly se porovnat.
+    Stored as "cs,en,de" - sorted and without duplicates, so two titles put
+    together the same are stored the same and can be compared.
     """
     seen = []
     for code in codes or []:
@@ -342,7 +349,7 @@ def pack(codes) -> str:
         if canonical not in seen:
             seen.append(canonical)
 
-    # Zname jazyky napred, "neuvedeno" az na konec.
+    # Known languages first, "not stated" at the end.
     known = sorted(c for c in seen if c != UNKNOWN)
     if UNKNOWN in seen:
         known.append(UNKNOWN)
@@ -350,28 +357,28 @@ def pack(codes) -> str:
 
 
 def unpack(packed: str | None) -> list[str]:
-    """Opak funkce pack."""
+    """The opposite of pack."""
     if not packed:
         return []
     return [part for part in str(packed).split(",") if part]
 
 
 def combination_label(packed: str | None, max_codes: int = 4) -> str:
-    """Popisek kombinace stop, napriklad "CS + EN" nebo "CS + EN + DE + PL + ostatni".
+    """A label of a combination of streams, for example "CS + EN" or "CS + EN + DE + PL + others".
 
-    Presne to, na co se clovek u domaci knihovny pta: mam u toho filmu
-    ceskou i anglickou stopu, nebo jen jednu?
+    Exactly what a person asks about a home library: does this movie have a
+    Czech and an English stream, or just one?
     """
     from .i18n import translate
 
     codes = [c for c in unpack(packed) if c != UNKNOWN]
     if not codes:
-        return translate("Neuvedeno")
+        return translate("Not specified")
 
-    # Vypiseme az `max_codes` jazyku; co je navic, shrneme do "ostatni".
-    # Ctyri kody se jeste daji precist jedinym pohledem, deset uz ne.
+    # At most `max_codes` languages are listed; the rest is summed up as
+    # "others". Four codes can still be read at a glance, ten no longer.
     shown = codes[:max_codes]
     label = " + ".join(code.upper() for code in shown)
     if len(codes) > max_codes:
-        label += " + " + translate("ostatní")
+        label += " + " + translate("other")
     return label

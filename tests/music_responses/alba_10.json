@@ -1,0 +1,273 @@
+{
+ "Items": [
+  {
+   "Name": "Okrajové případy",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "1932cc824be9f426e7a0131094926416",
+   "DateCreated": "2026-11-15T20:58:07.334218Z",
+   "SortName": "okrajove pripady",
+   "ChannelId": null,
+   "Genres": [
+    "Experimental"
+   ],
+   "RunTimeTicks": 180342860,
+   "ProviderIds": {
+    "MusicBrainzAlbum": "11111111-1111-4111-8111-111111111111",
+    "MusicBrainzReleaseGroup": "33333333-3333-4333-8333-333333333333"
+   },
+   "IsFolder": true,
+   "ParentId": "411b5cd75b3471b3c7f899f6a36be5c6",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Experimental",
+     "Id": "da73a3d2483fe5518c2b5c27574e6c70"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "MusicAlbum-MusicBrainzReleaseGroup-33333333-3333-4333-8333-333333333333",
+    "ItemId": "1932cc824be9f426e7a0131094926416"
+   },
+   "Artists": [
+    "Hraničáři",
+    "Hraničáři; Host z venku"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Hraničáři",
+     "Id": "411b5cd75b3471b3c7f899f6a36be5c6"
+    },
+    {
+     "Name": "Hraničáři; Host z venku",
+     "Id": "bdf30ff803ee35994a212e7c3578df67"
+    }
+   ],
+   "AlbumArtist": "Hraničáři",
+   "AlbumArtists": [
+    {
+     "Name": "Hraničáři",
+     "Id": "411b5cd75b3471b3c7f899f6a36be5c6"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {},
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Bez alba",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "78d26761557a4be35abb89e532ac87ff",
+   "DateCreated": "2026-11-15T20:58:07.3270871Z",
+   "SortName": "bez alba",
+   "ChannelId": null,
+   "Genres": [],
+   "RunTimeTicks": 60342860,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "5d5b43ab44f1ca2fc8f6a2bc5cd2947a",
+   "Type": "MusicAlbum",
+   "GenreItems": [],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "78d26761-557a-4be3-5abb-89e532ac87ff",
+    "ItemId": "78d26761557a4be35abb89e532ac87ff"
+   },
+   "Artists": [],
+   "ArtistItems": [],
+   "AlbumArtists": [],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {},
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Synth Tide",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "8c9a8caaed13d7345d7b3a04d3142285",
+   "DateCreated": "2026-11-15T20:57:04.526181Z",
+   "SortName": "synth tide",
+   "PremiereDate": "2023-01-01T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Genres": [
+    "Synthwave"
+   ],
+   "RunTimeTicks": 1601828556,
+   "ProductionYear": 2023,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "55354b52d5a668fcbc2b2544f948746a",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Synthwave",
+     "Id": "9b55bc3eb759bd59313ad00aa6b5894f"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Pixel Harbor-Synth Tide",
+    "ItemId": "8c9a8caaed13d7345d7b3a04d3142285"
+   },
+   "Artists": [
+    "Pixel Harbor"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "55354b52d5a668fcbc2b2544f948746a"
+    }
+   ],
+   "AlbumArtist": "Pixel Harbor",
+   "AlbumArtists": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "55354b52d5a668fcbc2b2544f948746a"
+    }
+   ],
+   "ImageTags": {
+    "Primary": "78a02540ca7ea8bfc1e058444f7fc641"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "78a02540ca7ea8bfc1e058444f7fc641": "ezK$GkWYayoMbH1$a}j[WWf6oLo1f6jtfQj]a|f6fkfkS3j@fkayf6"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Midnight Radio",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "49bdf38e99b262b0e4d38a878174fb9a",
+   "DateCreated": "2026-11-15T20:57:04.5009139Z",
+   "SortName": "midnight radio",
+   "PremiereDate": "2019-01-01T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Genres": [
+    "Lo-fi"
+   ],
+   "RunTimeTicks": 1601828556,
+   "ProductionYear": 2019,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "449772111543cfbcd97ffd4921464b13",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Lo-fi",
+     "Id": "ccfe0de86d262ce6c34edca530e14790"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Velvet Static-Midnight Radio",
+    "ItemId": "49bdf38e99b262b0e4d38a878174fb9a"
+   },
+   "Artists": [
+    "Velvet Static"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Velvet Static",
+     "Id": "449772111543cfbcd97ffd4921464b13"
+    }
+   ],
+   "AlbumArtist": "Velvet Static",
+   "AlbumArtists": [
+    {
+     "Name": "Velvet Static",
+     "Id": "449772111543cfbcd97ffd4921464b13"
+    }
+   ],
+   "ImageTags": {
+    "Primary": "8e62ad7751496c161ef4321617fac3a6"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "8e62ad7751496c161ef4321617fac3a6": "ejH,|noeWBoefP0haykCWVfQs.jtayfQfkbIfQayfRayRjaykCfPj["
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Aurora Sessions",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "8c28b283b003bc91b1a6910a85be2d19",
+   "DateCreated": "2026-11-15T20:57:04.4643714Z",
+   "SortName": "aurora sessions",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 2000000000,
+   "ProductionYear": 2021,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "cdb5cdec3ff069a2770e21e4d2ed17ba",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Northern Lights Ensemble-Aurora Sessions",
+    "ItemId": "8c28b283b003bc91b1a6910a85be2d19"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "cdb5cdec3ff069a2770e21e4d2ed17ba"
+    }
+   ],
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "cdb5cdec3ff069a2770e21e4d2ed17ba"
+    }
+   ],
+   "ImageTags": {
+    "Primary": "d80135893439eec788e7111c8a785fd2"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "d80135893439eec788e7111c8a785fd2": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  }
+ ],
+ "TotalRecordCount": 5,
+ "StartIndex": 0
+}

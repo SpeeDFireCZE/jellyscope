@@ -1,0 +1,39 @@
+{
+ "data": [
+  {
+   "name": "bsplayer",
+   "status": "Good",
+   "retry": "-"
+  },
+  {
+   "name": "gestdown",
+   "status": "Good",
+   "retry": "-"
+  },
+  {
+   "name": "subf2m",
+   "status": "ConfigurationError",
+   "retry": "in 12 hours"
+  },
+  {
+   "name": "subtitlecat",
+   "status": "Good",
+   "retry": "-"
+  },
+  {
+   "name": "supersubtitles",
+   "status": "Good",
+   "retry": "-"
+  },
+  {
+   "name": "tvsubtitles",
+   "status": "HTTPError",
+   "retry": "in 7 minutes"
+  },
+  {
+   "name": "yifysubtitles",
+   "status": "Good",
+   "retry": "-"
+  }
+ ]
+}

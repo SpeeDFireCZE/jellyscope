@@ -1,0 +1,74 @@
+[
+ {
+  "id": 1,
+  "title": "Big Buck Bunny",
+  "year": 2008,
+  "tmdbId": 10378,
+  "imdbId": "tt1254207",
+  "added": "2026-11-12T20:50:09Z"
+ },
+ {
+  "id": 2,
+  "title": "Sintel",
+  "year": 2010,
+  "tmdbId": 45745,
+  "imdbId": "tt1727587",
+  "added": "2026-11-12T20:50:09Z"
+ },
+ {
+  "id": 3,
+  "title": "Tears of Steel",
+  "year": 2012,
+  "tmdbId": 133701,
+  "imdbId": "tt2285752",
+  "added": "2026-11-12T22:10:34Z"
+ },
+ {
+  "id": 4,
+  "title": "Elephants Dream",
+  "year": 2006,
+  "tmdbId": 9761,
+  "imdbId": "tt0807840",
+  "added": "2026-11-12T22:23:08Z"
+ },
+ {
+  "id": 5,
+  "title": "The Matrix",
+  "year": 1999,
+  "tmdbId": 603,
+  "imdbId": "tt0133093",
+  "added": "2026-11-13T06:28:48Z"
+ },
+ {
+  "id": 6,
+  "title": "Inception",
+  "year": 2010,
+  "tmdbId": 27205,
+  "imdbId": "tt1375666",
+  "added": "2026-11-13T06:28:48Z"
+ },
+ {
+  "id": 7,
+  "title": "Interstellar",
+  "year": 2014,
+  "tmdbId": 157336,
+  "imdbId": "tt0816692",
+  "added": "2026-11-13T06:28:48Z"
+ },
+ {
+  "id": 8,
+  "title": "Arrival",
+  "year": 2016,
+  "tmdbId": 329865,
+  "imdbId": "tt2543164",
+  "added": "2026-11-13T06:28:49Z"
+ },
+ {
+  "id": 9,
+  "title": "Dune",
+  "year": 2021,
+  "tmdbId": 438631,
+  "imdbId": "tt1160419",
+  "added": "2026-11-13T06:28:49Z"
+ }
+]

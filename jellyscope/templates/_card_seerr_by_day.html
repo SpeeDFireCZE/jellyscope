@@ -1,0 +1,17 @@
+{# The Seerr card "Requests per day": films and series day by day.
+
+   From the database (cards_seerr.py, `d.body` = stats.chart_days: days without a request
+   are in the chart as zero, not as a gap). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("movies and series") }}</p>
+    </div>
+    {% if d.body %}
+        {{ charts.area_chart_multi(d.body, 'day',
+               [{'key': 'movies', 'label': _('movies'), 'slot': 1},
+                {'key': 'series_list', 'label': _('shows'), 'slot': 2}], unit='', whole_ticks=True) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("Nobody requested anything in this period.") }}</p>
+    {% endif %}
+</div>

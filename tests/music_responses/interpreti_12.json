@@ -1,0 +1,90 @@
+{
+ "Items": [
+  {
+   "Name": "Pixel Harbor",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "5edbf9f21d1332f81110de015a768c16",
+   "DateCreated": "2026-10-29T14:33:42.6914286Z",
+   "SortName": "pixel harbor",
+   "ChannelId": null,
+   "Genres": [],
+   "RunTimeTicks": 0,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "ea36591a2e43265f81f7c49f8cfb116a",
+   "Type": "MusicArtist",
+   "GenreItems": [],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Artist-Pixel Harbor",
+    "ItemId": "5edbf9f21d1332f81110de015a768c16"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {},
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Velvet Static",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "bba7e73588c8bb21a724faf2e048e742",
+   "DateCreated": "2026-10-29T14:33:42.6902706Z",
+   "SortName": "velvet static",
+   "ChannelId": null,
+   "Genres": [],
+   "RunTimeTicks": 0,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "ea36591a2e43265f81f7c49f8cfb116a",
+   "Type": "MusicArtist",
+   "GenreItems": [],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Artist-Velvet Static",
+    "ItemId": "bba7e73588c8bb21a724faf2e048e742"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {},
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Northern Lights Ensemble",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "df1aea59da02abe87d493a0f7fdd6a0c",
+   "DateCreated": "2026-10-29T14:33:42.689017Z",
+   "SortName": "northern lights ensemble",
+   "ChannelId": null,
+   "Genres": [],
+   "RunTimeTicks": 0,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "ea36591a2e43265f81f7c49f8cfb116a",
+   "Type": "MusicArtist",
+   "GenreItems": [],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Artist-Northern Lights Ensemble",
+    "ItemId": "df1aea59da02abe87d493a0f7fdd6a0c"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {},
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  }
+ ],
+ "TotalRecordCount": 3,
+ "StartIndex": 0
+}

@@ -1,0 +1,30 @@
+{# The Bazarr card "App warnings": what Bazarr itself reports as a problem.
+
+   Live from Bazarr (cards_bazarr.py). A warning says what it concerns (`what` -
+   often a path on the disk) and what is wrong (`problem`), hence only the admin
+   gets the texts (cards_bazarr.for_account); others see only how many there are.
+   When the texts do not load and Bazarr reports the count elsewhere (badges), the
+   card says the count and that the details are missing - not "the admin sees them" to the admin. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("reported by the app itself") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.warnings is none %}
+        <p class="chart-empty">{{ _("The warnings could not be loaded from the app.") }}</p>
+    {% elif d.health %}
+        <ul class="flash-list">
+        {% for z in d.health %}
+            <li>{% if z.what %}<span class="strong">{{ z.what }}</span> {% endif %}{{ z.problem }}</li>
+        {% endfor %}
+        </ul>
+    {% elif d.warnings and d.health is none %}
+        <p class="chart-empty">{{ _("The app reports warnings: {n}. Their details could not be loaded from it.").format(n=d.warnings | number) }}</p>
+    {% elif d.warnings %}
+        <p class="chart-empty">{{ _("The app reports warnings: {n}. Details are visible to the admin.").format(n=d.warnings | number) }}</p>
+    {% else %}
+        <p class="chart-empty">{{ _("The app reports no warnings.") }}</p>
+    {% endif %}
+</div>

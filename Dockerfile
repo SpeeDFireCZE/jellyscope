@@ -1,21 +1,21 @@
 # ---------------------------------------------------------------------------
-# Jellyscope v kontejneru.
+# Jellyscope in a container.
 #
 #     docker compose up -d
 #     http://localhost:8097
 #
-# Co je potřeba vědět předem:
+# Worth knowing up front:
 #
-#   * Data (databáze, log, mezipaměť obrázků, zálohy) bydlí ve svazku
-#     připojeném do /app/data. Bez něj by po `docker compose down` zmizela
-#     celá historie - tohle je jediná věc, o kterou v kontejneru jde přijít.
-#   * Když sbíráš technické údaje přes ffprobe, musí kontejner na soubory
-#     vidět: knihovnu připoj jen pro čtení a v Nastavení nastav mapování
-#     cest z pohledu Jellyfinu na cestu v kontejneru.
-#   * Zálohy si ukládej do /app/data (třeba /app/data/backups). Cokoliv
-#     mimo připojené složky se uloží dovnitř kontejneru a při dalším
-#     buildu je to pryč.
-#   * Do Jellyfinu se jen čte. Kontejner nepotřebuje žádné právo navíc.
+#   * Data (database, log, image cache, backups) lives in a volume mounted
+#     at /app/data. Without it `docker compose down` would wipe the whole
+#     history - it is the one thing in the container you can lose.
+#   * When technical data comes from ffprobe, the container has to see the
+#     files: mount the library read-only and in Settings map the paths as
+#     Jellyfin sees them to the paths in the container.
+#   * Keep backups in /app/data (for example /app/data/backups). Anything
+#     outside the mounted folders is stored inside the container and is
+#     gone with the next build.
+#   * Jellyfin is only ever read from. The container needs no extra rights.
 # ---------------------------------------------------------------------------
 
 FROM python:3.13-slim
@@ -24,18 +24,19 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
-# ffprobe (součást ffmpeg) čte technické údaje přímo ze souborů - bez něj
-# umí aplikace jen to, co hlásí Jellyfin. Je to volba při buildu:
+# ffprobe (part of ffmpeg) reads technical data straight from the files -
+# without it the app knows only what Jellyfin reports. It is a build-time
+# choice:
 #
 #     docker compose build --build-arg FFPROBE=0
 #
-# ušetří ~250 MB obrazu a nechá zdroj dat na Jellyfinu.
+# saves ~250 MB of image and leaves the data source to Jellyfin.
 ARG FFPROBE=1
 
-# pg_dump (postgresql-client) je potřeba jen při zálohování PostgreSQL.
-# Bez něj se aplikace zazálohuje vlastním exportem - funguje to, ale
-# pg_dump umí konzistentní snímek, pořadí závislostí i indexy, takže
-# ~30 MB v obrazu za to stojí. U SQLite se nepoužije vůbec.
+# pg_dump (postgresql-client) is needed only for PostgreSQL backups.
+# Without it the app backs up with its own export - that works, but
+# pg_dump takes a consistent snapshot and gets dependency order and indexes
+# right, so ~30 MB of image is worth it. SQLite does not use it at all.
 ARG PGDUMP=1
 
 RUN if [ "$FFPROBE" = "1" ] || [ "$PGDUMP" = "1" ]; then \
@@ -51,35 +52,35 @@ RUN if [ "$FFPROBE" = "1" ] || [ "$PGDUMP" = "1" ]; then \
 
 WORKDIR /app
 
-# Závislosti zvlášť a jako první vrstva: dokud se requirements.txt
-# nezmění, další build je nepřeinstalovává znovu.
+# Dependencies on their own, as the first layer: until requirements.txt
+# changes, the next build does not install them again.
 COPY requirements.txt .
-# Nejdřív pip sám: v základním obrazu bývá ten, se kterým obraz vyšel,
-# a pip má vlastní bezpečnostní opravy (rozbalování archivů).
+# pip itself first: the base image tends to carry the pip it was released
+# with, and pip has security fixes of its own (unpacking archives).
 RUN python -m pip install --no-cache-dir --upgrade pip \
  && python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Aplikace běží pod vlastním uživatelem s pevným UID - nikdy jako root.
-# Pevné číslo proto, aby šlo připojené složce nastavit vlastníka i na
-# hostiteli.
+# The app runs as its own user with a fixed UID - never as root. A fixed
+# number so that the owner of the mounted folder can be set on the host
+# too.
 RUN useradd --create-home --uid 10001 jellyscope \
     && mkdir -p /app/data \
     && chown -R jellyscope:jellyscope /app
 
-# setpriv zahazuje rootovská práva ve spouštěči (viz níž). V debianím
-# základu bývá, ale spoléhat se na to nebudeme: chybějící nástroj by se
-# projevil až na cizím serveru tím, že by aplikace běžela jako root.
+# setpriv drops the root privileges in the entrypoint (see below). The
+# Debian base usually has it, but we do not rely on that: a missing tool
+# would show only on somebody else's server, as the app running as root.
 RUN command -v setpriv >/dev/null 2>&1 \
     || (apt-get update \
         && apt-get install --no-install-recommends -y util-linux \
         && rm -rf /var/lib/apt/lists/*)
 
-# Na 127.0.0.1 uvnitř kontejneru se zvenku nikdo nedovolá.
-# JELLYSCOPE_DOCKER rekne aplikaci, ze bezi v kontejneru. Podle toho
-# si sama nastavi slozku na zalohy do /app/data/backups - tedy do
-# pripojene slozky, ke ktere se da dostat i z hostitele.
+# Nobody outside can reach 127.0.0.1 inside the container.
+# JELLYSCOPE_DOCKER tells the app it runs in this image. The app then sets
+# its backup folder to /app/data/backups - inside the mounted folder,
+# which can be reached from the host as well.
 ENV HOST=0.0.0.0 \
     PORT=8097 \
     DATABASE_PATH=data/jellyscope.db \
@@ -87,18 +88,20 @@ ENV HOST=0.0.0.0 \
 
 EXPOSE 8097
 
-# Kontejner, který běží, ale neodpovídá, vypadá zvenku stejně jako zdravý.
-# /setup odpoví i bez přihlášení, takže se hodí líp než domovská stránka.
+# A container that runs but does not answer looks just like a healthy one
+# from outside. /setup answers even without signing in, so it suits better
+# than the home page.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/setup', timeout=4)"
 
-# Kontejner startuje jako root JEN kvůli jedné věci: srovnat vlastníka
-# připojené složky s daty. Ta na hostiteli patří tomu, kdo ji vyrobil -
-# při prvním `docker compose up` tedy rootovi - a aplikace by se do ní
-# nedostala. Spouštěč to spraví a hned nato práva zahodí; samotná
-# aplikace běží jako jellyscope (UID 10001).
+# The container starts as root for ONE thing only: to set the owner of the
+# mounted data folder. On the host that folder belongs to whoever created
+# it - on the first `docker compose up` that is root - and the app could
+# not get into it. The entrypoint fixes that and drops the privileges
+# right away; the app itself runs as jellyscope (UID 10001).
 #
-# Přes `sh` schválně: repozitář se vyvíjí i na Windows, kde se právo
-# ke spuštění v gitu neudrží, a chybějící "x" by kontejner shodilo.
+# Through `sh` on purpose: the repository is also developed on Windows,
+# where git does not keep the executable bit, and a missing "x" would
+# bring the container down.
 ENTRYPOINT ["/bin/sh", "/app/deploy/docker-entrypoint.sh"]
 CMD ["python", "run.py"]

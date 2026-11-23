@@ -1,0 +1,32 @@
+{# The Readarr card "Coming in the next 7 days": the app's calendar.
+
+   Live from Readarr (cards_readarr.py, `d` = the live state for the account): the books
+   that come out; "in the library" = Readarr has files of it already. #}
+{% from "_macros.html" import link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("the app's calendar") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.calendar is none %}
+        <p class="chart-empty">{{ _("The calendar could not be loaded from the app.") }}</p>
+    {% elif d.calendar %}
+    <div class="table-wrap"><table>
+        <tbody>
+        {% for c in d.calendar %}
+            <tr>
+                <td>{{ c.at | datetime }}</td>
+                <td class="strong">{% call link(c.detail_url) %}{{ c.title }}{% endcall %}</td>
+                <td class="muted">
+                    {% if c.has_file %}<span class="badge good">{{ _("in the library") }}</span>{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+        <p class="chart-empty">{{ _("Nothing comes out in the next 7 days.") }}</p>
+    {% endif %}
+</div>

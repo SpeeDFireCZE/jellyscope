@@ -1,0 +1,23 @@
+{# The Seerr card "How fast requests are handled": from the request to the library and to the approval.
+
+   From the database (cards_seerr.py; the durations are put together by cards_base.duration -
+   long ones in days). Seerr does not store the time of approval: Jellyscope catches it only when
+   it saw the request waiting and approved at the next sync. #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("median") }}</p>
+    </div>
+    <div class="kpi-row">
+        {{ tile(_("Request to library, median"), d.to_library.median,
+                note=(_("90% within {time}").format(time=d.to_library.p90) if d.to_library.p90 else none)) }}
+        {{ tile(_("Request to approval, median"), d.to_approve.median,
+                note=(_("90% within {time}").format(time=d.to_approve.p90) if d.to_approve.p90 else none)) }}
+        {{ tile(_("Show continuations"), d.continuation | number) }}
+    </div>
+    <p class="card-note">
+        {{ _("Request to library counts titles whose library date is known. A continuation is a request for a title that was already in the library (typically another season) - its time cannot be measured.") }}
+        {{ _("Request to approval only for requests Jellyscope saw pending and then approved: Seerr does not store the approval time, Jellyscope catches it while syncing. A request that was both approved and downloaded between two syncs is not counted.") }}
+    </p>
+</div>

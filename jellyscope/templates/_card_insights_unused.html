@@ -1,0 +1,63 @@
+{# The card "Storage nobody uses" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_unused`) - one template, so the two places do not drift apart.
+   Expects `dead (insights.dead_storage)`. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card" id="unused-space">
+    <div class="card-head">
+        <h2>{{ _("Storage nobody uses") }}</h2>
+        <p class="card-note">
+            {{ _("nothing played in") }}
+            {# For a custom period (and the whole history) we write the range. #}
+            {% if period is defined and period.own %}{{ period.since_label }} – {{ period.until_label }}
+            {% else %}{{ _(day_labels[days]) }}{% endif %}
+            &middot; {{ _("recently added titles excluded") }}
+        </p>
+    </div>
+
+    <div class="hero">{{ dead.size_bytes | bytes }}</div>
+    <div class="delta flat">
+        {{ _n("{n} titles", dead.item_count) }} &middot;
+        {{ dead.share | percent(1) }} {{ _("of total library size") }}
+        ({{ dead.library_bytes | bytes }})
+    </div>
+
+    {% if dead.rows %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Title") }}</th><th>{{ _("Library") }}</th><th class="num">{{ _("Size") }}</th>
+                <th class="num">{{ _("Resolution") }}</th><th>{{ _("Codec") }}</th>
+                <th class="num">{{ _("Added") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in dead.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong truncate" title="{{ row.name }}">
+                    {% call link("/item/" ~ row.id) %}
+                        {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
+                        {{ row.name }}
+                    {% endcall %}
+                    {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
+                </td>
+                <td class="muted">{{ row.library_name or '-' }}</td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="muted">{{ (row.video_codec or '-') | upper }}</td>
+                <td class="num muted">{{ row.date_created | datetime }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ whole_table_button(dead.rows | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Jellyscope never deletes anything and cannot. It only shows you where to look.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("No unwatched content, or not enough history yet.") }}</p>
+    {% endif %}
+</div>

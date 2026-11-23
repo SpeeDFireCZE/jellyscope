@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Převzatá historie nesmí zkreslit jazykové statistiky.
+"""Imported history must not skew the language statistics.
 
-Ani Jellystat, ani plugin Playback Reporting jazyk přehrávané stopy
-nezaznamenávají — prostě ten údaj nemají. Kdyby se převzaté záznamy
-počítaly, přidaly by do statistik jen hromadu „Neuvedeno" a přehlušily
-skutečná data ze sběrače.
+Neither Jellystat nor the Playback Reporting plugin records the language of the
+played track — they simply do not have that detail. Were the imported records
+counted, they would add only a heap of "Neuvedeno" to the statistics and drown
+out the real data from the collector.
 
-A není to jen kosmetika: „60 % česky" spočítané včetně záznamů, u kterých
-jazyk nikdo nezná, je prostě **špatné číslo**.
+And it is not just cosmetics: "60 % Czech" computed including records whose
+language nobody knows is simply **a wrong number**.
 
-Statistiky nad tabulkou `items` („co je v knihovně k dispozici") se toho
-netýkají — ty s importem nemají nic společného a musí počítat dál.
+The statistics over the `items` table ("what is available in the library") are
+not affected — they have nothing to do with the import and must keep counting.
 """
 from __future__ import annotations
 
@@ -23,8 +23,9 @@ PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 
 _tmp = tempfile.mkdtemp()
-# Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
-# databáze v data/database.json a test by běžel proti ostré databázi.
+# An own home: without it the stored choice of the database in
+# data/database.json would override DATABASE_PATH and the test would run
+# against the live database.
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "lang.db")
 os.environ["SECRET_KEY"] = "testovaci-podpisovy-klic"
@@ -36,7 +37,7 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
@@ -56,8 +57,8 @@ with db.connect() as conn:
     )
 
 
-def vloz(session_key: str, jazyk: str | None, sekund: int = 3600,
-         uzivatel: str = "u1", polozka: str = "film-1") -> None:
+def insert(session_key: str, language: str | None, seconds: int = 3600,
+           user: str = "u1", item: str = "film-1") -> None:
     with db.connect() as conn:
         conn.execute(
             """INSERT INTO playback (session_key, user_id, user_name, item_id,
@@ -67,144 +68,145 @@ def vloz(session_key: str, jazyk: str | None, sekund: int = 3600,
                VALUES (?,?,'Karel',?,'Matrix','Movie',?,NULL,
                        datetime('now','-2 days'), datetime('now','-2 days'),
                        datetime('now','-2 days'), ?, 0)""",
-            (session_key, uzivatel, polozka, jazyk, sekund),
+            (session_key, user, item, language, seconds),
         )
 
 
-print("--- vlastní sběr: dvě hodiny česky, jedna anglicky ---")
-vloz("relace-a:film-1", "cs")
-vloz("relace-b:film-1", "cs")
-vloz("relace-c:film-1", "en")
+print("--- our own collection: two hours in Czech, one in English ---")
+insert("relace-a:film-1", "cs")
+insert("relace-b:film-1", "cs")
+insert("relace-c:film-1", "en")
 
-barvy = langstats.colour_map()
-w = langstats.watched_languages(90, barvy)
-check(round(w["total_hours"]) == 3, f"tři hodiny celkem ({w['total_hours']})")
+colours = langstats.colour_map()
+w = langstats.watched_languages(90, colours)
+check(round(w["total_hours"]) == 3, f"three hours in total ({w['total_hours']})")
 check(round(w["preferred_percent"]) == 67,
-      f"čeština 67 % ({w['preferred_percent']:.0f})")
-check(len(w["rows"]) == 2, f"dva jazyky ({len(w['rows'])})")
-check(langstats.imported_plays(90) == 0, "zatím nic z importu")
+      f"Czech 67 % ({w['preferred_percent']:.0f})")
+check(len(w["rows"]) == 2, f"two languages ({len(w['rows'])})")
+check(langstats.imported_plays(90) == 0, "nothing from an import so far")
 
-pred_coverage = langstats.coverage()
-pred_titulky = langstats.subtitle_usage(90)
-pred_uzivatele = langstats.languages_by_user(90, barvy)
-pred_dabing = langstats.dubbed_vs_original(90)
-pred_knihovna = langstats.library_languages(barvy)
-pred_kombinace = langstats.language_combinations()
-pred_chybi = langstats.missing_preferred(90, "cs")
+before_coverage = langstats.coverage()
+before_subtitles = langstats.subtitle_usage(90)
+before_users = langstats.languages_by_user(90, colours)
+before_dubbing = langstats.dubbed_vs_original(90)
+before_library = langstats.library_languages(colours)
+before_combinations = langstats.language_combinations()
+before_missing = langstats.missing_preferred(90, "cs")
 
 
 print()
-print("--- teď přibude 50 převzatých záznamů bez jazyka ---")
+print("--- now 50 imported records without a language are added ---")
 for i in range(50):
-    vloz(f"import:jst:{i}:film-1", None)
+    insert(f"import:jst:{i}:film-1", None)
 
 check(langstats.imported_plays(90) == 50,
-      f"stránka ví, že jich je 50 ({langstats.imported_plays(90)})")
+      f"the page knows there are 50 of them ({langstats.imported_plays(90)})")
 
 w = langstats.watched_languages(90, langstats.colour_map())
-check(round(w["total_hours"]) == 3, f"hodiny se nezměnily ({w['total_hours']})")
+check(round(w["total_hours"]) == 3, f"the hours did not change ({w['total_hours']})")
 check(round(w["preferred_percent"]) == 67,
-      f"čeština pořád 67 % ({w['preferred_percent']:.0f})")
-check(len(w["rows"]) == 2, f"nepřibylo „Neuvedeno“ ({len(w['rows'])} jazyků)")
+      f"Czech still 67 % ({w['preferred_percent']:.0f})")
+check(len(w["rows"]) == 2, f"no \"Neuvedeno\" was added ({len(w['rows'])} languages)")
 check(all(row["code"] != "und" for row in w["rows"]),
-      "mezi jazyky žádné 'und' není")
+      "there is no 'und' among the languages")
 
 
 print()
-print("--- ostatní statistiky nad přehráváním taky ---")
-po = langstats.coverage()
-check(po["plays_total"] == pred_coverage["plays_total"],
-      f"pokrytí počítá stejný vzorek ({po['plays_total']})")
-check(po["plays_percent"] == pred_coverage["plays_percent"],
-      f"a stejné procento ({po['plays_percent']:.0f} %)")
-check(langstats.subtitle_usage(90) == pred_titulky, "titulky beze změny")
-check(langstats.languages_by_user(90, barvy) == pred_uzivatele,
-      "rozpad podle uživatelů beze změny")
-check(langstats.dubbed_vs_original(90) == pred_dabing, "dabing/originál beze změny")
+print("--- the other statistics over playback too ---")
+after = langstats.coverage()
+check(after["plays_total"] == before_coverage["plays_total"],
+      f"the coverage counts the same sample ({after['plays_total']})")
+check(after["plays_percent"] == before_coverage["plays_percent"],
+      f"and the same percentage ({after['plays_percent']:.0f} %)")
+check(langstats.subtitle_usage(90) == before_subtitles, "subtitles unchanged")
+check(langstats.languages_by_user(90, colours) == before_users,
+      "the breakdown by users unchanged")
+check(langstats.dubbed_vs_original(90) == before_dubbing, "dubbing/original unchanged")
 
 
 print()
-print("--- ale co je v knihovně, se počítá dál ---")
-# Tyhle přehledy čtou tabulku items - s importem nemají nic společného.
-check(langstats.library_languages(barvy) == pred_knihovna,
-      "jazyky v knihovně beze změny")
-check(langstats.language_combinations() == pred_kombinace,
-      "kombinace stop beze změny")
-check(langstats.undefined_language_items() == 0, "titulů bez jazyka je 0")
+print("--- but what is in the library keeps counting ---")
+# These overviews read the items table - they have nothing to do with the import.
+check(langstats.library_languages(colours) == before_library,
+      "the languages in the library unchanged")
+check(langstats.language_combinations() == before_combinations,
+      "the track combinations unchanged")
+check(langstats.undefined_language_items() == 0, "there are 0 titles without a language")
 
 
 print()
-print("--- import, který jazyk NESE, se do čísel počítá ---")
-# Některé verze Playback Reportingu jazyk stopy ukládají a Jellyscope si
-# ho při importu převezme. Takový záznam je stejně dobrý jako z vlastního
-# sběru - a hláška nad grafy o něm nesmí tvrdit, že chybí.
-vloz("import:pbr:500:film-1", "cs")
-vloz("import:pbr:501:film-1", "cs")
+print("--- an import that CARRIES the language counts in the numbers ---")
+# Some versions of Playback Reporting store the track's language and
+# Jellyscope takes it over at import. Such a record is as good as one from our
+# own collection - and the message above the charts must not claim it is missing.
+insert("import:pbr:500:film-1", "cs")
+insert("import:pbr:501:film-1", "cs")
 
 check(langstats.imported_plays(90) == 50,
-      f"nezapočítaných zůstává 50, ne 52 ({langstats.imported_plays(90)})")
+      f"50 stay uncounted, not 52 ({langstats.imported_plays(90)})")
 
 w = langstats.watched_languages(90, langstats.colour_map())
-check(round(w["total_hours"]) == 5, f"hodiny narostly o dvě ({w['total_hours']})")
+check(round(w["total_hours"]) == 5, f"the hours grew by two ({w['total_hours']})")
 check(round(w["preferred_percent"]) == 80,
-      f"čeština 80 % - 4 z 5 hodin ({w['preferred_percent']:.0f})")
+      f"Czech 80 % - 4 of 5 hours ({w['preferred_percent']:.0f})")
 check(all(row["code"] != "und" for row in w["rows"]),
-      "a „Neuvedeno“ mezi jazyky pořád není")
+      "and \"Neuvedeno\" still is not among the languages")
 
-# U titulků to neplatí: záznam s jazykem zvuku nic neříká o tom, jestli
-# byly titulky zapnuté, takže by se tvářil jako "bez titulků".
-check(langstats.subtitle_usage(90) == pred_titulky,
-      "u titulků se import nepočítá ani s jazykem zvuku")
-
-
-print()
-print("--- „chybí česká stopa“ převzatá přehrávání počítá ---")
-# Tady jazyk bereme z knihovny, ne z přehrávání. Import je platný důkaz
-# toho, že se na titul někdo díval - zahodit ho by byla škoda.
-vloz("import:jst:900:film-2", None, polozka="film-2")
-chybi = langstats.missing_preferred(90, "cs")
-nazvy = {row["label"] for row in chybi["rows"]}
-check("Duna" in nazvy, f"titul sledovaný jen podle importu je v seznamu: {nazvy}")
-check(len(chybi["rows"]) > len(pred_chybi["rows"]),
-      "seznam se rozrostl, import se nezahodil")
+# For subtitles it does not hold: a record with an audio language says nothing
+# about whether subtitles were on, so it would look like "without subtitles".
+check(langstats.subtitle_usage(90) == before_subtitles,
+      "for subtitles the import does not count even with an audio language")
 
 
 print()
-print("--- filtr je opravdu v každém dotazu nad playback ---")
+print("--- \"the Czech track is missing\" counts imported plays ---")
+# Here we take the language from the library, not from the playback. An import
+# is valid proof that somebody watched the title - throwing it away would be a pity.
+insert("import:jst:900:film-2", None, item="film-2")
+missing = langstats.missing_preferred(90, "cs")
+names = {row["label"] for row in missing["rows"]}
+check("Duna" in names, f"a title watched only by the import is in the list: {names}")
+check(len(missing["rows"]) > len(before_missing["rows"]),
+      "the list grew, the import was not thrown away")
+
+
+print()
+print("--- the filter really is in every query over playback ---")
 import ast  # noqa: E402
 
-zdroj = (PROJECT / "jellyscope" / "langstats.py").read_text(encoding="utf-8")
-strom = ast.parse(zdroj)
+source = (PROJECT / "jellyscope" / "langstats.py").read_text(encoding="utf-8")
+tree = ast.parse(source)
 
-# `ast.walk` u f-řetězce navštíví i jeho vnitřní kousky. Ty samy o sobě
-# vypadají jako dotaz bez filtru, i když ho celek má - proto je vynecháme.
-uvnitr_fretezce = {
-    id(kus)
-    for uzel in ast.walk(strom) if isinstance(uzel, ast.JoinedStr)
-    for kus in uzel.values
+# `ast.walk` visits the inner pieces of an f-string too. By themselves they
+# look like a query without the filter, even though the whole has it - so we
+# leave them out.
+inside_fstring = {
+    id(piece)
+    for node in ast.walk(tree) if isinstance(node, ast.JoinedStr)
+    for piece in node.values
 }
 
-for uzel in ast.walk(strom):
-    if not isinstance(uzel, ast.FunctionDef) or uzel.name.startswith("_"):
+for node in ast.walk(tree):
+    if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
         continue
-    # missing_preferred a imported_plays jsou výjimky vysvětlené výše.
-    if uzel.name in ("missing_preferred", "imported_plays", "library_language_options",
+    # missing_preferred and imported_plays are the exceptions explained above.
+    if node.name in ("missing_preferred", "imported_plays", "library_language_options",
                      "preferred_language"):
         continue
-    for pod in ast.walk(uzel):
-        if isinstance(pod, ast.JoinedStr):
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.JoinedStr):
             text = "".join(c.value if isinstance(c, ast.Constant) else "{X}"
-                           for c in pod.values)
-        elif (isinstance(pod, ast.Constant) and isinstance(pod.value, str)
-                and id(pod) not in uvnitr_fretezce):
-            text = pod.value
+                           for c in sub.values)
+        elif (isinstance(sub, ast.Constant) and isinstance(sub.value, str)
+                and id(sub) not in inside_fstring):
+            text = sub.value
         else:
             continue
         if "FROM playback" not in text:
             continue
-        check("{X}" in text, f"{uzel.name}: dotaz nad playback filtr má")
+        check("{X}" in text, f"{node.name}: the query over playback has the filter")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

@@ -1,0 +1,29 @@
+{# The music card "Largest albums": the albums that take the most space.
+
+   From the database (cards_music.py, `d.radky` = stats.music_largest). A long table: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Album") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Tracks#count") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for a in d.rows %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{% call link(a.link) %}{{ a.name or "–" }}{% endcall %}
+                    <div class="cell-sub">{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %}</div></td>
+                <td class="num wide-wrapper-only">{{ a.track_count | number }}</td>
+                <td class="num strong">{{ a.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("The music library is empty so far.") }}</p>{% endif %}
+</div>

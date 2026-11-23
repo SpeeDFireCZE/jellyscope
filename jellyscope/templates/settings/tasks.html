@@ -1,0 +1,655 @@
+{# A Settings section: scheduled tasks, backups and purging history
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Scheduled tasks") }}</h2>
+        <p class="card-note">{{ _("they run on their own, but you can start them manually any time") }}</p>
+    </div>
+
+    {# Stopping belongs above the table: when a task runs at a bad moment,
+       it is the first thing a person looks for here. #}
+    {{ running_task(scan_running, stop_pending, 'tasks') }}
+
+    {% if not scan_running and last_library_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {% if last_library_scan %}
+            {{ _("Library") }}: {{ last_library_scan.started_at | relative }}
+            &middot; {{ last_library_scan.status }}
+            {% if last_library_scan.status == 'stopped' and last_library_scan.message %}
+                <br>{{ stored_text(last_library_scan.message, last_library_scan.message_values) }}
+            {% endif %}
+        {% endif %}
+    </p>
+    {% endif %}
+
+    {# Both forms are empty and the fields belong to them through `form=`.
+       Without that they would have to wrap both cards - and inside there would then be other
+       forms ("Run now", restoring a backup), which a browser cannot do. #}
+    <form method="post" action="/settings/history/forget" id="forget"></form>
+    <form method="post" action="/settings/tasks" id="tasks"></form>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Task") }}</th><th>{{ _("Automatic") }}</th>
+                <th class="num">{{ _("When") }}</th>
+                <th>{{ _("Last run") }}</th><th>{{ _("Next run") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in task_list %}
+            <tr>
+                <td>
+                    <div class="strong">{{ _(row.task.name) }}</div>
+                    <div class="card-note">{{ _(row.task.description) }}</div>
+                </td>
+                <td>
+                    {# A checkbox = on/off. When it is off,
+                       the task never starts by itself - only by hand. #}
+                    <label style="display:flex; align-items:center; gap:7px; cursor:pointer">
+                        <input type="checkbox" name="enabled_{{ row.task.key }}" form="tasks" value="1"
+                               {{ 'checked' if row.enabled }}>
+                        <span>{{ _("on") if row.enabled else _("off") }}</span>
+                    </label>
+                </td>
+                {# Nightly tasks are set by a time, not an interval. An interval
+                   counts from the last run, so every manual
+                   run would shift the whole schedule - and the task would in time
+                   turn round into the afternoon.
+
+                   Two number fields, not `<input type="time">` nor two
+                   `<select>`. Both open a pop-up of their own
+                   drawn by the browser: CSS cannot reach it
+                   and it decides the direction it opens in by the space on the
+                   screen - for the bottom row of the table it went up.
+                   This way nothing opens and the field looks the same as the
+                   neighbouring field with minutes. #}
+                <td class="num">
+                    {% if row.daily %}
+                    <div class="time-picker">
+                        <input type="number" name="time_{{ row.task.key }}_h" form="tasks"
+                               value="{{ row.hour }}" min="0" max="23"
+                               aria-label="{{ _('Hour') }}">
+                        <span aria-hidden="true">:</span>
+                        <input type="number" name="time_{{ row.task.key }}_m" form="tasks"
+                               value="{{ row.minute }}" min="0" max="59"
+                               aria-label="{{ _('Minute') }}">
+                    </div>
+                    <div class="card-note">{{ _("every day") }}</div>
+                    {% else %}
+                    {# The same width as the time field, so all
+                       rows have an equally wide column and line up. #}
+                    <input type="number" name="minutes_{{ row.task.key }}" form="tasks"
+                           value="{{ row.minutes }}" min="0" max="10080"
+                           style="width:110px" aria-label="{{ _('Interval') }}">
+                    <div class="card-note">{{ _("minutes") }}</div>
+                    {% endif %}
+                </td>
+                <td class="nowrap">
+                    {% if row.last %}
+                        {{ row.last.started_at | relative }}
+                        {% if row.last.status == 'error' %}
+                            <span class="badge critical"><span class="dot"></span>{{ _("failed") }}</span>
+                        {% elif row.last.status == 'running' %}
+                            <span class="badge warning"><span class="dot"></span>{{ _("running") }}</span>
+                        {% else %}
+                            <span class="badge good"><span class="dot"></span>{{ _("done") }}</span>
+                        {% endif %}
+                        {% if row.last.message %}
+                            <div class="card-note truncate" title="{{ stored_text(row.last.message, row.last.message_values) }}">
+                                {{ stored_text(row.last.message, row.last.message_values) }}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span class="muted">{{ _("never") }}</span>
+                    {% endif %}
+                </td>
+                <td class="nowrap muted">
+                    {% if not row.enabled %}
+                        {{ _("off") }}
+                    {% elif row.next_date %}
+                        {{ row.next_date }} {{ _("at") }} {{ row.time }}
+                    {% elif row.due_in is none or row.due_in <= 0 %}
+                        {{ _("at next check") }}
+                    {% elif row.daily %}
+                        {{ _("today") if row.next_is_today else _("tomorrow") }}
+                        {{ _("at") }} {{ row.time }}
+                    {% elif row.due_in < 60 %}
+                        {{ _("in") }} {{ row.due_in | round | int }} min
+                    {% else %}
+                        {{ _("in") }} {{ (row.due_in / 60) | round(1) }} h
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="group" style="margin-top:22px">{{ _("Backups") }}</h3>
+    <p class="group-description">{{ _("where they go and how many are kept") }}</p>
+
+    <div class="field">
+        <label for="backup_path">{{ _("Database backup folder") }}</label>
+        <input type="text" id="backup_path" name="backup_path" form="tasks"
+               value="{{ settings.backup_path }}" placeholder="/var/backups/jellyscope">
+        <p class="hint">
+            {{ _("Leave empty until you want regular backups. The folder is created when needed.") }}
+            {{ _("Before any deletion (history clean-up, forgetting a viewer) a backup is always taken; with no folder set it goes to") }} <code>{{ fallback_backup_folder }}</code>.
+            {% if backup_free %}{{ _("Free space") }}: {{ backup_free | bytes }}.{% endif %}
+        </p>
+    </div>
+
+    <div class="field">
+        <label for="backup_keep">{{ _("How many backups to keep") }}</label>
+        <input type="number" id="backup_keep" name="backup_keep" form="tasks"
+               value="{{ settings.backup_keep }}" min="1" max="365">
+        <p class="hint">{{ _("Older ones are deleted with every backup so the folder does not grow forever. The count applies separately to regular backups and to those taken before a deletion. Otherwise a few forgotten viewers in one day would push out every nightly backup.") }}</p>
+    </div>
+
+    {# Only with PostgreSQL - SQLite is backed up by a built-in function and needs no
+       outside tool. #}
+    {% if pg_server %}
+    <div class="field">
+        <label for="pg_dump_path">{{ _("Path to pg_dump") }}</label>
+        <input type="text" id="pg_dump_path" name="pg_dump_path" form="tasks"
+               value="{{ settings.pg_dump_path }}"
+               placeholder="/usr/lib/postgresql/{{ pg_server }}/bin/pg_dump">
+        <p class="hint">
+            {{ _("Leave empty unless Jellyscope should not choose on its own.") }}
+            {{ _("The server version is") }} <strong>{{ pg_server }}</strong>.
+            {% if pg_dumps %}
+                {{ _("Tools found") }}:
+                {% for pg_version, dump_path in pg_dumps %}
+                    <br><code>{{ dump_path }}</code>
+                    &middot; {{ _("version") }} {{ pg_version }}
+                    {%- if pg_version < pg_server %}
+                        &middot; <span class="badge critical"><span class="dot"></span>{{ _("not enough for this server") }}</span>
+                    {%- endif %}
+                {% endfor %}
+                {% if pg_dumps[0][0] < pg_server %}
+                <br>{{ _("None of them can handle the server: pg_dump can only back up a server of the same or an older version. Install the client:") }}
+                <br><code>sudo apt install -y postgresql-client-{{ pg_server }}</code>
+                {% endif %}
+            {% else %}
+                <br><span class="badge critical"><span class="dot"></span>{{ _("pg_dump not found") }}</span>
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    {# The rotation is done by the task Log rotation in the table above: every day at its time
+       it looks whether the set number of days has passed. #}
+    <h3 class="group" style="margin-top:22px">{{ _("Logs") }}</h3>
+    <p class="group-description">{{ _("how often they rotate and how many old ones stay") }}</p>
+
+    <div class="field">
+        <label for="logrotate_days">{{ _("Rotate every (days)") }}</label>
+        <input type="number" id="logrotate_days" name="logrotate_days" form="tasks"
+               value="{{ logrotate_days }}" min="1" max="{{ logrotate_days_max }}" style="max-width:120px">
+        <p class="hint">{{ _("At the time of the Log rotation task, the application log and the API log are put aside and new ones start. 1 = every day, 7 = once a week.") }}</p>
+    </div>
+
+    <div class="field">
+        <label for="logrotate_count">{{ _("How many old logs to keep") }}</label>
+        <input type="number" id="logrotate_count" name="logrotate_count" form="tasks"
+               value="{{ logrotate_count }}" min="1" max="{{ logrotate_count_max }}" style="max-width:120px">
+        <p class="hint">{{ _("Older ones are deleted when the logs rotate. Until then they can be downloaded in Settings → Log.") }}</p>
+    </div>
+
+    <div class="btn-row">
+        <button data-keep-scroll class="btn primary" type="submit" form="tasks">{{ _("Save tasks and backups") }}</button>
+    </div>
+
+    <div class="btn-row" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)">
+        <span class="card-note">{{ _("Run now") }}:</span>
+        {% for row in task_list %}
+        <form method="post" action="/settings/tasks/run">
+            <input type="hidden" name="key" value="{{ row.task.key }}">
+            <button data-keep-scroll class="btn" type="submit">{{ _(row.task.name) }}</button>
+        </form>
+        {% endfor %}
+    </div>
+
+    {% if backups %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Existing backups") }}</th><th class="num">{{ _("Size") }}</th>
+                <th class="num">{{ _("Created#feminine") }}</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for row in backups %}
+            <tr>
+                <td><code style="font-size:12px">{{ row.name }}</code></td>
+                <td class="num">{{ row.size_bytes | bytes }}</td>
+                <td class="num muted">{{ row.created_at | relative }}</td>
+                <td class="num">
+                    <div class="btn-row" style="justify-content:flex-end">
+                        <a class="btn" href="/settings/backup/download?name={{ row.name | urlencode }}">
+                            {{ _("Download") }}
+                        </a>
+                        {# A restore overwrites everything that is in the database now.
+                           Hence an emphatic confirmation - and hence Jellyscope
+                           first saves the current state, see restore_backup(). #}
+                        <form method="post" action="/settings/backup/restore"
+                              data-confirm="{{ (_("Restore the database from backup") ~ " " ~ row.name ~ "?\n\n" ~ _("This overwrites ALL current data. The state before the restore is saved as another backup first, and the application then restarts.")) }}">
+                            <input type="hidden" name="name" value="{{ row.name }}">
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Restore") }}</button>
+                        </form>
+                        {# The confirmation is here on purpose: a deleted backup cannot be
+                           brought back and the rows look alike. #}
+                        <form method="post" action="/settings/backup/delete"
+                              data-confirm="{{ (_("Really delete backup") ~ " " ~ row.name ~ "?") }}">
+                            <input type="hidden" name="name" value="{{ row.name }}">
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Delete") }}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+
+{# `id` is not decoration: after forgetting and after restoring the page returns here
+   (see `#purge` in the redirect), so a person stays at what they were doing,
+   instead of being thrown to the top of the page. They do not miss the message by it -
+   it is a floating box at the top, not a piece of the page. #}
+<div class="card" id="purge">
+    <div class="card-head">
+        <h2>{{ _("Clearing out the history") }}</h2>
+        <p class="card-note">{{ _("how long history is kept, and how to forget a single viewer") }}</p>
+    </div>
+
+    <div class="field">
+        <label for="history_retention_days">{{ _("History is kept for (days)") }}</label>
+        <input type="number" id="history_retention_days" name="history_retention_days" form="tasks"
+               value="{{ retention_days }}" min="{{ retention_min }}" max="{{ retention_max }}"
+               style="width:120px">
+        <p class="hint">
+            {{ _('This applies only once the "Clearing out the history" task above is switched on. Without it nothing is deleted. Playback that is running right now is never deleted.') }}
+            <br>
+            {% if purge.total %}
+                {{ _("The history holds") }} <strong>{{ purge.total | number }}</strong>
+                {{ _("playbacks") }}{% if purge.oldest %}, {{ _("the oldest from") }}
+                {{ purge.oldest[:10] | czech_date }}{% endif %}.
+                {% if purge.leaving %}
+                    <br><span class="badge warning"><span class="dot"></span>{{ _("with this setting it would remove") }}
+                    {{ _n("{n} playbacks", purge.leaving) }}</span>
+                {% else %}
+                    <br><span class="badge good"><span class="dot"></span>{{ _("with this setting nothing would be removed right now") }}</span>
+                {% endif %}
+            {% else %}
+                {{ _("The history is empty so far.") }}
+            {% endif %}
+        </p>
+    </div>
+
+    {# Forgetting a viewer is a one-off intervention, not a setting - hence it has
+       a form of its own and is not saved together with the tasks. #}
+    <div class="field">
+        <label for="forget_viewer">{{ _("Forget one viewer") }}</label>
+        <div class="field-with-unit">
+            <select id="forget_viewer" name="user_id" form="forget"
+                    {{ 'disabled' if not viewers }}>
+                {% for viewer in viewers %}
+                    <option value="{{ viewer.user_id }}">
+                        {{ viewer.name or viewer.user_id }} ({{ viewer.session_count | number }})
+                    </option>
+                {% else %}
+                    <option value="">{{ _("nobody here") }}</option>
+                {% endfor %}
+            </select>
+            {# `type="button"` is here on purpose and it is a safeguard, not a detail.
+               This button **cannot send the form** - it only opens a window
+               with a question. When anything goes wrong with the script, nothing
+               happens; it cannot happen that a history is deleted silently. Only the
+               confirmation inside that window can send it.
+
+               Why like this: the handler here used to call a named function
+               that had the same name as the <select> above it. An element with an `id`
+               is a property of `window` and overrode the function, the call failed with
+               "is not a function", the browser skipped `onclick` - and did
+               the default action, that is it sent the form. A viewer's history thus
+               vanished without a single question. The broken safeguard did not behave
+               as broken, it behaved as if it was not there. #}
+            <button class="btn danger" type="button"
+                    {{ 'disabled' if not viewers }}
+                    data-action="forget-viewer">
+                {{ _("Forget") }}
+            </button>
+            {# It appears only when there is something to restore - while nobody
+               is forgotten, it has nothing to offer. `type="button"` for the
+               same reason as with the button beside it: a click must not
+               send any form. #}
+            {% if forgotten %}
+            <button class="btn primary" type="button" data-modal="modal-restore">
+                {{ _("Restore") }}
+            </button>
+            {% endif %}
+        </div>
+        <p class="hint">
+            {{ _("Deletes everything recorded about that viewer. The account itself lives in Jellyfin and cannot be deleted from here, so the next sync will see it again, just without the history. A database backup is taken first. Until tonight the deletion can be taken back.") }}
+        </p>
+    </div>
+
+    {# A button of its own: without it the card looks as if it is not saved. It saves the same
+       form as the card above it - what matters is that every card
+       has the button. #}
+    <div class="btn-row">
+        <button data-keep-scroll class="btn primary" type="submit" form="tasks">{{ _("Save cleanup") }}</button>
+    </div>
+
+    {# A window of our own instead of the browser's `confirm()`. The reason is not the look:
+       `confirm()` can do only a bare sentence, so it had to ask twice for
+       the second question to manage to say whom it concerns. Here the viewer's name
+       and the number of records are visible at once, so one question is enough - and it is
+       more specific than the two before put together.
+
+       The <dialog> tag is built in: it dims the background itself, closes with Escape
+       and minds the focus. No library, no keyboard handling. #}
+    {# Who is forgotten and what can still be done about it.
+
+       In the card it was always in sight, although it is an exceptional state -
+       and it got in the way of what is done there usually. It does not escape
+       behind the button: the button appears only when there is something to restore. #}
+    <dialog id="modal-restore" class="dialog">
+        <h2>{{ _("Forgotten viewers") }}</h2>
+
+        <p>
+            {{ _("A deletion can be taken back until the nightly clean-up makes it final.") }}
+            {% if compaction_at %}<strong>{{ _("Next clean-up") }}: {{ compaction_at.strftime("%d.%m. %H:%M") }}.</strong>{% endif %}
+            {{ _("After that only the backup taken just before it remains.") }}
+        </p>
+
+        <table class="forget-table">
+            {% for z in forgotten %}
+            <tr>
+                <td>
+                    <strong>{{ z.name }}</strong>
+                    <span class="hint">{{ _n("{n} playbacks", z.session_count) }},
+                    {{ z.forgotten_at | relative }}</span>
+                </td>
+                <td class="{{ 'actions' if z.in_bin }}">
+                    {% if z.in_bin %}
+                        <form method="post" action="/settings/history/restore">
+                            <input type="hidden" name="event" value="{{ z.id }}">
+                            <button class="btn primary" type="submit"
+                                    data-keep-scroll>{{ _("Bring back") }}</button>
+                        </form>
+                    {% else %}
+                        {# The cleanup has run already. The only way back is a backup -
+                           and it is named, so it need not be looked for among
+                           the others. #}
+                        <span class="hint">
+                            {{ _("this viewer's data can still be restored from backup") }}
+                            <code>{{ z.backup_file }}</code>
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <p class="card-note">
+            {{ _("You upload a backup under Settings → Database. These are pruned like any other backup, by how many you keep. When the last one goes, the viewer leaves this list too.") }}
+        </p>
+
+        <div class="btn-row">
+            <form method="dialog">
+                <button class="btn" type="submit" autofocus>{{ _("Close") }}</button>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog id="modal-forget" class="dialog">
+        <h2>{{ _("Forget a viewer") }}</h2>
+
+        <p class="dialog-label">{{ _("Who this is about") }}</p>
+        <p><strong id="whom-to-forget"></strong></p>
+
+        <p>{{ _("Everything recorded about that viewer is deleted. A database backup is taken just before, and until tonight the deletion can be taken back with one button.") }}</p>
+
+        <p class="card-note">
+            {{ _("The account stays in Jellyfin, so the next sync will see it again, just without the history.") }}
+        </p>
+
+        <div class="btn-row">
+            {# Cancel is first, and so is what has the focus after opening.
+               Enter out of habit thus deletes nothing. #}
+            <form method="dialog">
+                <button class="btn" type="submit" autofocus>{{ _("Cancel") }}</button>
+            </form>
+            {# `data-keep-scroll`: after the action the page loads again and without
+               this it would start from the top. A script in static/js/app.js remembers the position
+               on the click and restores it after loading - a person
+               stays exactly where they were. The anchor `#purge` in the address
+               is only a rescue for when the script does not run. #}
+            <button class="btn danger" type="submit" form="forget"
+                    data-keep-scroll>
+                {{ _("Yes, forget") }}
+            </button>
+        </div>
+    </dialog>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("File analysis") }}</h2>
+        <p class="card-note">
+            {{ coverage.from_ffprobe | number }} / {{ coverage.total | number }}
+            {{ _("items measured") }}
+        </p>
+    </div>
+
+    {% if settings.tech_source != 'ffprobe' %}
+        <p class="card-note">
+            {{ _('The technical data source is set to Jellyfin. To measure the files directly, switch Data collection to "ffprobe + Jellyfin" and save the settings.') }}
+        </p>
+    {% else %}
+        {# So it is clear that the buttons below are for exceptional situations, not for
+           normal running - the sync takes care of that by itself. #}
+        <p class="card-note">
+            {{ _("It happens on its own after every library sync and for newly added titles. The buttons below are for when you don't want to wait, or when you need to re-measure files that already have data (after replacing a file in place, for instance).") }}
+        </p>
+    {% endif %}
+
+    <div class="btn-row" style="margin-top:12px">
+        <form method="post" action="/settings/scan">
+            <input type="hidden" name="mode" value="missing">
+            <button data-keep-scroll class="btn primary" type="submit"
+                    {{ 'disabled' if scan_running or settings.tech_source != 'ffprobe' }}>
+                {{ _("Analyse missing") }}
+            </button>
+        </form>
+        <form method="post" action="/settings/scan">
+            <input type="hidden" name="mode" value="all">
+            <button data-keep-scroll class="btn" type="submit"
+                    {{ 'disabled' if scan_running or settings.tech_source != 'ffprobe' }}>
+                {{ _("Re-analyse everything") }}
+            </button>
+        </form>
+    </div>
+
+    {% if last_tech_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Last analysis") }}: {{ last_tech_scan.started_at | relative }}
+        &middot; {{ _("status") }}: {{ last_tech_scan.status }}
+        &middot; {{ _("done") }} {{ last_tech_scan.items_ok | number }},
+        {{ _("failed") }} {{ last_tech_scan.items_failed | number }}
+        {% if last_tech_scan.message %}<br>{{ stored_text(last_tech_scan.message, last_tech_scan.message_values) }}{% endif %}
+    </p>
+    {% endif %}
+
+</div>
+
+
+{# ------------------------------------------------------------------ #}
+{# Tidying the data                                                   #}
+{#                                                                    #}
+{# There used to be two buttons and one had to know which goes first. #}
+{# The order is no choice though: the lookup in Jellyfin makes links  #}
+{# everything else works with. Hence one action.                      #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="cleanup">
+    <div class="card-head">
+        <h2>{{ _("Data tidy-up") }}</h2>
+        <p class="card-note">{{ _("puts the history and the library archive straight") }}</p>
+    </div>
+
+    {# Whoever thinks it is only about the history then looks in vain for how to straighten
+       the archive. We say it in the first sentence - returning episodes from the archive is
+       exactly the part a person often comes back here for. #}
+    <p class="card-note">
+        {{ _("It straightens the library as well as the history: an episode whose file was replaced in Jellyfin comes back from the archive to the live one, watched time and all. A library sync on its own does not do this.") }}
+    </p>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("Duplicate records appeared when two collectors ran against one database by mistake, typically an old version of the app next to a new one. The collector now prevents that on its own.") }}
+    </p>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("Records attached to the wrong episode are left over from a bug in TMDB merging: for an episode it used the id of the whole series, so the history of every episode collapsed onto one. The repair uses the episode name kept in the record.") }}
+    </p>
+
+    {# The rules belong on the screen, not only in the code. With a function that deletes
+       rows of history, one has to see in advance what it will touch. #}
+    <details class="fallback" style="margin-top:14px">
+        <summary>{{ _("How a duplicate is recognised") }}</summary>
+        <p class="card-note" style="margin:10px 0 6px">
+            {{ _("Two records count as one and the same viewing only when all of this holds at once:") }}
+        </p>
+        <ul class="card-note" style="margin:0 0 10px 18px">
+            <li>{{ _("same user and same title,") }}</li>
+            <li>{{ _("their times overlap,") }}</li>
+            <li>{{ _("they do not contradict each other on the device,") }}</li>
+            <li>{{ _("neither one comes from an import.") }}</li>
+        </ul>
+        <p class="card-note" style="margin-bottom:6px">
+            <strong>{{ _("So these are not merged:") }}</strong>
+        </p>
+        <ul class="card-note" style="margin:0 0 10px 18px">
+            <li>{{ _("a film started last night and finished today: two viewings, two records, the times do not overlap;") }}</li>
+            <li>{{ _("a film finished and immediately replayed: adjoining stretches are not an overlap;") }}</li>
+            <li>{{ _("the same film on the TV and on the phone at once: the device differs;") }}</li>
+            <li>{{ _("two different users on the same title at the same moment.") }}</li>
+        </ul>
+        <p class="card-note">
+            {{ _("Overlap rather than an exact start time: two collectors each write a second apart, so an exact match would miss most duplicates.") }}
+        </p>
+    </details>
+
+    {# Two parts apart: the history and the archive. While the card counted only the
+       history, it showed zeros for the archive and it looked as if it did not handle it. #}
+    <h3 class="group">{{ _("History") }}</h3>
+    <div class="table-wrap">
+        <table>
+            <tbody>
+            <tr>
+                <td>{{ _("Duplicate records") }}</td>
+                <td class="num strong">{{ duplicate_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>{{ _("Records on the wrong episode") }}</td>
+                <td class="num strong">{{ misplaced_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("The same viewing from two sources") }}
+                    <div class="card-note">
+                        {{ _("Jellystat and Playback Reporting each record a different moment, so the same film shows up twice, offset. It is recognised by an equally long playback of the same title on the same device within one day.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ import_duplicate_rows | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Records with no item in the library") }}
+                    <div class="card-note">
+                        {{ _("They are matched by name where possible. An episode then falls under its series; otherwise it would look like a standalone film in the overviews.") }}
+                    </div>
+                </td>
+                <td class="num strong">
+                    {{ orphan_rows | number }}
+                    <div class="card-note">{{ _n("{n} titles", orphan_items) }}</div>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("Records whose name differs from the title in the library") }}
+                    <div class="card-note">
+                        {{ _("The name is stored together with each playback so that history of a deleted title does not end up nameless. But when a title gets renamed (typically when you fix wrongly identified metadata in Jellyfin), the old record keeps the original name. The statistics then show one title under another title's name.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ stale_name_rows | number }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="group">{{ _("Library archive") }}</h3>
+    <div class="table-wrap">
+        <table>
+            <tbody>
+            <tr>
+                <td>
+                    {{ _("Episodes that go back to the live ones") }}
+                    <div class="card-note">
+                        {{ _("The episode's file was replaced in Jellyfin and the episode got a new id. Tidying moves it back to the live episode, watch time included.") }}
+                    </div>
+                </td>
+                <td class="num strong">{{ archive.to_return | number }}</td>
+            </tr>
+            <tr>
+                <td>
+                    {{ _("In the archive without a counterpart") }}
+                    <div class="card-note">
+                        {{ _("The title is no longer in the library, or it came back under another name or with different episode numbers. It is not assigned automatically, so the history does not end up on another title with the same name. Assign it by hand in the library archive:") }}
+                        {% for library_row in archive.libraries %}<a href="/library/{{ library_row.id }}?tab=media&archived=1">{{ library_row.name }} ({{ library_row.count | number }})</a>{% if not loop.last %}, {% endif %}{% endfor %}
+                    </div>
+                </td>
+                <td class="num strong">{{ archive.left | number }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="btn-row" style="margin-top:14px">
+        {# One button, one action. The lookup in Jellyfin is its first
+           step - when Jellyfin does not answer, the rest runs without it. #}
+        <form method="post" action="/settings/history/tidy">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Tidy the data") }}</button>
+        </form>
+        {# The list of what is left - with the reason. It is not computed during the cleanup
+           and not stored: a stored one would show the state after the last
+           run, that is something that may no longer hold. #}
+        <a class="btn" href="/settings/history/orphans">
+            {{ _("What could not be placed") }}
+            {% if orphan_items %}({{ orphan_items | number }}){% endif %}
+        </a>
+    </div>
+    <p class="card-note" style="margin-top:10px">
+        {{ _('First the identifiers from the imported history are shown to Jellyfin. They are genuine, only nothing in the library leads to them. Jellyfin names the series and the episode number, so a record that carries just "7th episode" can finally be placed. Jellyfin is only ever read from. The rest builds on that: linking by name, merging duplicates and aligning names.') }}
+    </p>
+    <p class="card-note" style="margin-top:10px">
+        {{ _('You do not have to press this: the "Data tidy-up" task above does the same thing every day at the time you pick.') }}
+    </p>
+    <p class="card-note" style="margin-top:10px">
+        {{ _("It can be run repeatedly; the second time it finds nothing. Records are not merged by adding up: two entries about the same playback are not two viewings, so the more complete one is kept.") }}
+    </p>
+</div>
+
+
+{# ================================================================== #}

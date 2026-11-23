@@ -1,0 +1,136 @@
+{# ====================================================================== #}
+{# The card "Watch time by day".                                       #}
+{#                                                                        #}
+{# A file of its own has a reason: /video/partials/daily returns the same #}
+{# piece of the page, JavaScript takes it from there when movies/series   #}
+{# switch and replaces it in place. Were it a copy, one would wander off. #}
+{# ====================================================================== #}
+{# ================================================================== #}
+{# Watching by day - movies and series over each other                #}
+{#                                                                    #}
+{# The series are built by the chosen filter, but the colour slot is  #}
+{# fixed: movies have slot 1, series slot 2. Colouring by order,      #}
+{# a new filter would recolour the rest - and the chart would lie.    #}
+{# ================================================================== #}
+{# The third series "Other" is added only when there really is something in it.
+   Everything that is neither a movie nor an episode falls into it — typically imported
+   history that has no item in the library yet, so the type is unknown.
+   Without it such hours would vanish from the chart, though they are in the summary. #}
+{% from "_macros.html" import link with context %}
+{% set ns = namespace(other=0) %}
+{% for row in daily %}{% set ns.other = ns.other + row.other_hours %}{% endfor %}
+
+{# What "Other" is made of. Written under the chart, and the legend's tooltip
+   gets the same text - hours without an explanation are useless,
+   because in the history one cannot trace what it was. #}
+{% set others_tip = (others or []) | map(attribute='label') | join(', ') %}
+
+{% if kind == 'movies' %}
+    {% set series = [{'key': 'movie_hours', 'label': _("Movies"), 'slot': 1,
+                  'color': 'var(--line-1)'}] %}
+    {% set hours_key = 'movie_hours' %}{% set plays_key = 'movie_plays' %}
+{% elif kind == 'series' %}
+    {% set series = [{'key': 'series_hours', 'label': _("TV shows"), 'slot': 2,
+                  'color': 'var(--line-2)'}] %}
+    {% set hours_key = 'series_hours' %}{% set plays_key = 'series_plays' %}
+{% elif kind == 'other' %}
+    {% set series = [{'key': 'other_hours', 'label': _("Other"), 'slot': 3,
+                      'tip': others_tip, 'color': 'var(--line-3)'}] %}
+    {% set hours_key = 'other_hours' %}{% set plays_key = 'other_plays' %}
+{% else %}
+    {% set series = [{'key': 'movie_hours', 'label': _("Movies"), 'slot': 1,
+                      'color': 'var(--line-1)'},
+                     {'key': 'series_hours', 'label': _("TV shows"), 'slot': 2,
+                      'color': 'var(--line-2)'}] %}
+    {% if ns.other > 0 %}
+        {% set series = series + [{'key': 'other_hours', 'label': _("Other"),
+                                   'slot': 3, 'tip': others_tip,
+                                   'color': 'var(--line-3)'}] %}
+    {% endif %}
+    {% set hours_key = 'hours' %}{% set plays_key = 'plays' %}
+{% endif %}
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Watch time by day") }}</h2>
+        <div class="filters">
+            <a class="chip {{ 'active' if kind == 'both' }}" href="?kind=both" data-kind="both">{{ _("Mix") }}</a>
+            <a class="chip {{ 'active' if kind == 'movies' }}" href="?kind=movies" data-kind="movies">{{ _("Movies") }}</a>
+            <a class="chip {{ 'active' if kind == 'series' }}" href="?kind=series" data-kind="series">{{ _("TV shows") }}</a>
+            {# The fourth filter is offered only when something fell into it - otherwise
+               it would be a button leading to an empty chart. When it is
+               chosen right now, it stays even if the window has nothing; otherwise
+               what a person is looking at would disappear. #}
+            {% if ns.other > 0 or kind == 'other' %}
+            <a class="chip {{ 'active' if kind == 'other' }}" href="?kind=other"
+               data-kind="other"
+               {% if others_tip %}data-tip="{{ others_tip }}"{% endif %}>{{ _("Other") }}</a>
+            {% endif %}
+        </div>
+    </div>
+    <p class="card-note" style="margin:-6px 0 12px">{{ _("in hours") }}</p>
+
+    {# selectable=True: dragging in the chart picks a range of days and sets
+       it as the page's custom period. #}
+    {{ charts.area_chart_multi(daily, 'day', series, selectable=True) | safe }}
+    {# A legend is required with two or more series - colour alone carries no identity.
+       With one series it is drawn only when it has something to explain; that is
+       the case of "Other", where the name alone says nothing. #}
+    {% if series | length > 1 or kind == 'other' %}
+        {{ charts.legend(series) | safe }}
+    {% endif %}
+
+    {% if others and (ns.other > 0 or kind == 'other') %}
+        <p class="card-note" style="margin-top:6px">
+            {{ _('"Other" is made of') }}:
+            {% for line in others %}
+                <strong>{{ line.label }}</strong>
+                ({{ line.hours | hours }}, {{ line.plays | number }}×){% if not loop.last %},{% endif %}
+            {% endfor %}
+        </p>
+    {% endif %}
+
+    {# Every chart has a table too. The chart is a quick overview,
+       the table the exact number - and it works for screen readers too.
+       The table shows the same as the chart right now: with the filter "Movies"
+       only movies, otherwise the numbers would not match the curve above them. #}
+    <details style="margin-top:12px">
+        <summary class="card-note" style="cursor:pointer">{{ _("Show as table") }}</summary>
+        <p class="card-note" style="margin:10px 0 0">
+            {{ _("Click a day to see in the history what played that day.") }}
+        </p>
+        <div class="table-wrap" style="margin-top:10px">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Day") }}</th>
+                    {% if kind == 'both' %}
+                        <th class="num">{{ _("Movies") }}</th>
+                        <th class="num">{{ _("TV shows") }}</th>
+                        {% if ns.other > 0 %}<th class="num">{{ _("Other") }}</th>{% endif %}
+                    {% endif %}
+                    <th class="num">{{ _("Hours") }}</th>
+                    <th class="num">{{ _("Plays#starts") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for row in daily | reverse %}
+                    <tr>
+                        <td>
+                            {# A link to the history of that day. The type filter is
+                               carried along, so the list matches the table.
+                               Only for whoever may open the History (a reader with "...who watched it"). #}
+                            {% call link("/history?day=" ~ row.day ~ "&kind=" ~ kind) %}{{ row.day }}{% endcall %}
+                        </td>
+                        {% if kind == 'both' %}
+                            <td class="num">{{ row.movie_hours | hours }}</td>
+                            <td class="num">{{ row.series_hours | hours }}</td>
+                            {% if ns.other > 0 %}<td class="num">{{ row.other_hours | hours }}</td>{% endif %}
+                        {% endif %}
+                        <td class="num">{{ row[hours_key] | hours }}</td>
+                        <td class="num">{{ row[plays_key] | number }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>

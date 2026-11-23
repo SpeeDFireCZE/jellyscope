@@ -1,0 +1,31 @@
+{# The books card "File formats": the format by the file's extension.
+
+   From the database (cards_books.py, `d.rows` = stats.books_formats). Files, not books: an audiobook of three files is
+   three MP3s. A file Jellyfin reports no format for is under "unknown". #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Format") }}</th>
+            <th class="num">{{ _("Files") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Share") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for f in d.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{{ f.format or _("unknown") }}</td>
+                <td class="num">{{ f.file_count | number }}</td>
+                <td class="num wide-wrapper-only">{{ f.share | percent }}</td>
+                <td class="num">{{ f.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length) }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

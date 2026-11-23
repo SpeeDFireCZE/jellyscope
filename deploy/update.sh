@@ -348,21 +348,44 @@ case "$MANAGER" in
         ;;
 esac
 
-if [[ $RUNNING -eq 0 ]]; then
+# The way back when the new version does not work. 1.9.0 renames the database to
+# English names at its first start; the previous version cannot run on a converted
+# database, so the backup from before the update comes first, then the old code.
+way_back() {
     echo
-    warn "The app did not come up. Last 25 lines of the log:"
+    warn "Last 25 lines of the log:"
     eval "$LOG_CMD" 2>/dev/null || true
     echo
     warn "Going back to the previous version:"
+    warn "  If the log mentions the database's conversion to English names (a file"
+    warn "  jellyscope-*-before-conversion.* in the backup folder), restore the backup"
+    warn "  from before the update first: $BACKUP_DIR"
+    warn "  (README, \"Updating to 1.9.0\"). Then the old code:"
     warn "  git -C $APP_DIR reset --hard $BEFORE"
     warn "  $RESTART_CMD"
     die "The update failed."
+}
+
+if [[ $RUNNING -eq 0 ]]; then
+    echo
+    warn "The app did not come up."
+    way_back
 fi
 
 if [[ $RUNNING -eq 1 ]]; then
     PORT="$(grep -E '^PORT=' "$APP_DIR/.env" 2>/dev/null | cut -d= -f2 || echo 8097)"
-    if command -v curl >/dev/null && curl -fsS -o /dev/null "http://127.0.0.1:${PORT:-8097}/setup"; then
-        ok "the app answers"
+    if command -v curl >/dev/null; then
+        CODE="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT:-8097}/setup" 2>/dev/null || true)"
+        if [[ "$CODE" == "503" ]]; then
+            # Every address answers 503 with the outage page: the database could not be
+            # opened or prepared - in 1.9.0 also a conversion that stopped. The page says why.
+            echo
+            warn "The app runs, but shows the outage page: it could not prepare the database."
+            warn "Open it in the browser for the reason."
+            way_back
+        elif [[ "$CODE" =~ ^[23] ]]; then
+            ok "the app answers"
+        fi
     fi
     printf '\n  Done. Missing database columns were added automatically at startup.\n\n'
     exit 0

@@ -1,14 +1,14 @@
-"""Ukazkovy rezim - spusti Jellyscope s vymyslenymi daty.
+"""The demo mode - runs Jellyscope with made-up data.
 
-Na co to je: proklikat si aplikaci driv, nez ji napojis na svuj Jellyfin.
-Nepotrebuje API klic, nepotrebuje soubor .env, nepotrebuje nic.
+What it is for: clicking through the application before you connect it to
+your Jellyfin. It needs no API key, no .env file, nothing.
 
     python demo.py
 
-Pak otevri http://127.0.0.1:8098
+Then open http://127.0.0.1:8098
 
-Vsechno se uklada do data/demo.db. Chces-li zacit nanovo, smaz ten soubor.
-Tvoje skutecna data (data/jellyscope.db) tim nijak nezmenis.
+Everything is stored into data/demo.db. To start anew, delete that file.
+Your real data (data/jellyscope.db) do not change by it in any way.
 """
 
 from __future__ import annotations
@@ -18,26 +18,27 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Nastaveni prostredi MUSI byt driv nez import aplikace - konfigurace se
-# nacita pri importu a pak uz se nemeni.
+# Setting the environment MUST come before importing the application - the
+# configuration is loaded at import and does not change after that.
 os.environ["DATABASE_PATH"] = "data/demo.db"
-os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"   # zamerne nefunkcni
+os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"   # broken on purpose
 os.environ["JELLYFIN_API_KEY"] = "ukazkovy-rezim-bez-serveru"
-# setdefault, ne prirazeni: timhle klicem se podepisuji prihlasovaci
-# cookies a "ukazkovy-rezim" stoji ve verejnem zdrojaku. Doma to
-# nevadi, na verejne ukazce si klic ma server nastavit vlastni.
+# setdefault, not an assignment: the sign-in cookies are signed with this key
+# and "ukazkovy-rezim" stands in the public source. At home it does not
+# matter, a public demo server should set a key of its own.
 os.environ.setdefault("SECRET_KEY", "ukazkovy-rezim")
-# Ukazkovy rezim: sberac se nespousti (nema se koho ptat)
-# a vymyslene "prave se hraje" tak na Prehledu zustane videt.
+# The demo mode: the collector does not start (there is nobody to ask)
+# and the made-up "now playing" thus stays visible on the Overview.
 os.environ["JELLYSCOPE_DEMO"] = "1"
-# Adresa a port jdou prepsat z prostredi. Vychozi 127.0.0.1 je zamer:
-# ukazka na svem stroji nema poslouchat do site. V kontejneru je to ale
-# naopak nutnost - na 127.0.0.1 uvnitr kontejneru se zvenku nikdo
-# nedovola, proto se tam nastavuje HOST=0.0.0.0.
+# The address and the port can be overridden from the environment. The
+# default 127.0.0.1 is on purpose: a demo on your own machine should not
+# listen to the network. In a container it is a necessity the other way
+# round, though - nobody from outside gets through to 127.0.0.1 inside the
+# container, hence HOST=0.0.0.0 is set there.
 os.environ.setdefault("HOST", "127.0.0.1")
 os.environ.setdefault("PORT", "8098")
 
-_ADRESA = os.environ["HOST"]
+_ADDRESS = os.environ["HOST"]
 _PORT = int(os.environ["PORT"])
 
 import uvicorn  # noqa: E402
@@ -49,32 +50,32 @@ def main() -> None:
     db.init_db()
 
     if demodata.already_seeded():
-        print("Ukazkova data uz v databazi jsou, jen spoustim server.")
-    counts = demodata.pripravit()
+        print("The sample data is in the database already, only starting the server.")
+    counts = demodata.prepare()
     if counts["items"]:
-        print(f"  {counts['items']} titulu, {counts['plays']} prehravani, "
-              f"{counts['users']} uzivatelu")
+        print(f"  {counts['items']} titles, {counts['plays']} playbacks, "
+              f"{counts['users']} users")
 
     print()
     print("=" * 58)
-    print("  UKAZKOVY REZIM - data jsou vymyslena")
+    print("  DEMO MODE - the data is made up")
     print()
-    print(f"  Otevri v prohlizeci:  http://{_ADRESA}:{_PORT}")
+    print(f"  Open in a browser:  http://{_ADDRESS}:{_PORT}")
     print()
-    print(f"  Prihlaseni:  {demodata.DEMO_USERNAME} / {demodata.DEMO_PASSWORD}")
+    print(f"  Sign in:  {demodata.DEMO_USERNAME} / {demodata.DEMO_PASSWORD}")
     print()
-    print("  Ukoncis stiskem Ctrl+C")
+    print("  Stop it with Ctrl+C")
     print("=" * 58)
     print()
 
-    # V ukazkovem rezimu nema smysl obtezovat nedostupny Jellyfin
-    # dotazy kazdych deset sekund.
+    # In the demo mode there is no point bothering an unreachable Jellyfin
+    # with requests every ten seconds.
     db.set_setting("poll_interval", "300")
-    # A uz vubec nema smysl poustet naplanovane ulohy - nemaji kam sahnout.
+    # And even less point in running the scheduled tasks - they have nothing to reach.
     db.set_setting("task_sync_enabled", "0")
     db.set_setting("task_recent_enabled", "0")
 
-    uvicorn.run("jellyscope.web:app", host=_ADRESA, port=_PORT,
+    uvicorn.run("jellyscope.web:app", host=_ADDRESS, port=_PORT,
                 log_level="warning")
 
 

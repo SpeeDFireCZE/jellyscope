@@ -1,0 +1,87 @@
+{
+ "data": [
+  {
+   "title": "Inception",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "radarrId": 6,
+   "sceneName": "Inception.2010.1080p.BluRay.DD5.1.x264-GROUP",
+   "tags": []
+  },
+  {
+   "title": "Elephants Dream",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "radarrId": 4,
+   "sceneName": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb",
+   "tags": []
+  },
+  {
+   "title": "Tears of Steel",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "radarrId": 3,
+   "sceneName": "Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES",
+   "tags": []
+  },
+  {
+   "title": "Sintel",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "radarrId": 2,
+   "sceneName": "Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX",
+   "tags": []
+  },
+  {
+   "title": "Big Buck Bunny",
+   "missing_subtitles": [
+    {
+     "name": "Czech",
+     "code2": "cs",
+     "code3": "ces",
+     "forced": false,
+     "hi": false
+    },
+    {
+     "name": "English",
+     "code2": "en",
+     "code3": "eng",
+     "forced": false,
+     "hi": false
+    }
+   ],
+   "radarrId": 1,
+   "sceneName": "Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX",
+   "tags": []
+  }
+ ],
+ "total": 5
+}

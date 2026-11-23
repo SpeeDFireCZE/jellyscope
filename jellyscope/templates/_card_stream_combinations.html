@@ -1,0 +1,103 @@
+{# A card of the Languages page (video/languages.html).
+
+   Included by that page and by dashboards (cards.py, key `combinations`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `combinations, all_combinations, undefined_items (langstats)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Track combinations") }}</h2>
+        <p class="card-note">{{ _("four most common, rest summarised") }}</p>
+    </div>
+    {% if combinations %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Combination") }}</th><th class="num">{{ _("Titles") }}</th>
+                <th class="num">{{ _("Share") }}</th>
+                <th class="num">{{ _("Size") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in combinations %}
+            <tr>
+                <td class="strong">
+                    {% if row.combinations %}
+                        {# The row "Other" is blind otherwise: it says something
+                           is hidden and offers no way to show it. Here it
+                           becomes a button to a window with the complete list. #}
+                        <button class="link-button" type="button" data-modal="modal-combinations">
+                            {{ row.label }}
+                            <span class="muted">({{ row.combinations }} {{ _("more combinations") }})</span>
+                        </button>
+                    {% else %}
+                        {{ row.label }}
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num strong">{{ row.percent | percent(1) }}</td>
+                <td class="num muted">{{ row.size_bytes | bytes }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if undefined_items %}
+    <p class="card-note" style="margin-top:12px">
+        <a href="/video/languages/undetermined">{{ _n("{n} files", undefined_items) }}</a> &ndash;
+        {{ _("have no track language filled in. That says nothing about the library's composition, only about missing metadata.") }}
+    </p>
+    {% endif %}
+
+    {# The window with everything. Drawn only when the card hides something -
+       for a library with four combinations it would just be a second copy
+       of the same table. Told by the same sign as the button:
+       the total row at the end has `combinations`. #}
+    {% set total_row = combinations | last %}
+    {% if total_row.combinations %}
+    <dialog class="modal modal-wide" id="modal-combinations">
+        <form method="dialog" class="modal-head">
+            <h2>{{ _("All track combinations") }} ({{ all_combinations | length }})</h2>
+            <button class="btn modal-close" type="submit"
+                    aria-label="{{ _("Close") }}">&times;</button>
+        </form>
+
+        <div class="modal-body">
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>{{ _("Combination") }}</th>
+                        <th class="num">{{ _("Titles") }}</th>
+                        <th class="num">{{ _("Share") }}</th>
+                        <th class="num">{{ _("Size") }}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for row in all_combinations %}
+                    <tr>
+                        <td class="strong">{{ row.label }}</td>
+                        <td class="num">{{ row.item_count | number }}</td>
+                        <td class="num strong">{{ row.percent | percent(1) }}</td>
+                        <td class="num muted">{{ row.size_bytes | bytes }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                    {# The sum is here because in a long list one loses
+                       what the percentages are actually computed from. #}
+                    <tfoot><tr>
+                        <td class="strong">{{ _("Total") }}</td>
+                        <td class="num strong">
+                            {{ all_combinations | sum(attribute='item_count') | number }}
+                        </td>
+                        <td class="num">100 %</td>
+                        <td class="num muted">
+                            {{ all_combinations | sum(attribute='size_bytes') | bytes }}
+                        </td>
+                    </tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </dialog>
+    {% endif %}
+    {% else %}
+        <p class="chart-empty">{{ _("No language data.") }}</p>
+    {% endif %}
+</div>

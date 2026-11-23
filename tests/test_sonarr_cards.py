@@ -1,0 +1,368 @@
+# -*- coding: utf-8 -*-
+r"""Sonarr: cards from the registry - the /arr/sonarr tab and custom dashboards.
+
+Every question is a card of its own in the registry (jellyscope/cards_sonarr.py)
+and the tab and the dashboards draw it the same way.
+Watched:
+
+A) the registry: 23 cards, keys `arr_sonarr_<name>`, area, group, widths,
+   templates, translations; an unconnected Sonarr is not offered;
+B) the /arr/sonarr tab draws exactly Sonarr's cards in the order of the sections,
+   with the sections' headings and with the same numbers the statistics give;
+C) every card is drawn alone in the dashboard too and carries the application's name;
+E) the period's events are selected once (with a custom range too) and "the whole
+   history" reaches back to Sonarr's first event; the live state for an account is put together
+   once per computation;
+F) long tables follow Settings → Interface → Long lists;
+G) rights: texts from the application only for the administrator, without the *Arr area no card;
+H) live data: without warnings, a partial failure, an unavailable Sonarr,
+   a disconnected Sonarr.
+
+What concerns more applications at once (Sonarr and Radarr in one dashboard,
+a dashboard saved before the split) is watched by tests/test_arr_registry.py.
+
+Sonarr is not run: the answers are recorded (tests/sonarr_responses/),
+the client is replaced by a client with httpx.MockTransport (tests/_apps.py).
+
+Spec: docs/superpowers/specs/2026-11-13-karty-arr-seerr-design.md
+
+Run:
+    .venv/bin/python tests/test_sonarr_cards.py
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
+
+_tmp = tempfile.mkdtemp()
+os.environ["JELLYSCOPE_HOME"] = _tmp
+os.environ["DATABASE_PATH"] = str(Path(_tmp) / "sonarr-karty.db")
+os.environ["SECRET_KEY"] = "testovaci-klic"
+os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
+os.environ["JELLYFIN_API_KEY"] = "test-key"
+
+import httpx  # noqa: E402
+
+from _apps import (  # noqa: E402
+    no_network, tile, card_html, fill_sonarr, not_responding, login, connect_sonarr, sonarr_client, sonarr_handler,
+)
+from _package import substitute  # noqa: E402
+from jellyscope import access, accounts, cards, cards_sonarr, db, i18n, stats  # noqa: E402
+from jellyscope.arr import sonarr  # noqa: E402
+
+failures = 0
+db.init_db()
+db.set_setting("ui_language", "cs")  # the checks read Czech (English is the default)
+no_network()      # no application other than Sonarr is to ask here
+
+
+def check(condition: bool, label: str) -> None:
+    global failures
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
+    if not condition:
+        failures += 1
+
+
+accounts.create("admin", "longpassword", is_admin=True)
+accounts.create("reader", "longpassword")
+admin_account, reader_account = accounts.get_by_name("admin"), accounts.get_by_name("reader")
+db.set_setting(cards.ENABLED_KEY, "1")
+db.set_setting(cards.NAME_KEY, "Rodina")
+db.forget_settings()
+
+print("--- A) the registry ---")
+CARDS = cards_sonarr.CARDS
+NAMES = [j for _, names in cards_sonarr.SECTIONS for j in names]
+check(len(NAMES) == 23 and len(set(NAMES)) == 23, f"23 card names ({len(NAMES)})")
+check([i18n.translate(n, "cs") if n else "" for n, _ in cards_sonarr.SECTIONS] == ["Teď v aplikaci", "Co přibylo", "Rychlost", "Zdroje a kvalita", "Upgrady"],
+      "five sections in the page's order")
+check(len(CARDS) == 23 and len({k.key for k in CARDS}) == 23, "23 cards, the keys different")
+check([k.key for k in CARDS] == [f"arr_sonarr_{j}" for j in NAMES] and cards_sonarr.card_key("queue") == "arr_sonarr_queue",
+      "keys arr_sonarr_<name>, in the order of the sections")
+check(all(k.area == "arr" and k.group == "Sonarr" for k in CARDS), "the *Arr area and the Sonarr group")
+check(all(k in cards.ALL_CARDS for k in CARDS), "all are in the registry (cards.ALL_CARDS)")
+live_keys = {cards_sonarr.card_key(j) for j in ("live_numbers", "queue", "calendar", "health")}
+# "Stahuje se" is without a period too, but it has a live state of its own (arr/sonarr/progress.py, tests/test_sonarr_progress.py).
+check({k.key for k in CARDS if not k.uses_period} == live_keys | {"arr_sonarr_downloading"}, "only the live cards without a period")
+WIDTHS = {"live_numbers": "full", "downloading": "full", "queue": "half", "calendar": "half", "health": "full", "numbers": "full", "by_day": "full",
+          "when": "half", "best_days": "half", "largest": "full", "downloads": "half", "after_release": "half",
+          "indexers": "third", "groups": "third", "clients": "third", "protocols": "third", "qualities": "third",
+          "resolutions": "third", "upgrades": "full", "how_all": "half", "how_upgrades": "half", "transitions": "half",
+          "upgraded": "half"}
+wrong = [(k.key, k.width) for j, k in zip(NAMES, CARDS, strict=True) if k.width != WIDTHS[j]]
+check(not wrong, f"the widths by the spec ({wrong[:3]})")
+with_table = {"largest", "indexers", "groups", "clients", "protocols", "qualities", "resolutions", "transitions", "upgraded"}
+check({j for j, k in zip(NAMES, CARDS, strict=True) if k.has_table_window} == with_table,
+      "cards with a long table want the dialog for the whole table")
+CARD_NAMES = {"live_numbers": "Čísla teď", "downloading": "Stahuje se", "queue": "Fronta s chybou nebo varováním", "calendar": "Vyjde v příštích 7 dnech",
+              "health": "Varování aplikace", "numbers": "Čísla období", "by_day": "Přírůstky po dnech",
+              "when": "Kdy se převádí do knihovny", "best_days": "Nejlepší dny", "largest": "Největší převzaté soubory",
+              "downloads": "Jak dlouho se stahuje", "after_release": "Jak brzy po vydání", "indexers": "Indexery",
+              "groups": "Release skupiny", "clients": "Klienti stahování", "protocols": "Usenet a torrent",
+              "qualities": "Kvalita převzatých souborů", "resolutions": "Rozlišení převzatých souborů", "upgrades": "Čísla upgradů",
+              "how_all": "Jak se stahovalo všechno", "how_upgrades": "Jak se stahovaly upgrady",
+              "transitions": "Z jaké kvality na jakou", "upgraded": "Nejčastěji upgradované tituly"}
+check({j: i18n.translate(k.name, "cs") for j, k in zip(NAMES, CARDS, strict=True)} == CARD_NAMES, "the cards' names by the spec")
+TEMPLATES = PROJECT / "jellyscope" / "templates"
+missing_templates = sorted({k.template for k in CARDS if not (TEMPLATES / k.template).exists()})
+check(not missing_templates and all(k.template.startswith("_card_sonarr_") for k in CARDS),
+      f"the cards' templates exist and are Sonarr's ({missing_templates})")
+for language in ("cs", "es"):            # English is the source, Czech and Spanish translate it
+    dictionary = json.loads((PROJECT / "jellyscope" / "translations" / f"{language}.json").read_text(encoding="utf-8"))
+    missing = sorted({t for k in CARDS for t in (k.name, k.description) if t not in dictionary})
+    check(not missing, f"the cards' names and descriptions have a translation ({language}; missing {missing[:3]})")
+check(not [k for k in cards.allowed(list(cards.ALL_CARDS), admin_account) if k.area == "arr"],
+      "an unconnected Sonarr is not offered")
+check(not (TEMPLATES / "_arr_karty.html").exists(), "the old template _arr_karty.html is gone")
+
+print()
+print("--- B) Sonarr connected: the tab from the registry ---")
+asked: list[str] = []
+# A dict, so the handler can be swapped while running (part does not load, Sonarr does not answer).
+handlers = {"sonarr": sonarr_handler(asked)}
+restore = substitute(sonarr, "SonarrClient", sonarr_client(lambda request: handlers["sonarr"](request)))
+connect_sonarr()
+fill_sonarr()
+admin, reader = login("admin"), login("reader")
+
+s = admin.get("/arr/sonarr?days=365").text
+order = re.findall(r"<!-- card: (\w+) -->", s)
+check(order == [cards_sonarr.card_key(j) for j in NAMES], f"23 Sonarr cards in the order of the sections ({len(order)})")
+check(all(f"<h2>{i18n.translate(n, 'cs')}</h2>" in s for n, _ in cards_sonarr.SECTIONS), "the sections' headings (the page is Czech)")
+additions = stats.sonarr_additions(365)
+total = sum(r["count"] for r in additions)
+check(tile(s, "Převzato do knihovny") == str(total) and total > 0,
+      f"Převzato do knihovny = the sum of the additions ({tile(s, 'Převzato do knihovny')})")
+check(tile(s, "Upgrady") == str(sum(r["upgrade_count"] for r in additions))
+      and tile(s, "Selhaná stažení v období") == str(stats.sonarr_failures(365)), "Upgrady and Selhaná stažení")
+check(tile(s, "Upgradů na položku") == "1,0", f"upgrades per item with a decimal comma ({tile(s, 'Upgradů na položku')})")
+# (The window title "*Arr · Sonarr · Jellyscope" does not count - it is about the cards' headings and the tiles' labels.)
+check("<h2>Sonarr · " not in s and "card-group" not in s, "on its own tab the cards have no application prefix")
+check('class="heatmap"' in card_html(s, "arr_sonarr_when") and "arr-test" in card_html(s, "arr_sonarr_indexers")
+      and "Game of Thrones" in card_html(s, "arr_sonarr_largest"), "the heatmap, the indexer and the series are in their cards")
+check("No audio tracks detected" in card_html(s, "arr_sonarr_queue")
+      and "No indexers available with RSS sync enabled" in card_html(s, "arr_sonarr_health"),
+      "the administrator: the queue's message and the application's warning in their cards")
+check("ruční výběr" in card_html(s, "arr_sonarr_how_all"), "how it was downloaded, in Czech")
+check('<span class="badge critical">error</span>' in card_html(s, "arr_sonarr_health"), "the health pill shows the type of the message (error)")
+# "Jak brzy po vydání" counts only what was waited for. The test Sonarr got series from 2011
+# only in 2026 - none of their episodes is counted therefore and the card says so with a sentence with the count.
+after_release = card_html(s, "arr_sonarr_after_release")
+check("titul přibyl do aplikace až po vydání" in after_release and "Nepočít" in after_release and "jen to, na co se čekalo" in after_release
+      and "neví" not in after_release,
+      "Jak brzy po vydání: old series added afterwards are not counted and the card says how many episodes that is")
+# A series for which it is not known when it was added (after an upgrade, before the list of series is downloaded again; a series
+# Sonarr no longer has) is not counted either - but the card does not claim it was added only after the release.
+with db.connect() as conn:
+    conn.execute("UPDATE sonarr_title SET added_at = NULL")
+    conn.commit()
+without_time = card_html(admin.get("/arr/sonarr?days=365").text, "arr_sonarr_after_release")
+check("neví, kdy titul do aplikace přibyl" in without_time and "až po vydání." not in without_time.split("neví, kdy")[0][-200:],
+      "Jak brzy po vydání: an unknown time of adding has its own sentence, not “až po vydání”")
+check("tajny-klic" not in s, "the key is not in the page")
+check('id="table-window"' in s, "the tab has the dialog for the whole table")
+check({k.key for k in cards.allowed(list(cards.ALL_CARDS), admin_account) if k.area == "arr"} == {k.key for k in CARDS},
+      "exactly Sonarr's cards are offered")
+check(admin.get("/arr/radarr").status_code == 404, "an application that is not connected has no tab")
+
+print()
+print("--- C) every card alone in the dashboard ---")
+for card in CARDS:
+    cards.save_layout([card.key])
+    r = admin.get("/dashboard?days=365")
+    piece = card_html(r.text, card.key)
+    check(r.status_code == 200 and "Sonarr · " in piece, f"{card.key} alone in the dashboard, with the application's name")
+cards.save_layout(["arr_sonarr_numbers"])
+check("modal-period" in admin.get("/dashboard").text, "a period card wants the period switch")
+cards.save_layout(["arr_sonarr_queue"])
+check("modal-period" not in admin.get("/dashboard").text, "a live card not")
+cards.save_layout([k.key for k in CARDS])
+everything = admin.get("/dashboard?days=365")
+check(everything.status_code == 200 and len(re.findall(r"<!-- card: arr_sonarr_\w+ -->", everything.text)) == 23, "all 23 cards at once in one dashboard")
+
+print()
+print("--- E) the period's events once, the whole history from the first event ---")
+db_queries: list[str] = []
+original_query_all = db.query_all
+
+
+def _eavesdrop(sql, *a, **k):
+    db_queries.append(sql)
+    return original_query_all(sql, *a, **k)
+
+
+def event_selections(action) -> int:
+    """How many times `action` selected the period's events (the `_analysis` query of Sonarr's statistics)."""
+    db_queries.clear()
+    db.query_all = _eavesdrop
+    try:
+        action()
+    finally:
+        db.query_all = original_query_all
+    return sum("FROM sonarr_event" in q and "ORDER BY happened_at, arr_id" in q for q in db_queries)
+
+
+count = event_selections(lambda: admin.get("/arr/sonarr?days=365"))
+check(count == 1, f"the tab selects the period's events once ({count}×)")
+count = event_selections(lambda: admin.get("/arr/sonarr?since=2026-11-01&until=2026-11-13"))
+check(count == 1, f"with a custom date range too ({count}×)")
+check(tile(admin.get("/arr/sonarr?since=2026-11-01&until=2026-11-13").text, "Převzato do knihovny") == str(total)
+      and tile(admin.get("/arr/sonarr?since=2026-10-01&until=2026-10-31").text, "Převzato do knihovny") == "0",
+      "a custom range counts only its days")
+count = event_selections(lambda: admin.get("/dashboard?days=365"))
+check(count == 1, f"a dashboard with all of Sonarr's cards: once too ({count}×)")
+with db.connect() as conn:
+    conn.execute("INSERT INTO sonarr_event (arr_id, event_type, happened_at, title, episode, item_id, quality, size_bytes)"
+                 " VALUES (900001, 'downloadFolderImported', '2025-01-15 10:00:00', 'Stary serial',"
+                 " 'S01E01', 900001, 'WEBDL-720p', 1000)")
+    conn.commit()
+check("Stary serial" in card_html(admin.get("/arr/sonarr?days=0").text, "arr_sonarr_largest"),
+      "the whole history on the tab reaches back to Sonarr's first event, not to the first play")
+count = event_selections(lambda: admin.get("/arr/sonarr?days=0"))
+check(count == 1, f"the whole history selects the events once too ({count}×)")
+cards.save_layout(["arr_sonarr_largest"])
+check("Stary serial" in card_html(admin.get("/dashboard?days=0").text, "arr_sonarr_largest"),
+      "the whole history in the dashboard: from Sonarr's first event too")
+admin.get("/arr/sonarr?days=365")   # the remembered period back
+
+# Review (13. 11. 2026): the four live cards of one application each put together the live state for an account
+# separately - four times the same lookup of the queue's and the calendar's titles in the library.
+lookups: list[str] = []
+original_details = stats.sonarr_detail_links
+restore_details = substitute(stats, "sonarr_detail_links", lambda ids=None: (lookups.append("sonarr"), original_details(ids))[1])
+sonarr.live.CACHE.clear()
+computed = cards.data_for([k for k in cards.ALL_CARDS if k.key in live_keys], 30, account=admin_account)
+restore_details()
+check(all(computed[key]["available"] for key in live_keys) and len(lookups) == 2,
+      f"the four live cards of Sonarr look the titles up in the library once - the queue and the calendar ({len(lookups)}×)")
+
+print()
+print("--- F) long tables by Settings -> Interface ---")
+db.set_setting("ui_max_rows_arr", "3")
+db.forget_settings()
+s = admin.get("/arr/sonarr?days=365").text
+largest = card_html(s, "arr_sonarr_largest")
+check('class="extra-row"' in largest and "zobrazit celou tabulku" in largest, "a table over the limit: extra rows and a button to the dialog")
+check(largest.count("<tr") - 1 == min(len(stats.sonarr_largest(365, limit=100)), 100)
+      and len(stats.sonarr_largest(365, limit=100)) > 3, "the card has all the rows (the hidden ones wait for the dialog), not a fixed ten")
+# *Arr has its own number of rows in Long lists, independent of the Insights.
+all_rows = len(stats.sonarr_largest(365, limit=100))
+db.set_setting("ui_max_rows", "50")
+db.set_setting("ui_max_rows_arr", "2")
+db.set_setting("ui_max_rows_arr_mobile", "1")
+db.forget_settings()
+largest = card_html(admin.get("/arr/sonarr?days=365").text, "arr_sonarr_largest")
+check(largest.count('class="extra-row"') == all_rows - 2 and largest.count('class="desktop-only"') == 1 and "zobrazit celou tabulku" in largest,
+      f"the *Arr limit of its own: 2 rows straight away (1 on a phone), even though the Insights have 50 ({largest.count('extra-row')} hidden of {all_rows})")
+# ... and it holds for every Sonarr table, not only for that one. With the limit 1 every card with a table
+# that has at least two rows has hidden rows; and the templates say so explicitly (without "arr" the Insights' limit would hold).
+db.set_setting("ui_max_rows_arr", "1")
+db.forget_settings()
+tab = admin.get("/arr/sonarr?days=365").text
+tables = {j: card_html(tab, f"arr_sonarr_{j}") for j in sorted(with_table)}
+card_rows = {j: (h.count("<tr") - 1, h.count('class="extra-row"')) for j, h in tables.items() if "<table" in h}
+long_ones = {j: r for j, r in card_rows.items() if r[0] >= 2}
+check(len(long_ones) >= 4 and all(extra == rows - 1 for rows, extra in long_ones.values()),
+      f"the *Arr limit holds for all of Sonarr's tables ({card_rows})")
+template_texts = {s.name: s.read_text(encoding="utf-8") for s in TEMPLATES.glob("_card_sonarr_*.html")}
+with_rows = {name: text for name, text in template_texts.items() if "{{ row_class(" in text}
+wrong_templates = sorted(name for name, text in with_rows.items()
+                         if 'row_class(loop.index, "arr")' not in text or ', "arr") }}' not in text)
+check(not wrong_templates and len(with_rows) >= 4, f"Sonarr's table templates tell the macros whose limit holds ({len(with_rows)} templates, wrong {wrong_templates})")
+db.set_setting("ui_max_rows", "10")
+db.set_setting("ui_max_rows_arr", "10")
+db.set_setting("ui_max_rows_arr_mobile", "5")
+db.forget_settings()
+
+print()
+print("--- G) rights ---")
+s_reader = reader.get("/arr/sonarr?days=365").text
+check(reader.get("/arr/sonarr").status_code == 200 and len(re.findall(r"<!-- card: (\w+) -->", s_reader)) == 23,
+      "a reader sees the tab and the cards (the area is on by default)")
+check("No indexers available with RSS sync enabled" not in s_reader and "No audio tracks detected" not in s_reader,
+      "whoever is not the administrator sees neither the application's warning texts nor the queue's messages")
+check("Aplikace hlásí varování" in card_html(s_reader, "arr_sonarr_health")
+      and "Game of Thrones" in card_html(s_reader, "arr_sonarr_queue"), "... but sees that the application reports something, and the series in the queue")
+cards.save_layout(["arr_sonarr_health", "arr_sonarr_queue"])
+p_reader = reader.get("/dashboard").text
+check("No indexers available" not in p_reader and "No audio tracks detected" not in p_reader
+      and "Aplikace hlásí varování" in p_reader, "the same in the dashboard: the card is computed for the account that reads it")
+check("No indexers available" in admin.get("/dashboard").text, "and the administrator has the texts there")
+# Without the *Arr area: the cards are neither offered nor computed and the dashboard for everybody leaves them out.
+accounts.save_permissions(reader_account["id"], access.pack_permissions(["library", "overview", "dashboard"], False))
+reader_without = accounts.get_by_name("reader")
+check(cards.allowed(list(CARDS), reader_without) == [], "without the *Arr area no card")
+cards.save_layout(["arr_sonarr_numbers", "codecs"])
+count = event_selections(lambda: reader.get("/dashboard"))
+without = reader.get("/dashboard").text
+check("arr_sonarr_numbers" not in without and "Převzato do knihovny" not in without and "<!-- card: codecs -->" in without and count == 0,
+      "the dashboard for everybody neither draws nor computes Sonarr's card for them")
+cards.save_layout(["arr_sonarr_numbers"], reader_account["id"])
+mine = reader.get("/account/dashboard").text
+check("Nemáš oprávnění k oblasti" in mine and "Převzato do knihovny" not in mine, "My dashboard: a message about the permission instead of the card")
+accounts.save_permissions(reader_account["id"], None)
+cards.save_layout([], reader_account["id"])
+
+print()
+print("--- H) live data: without warnings, part does not load, Sonarr does not answer, disconnected ---")
+cards.save_layout([])
+handlers["sonarr"] = sonarr_handler(asked, instead={"health": httpx.Response(200, json=[])})
+sonarr.live.CACHE.clear()
+without_warning = admin.get("/arr/sonarr?days=365").text
+check("Aplikace nehlásí žádné varování." in card_html(without_warning, "arr_sonarr_health"), "the health card without warnings says so")
+check(tile(card_html(without_warning, "arr_sonarr_live_numbers"), "Varování aplikace") == "0", "and the tile shows zero")
+
+error500 = httpx.Response(500)
+handlers["sonarr"] = sonarr_handler(asked, instead={"queue": error500, "calendar": error500})
+sonarr.live.CACHE.clear()
+s = admin.get("/arr/sonarr?days=365").text
+check(tile(s, "Ve frontě") == "–" and tile(s, "Chybí") not in (None, "–"), "what did not load is a dash, not zero")
+check("nepodařilo načíst" in card_html(s, "arr_sonarr_live_numbers"), "the card with the numbers says part did not load")
+check("Frontu se z aplikace nepodařilo načíst." in card_html(s, "arr_sonarr_queue")
+      and "Kalendář se z aplikace nepodařilo načíst." in card_html(s, "arr_sonarr_calendar")
+      and "V příštích 7 dnech nic nevychází" not in s and "Ve frontě není nic s chybou" not in s,
+      "the queue and the calendar do not say “nothing” when it could not be found out")
+
+# Sonarr unavailable, the dashboard has its live cards and a card from the database.
+attempts: list[str] = []
+handlers["sonarr"] = not_responding(attempts)
+sonarr.live.CACHE.clear()
+live_names = ("live_numbers", "queue", "calendar", "health")
+cards.save_layout([cards_sonarr.card_key(j) for j in (*live_names, "largest")])
+r = admin.get("/dashboard?days=365")
+check(r.status_code == 200 and all("Aplikace neodpovídá" in card_html(r.text, cards_sonarr.card_key(j)) for j in live_names),
+      "Sonarr unavailable: the dashboard is drawn and every live card says so")
+check("Game of Thrones" in card_html(r.text, "arr_sonarr_largest"), "the card from the database goes on")
+check(attempts.count("queue") == 1, f"four live cards = one request for the live state ({attempts.count('queue')})")
+check(tile(card_html(r.text, "arr_sonarr_live_numbers"), "Ve frontě") == "–", "the tiles of the live numbers are dashes")
+check("Connection refused" in card_html(r.text, "arr_sonarr_live_numbers") and "tajny-klic" not in r.text,
+      "the administrator sees the error's detail, the key nowhere")
+s_reader = reader.get("/arr/sonarr?days=365").text
+check("Aplikace neodpovídá" in s_reader and "Connection refused" not in s_reader and "Game of Thrones" in s_reader,
+      "whoever is not the administrator sees only the sentence that the application does not answer - and the statistics from the database")
+
+# The administrator disconnects Sonarr: the layout stays, the card is neither drawn nor computed.
+sonarr.save_settings(False, "http://sonarr.test", "")
+db.forget_settings()
+cards.save_layout(["arr_sonarr_numbers", "codecs"])
+count = event_selections(lambda: admin.get("/dashboard?days=365"))
+after = reader.get("/dashboard?days=365").text
+check("<!-- card: arr_sonarr_numbers -->" not in after and "<!-- card: codecs -->" in after and count == 0,
+      "a disconnected Sonarr: the dashboard for everybody leaves its card out and does not compute it")
+check([k.key for k in cards.load_layout()] == ["arr_sonarr_numbers", "codecs"] and admin.get("/arr/sonarr").status_code == 404
+      and admin.get("/partials/arr/sonarr/downloading").status_code == 404,
+      "the layout stays; neither the tab nor the partial of the disconnected application are there")
+check(not [k for k in cards.allowed(list(cards.ALL_CARDS), admin_account) if k.area == "arr"], "and its cards stop being offered")
+restore()
+
+print()
+print(f"DONE - failures: {failures}")
+sys.exit(1 if failures else 0)

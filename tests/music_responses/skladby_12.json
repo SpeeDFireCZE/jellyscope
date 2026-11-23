@@ -1,0 +1,1624 @@
+{
+ "Items": [
+  {
+   "Name": "Station Identification",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "765a9ea1c3c5bb87231cbeb4ef33818d",
+   "DateCreated": "2026-10-02T13:54:53.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0004 - Station Identification",
+   "PremiereDate": "2019-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "765a9ea1c3c5bb87231cbeb4ef33818d",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/04 Station Identification.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801639,
+     "Name": "04 Station Identification",
+     "IsRemote": false,
+     "ETag": "24f07c52db5ee836ef6656f58de10b9f",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160144,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Lo-fi"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2019,
+   "IndexNumber": 4,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Lo-fi",
+     "Id": "ccfe0de86d262ce6c34edca530e14790"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Velvet Static-Midnight Radio-0004Station Identification",
+    "ItemId": "765a9ea1c3c5bb87231cbeb4ef33818d"
+   },
+   "Artists": [
+    "Velvet Static"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "Album": "Midnight Radio",
+   "AlbumId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "AlbumPrimaryImageTag": "49de342790af2fd13f9935ab17c462ff",
+   "AlbumArtist": "Velvet Static",
+   "AlbumArtists": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "49de342790af2fd13f9935ab17c462ff": "ejH,|noeWBoefP0haykCWVfQs.jtayfQfkbIfQayfRayRjaykCfPj["
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Late Night Request",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "b16b1a9fc535346e7c363adc39bfaa5e",
+   "DateCreated": "2026-10-02T13:54:52.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0003 - Late Night Request",
+   "PremiereDate": "2019-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "b16b1a9fc535346e7c363adc39bfaa5e",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/03 Late Night Request.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801635,
+     "Name": "03 Late Night Request",
+     "IsRemote": false,
+     "ETag": "a75eec65b5ce8150d91ee7bf1521d619",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160143,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Lo-fi"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2019,
+   "IndexNumber": 3,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Lo-fi",
+     "Id": "ccfe0de86d262ce6c34edca530e14790"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Velvet Static-Midnight Radio-0003Late Night Request",
+    "ItemId": "b16b1a9fc535346e7c363adc39bfaa5e"
+   },
+   "Artists": [
+    "Velvet Static"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "Album": "Midnight Radio",
+   "AlbumId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "AlbumPrimaryImageTag": "49de342790af2fd13f9935ab17c462ff",
+   "AlbumArtist": "Velvet Static",
+   "AlbumArtists": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "49de342790af2fd13f9935ab17c462ff": "ejH,|noeWBoefP0haykCWVfQs.jtayfQfkbIfQayfRayRjaykCfPj["
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Rain on the Antenna",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "7c66221225b849d24a66ecdcc088c7e2",
+   "DateCreated": "2026-10-02T13:54:51.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0002 - Rain on the Antenna",
+   "PremiereDate": "2019-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "7c66221225b849d24a66ecdcc088c7e2",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/02 Rain on the Antenna.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801636,
+     "Name": "02 Rain on the Antenna",
+     "IsRemote": false,
+     "ETag": "64b0b04a9e21475bb2c38c8065607a6d",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160144,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Lo-fi"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2019,
+   "IndexNumber": 2,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Lo-fi",
+     "Id": "ccfe0de86d262ce6c34edca530e14790"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Velvet Static-Midnight Radio-0002Rain on the Antenna",
+    "ItemId": "7c66221225b849d24a66ecdcc088c7e2"
+   },
+   "Artists": [
+    "Velvet Static"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "Album": "Midnight Radio",
+   "AlbumId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "AlbumPrimaryImageTag": "49de342790af2fd13f9935ab17c462ff",
+   "AlbumArtist": "Velvet Static",
+   "AlbumArtists": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "49de342790af2fd13f9935ab17c462ff": "ejH,|noeWBoefP0haykCWVfQs.jtayfQfkbIfQayfRayRjaykCfPj["
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Dial Tone Lullaby",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "df94b791fa02561107ee06960437bb7b",
+   "DateCreated": "2026-10-02T13:54:49.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0001 - Dial Tone Lullaby",
+   "PremiereDate": "2019-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "df94b791fa02561107ee06960437bb7b",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/01 Dial Tone Lullaby.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801634,
+     "Name": "01 Dial Tone Lullaby",
+     "IsRemote": false,
+     "ETag": "6cde4bc8a0cfe5c14d1738804341446b",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160143,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Lo-fi"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2019,
+   "IndexNumber": 1,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Lo-fi",
+     "Id": "ccfe0de86d262ce6c34edca530e14790"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Velvet Static-Midnight Radio-0001Dial Tone Lullaby",
+    "ItemId": "df94b791fa02561107ee06960437bb7b"
+   },
+   "Artists": [
+    "Velvet Static"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "Album": "Midnight Radio",
+   "AlbumId": "23af0acbd8a1e47c5c14e8ba079832de",
+   "AlbumPrimaryImageTag": "49de342790af2fd13f9935ab17c462ff",
+   "AlbumArtist": "Velvet Static",
+   "AlbumArtists": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "49de342790af2fd13f9935ab17c462ff": "ejH,|noeWBoefP0haykCWVfQs.jtayfQfkbIfQayfRayRjaykCfPj["
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Saltwater Grid",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "613d3ecadad7bdbaf7c3a6dbb3f56ce0",
+   "DateCreated": "2026-10-02T13:54:48.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0004 - Saltwater Grid",
+   "PremiereDate": "2023-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "613d3ecadad7bdbaf7c3a6dbb3f56ce0",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/04 Saltwater Grid.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801629,
+     "Name": "04 Saltwater Grid",
+     "IsRemote": false,
+     "ETag": "e5449c402a58703dc10b6a417959917e",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160142,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Synthwave"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2023,
+   "IndexNumber": 4,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Synthwave",
+     "Id": "9b55bc3eb759bd59313ad00aa6b5894f"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Pixel Harbor-Synth Tide-0004Saltwater Grid",
+    "ItemId": "613d3ecadad7bdbaf7c3a6dbb3f56ce0"
+   },
+   "Artists": [
+    "Pixel Harbor"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "Album": "Synth Tide",
+   "AlbumId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "AlbumPrimaryImageTag": "0b10a31f1bbf336c27963c25d4c90828",
+   "AlbumArtist": "Pixel Harbor",
+   "AlbumArtists": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "0b10a31f1bbf336c27963c25d4c90828": "ezK$GkWYayoMbH1$a}j[WWf6oLo1f6jtfQj]a|f6fkfkS3j@fkayf6"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Arcade Lighthouse",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "2b7283cc3faa323f4bfc9e6821878ac3",
+   "DateCreated": "2026-10-02T13:54:46.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0003 - Arcade Lighthouse",
+   "PremiereDate": "2023-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "2b7283cc3faa323f4bfc9e6821878ac3",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/03 Arcade Lighthouse.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801632,
+     "Name": "03 Arcade Lighthouse",
+     "IsRemote": false,
+     "ETag": "e07730572dc6223c74d0533bbcec3a33",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160143,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Synthwave"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2023,
+   "IndexNumber": 3,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Synthwave",
+     "Id": "9b55bc3eb759bd59313ad00aa6b5894f"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Pixel Harbor-Synth Tide-0003Arcade Lighthouse",
+    "ItemId": "2b7283cc3faa323f4bfc9e6821878ac3"
+   },
+   "Artists": [
+    "Pixel Harbor"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "Album": "Synth Tide",
+   "AlbumId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "AlbumPrimaryImageTag": "0b10a31f1bbf336c27963c25d4c90828",
+   "AlbumArtist": "Pixel Harbor",
+   "AlbumArtists": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "0b10a31f1bbf336c27963c25d4c90828": "ezK$GkWYayoMbH1$a}j[WWf6oLo1f6jtfQj]a|f6fkfkS3j@fkayf6"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Low Tide Drive",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "85719124f9eeca24e1627f0dfabbdfcb",
+   "DateCreated": "2026-10-02T13:54:45.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0002 - Low Tide Drive",
+   "PremiereDate": "2023-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "85719124f9eeca24e1627f0dfabbdfcb",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/02 Low Tide Drive.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801629,
+     "Name": "02 Low Tide Drive",
+     "IsRemote": false,
+     "ETag": "3d079c3ebc6631b0591317c2af85b405",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160142,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Synthwave"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2023,
+   "IndexNumber": 2,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Synthwave",
+     "Id": "9b55bc3eb759bd59313ad00aa6b5894f"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Pixel Harbor-Synth Tide-0002Low Tide Drive",
+    "ItemId": "85719124f9eeca24e1627f0dfabbdfcb"
+   },
+   "Artists": [
+    "Pixel Harbor"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "Album": "Synth Tide",
+   "AlbumId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "AlbumPrimaryImageTag": "0b10a31f1bbf336c27963c25d4c90828",
+   "AlbumArtist": "Pixel Harbor",
+   "AlbumArtists": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "0b10a31f1bbf336c27963c25d4c90828": "ezK$GkWYayoMbH1$a}j[WWf6oLo1f6jtfQj]a|f6fkfkS3j@fkayf6"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Neon Pier",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "1b4da132948b8e0a8810dc1957286aed",
+   "DateCreated": "2026-10-02T13:54:44.0000000Z",
+   "HasLyrics": false,
+   "Container": "mp3",
+   "SortName": "0001 - Neon Pier",
+   "PremiereDate": "2023-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "1b4da132948b8e0a8810dc1957286aed",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/01 Neon Pier.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 801624,
+     "Name": "01 Neon Pier",
+     "IsRemote": false,
+     "ETag": "68dde67ee0b27318040d181dc9a0f3ae",
+     "RunTimeTicks": 400457139,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "TimeBase": "1/14112000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "MP3 - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 160000,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 160141,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Synthwave"
+   ],
+   "RunTimeTicks": 400457139,
+   "ProductionYear": 2023,
+   "IndexNumber": 1,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Synthwave",
+     "Id": "9b55bc3eb759bd59313ad00aa6b5894f"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Pixel Harbor-Synth Tide-0001Neon Pier",
+    "ItemId": "1b4da132948b8e0a8810dc1957286aed"
+   },
+   "Artists": [
+    "Pixel Harbor"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "Album": "Synth Tide",
+   "AlbumId": "f25398e02894768bfe77b0fa64ac8ed5",
+   "AlbumPrimaryImageTag": "0b10a31f1bbf336c27963c25d4c90828",
+   "AlbumArtist": "Pixel Harbor",
+   "AlbumArtists": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "0b10a31f1bbf336c27963c25d4c90828": "ezK$GkWYayoMbH1$a}j[WWf6oLo1f6jtfQj]a|f6fkfkS3j@fkayf6"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Last Aurora",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "baa7d3afa0af5443e062327783bcb737",
+   "DateCreated": "2026-10-02T13:54:42.0000000Z",
+   "HasLyrics": false,
+   "Container": "flac",
+   "SortName": "0005 - Last Aurora",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "baa7d3afa0af5443e062327783bcb737",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/05 Last Aurora.flac",
+     "Type": "Default",
+     "Container": "flac",
+     "Size": 1631356,
+     "Name": "05 Last Aurora",
+     "IsRemote": false,
+     "ETag": "b88e1bcf30a7d00b50365bf4e7f1313e",
+     "RunTimeTicks": 400000000,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "flac",
+       "TimeBase": "1/44100",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "FLAC - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 326271,
+       "BitDepth": 24,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 326271,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 400000000,
+   "ProductionYear": 2021,
+   "IndexNumber": 5,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9a39b820cb58f6465633dcb706941592",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Northern Lights Ensemble-Aurora Sessions-0005Last Aurora",
+    "ItemId": "baa7d3afa0af5443e062327783bcb737"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "Album": "Aurora Sessions",
+   "AlbumId": "9a39b820cb58f6465633dcb706941592",
+   "AlbumPrimaryImageTag": "474bda9d336059f062f96b5cb9c92369",
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "474bda9d336059f062f96b5cb9c92369": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Silent Fjord",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "d1d1a22fcc72f9a6a1c00b453f1cb39d",
+   "DateCreated": "2026-10-02T13:54:41.0000000Z",
+   "HasLyrics": false,
+   "Container": "flac",
+   "SortName": "0004 - Silent Fjord",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "d1d1a22fcc72f9a6a1c00b453f1cb39d",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/04 Silent Fjord.flac",
+     "Type": "Default",
+     "Container": "flac",
+     "Size": 1518012,
+     "Name": "04 Silent Fjord",
+     "IsRemote": false,
+     "ETag": "3bfca2ab8b608449b3e90cd2f0bee443",
+     "RunTimeTicks": 400000000,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "flac",
+       "TimeBase": "1/44100",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "FLAC - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 303602,
+       "BitDepth": 24,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 303602,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 400000000,
+   "ProductionYear": 2021,
+   "IndexNumber": 4,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9a39b820cb58f6465633dcb706941592",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Northern Lights Ensemble-Aurora Sessions-0004Silent Fjord",
+    "ItemId": "d1d1a22fcc72f9a6a1c00b453f1cb39d"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "Album": "Aurora Sessions",
+   "AlbumId": "9a39b820cb58f6465633dcb706941592",
+   "AlbumPrimaryImageTag": "474bda9d336059f062f96b5cb9c92369",
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "474bda9d336059f062f96b5cb9c92369": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Magnetic North",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "202d35041a5d3bb62fe3bf4075bd3261",
+   "DateCreated": "2026-10-02T13:54:39.0000000Z",
+   "HasLyrics": false,
+   "Container": "flac",
+   "SortName": "0003 - Magnetic North",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "202d35041a5d3bb62fe3bf4075bd3261",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/03 Magnetic North.flac",
+     "Type": "Default",
+     "Container": "flac",
+     "Size": 1475789,
+     "Name": "03 Magnetic North",
+     "IsRemote": false,
+     "ETag": "b80d31496d2278a502d67a1add35990d",
+     "RunTimeTicks": 400000000,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "flac",
+       "TimeBase": "1/44100",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "FLAC - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 295157,
+       "BitDepth": 24,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 295157,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 400000000,
+   "ProductionYear": 2021,
+   "IndexNumber": 3,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9a39b820cb58f6465633dcb706941592",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Northern Lights Ensemble-Aurora Sessions-0003Magnetic North",
+    "ItemId": "202d35041a5d3bb62fe3bf4075bd3261"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "Album": "Aurora Sessions",
+   "AlbumId": "9a39b820cb58f6465633dcb706941592",
+   "AlbumPrimaryImageTag": "474bda9d336059f062f96b5cb9c92369",
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "474bda9d336059f062f96b5cb9c92369": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "Polar Drift",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "63b7b46fce742f0372c0469d4f41c32b",
+   "DateCreated": "2026-10-02T13:54:38.0000000Z",
+   "HasLyrics": false,
+   "Container": "flac",
+   "SortName": "0002 - Polar Drift",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "63b7b46fce742f0372c0469d4f41c32b",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/02 Polar Drift.flac",
+     "Type": "Default",
+     "Container": "flac",
+     "Size": 1390036,
+     "Name": "02 Polar Drift",
+     "IsRemote": false,
+     "ETag": "a22d26ad666bc916ba0fc645a3d261c9",
+     "RunTimeTicks": 400000000,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "flac",
+       "TimeBase": "1/44100",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "FLAC - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 278007,
+       "BitDepth": 24,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 278007,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 400000000,
+   "ProductionYear": 2021,
+   "IndexNumber": 2,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9a39b820cb58f6465633dcb706941592",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Northern Lights Ensemble-Aurora Sessions-0002Polar Drift",
+    "ItemId": "63b7b46fce742f0372c0469d4f41c32b"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "Album": "Aurora Sessions",
+   "AlbumId": "9a39b820cb58f6465633dcb706941592",
+   "AlbumPrimaryImageTag": "474bda9d336059f062f96b5cb9c92369",
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "474bda9d336059f062f96b5cb9c92369": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  },
+  {
+   "Name": "First Light",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "1368b5173165b3cb21f1b6b7ed9c76a2",
+   "DateCreated": "2026-10-02T13:54:37.0000000Z",
+   "HasLyrics": false,
+   "Container": "flac",
+   "SortName": "0001 - First Light",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "1368b5173165b3cb21f1b6b7ed9c76a2",
+     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/01 First Light.flac",
+     "Type": "Default",
+     "Container": "flac",
+     "Size": 1347905,
+     "Name": "01 First Light",
+     "IsRemote": false,
+     "ETag": "15842819469831a2afb790d43223b3c3",
+     "RunTimeTicks": 400000000,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "MediaStreams": [
+      {
+       "Codec": "flac",
+       "TimeBase": "1/44100",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "FLAC - Stereo",
+       "IsInterlaced": false,
+       "ChannelLayout": "stereo",
+       "BitRate": 269581,
+       "BitDepth": 24,
+       "Channels": 2,
+       "SampleRate": 44100,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Type": "Audio",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 269581,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 0,
+     "HasSegments": false
+    }
+   ],
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 400000000,
+   "ProductionYear": 2021,
+   "IndexNumber": 1,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9a39b820cb58f6465633dcb706941592",
+   "Type": "Audio",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 1,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-11-15T20:53:06.283008Z",
+    "Played": true,
+    "Key": "1368b517-3165-b3cb-21f1-b6b7ed9c76a2",
+    "ItemId": "1368b5173165b3cb21f1b6b7ed9c76a2"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "Album": "Aurora Sessions",
+   "AlbumId": "9a39b820cb58f6465633dcb706941592",
+   "AlbumPrimaryImageTag": "474bda9d336059f062f96b5cb9c92369",
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "474bda9d336059f062f96b5cb9c92369": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Audio"
+  }
+ ],
+ "TotalRecordCount": 13,
+ "StartIndex": 0
+}

@@ -1,70 +1,70 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, pager, method_badge, transcode_popis, vyber_cile %}
-{% from "_macros.html" import period_filter, odkaz with context %}
+{% from "_macros.html" import tile, pager, method_badge, transcode_description, target_picker %}
+{% from "_macros.html" import period_filter, link with context %}
 {% block title %}{{ library.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div>
         <p class="subtitle" style="margin-bottom:2px">
-            <a href="/library">&larr; {{ _("všechny knihovny") }}</a>
+            <a href="/library">&larr; {{ _("all libraries") }}</a>
         </p>
         <h1>{{ library.name }}</h1>
         <p class="subtitle">
-            {{ overview.item_count | number }} {{ _("souborů") }}
+            {{ _n("{n} files", overview.item_count) }}
             &middot; {{ overview.size_bytes | bytes }}
-            &middot; {{ overview.hours | hours }} {{ _("obsahu") }}
+            &middot; {{ overview.hours | hours }} {{ _("of content") }}
         </p>
     </div>
 </div>
 
-{# Záložky. Každá má vlastní adresu, takže funguje zpětné tlačítko
-   i posílání odkazu. #}
+{# Tabs. Each has its own address, so the back button
+   and sending a link work. #}
 <div class="tabs">
     <a href="/library/{{ library.id }}?tab=overview"
-       class="{{ 'active' if tab == 'overview' }}">{{ _("Přehled") }}</a>
+       class="{{ 'active' if tab == 'overview' }}">{{ _("Overview") }}</a>
     <a href="/library/{{ library.id }}?tab=media"
-       class="{{ 'active' if tab == 'media' }}">{{ _("Média") }}</a>
+       class="{{ 'active' if tab == 'media' }}">{{ _("Media") }}</a>
     <a href="/library/{{ library.id }}?tab=activity"
-       class="{{ 'active' if tab == 'activity' }}">{{ _("Aktivita") }}</a>
+       class="{{ 'active' if tab == 'activity' }}">{{ _("Activity") }}</a>
 </div>
 
 {# ================================================================== #}
 {% if tab == 'overview' %}
 {# ================================================================== #}
 
-{# Přehled je o tom, co v knihovně je - zvolené období na něj nemá vliv.
-   Bez té věty se nedalo poznat, jestli čísla nejsou za „posledních 30
-   dní" jako o stránku vedle. #}
-<p class="card-note" style="margin:0 0 12px">{{ _("Stav knihovny teď. Zvolené období na něj nemá vliv.") }}</p>
+{# The Overview is about what the library holds - the chosen period does not affect it.
+   Without that sentence one could not tell whether the numbers are not
+   for "the last 30 days" like the page next door. #}
+<p class="card-note" style="margin:0 0 12px">{{ _("The library as it is now. The selected period does not apply here.") }}</p>
 
 <div class="kpi-row">
-    {# "Souborů", ne "Titulů": u serialu je kazdy dil samostatny soubor,
-       kdezto v seznamu nize je serial jeden radek. Kdyby oboji rikalo
-       "titulu", cisla by si odporovala. #}
-    {{ tile(_("Souborů"), overview.item_count | number) }}
-    {{ tile(_("Velikost"), overview.size_bytes | bytes) }}
-    {{ tile(_("Ve 4K"), overview.uhd_count | number) }}
+    {# "Files", not "Titles": for a series every episode is a file of its own,
+       while in the list below a series is one row. If both said
+       "titulů", the numbers would contradict each other. #}
+    {{ tile(_("Files"), overview.item_count | number) }}
+    {{ tile(_("Size"), overview.size_bytes | bytes) }}
+    {{ tile(_("In 4K"), overview.uhd_count | number) }}
     {{ tile(_("HDR / Dolby Vision"), overview.hdr_count | number) }}
 </div>
 
 {% if overview.without_tech %}
 <div class="flash warning">
     <span class="dot"></span>
-    {# Tlačítko je tu jen pro správce a jen při ffprobe: z Jellyfinu se
-       technická data berou sama při synchronizaci, takže by nebylo co
-       dopočítávat. Ostatní uvidí původní větu s odkazem do Nastavení. #}
+    {# The button is here only for the admin and only with ffprobe: from Jellyfin the
+       technical data come by themselves with the sync, so there would be nothing to
+       compute. Others see the original sentence with a link to Settings. #}
     {% if account.is_admin and tech_source == 'ffprobe' %}
     <span>{{ overview.without_tech | number }}
-        {{ _("souborů v této knihovně nemá technická data.") }}</span>
+        {{ _("files in this library have no technical data.") }}</span>
     <form method="post" action="/settings/scan" style="margin-left:auto; margin-top:-3px">
         <input type="hidden" name="mode" value="missing">
         <input type="hidden" name="library_id" value="{{ library.id }}">
-        <button class="btn" type="submit">{{ _("Dopočítat chybějící") }}</button>
+        <button class="btn" type="submit">{{ _("Analyse the missing ones") }}</button>
     </form>
     {% else %}
     <span>{{ overview.without_tech | number }}
-        {{ _("souborů v této knihovně nemá technická data. Spusť analýzu v Nastavení.") }}</span>
+        {{ _("files in this library have no technical data. Run the analysis in Settings.") }}</span>
     {% endif %}
 </div>
 {% endif %}
@@ -72,16 +72,16 @@
 <div class="grid-2">
     <div class="card">
         <div class="card-head">
-            <h2>{{ _("Kodeky") }}</h2>
-            <p class="card-note">{{ _("počet souborů") }}</p>
+            <h2>{{ _("Codecs") }}</h2>
+            <p class="card-note">{{ _("file count") }}</p>
         </div>
         {{ charts.hbar_chart(codecs, 'label', 'item_count', unit='') | safe }}
     </div>
 
     <div class="card">
         <div class="card-head">
-            <h2>{{ _("Rozlišení") }}</h2>
-            <p class="card-note">{{ _("počet souborů") }}</p>
+            <h2>{{ _("Resolution") }}</h2>
+            <p class="card-note">{{ _("file count") }}</p>
         </div>
         {{ charts.hbar_chart(resolutions, 'label', 'item_count', unit='') | safe }}
     </div>
@@ -89,12 +89,12 @@
 
 <div class="card">
     <div class="card-head">
-        <h2>{{ _("Jazyky v této knihovně") }}</h2>
-        <p class="card-note">{{ _("kolik titulů danou zvukovou stopu obsahuje") }}</p>
+        <h2>{{ _("Languages in this library") }}</h2>
+        <p class="card-note">{{ _("how many titles contain each audio track") }}</p>
     </div>
     {{ charts.hbar_chart(languages_in_library, 'label', 'item_count', unit='') | safe }}
     <p class="card-note" style="margin-top:14px">
-        {{ _("Titul s českou i anglickou stopou se počítá do obou řádků, součet proto převyšuje počet titulů.") }}
+        {{ _("A title with both Czech and English audio counts in both rows, so the total exceeds the number of titles.") }}
     </p>
 </div>
 
@@ -106,183 +106,183 @@
     <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
         <input type="hidden" name="tab" value="media">
         <input type="search" name="search" value="{{ search }}"
-               placeholder="{{ _('Hledat název...') }}" style="width:230px">
+               placeholder="{{ _('Search title...') }}" style="width:230px">
         <select name="sort" style="width:auto">
-            <option value="size"       {{ 'selected' if sort == 'size' }}>{{ _("Podle velikosti") }}</option>
-            <option value="bitrate"    {{ 'selected' if sort == 'bitrate' }}>{{ _("Podle bitrate") }}</option>
-            <option value="resolution" {{ 'selected' if sort == 'resolution' }}>{{ _("Podle rozlišení") }}</option>
-            <option value="plays"      {{ 'selected' if sort == 'plays' }}>{{ _("Podle přehrání") }}</option>
-            <option value="name"       {{ 'selected' if sort == 'name' }}>{{ _("Podle názvu") }}</option>
+            <option value="size"       {{ 'selected' if sort == 'size' }}>{{ _("By size") }}</option>
+            <option value="bitrate"    {{ 'selected' if sort == 'bitrate' }}>{{ _("By bitrate") }}</option>
+            <option value="resolution" {{ 'selected' if sort == 'resolution' }}>{{ _("By resolution") }}</option>
+            <option value="plays"      {{ 'selected' if sort == 'plays' }}>{{ _("By play count") }}</option>
+            <option value="name"       {{ 'selected' if sort == 'name' }}>{{ _("By name") }}</option>
         </select>
-        {# Přepínač archivu je součástí formuláře, aby si volbu udrželo
-           i hledání a řazení. Skryté pole se posílá jen když je archiv
-           zapnutý - nezaškrtnuté políčko prohlížeč neposílá vůbec. #}
+        {# The archive switch is part of the form, so the choice is kept
+           by searching and sorting too. The hidden field is sent only when the archive
+           is on - a browser does not send an unticked box at all. #}
         {% if archived %}<input type="hidden" name="archived" value="1">{% endif %}
-        <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
+        <button class="btn primary" type="submit">{{ _("Show") }}</button>
         {% if search %}
-            <a class="btn" href="/library/{{ library.id }}?tab=media{{ '&archived=1' if archived }}">{{ _("Zrušit hledání") }}</a>
+            <a class="btn" href="/library/{{ library.id }}?tab=media{{ '&archived=1' if archived }}">{{ _("Clear search") }}</a>
         {% endif %}
-        <span class="card-note">{{ total | number }} {{ _("nalezeno") }}</span>
+        <span class="card-note">{{ total | number }} {{ _("found") }}</span>
     </form>
-    <p class="card-note" style="margin:6px 0 0">{{ _("Počet přehrání u titulů je za celou historii, ne za zvolené období.") }}</p>
+    <p class="card-note" style="margin:6px 0 0">{{ _("Play counts on the titles cover the whole history, not the selected period.") }}</p>
 
-    {# Živá knihovna / archiv. Archiv jsou tituly, které už v Jellyfinu
-       nejsou - Jellyscope je nemaže, protože na ně odkazuje historie. #}
+    {# Live library / archive. The archive is titles that are no longer in Jellyfin
+       - Jellyscope does not delete them, because the history points at them. #}
     <div class="filters" style="margin-top:12px">
         <a class="chip {{ 'active' if not archived }}"
-           href="/library/{{ library.id }}?tab=media&sort={{ sort }}">{{ _("V knihovně") }}</a>
+           href="/library/{{ library.id }}?tab=media&sort={{ sort }}">{{ _("In library") }}</a>
         <a class="chip {{ 'active' if archived }}"
            href="/library/{{ library.id }}?tab=media&sort={{ sort }}&archived=1">
-            {{ _("Archiv") }}{% if archived_count %} ({{ archived_count }}){% endif %}
+            {{ _("Archive") }}{% if archived_count %} ({{ archived_count }}){% endif %}
         </a>
     </div>
 
     {% if archived %}
     <p class="card-note" style="margin-top:10px">
-        {{ _("Tyhle tituly už v Jellyfinu nejsou. Jellyscope je nemaže sám, protože na ně odkazuje historie přehrávání a bez nich by ve statistikách zůstaly bezejmenné záznamy. Když se soubor vrátí (i s jiným ItemId), Jellyscope ho podle tmdb ID zase spáruje a historie naváže.") }}
+        {{ _("These titles are no longer in Jellyfin. Jellyscope does not delete them on its own, because the playback history points at them and without them the statistics would be full of nameless records. When the file comes back (even with a different ItemId), Jellyscope matches it by tmdb ID and the history continues.") }}
     </p>
-    {% if k_mazani %}
+    {% if to_delete %}
     <div class="btn-row" style="margin-top:10px">
-        <button class="btn primary" type="button" data-okno="okno-prirazeni">
-            {{ _("Přiřadit k jiným titulům") }}
+        <button class="btn primary" type="button" data-modal="modal-assignment">
+            {{ _("Assign to other titles") }}
         </button>
-        <span class="card-note">{{ _("když automatika nepozná, ke kterému titulu historie patří") }}</span>
-        {# Nevratná akce stranou od té hlavní, ať se do ní nekliká omylem. #}
-        <button class="btn danger" type="button" data-okno="okno-mazani" style="margin-left:auto">
-            {{ _("Smazat z archivu") }}
+        <span class="card-note">{{ _("when the automatic matching cannot tell which title the history belongs to") }}</span>
+        {# An irreversible action away from the main one, so it is not clicked by mistake. #}
+        <button class="btn danger" type="button" data-modal="modal-delete" style="margin-left:auto">
+            {{ _("Delete from the archive") }}
         </button>
     </div>
     {% endif %}
     {% endif %}
 </div>
 
-{% if k_prirazeni %}
-{# Hromadné přiřazení. Řádek = archivovaná položka (díly zvlášť), vedle
-   výběr cíle s hledáním v živé knihovně. Co nemá vybraný cíl, se nechává
-   být. Jedna záloha na celou dávku. #}
-<dialog class="okno okno-rozvrzeni" id="okno-prirazeni">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ _("Přiřadit archiv k jiným titulům") }}</h2>
-        <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
+{% if to_assign %}
+{# Bulk assignment. A row = an archived item (episodes apart), beside it
+   the target picker with a search in the live library. What has no target chosen is
+   left alone. One backup for the whole batch. #}
+<dialog class="modal modal-layout" id="modal-assignment">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Assign the archive to other titles") }}</h2>
+        <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
-    {# Dva kroky v jednom formuláři: výběr a potvrzení s rekapitulací.
-       První tlačítko jen ukáže rekapitulaci (skládá ji skript ve static/js/app.js
-       z vybraných řádků) - odesílá až „Ano, přiřadit", které nese
-       potvrzeno=1. Server bez toho nic nezmění. #}
-    <form method="post" action="/library/{{ library.id }}/archiv/priradit"
-          data-prirazeni data-rekapitulace class="okno-kroky">
-        <div class="okno-krok" data-krok="vyber">
+    {# Two steps in one form: choice and confirmation with a recap.
+       The first button only shows the recap (put together by a script in static/js/app.js
+       from the chosen rows) - only "Yes, assign" sends it, carrying
+       potvrzeno=1. Without that the server changes nothing. #}
+    <form method="post" action="/library/{{ library.id }}/archive/assign"
+          data-assignment data-recap class="modal-steps">
+        <div class="modal-step" data-step="select">
             <p class="card-note" style="margin:0 0 14px">
-                {{ _("U titulu, ke kterému historie patří, vyber cíl. Po uložení přejde historie a statistiky na vybraný titul a položka z archivu se smaže. U řádků bez cíle se nic nestane. Před uložením se udělá záloha databáze.") }}
+                {{ _("Pick a target for each title whose history belongs elsewhere. On saving, the history and statistics move to the chosen title and the archived item is deleted. Rows without a target are left alone. A database backup is taken before saving.") }}
             </p>
-            <div class="okno-obsah" style="flex:1; min-height:0">
-                <div class="prirazeni-radky">
-                    {% for p in k_prirazeni %}
-                    {# Archivovaná položka bez plakátku - její obrázek už
-                       v Jellyfinu není. Plakát má jen vybraný cíl. #}
-                    <div class="prirazeni-radek" data-popis="{{ p.popis }}" data-plays="{{ p.plays }}">
-                        <span class="vyber-cile-text">
-                            <strong>{{ p.popis }}</strong>
+            <div class="modal-body" style="flex:1; min-height:0">
+                <div class="assignment-rows">
+                    {% for p in to_assign %}
+                    {# An archived item without a small poster - its image is no longer
+                       in Jellyfin. Only the chosen target has a poster. #}
+                    <div class="assignment-row" data-description="{{ p.description }}" data-plays="{{ p.plays }}">
+                        <span class="target-picker-text">
+                            <strong>{{ p.description }}</strong>
                             <small>
-                                {{ p.plays | number }} {{ _("přehrávání") }}{% if p.soubor %} &middot; {{ p.soubor }}{% endif %}
+                                {{ _n("{n} playbacks", p.plays) }}{% if p.file %} &middot; {{ p.file }}{% endif %}
                             </small>
                         </span>
-                        {{ vyber_cile('cil_' ~ p.id) }}
+                        {{ target_picker('target_' ~ p.id) }}
                     </div>
                     {% endfor %}
                 </div>
-                {% if k_prirazeni | length >= 500 %}
-                <p class="card-note">{{ _("Ukazuje se prvních 500 položek s nejvíc přehráními.") }}</p>
+                {% if to_assign | length >= 500 %}
+                <p class="card-note">{{ _("Showing the first 500 items with the most playbacks.") }}</p>
                 {% endif %}
             </div>
-            <div class="okno-pata">
-                <button class="btn" type="button" data-zavrit-okno>{{ _("Zrušit") }}</button>
-                <button class="btn primary" type="button" data-prirazeni-potvrdit data-krok-dal disabled>
-                    <span>{{ _("Přiřadit") }} (<span data-prirazeni-pocet>0</span>)</span>
+            <div class="modal-foot">
+                <button class="btn" type="button" data-close-modal>{{ _("Cancel") }}</button>
+                <button class="btn primary" type="button" data-assignment-confirm data-step-next disabled>
+                    <span>{{ _("Assign") }} (<span data-assignment-count>0</span>)</span>
                 </button>
             </div>
         </div>
 
-        <div class="okno-krok" data-krok="potvrzeni" hidden>
-            <p style="margin:0 0 6px"><strong data-rekap-souhrn
-               data-sablona="{{ _('Titulů k přiřazení: {t} · přehrávání k přesunu: {n}') }}"></strong></p>
+        <div class="modal-step" data-step="confirm" hidden>
+            <p style="margin:0 0 6px"><strong data-recap-summary
+               data-template="{{ _('Titles to assign: {t} · playbacks to move: {n}') }}"></strong></p>
             <p class="card-note" style="margin:0 0 14px">
-                {{ _("Historie a statistiky přejdou na vybrané tituly a položky z archivu se smažou. Těsně před tím se udělá záloha databáze.") }}
-                <span data-rekap-zbytek data-sablona="{{ _('Položek, které zůstanou v archivu beze změny: {z}.') }}"></span>
+                {{ _("History and statistics move to the chosen titles and the archived items are deleted. A database backup is made right before that.") }}
+                <span data-recap-rest data-template="{{ _('Items that stay in the archive unchanged: {count}.') }}"></span>
             </p>
-            <div class="okno-obsah" style="flex:1; min-height:0">
-                <ul class="rekapitulace" data-rekap-seznam></ul>
+            <div class="modal-body" style="flex:1; min-height:0">
+                <ul class="recap" data-recap-list></ul>
             </div>
-            <div class="okno-pata">
-                <button class="btn" type="button" data-krok-zpet>{{ _("Zpět k výběru") }}</button>
-                <button class="btn primary" type="submit" name="potvrzeno" value="1" data-rekap-potvrdit>{{ _("Ano, přiřadit") }}</button>
+            <div class="modal-foot">
+                <button class="btn" type="button" data-step-back>{{ _("Back to the selection") }}</button>
+                <button class="btn primary" type="submit" name="confirmed" value="1" data-recap-confirm>{{ _("Yes, assign") }}</button>
             </div>
         </div>
     </form>
 </dialog>
 {% endif %}
 
-{% if k_mazani %}
-{# Hromadné mazání z archivu. Řádek = archivovaná položka (díly zvlášť)
-   se zaškrtávátkem a počtem přehrání, „Vybrat vše" zaškrtne všechny.
-   Stejné dva kroky jako u přiřazení: „Smazat vybrané" jen ukáže, co
-   zmizí - maže až „Ano, smazat", které nese potvrzeno=1. Skript je
-   ve static/js/app.js (data-mazani-archivu). #}
-<dialog class="okno okno-rozvrzeni" id="okno-mazani">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ _("Smazat z archivu") }}</h2>
-        <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
+{% if to_delete %}
+{# Bulk deleting from the archive. A row = an archived item (episodes apart)
+   with a checkbox and the play count, "Select all" ticks all of them.
+   The same two steps as with assignment: "Delete selected" only shows what
+   will vanish - only "Yes, delete", carrying potvrzeno=1, deletes. The script is
+   in static/js/app.js (data-archive-delete). #}
+<dialog class="modal modal-layout" id="modal-delete">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Delete from the archive") }}</h2>
+        <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
-    <form method="post" action="/library/{{ library.id }}/archiv/smazat"
-          data-mazani-archivu class="okno-kroky">
-        <div class="okno-krok" data-krok="vyber">
+    <form method="post" action="/library/{{ library.id }}/archive/delete"
+          data-archive-delete class="modal-steps">
+        <div class="modal-step" data-step="select">
             <p class="card-note" style="margin:0 0 14px">
-                {{ _("Zaškrtni, co se má smazat. Smaže se titul i celá jeho historie přehrávání. Těsně před tím se udělá záloha databáze.") }}
+                {{ _("Tick what should be deleted. A title goes together with its whole playback history. A database backup is made right before that.") }}
             </p>
-            <label class="mazani-vse">
-                <input type="checkbox" data-vybrat-vse>
-                <span>{{ _("Vybrat vše") }} ({{ k_mazani | length | number }})</span>
+            <label class="delete-all">
+                <input type="checkbox" data-select-all>
+                <span>{{ _("Select all") }} ({{ to_delete | length | number }})</span>
             </label>
-            <div class="okno-obsah" style="flex:1; min-height:0">
-                <ul class="mazani-radky">
-                    {% for p in k_mazani %}
+            <div class="modal-body" style="flex:1; min-height:0">
+                <ul class="delete-rows">
+                    {% for p in to_delete %}
                     <li>
-                        <label class="mazani-radek">
-                            <input type="checkbox" name="smazat" value="{{ p.id }}" data-plays="{{ p.plays }}">
-                            <span class="vyber-cile-text">
-                                <strong>{{ p.popis }}</strong>
+                        <label class="delete-row">
+                            <input type="checkbox" name="delete" value="{{ p.id }}" data-plays="{{ p.plays }}">
+                            <span class="target-picker-text">
+                                <strong>{{ p.description }}</strong>
                                 <small>
-                                    {{ p.plays | number }} {{ _("přehrávání") }}{% if p.soubor %} &middot; {{ p.soubor }}{% endif %}
+                                    {{ _n("{n} playbacks", p.plays) }}{% if p.file %} &middot; {{ p.file }}{% endif %}
                                 </small>
                             </span>
                         </label>
                     </li>
                     {% endfor %}
                 </ul>
-                {% if k_mazani | length >= strop_mazani %}
-                <p class="card-note">{{ _("Ukazuje se prvních {n} položek s nejvíc přehráními. Po smazání se ukážou další.") | replace("{n}", strop_mazani | number | string) }}</p>
+                {% if to_delete | length >= delete_limit %}
+                <p class="card-note">{{ _("Showing the first {n} items with the most playbacks. More appear after deleting.") | replace("{n}", delete_limit | number | string) }}</p>
                 {% endif %}
             </div>
-            <div class="okno-pata">
-                <button class="btn" type="button" data-zavrit-okno>{{ _("Zrušit") }}</button>
-                <button class="btn danger" type="button" data-krok-dal disabled>
-                    <span>{{ _("Smazat vybrané") }} (<span data-mazani-pocet>0</span>)</span>
+            <div class="modal-foot">
+                <button class="btn" type="button" data-close-modal>{{ _("Cancel") }}</button>
+                <button class="btn danger" type="button" data-step-next disabled>
+                    <span>{{ _("Delete selected") }} (<span data-delete-count>0</span>)</span>
                 </button>
             </div>
         </div>
 
-        <div class="okno-krok" data-krok="potvrzeni" hidden>
-            <p style="margin:0 0 6px"><strong data-mazani-souhrn
-               data-sablona="{{ _('Titulů ke smazání: {t} · záznamů v historii: {n}') }}"></strong></p>
+        <div class="modal-step" data-step="confirm" hidden>
+            <p style="margin:0 0 6px"><strong data-delete-summary
+               data-template="{{ _('Titles to delete: {t} · history records: {n}') }}"></strong></p>
             <p class="card-note" style="margin:0 0 14px">
-                {{ _("Tituly i jejich historie přehrávání zmizí ze statistik. Vrátit je půjde jen obnovením zálohy, která se udělá těsně před smazáním.") }}
+                {{ _("The titles and their playback history disappear from the statistics. Only restoring the backup made right before the deletion brings them back.") }}
             </p>
-            <div class="okno-obsah" style="flex:1; min-height:0">
-                <ul class="mazani-seznam" data-mazani-seznam></ul>
+            <div class="modal-body" style="flex:1; min-height:0">
+                <ul class="delete-list" data-delete-list></ul>
             </div>
-            <div class="okno-pata">
-                <button class="btn" type="button" data-krok-zpet>{{ _("Zpět k výběru") }}</button>
-                <button class="btn danger" type="submit" name="potvrzeno" value="1">{{ _("Ano, smazat") }}</button>
+            <div class="modal-foot">
+                <button class="btn" type="button" data-step-back>{{ _("Back to the selection") }}</button>
+                <button class="btn danger" type="submit" name="confirmed" value="1">{{ _("Yes, delete") }}</button>
             </div>
         </div>
     </form>
@@ -291,21 +291,25 @@
 
 {% if items %}
 <div class="media-grid">
-    {# Seriál je jeden dlaždice, ne sto. Rozpad na řady a díly je až
-       v jeho detailu - viz /series/<id>. #}
+    {# A series is one tile, not a hundred. The split into seasons and episodes is only
+       in its detail - see /series/<id>. #}
     {% for row in items %}
     <a class="media-card {{ 'is-archived' if row.is_missing }}"
        href="{{ '/series/' ~ row.id if row.is_series else '/item/' ~ row.id }}">
         <div class="media-poster">
             <img src="/image/{{ row.id }}?kind=Primary&w=300{{ '&tag=' ~ row.image_tag if row.image_tag }}" alt="" loading="lazy"
-                 data-pri-chybe="skryt">
+                 data-on-error="hide">
             {% if row.is_missing %}
-                {# Rozostřený plakát s přeškrtnutím: na první pohled je vidět,
-                   že tenhle titul už na disku není, aniž bys musel číst text. #}
-                <span class="media-archived">{{ _("Archivováno") }}</span>
+                {# A blurred poster crossed out: it shows at first sight
+                   that this title is no longer on the disk, without reading any text. #}
+                <span class="media-archived">{{ _("Archived") }}</span>
             {% endif %}
-            {% if row.is_series %}
-                <span class="media-badge">{{ row.episode_count }}&times;</span>
+            {# The number of files: episodes for a series, files in this library for a film -
+               copies (a film twice is one tile, see scanner/copies.py)
+               and versions inside the item. The same number as in the detail at the File card. #}
+            {% set file_count = row.episode_count if row.is_series else row.file_count %}
+            {% if row.is_series or file_count > 1 %}
+                <span class="media-badge">{{ file_count }}&times;</span>
             {% endif %}
             {% if row.size_bytes %}
                 <span class="media-size">{{ row.size_bytes | bytes }}</span>
@@ -314,11 +318,13 @@
         <div class="media-name" title="{{ row.name }}">{{ row.name }}</div>
         <div class="media-meta">
             {% if row.is_series %}
-                {{ row.episode_count }} {{ _("dílů") }}
+                {{ _n("{n} episodes", row.episode_count) }}
                 {% if row.season_count > 1 %}
-                    &middot; {{ row.season_count }} {{ _("řad") }}
+                    &middot; {{ _n("{n} seasons", row.season_count) }}
                 {% endif %}
             {% else %}
+                {# A text of its own: "on disc" alone means a physical release already (the *Arr calendar). #}
+                {% if row.file_count > 1 %}{{ _("{n}× on disk").format(n=row.file_count) }} &middot;{% endif %}
                 {{ row.height | resolution(row.width) }}
                 {% if row.video_codec %}&middot; {{ row.video_codec | upper }}{% endif %}
             {% endif %}
@@ -331,74 +337,74 @@
 {% set extra %}&tab=media&sort={{ sort }}{% if search %}&search={{ search }}{% endif %}{% if archived %}&archived=1{% endif %}{% endset %}
 {{ pager(page, pages, total, '/library/' ~ library.id, extra) }}
 {% else %}
-<div class="card"><p class="chart-empty">{{ _("Nic nenalezeno.") }}</p></div>
+<div class="card"><p class="chart-empty">{{ _("Nothing found.") }}</p></div>
 {% endif %}
 
 {# ================================================================== #}
 {% else %}
 {# ================================================================== #}
 
-{# Aktivita je za zvolené období - stejné jako na Přehledu a jinde
-   (pamatuje se mezi stránkami). Přepínač nese `tab`, jinak by klik na
-   „rok" skončil na Přehledu knihovny. #}
+{# Activity is for the chosen period - the same as on the Overview and elsewhere
+   (remembered between pages). The switch carries `tab`, otherwise a click on
+   "rok" would end on the library's Overview. #}
 <div class="section-head">
     <div>
         <p class="card-note">
-            {# Vlastní rozmezí stojí na tlačítku přepínače vedle - podruhé
-               by se jen opakovalo. Rok má vlastní větu: „za posledních" +
-               „rok" by dalo „za posledních rok". A „posledních" tam být
-               musí - „za 30 dnů" jde číst i jako „za 30 dní od teď". #}
-            {% if obdobi.vlastni %}{{ _("Co se v knihovně sledovalo ve vybraném období.") }}
-            {% elif days == 365 %}{{ _("Co se v knihovně sledovalo za poslední rok.") }}
-            {% else %}{{ _("Co se v knihovně sledovalo za posledních {obdobi}.").format(obdobi=_(day_labels[days])) }}
+            {# A custom range stands on the switch's button beside - a second time
+               it would only repeat. The year has a sentence of its own: "za posledních" +
+               "rok" would give "za posledních rok". And "posledních" has to be
+               there - "za 30 dnů" can also read as "in 30 days from now". #}
+            {% if period.own %}{{ _("What was watched in this library in the selected period.") }}
+            {% elif days == 365 %}{{ _("What was watched in this library over the last year.") }}
+            {% else %}{{ _("What was watched in this library over the last {period}.").format(period=_(day_labels[days])) }}
             {% endif %}
         </p>
     </div>
-    {{ period_filter(obdobi, '/library/' ~ library.id, {'tab': 'activity'}) }}
+    {{ period_filter(period, '/library/' ~ library.id, {'tab': 'activity'}) }}
 </div>
 
 <div class="kpi-row">
-    {{ tile(_("Odsledováno"), activity.totals.hours | hours) }}
-    {{ tile(_("Spuštění"), activity.totals.plays | number) }}
-    {{ tile(_("Diváků"), activity.totals.users | number) }}
-    {{ tile(_("Různých titulů"), activity.totals.item_count | number) }}
+    {{ tile(_("Watched"), activity.totals.hours | hours) }}
+    {{ tile(_("Plays#starts"), activity.totals.plays | number) }}
+    {{ tile(_("Viewers#count"), activity.totals.users | number) }}
+    {{ tile(_("Distinct titles"), activity.totals.item_count | number) }}
 </div>
 
-{# Diváci a jejich poslední přehrání = „…včetně kdo to sledoval"
-   (knihovna_kdo). Bez něj zbydou jen tituly, přes celou šířku. #}
-{% set kdo_sledoval = vidi("knihovna_kdo") %}
-<div class="{{ 'grid-2' if kdo_sledoval }}">
+{# Viewers and their last play = "...including who watched"
+   (library_who). Without it only the titles are left, across the full width. #}
+{% set who_watched = sees("library_who") %}
+<div class="{{ 'grid-2' if who_watched }}">
     <div class="card">
         <div class="card-head">
-            <h2>{{ _("Nejsledovanější") }}</h2>
-            <p class="card-note">{{ _("v hodinách") }}</p>
+            <h2>{{ _("Most watched") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
         </div>
         {{ charts.hbar_chart(activity.top_items, 'label', 'hours') | safe }}
     </div>
 
-    {% if kdo_sledoval %}
+    {% if who_watched %}
     <div class="card">
         <div class="card-head">
-            <h2>{{ _("Diváci") }}</h2>
-            <p class="card-note">{{ _("v hodinách") }}</p>
+            <h2>{{ _("Viewers") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
         </div>
         {{ charts.hbar_chart(activity.top_users, 'label', 'hours') | safe }}
     </div>
     {% endif %}
 </div>
 
-{% if kdo_sledoval %}
+{% if who_watched %}
 <div class="card">
     <div class="card-head">
-        <h2>{{ _("Poslední přehrávání") }}</h2>
-        <p class="card-note">{{ _("posledních 25, bez ohledu na období") }}</p>
+        <h2>{{ _("Recent playbacks") }}</h2>
+        <p class="card-note">{{ _("the last 25, whatever the period") }}</p>
     </div>
     <div class="table-wrap">
         <table>
             <thead>
             <tr>
-                <th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Titul") }}</th>
-                <th>{{ _("Způsob") }}</th><th class="num">{{ _("Délka") }}</th>
+                <th>{{ _("When") }}</th><th>{{ _("User") }}</th><th>{{ _("Title") }}</th>
+                <th>{{ _("Method") }}</th><th class="num">{{ _("Duration") }}</th>
             </tr>
             </thead>
             <tbody>
@@ -406,7 +412,7 @@
             <tr>
                 <td class="nowrap muted">{{ row.started_at | datetime }}</td>
                 <td>
-                    {%- call odkaz(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
+                    {%- call link(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
                 </td>
                 <td class="truncate">
                     <a href="/item/{{ row.item_id }}">
@@ -414,7 +420,7 @@
                         {{ row.item_name }}
                     </a>
                 </td>
-                <td>{{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}</td>
+                <td>{{ method_badge(row.play_method, transcode_description(row.recount)) }}</td>
                 <td class="num">{{ row.watched_seconds | seconds }}</td>
             </tr>
             {% endfor %}
@@ -422,7 +428,7 @@
         </table>
     </div>
     {% if not activity.recent %}
-        <p class="chart-empty">{{ _("Z této knihovny se zatím nic nepřehrávalo.") }}</p>
+        <p class="chart-empty">{{ _("Nothing has been played from this library yet.") }}</p>
     {% endif %}
 </div>
 {% endif %}

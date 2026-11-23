@@ -1,0 +1,33 @@
+{# The Radarr card "How soon after release": how long after the release a film is in the library.
+
+   From the database (cards_radarr.py). Only the first import counts: an upgrade of the same
+   film a day later would count it a second time and later. And only what was
+   waited for - the film was in the app already when it came out:
+   a film added thirty years after the release would pull the numbers
+   towards years otherwise. Imported before the
+   release (a premiere, a wrong date) and titles added only after the release have
+   just their count. #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("only what was being waited for; no upgrades") }}</p>
+    </div>
+    <div class="kpi-row">
+        {{ tile(_("Median"), d.median) }}
+        {{ tile(_("90% within"), d.p90) }}
+        {{ tile(_("Before release"), d.before_release | number) }}
+    </div>
+    {% if d.not_counted or d.unknown %}
+    {# An unknown time of adding: a title the app no longer has, or a list of titles fetched by an
+       older version (filled in at the next sync). #}
+    <p class="card-note">{{ d.not_counted }} {{ d.unknown }}</p>
+    {% endif %}
+    {% if d.count %}
+        {{ charts.hbar_chart(d.buckets, 'label', 'count', unit='', limit=5) | safe }}
+    {% endif %}
+    {# A gap from the chart above - otherwise the sentence sticks to the last row. #}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Time since release runs from the movie's digital or physical release. Only what was being waited for counts: the movie was already in the app when it came out. A movie added years after its release is not counted, and neither are upgrades or imports before the release.") }}
+    </p>
+</div>

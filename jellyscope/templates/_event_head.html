@@ -1,0 +1,10 @@
+{# Seasonal decoration for <head> - only during a holiday (`holiday`, see
+   seasonal.py). Outside it nothing loads. Today's holiday game is downloaded
+   with the page: only after a click it would wait in the queue behind the posters
+   on the Overview (a browser lets only six connections to a server at once). #}
+{%- if holiday %}
+    <link rel="stylesheet" href="/static/events/events.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/events/{{ holiday }}.css?v={{ asset_version }}">
+    <script defer src="/static/events/events.js?v={{ asset_version }}"></script>
+    <script defer src="/static/events/games/{{ holiday }}.js?v={{ asset_version }}"></script>
+{%- endif %}

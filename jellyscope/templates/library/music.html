@@ -1,0 +1,178 @@
+{# A music library (web/music_library.py), with the tabs of a video library:
+   Overview (what it holds now), Albums (the grid, like the series of a video library) and
+   Activity (listening of the period). The tab is in the address (?tab=), so the back button
+   and links work. Albums that vanished from Jellyfin are not in the grid - their page stays
+   for links from the history. #}
+{% extends "base.html" %}
+{% from "_macros.html" import pager, tile, link, period_filter, method_badge, table_window with context %}
+{% block title %}{{ library.name }} · Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="subtitle" style="margin-bottom:2px"><a href="/library">&larr; {{ _("Library") }}</a></p>
+        <h1>{{ library.name }}</h1>
+        <p class="subtitle">{{ _("Music") }}</p>
+    </div>
+</div>
+
+{# Overview and Activity only with the Music area (web/music_library.library_page). #}
+<div class="tabs">
+    {% for key, label in (("overview", _("Overview")), ("albums", _("Albums")), ("activity", _("Activity"))) if key in tabs %}
+        <a href="/library/{{ library.id }}?tab={{ key }}" class="{{ 'active' if tab == key }}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+{# ================================================================== #}
+{% if tab == 'overview' %}
+{# ================================================================== #}
+<div class="kpi-row">
+    {{ tile(_("Albums#count"), overview.album_count | number) }}
+    {{ tile(_("Tracks#count"), overview.track_count | number) }}
+    {{ tile(_("Artists"), overview.artist_count | number) }}
+    {{ tile(_("Size"), overview.size_bytes | bytes) }}
+    {{ tile(_("Duration"), overview.seconds | seconds) }}
+</div>
+{# The library cards of the Music page, over this one library (same templates and data shape). #}
+<div class="grid-2">
+    {% for key in ("music_formats", "music_quality", "music_library_genres", "music_years", "music_largest") %}
+        {# `card`, `d` and `prefix` are the names the card templates read. #}
+        {% set card = music_cards[key] %}{% set d = music_card_data[key] %}{% set prefix = "" %}
+        <!-- card: {{ key }} -->
+        {% include card.template %}
+    {% endfor %}
+</div>
+
+{# ================================================================== #}
+{% elif tab == 'albums' %}
+{# ================================================================== #}
+<div class="card">
+    <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
+        <input type="hidden" name="tab" value="albums">
+        <input type="search" name="search" value="{{ search }}" maxlength="200"
+               placeholder="{{ _('Search album or artist...') }}" style="width:260px">
+        <select name="sort" style="width:auto" aria-label="{{ _('Sorting') }}">
+            {% for key, label in (("added", _("By date added")), ("name", _("By name")), ("artist", _("By artist")),
+                                    ("year", _("By year")), ("size", _("By size"))) %}
+                <option value="{{ key }}"{{ ' selected' if sort == key }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn primary" type="submit">{{ _("Show") }}</button>
+        {% if search %}
+            <a class="btn" href="/library/{{ library.id }}?tab=albums&sort={{ sort }}">{{ _("Clear search") }}</a>
+        {% endif %}
+        <span class="card-note">{{ total | number }} {{ _("found") }}</span>
+    </form>
+</div>
+
+{% if albums %}
+<div class="media-grid">
+    {% for album in albums %}
+    <a class="media-card media-card-album" href="{{ album.link }}">
+        <div class="media-poster">
+            {% if album.cover %}
+                <img src="{{ album.cover }}" alt="" loading="lazy" data-on-error="hide">
+            {% endif %}
+            {% if album.size_bytes %}<span class="media-size">{{ album.size_bytes | bytes }}</span>{% endif %}
+        </div>
+        <div class="media-name" title="{{ album.name }}">{{ album.name or "–" }}</div>
+        <div class="media-meta">
+            {{ album.artist or _("unknown artist") }}{% if album.year %} &middot; {{ album.year }}{% endif %}
+            &middot; {{ _n("{n} tracks", album.track_count) }}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% set extra %}&tab=albums&sort={{ sort }}{% if search %}&search={{ search | urlencode }}{% endif %}{% endset %}
+{{ pager(page, pages, total, '/library/' ~ library.id, extra) }}
+{% else %}
+<div class="card"><p class="chart-empty">{{ _("Nothing found.") }}</p></div>
+{% endif %}
+
+{# ================================================================== #}
+{% else %}
+{# ================================================================== #}
+{# Listening of the chosen period (remembered between pages, like everywhere). The switch
+   carries `tab`, otherwise a click on "year" would end on the Overview. #}
+<div class="section-head">
+    <div>
+        <p class="card-note">
+            {# The whole history comes as a period of its own (period.vlastni too), so it goes first. #}
+            {% if period.whole_history %}{{ _("What was listened to from the library over the whole history.") }}
+            {% elif period.own %}{{ _("What was listened to from the library in the selected period.") }}
+            {% elif days == 365 %}{{ _("What was listened to from the library over the last year.") }}
+            {% else %}{{ _("What was listened to from the library over the last {period}.").format(period=_(day_labels[days])) }}
+            {% endif %}
+        </p>
+    </div>
+    {{ period_filter(period, '/library/' ~ library.id, {'tab': 'activity'}) }}
+</div>
+
+<div class="kpi-row">
+    {{ tile(_("Listening"), activity.totals.seconds | seconds) }}
+    {{ tile(_("Plays"), activity.totals.plays | number) }}
+    {{ tile(_("Listeners#count"), activity.totals.listener_count | number) }}
+    {{ tile(_("Different albums"), activity.totals.album_count | number) }}
+</div>
+
+{# Listeners and the last listens = "...including who listened" (music_who), like the album page.
+   Without it the most played albums stay, across the full width. #}
+<div class="{{ 'grid-2' if activity.listeners is not none }}">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Most played albums") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
+        </div>
+        {% if activity.top_albums %}{{ charts.hbar_chart(activity.top_albums, 'label', 'hours') | safe }}
+        {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+    </div>
+
+    {% if activity.listeners is not none %}
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Listeners") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
+        </div>
+        {% if activity.listeners %}{{ charts.hbar_chart(activity.listeners, 'label', 'hours') | safe }}
+        {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% if activity.recent is not none %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Latest listens") }}</h2>
+        <p class="card-note">{{ _("the last 25, whatever the period") }}</p>
+    </div>
+    {% if activity.recent %}
+    <div class="table-wrap wrapper-by-width">
+        <table class="table-dense">
+            <thead>
+            <tr>
+                <th>{{ _("When") }}</th><th>{{ _("Listener") }}</th><th>{{ _("Track") }}</th>
+                <th class="wide-wrapper-only">{{ _("Method") }}</th><th class="num">{{ _("Duration") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in activity.recent %}
+            <tr>
+                <td class="nowrap muted">{{ row.started_at | datetime }}</td>
+                <td class="break-anywhere">{%- call link(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}</td>
+                <td class="break-anywhere">
+                    {% call link(row.link) %}{% if row.artist %}<span class="muted">{{ row.artist }} &ndash;</span> {% endif %}{{ row.track or "–" }}{% endcall %}
+                </td>
+                <td class="wide-wrapper-only">{{ method_badge(row.play_method) }}</td>
+                <td class="num">{{ row.watched_seconds | seconds }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="chart-empty">{{ _("Nothing from this library has been listened to yet.") }}</p>{% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+{{ table_window() }}
+{% endblock %}

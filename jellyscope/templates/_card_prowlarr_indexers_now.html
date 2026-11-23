@@ -1,0 +1,54 @@
+{# The Prowlarr card "Indexers now": the indexers and their state.
+
+   Live from Prowlarr (cards_prowlarr.py, `d.radky`: name, protocol, switched on,
+   blokovan_do, selhava_od - times in UTC; None = it could not be loaded).
+   First the indexers Prowlarr switched off for a while because of errors (for a few
+   minutes, longer when it repeats) - with since when they fail and until when it skips them.
+   Then those whose block expired, but Prowlarr still names them in the warning
+   about unavailable indexers (`reported`): it tries them again only at the next
+   query, until then nobody knows whether they work - "OK" would contradict the
+   warning a card lower. Then those a person switched off, then the others.
+
+   When the blocks or the warnings do not load (`d.blokovani_nezname`), "OK" is
+   claimed for nobody - only "enabled".
+
+   Only two columns: the times stand under the state. The card is often at half width (a 1024 px
+   window = a 320 px card) and the indexers' names are long. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("Prowlarr skips temporarily disabled ones for a while after errors") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.rows is none %}
+        <p class="chart-empty">{{ _("Indexers could not be loaded from the app.") }}</p>
+    {% elif d.rows %}
+    {% if d.blocks_unknown %}
+        <p class="card-note">{{ _("Which indexers are unavailable right now could not be loaded completely.") }}</p>
+    {% endif %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Indexer") }}</th>
+            <th>{{ _("State") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr>
+                <td class="strong break-anywhere">{{ r.name }}
+                    {% if r.protocol %}<div class="cell-sub">{{ r.protocol }}</div>{% endif %}</td>
+                <td>{% if r.blocked_until %}<span class="badge warning"><span class="dot"></span>{{ _("temporarily disabled") }}</span>
+                    <div class="cell-sub">{% if r.failing_since %}{{ _("failing since {when}").format(when=r.failing_since | datetime) }} &middot; {% endif %}{{ _("next try {when}").format(when=r.blocked_until | datetime) }}</div>
+                    {% elif r.reported %}<span class="badge warning"><span class="dot"></span>{{ _("unavailable") }}</span>
+                    <div class="cell-sub">{{ _("Prowlarr reports it in a warning; it will try it again on the next query") }}</div>
+                    {% elif not r.enabled %}<span class="badge neutral"><span class="dot"></span>{{ _("disabled manually") }}</span>
+                    {% elif d.blocks_unknown %}<span class="badge neutral"><span class="dot"></span>{{ _("enabled") }}</span>
+                    {% else %}<span class="badge good"><span class="dot"></span>{{ _("OK") }}</span>{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+        <p class="chart-empty">{{ _("There is no indexer in Prowlarr.") }}</p>
+    {% endif %}
+</div>

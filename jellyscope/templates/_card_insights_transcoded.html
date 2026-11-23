@@ -1,0 +1,46 @@
+{# The card "Most frequently transcoded files" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_transcoded`) - one template, so the two places do not drift apart.
+   Expects `transcodes (insights.transcode_offenders)`. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Most frequently transcoded files") }}</h2>
+    </div>
+    {% if transcodes %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr><th>{{ _("Title") }}</th><th class="num">{{ _("Transcode") }}</th>
+                <th class="num">{{ _("Resolution") }}</th><th>{{ _("Codec") }}</th></tr>
+            </thead>
+            <tbody>
+            {% for row in transcodes %}
+            <tr class="{{ row_class(loop.index) }}">
+                {# A link to the detail: for a series to the series, for a film to
+                   the file. Rows without a link are titles that are no longer
+                   in the library - a link to a 404 is worse than none. #}
+                <td class="truncate" title="{{ row.label }}">
+                    {% if row.detail_url %}
+                        {% call link(row.detail_url) %}{{ row.label }}{% endcall %}
+                    {% else %}
+                        {{ row.label }}
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.transcodes | number }}</td>
+                <td class="num">{{ row.height | resolution(row.width) }}</td>
+                <td class="muted">{{ (row.video_codec or '-') | upper }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ whole_table_button(transcodes | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Converting these to a format your players handle directly (usually H.264 + AAC) takes the load off the server CPU.") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("No transcodes, which is good news.") }}</p>
+    {% endif %}
+</div>

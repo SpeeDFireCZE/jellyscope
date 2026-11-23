@@ -1,0 +1,13 @@
+{# The Lidarr card "Upgrade numbers": how many upgrades happened and how many albums they concerned.
+
+   From the database (cards_lidarr.py). An upgrade is counted by albums: one album with three
+   replaced tracks is one upgrade. "Upgrades per album" is an average to one decimal
+   place (cards_base.per_item) - usually between 1 and 2. A row of tiles without
+   a heading; in a dashboard it carries a small label with the app. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Upgrades#count"), d.count | number) }}
+    {{ tile(_("Upgraded albums"), d.item_count | number) }}
+    {{ tile(_("Upgrades per album"), d.per_item) }}
+</div>

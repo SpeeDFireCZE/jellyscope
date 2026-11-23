@@ -1,8 +1,9 @@
-"""Konfigurace aplikace.
+"""Configuration of the application.
 
-Pravidlo, ktere se vyplati drzet po cely zivot: **tajemstvi nepatri do kodu**.
-API klice a hesla ctem z prostredi (souboru .env), ne z .py souboru. Diky tomu
-muzes kod klidne dat na GitHub a nic tim nevyzradis.
+A rule worth keeping for a lifetime: **secrets do not belong in the code**.
+API keys and passwords are read from the environment (the .env file), not
+from a .py file. Thanks to that you can put the code on GitHub and give
+nothing away.
 """
 
 from __future__ import annotations
@@ -15,33 +16,35 @@ from pathlib import Path
 
 log = logging.getLogger("jellyscope.config")
 
-# Slozka, ve ktere lezi cely projekt (o uroven vys nez tenhle soubor).
-# Korenova slozka instalace: tady se hleda .env a slozka data/ (v ni je
-# databaze i database.json s vyberem databaze).
+# The folder the whole project lives in (one level above this file).
+# The root folder of the installation: .env and the data/ folder (holding
+# the database and database.json with the choice of database) are looked
+# for here.
 #
-# `JELLYSCOPE_HOME` to umi presmerovat. Neni to rozmar - bez toho nejde
-# aplikaci poradne otestovat: `DATABASE_PATH` totiz **prebiji** ulozeny
-# vyber v data/database.json, takze test, ktery si nastavi vlastni
-# databazi, by stejne skoncil v te ostre. A protoze by v ni nasel uz
-# hotove schema, tvaril by se, ze prosel.
+# `JELLYSCOPE_HOME` can redirect it. That is no whim - without it the
+# application cannot be tested properly: `DATABASE_PATH` **is overridden**
+# by the choice stored in data/database.json, so a test that sets up its
+# own database would end up in the live one anyway. And since it would find
+# a finished schema there, it would look as if it passed.
 #
-# Poradi je zamerne: ulozeny vyber ma v aplikaci prednost pred .env
-# (uzivatel ho meni v Nastaveni a musi to fungovat), kdezto
-# JELLYSCOPE_HOME prepina cely domecek - tedy i ten ulozeny vyber.
+# The order is deliberate: the stored choice wins over .env in the
+# application (the user changes it in Settings and that has to work),
+# whereas JELLYSCOPE_HOME switches the whole home - the stored choice
+# included.
 BASE_DIR = Path(
     os.environ.get("JELLYSCOPE_HOME") or Path(__file__).resolve().parent.parent
 ).resolve()
 
 
 def _load_dotenv(path: Path) -> None:
-    """Nacte soubor .env do promennych prostredi.
+    """Reads the .env file into environment variables.
 
-    Existuje na to knihovna (python-dotenv), ale je to patnact radku kodu
-    a je uzitecne videt, ze na tom neni nic magickeho: precti radky,
-    preskoc komentare, rozdel na "klic=hodnota".
+    There is a library for it (python-dotenv), but it is fifteen lines of
+    code and it is useful to see there is nothing magic about it: read the
+    lines, skip the comments, split on "key=value".
 
-    Uz nastavene promenne prostredi maji prednost - to je zvyk, ktery
-    umoznuje docasne neco prebit z prikazove radky.
+    Environment variables already set win - a habit that lets you override
+    something from the command line for a while.
     """
     if not path.exists():
         return
@@ -59,10 +62,11 @@ def _load_dotenv(path: Path) -> None:
 
 @dataclass(frozen=True)
 class Config:
-    """Vsechna nastaveni na jednom miste.
+    """All the settings in one place.
 
-    `frozen=True` znamena, ze se objekt po vytvoreni nemuze zmenit. To je
-    zamer: konfigurace se nacte jednou pri startu a pak uz je konstantou.
+    `frozen=True` means the object cannot change once created. That is the
+    intent: the configuration is read once at start and is a constant from
+    then on.
     """
 
     jellyfin_url: str
@@ -71,29 +75,33 @@ class Config:
     host: str
     port: int
     secret_key: str
-    # Za reverzni proxy s HTTPS zapnout. Prihlasovaci cookie se pak posle
-    # jen po sifrovanem spojeni - bez toho ji lze po ceste odposlechnout.
+    # Switch on behind a reverse proxy with HTTPS. The sign-in cookie is then
+    # sent over an encrypted connection only - without it, it can be
+    # overheard on the way.
     secure_cookies: bool
-    # Komu verit hlavicky X-Forwarded-*. Prazdne = nikomu (primy provoz).
-    # Za proxy nastav na jeji adresu, typicky 127.0.0.1.
+    # Whom to trust the X-Forwarded-* headers. Empty = nobody (direct
+    # traffic). Behind a proxy set it to the proxy's address, typically
+    # 127.0.0.1.
     forwarded_allow_ips: str
-    # Ukazkovy rezim (demo.py). Sberac se nespousti - nema se koho ptat
-    # a jen by uzavrel vymyslene prehravani, ktere ma byt videt.
+    # Demo mode (demo.py). The collector does not start - there is nobody to
+    # ask, and it would only close the made-up playback that is meant to be
+    # seen.
     demo_mode: bool
-    # Bezi aplikace v jakemkoliv kontejneru? Rozhoduje o tom, kam se
-    # poprve nastavi slozka na zalohy - viz _v_kontejneru().
+    # Does the application run in any container? It decides where the backup
+    # folder is set the first time - see _in_container().
     in_docker: bool
-    # A bezi z NASEHO obrazu (Dockerfile v tomhle repozitari)? Jen tam
-    # ma smysl rikat "aktualizuj prestavenim obrazu"; v cizim kontejneru
-    # muze byt aplikace nainstalovana z gitu a `git pull` ji funguje.
-    nas_obraz: bool
+    # And does it run from OUR image (the Dockerfile in this repository)?
+    # Only there does "update by rebuilding the image" make sense; in someone
+    # else's container the application can be installed from git, and
+    # `git pull` works for it.
+    our_image: bool
 
 
 _cached: Config | None = None
 
 
 def load_config(reload: bool = False) -> Config:
-    """Vrati konfiguraci. Podruhe uz jen tu drive nactenou (cache)."""
+    """Returns the configuration. The second time just the one read before (cache)."""
     global _cached
     if _cached is not None and not reload:
         return _cached
@@ -105,34 +113,35 @@ def load_config(reload: bool = False) -> Config:
         db_path = BASE_DIR / db_path
 
     _cached = Config(
-        # rstrip("/") - aby fungovalo i kdyz uzivatel napise adresu s lomitkem na konci
+        # rstrip("/") - so it works even when the user writes the address with a slash at the end
         jellyfin_url=os.environ.get("JELLYFIN_URL", "http://localhost:8096").rstrip("/"),
         jellyfin_api_key=os.environ.get("JELLYFIN_API_KEY", "").strip(),
         database_path=db_path,
         host=os.environ.get("HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", "8097")),
-        secret_key=os.environ.get("SECRET_KEY", "").strip() or _vlastni_klic(),
+        secret_key=os.environ.get("SECRET_KEY", "").strip() or _generated_secret_key(),
         secure_cookies=_flag("SECURE_COOKIES"),
         forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "").strip(),
         demo_mode=_flag("JELLYSCOPE_DEMO"),
-        in_docker=_v_kontejneru(),
-        nas_obraz=_flag("JELLYSCOPE_DOCKER"),
+        in_docker=_in_container(),
+        our_image=_flag("JELLYSCOPE_DOCKER"),
     )
     return _cached
 
 
-def _v_kontejneru() -> bool:
-    """Bezi aplikace v kontejneru? V jakemkoliv, ne nutne v tom nasem.
+def _in_container() -> bool:
+    """Does the application run in a container? In any, not necessarily ours.
 
-    Ptame se trema zpusoby, protoze kazdy sam o sobe nekde selze:
+    We ask in three ways, because each one fails somewhere on its own:
 
-    * `JELLYSCOPE_DOCKER=1` nastavuje nas Dockerfile - u naseho obrazu
-      je to jistota, nic se nehada,
-    * `/.dockerenv` zaklada Docker sam, takze chyti i cizi obraz,
-    * `/run/.containerenv` je totez u Podmanu.
+    * `JELLYSCOPE_DOCKER=1` is set by our Dockerfile - for our image it is
+      a certainty, nothing is guessed,
+    * `/.dockerenv` is created by Docker itself, so it catches someone
+      else's image too,
+    * `/run/.containerenv` is the same for Podman.
 
-    Podle cgroup se to nepozna spolehlive: na cgroup v2 je v souboru
-    obvykle jen "0::/" a zadne "docker" tam neni.
+    The cgroup does not tell reliably: on cgroup v2 the file usually holds
+    just "0::/" and no "docker" at all.
     """
     if _flag("JELLYSCOPE_DOCKER"):
         return True
@@ -142,55 +151,56 @@ def _v_kontejneru() -> bool:
         return False
 
 
-def _vlastni_klic() -> str:
-    """Podpisový klíč, když ho nikdo nenastavil v `.env`.
+def _generated_secret_key() -> str:
+    """The signing key, when nobody set one in `.env`.
 
-    Tímhle klíčem se **podepisuje přihlašovací cookie**. Dřív tu byla
-    pevná náhradní hodnota - jenže ta je v každé kopii zdrojáku stejná,
-    takže kdokoliv, kdo ji zná, si podepíše vlastní cookie s cizím
-    účtem a je uvnitř jako správce. Bez hesla.
+    This key **signs the sign-in cookie**. There used to be a fixed fallback
+    value here - but that is the same in every copy of the source, so anyone
+    who knows it signs their own cookie with somebody else's account and is
+    inside as an admin. Without a password.
 
-    Proto se místo toho vyrobí náhodný klíč a uloží se do souboru
-    `data/secret_key`. Náhodný klíč držený jen v paměti by nestačil:
-    po každém restartu by byl jiný a všichni by se museli přihlašovat
-    znovu - a to je přesně ten druh otravnosti, kvůli které lidé
-    sahají po nebezpečném řešení.
+    So a random key is made instead and saved to the file `data/secret_key`.
+    A random key kept in memory only would not do: it would differ after
+    every restart and everybody would have to sign in again - and that is
+    exactly the kind of nuisance that makes people reach for the unsafe
+    solution.
 
-    Soubor dostane práva 600 (čte jen jeho vlastník). Na Windows to
-    `chmod` neumí, tam chrání soubor přístup ke složce.
+    The file gets permissions 600 (readable by its owner only). On Windows
+    `chmod` cannot do that; there the file is protected by access to the
+    folder.
     """
-    soubor = BASE_DIR / "data" / "secret_key"
+    path = BASE_DIR / "data" / "secret_key"
     try:
-        if soubor.is_file():
-            ulozeny = soubor.read_text(encoding="utf-8").strip()
-            if len(ulozeny) >= 32:
-                return ulozeny
+        if path.is_file():
+            stored = path.read_text(encoding="utf-8").strip()
+            if len(stored) >= 32:
+                return stored
 
-        novy = secrets.token_hex(32)
-        soubor.parent.mkdir(parents=True, exist_ok=True)
-        soubor.write_text(novy, encoding="utf-8")
+        new_key = secrets.token_hex(32)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(new_key, encoding="utf-8")
         try:
-            soubor.chmod(0o600)
+            path.chmod(0o600)
         except OSError:
             pass
         log.warning(
-            "SECRET_KEY nebyl nastaven, vyrobil jsem náhodný a uložil ho do %s. "
-            "Přihlášení tím zůstává v bezpečí; kdo chce klíč spravovat sám, "
-            "ať ho vyplní v .env.", soubor)
-        return novy
+            "SECRET_KEY was not set, so a random one was generated and "
+            "stored in %s. Sign-in stays safe; set it in .env to "
+            "manage the key yourself.", path)
+        return new_key
     except OSError as exc:
-        # Na disk se psát nedá (jen pro čtení, chybí práva). Radši klíč
-        # jen v paměti - po restartu se všichni přihlásí znovu, ale
-        # podepsat si cizí přihlášení nikdo nemůže.
-        log.error("Podpisový klíč nejde uložit (%s). Použil jsem dočasný - "
-                  "po restartu bude potřeba se přihlásit znovu.", exc)
+        # The disk cannot be written (read-only, missing permissions). Better
+        # a key in memory only - after a restart everybody signs in again,
+        # but nobody can sign somebody else's sign-in.
+        log.error("The signing key cannot be saved (%s). Using a temporary one; "
+                  "everyone will have to sign in again after a restart.", exc)
         return secrets.token_hex(32)
 
 
 def _flag(name: str) -> bool:
-    """Pravda/nepravda z promenne prostredi.
+    """True or false from an environment variable.
 
-    Prijima "1", "true", "yes", "on" - lide je pisou ruzne a hadat se
-    s uzivatelem o tvar hodnoty nema smysl.
+    Takes "1", "true", "yes", "on" - people write them differently, and
+    arguing with the user about the shape of the value makes no sense.
     """
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}

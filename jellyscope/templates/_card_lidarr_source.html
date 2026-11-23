@@ -1,0 +1,33 @@
+{# A Lidarr card of one source: Indexers, Release groups, Download clients,
+   Usenet and torrent or Quality of imported albums.
+
+   Five cards, one template - they differ only in the group
+   cards_lidarr.py sends them (`d.rows`: name, count, size; `d.import_count` =
+   how many albums were imported in all, the share is of that). A long table as on Insights: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table>
+        <thead><tr>
+            <th>{{ _("Name") }}</th>
+            <th class="num">{{ _("Albums") }}</th>
+            <th class="num">{{ _("Share") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong">{{ r.name }}</td>
+                <td class="num">{{ r.count | number }}</td>
+                <td class="num">{{ (r.count / d.import_count * 100) | percent if d.import_count else "–" }}</td>
+                <td class="num muted">{{ r.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

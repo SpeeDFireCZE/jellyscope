@@ -1,0 +1,49 @@
+{# The music card "Newly added albums": a strip of covers from the last added.
+
+   From the database (cards_music.py, `d.radky` = stats.music_newest, at most
+   cards_music.RECENT_ALBUMS albums). Shaped like "Recently added" for films; the same albums
+   as a table in the window (a button in the card's head). #}
+{% from "_macros.html" import poster, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for a in d.rows %}
+        <div class="poster-card">
+            {{ poster(a.cover, "poster-frame album-cover", detail=a.link, placeholder=_("No cover")) }}
+            {% call link(a.link, {"class": "poster-name", "title": a.name}) %}{{ a.name or "–" }}{% endcall %}
+            <div class="poster-meta">{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %} &middot; {{ a.added_at | relative }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="modal-only">
+        <table>
+            <thead><tr>
+                <th>{{ _("Album") }}</th>
+                <th>{{ _("Artist") }}</th>
+                <th class="num">{{ _("Year") }}</th>
+                <th class="num">{{ _("Tracks#count") }}</th>
+                <th>{{ _("Added") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for a in d.rows %}
+                <tr>
+                    <td class="strong">{% call link(a.link) %}{{ a.name or "–" }}{% endcall %}</td>
+                    <td>{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %}</td>
+                    <td class="num">{{ a.year or "–" }}</td>
+                    <td class="num">{{ a.track_count | number }}</td>
+                    <td class="muted">{{ a.added_at | datetime }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="chart-empty">{{ _("The music library is empty so far.") }}</p>
+    {% endif %}
+</div>

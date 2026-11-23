@@ -1,0 +1,27 @@
+{# The Radarr card "App warnings": what the app itself reports as a problem.
+
+   Live from the app (cards_radarr.py, `d` = the live state for the account). The texts carry
+   addresses and paths of the inner network ("Unable to communicate with qBittorrent
+   at http://192.168.1.5:8080"), hence only the admin gets them
+   (cards_radarr.for_account); others see only how many warnings there are. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("reported by the app itself") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.health_count is none %}
+        <p class="chart-empty">{{ _("The warnings could not be loaded from the app.") }}</p>
+    {% elif d.health %}
+        <ul class="flash-list">
+        {% for z in d.health %}
+            <li><span class="badge {{ 'critical' if z.type == 'error' else 'warning' }}">{{ z.type }}</span> {{ z.message }}</li>
+        {% endfor %}
+        </ul>
+    {% elif d.health_count %}
+        <p class="chart-empty">{{ _("The app reports warnings: {n}. Details are visible to the admin.").format(n=d.health_count | number) }}</p>
+    {% else %}
+        <p class="chart-empty">{{ _("The app reports no warnings.") }}</p>
+    {% endif %}
+</div>

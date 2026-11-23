@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 {% from "_macros.html" import period_filter with context %}
-{% block title %}{{ _("Uživatelé") }} &middot; Jellyscope{% endblock %}
+{% block title %}{{ _("Users") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div>
-        <h1>{{ _("Uživatelé") }}</h1>
+        <h1>{{ _("Users") }}</h1>
         <p class="subtitle">
-            {# Tři celé věty: u vlastního rozmezí popisek období není (zbyla
-               by „za posledních ."), u roku by vyšlo „za posledních rok". #}
-            {% if obdobi.vlastni %}{{ _("Kdo kolik sleduje ve vybraném období.") }}
-            {% elif days == 365 %}{{ _("Kdo kolik sleduje za poslední rok.") }}
-            {% else %}{{ _("Kdo kolik sleduje za posledních {obdobi}.").format(obdobi=_(day_labels[days])) }}
+            {# Three whole sentences: for a custom range there is no period label ("za posledních ."
+               would be left), for a year it would come out as "za posledních rok". #}
+            {% if period.own %}{{ _("Who watches how much in the selected period.") }}
+            {% elif days == 365 %}{{ _("Who watches how much over the last year.") }}
+            {% else %}{{ _("Who watches how much over the last {period}.").format(period=_(day_labels[days])) }}
             {% endif %}
         </p>
     </div>
-    {{ period_filter(obdobi, '/users') }}
+    {{ period_filter(period, '/users') }}
 </div>
 
-{% include "_sekce_uzivatele_graf.html" %}
+{% include "_card_users_chart.html" %}
 
-{% include "_sekce_uzivatele_tabulka.html" %}
+{% include "_card_users_table.html" %}
 {% endblock %}

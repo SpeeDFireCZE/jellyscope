@@ -1,72 +1,70 @@
-{# Pás nedávno přidaných titulů.
+{# A strip of recently added titles.
 
-   Vlastní šablona, protože se kreslí ze dvou míst: při načtení Přehledu
-   a pak znovu, kdykoliv doběhne synchronizace a přibylo něco nového
-   (viz /partials/recently-added). Kdyby existovala dvakrát, jedna kopie
-   by se časem od druhé odchýlila. #}
+   A template of its own, because it is drawn from two places: when the Overview loads
+   and again whenever a sync finishes and something new was added
+   (see /partials/recently-added). Were it there twice, one copy
+   would drift from the other in time. #}
 
 {% if recent %}
-{# Celý pás je karta, ne volný pruh na stránce.
+{# The whole strip is a card, not a loose band on the page.
 
-   Bez rámečku plakáty splývaly s podkladem a nebylo poznat, kde pás
-   začíná a kde končí - obzvlášť když se posouvá do strany a poslední
-   plakát je useknutý v půli. #}
+   Without a frame the posters merged with the background and one could not tell where
+   the strip starts and ends - especially when it scrolls sideways and the last
+   poster is cut in half. #}
 <div class="card recent-card">
     <div class="card-head">
-        <h2>{{ _("Nedávno přidané") }}</h2>
-        <a class="card-note" href="/library">{{ _("celá knihovna") }} &rarr;</a>
+        <h2>{{ _("Recently added") }}</h2>
+        <a class="card-note" href="/library">{{ _("whole library") }} &rarr;</a>
     </div>
 
-{# Vodorovný pás plakátů. Posouvá se sám, když se nevejdou - u obsahu,
-   který je ze své podstaty dlouhý seznam, je to správný tvar. #}
+{# A horizontal strip of posters. It scrolls by itself when they do not fit - for
+   content that is a long list by its nature, it is the right shape. #}
 <div class="poster-strip">
     {% for row in recent %}
-    {# Když přišel jeden díl, je karta prostý odkaz rovnou na něj. Když
-       jich přišlo víc, ukáže se po najetí jejich seznam - tam už není co
-       "otevřít jedním klikem", protože každý díl je jinam. #}
+    {# When one episode came, the card is a plain link straight to it. When
+       more came, their list shows on hover - there is nothing to
+       "open with one click" there, because every episode goes elsewhere. #}
     <div class="poster-card{% if row.episodes %} has-episodes{% endif %}">
         {% if row.episodes %}
-        {# Rámeček tady NENÍ odkaz. Odkaz uvnitř odkazu je neplatné HTML -
-           prohlížeč vnější `<a>` uzavře, jakmile narazí na vnitřní, a seznam
-           dílů by vypadl mimo rámeček. Proklik na seriál obstará název pod
-           plakátem, jednotlivé díly ten seznam. #}
+        {# The frame is NOT a link here. A link inside a link is invalid HTML -
+           the browser closes the outer `<a>` as soon as it meets the inner one, and the list
+           of episodes would fall out of the frame. The name under the poster leads to the
+           series, the list to the single episodes. #}
         <div class="poster-frame">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
-                 loading="lazy" data-pri-chybe="skryt">
-            {# Místo "epizoda" rovnou počet - ať je na první pohled vidět,
-               že přišla celá dávka. Čeština chce jiný tvar pro 2-4 a jiný
-               od 5 výš; dávka je vždycky aspoň dvě, takže stačí dva. #}
+                 loading="lazy" data-on-error="hide">
+            {# Instead of "episode" the count straight away - so it shows at first sight
+               that a whole batch came. #}
             <span class="poster-badge">
-                {{ row.episodes | length }}
-                {{ _("díly") if row.episodes | length < 5 else _("dílů") }}
+                {{ _n("{n} episodes", row.episodes | length) }}
             </span>
 
-            {# Seznam leží uvnitř rámečku schválně: pás plakátů se posouvá
-               do stran (overflow), takže cokoliv, co by z něj vyčnívalo,
-               by se oříznulo. Takhle zůstane na svém. #}
+            {# The list lies inside the frame on purpose: the strip of posters scrolls
+               sideways (overflow), so anything sticking out of it
+               would be cut off. This way it stays where it is. #}
             <div class="poster-episodes">
-                <span class="poster-episodes-head">{{ _("Přidané díly") }}</span>
-                {% for dil in row.episodes %}
-                <a href="/item/{{ dil.id }}" title="{{ dil.name }}">
-                    {%- if dil | kod_dilu -%}
-                        <strong>{{ dil | kod_dilu }}</strong>
+                <span class="poster-episodes-head">{{ _("Added episodes") }}</span>
+                {% for ep in row.episodes %}
+                <a href="/item/{{ ep.id }}" title="{{ ep.name }}">
+                    {%- if ep | episode_code -%}
+                        <strong>{{ ep | episode_code }}</strong>
                     {%- endif %}
-                    {{ dil.name }}
+                    {{ ep.name }}
                 </a>
                 {% endfor %}
             </div>
         </div>
         {% else %}
-        {# Plakát i název pod ním vedou na tentýž titul. Myší se klikne
-           kamkoliv, ale klávesnice a čtečka obrazovky mají mít jeden
-           odkaz: jinak se u každého plakátu mačká Tab dvakrát a čtečka
-           u obrázku přečte jen „odkaz" bez jména (alt je prázdný, protože
-           název je hned pod ním). #}
+        {# The poster and the name under it lead to the same title. With a mouse one clicks
+           anywhere, but the keyboard and a screen reader are to have one
+           link: otherwise Tab is pressed twice at every poster and a screen reader
+           reads only "link" without a name at the image (the alt is empty, because
+           the name is right under it). #}
         <a class="poster-frame" href="/item/{{ row.id }}" tabindex="-1" aria-hidden="true">
             <img src="/image/{{ row.poster_id }}?kind=Primary&w=300{{ '&tag=' ~ row.poster_tag if row.poster_tag }}" alt=""
-                 loading="lazy" data-pri-chybe="skryt">
+                 loading="lazy" data-on-error="hide">
             {% if row.is_episode %}
-                <span class="poster-badge">{{ _("epizoda") }}</span>
+                <span class="poster-badge">{{ _("episode") }}</span>
             {% endif %}
         </a>
         {% endif %}

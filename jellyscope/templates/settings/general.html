@@ -1,0 +1,107 @@
+{# A Settings section: language, time and version
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# The version and watching for a new one                             #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="version">
+    <div class="card-head">
+        <h2>{{ _("Version") }}</h2>
+        <p class="card-note">{{ _("running") }} <strong>v{{ version_info.version }}</strong></p>
+    </div>
+
+    {# One button. Checking is an action; what it found is information - and that
+       shows as a line under the button, not as a second button. The line
+       opens the same window as the footer: the release notes and the update
+       in one click. #}
+    <form method="post" action="/settings/updates">
+        <p class="card-note">
+            {{ _("Regular checks are switched on and scheduled in") }}
+            <a href="/settings?section=tasks">{{ _("Tasks") }}</a>
+            {{ _('as the "Check for updates" task. It installs nothing, it only tells you. It is the only connection anywhere other than Jellyfin, which is why it is off by default.') }}
+        </p>
+        <div class="btn-row" style="margin-top:14px">
+            <button data-keep-scroll class="btn primary" type="submit">
+                {{ _("Check for updates") }}
+            </button>
+        </div>
+    </form>
+
+    {% if version_info.is_newer or version_info.new_translations %}
+    <button class="version-new{{ ' version-translations' if not version_info.is_newer }}"
+            type="button" data-modal="modal-update" style="margin-top:14px">
+        <span class="dot"></span>
+        <span>
+            {% if version_info.is_newer and version_info.new_translations %}
+                <strong>{{ _("New version") }} {{ version_info.found_one }} {{ _("and new translations") }}</strong><br>
+                <span class="version-new-note">{{ _("you have") }} v{{ version_info.version }} &middot; {{ _("what is new") }}</span>
+            {% elif version_info.is_newer %}
+                <strong>{{ _("New version") }} {{ version_info.found_one }}</strong><br>
+                <span class="version-new-note">{{ _("you have") }} v{{ version_info.version }} &middot; {{ _("what is new") }}</span>
+            {% else %}
+                <strong>{{ _("New translations") }}</strong><br>
+                <span class="version-new-note">{{ version_info.new_translations }} {{ _("files on GitHub") }} &middot; {{ _("download") }}</span>
+            {% endif %}
+        </span>
+    </button>
+    {% endif %}
+
+
+    {% if version_info.checked_at %}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Last checked") }} {{ version_info.checked_at | relative }}{% if version_info.found_one %},
+        {{ _("latest release") }}: {{ version_info.found_one }}{% endif %}.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Language and time") }}</h2>
+        <p class="card-note">{{ _("The choice applies to the whole application, not just to you.") }}</p>
+    </div>
+    <form method="post" action="/settings/language">
+        <div class="field">
+            <label for="ui_language">{{ _("Interface") }}</label>
+            <select id="ui_language" name="ui_language" style="width:auto">
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == server_language }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# The app's time zone. Without it the machine's zone mattered -
+           and a server running in UTC shifted the evening peak in the charts
+           by two hours against what people lived through. #}
+        <div class="field">
+            <label for="app_timezone">{{ _("Time zone") }}</label>
+            <input type="text" id="app_timezone" name="app_timezone" list="zones"
+                   value="{{ settings.app_timezone }}" placeholder="{{ _("as the system says") }}"
+                   style="width:260px">
+            <datalist id="zones">
+                {% for z in time_zones %}<option value="{{ z }}">{% endfor %}
+            </datalist>
+            <p class="hint">
+                {{ _('All times are shown in it and the days in charts are split by it. An empty field means "whatever the server says". The change takes full effect after a restart, because the database splits the days and has to be set up at startup.') }}
+                {% if zone_now %}<br>{{ _("It is now") }} <strong>{{ zone_now }}</strong>.{% endif %}
+            </p>
+        </div>
+
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-head"><h2>{{ _("What stays in .env") }}</h2></div>
+    <p class="card-note">
+        {{ _("The .env file now only holds the secret key for signing session cookies and the network settings (host and port). The Jellyfin connection, passwords and everything else live in the database and are changed here.") }}
+    </p>
+</div>

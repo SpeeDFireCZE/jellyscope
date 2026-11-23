@@ -1,94 +1,97 @@
 # Jellyscope.
 #
-#     docker compose up -d          spustí na pozadí
-#     docker compose logs -f        ukáže, co dělá
-#     docker compose down           zastaví (data zůstanou v ./data)
+#     docker compose up -d          starts it in the background
+#     docker compose logs -f        shows what it is doing
+#     docker compose down           stops it (the data stays in ./data)
 #
-# Nic se nenastavuje tady. Všechno se bere ze souboru `.env` vedle tohohle
-# souboru - ten samý, který používá aplikace i bez Dockeru. Vzor je
-# v `.env.example`:
+# Nothing is set here. Everything is taken from the `.env` file next to
+# this one - the same file the app uses without Docker. The template is
+# `.env.example`:
 #
 #     cp .env.example .env
 #     python3 -c "import secrets; print(secrets.token_hex(32))"   # SECRET_KEY
 #
-# Compose ten soubor čte sám a dosadí hodnoty níž. Chceš jiný port? Změň
-# PORT v `.env` a `docker compose up -d`. Nic jiného.
+# Compose reads that file itself and fills the values in below. Want a
+# different port? Change PORT in `.env` and run `docker compose up -d`.
+# Nothing else.
 
 services:
   jellyscope:
     build:
       context: .
       args:
-        # 0 = bez ffmpeg (~250 MB menší obraz). Technické údaje pak umí
-        # jen to, co hlásí Jellyfin - čtení souborů přes ffprobe nebude.
+        # 0 = without ffmpeg (~250 MB smaller image). Technical data is then
+        # only what Jellyfin reports - no reading the files with ffprobe.
         FFPROBE: "${FFPROBE:-1}"
-        # 0 = bez pg_dump (~30 MB). Týká se jen záloh PostgreSQL; bez něj
-        # se zálohuje vlastním exportem. U SQLite je to jedno.
+        # 0 = without pg_dump (~30 MB). Only PostgreSQL backups care; without
+        # it they use the app's own export. With SQLite it makes no difference.
         PGDUMP: "${PGDUMP:-1}"
     image: jellyscope
     container_name: jellyscope
     restart: unless-stopped
 
     ports:
-      # BIND=127.0.0.1 (výchozí) znamená "jen přes reverzní proxy".
-      # Bez proxy dej do `.env` BIND=0.0.0.0, ať se dá na aplikaci dostat
-      # ze sítě.
+      # BIND=127.0.0.1 (the default) means "only through a reverse proxy".
+      # Without a proxy put BIND=0.0.0.0 into `.env`, so the app can be
+      # reached from the network.
       - "${BIND:-127.0.0.1}:${PORT:-8097}:${PORT:-8097}"
 
     environment:
-      # Uvnitř kontejneru se musí poslouchat na všech adresách, jinak se
-      # k aplikaci Docker nedostane. Ven ji pouští teprve `ports` výš.
+      # Inside the container the app has to listen on all addresses, or
+      # Docker cannot reach it. Only `ports` above lets it out.
       HOST: "0.0.0.0"
       PORT: "${PORT:-8097}"
 
-      # POVINNÉ - podepisují se tím přihlašovací cookies. Po změně se
-      # všichni odhlásí. Bez něj se kontejner ani nespustí, což je
-      # schválně: prázdný klíč je díra, ne výchozí hodnota.
-      SECRET_KEY: "${SECRET_KEY:?vyplň SECRET_KEY v souboru .env}"
+      # REQUIRED - it signs the login cookies. Changing it signs everybody
+      # out. Without it the container does not even start, on purpose: an
+      # empty key is a hole, not a default.
+      SECRET_KEY: "${SECRET_KEY:?set SECRET_KEY in the .env file}"
 
-      # 1 = ukázkový režim: všechno je vidět, nic nejde uložit. Pro
-      # veřejnou ukázku, ne jako ochrana běžné instalace - od toho je
-      # přihlášení a účty. Bez téhle řádky by šel kontejner pustit jen
-      # jako plnohodnotná instalace a veřejná ukázka by se dala přenastavit
-      # každému, kdo se do ní podívá.
+      # 1 = demo mode: everything can be looked at, nothing can be saved.
+      # For a public demo, not as protection of a normal installation -
+      # that is what the login and accounts are for. Without this line the
+      # container could run only as a full installation, and anyone who
+      # looked at a public demo could change its settings.
       JELLYSCOPE_DEMO: "${JELLYSCOPE_DEMO:-0}"
 
-      # Připojení k Jellyfinu se vyplňuje v aplikaci a bydlí v databázi;
-      # tohle je jen první nastřelení při úplně prvním startu.
+      # The Jellyfin connection is filled in inside the app and lives in the
+      # database; this is only a first guess for the very first start.
       JELLYFIN_URL: "${JELLYFIN_URL:-http://jellyfin:8096}"
       JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
 
-      # Za HTTPS proxy patří do `.env` obojí: SECURE_COOKIES=1 (cookie jen
-      # po HTTPS) a FORWARDED_ALLOW_IPS s adresou proxy - bez toho druhého
-      # uvidíš u všech přehrávání adresu proxy místo adresy diváka.
+      # Behind an HTTPS proxy put both into `.env`: SECURE_COOKIES=1 (the
+      # cookie over HTTPS only) and FORWARDED_ALLOW_IPS with the proxy's
+      # address - without the second, every playback shows the proxy's
+      # address instead of the viewer's.
       SECURE_COOKIES: "${SECURE_COOKIES:-0}"
       FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-}"
 
-      # Kvůli časům v grafech a v historii. Bez toho běží kontejner v UTC
-      # a večerní špička se rozjede o dvě hodiny.
+      # For the times in charts and in the history. Without it the container
+      # runs in UTC and the evening peak moves by two hours.
       TZ: "${TZ:-Europe/Prague}"
 
     volumes:
-      # Jediné, o co jde v kontejneru přijít: databáze, log, mezipaměť
-      # obrázků a zálohy. Složka na hostiteli, ne pojmenovaný svazek -
-      # zálohu si tak odneseš prostým zkopírováním.
+      # The only thing in the container you can lose: the database, log,
+      # image cache and backups. A folder on the host, not a named volume -
+      # so a backup is a plain copy of a folder.
       #
-      # Vlastníka téhle složky si kontejner při startu srovná sám, ale
-      # jen když je prázdná - tedy když ji před chvílí vyrobil Docker
-      # a není v ní nic tvého (deploy/docker-entrypoint.sh). Do složky,
-      # ve které něco je, nesahá: pak aplikace naběhne a na každé
-      # stránce řekne, co spustit.
+      # The container sets the owner of this folder itself at start, but
+      # only when the folder is empty - that is, when Docker made it a moment
+      # ago and nothing of yours is in it (deploy/docker-entrypoint.sh). A
+      # folder with something in it is left alone: the app then starts
+      # anyway and says on every page what to run.
       #
-      # Cesta pro zálohy se nastavuje v aplikaci a musí ležet UVNITŘ téhle
-      # složky (třeba /app/data/backups), jinak se uloží do kontejneru
-      # a s dalším buildem zmizí. Chceš je jinam? Připoj tam další svazek.
+      # The backup path is set in the app and has to lie INSIDE this folder
+      # (for example /app/data/backups), otherwise backups are stored in the
+      # container and disappear with the next build. Want them elsewhere?
+      # Mount another volume there.
       - "${DATA_DIR:-./data}:/app/data"
 
-      # Knihovna. Potřebná jen když technické údaje čteš přes ffprobe.
-      # Připoj ji JEN PRO ČTENÍ (:ro) - Jellyscope do souborů nikdy
-      # nezapisuje a tohle je nejlevnější způsob, jak si tím být jistý.
-      # V Nastavení → Sběr dat pak nastav mapování cest, aby cesta, kterou
-      # hlásí Jellyfin, seděla na cestu v kontejneru.
+      # The library. Needed only when technical data is read with ffprobe.
+      # Mount it READ-ONLY (:ro) - Jellyscope never writes to the files, and
+      # this is the cheapest way to be sure of that. Then in Settings → Data
+      # collection map the paths, so the path Jellyfin reports matches the
+      # path in the container.
       # - /srv/media:/media:ro
 
     security_opt:

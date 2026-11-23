@@ -1,0 +1,32 @@
+{# The music card "File formats": the format by the audio codec.
+
+   From the database (cards_music.py, `d.radky` = stats.music_formats). By the codec,
+   not by the extension: a .m4a file is AAC as well as ALAC. A track Jellyfin
+   reports no codec for is under "unknown". #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Format") }}</th>
+            <th class="num">{{ _("Tracks#count") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Share") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for f in d.rows %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{{ f.format or _("unknown") }}</td>
+                <td class="num">{{ f.track_count | number }}</td>
+                <td class="num wide-wrapper-only">{{ f.share | percent }}</td>
+                <td class="num">{{ f.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

@@ -1,0 +1,26 @@
+{# The Sonarr card "Most upgraded titles".
+
+   From the database (cards_sonarr.py, `d.radky`: title, number of upgrades). A long table as on Insights: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table>
+        <thead><tr>
+            <th>{{ _("Title") }}</th>
+            <th class="num">{{ _("Upgrades#count") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for t in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong">{% call link(t.detail_url) %}{{ t.title }}{% endcall %}</td>
+                <td class="num">{{ t.count | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

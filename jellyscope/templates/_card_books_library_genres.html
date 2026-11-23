@@ -1,0 +1,28 @@
+{# The books card "Genres in the library": how many books each genre has.
+
+   From the database (cards_books.py, `d.rows` = stats.books_library_genres). A book with several genres counts towards
+   each. A long table: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("a book with several genres counts towards each") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Genre") }}</th>
+            <th class="num">{{ _("Books") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for z in d.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{{ z.genre }}</td>
+                <td class="num">{{ z.work_count | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length) }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

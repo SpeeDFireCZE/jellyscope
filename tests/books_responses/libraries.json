@@ -1,0 +1,32 @@
+[
+ {
+  "Name": "Knihy",
+  "Locations": [
+   "/media/books"
+  ],
+  "CollectionType": "books",
+  "ItemId": "9df755f2b7a9da9df80891c79b9a8a4d",
+  "PrimaryImageItemId": "9df755f2b7a9da9df80891c79b9a8a4d",
+  "RefreshStatus": "Idle"
+ },
+ {
+  "Name": "Audioknihy",
+  "Locations": [
+   "/media/audiobooks"
+  ],
+  "CollectionType": "books",
+  "ItemId": "5e2022368c574c08ee6f709de93555dc",
+  "PrimaryImageItemId": "5e2022368c574c08ee6f709de93555dc",
+  "RefreshStatus": "Idle"
+ },
+ {
+  "Name": "Filmy",
+  "Locations": [
+   "/media/movies"
+  ],
+  "CollectionType": "movies",
+  "ItemId": "a9b6c79d6191931493de6211942d9355",
+  "PrimaryImageItemId": "a9b6c79d6191931493de6211942d9355",
+  "RefreshStatus": "Idle"
+ }
+]

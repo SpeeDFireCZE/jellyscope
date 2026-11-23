@@ -1,0 +1,63 @@
+{# The card with the key `origin`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+{# The template imports the macro itself. In a custom dashboard it is drawn
+   on its own, so it must not rely on what the page around it
+   imported - on the Network page it worked, in a custom dashboard it did not. #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Where they watch from") }}</h2>
+        <p class="card-note">{{ _("by the address Jellyfin reports") }}</p>
+    </div>
+
+    <div class="kpi-row" style="margin-bottom:16px">
+        {{ tile(_("From the home network"), where_from.groups.at_home.plays | number,
+                note=where_from.groups.at_home.byte_count | bytes) }}
+        {{ tile(_("From the internet"), where_from.groups.internet.plays | number,
+                note=where_from.groups.internet.byte_count | bytes) }}
+        {{ tile(_("Origin unknown"), where_from.groups.unknown_origin.plays | number,
+                note=_("from imports, which carry no address")) }}
+    </div>
+
+    {% if where_from.urls %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Address") }}</th>
+                <th>{{ _("Origin") }}</th>
+                <th class="num">{{ _("People") }}</th>
+                <th class="num">{{ _("Plays#starts") }}</th>
+                <th class="num">{{ _("Time") }}</th>
+                <th class="num">{{ _("Transferred") }}</th>
+                <th class="num">{{ _("Last seen") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for line in where_from.urls %}
+            <tr>
+                <td><code>{{ line.address }}</code></td>
+                <td>
+                    {% if line.home %}
+                        <span class="badge good"><span class="dot"></span>{{ _("home network") }}</span>
+                    {% else %}
+                        <span class="badge warning"><span class="dot"></span>{{ _("internet") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ line.people | number }}</td>
+                <td class="num">{{ line.plays | number }}</td>
+                <td class="num">{{ line.seconds | seconds }}</td>
+                <td class="num">{{ line.byte_count | bytes }}</td>
+                <td class="num nowrap muted">{{ line.last_at | relative }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+</div>

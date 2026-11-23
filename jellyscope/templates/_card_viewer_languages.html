@@ -1,0 +1,131 @@
+{# A card of the Languages page (video/languages.html).
+
+   Included by that page and by dashboards (cards.py, key `who_language`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `by_user (langstats.languages_by_user)` and, for the legend, `watched`. #}
+{% from "_macros.html" import link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Who watches in which language") }}</h2>
+        <p class="card-note">{{ _("each bar is one person, width = language share") }}</p>
+    </div>
+
+    {# One bar is written twice - in the card and in the window - so it is a
+       macro. Two copies would drift apart in time. #}
+    {% macro bar(person) %}
+    <div style="margin-bottom:18px" data-user="{{ person.user_id or '' }}">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px">
+            <strong>
+                {% call link(person.user_id and "/users/" ~ person.user_id) %}{{ person.name }}{% endcall %}
+            </strong>
+            <span class="card-note">
+                {{ person.total | hours }}
+                {% if person.main %}
+                    &middot; {{ _("mostly") }} {{ person.main.label }}
+                    ({{ person.main.percent | percent }})
+                {% endif %}
+            </span>
+        </div>
+        {{ charts.stacked_bar(person.segments) | safe }}
+    </div>
+    {% endmacro %}
+
+    {# Up to `people_limit` the bars are written directly. Above it they hide in
+       a window: with fifty viewers the card would never end and everything under it
+       would be off the screen. #}
+    {# Two limits: one for a wide screen, the other for a phone. The server
+       does not know what a person looks on, so it sends both and CSS decides -
+       hence `desktop-only` and `mobile-only` instead of two different pages.
+       The same as with "Now playing", see _now_playing.html. #}
+    {% set hide_people = by_user | length > people_limit %}
+    {% set hide_people_mobile = by_user | length > people_limit_mobile %}
+
+    {% if hide_people %}
+        <div class="btn-row" style="margin-bottom:12px">
+            <button class="btn session-more" type="button" data-modal="modal-languages">
+                <span>
+                    <strong>{{ _("Viewers are hidden because there are many") }}</strong><br>
+                    <span class="session-more-note">
+                        {{ _n("show all {n}", by_user | length) }}
+                    </span>
+                </span>
+            </button>
+        </div>
+    {% else %}
+        {# Bars above the mobile limit hide on a narrow screen -
+           on a wide one they all stay. #}
+        {% for person in by_user %}
+            {% if loop.index > people_limit_mobile %}
+                <div class="desktop-only">{{ bar(person) }}</div>
+            {% else %}
+                {{ bar(person) }}
+            {% endif %}
+        {% endfor %}
+
+        {% if hide_people_mobile %}
+        {# On a phone it leads to the same viewers in the window as with the wide limit. #}
+        <div class="btn-row mobile-only" style="margin-bottom:12px">
+            <button class="btn" type="button" data-modal="modal-languages">
+                {{ _n("show all {n}", by_user | length) }}
+            </button>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    {# The legend is shared by all bars - the colours are the same in all of them. #}
+    {{ charts.legend(watched.rows) | safe }}
+
+    {# The window has to be on the page even when it hides only on a phone -
+       the button above points at it. #}
+    {% if hide_people or hide_people_mobile %}
+    <dialog class="modal modal-wide" id="modal-languages">
+        <form method="dialog" class="modal-head">
+            <h2>{{ _("Who watches in which language") }} ({{ by_user | length }})</h2>
+            <button class="btn modal-close" type="submit"
+                    aria-label="{{ _("Close") }}">&times;</button>
+        </form>
+
+        {# The filter applies only here in the window - it is a way to get to one person
+           in a long list, not a saved setting. #}
+        <div class="filter-fields" style="margin-bottom:14px">
+            <label for="filter-languages">{{ _("User") }}</label>
+            <select id="filter-languages" data-filter-modal="modal-languages">
+                <option value="">{{ _("everyone") }}</option>
+                {% for person in by_user %}
+                    <option value="{{ person.user_id }}">{{ person.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="modal-body">
+            {% for person in by_user %}{{ bar(person) }}{% endfor %}
+            {{ charts.legend(watched.rows) | safe }}
+        </div>
+    </dialog>
+    {% endif %}
+
+    <details style="margin-top:14px">
+        <summary class="card-note" style="cursor:pointer">{{ _("Show as table") }}</summary>
+        <div class="table-wrap" style="margin-top:10px">
+            <table>
+                <thead><tr>
+                    <th>{{ _("User") }}</th><th>{{ _("Language") }}</th>
+                    <th class="num">{{ _("Share") }}</th><th class="num">{{ _("Watched") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for person in by_user %}
+                    {% for segment in person.segments %}
+                    <tr>
+                        <td>{% if loop.first %}{% call link(person.user_id and "/users/" ~ person.user_id) %}{{ person.name }}{% endcall %}{% endif %}</td>
+                        <td>{{ segment.label }}</td>
+                        <td class="num">{{ segment.percent | percent(1) }}</td>
+                        <td class="num">{{ segment.hours | hours }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>

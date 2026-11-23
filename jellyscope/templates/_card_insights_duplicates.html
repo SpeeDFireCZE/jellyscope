@@ -1,0 +1,48 @@
+{# The card "Possible duplicates" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_duplicates`) - one template, so the two places do not drift apart.
+   Expects `duplicates (insights.duplicate_candidates)`. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Possible duplicates") }}</h2>
+        <p class="card-note">{{ _("matching title and year") }}</p>
+    </div>
+    {% if duplicates %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Movie") }}</th><th class="num">{{ _("Copies") }}</th>
+                <th class="num">{{ _("Combined") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in duplicates %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td>
+                    {# The name leads to the first copy, every path below to its own file. #}
+                    <div class="strong">{% call link(row.detail_url) %}{{ row.label }}{% endcall %}
+                        {% if row.production_year %}<span class="muted">({{ row.production_year }})</span>{% endif %}
+                    </div>
+                    <div class="muted" style="font-size:12.5px">{{ row.variants }}</div>
+                    {% if row.paths %}
+                    <details class="paths"><summary>{{ _("paths") }}</summary><pre>
+                        {%- for copy in row.copy_items if copy.path %}{% call link("/item/" ~ copy.id) %}{{ copy.path }}{% endcall %}{{ "\n" }}{% endfor -%}
+                    </pre></details>
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.copies }}</td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ whole_table_button(duplicates | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Careful: a matching name is no proof. It may be a director's cut next to the theatrical version, hence \"possible\".") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("No duplicates found.") }}</p>
+    {% endif %}
+</div>

@@ -1,56 +1,60 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager, method_badge, transcode_popis, odkaz with context %}
-{% block title %}{{ _("Historie") }} &middot; Jellyscope{% endblock %}
+{% from "_macros.html" import pager, method_badge, transcode_description, link with context %}
+{% block title %}{{ _("History") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div>
-        <h1>{{ _("Historie") }}</h1>
-        <p class="subtitle">{{ _("Každé zaznamenané přehrávání, od nejnovějšího.") }}</p>
+        <h1>{{ _("History") }}</h1>
+        <p class="subtitle">{{ _("Every recorded playback, newest first.") }}</p>
     </div>
 </div>
 
 <div class="card">
-    {# Filtr je v okně, ne rozložený na stránce. Osm polí nad tabulkou
-       zabíralo půl obrazovky a člověk je potřebuje jednou za čas -
-       tabulka je to, kvůli čemu sem chodí.
+    {# The filter is in a window, not spread over the page. Eight fields above the table
+       took half the screen and a person needs them once in a while -
+       the table is what they come here for.
 
-       Na stránce zůstává tlačítko a shrnutí toho, co je zapnuté; celé
-       nastavení je v <dialog>, který umí Esc i klik mimo. #}
+       The page keeps the button and a summary of what is on; the whole
+       setting is in a <dialog>, which handles Esc and a click outside. #}
     <div class="btn-row" style="margin-bottom:14px">
-        <button class="btn {{ 'primary' if filtr_aktivni }}" type="button"
-                data-okno="okno-filtr">
-            {{ _("Filtr") }}{% if filtr_aktivni %} ({{ pocet_filtru }}){% endif %}
+        <button class="btn {{ 'primary' if filter_active }}" type="button"
+                data-modal="modal-filter">
+            {{ _("Filter") }}{% if filter_active %} ({{ filter_count }}){% endif %}
         </button>
-        {% if filtr_aktivni %}
-            <a class="btn" href="/history">{{ _("Zrušit filtr") }}</a>
+        {% if filter_active %}
+            <a class="btn" href="/history">{{ _("Clear filter") }}</a>
         {% endif %}
         <span class="card-note" style="align-self:center">
-            {{ total | number }} {{ _("záznamů") }}
+            {{ _n("{n} records", total) }}
         </span>
     </div>
 
-    {% if filtr_aktivni %}
+    {% if filter_active %}
     <div class="filters" style="margin-bottom:14px">
-        {% if day %}<span class="chip active">{{ _("Den") }}: {{ day }}</span>{% endif %}
-        {% if obdobi != 'vse' and not day %}
+        {% if day %}<span class="chip active">{{ _("Day") }}: {{ day }}</span>{% endif %}
+        {% if period != 'all' and not day %}
             <span class="chip active">
-                {% if obdobi == 'vlastni' %}
-                    {{ od_text or '…' }} – {{ do_text or '…' }}
+                {% if period == 'custom' %}
+                    {{ since_text or '…' }} – {{ until_text or '…' }}
                 {% else %}
-                    {{ obdobi_popis }}
+                    {{ period_label }}
                 {% endif %}
             </span>
         {% endif %}
-        {% if user_id %}<span class="chip active">{{ jmeno_uzivatele }}</span>{% endif %}
-        {% if kind == 'movies' %}<span class="chip active">{{ _("Filmy") }}</span>{% endif %}
-        {% if kind == 'series' %}<span class="chip active">{{ _("Seriály") }}</span>{% endif %}
-        {% if kind == 'other' %}<span class="chip active">{{ _("Ostatní") }}</span>{% endif %}
+        {% if user_id %}<span class="chip active">{{ user_name }}</span>{% endif %}
+        {% if kind == 'movies' %}<span class="chip active">{{ _("Movies") }}</span>{% endif %}
+        {% if kind == 'series' %}<span class="chip active">{{ _("TV shows") }}</span>{% endif %}
+        {% if kind == 'music' %}<span class="chip active">{{ _("Music") }}</span>{% endif %}
+        {% if kind == 'books' %}<span class="chip active">{{ _("Books") }}</span>{% endif %}
+        {% if kind == 'other' %}<span class="chip active">{{ _("Other") }}</span>{% endif %}
+        {# Watching (without music and books) comes by a click from a day on the Overview; it is not in the switch. #}
+        {% if kind == 'both' %}<span class="chip active">{{ _("Watching") }}</span>{% endif %}
         {% if method %}<span class="chip active">{{ _(method) }}</span>{% endif %}
         {% if client %}<span class="chip active">{{ client }}</span>{% endif %}
         {% if language %}
             <span class="chip active">
-                {{ _("neuvedený") if language == 'und' else lang.display(language) }}
+                {{ _("not given") if language == 'und' else lang.display(language) }}
             </span>
         {% endif %}
         {% if search %}<span class="chip active">„{{ search }}"</span>{% endif %}
@@ -61,16 +65,16 @@
         <table>
             <thead>
             <tr>
-                {# `sloupec-navic`: na mobilu se skryje. Osm sloupců se na
-                   úzkou obrazovku nevejde a z tabulky pak byla vidět
-                   třetina, s řádky vysokými 120 px, protože se obsah
-                   lámal. Zůstává to podstatné: kdy, kdo, co a jak dlouho. #}
-                <th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Titul") }}</th>
-                <th class="sloupec-navic">{{ _("Jazyk") }}</th>
-                <th class="sloupec-navic">{{ _("Zařízení") }}</th>
-                <th class="sloupec-navic">{{ _("Druh") }}</th>
-                <th class="sloupec-navic">{{ _("Způsob") }}</th>
-                <th class="num">{{ _("Délka") }}</th>
+                {# `extra-column`: hidden on a phone. Eight columns do not
+                   fit on a narrow screen and a third of the table was then
+                   visible, with rows 120 px tall, because the content
+                   wrapped. What matters stays: when, who, what and how long. #}
+                <th>{{ _("When") }}</th><th>{{ _("User") }}</th><th>{{ _("Title") }}</th>
+                <th class="extra-column">{{ _("Language") }}</th>
+                <th class="extra-column">{{ _("Device") }}</th>
+                <th class="extra-column">{{ _("Kind") }}</th>
+                <th class="extra-column">{{ _("Method") }}</th>
+                <th class="num">{{ _("Duration") }}</th>
             </tr>
             </thead>
             <tbody>
@@ -78,37 +82,47 @@
             <tr>
                 <td class="nowrap muted">{{ row.started_at | datetime }}</td>
 
-                {# Proklik na detail uživatele. Odkaz vede na tutéž stránku,
-                   kterou najdeš přes Uživatele - jen se k ní dá dostat
-                   rovnou odsud. Kdo na ni nesmí, dostane jen jméno. #}
+                {# A link to the user's detail. The link leads to the same page
+                   you find through Users - it can just be reached
+                   straight from here. Whoever may not open it gets just the name. #}
                 <td class="strong">
                     {% if row.user_id %}
-                        {% call odkaz("/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
+                        {% call link("/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
                     {% else %}
                         {{ row.user_name or '?' }}
                     {% endif %}
                 </td>
 
+                {# A track leads to its row on the album's page (it has no page of its own),
+                   a title of the library to its detail. What neither the library nor music knows
+                   (a track without an album, an item deleted before the library's
+                   sync saw it) is just text - otherwise the link would lead to a 404. #}
                 <td class="truncate" title="{{ row.item_name }}">
-                    {% if row.item_id %}
-                        {% call odkaz("/item/" ~ row.item_id) %}
+                    {% if row.music_track_id %}
+                        {% call link("/album/" ~ row.music_album_id ~ "#track-" ~ row.item_id if row.music_album_id else "") %}
+                            {% if row.music_artist %}<span class="muted">{{ row.music_artist }} &ndash;</span> {% endif %}
+                            {{ row.item_name }}
+                        {% endcall %}
+                    {% elif row.item_id and row.in_library %}
+                        {% call link("/item/" ~ row.item_id) %}
                             {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
                             {{ row.item_name }}
                         {% endcall %}
                     {% else %}
+                        {% if row.series_name %}<span class="muted">{{ row.series_name }} &ndash;</span> {% endif %}
                         {{ row.item_name }}
                     {% endif %}
                     {% if row.height %}<span class="muted">&middot; {{ row.height | resolution(row.width) }}</span>{% endif %}
                 </td>
 
-                {# Jazyk zvukové stopy, kterou si divák skutečně pustil,
-                   a případně jazyk zapnutých titulků. #}
-                <td class="nowrap sloupec-navic">
+                {# The language of the audio track the viewer really played,
+                   and the language of the subtitles turned on, if any. #}
+                <td class="nowrap extra-column">
                     {% if row.audio_language %}
                         {{ lang.display(row.audio_language) }}
                         {% if row.subtitle_language %}
                             <div class="muted" style="font-size:12px">
-                                {{ _("titulky") }} {{ row.subtitle_language | upper }}
+                                {{ _("subtitles") }} {{ row.subtitle_language | upper }}
                             </div>
                         {% endif %}
                     {% else %}
@@ -116,15 +130,15 @@
                     {% endif %}
                 </td>
 
-                <td class="muted sloupec-navic zarizeni">{{ row.device_name or '?' }}<div class="zarizeni-aplikace">{{ row.client or '' }}</div></td>
-                {# Druh záznamu. Bez něj se u „Ostatního“ z grafu nedalo
-                   dohledat, o co vlastně šlo - v seznamu byly jen názvy,
-                   které samy o sobě nic neříkají. #}
-                <td class="nowrap muted sloupec-navic">{{ row.item_type | type_name }}</td>
-                <td class="sloupec-navic">
-                    {{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}
+                <td class="muted extra-column devices">{{ row.device_name or '?' }}<div class="device-apps">{{ row.client or '' }}</div></td>
+                {# The kind of record. Without it the "Other" of the chart could not
+                   be traced to what it really was - the list had only names,
+                   which say nothing on their own. #}
+                <td class="nowrap muted extra-column">{{ row.item_type | type_name }}</td>
+                <td class="extra-column">
+                    {{ method_badge(row.play_method, transcode_description(row.recount)) }}
                     {% if row.play_method == 'Transcode' and row.transcode_reasons %}
-                        <div class="muted duvod-prepoctu" title="{{ row.transcode_reasons }}">{{ row.transcode_reasons | duvody }}</div>
+                        <div class="muted transcode-reason" title="{{ row.transcode_reasons }}">{{ row.transcode_reasons | transcode_reasons }}</div>
                     {% endif %}
                 </td>
                 <td class="num">{{ row.watched_seconds | seconds }}</td>
@@ -136,30 +150,30 @@
 
     {% if not rows %}
         <p class="chart-empty">
-            {{ _("Zatím žádná historie. Collector zaznamená každé přehrávání, které proběhne od chvíle, kdy Jellyscope běží. Starší data se dají naimportovat z Playback Reporting nebo Jellystatu (viz Nastavení).") }}
+            {{ _("No history yet. The collector records every playback from the moment Jellyscope runs. Older data can be imported from Playback Reporting or Jellystat (see Settings).") }}
         </p>
     {% endif %}
 
-    {% set extra %}{% if user_id %}&user_id={{ user_id }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if day %}&day={{ day }}{% endif %}{% if kind != 'both' %}&kind={{ kind }}{% endif %}{% endset %}
+    {% set extra %}{% if user_id %}&user_id={{ user_id }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if day %}&day={{ day }}{% endif %}{% if kind != 'all' %}&kind={{ kind }}{% endif %}{% endset %}
     {{ pager(page, pages, total, '/history', extra) }}
 </div>
 
-<dialog class="okno okno-siroke" id="okno-filtr">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ _("Filtr historie") }}</h2>
-        <button class="btn okno-zavrit" type="submit"
-                aria-label="{{ _("Zavřít") }}">&times;</button>
+<dialog class="modal modal-wide" id="modal-filter">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("History filter") }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
     </form>
 
-    <form method="get" action="/history" class="filtr">
-        {# Divák má ve filtru sám sebe, ať si do adresy napíše cokoliv
-           (vnucuje to routa). Nabízet mu seznam ostatních by znamenalo
-           ukázat jména lidí, o kterých se nemá dozvědět nic. #}
-        {% if not muj_divak %}
-        <div class="filtr-pole">
-            <label for="f-user">{{ _("Uživatel") }}</label>
+    <form method="get" action="/history" class="filter">
+        {# A viewer has themselves in the filter, whatever they write into the address
+           (the route enforces it). Offering them the list of others would mean
+           showing the names of people they are to learn nothing about. #}
+        {% if not own_viewer %}
+        <div class="filter-fields">
+            <label for="f-user">{{ _("User") }}</label>
             <select id="f-user" name="user_id">
-                <option value="">{{ _("všichni") }}</option>
+                <option value="">{{ _("everyone") }}</option>
                 {% for row in users %}
                     <option value="{{ row.id }}" {{ 'selected' if row.id == user_id }}>{{ row.name }}</option>
                 {% endfor %}
@@ -167,86 +181,89 @@
         </div>
         {% endif %}
 
-        <div class="filtr-pole">
-            <label for="f-kind">{{ _("Druh") }}</label>
+        <div class="filter-fields">
+            <label for="f-kind">{{ _("Kind") }}</label>
             <select id="f-kind" name="kind">
-                <option value="both">{{ _("vše") }}</option>
-                <option value="movies" {{ 'selected' if kind == 'movies' }}>{{ _("Filmy") }}</option>
-                <option value="series" {{ 'selected' if kind == 'series' }}>{{ _("Seriály") }}</option>
-                <option value="other" {{ 'selected' if kind == 'other' }}>{{ _("Ostatní") }}</option>
+                <option value="all">{{ _("all") }}</option>
+                <option value="movies" {{ 'selected' if kind == 'movies' }}>{{ _("Movies") }}</option>
+                <option value="series" {{ 'selected' if kind == 'series' }}>{{ _("TV shows") }}</option>
+                <option value="music" {{ 'selected' if kind == 'music' }}>{{ _("Music") }}</option>
+                <option value="books" {{ 'selected' if kind == 'books' }}>{{ _("Books") }}</option>
+                <option value="other" {{ 'selected' if kind == 'other' }}>{{ _("Other") }}</option>
+                {% if kind == 'both' %}<option value="both" selected>{{ _("Watching") }}</option>{% endif %}
             </select>
         </div>
 
-        {# Období: seznam toho, co si člověk vybírá nejčastěji. Nativní
-           <input type="date"> tu byl dřív a vypadal v každém prohlížeči
-           jinak - stejná lekce jako u výběru času v úlohách. Přesné datum
-           se dá pořád zadat, jen se o něj neklopýtá. #}
-        <div class="filtr-pole">
-            <label for="f-obdobi">{{ _("Období") }}</label>
-            <select id="f-obdobi" name="obdobi" data-obdobi>
-                {% for hodnota, popis in obdobi_volby %}
-                    <option value="{{ hodnota }}" {{ 'selected' if hodnota == obdobi }}>{{ popis }}</option>
+        {# The period: a list of what people pick most often. A native
+           <input type="date"> was here before and looked different in every browser
+           - the same lesson as with the time picker in tasks. An exact date
+           can still be entered, it just does not get in the way. #}
+        <div class="filter-fields">
+            <label for="f-period">{{ _("Period") }}</label>
+            <select id="f-period" name="period" data-period>
+                {% for val, description in period_choices %}
+                    <option value="{{ val }}" {{ 'selected' if val == period }}>{{ description }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="filtr-pole filtr-vlastni" {{ 'hidden' if obdobi != 'vlastni' }}>
-            <label for="f-od">{{ _("Od") }}</label>
-            <input type="text" id="f-od" name="od" data-kalendar value="{{ od_text or '' }}"
+        <div class="filter-fields filter-custom" {{ 'hidden' if period != 'custom' }}>
+            <label for="f-since">{{ _("From") }}</label>
+            <input type="text" id="f-since" name="since" data-calendar value="{{ since_text or '' }}"
                    placeholder="1.8.2026" inputmode="numeric" autocomplete="off">
         </div>
 
-        <div class="filtr-pole filtr-vlastni" {{ 'hidden' if obdobi != 'vlastni' }}>
-            <label for="f-do">{{ _("Do") }}</label>
-            <input type="text" id="f-do" name="do" data-kalendar value="{{ do_text or '' }}"
+        <div class="filter-fields filter-custom" {{ 'hidden' if period != 'custom' }}>
+            <label for="f-until">{{ _("To") }}</label>
+            <input type="text" id="f-until" name="until" data-calendar value="{{ until_text or '' }}"
                    placeholder="31.8.2026" inputmode="numeric" autocomplete="off">
         </div>
 
-        <div class="filtr-pole">
-            <label for="f-method">{{ _("Způsob") }}</label>
+        <div class="filter-fields">
+            <label for="f-method">{{ _("Method") }}</label>
             <select id="f-method" name="method">
-                <option value="">{{ _("jakýkoliv") }}</option>
-                {% for zpusob in nabidka.zpusoby %}
-                    <option value="{{ zpusob }}" {{ 'selected' if zpusob == method }}>{{ _(zpusob) }}</option>
+                <option value="">{{ _("any") }}</option>
+                {% for play_method in choices.methods %}
+                    <option value="{{ play_method }}" {{ 'selected' if play_method == method }}>{{ _(play_method) }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="filtr-pole">
-            <label for="f-client">{{ _("Přehrávač") }}</label>
+        <div class="filter-fields">
+            <label for="f-client">{{ _("Player") }}</label>
             <select id="f-client" name="client">
-                <option value="">{{ _("jakýkoliv") }}</option>
-                {% for klient in nabidka.klienti %}
-                    <option value="{{ klient }}" {{ 'selected' if klient == client }}>{{ klient }}</option>
+                <option value="">{{ _("any") }}</option>
+                {% for client_name in choices.clients %}
+                    <option value="{{ client_name }}" {{ 'selected' if client_name == client }}>{{ client_name }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="filtr-pole">
-            <label for="f-language">{{ _("Jazyk") }}</label>
+        <div class="filter-fields">
+            <label for="f-language">{{ _("Language") }}</label>
             <select id="f-language" name="language">
-                <option value="">{{ _("jakýkoliv") }}</option>
-                {% for kod in nabidka.jazyky %}
-                    <option value="{{ kod }}" {{ 'selected' if kod == language }}>{{ lang.display(kod) }}</option>
+                <option value="">{{ _("any") }}</option>
+                {% for lang_code in choices.languages %}
+                    <option value="{{ lang_code }}" {{ 'selected' if lang_code == language }}>{{ lang.display(lang_code) }}</option>
                 {% endfor %}
-                <option value="und" {{ 'selected' if language == 'und' }}>{{ _("neuvedený") }}</option>
+                <option value="und" {{ 'selected' if language == 'und' }}>{{ _("not given") }}</option>
             </select>
         </div>
 
-        <div class="filtr-pole filtr-hledani">
-            <label for="f-search">{{ _("Název") }}</label>
+        <div class="filter-fields filter-search">
+            <label for="f-search">{{ _("Name") }}</label>
             <input type="search" id="f-search" name="search" value="{{ search or '' }}"
-                   placeholder="{{ _('Hledat název...') }}">
+                   placeholder="{{ _('Search title...') }}">
         </div>
 
-        {# Den přijde proklikem z tabulky na Přehledu. Nese se dál skrytým
-           polem, aby ho ostatní volby neshodily - jinak by druhé kliknutí
-           filtr tiše zrušilo. #}
+        {# The day comes by a click from the table on the Overview. It is carried on in a hidden
+           field, so the other choices do not drop it - otherwise a second click would
+           silently cancel the filter. #}
         {% if day %}<input type="hidden" name="day" value="{{ day }}">{% endif %}
 
-        <div class="filtr-tlacitka">
-            <button class="btn primary" type="submit">{{ _("Zobrazit") }}</button>
-            <a class="btn" href="/history">{{ _("Zrušit filtr") }}</a>
+        <div class="filter-buttons">
+            <button class="btn primary" type="submit">{{ _("Show") }}</button>
+            <a class="btn" href="/history">{{ _("Clear filter") }}</a>
         </div>
     </form>
 </dialog>

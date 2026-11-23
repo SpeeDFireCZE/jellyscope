@@ -1,0 +1,14 @@
+{# The Radarr cards "How everything was grabbed" and "How upgrades were grabbed".
+
+   Two cards, one template: columns by who started the download
+   (automation, a user's search, a manual pick, another app). From the database
+   (cards_radarr.py, `d.radky` with translated labels, only non-empty groups). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("who started the download") }}</p>
+    </div>
+    {% if d.rows %}
+        {{ charts.hbar_chart(d.rows, 'label', 'count', unit='', labels_above=True) | safe }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

@@ -1,0 +1,92 @@
+/* ---------------------------------------------------------------------------
+   Seasonal decoration: Christmas (17.-26. 12.)
+
+   Loaded only during the holiday (see seasonal.py and _event_head.html), after
+   style.css. Only the app's colour changes (--accent, --accent-2 and the text on
+   it); chart colours stay. Contrast is guarded by tests/test_contrast.py.
+   The dark values are there twice, as in style.css: by the system and after a
+   manual switch.
+   --------------------------------------------------------------------------- */
+:root[data-event="christmas"] {
+    --accent:     #c0392b;
+    --accent-2:   #1e7b3c;
+    --accent-ink: #ffffff;
+    --event-snow: #8fa9c2;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-event="christmas"]:not([data-theme="light"]) {
+        --accent:     #ff6f61;
+        --accent-2:   #4cc27a;
+        --accent-ink: #0b0b0b;
+        --event-snow: #ffffff;
+    }
+}
+:root[data-event="christmas"][data-theme="dark"] {
+    --accent:     #ff6f61;
+    --accent-2:   #4cc27a;
+    --accent-ink: #0b0b0b;
+    --event-snow: #ffffff;
+}
+
+/* A cap on the logo, behind the name a tree with a star and twinkling lights. */
+.orn-hat { width: 24px; top: -13px; left: 8px; transform: rotate(16deg); }
+.side-tree { width: 22px; }
+.side-tree .light { animation: event-blink 1.8s ease-in-out infinite; }
+.side-tree .s2 { animation-delay: .6s; }
+.side-tree .s3 { animation-delay: 1.2s; }
+.side-tree .star {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: event-sparkle 2.4s ease-in-out infinite;
+}
+@keyframes event-blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes event-sparkle { 0%, 100% { transform: scale(.55); opacity: .5; } 50% { transform: scale(1); opacity: 1; } }
+
+/* Falling snow (events.js): big flakes as SVG, small ones as dots. */
+.event-effect .snowflake {
+    top: 0;
+    left: var(--x);
+    width: var(--s);
+    height: var(--s);
+    color: var(--event-snow);
+    opacity: var(--o);
+    animation: event-fall var(--d) linear var(--z) infinite both;
+}
+.event-effect .snowflake > i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    animation: event-sway calc(var(--d) / 3) ease-in-out infinite alternate;
+}
+.event-effect .snowflake svg,
+.event-effect .snowflake b { display: block; width: 100%; height: 100%; }
+.event-effect .snowflake b { border-radius: 50%; background: currentColor; }
+.event-effect .snowflake-static { color: var(--event-snow); opacity: .7; }
+.event-effect .snowflake-static svg { display: block; width: 100%; }
+@keyframes event-fall { from { transform: translateY(-18px); } to { transform: translateY(calc(var(--h) + 18px)); } }
+@keyframes event-sway { from { transform: translateX(-8px) rotate(-25deg); } to { transform: translateX(8px) rotate(25deg); } }
+
+/* Without motion: the system says "reduce motion", or the account switched it off. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-event="christmas"] .brand-logo *,
+    :root[data-event="christmas"] .brand-ornaments * { animation: none !important; }
+}
+:root[data-event="christmas"][data-event-motion="0"] .brand-logo *,
+:root[data-event="christmas"][data-event-motion="0"] .brand-ornaments * { animation: none !important; }
+
+/* The game: a gift (games/christmas.js). It sways until somebody unwraps it. */
+.event-scene .gift-whole {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: event-gift-wiggle 2.6s ease-in-out infinite;
+    cursor: pointer;
+}
+.event-scene .gift-whole:focus { outline: none; }
+.event-scene .gift-whole:focus-visible { outline: 2px dashed #fff; outline-offset: 6px; }
+@keyframes event-gift-wiggle {
+    0%, 70%, 100% { transform: rotate(0); }
+    76% { transform: rotate(-5deg); }
+    82% { transform: rotate(5deg); }
+    88% { transform: rotate(-3deg); }
+    94% { transform: rotate(2deg); }
+}

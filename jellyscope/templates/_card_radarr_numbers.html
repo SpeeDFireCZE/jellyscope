@@ -1,0 +1,12 @@
+{# The Radarr card "Numbers for the period": how much was imported into the library and how many downloads failed.
+
+   From the database (cards_radarr.py, `d` = the period's sums of additions and failures).
+   A row of tiles without a heading; in a dashboard it carries a small label with the app. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Imported into the library"), d.count | number, note=d.size_bytes | bytes) }}
+    {{ tile(_("New"), d.new_count | number) }}
+    {{ tile(_("Upgrades"), d.upgrade_count | number) }}
+    {{ tile(_("Failed downloads in the period"), d.failures | number) }}
+</div>

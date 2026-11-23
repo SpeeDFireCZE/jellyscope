@@ -1,0 +1,21 @@
+{# The page for "this is not yours".
+
+   Not a bare 403 from the server: whoever gets here does nothing wrong - usually
+   they just saved a link from the time they were an admin, or somebody sent it to them.
+   They are to learn what happened and the way back, not get a browser's message. #}
+{% extends "base.html" %}
+{% block title %}{{ _("You cannot open this") }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+    <div class="card-head">
+        <h2>{{ _("You cannot open this") }}</h2>
+        <p class="card-note">{{ _("this page is about other viewers or about the server settings") }}</p>
+    </div>
+    <p>
+        {{ _("You are signed in as a viewer, so you see your own playback and the title charts. What others watch, who connects from where, and the server settings belong to the administrator.") }}
+    </p>
+    <div class="btn-row" style="margin-top:14px">
+        <a class="btn primary" href="/">{{ _("Back to my statistics") }}</a>
+    </div>
+</div>
+{% endblock %}

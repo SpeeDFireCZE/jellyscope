@@ -1,8 +1,8 @@
-{%- from "_macros.html" import hlava -%}
+{%- from "_macros.html" import head -%}
 <!doctype html>
 <html lang="{{ ui_language | default('cs') }}">
 <head>
-    {{ hlava(_("Vytvoř si správcovský účet")) }}
+    {{ head(_("Create an administrator account")) }}
 </head>
 <body>
 <div class="login-page">
@@ -12,9 +12,9 @@
             <span>Jellyscope</span>
         </div>
 
-        <h1 style="font-size:19px; margin:14px 0 6px">{{ _("Vytvoř si správcovský účet") }}</h1>
+        <h1 style="font-size:19px; margin:14px 0 6px">{{ _("Create an administrator account") }}</h1>
         <p class="card-note" style="margin-bottom:18px">
-            {{ _("Tohle je první spuštění. Účet, který teď založíš, bude mít plná práva. Další uživatele přidáš později v Nastavení.") }}
+            {{ _("This is the first run. The account you create now will have full privileges. You can add more users later in Settings.") }}
         </p>
 
         {% if error %}
@@ -22,41 +22,41 @@
         {% endif %}
 
         <div class="field" style="margin-bottom:14px">
-            <label for="username">{{ _("Uživatelské jméno") }}</label>
+            <label for="username">{{ _("Username") }}</label>
             <input type="text" id="username" name="username" value="{{ username or '' }}"
                    autocomplete="username" autofocus required>
-            <p class="hint">{{ _("3 až 32 znaků, bez diakritiky a mezer.") }}</p>
+            <p class="hint">{{ _("3 to 32 characters, no accents or spaces.") }}</p>
         </div>
 
         <div class="field" style="margin-bottom:14px">
-            <label for="password">{{ _("Heslo") }}</label>
+            <label for="password">{{ _("Password") }}</label>
             <input type="password" id="password" name="password"
                    autocomplete="new-password" required>
-            <p class="hint">{{ _("Alespoň 8 znaků. Uloží se jen jeho otisk, ne heslo samotné.") }}</p>
+            <p class="hint">{{ _("At least 8 characters. Only its hash is stored, never the password itself.") }}</p>
         </div>
 
         <div class="field" style="margin-bottom:14px">
-            <label for="password_again">{{ _("Heslo znovu") }}</label>
+            <label for="password_again">{{ _("Password again") }}</label>
             <input type="password" id="password_again" name="password_again"
                    autocomplete="new-password" required>
         </div>
 
-        {# Jazyk hned tady, ne až v Nastavení. Kdo aplikaci vidí poprvé,
-           má ji mít v řeči, které rozumí - jinak si první obrazovku
-           přeluští a teprve pak hledá, kde se to přepíná. #}
+        {# The language right here, not only in Settings. Whoever sees the app for the first
+           time is to have it in a language they understand - otherwise they decipher the
+           first screen and only then look for where to switch it. #}
         <div class="field" style="margin-bottom:18px">
-            <label for="ui_language">{{ _("Jazyk rozhraní") }}</label>
+            <label for="ui_language">{{ _("Interface language") }}</label>
             <select id="ui_language" name="ui_language">
                 {% for code, name in ui_languages.items() %}
                     <option value="{{ code }}"
                             {{ 'selected' if code == (ui_language or 'cs') }}>{{ name }}</option>
                 {% endfor %}
             </select>
-            <p class="hint">{{ _("Platí pro celou aplikaci. Změnit ho jde kdykoliv v Nastavení.") }}</p>
+            <p class="hint">{{ _("Applies to the whole app. You can change it any time in Settings.") }}</p>
         </div>
 
         <button class="btn primary" type="submit" style="width:100%; justify-content:center">
-            {{ _("Založit účet a pokračovat") }}
+            {{ _("Create account and continue") }}
         </button>
     </form>
 </div>

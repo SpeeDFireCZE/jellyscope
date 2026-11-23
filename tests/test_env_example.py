@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-r"""Co aplikace čte z prostředí, to je popsané v .env.example.
+r"""What the application reads from the environment is described in .env.example.
 
-Proměnná, o které se nikde nepíše, je proměnná, kterou nikdo nenajde -
-leda čtením zdrojáku. A přibývají tiše: stačí napsat os.environ.get(...)
-a dokumentace zestárne, aniž by kdokoliv něco smazal.
+A variable written about nowhere is a variable nobody finds - except by
+reading the source. And they pile up quietly: writing os.environ.get(...) is
+enough, and the documentation goes stale without anybody deleting anything.
 
-Test proto porovnává obojí a hlídá i opačný směr: JELLYSCOPE_DOCKER se
-v .env.example jenom popisuje, nikdy nenastavuje. Kdyby tam někdo přidal
-činný řádek, každý, kdo si soubor zkopíruje, by si tím na běžném stroji
-zakázal aktualizaci z prohlížeče.
+So the test compares both and guards the opposite direction too:
+JELLYSCOPE_DOCKER is only described in .env.example, never set. Were somebody
+to add an active line there, everyone who copies the file would thereby turn
+off updating from the browser on an ordinary machine.
 
-Spuštění:
-    .\.venv\Scripts\python.exe tests\test_env_example.py
+Run:
+    .venv/bin/python tests/test_env_example.py
 """
 from __future__ import annotations
 
@@ -26,48 +26,48 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
-# Čteme zdroják, ne běžící aplikaci: proměnná se může číst v kódu, který
-# se za normálního běhu nikdy nespustí (a právě ta by se zapomněla).
-CTENI = re.compile(
+# The source is read, not the running application: a variable can be read in
+# code that never runs in a normal run (and exactly that one would be forgotten).
+READING = re.compile(
     r"""os\.environ\.get\(\s*["']([A-Z_]+)["']"""
     r"""|os\.getenv\(\s*["']([A-Z_]+)["']"""
     r"""|os\.environ\[\s*["']([A-Z_]+)["']\s*\]"""
     r"""|_flag\(\s*["']([A-Z_]+)["']"""
 )
 
-# Proměnné, které si nastavuje operační systém nebo Python sám a do
-# konfigurace aplikace nepatří.
-CIZI = {"PATH", "PYTHONIOENCODING", "TEMP", "TMP", "USERPROFILE", "HOME"}
+# Variables the operating system or Python sets by itself, which do not
+# belong to the application's configuration.
+FOREIGN = {"PATH", "PYTHONIOENCODING", "TEMP", "TMP", "USERPROFILE", "HOME"}
 
-ctene: set[str] = set()
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    for nalez in CTENI.finditer(soubor.read_text(encoding="utf-8")):
-        jmeno = next(g for g in nalez.groups() if g)
-        if jmeno not in CIZI:
-            ctene.add(jmeno)
+read: set[str] = set()
+for path in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    for match in READING.finditer(path.read_text(encoding="utf-8")):
+        name = next(g for g in match.groups() if g)
+        if name not in FOREIGN:
+            read.add(name)
 
-priklad = (PROJECT / ".env.example").read_text(encoding="utf-8")
+example = (PROJECT / ".env.example").read_text(encoding="utf-8")
 
-print("--- každá proměnná je v .env.example popsaná ---")
-check(len(ctene) >= 10, f"našly se proměnné v kódu ({len(ctene)})")
-for jmeno in sorted(ctene):
-    check(re.search(rf"\b{jmeno}\b", priklad) is not None, jmeno)
+print("--- every variable is described in .env.example ---")
+check(len(read) >= 10, f"variables found in the code ({len(read)})")
+for name in sorted(read):
+    check(re.search(rf"\b{name}\b", example) is not None, name)
 
 print()
-print("--- JELLYSCOPE_DOCKER se jenom popisuje ---")
-# Činný řádek = nezačíná mřížkou. Zakomentovaný popis je v pořádku.
-cinne = [
-    radek for radek in priklad.splitlines()
-    if radek.strip().startswith("JELLYSCOPE_DOCKER")
+print("--- JELLYSCOPE_DOCKER is only described ---")
+# An active line = it does not start with a hash. A commented-out description is fine.
+active = [
+    line for line in example.splitlines()
+    if line.strip().startswith("JELLYSCOPE_DOCKER")
 ]
-check(not cinne, f"žádný činný řádek ({cinne})")
-check("JELLYSCOPE_DOCKER" in priklad, "ale zmíněný tam je")
+check(not active, f"no active line ({active})")
+check("JELLYSCOPE_DOCKER" in example, "but it is mentioned there")
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

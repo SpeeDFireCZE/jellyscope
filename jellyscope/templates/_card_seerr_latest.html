@@ -1,0 +1,61 @@
+{# The Seerr card "Latest requests": a strip of posters from the newest request.
+
+   Shaped like "Recently added". The poster says how the request ended (briefly;
+   the full wording in `title`), under it the title, the requester and when they requested. From the
+   database (cards_seerr.py, `d.radky`, at most insights.INSIGHT_ROWS of the newest).
+
+   The same requests are here once more as a table - hidden in the card
+   (`modal-only`), the button in the head opens it in the shared window
+   (data-table-window, static/js/app.js). The strip is for browsing, the table for
+   scanning by eye. #}
+{% from "_macros.html" import poster, requester, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for z in d.rows %}
+        <div class="poster-card">
+            {# A title that is in the library already leads to its detail (the poster and the name);
+               the others are without a link - there is nowhere to go. #}
+            {{ poster(z.poster, "poster-frame", z.state, z.state_full, detail=z.detail_url) }}
+            {% call link(z.detail_url, {"class": "poster-name", "title": z.title}) %}{{ z.title or "–" }}{% endcall %}
+            <div class="poster-meta">
+                {%- if z.user_name is defined %}{{ requester(z) }} &middot; {% endif %}{{ z.created_at | relative -}}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% if d.total > d.rows | length %}
+    <p class="card-note">{{ _n("The latest {n} of {total} requests in the period.", d.rows | length, total=d.total | number) }}</p>
+    {% endif %}
+    {% include "_seerr_poster_hint.html" %}
+    <div class="modal-only">
+        <table>
+            <thead><tr>
+                <th>{{ _("Title") }}</th>
+                <th>{{ _("State") }}</th>
+                {% if d.rows[0].user_name is defined %}<th>{{ _("Requester") }}</th>{% endif %}
+                <th>{{ _("Requested") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for z in d.rows %}
+                <tr>
+                    <td class="strong">{% call link(z.detail_url) %}{{ z.title or "–" }}{% endcall %}
+                        <span class="muted">{{ _("series") if z.media_type == 'tv' else _("movie") }}{% if z.is_4k %} · 4K{% endif %}</span></td>
+                    <td>{{ z.state_full }}</td>
+                    {% if z.user_name is defined %}<td>{{ requester(z) }}</td>{% endif %}
+                    <td class="muted">{{ z.created_at | datetime }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="chart-empty">{{ _("Nobody requested anything in this period.") }}</p>
+    {% endif %}
+</div>

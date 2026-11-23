@@ -1,0 +1,45 @@
+{# The card with the key `language_share`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Language ratio") }}</h2>
+        <p class="card-note">{{ _("by watched time") }}</p>
+    </div>
+
+    {{ charts.stacked_bar(watched.rows) | safe }}
+    {{ charts.legend(watched.rows) | safe }}
+
+    <div class="table-wrap" style="margin-top:16px">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Language") }}</th><th class="num">{{ _("Share") }}</th>
+                <th class="num">{{ _("Watched") }}</th><th class="num">{{ _("Plays#starts") }}</th>
+                <th class="num">{{ _("Titles") }}</th><th class="num">{{ _("Viewers#count") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in watched.rows %}
+            <tr>
+                <td class="strong">
+                    {% if row.slot %}
+                        <span class="legend-swatch" style="background: var(--series-{{ row.slot }})"></span>
+                    {% endif %}
+                    {{ row.label }}
+                    <span class="muted">{{ row.code | upper }}</span>
+                </td>
+                <td class="num strong">{{ row.percent | percent(1) }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.plays | number }}</td>
+                <td class="num muted">{{ row.item_count | number }}</td>
+                <td class="num muted">{{ row.users | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

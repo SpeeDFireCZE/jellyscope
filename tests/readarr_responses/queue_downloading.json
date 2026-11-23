@@ -1,0 +1,375 @@
+{
+ "page": 1,
+ "pageSize": 200,
+ "sortKey": "timeleft",
+ "sortDirection": "descending",
+ "totalRecords": 8,
+ "records": [
+  {
+   "authorId": 3,
+   "bookId": 31,
+   "author": {
+    "id": 3,
+    "authorName": "Ivan Olbracht",
+    "foreignAuthorId": "100003-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 31,
+    "title": "Nikola Šuhaj",
+    "authorId": 3,
+    "foreignBookId": "200031-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Ivan Olbracht-Nikola Šuhaj-EPUB",
+   "sizeleft": 805306368,
+   "timeleft": "00:12:30",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_101",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 101
+  },
+  {
+   "authorId": 2,
+   "bookId": 22,
+   "author": {
+    "id": 2,
+    "authorName": "Terry Pratchett",
+    "foreignAuthorId": "100002-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 22,
+    "title": "Stráže! Stráže!",
+    "authorId": 2,
+    "foreignBookId": "200022-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 2147483648,
+   "title": "Terry Pratchett-Stráže! Stráže!-EPUB",
+   "sizeleft": 1073741824,
+   "timeleft": "00:04:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_102",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 102
+  },
+  {
+   "authorId": 1,
+   "bookId": 12,
+   "author": {
+    "id": 1,
+    "authorName": "Karel Čapek",
+    "foreignAuthorId": "100001-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 12,
+    "title": "Bílá nemoc",
+    "authorId": 1,
+    "foreignBookId": "200012-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 536870912,
+   "title": "Karel Čapek-Bílá nemoc-EPUB",
+   "sizeleft": 536870912,
+   "timeleft": null,
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "paused",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_103",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 103
+  },
+  {
+   "authorId": 4,
+   "bookId": 41,
+   "author": {
+    "id": 4,
+    "authorName": "Božena Němcová",
+    "foreignAuthorId": "100004-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 41,
+    "title": "Babička",
+    "authorId": 4,
+    "foreignBookId": "200041-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 268435456,
+   "title": "Božena Němcová-Babička-EPUB",
+   "sizeleft": 268435456,
+   "timeleft": null,
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "queued",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_104",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 104
+  },
+  {
+   "authorId": 1,
+   "bookId": 11,
+   "author": {
+    "id": 1,
+    "authorName": "Karel Čapek",
+    "foreignAuthorId": "100001-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 11,
+    "title": "Válka s mloky",
+    "authorId": 1,
+    "foreignBookId": "200011-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 536870912,
+   "title": "Karel Čapek-Válka s mloky-EPUB",
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importPending",
+   "statusMessages": [
+    {
+     "title": "Válka s mloky",
+     "messages": [
+      "Has missing files"
+     ]
+    }
+   ],
+   "downloadId": "SABnzbd_nzo_105",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 105
+  },
+  {
+   "authorId": 2,
+   "bookId": 21,
+   "author": {
+    "id": 2,
+    "authorName": "Terry Pratchett",
+    "foreignAuthorId": "100002-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 21,
+    "title": "Mort",
+    "authorId": 2,
+    "foreignBookId": "200021-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Terry Pratchett-Mort-EPUB",
+   "sizeleft": 536870912,
+   "timeleft": "00:06:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_pack",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 106
+  },
+  {
+   "authorId": 2,
+   "bookId": 22,
+   "author": {
+    "id": 2,
+    "authorName": "Terry Pratchett",
+    "foreignAuthorId": "100002-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "book": {
+    "id": 22,
+    "title": "Stráže! Stráže!",
+    "authorId": 2,
+    "foreignBookId": "200022-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Terry Pratchett-Stráže! Stráže!-EPUB",
+   "sizeleft": 536870912,
+   "timeleft": "00:06:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_pack",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "id": 107
+  },
+  {
+   "authorId": null,
+   "bookId": null,
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "EPUB"
+    }
+   },
+   "size": 134217728,
+   "title": "Unknown.Author-Mystery-EPUB",
+   "sizeleft": 67108864,
+   "timeleft": "00:01:00",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_unknown",
+   "protocol": "torrent",
+   "downloadClient": "Torrent klient",
+   "indexer": "T",
+   "id": 108
+  }
+ ]
+}

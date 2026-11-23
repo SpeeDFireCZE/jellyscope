@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Jellyscope do Jellyfinu jen čte.
+"""Jellyscope only reads from Jellyfin.
 
-Tenhle test hlídá slib, na kterém celá aplikace stojí: **Jellyfin se nikdy
-nemění**. Statistiky se dají spočítat i bez zápisu, takže není důvod si na
-cizí server sahat — a kdyby se do kódu jednou zápis dostal, má to shodit
-test, ne rozbít někomu knihovnu.
+This test guards the promise the whole application stands on: **Jellyfin is
+never changed**. The statistics can be computed without writing, so there is
+no reason to touch somebody else's server — and should a write ever get into
+the code, it is to fail a test, not break somebody's library.
 
-Kontroluje se trojí:
-  1. klient nemá jinou HTTP metodu než GET,
-  2. každá adresa, která se v kódu objeví, je v seznamu čtecích,
-  3. SQL posílané pluginu Playback Reporting projde pojistkou `jen_cteni`.
+Three things are checked:
+  1. the client has no HTTP method other than GET,
+  2. every address that appears in the code is on the list of reading ones,
+  3. SQL sent to the Playback Reporting plugin passes the `read_only` safeguard.
 """
 from __future__ import annotations
 
@@ -20,162 +20,162 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 
-from jellyscope.importers import PBR_QUERY, ImportError_, jen_cteni  # noqa: E402
+from jellyscope.importers import PBR_QUERY, ImportError_, read_only  # noqa: E402
 
 failures = 0
 
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
-BALICEK = PROJECT / "jellyscope"
-# scanner (3c) a importers (3d) jsou balíky - čtou se celé, soubor po souboru.
-SOUBORY = ("jellyfin.py", *sorted(f"scanner/{p.name}" for p in (BALICEK / "scanner").glob("*.py")),
-           "collector.py", *sorted(f"importers/{p.name}" for p in (BALICEK / "importers").glob("*.py")))
+PACKAGE = PROJECT / "jellyscope"
+# scanner (3c) and importers (3d) are packages - they are read whole, file by file.
+FILES = ("jellyfin.py", *sorted(f"scanner/{p.name}" for p in (PACKAGE / "scanner").glob("*.py")),
+         "collector.py", *sorted(f"importers/{p.name}" for p in (PACKAGE / "importers").glob("*.py")))
 
 
-def kod(nazev: str) -> str:
-    """Zdroják bez komentářů - jde o to, co se volá, ne co je popsané."""
-    text = (BALICEK / nazev).read_text(encoding="utf-8")
+def code(name: str) -> str:
+    """The source without comments - it is about what is called, not what is described."""
+    text = (PACKAGE / name).read_text(encoding="utf-8")
     return "\n".join(
-        "" if radek.strip().startswith("#") else radek
-        for radek in text.splitlines()
+        "" if line.strip().startswith("#") else line
+        for line in text.splitlines()
     )
 
 
-print("--- klient umí jen GET (krom přihlašování) ---")
-klient = kod("jellyfin.py")
-for metoda in ("put", "delete", "patch"):
-    check(f"_client.{metoda}(" not in klient,
-          f"jellyfin.py nevolá _client.{metoda}()")
-# POST je jen v prihlasovani: overeni hesla, zaloha kodu pro Quick
-# Connect, vymena potvrzeneho kodu za identitu a zruseni tokenu, ktery
-# tim vznikl. Nic jineho se timhle klientem nemeni - viz nize.
-check(klient.count("_client.post(") == 4,
-      f"POST je jen čtyřikrát, všechny kvůli přihlášení "
-      f"({klient.count('_client.post(')}x)")
-check(klient.count("async def _get") == 1, "existuje jediná odesílací funkce")
-# Obrazky se stahuji po kusech (strop velikosti) pres _client.stream().
-# Tam se metoda pise jako text - kdyby v nem stalo cokoliv jineho nez
-# GET, kontrola put/delete/patch vys by to nevidela.
-metody_streamu = re.findall(r'_client\.stream\(\s*"(\w+)"', klient)
-check(bool(metody_streamu) and set(metody_streamu) == {"GET"},
-      f"stahování obrázků jde přes GET ({metody_streamu})")
-check("_client.request(" not in klient, "jellyfin.py nevolá obecné _client.request()")
+print("--- the client can do only GET (apart from signing in) ---")
+client = code("jellyfin.py")
+for method in ("put", "delete", "patch"):
+    check(f"_client.{method}(" not in client,
+          f"jellyfin.py does not call _client.{method}()")
+# POST is only in signing in: checking a password, asking for a Quick Connect
+# code, exchanging a confirmed code for an identity and revoking the token that
+# came of it. Nothing else is changed with this client - see below.
+check(client.count("_client.post(") == 4,
+      f"POST only four times, all for signing in "
+      f"({client.count('_client.post(')}x)")
+check(client.count("async def _get") == 1, "there is a single sending function")
+# Images are downloaded in pieces (a size ceiling) through _client.stream().
+# There the method is written as text - were anything other than GET to stand
+# in it, the put/delete/patch check above would not see it.
+stream_methods = re.findall(r'_client\.stream\(\s*"(\w+)"', client)
+check(bool(stream_methods) and set(stream_methods) == {"GET"},
+      f"downloading images goes through GET ({stream_methods})")
+check("_client.request(" not in client, "jellyfin.py does not call the generic _client.request()")
 
 
 print()
-print("--- adresy, které se v kódu objevují ---")
-# Sbíráme VŠECHNY textové adresy, ne jen ty psané přímo do _get():
-# některé se skládají do proměnné (path = f"/Users/{id}/Items") a kontrola
-# koukající jen na volání by je minula.
-CTECI_ADRESY = {
-    "/System/Info",                     # verze serveru, kontrola spojení
-    "/Users",                           # seznam uživatelů
-    "/Sessions",                        # co se právě hraje
-    "/Library/VirtualFolders",          # seznam knihoven
-    # Kolik zbývá místa tam, kde data OPRAVDU leží. `disk_usage` měří
-    # disk pod Jellyscope, jenže knihovna bývá jinde. Starší Jellyfin
-    # endpoint nemá a vrátí 404 - to se bere jako "nevím", ne jako chyba.
-    "/System/Info/Storage",             # jmeno od Jellyfinu 12 (overeno 12.1.0)
+print("--- addresses that appear in the code ---")
+# We collect ALL text addresses, not only those written right into _get():
+# some are put together into a variable (path = f"/Users/{id}/Items") and a
+# check looking only at the calls would miss them.
+READING_ADDRESSES = {
+    "/System/Info",                     # the server version, the connection check
+    "/Users",                           # the list of users
+    "/Sessions",                        # what is playing right now
+    "/Library/VirtualFolders",          # the list of libraries
+    # How much space is left where the data REALLY lie. `disk_usage` measures
+    # the disk under Jellyscope, but the library tends to be elsewhere. An older
+    # Jellyfin does not have the endpoint and returns 404 - that is taken as
+    # "I do not know", not as an error.
+    "/System/Info/Storage",             # the name since Jellyfin 12 (verified on 12.1.0)
     "/System/Storage",
-    "/Items",                           # položky knihovny
-    "/Users/{user_id}/Items",           # položky očima jednoho uživatele
-    "/Items/{item_id}/Images/{kind}",   # plakát
-    "/UserImage",                       # profilový obrázek diváka (Můj účet)
-    # Dotazovací rozhraní pluginu Playback Reporting. Jediné místo, kde se
-    # posílá POST - SQL jde v těle požadavku a hlídá ho jen_cteni().
+    "/Items",                           # the library's items
+    "/Users/{user_id}/Items",           # the items through one user's eyes
+    "/Items/{item_id}/Images/{kind}",   # a poster
+    "/UserImage",                       # a viewer's profile image (My account)
+    # The query interface of the Playback Reporting plugin. The only place
+    # where POST is sent - the SQL goes in the request body and read_only() guards it.
     "/user_usage_stats/submit_custom_query",
-    # Prihlaseni jellyfinovym heslem - a hned uklid po nem. Vysvetleni
-    # je u MENICI_ADRESY nize.
+    # Signing in with a Jellyfin password - and cleaning up right after it. The
+    # explanation is at CHANGING_ADDRESSES below.
     "/Users/AuthenticateByName",
     "/Sessions/Logout",
-    # Prihlaseni kodem (Quick Connect). Jellyscope si rekne o kod,
-    # potvrdi ho clovek ve svem vlastnim Jellyfinu - heslo se sem
-    # nedostane vubec. Token, ktery z toho padne, se rusi stejne jako
-    # u hesla.
+    # Signing in with a code (Quick Connect). Jellyscope asks for a code, the
+    # person confirms it in their own Jellyfin - the password does not get here
+    # at all. The token that comes of it is revoked the same as with a password.
     "/QuickConnect/Enabled",
     "/QuickConnect/Initiate",
     "/QuickConnect/Connect",
     "/Users/AuthenticateWithQuickConnect",
 }
 
-nalezene: set[str] = set()
-for soubor in SOUBORY:
-    for adresa in re.findall(r'f?"(/[A-Za-z][^"\s]*)"', kod(soubor)):
-        nalezene.add(adresa.split("?")[0])
+found: set[str] = set()
+for path in FILES:
+    for address in re.findall(r'f?"(/[A-Za-z][^"\s]*)"', code(path)):
+        found.add(address.split("?")[0])
 
-navic = sorted(nalezene - CTECI_ADRESY)
-check(not navic, f"žádná neznámá adresa (navíc: {navic})")
-print(f"       nalezené adresy: {sorted(nalezene)}")
+extra = sorted(found - READING_ADDRESSES)
+check(not extra, f"no unknown address (extra: {extra})")
+print(f"       addresses found: {sorted(found)}")
 
-# Adresy, kterými se Jellyfin ovládá nebo mění. Ani jedna se nesmí
-# objevit ani jako text - i kdyby ji dnes nikdo nezavolal.
-MENICI_ADRESY = (
+# Addresses that control or change Jellyfin. Not one may appear even as text -
+# even if nobody calls it today.
+CHANGING_ADDRESSES = (
     "/Playing", "/Library/Refresh", "/ScheduledTasks/Running",
     "/System/Restart", "/System/Shutdown", "/Users/New",
     "/Plugins/", "/Packages/", "/Items/Delete", "/Startup/",
 )
-vsechen_kod = "\n".join(kod(soubor) for soubor in SOUBORY)
-for adresa in MENICI_ADRESY:
-    check(adresa not in vsechen_kod, f"nikde se neobjevuje {adresa}")
+all_code = "\n".join(code(path) for path in FILES)
+for address in CHANGING_ADDRESSES:
+    check(address not in all_code, f"appears nowhere: {address}")
 
-# Sest vyjimek, vsechny jen kvuli prihlasovani jellyfinovym uctem.
+# Six exceptions, all only for signing in with a Jellyfin account.
 #
-# `AuthenticateByName` neni zasah do knihovny ani do nastaveni - je to
-# dotaz "sedi tohle heslo?", polozeny za cloveka ve chvili, kdy ho sam
-# napsal do naseho prihlasovaciho okna. Jellyfin za nej ale vyda
-# pristupovy token, a ten uz zasah je: platny klic k cizimu uctu, ktery
-# by po nas zustal viset. Proto se hned rusi pres `/Sessions/Logout`.
-# Overeno na 10.11.11 i 12.0.0: po prihlaseni nepribyde zadne zarizeni
-# ani klic.
+# `AuthenticateByName` is no intervention in the library nor in the settings -
+# it is the question "does this password match?", asked on behalf of a person
+# at the moment they typed it into our sign-in window themselves. But Jellyfin
+# issues an access token for it, and that is an intervention: a valid key to
+# somebody else's account that would stay hanging after us. So it is revoked
+# at once through `/Sessions/Logout`. Verified on 10.11.11 and 12.0.0: after
+# signing in no device nor key is added.
 #
-# Obe adresy smi byt **jen v te jedne funkci** - jinde uz to neni
-# prihlasovani a tahle uvaha na ne neplati.
-zacatek = klient.index("async def over_prihlaseni")
-konec = klient.index("async def items_page")
-prihlasovani = klient[zacatek:konec]
+# Both addresses may be **only in that one function** - elsewhere it is no
+# longer signing in and this reasoning does not apply to them.
+start = client.index("async def verify_login")
+end = client.index("async def items_page")
+signing_in = client[start:end]
 #
-# Quick Connect je na tom stejne, jen obraceny smer: Jellyscope si
-# vyzada kod, clovek ho potvrdi ve svem uz prihlasenem Jellyfinu a
-# teprve pak se vymeni za identitu. `Enabled` a `Connect` se jen ptaji,
-# `Initiate` zaklada kod a `AuthenticateWithQuickConnect` vraci token -
-# ten se rusi hned, jako u hesla. Do knihovny ani do nastaveni
-# nesahne ani jedna z nich.
-for adresa in ("/Users/AuthenticateByName", "/Sessions/Logout",
-               "/QuickConnect/Enabled", "/QuickConnect/Initiate",
-               "/QuickConnect/Connect",
-               "/Users/AuthenticateWithQuickConnect"):
-    check(vsechen_kod.count(adresa) == 1,
-          f"{adresa} je v kódu jen jednou ({vsechen_kod.count(adresa)}x)")
-    check(adresa in prihlasovani, f"{adresa} je jen v přihlašování")
-check("_zrus_token" in prihlasovani, "a token po ověření hesla hned mizí")
-# A hlavne: vsechny POSTy klienta lezi prave v tomhle useku. Kdyby
-# nekdy pribyl jinde, uz to neni prihlasovani a tahle uvaha neplati.
-check(prihlasovani.count("_client.post(") == klient.count("_client.post("),
-      "žádný POST klienta neleží mimo přihlašování")
+# Quick Connect is the same, only the direction is reversed: Jellyscope asks
+# for a code, the person confirms it in their already signed-in Jellyfin and
+# only then it is exchanged for an identity. `Enabled` and `Connect` only ask,
+# `Initiate` creates a code and `AuthenticateWithQuickConnect` returns a
+# token - it is revoked at once, as with a password. None of them touches the
+# library or the settings.
+for address in ("/Users/AuthenticateByName", "/Sessions/Logout",
+                "/QuickConnect/Enabled", "/QuickConnect/Initiate",
+                "/QuickConnect/Connect",
+                "/Users/AuthenticateWithQuickConnect"):
+    check(all_code.count(address) == 1,
+          f"{address} is in the code only once ({all_code.count(address)}x)")
+    check(address in signing_in, f"{address} is only in signing in")
+check("_revoke_token" in signing_in, "and the token vanishes right after checking the password")
+# And above all: all the client's POSTs lie exactly in this stretch. Were one
+# ever added elsewhere, it is no longer signing in and this reasoning does not apply.
+check(signing_in.count("_client.post(") == client.count("_client.post("),
+      "no POST of the client lies outside signing in")
 
 
 print()
-print("--- plugin Playback Reporting: jen SELECT ---")
-# Tohle je jediné místo s POST. POST sám o sobě nic nemění - mění to,
-# co se v něm pošle. Proto ta pojistka.
-importery = "\n".join(kod(f"importers/{p.name}") for p in sorted((BALICEK / "importers").glob("*.py")))
-posty = re.findall(r"_client\.post\(", importery)
-check(len(posty) == 2, f"POST je jen na dvou místech (je {len(posty)})")
-check(importery.count("jen_cteni(") >= 3,
-      "obě volání procházejí pojistkou jen_cteni()")
+print("--- the Playback Reporting plugin: only SELECT ---")
+# This is the only place with POST. POST by itself changes nothing - what
+# is sent in it does. Hence the safeguard.
+importer_code = "\n".join(code(f"importers/{p.name}") for p in sorted((PACKAGE / "importers").glob("*.py")))
+posts = re.findall(r"_client\.post\(", importer_code)
+check(len(posts) == 2, f"POST is only in two places (there are {len(posts)})")
+check(importer_code.count("read_only(") >= 3,
+      "both calls go through the read_only() safeguard")
 
-check(jen_cteni("SELECT * FROM PlaybackActivity") == "SELECT * FROM PlaybackActivity",
-      "SELECT projde")
-check(jen_cteni("  select  a  from  b  ;") == "select a from b",
-      "zbytečné mezery i koncový středník se srovnají")
+check(read_only("SELECT * FROM PlaybackActivity") == "SELECT * FROM PlaybackActivity",
+      "SELECT passes")
+check(read_only("  select  a  from  b  ;") == "select a from b",
+      "needless spaces and the final semicolon are evened out")
 
-for zly in [
+for bad in [
     "DELETE FROM PlaybackActivity",
     "DROP TABLE PlaybackActivity",
     "UPDATE PlaybackActivity SET x = 1",
@@ -189,26 +189,26 @@ for zly in [
     "REPLACE INTO x VALUES (1)",
 ]:
     try:
-        jen_cteni(zly)
-        prosel = True
+        read_only(bad)
+        passed = True
     except ImportError_:
-        prosel = False
-    check(not prosel, f"odmítne: {zly[:45]}")
+        passed = False
+    check(not passed, f"refuses: {bad[:45]}")
 
 try:
-    jen_cteni(PBR_QUERY)
-    ok_dotaz = True
+    read_only(PBR_QUERY)
+    query_ok = True
 except ImportError_ as exc:
-    ok_dotaz = False
+    query_ok = False
     print("       ", exc)
-check(ok_dotaz, "skutečný dotaz na plugin pojistkou projde")
+check(query_ok, "the real query to the plugin passes the safeguard")
 
 
 print()
-print("--- zápis míří jen do vlastní databáze ---")
-check("httpx" not in kod("db.py"), "db.py vůbec nemluví po síti")
+print("--- writing aims only at our own database ---")
+check("httpx" not in code("db.py"), "db.py does not talk over the network at all")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

@@ -1,0 +1,39 @@
+{# The Prowlarr card "Numbers right now": indexers switched on, unavailable, connected apps, warnings.
+
+   Prowlarr's state right now, the period does not concern it. Drawn by the Prowlarr
+   tab and by dashboards (cards_prowlarr.py). Expects `d` = the live state for the account
+   (cards_prowlarr.for_account): what did not load is None and shows as "–",
+   not as zero. Only the admin gets the error's detail (`d.chyba`).
+
+   "Nedostupné" are the indexers Prowlarr skips for a while because of errors,
+   and those it names in the warning about unavailable indexers (the block
+   expired, but it has not tried them again yet) - not those a person switched off.
+
+   The only live card that says in a whole sentence what happened; the others have
+   just a short note. In a dashboard it carries a small label with the app
+   (`prefix`) - a row of tiles has no heading of its own. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+{% if not d.available %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("The app is not responding; indexers, connected apps and warnings cannot be loaded right now. Statistics from the database still apply.") }}
+        {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
+    </span>
+</div>
+{% elif d.partly_loaded %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("Part of the data could not be loaded from the app - a dash means unknown, not zero.") }}
+        {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
+    </span>
+</div>
+{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Enabled indexers"), d.enabled_count | number if d.enabled_count is not none else "–") }}
+    {{ tile(_("Unavailable indexers"), d.unavailable_count | number if d.unavailable_count is not none else "–") }}
+    {{ tile(_("Connected apps"), d.app_count | number if d.app_count is not none else "–") }}
+    {{ tile(_("App warnings"), d.warnings | number if d.warnings is not none else "–") }}
+</div>

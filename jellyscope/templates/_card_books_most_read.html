@@ -1,0 +1,25 @@
+{# The books card "Most read" on the overview - the five books with the most hours in the period, with their cover
+   (cards_books.py, `d.rows` = the first rows of "Most read books"); the whole charts are on Insights - the link only
+   for whoever may open them. #}
+{% from "_macros.html" import poster, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for b in d.rows %}
+        <div class="poster-card">
+            {{ poster(b.cover, "poster-frame", detail=b.link, placeholder=_("No cover")) }}
+            {% call link(b.link, {"class": "poster-name", "title": b.title}) %}{{ b.title or _("unknown book") }}{% endcall %}
+            <div class="poster-meta">{{ b.author or "–" }} &middot; {{ b.seconds | seconds }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% if may_open("/books/insights") %}
+    <p class="card-note" style="margin-top:10px"><a href="/books/insights">{{ _("The whole ranking") }} &rarr;</a></p>
+    {% endif %}
+    {% else %}
+    <p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>
+    {% endif %}
+</div>

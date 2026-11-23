@@ -1,0 +1,212 @@
+{
+ "Items": [
+  {
+   "Name": "Duna",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "3850b20b206d4bf31310d0d55f0a0eb9",
+   "DateCreated": "2026-11-20T10:00:00.0000000Z",
+   "Container": "epub",
+   "SortName": "duna",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "3850b20b206d4bf31310d0d55f0a0eb9",
+     "Path": "/media/books/Frank Herbert/Duna.epub",
+     "Type": "Default",
+     "Container": "epub",
+     "Size": 1850000,
+     "Name": "Duna",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {}
+    }
+   ],
+   "Genres": [
+    "Science Fiction",
+    "Klasika"
+   ],
+   "ProviderIds": {
+    "Isbn": "9788025702345",
+    "GoogleBooks": "abcDEF123"
+   },
+   "IsFolder": false,
+   "ParentId": "cc5791b676f230cf8f9467fdea305d87",
+   "Type": "Book",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "3850b20b206d4bf31310d0d55f0a0eb9"
+   },
+   "ImageTags": {
+    "Primary": "cover-duna"
+   },
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Book",
+   "ProductionYear": 1965,
+   "SeriesName": "Kroniky Duny",
+   "People": [
+    {
+     "Name": "Frank Herbert",
+     "Id": "d378835058be3ab5ca1ac4ba21736e57",
+     "Type": "Author"
+    },
+    {
+     "Name": "Překladatel Pavel",
+     "Id": "4763d209bae44e1739643c6132bf6457",
+     "Type": "Translator"
+    }
+   ]
+  },
+  {
+   "Name": "Algoritmy bez vzorců",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "38da69d8788f2057ce1866ea64f2c578",
+   "DateCreated": "2026-11-18T09:00:00.0000000Z",
+   "Container": "pdf",
+   "SortName": "algoritmy bez vzorců",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "38da69d8788f2057ce1866ea64f2c578",
+     "Path": "/media/books/Sbírka/Algoritmy.pdf",
+     "Type": "Default",
+     "Container": "pdf",
+     "Size": 12400000,
+     "Name": "Algoritmy",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {}
+    }
+   ],
+   "Genres": [
+    "Informatika"
+   ],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "a1e8ee0344cb2ee3eea92cef31aeb172",
+   "Type": "Book",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "38da69d8788f2057ce1866ea64f2c578"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Book",
+   "ProductionYear": 2019
+  },
+  {
+   "Name": "Příběhy z Trollí hory",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "4252f6f7563afaac7788086db2b40565",
+   "DateCreated": "2026-11-10T09:00:00.0000000Z",
+   "Container": "cbz",
+   "SortName": "příběhy z trollí hory",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "4252f6f7563afaac7788086db2b40565",
+     "Path": "/media/books/Komiksy/Trolli-hora.cbz",
+     "Type": "Default",
+     "Container": "cbz",
+     "Size": 48000000,
+     "Name": "Trolli-hora",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {}
+    }
+   ],
+   "Genres": [
+    "Komiks"
+   ],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "bf9196de3076427842b801846dbf2b41",
+   "Type": "Book",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "4252f6f7563afaac7788086db2b40565"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Book",
+   "People": [
+    {
+     "Name": "Kreslíř Karel",
+     "Id": "ab094741871d645a5b4ab0f6d8119865",
+     "Type": "Illustrator"
+    }
+   ]
+  },
+  {
+   "Name": "Staré pověsti",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "a4bb9ff8e3e3fd116259ef0332df152b",
+   "DateCreated": "2026-10-01T09:00:00.0000000Z",
+   "Container": "mobi",
+   "SortName": "staré pověsti",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "a4bb9ff8e3e3fd116259ef0332df152b",
+     "Path": "/media/books/Klasika/Stare-povesti.mobi",
+     "Type": "Default",
+     "Container": "mobi",
+     "Size": 900000,
+     "Name": "Stare-povesti",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {}
+    }
+   ],
+   "Genres": [],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "6605602907c2e6688d14888c15bfa58e",
+   "Type": "Book",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "a4bb9ff8e3e3fd116259ef0332df152b"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Book",
+   "ProductionYear": 1894,
+   "People": [
+    {
+     "Name": "Alois Jirásek",
+     "Id": "a37416793a003b4affc29310b8055d24",
+     "Type": "Author"
+    }
+   ]
+  }
+ ],
+ "TotalRecordCount": 4,
+ "StartIndex": 0
+}

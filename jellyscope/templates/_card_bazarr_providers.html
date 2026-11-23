@@ -1,0 +1,41 @@
+{# The Bazarr card "Subtitle providers": where the acquired subtitles are from.
+
+   From the database (cards_bazarr.py, `d.radky`: name, count, share, the average
+   match as ready text, `replaced` = how many upgrades in the period replaced
+   subtitles of this provider). An own file and subtitles without a
+   provider (a translation) have their own row. A long table as on Insights: the first rows in the card, the whole one in the window.
+
+   The table follows the card's width, not the window's (wrapper-by-width, see style.css):
+   providers' names are long and do not wrap, so on a narrow card
+   "Share" and "Replaced later" hide and the same numbers are under the name.
+   The window with the whole table has all the columns. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Provider") }}</th>
+            <th class="num">{{ _("Subtitles#count") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Share") }}</th>
+            <th class="num">{{ _("Average match") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Replaced later") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong">{{ r.name }}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Share") }} {{ r.share | percent }} &middot; {{ _("Replaced later") }} {{ r.replaced | number }}</div></td>
+                <td class="num">{{ r.count | number }}</td>
+                <td class="num wide-wrapper-only">{{ r.share | percent }}</td>
+                <td class="num">{{ r.score }}</td>
+                <td class="num muted wide-wrapper-only">{{ r.replaced | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

@@ -1,0 +1,388 @@
+{# A Settings section: looks, long lists and the map
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# What a person sets about the look of the pages. A section of its own on purpose:
+   such options will grow, and in General they would get lost among things
+   that have nothing in common with the look. #}
+
+{# ------------------------------------------------------------------ #}
+{# Interface - how much the cards show at once                        #}
+{# ------------------------------------------------------------------ #}
+{# The form wraps all cards of the section - they are saved with one
+   submit, only split by what they concern. #}
+<form method="post" action="/settings/interface">
+<div class="card" id="interface">
+    <div class="card-head">
+        <h2>{{ _("How the application looks") }}</h2>
+        <p class="card-note">{{ _("colours, cards and how time is written") }}</p>
+    </div>
+        <div class="field">
+            <label>{{ _("Appearance") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_skin" value="new"
+                           {{ 'checked' if ui_skin != 'classic' }}>
+                    <span>
+                        <span class="title">{{ _("New#masculine") }}</span>
+                        <span class="desc">
+                            {{ _("Colours from the Jellyfin logo, cards with a soft gradient, playback state in colour (green for direct, orange for transcoding). The headline number sits beside the curve.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_skin" value="classic"
+                           {{ 'checked' if ui_skin == 'classic' }}>
+                    <span>
+                        <span class="title">{{ _("Classic") }}</span>
+                        <span class="desc">
+                            {{ _("The original look: blue on a neutral ground, flat cards, badges with a dot. Nothing is lost, it just looks the way it did.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Only the looks change, not the data or any calculation. You can switch back at any time.") }}</p>
+        </div>
+
+        <div class="field">
+            <label>{{ _("Time in charts") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_exact_time" value="0"
+                           {{ 'checked' if not ui_exact_time }}>
+                    <span>
+                        <span class="title">{{ _("Rounded") }}</span>
+                        <span class="desc">
+                            {{ _('"12 h", "4.4 h". Round numbers read faster and the order of magnitude is obvious at a glance.') }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_exact_time" value="1"
+                           {{ 'checked' if ui_exact_time }}>
+                    <span>
+                        <span class="title">{{ _("Exact to the minute") }}</span>
+                        <span class="desc">
+                            {{ _('"12:24", "4:22". Above ten hours the decimals are dropped, so a day with 34.52 hours reports 35, almost half an hour out.') }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _('It applies to numbers read as a value: chart tooltips and the figures beside bars. Axis labels stay round, because there "40" is a mark on the scale, not a reading.') }}</p>
+            <p class="hint">{{ _('This is purely a display setting. Internally the application always works with the seconds Jellyfin reported, and the headline figures ("Total watched") are summed from those, not from what the chart shows. The switch changes no data and no calculation, only the notation.') }}</p>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+
+
+{# The default page (navigation.default_page_field): what /, the logo and signing in open.
+   Only what exists now is on offer; a saved choice that is unavailable now stays selected,
+   marked as such, so saving another field of this form does not change it - and the hint
+   says what opens instead. #}
+{% if default_page is defined %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Default page") }}</h2>
+        <p class="card-note">{{ _("what opens after signing in and when clicking the logo") }}</p>
+    </div>
+        <div class="field">
+            <label for="ui_default_page">{{ _("Default page") }}</label>
+            <select id="ui_default_page" name="ui_default_page" style="max-width:320px">
+                {% for val, option_label in default_page.options %}
+                    <option value="{{ val }}"{{ ' selected' if val == default_page.chosen }}>{{ option_label }}</option>
+                {% endfor %}
+            </select>
+            {% if default_page.chosen == "auto" %}
+                <p class="hint">{{ _("Automatic: the custom overview when it has something to show, otherwise Movies & series.") }}</p>
+            {% endif %}
+            {% if default_page.now %}
+                <p class="hint">{{ _("Opening now: {page}.").format(page=default_page.now) }}</p>
+            {% endif %}
+            <p class="hint">{{ _("Applies to everyone except viewers from Jellyfin, who start on their own page. Anyone who may not open the chosen page gets the first one they may.") }}</p>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+{% endif %}
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Custom overview") }}</h2>
+        <p class="card-note">{{ _("a page for everyone, put together by the admin") }}</p>
+    </div>
+        <div class="field">
+            <label>{{ _("Custom overview") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_dashboard" value="0"
+                           {{ 'checked' if not ui_dashboard }}>
+                    <span>
+                        <span class="title">{{ _("Off") }}</span>
+                        <span class="desc">
+                            {{ _("No tab in the menu.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_dashboard" value="1"
+                           {{ 'checked' if ui_dashboard }}>
+                    <span>
+                        <span class="title">{{ _("On") }}</span>
+                        <span class="desc">
+                            {{ _("A tab appears where you build your own page from the existing statistics. It can also be chosen as the default page.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <p class="hint">{{ _("An administrator builds it and it applies to the whole server, like every other setting. Until something is in it, the tab stays hidden.") }}</p>
+        </div>
+
+        {# The name goes into the menu and the heading - "Rodina", "Kino", by
+           what the page is for. It is not translated, it is the admin's text. #}
+        <div class="field">
+            <label for="dashboard_name">{{ _("Page name") }}</label>
+            <input type="text" id="dashboard_name" name="dashboard_name"
+                   maxlength="40" value="{{ dashboard_name }}" style="max-width:320px">
+            <p class="hint">{{ _("It shows in the menu and as the page heading. The overview cannot be switched on without it.") }}</p>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Long lists") }}</h2>
+        <p class="card-note">{{ _("how much a card shows outright before the rest moves into a window") }}</p>
+    </div>
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Every extra stream (or viewer) pushes the rest of the page down. Above this count the list hides behind a button and opens in a dialog. You know better than the app how much fits on your screen, so it is a setting here.") }}
+    </p>
+
+        <div class="field">
+            <label for="ui_max_streams">{{ _("Playbacks on the Overview") }}</label>
+            <input type="number" id="ui_max_streams" name="ui_max_streams"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ stream_limit }}" style="width:120px">
+            <p class="hint">{{ _('Above this count "Now playing" folds into a dialog.') }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_streams_mobile">{{ _("Playback on the Overview (phone)") }}</label>
+            <input type="number" id="ui_max_streams_mobile" name="ui_max_streams_mobile"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ stream_limit_mobile }}" style="width:120px">
+            <p class="hint">
+                {{ _("On a narrow screen a stream card takes the full width, so fewer of them fit. The rest hides behind a button that opens the same streams in a window.") }}
+            </p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_viewers">{{ _("Viewers in the language statistics") }}</label>
+            <input type="number" id="ui_max_viewers" name="ui_max_viewers"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ people_limit }}" style="width:120px">
+            <p class="hint">{{ _('Above this count the "Who watches in which language" bars fold into a dialog.') }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_viewers_mobile">{{ _("Viewers in the language statistics (phone)") }}</label>
+            <input type="number" id="ui_max_viewers_mobile" name="ui_max_viewers_mobile"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ people_limit_mobile }}" style="width:120px">
+            <p class="hint">
+                {{ _("On a narrow screen a bar takes the full width, and below the viewers there is still a legend and a table. The rest hides behind a button that opens the same viewers in a window.") }}
+            </p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows">{{ _("Rows in Insights tables") }}</label>
+            <input type="number" id="ui_max_rows" name="ui_max_rows"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ insights_row_limit }}" style="width:120px">
+            <p class="hint">{{ _("The tables on the Insights page are sorted most important first. Above this number they are cut short, and the whole table opens in a window.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows_mobile">{{ _("Rows in Insights tables (mobile)") }}</label>
+            <input type="number" id="ui_max_rows_mobile" name="ui_max_rows_mobile"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ insights_row_limit_mobile }}" style="width:120px">
+            <p class="hint">{{ _("On a narrow screen a table row is taller, so fewer of them fit.") }}</p>
+        </div>
+
+        {# *Arr, Seerr and music have row counts of their own. The fields are here only with the app
+           connected (music only with music) - without it they have nothing to control. The hidden field
+           `ui_rows_…` tells the route the form had these fields: without it the counts are left alone. #}
+        {% if arr_connected() %}
+        <input type="hidden" name="ui_rows_arr" value="1">
+        <div class="field">
+            <label for="ui_max_rows_arr">{{ _("Rows in *Arr tables") }}</label>
+            <input type="number" id="ui_max_rows_arr" name="ui_max_rows_arr"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ table_limits.arr[0] }}" style="width:120px">
+            <p class="hint">{{ _("Tables on the Sonarr, Radarr, Lidarr and Readarr pages (largest files, indexers, upgrades…). Above this number they are cut short and the whole table opens in a window.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows_arr_mobile">{{ _("Rows in *Arr tables (mobile)") }}</label>
+            <input type="number" id="ui_max_rows_arr_mobile" name="ui_max_rows_arr_mobile"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ table_limits.arr[1] }}" style="width:120px">
+        </div>
+        {% endif %}
+
+        {% if seerr_connected() %}
+        <input type="hidden" name="ui_rows_seerr" value="1">
+        <div class="field">
+            <label for="ui_max_rows_seerr">{{ _("Rows in Seerr tables") }}</label>
+            <input type="number" id="ui_max_rows_seerr" name="ui_max_rows_seerr"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ table_limits.seerr[0] }}" style="width:120px">
+            <p class="hint">{{ _('The "Who requests" table on the Seerr page. Above this number it is cut short and the whole table opens in a window.') }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows_seerr_mobile">{{ _("Rows in Seerr tables (mobile)") }}</label>
+            <input type="number" id="ui_max_rows_seerr_mobile" name="ui_max_rows_seerr_mobile"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ table_limits.seerr[1] }}" style="width:120px">
+        </div>
+        {% endif %}
+
+        {% if has_music() %}
+        <input type="hidden" name="ui_rows_music" value="1">
+        <div class="field">
+            <label for="ui_max_rows_music">{{ _("Rows in music tables") }}</label>
+            <input type="number" id="ui_max_rows_music" name="ui_max_rows_music"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ table_limits.music[0] }}" style="width:120px">
+            <p class="hint">{{ _("Tables on the Music page (artists, tracks, listeners…). Above this number they are shortened and the full table opens in a window.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="ui_max_rows_music_mobile">{{ _("Rows in music tables (mobile)") }}</label>
+            <input type="number" id="ui_max_rows_music_mobile" name="ui_max_rows_music_mobile"
+                   min="{{ limit_min }}" max="{{ limit_max }}"
+                   value="{{ table_limits.music[1] }}" style="width:120px">
+        </div>
+        {% endif %}
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("The map on the Network page") }}</h2>
+        <p class="card-note">{{ _("how far it zooms in, and where it starts") }}</p>
+    </div>
+        <div class="field">
+            <label>{{ _("Zooming the map") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_zoom" value="click"
+                           {{ 'checked' if map_zoom != 'wheel' }}>
+                    <span>
+                        <span class="title">{{ _("By clicking") }}</span>
+                        <span class="desc">
+                            {{ _("Clicking the map zooms in on that spot, Alt-click zooms out, and there are + and - buttons above the map. The map ignores the wheel entirely, so the page scrolls the same as everywhere else.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_zoom" value="wheel"
+                           {{ 'checked' if map_zoom == 'wheel' }}>
+                    <span>
+                        <span class="title">{{ _("With the wheel") }}</span>
+                        <span class="desc">
+                            {{ _("More comfortable, but while the cursor is over the map the page will not scroll, because the map takes the wheel for itself.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        {# The OSM basemap is the only option in the app that sends the viewers'
+           browsers to a foreign server - hence off by default and with a sentence
+           about what exactly goes out. #}
+        <div class="field">
+            <label>{{ _("Map background") }}</label>
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_base" value="drawn"
+                           {{ 'checked' if map_basemap != 'osm' }}>
+                    <span>
+                        <span class="title">{{ _("Drawn map") }}</span>
+                        <span class="desc">
+                            {{ _("Land outlines and country borders straight from the application, no internet needed. When the detailed map is downloaded on the Network page, zooming in shows coastlines, lakes, rivers and city outlines.") }}
+                        </span>
+                    </span>
+                </label>
+
+                <label class="radio-card">
+                    <input type="radio" name="ui_map_base" value="osm"
+                           {{ 'checked' if map_basemap == 'osm' }}>
+                    <span>
+                        <span class="title">OpenStreetMap</span>
+                        <span class="desc">
+                            {{ _("A real map with streets. The browser of everyone who opens the map downloads its images straight from OpenStreetMap, which therefore sees their IP address, the address of this server and the area they look at. It learns nothing about plays or viewers.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+
+<div class="card" id="decorations">
+    <div class="card-head">
+        <h2>{{ _("Seasonal decorations") }}</h2>
+    </div>
+        <div class="field">
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="ui_events" value="1" {{ 'checked' if ui_events }}>
+                    <span><span class="title">{{ _("On#feminine") }}</span></span>
+                </label>
+                <label class="radio-card">
+                    <input type="radio" name="ui_events" value="0" {{ 'checked' if not ui_events }}>
+                    <span><span class="title">{{ _("Off#feminine") }}</span></span>
+                </label>
+            </div>
+            <p class="hint">{{ _("Around some holidays, Jellyscope dresses up on its own. You can switch that off here.") }}</p>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+</form>
+{# The development date for the decoration - dev only (jellyscope/devtools.py). In prod
+   the global `devtools_date` does not exist and the template is not even looked for. #}
+{% if devtools_date is defined %}{% include "settings/_devtools_events.html" %}{% endif %}
+{# ================================================================== #}

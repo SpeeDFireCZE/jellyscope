@@ -1,0 +1,184 @@
+{
+ "page": 1,
+ "pageSize": 50,
+ "sortKey": "timeleft",
+ "sortDirection": "descending",
+ "totalRecords": 1,
+ "records": [
+  {
+   "movieId": 4,
+   "movie": {
+    "title": "Elephants Dream",
+    "originalTitle": "Elephants Dream",
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "alternateTitles": [],
+    "secondaryYearSourceId": 0,
+    "sortTitle": "elephants dream",
+    "status": "released",
+    "overview": "Elephants Dream is the story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo. As their journey unfolds we discover signs that the machine is not all Proog thinks it is, and his guiding takes on a more desperate aspect.  Elephants Dream is a story about communication and fiction, made purposefully open-ended as the world’s first 3D animated “Open movie”. The film itself is released under the Creative Commons license, along with the entirety of the production files used to make it (roughly 7 Gigabytes of data). The software used to make the movie is the free/open source animation suite Blender along with other open source software, thus allowing the movie to be remade, remixed and re-purposed with only a computer and the data on the DVD or download.",
+    "digitalRelease": "2006-03-24T00:00:00Z",
+    "releaseDate": "2006-03-24T00:00:00Z",
+    "images": [
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/9zROtU9TkpZQrOuEaMAp68FOWLK.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/9bJDwuhza19HQcYA99FeslLYmUm.jpg"
+     }
+    ],
+    "website": "http://www.elephantsdream.org/",
+    "year": 2006,
+    "youTubeTrailerId": "_0wxP7EWsOc",
+    "studio": "Blender Foundation",
+    "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+    "qualityProfileId": 1,
+    "movieFileId": 2,
+    "monitored": true,
+    "minimumAvailability": "released",
+    "isAvailable": true,
+    "folderName": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+    "runtime": 11,
+    "cleanTitle": "elephantsdream",
+    "imdbId": "tt0807840",
+    "tmdbId": 9761,
+    "titleSlug": "9761",
+    "certification": "NR",
+    "genres": [
+     "Animation",
+     "Science Fiction"
+    ],
+    "keywords": [
+     "blender",
+     "dreams",
+     "future"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:23:08Z",
+    "ratings": {
+     "imdb": {
+      "votes": 1397,
+      "value": 5.6,
+      "type": "user"
+     },
+     "tmdb": {
+      "votes": 71,
+      "value": 5.8,
+      "type": "user"
+     },
+     "trakt": {
+      "votes": 86,
+      "value": 5.98837,
+      "type": "user"
+     }
+    },
+    "movieFile": {
+     "movieId": 4,
+     "relativePath": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+     "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+     "size": 203381,
+     "dateAdded": "2026-11-12T22:26:06Z",
+     "sceneName": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb",
+     "releaseGroup": "NTb",
+     "edition": "",
+     "languages": [
+      {
+       "id": 1,
+       "name": "English"
+      }
+     ],
+     "quality": {
+      "quality": {
+       "id": 5,
+       "name": "WEBDL-720p",
+       "source": "webdl",
+       "resolution": 720,
+       "modifier": "none"
+      },
+      "revision": {
+       "version": 1,
+       "real": 0,
+       "isRepack": false
+      }
+     },
+     "indexerFlags": 0,
+     "mediaInfo": {
+      "audioBitrate": 0,
+      "audioChannels": 1,
+      "audioCodec": "AAC",
+      "audioLanguages": "",
+      "audioStreamCount": 1,
+      "videoBitDepth": 8,
+      "videoBitrate": 0,
+      "videoCodec": "x264",
+      "videoFps": 1,
+      "videoDynamicRange": "",
+      "videoDynamicRangeType": "",
+      "resolution": "1280x720",
+      "runTime": "30:00",
+      "scanType": "Progressive",
+      "subtitles": ""
+     },
+     "originalFilePath": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+     "qualityCutoffNotMet": false,
+     "id": 2
+    },
+    "popularity": 1.8026,
+    "lastSearchTime": "2026-11-12T22:23:08Z",
+    "id": 4
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "webdl",
+     "resolution": 1080,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 60306,
+   "title": "Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING",
+   "estimatedCompletionTime": "2026-11-12T22:37:11Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importBlocked",
+   "statusMessages": [
+    {
+     "title": "One or more movies expected in this release were not imported or missing",
+     "messages": []
+    },
+    {
+     "title": "Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING.mkv",
+     "messages": [
+      "No audio tracks detected"
+     ]
+    }
+   ],
+   "downloadId": "Blackhole_Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING_639301196637781394",
+   "protocol": "usenet",
+   "downloadClient": "Blackhole",
+   "downloadClientHasPostImportCategory": false,
+   "outputPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING",
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "id": 220815722
+  }
+ ]
+}

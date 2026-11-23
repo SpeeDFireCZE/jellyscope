@@ -1,0 +1,28 @@
+{# The block "Who listened" on the artist's and the album's page: listeners of the period.
+
+   Only with the area "...including who listened" (the route does not send `d.posluchaci`
+   otherwise). Anonymisation guards the names; a viewer is a link to their page only
+   for whoever may open it (the link macro). #}
+{% from "_macros.html" import link, row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Who listened") }}</h2></div>
+    {% if d.listeners %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Listener") }}</th>
+            <th class="num">{{ _("Listening") }}</th>
+            <th class="num">{{ _("Plays") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for p in d.listeners %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{% call link("/users/" ~ p.user_id if p.user_id else "") %}{{ p.user_name or "–" }}{% endcall %}</td>
+                <td class="num strong">{{ p.seconds | seconds }}</td>
+                <td class="num">{{ p.plays | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.listeners | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+</div>

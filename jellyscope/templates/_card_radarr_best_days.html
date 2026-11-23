@@ -1,0 +1,27 @@
+{# The Radarr card "Best days": the days the library grew by the most files.
+
+   From the database (cards_radarr.py, `d.radky` = the five days with the most imported files). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("most files imported in a day") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table>
+        <thead><tr>
+            <th>{{ _("Day") }}</th>
+            <th class="num">{{ _("Imported") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr>
+                <td>{{ r.day | czech_date }}</td>
+                <td class="num strong">{{ r.count | number }}</td>
+                <td class="num muted">{{ r.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

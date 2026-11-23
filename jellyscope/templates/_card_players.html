@@ -1,0 +1,13 @@
+{# The card with the key `players`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Players") }}</h2>
+        <p class="card-note">{{ _("in hours") }}</p>
+    </div>
+    {{ charts.hbar_chart(clients, 'label', 'hours') | safe }}
+</div>

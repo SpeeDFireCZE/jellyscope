@@ -1,0 +1,18 @@
+{# The books card "Reading and listening numbers": how much was listened to and read in the period.
+
+   From the database (cards_books.py, `d` = stats.books_numbers + `reading_reported`). Listening is the time of
+   audiobooks, reading the time an e-book's reader was open - Jellyfin may not report it at all, then the tile says
+   so instead of a zero. A row of tiles without a heading; in a dashboard it carries a small label "Books · …". #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Audiobook listening"), d.listening | seconds) }}
+    {% if d.reading_reported %}
+        {{ tile(_("Reading time"), d.reading | seconds) }}
+    {% else %}
+        {{ tile(_("Reading time"), "–", note=_("Jellyfin does not report reading e-books.")) }}
+    {% endif %}
+    {{ tile(_("Readers and listeners"), d.reader_count | number) }}
+    {{ tile(_("Books"), d.work_count | number) }}
+    {{ tile(_("Authors"), d.author_count | number) }}
+</div>

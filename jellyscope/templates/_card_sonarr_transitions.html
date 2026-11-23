@@ -1,0 +1,26 @@
+{# The Sonarr card "From which quality to which": the most common transitions in an upgrade.
+
+   From the database (cards_sonarr.py, `d.radky`: from, to, count). A long table as on Insights: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table>
+        <thead><tr>
+            <th>{{ _("Quality") }}</th>
+            <th class="num">{{ _("Upgrades#count") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for p in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td>{{ p.z }} → <strong>{{ p.to }}</strong></td>
+                <td class="num">{{ p.count | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

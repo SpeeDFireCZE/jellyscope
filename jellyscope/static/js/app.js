@@ -1,262 +1,261 @@
-// Skripty stránek aplikace (vše, co stojí na base.html). Dřív byly vložené
-// přímo v base.html; hlavička CSP teď vložený kód nepouští (viz zaklad.js
-// a tests/test_bez_vlozeneho_js.py). Přesunuté beze změny logiky.
+// Scripts of the app's pages (everything standing on base.html). They used to be
+// inline in base.html; the CSP header no longer lets inline code run (see base.js
+// and tests/test_no_inline_js.py). Moved with the logic unchanged.
 //
-// Načítá se s `defer` - poběží, až je stránka celá načtená. Každá část si
-// nejdřív ověří, že její prvek na stránce je: jeden soubor slouží všem
-// stránkám.
+// Loaded with `defer` - it runs once the page has fully loaded. Each part
+// first checks that its element is on the page: one file serves all
+// pages.
 //
-// Texty, které skript ukazuje, přeložila šablona do datového bloku
-// <script type="application/json" id="texty-js"> (base.html).
+// Texts the script shows were translated by the template into the data block
+// <script type="application/json" id="texts-js"> (base.html).
 //
-// Celý soubor je v jednom bloku, ať nic neuteče do `window` - části
-// uvnitř zůstávají každá ve svém. Bez odsazení schválně: blok je jen obal
-// a o úroveň hlubší celý soubor by se hůř četl. Co mají ostatní volat,
-// se dává do `window` výslovně (window.zapamatujPolohu).
+// The whole file is one block, so nothing leaks into `window` - the parts
+// inside each keep to their own. No indentation on purpose: the block is only
+// a wrapper and the whole file one level deeper would read worse. What others
+// are to call is put into `window` explicitly (window.rememberPosition).
 (function () {
-var TEXTY = JSON.parse((document.getElementById("texty-js") || {}).textContent || "{}");
+var TEXTS = JSON.parse((document.getElementById("texts-js") || {}).textContent || "{}");
 
-// Sama zmizí, ale ne dřív, než se dá přečíst. Chyby
-// zůstávají - u nich je nejdůležitější, aby si jich
-// člověk všiml, a zavřít je může sám.
+// It disappears by itself, but not before it can be read. Errors
+// stay - with those the most important thing is that a person
+// notices them, and they can close them themselves.
 (function () {
     var box = document.getElementById("flash-toast");
     if (!box || box.querySelector(".flash.error")) { return; }
-    setTimeout(function () { box.classList.add("odchazi"); }, 9000);
+    setTimeout(function () { box.classList.add("leaving"); }, 9000);
     setTimeout(function () { box.remove(); }, 9600);
 })();
 
 // ------------------------------------------------------------------
-// Ukázka: místo odeslání formuláře hláška na místě
+// Demo: a message on the spot instead of submitting the form
 //
-// Výjimkou je přihlášení a odhlášení - bez nich by se do ukázky
-// nedalo dostat ani z ní ven.
+// Signing in and out are the exception - without them one could
+// neither get into the demo nor out of it.
 // ------------------------------------------------------------------
 (function () {
     if (document.body.dataset.demo !== "1") { return; }
-    var POVOLENO = ["/login", "/logout"];
-    var hlaska = document.getElementById("hlaska-ukazky");
-    var casovac = null;
+    var ALLOWED = ["/login", "/logout"];
+    var flash = document.getElementById("demo-flash");
+    var timer = null;
 
     document.addEventListener("submit", function (event) {
         var form = event.target;
-        var kam = (form.getAttribute("action") || "").split("?")[0];
-        // Zastavuje se jen to, co zapisuje.
+        var whereTo = (form.getAttribute("action") || "").split("?")[0];
+        // Only what writes is stopped.
         //
-        //   method="dialog"  zavírá okno, nikam se neposílá,
-        //   method="get"     je filtr - mění adresu, ne data
-        //                    (období statistik, filtr historie),
-        //   POVOLENO         přihlášení a odhlášení.
+        //   method="dialog"  closes the window, sends nothing anywhere,
+        //   method="get"     is a filter - changes the address, not data
+        //                    (the statistics' period, the history filter),
+        //   ALLOWED          signing in and out.
         //
-        // Server to hlídá stejně: middleware `ukazkovy_rezim` propouští
-        // GET i HEAD bez ptaní.
+        // The server guards it the same way: the middleware `demo_mode_middleware` lets
+        // GET and HEAD through without asking.
         if (form.method === "dialog" || form.method === "get"
-                || POVOLENO.indexOf(kam) !== -1) { return; }
+                || ALLOWED.indexOf(whereTo) !== -1) { return; }
 
         event.preventDefault();
-        hlaska.textContent = form.dataset.demoNote
-            || TEXTY.ukazka;
-        hlaska.classList.add("vidi");
-        clearTimeout(casovac);
-        casovac = setTimeout(function () { hlaska.classList.remove("vidi"); }, 4500);
+        flash.textContent = TEXTS.demo;
+        flash.classList.add("shown");
+        clearTimeout(timer);
+        timer = setTimeout(function () { flash.classList.remove("shown"); }, 4500);
     });
 })();
 
 // ------------------------------------------------------------------
-// Kalendář k psanému datu
+// A calendar for a typed date
 //
-// Vlastní, ne <input type="date">: ten vypadá v každém prohlížeči
-// jinak a uprostřed sladěného okna trčí. Psát datum jde pořád - tohle
-// je jen našeptávač, který se otevře po kliknutí do pole.
+// Our own, not <input type="date">: that one looks different in every
+// browser and sticks out in the middle of a matched window. Typing a date
+// still works - this is only a suggester that opens after a click into the field.
 //
-// Názvy měsíců a dnů si bere prohlížeč podle jazyka stránky (Intl),
-// takže se nemusí překládat a jsou správně skloněné.
+// The browser takes the names of months and days from the page's language
+// (Intl), so they need no translation and are declined correctly.
 // ------------------------------------------------------------------
 (function () {
-    var pole = null;      // input, ke kterému kalendář právě patří
+    var field = null;      // the input the calendar belongs to right now
     var panel = null;
-    var mesic = null;     // první den zobrazeného měsíce
+    var monthIndex = null;     // the first day of the month shown
 
-    function jazyk() {
+    function language() {
         return document.documentElement.getAttribute("lang") || "cs";
     }
 
-    function nazevMesice(datum) {
-        return new Intl.DateTimeFormat(jazyk(), {
+    function monthName(date) {
+        return new Intl.DateTimeFormat(language(), {
             month: "long", year: "numeric"
-        }).format(datum);
+        }).format(date);
     }
 
-    function zkratkyDnu() {
-        // 2024-01-01 bylo pondělí - od něj sedm dní dopředu.
-        var format = new Intl.DateTimeFormat(jazyk(), { weekday: "short" });
-        var dny = [];
+    function dayAbbreviations() {
+        // 2024-01-01 was a Monday - seven days forward from it.
+        var formatter = new Intl.DateTimeFormat(language(), { weekday: "short" });
+        var days = [];
         for (var i = 0; i < 7; i++) {
-            dny.push(format.format(new Date(2024, 0, 1 + i)));
+            days.push(formatter.format(new Date(2024, 0, 1 + i)));
         }
-        return dny;
+        return days;
     }
 
-    function ctiDatum(text) {
-        var shoda = /^\s*(\d{1,2})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{4})\s*$/.exec(text || "");
-        if (shoda) {
-            return new Date(+shoda[3], +shoda[2] - 1, +shoda[1]);
+    function readDate(text) {
+        var match = /^\s*(\d{1,2})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{4})\s*$/.exec(text || "");
+        if (match) {
+            return new Date(+match[3], +match[2] - 1, +match[1]);
         }
-        shoda = /^\s*(\d{4})-(\d{2})-(\d{2})\s*$/.exec(text || "");
-        return shoda ? new Date(+shoda[1], +shoda[2] - 1, +shoda[3]) : null;
+        match = /^\s*(\d{4})-(\d{2})-(\d{2})\s*$/.exec(text || "");
+        return match ? new Date(+match[1], +match[2] - 1, +match[3]) : null;
     }
 
-    function napisDatum(datum) {
-        return datum.getDate() + "." + (datum.getMonth() + 1) + "."
-             + datum.getFullYear();
+    function writeDate(date) {
+        return date.getDate() + "." + (date.getMonth() + 1) + "."
+             + date.getFullYear();
     }
 
-    function stejnyDen(a, b) {
+    function sameDay(a, b) {
         return a && b && a.getFullYear() === b.getFullYear()
             && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
     }
 
-    function zavri() {
+    function close() {
         if (panel) { panel.remove(); panel = null; }
-        pole = null;
+        field = null;
     }
 
-    function vykresli() {
+    function render() {
         panel.innerHTML = "";
 
-        var hlava = document.createElement("div");
-        hlava.className = "kalendar-hlava";
-        var zpet = document.createElement("button");
-        zpet.type = "button";
-        zpet.className = "kalendar-sipka";
-        zpet.textContent = "\u2039";
-        zpet.addEventListener("click", function () {
-            mesic = new Date(mesic.getFullYear(), mesic.getMonth() - 1, 1);
-            vykresli();
+        var head = document.createElement("div");
+        head.className = "calendar-head";
+        var back = document.createElement("button");
+        back.type = "button";
+        back.className = "calendar-arrow";
+        back.textContent = "\u2039";
+        back.addEventListener("click", function () {
+            monthIndex = new Date(monthIndex.getFullYear(), monthIndex.getMonth() - 1, 1);
+            render();
         });
-        var nazev = document.createElement("span");
-        nazev.className = "kalendar-mesic";
-        nazev.textContent = nazevMesice(mesic);
-        var vpred = document.createElement("button");
-        vpred.type = "button";
-        vpred.className = "kalendar-sipka";
-        vpred.textContent = "\u203a";
-        vpred.addEventListener("click", function () {
-            mesic = new Date(mesic.getFullYear(), mesic.getMonth() + 1, 1);
-            vykresli();
+        var title = document.createElement("span");
+        title.className = "calendar-month";
+        title.textContent = monthName(monthIndex);
+        var forward = document.createElement("button");
+        forward.type = "button";
+        forward.className = "calendar-arrow";
+        forward.textContent = "\u203a";
+        forward.addEventListener("click", function () {
+            monthIndex = new Date(monthIndex.getFullYear(), monthIndex.getMonth() + 1, 1);
+            render();
         });
-        hlava.append(zpet, nazev, vpred);
-        panel.appendChild(hlava);
+        head.append(back, title, forward);
+        panel.appendChild(head);
 
-        var mrizka = document.createElement("div");
-        mrizka.className = "kalendar-mrizka";
-        zkratkyDnu().forEach(function (zkratka) {
-            var bunka = document.createElement("span");
-            bunka.className = "kalendar-den-tydne";
-            bunka.textContent = zkratka;
-            mrizka.appendChild(bunka);
+        var grid = document.createElement("div");
+        grid.className = "calendar-grid";
+        dayAbbreviations().forEach(function (abbreviation) {
+            var cell = document.createElement("span");
+            cell.className = "calendar-weekday";
+            cell.textContent = abbreviation;
+            grid.appendChild(cell);
         });
 
-        // Týden začíná pondělkem; getDay() má neděli jako nulu.
-        var prvni = new Date(mesic.getFullYear(), mesic.getMonth(), 1);
-        var posun = (prvni.getDay() + 6) % 7;
-        var dnes = new Date();
-        var vybrane = ctiDatum(pole.value);
+        // The week starts on Monday; getDay() has Sunday as zero.
+        var first = new Date(monthIndex.getFullYear(), monthIndex.getMonth(), 1);
+        var offsetBy = (first.getDay() + 6) % 7;
+        var today = new Date();
+        var selected = readDate(field.value);
 
-        for (var i = 0; i < posun; i++) {
-            mrizka.appendChild(document.createElement("span"));
+        for (var i = 0; i < offsetBy; i++) {
+            grid.appendChild(document.createElement("span"));
         }
 
-        var pocet = new Date(mesic.getFullYear(), mesic.getMonth() + 1, 0).getDate();
-        for (var den = 1; den <= pocet; den++) {
-            (function (den) {
-                var datum = new Date(mesic.getFullYear(), mesic.getMonth(), den);
-                var tlacitko = document.createElement("button");
-                tlacitko.type = "button";
-                tlacitko.className = "kalendar-den";
-                tlacitko.textContent = den;
-                if (stejnyDen(datum, dnes)) { tlacitko.classList.add("dnes"); }
-                if (stejnyDen(datum, vybrane)) { tlacitko.classList.add("vybrany"); }
-                // Statistika z budoucnosti je prázdná, tak tam nepouštíme.
-                if (datum > dnes) { tlacitko.disabled = true; }
-                tlacitko.addEventListener("click", function () {
-                    pole.value = napisDatum(datum);
-                    pole.dispatchEvent(new Event("change", { bubbles: true }));
-                    zavri();
+        var count = new Date(monthIndex.getFullYear(), monthIndex.getMonth() + 1, 0).getDate();
+        for (var day = 1; day <= count; day++) {
+            (function (day) {
+                var date = new Date(monthIndex.getFullYear(), monthIndex.getMonth(), day);
+                var button = document.createElement("button");
+                button.type = "button";
+                button.className = "calendar-day";
+                button.textContent = day;
+                if (sameDay(date, today)) { button.classList.add("today"); }
+                if (sameDay(date, selected)) { button.classList.add("selected"); }
+                // Statistics from the future are empty, so we do not go there.
+                if (date > today) { button.disabled = true; }
+                button.addEventListener("click", function () {
+                    field.value = writeDate(date);
+                    field.dispatchEvent(new Event("change", { bubbles: true }));
+                    close();
                 });
-                mrizka.appendChild(tlacitko);
-            })(den);
+                grid.appendChild(button);
+            })(day);
         }
-        panel.appendChild(mrizka);
+        panel.appendChild(grid);
     }
 
-    function otevri(vstup) {
-        zavri();
-        pole = vstup;
-        var vybrane = ctiDatum(pole.value) || new Date();
-        mesic = new Date(vybrane.getFullYear(), vybrane.getMonth(), 1);
+    function open(input) {
+        close();
+        field = input;
+        var selected = readDate(field.value) || new Date();
+        monthIndex = new Date(selected.getFullYear(), selected.getMonth(), 1);
 
         panel = document.createElement("div");
-        panel.className = "kalendar";
-        // Do rodiče pole, ne do <body>: okno (<dialog>) se kreslí
-        // v horní vrstvě a cokoliv připnutého k body by se pod ním
-        // schovalo - stejná past jako u bubliny s hodnotou.
-        var obal = pole.closest(".field") || pole.parentElement;
-        obal.style.position = obal.style.position || "relative";
-        obal.appendChild(panel);
-        vykresli();
+        panel.className = "calendar";
+        // Into the field's parent, not into <body>: a window (<dialog>) is drawn
+        // in the top layer and anything attached to body would hide
+        // under it - the same trap as with the value tooltip.
+        var wrapper = field.closest(".field") || field.parentElement;
+        wrapper.style.position = wrapper.style.position || "relative";
+        wrapper.appendChild(panel);
+        render();
     }
 
-    // Odchytáváme v zachycovací fázi (`true`), ne při probublávání.
+    // We catch it in the capture phase (`true`), not while bubbling.
     //
-    // Šipky měsíců překreslují obsah panelu, takže než by kliknutí
-    // probublalo sem, tlačítko, na které se kliklo, už v dokumentu
-    // není - a `closest(".kalendar")` na odpojeném uzlu vrátí null.
-    // Kalendář to vyhodnotil jako kliknutí mimo sebe a zavřel se:
-    // měsíce tím nešly přepínat vůbec.
+    // The month arrows redraw the panel's content, so before the click
+    // bubbled up here, the button that was clicked is no longer in the
+    // document - and `closest(".calendar")` on a detached node returns null.
+    // The calendar took that for a click outside itself and closed:
+    // the months could not be switched at all.
     document.addEventListener("click", function (event) {
-        var vstup = event.target.closest("input[data-kalendar]");
-        if (vstup) {
-            if (vstup !== pole) { otevri(vstup); }
+        var input = event.target.closest("input[data-calendar]");
+        if (input) {
+            if (input !== field) { open(input); }
             return;
         }
-        if (panel && !event.target.closest(".kalendar")) { zavri(); }
+        if (panel && !event.target.closest(".calendar")) { close(); }
     }, true);
 
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" && panel) { zavri(); }
+        if (event.key === "Escape" && panel) { close(); }
     });
 })();
 
 // ------------------------------------------------------------------
-// Rychlé volby ve vlastním období
+// Quick choices in a custom period
 //
-// Vyplní pole, ale formulář neodešlou - ať je vidět, co se vybralo,
-// než se na to klikne. Bez JavaScriptu zůstanou pole na ručně psané
-// datum, takže se nic neztratí.
+// They fill the fields but do not submit the form - so it is visible what was
+// chosen before it is clicked. Without JavaScript the fields stay for a
+// hand-typed date, so nothing is lost.
 // ------------------------------------------------------------------
 document.addEventListener("click", function (event) {
-    var tlacitko = event.target.closest("[data-obdobi-od]");
-    if (!tlacitko) { return; }
-    var form = tlacitko.closest("form");
+    var button = event.target.closest("[data-period-since]");
+    if (!button) { return; }
+    var form = button.closest("form");
     if (!form) { return; }
-    // Pole se hledají podle data-pole, ne podle name: na Srovnání mají
-    // obě období vlastní předponu (a_od, b_od), aby se v adrese
-    // nepřebila, a hledání podle jména by tam nenašlo nic.
-    var od = form.querySelector('[data-pole="od"]');
-    var doPole = form.querySelector('[data-pole="do"]');
-    if (!od || !doPole) { return; }
-    od.value = tlacitko.dataset.obdobiOd;
-    doPole.value = tlacitko.dataset.obdobiDo;
+    // Fields are found by data-field, not by name: on the Comparison both
+    // periods have their own prefix (a_since, b_since), so they do not overwrite each
+    // other in the address, and a search by name would find nothing there.
+    var sinceField = form.querySelector('[data-field="since"]');
+    var untilField = form.querySelector('[data-field="until"]');
+    if (!sinceField || !untilField) { return; }
+    sinceField.value = button.dataset.periodSince;
+    untilField.value = button.dataset.periodUntil;
 });
 
 // ------------------------------------------------------------------
-// Bublina s hodnotou
+// The value tooltip
 //
-// Místo aby každý sloupec měl vlastní posluchač, posloucháme na celém
-// dokumentu a při události se zeptáme, nad čím myš je. Tomuhle se říká
-// delegace událostí: jeden posluchač místo tisíce, takže stránka
-// s velkou tabulkou nezpomalí.
+// Instead of every bar having its own listener, we listen on the whole
+// document and on an event ask what the mouse is over. This is called
+// event delegation: one listener instead of a thousand, so a page
+// with a big table does not slow down.
 // ------------------------------------------------------------------
 (function () {
     var tip = document.getElementById("tooltip");
@@ -264,68 +263,68 @@ document.addEventListener("click", function (event) {
 
     function place(event) {
         var offset = 14;
-        var okraj = 8;
+        var margin = 8;
         var x = event.clientX + offset;
         var y = event.clientY + offset;
 
-        // Aby bublina nevylezla z okna ven: když se nevejde vpravo
-        // (dolů), jde na druhou stranu kurzoru.
+        // Keep the tooltip from leaving the window: when it does not fit on the right
+        // (below), it goes to the other side of the cursor.
         var box = tip.getBoundingClientRect();
-        if (x + box.width > window.innerWidth - okraj) {
+        if (x + box.width > window.innerWidth - margin) {
             x = event.clientX - box.width - offset;
         }
-        if (y + box.height > window.innerHeight - okraj) {
+        if (y + box.height > window.innerHeight - margin) {
             y = event.clientY - box.height - offset;
         }
-        /* Na telefonu se často nevejde ani na jednu stranu - bublina
-           je skoro tak široká jako displej a klepnutí bývá uprostřed.
-           Překlopení ji pak poslalo do záporných souřadnic, půlka
-           textu zmizela za levým okrajem. Proto ji nakonec vždy
-           přisadíme dovnitř okna; radši překryje prst, než aby
-           useknula text. */
-        x = Math.max(okraj, Math.min(x, window.innerWidth - box.width - okraj));
-        y = Math.max(okraj, Math.min(y, window.innerHeight - box.height - okraj));
+        /* On a phone it often fits on neither side - the tooltip
+           is almost as wide as the display and the tap tends to be in the middle.
+           Flipping then sent it to negative coordinates, half the
+           text vanished behind the left edge. So in the end we always
+           push it inside the window; better to cover the finger than
+           to cut the text. */
+        x = Math.max(margin, Math.min(x, window.innerWidth - box.width - margin));
+        y = Math.max(margin, Math.min(y, window.innerHeight - box.height - margin));
         tip.style.left = x + "px";
         tip.style.top = y + "px";
     }
 
-    /* Obsah bubliny.
+    /* The tooltip's content.
 
-       Grafy posílají hodnoty v `data-tip-json`: nadpis (den) a řádky,
-       z nichž každý má barvu své série. Skládá se to z uzlů a textu
-       přes textContent - do bubliny se tak nikdy nedostane značka
-       z názvu filmu, i kdyby v něm byla.
+       Charts send values in `data-tip-json`: a heading (the day) and rows,
+       each with the colour of its series. It is built from nodes and text
+       through textContent - so markup from a film's name can never get into
+       the tooltip, even if there were some in it.
 
-       Všechno ostatní (sloupce, teplotní mapa, značka transcode) má
-       jen `data-tip`. Když je v něm víc údajů oddělených " · ",
-       rozpadnou se na řádky - je to čitelnější než jedna dlouhá věta
-       přes celou obrazovku. */
-    function naplnBublinu(target) {
+       Everything else (bars, the heat map, the transcode badge) has
+       only `data-tip`. When it holds several values separated by " · ",
+       they break into rows - that reads better than one long sentence
+       across the whole screen. */
+    function fillTooltip(target) {
         tip.textContent = "";
 
         var data = null;
         try {
             data = JSON.parse(target.getAttribute("data-tip-json") || "null");
         } catch (e) {
-            data = null;   /* poškozený JSON není důvod nic neukázat */
+            data = null;   /* broken JSON is no reason to show nothing */
         }
 
-        var nadpis = data ? data.nadpis : null;
-        var radky = data ? data.radky : (target.getAttribute("data-tip") || "")
+        var heading = data ? data.heading : null;
+        var rows = data ? data.rows : (target.getAttribute("data-tip") || "")
             .split(" · ").map(function (text) { return { text: text }; });
 
-        if (nadpis) {
+        if (heading) {
             var h = document.createElement("div");
-            h.className = "tooltip-nadpis";
-            h.textContent = nadpis;
+            h.className = "tooltip-heading";
+            h.textContent = heading;
             tip.appendChild(h);
         }
-        radky.forEach(function (radek) {
-            if (!radek || !radek.text) { return; }
+        rows.forEach(function (row) {
+            if (!row || !row.text) { return; }
             var r = document.createElement("div");
-            r.className = "tooltip-radek";
-            if (radek.barva) { r.style.color = radek.barva; }
-            r.textContent = radek.text;
+            r.className = "tooltip-row";
+            if (row.color) { r.style.color = row.color; }
+            r.textContent = row.text;
             tip.appendChild(r);
         });
     }
@@ -343,22 +342,22 @@ document.addEventListener("click", function (event) {
 
         if (target !== current) {
             current = target;
-            naplnBublinu(target);
+            fillTooltip(target);
             tip.classList.add("visible");
         }
 
-        /* Okno (<dialog>) se vykresluje v tzv. horní vrstvě, která je
-           nad vším ostatním - bublina připnutá k <body> se pod ním
-           schová a v okně tak nešlo poznat, co je co. Přestěhujeme ji
-           proto do toho okna a při odchodu zpátky. */
-        var okno = target.closest("dialog[open]");
-        var kam = okno || document.body;
-        if (tip.parentElement !== kam) { kam.appendChild(tip); }
+        /* A window (<dialog>) is drawn in the so-called top layer, which is
+           above everything else - a tooltip attached to <body> hides
+           under it, and in the window one could not tell what is what. So we move
+           it into that window, and back on leaving. */
+        var modal = target.closest("dialog[open]");
+        var whereTo = modal || document.body;
+        if (tip.parentElement !== whereTo) { whereTo.appendChild(tip); }
         place(event);
     }, { passive: true });
 
-    // Když stránka odroluje nebo myš opustí okno, bublina musí zmizet -
-    // jinak by zůstala viset nad ničím.
+    // When the page scrolls or the mouse leaves the window, the tooltip has to go -
+    // otherwise it would stay hanging over nothing.
     document.addEventListener("scroll", function () {
         current = null;
         tip.classList.remove("visible");
@@ -371,15 +370,15 @@ document.addEventListener("click", function (event) {
 })();
 
 // ------------------------------------------------------------------
-// Nastavení databáze: ukaž jen tu část, která platí
+// Database settings: show only the part that applies
 //
-// Výchozí stav vykreslí server (třída is-sqlite / is-postgres na
-// formuláři), takže se při načtení nic neprobleskne a bez JavaScriptu
-// je vidět ta správná polovina. Tenhle kód jen reaguje na přepnutí.
+// The server draws the initial state (class is-sqlite / is-postgres on
+// the form), so nothing flashes on load and without JavaScript
+// the right half is visible. This code only reacts to a switch.
 //
-// Skrytá pole se pořád odesílají - to je záměr. Když si přepneš na
-// SQLite a uložíš, nastavení PostgreSQL se nesmaže a je tam, až se
-// budeš vracet.
+// Hidden fields are still submitted - that is intended. When you switch to
+// SQLite and save, the PostgreSQL settings are not deleted and are there when
+// you come back.
 // ------------------------------------------------------------------
 (function () {
     var form = document.querySelector("[data-db-form]");
@@ -395,628 +394,780 @@ document.addEventListener("click", function (event) {
 
 
 // ------------------------------------------------------------------
-// Zachování pozice na stránce při změně období
+// Keeping the position on the page when the period changes
 //
-// Filtr 7 / 30 / 90 dnů mění čísla v celé stránce, takže se načítá
-// znovu - a prohlížeč při novém načtení vždycky skočí na začátek.
-// Když filtr klikneš dole u grafu, musel by ses posouvat zpátky.
+// The 7 / 30 / 90 days filter changes numbers across the whole page, so it loads
+// again - and on a new load the browser always jumps to the top.
+// If you click the filter down by a chart, you would have to scroll back.
 //
-// Řešení je staré a jednoduché: před odchodem si zapamatuj, kde jsi,
-// a po načtení se tam vrať. Klíč obsahuje adresu bez parametrů, aby
-// se pozice z jedné stránky nepoužila na jiné.
+// The fix is old and simple: before leaving, remember where you are,
+// and after loading go back there. The key holds the address without parameters,
+// so the position of one page is not used on another.
 //
-// (Komentáře v tomhle souboru dostane prohlížeč taky - proto tu nejsou
-// názvy sekcí, které jinde překládáme.)
+// (The browser gets the comments of this file too - that is why the names
+// of sections we translate elsewhere are not here.)
 //
-// sessionStorage, ne localStorage: platí jen pro tenhle panel a po
-// zavření zmizí. Pamatovat si polohu stránky navěky nemá smysl.
+// sessionStorage, not localStorage: it holds only for this tab and vanishes
+// when it closes. Remembering a page position forever makes no sense.
 // ------------------------------------------------------------------
 (function () {
     if (!window.sessionStorage) { return; }
-    var klic = "scroll:" + window.location.pathname;
+    var key = "scroll:" + window.location.pathname;
 
-    // Polohu si ukládá i kód, který stránku načte sám (čekání na
-    // úlohu, obnovení po jejím doběhnutí) - proto je to funkce, ne
-    // jen tělo posluchače. Bez toho by ruční spuštění úlohy skončilo
-    // na začátku stránky, i když kliknutí polohu zapamatovalo:
-    // stránku načetl skript, ne člověk.
-    window.zapamatujPolohu = function () {
+    // Code that loads the page by itself (waiting for a task, refreshing
+    // after it has finished) stores the position too - that is why it is a function,
+    // not just the listener's body. Without that, a task started by hand would end
+    // up at the top of the page even though the click remembered the position:
+    // the page was loaded by the script, not by a person.
+    window.rememberPosition = function () {
         try {
-            sessionStorage.setItem(klic, window.scrollY + ":" + Date.now());
-        } catch (e) { /* privátní okno, zakázaná úložiště */ }
+            sessionStorage.setItem(key, window.scrollY + ":" + Date.now());
+        } catch (e) { /* a private window, storage disallowed */ }
     };
 
     document.addEventListener("click", function (event) {
         if (event.target.closest("[data-keep-scroll]")) {
-            window.zapamatujPolohu();
+            window.rememberPosition();
         }
     }, { passive: true });
 
-    var ulozeno = sessionStorage.getItem(klic);
-    if (ulozeno === null) { return; }
-    sessionStorage.removeItem(klic);
+    var saved = sessionStorage.getItem(key);
+    if (saved === null) { return; }
+    sessionStorage.removeItem(key);
 
-    // Poloha platí jen chvíli. Ne každé kliknutí stránku načte znovu
-    // (stažení souboru, akce, která odpoví jinou stránkou) - a bez
-    // téhle lhůty by se zapamatovaná poloha použila až při nějakém
-    // pozdějším otevření stejné stránky, což by vypadalo jako
-    // samovolný skok bůhvíodkud.
-    var casti = String(ulozeno).split(":");
-    if (casti.length === 2 && Date.now() - parseInt(casti[1], 10) > 10000) {
+    // The position holds only for a while. Not every click loads the page again
+    // (a file download, an action that answers with another page) - and without
+    // this time limit the remembered position would be used at some
+    // later opening of the same page, which would look like
+    // a spontaneous jump from goodness knows where.
+    var parts = String(saved).split(":");
+    if (parts.length === 2 && Date.now() - parseInt(parts[1], 10) > 10000) {
         return;
     }
-    ulozeno = casti[0];
+    saved = parts[0];
 
-    // Až po dokreslení, jinak stránka ještě nemá svou výšku a skok
-    // by skončil na konci obsahu místo na správném místě.
+    // Only after drawing has finished, otherwise the page does not have its height yet and the jump
+    // would end at the end of the content instead of the right place.
     window.addEventListener("load", function () {
         requestAnimationFrame(function () {
-            window.scrollTo(0, parseInt(ulozeno, 10) || 0);
+            window.scrollTo(0, parseInt(saved, 10) || 0);
         });
     });
 })();
 
 // ------------------------------------------------------------------
-// Karta "Právě se hraje" se obnovuje sama
+// The "Now playing" card refreshes itself
 //
-// Collector se ptá Jellyfinu každých pár vteřin, ale stránka o tom
-// nevěděla - ukazovala stav z okamžiku načtení. Ve stejném rytmu si
-// teď výřez vyzvedne sama. Rychleji by to nemělo smysl: novější data
-// zatím nikde nejsou.
+// The collector asks Jellyfin every few seconds, but the page did not
+// know about it - it showed the state from the moment of loading. Now it
+// fetches the fragment itself at the same rhythm. Faster would make no sense:
+// newer data do not exist anywhere yet.
 //
-// Obnovuje se jen tenhle jeden kus, ne celá stránka. Kdyby se načítala
-// celá, odrolovalo by to na začátek a zahodilo rozečtenou tabulku.
+// Only this one piece refreshes, not the whole page. If the whole page
+// reloaded, it would scroll to the top and throw away a half-read table.
 // ------------------------------------------------------------------
-// Rozvržení vlastního přehledu
+// The custom dashboard's layout
 //
-// Skládá se v okně, na mřížce dlaždic - ne přetahováním skutečných
-// panelů po stránce. Panel s grafem je vysoký přes půl obrazovky,
-// takže při jeho tažení nebylo vidět, kam míří, a celé rozvržení se
-// nevešlo na jednu obrazovku. Na mřížce je vidět naráz.
+// It is put together in a window, on a grid of tiles - not by dragging the real
+// panels around the page. A panel with a chart is over half a screen tall,
+// so while dragging it one could not see where it was heading, and the whole
+// layout did not fit on one screen. On the grid it is all visible at once.
 //
-// Během tažení se s dlaždicemi NEHÝBE: ukazuje se jen proužek tam,
-// kam dlaždice spadne. Dokud se pořadí měnilo už během tahu,
-// přeskládala se mřížka pod kurzorem a další rozhodnutí se z té
-// změněné geometrie překlopilo zpátky - dlaždice pak poskakovaly.
+// While dragging, the tiles do NOT move: only a stripe shows where
+// the tile will land. While the order changed during the drag,
+// the grid rearranged itself under the cursor and the next decision flipped
+// back from that changed geometry - the tiles then jumped around.
 // ------------------------------------------------------------------
 (function () {
-    var mrizka = document.getElementById("dash-mrizka");
-    if (!mrizka) { return; }
+    var grid = document.getElementById("dash-grid");
+    if (!grid) { return; }
 
-    var nabidka = document.getElementById("dash-nabidka");
-    var formular = document.getElementById("dash-form");
-    var poradiPole = document.getElementById("dash-poradi");
-    var zrusit = document.getElementById("dash-zrusit");
-    var okno = document.getElementById("okno-rozvrzeni");
-    // Šířky i jejich značky jdou z registru (sekce.SIRKY) - jedna
-    // pravda místo dvou, které se časem rozejdou.
-    var ZNACKY = JSON.parse(mrizka.dataset.sirky || "{}");
-    var SIRKY = Object.keys(ZNACKY);
+    var menu = document.getElementById("dash-menu");
+    var formElement = document.getElementById("dash-form");
+    var fieldOrder = document.getElementById("dash-order");
+    var cancelButton = document.getElementById("dash-cancel");
+    var modal = document.getElementById("modal-layout");
+    // The widths and their labels come from the registry (cards.WIDTHS) - one
+    // truth instead of two that drift apart over time.
+    var MARKS = JSON.parse(grid.dataset.widths || "{}");
+    var WIDTHS = Object.keys(MARKS);
 
-    var tazena = null;       // dlaždice, která se přesouvá
-    var ukazatel = null;     // proužek na místě, kam spadne
-    var cil = null;          // před kterou dlaždici se vloží
-    var mista = [];          // kam všude se dá pustit
+    var dragged = null;       // the tile being moved
+    var indicator = null;     // the stripe at the place where it will land
+    var goal = null;          // the tile it will be inserted before
+    var spots = [];          // all the places it can be dropped
 
-    function dlazdice() {
+    function tile() {
         return Array.prototype.slice.call(
-            mrizka.querySelectorAll(".dash-dlazdice"));
+            grid.querySelectorAll(".dash-tile"));
     }
 
-    function zadani() {
-        return dlazdice().map(function (d) {
-            return d.dataset.sekce + ":" + (d.dataset.sirka || "cela");
+    function layoutInput() {
+        return tile().map(function (d) {
+            return d.dataset.card + ":" + (d.dataset.width || "full");
         }).join(",");
     }
 
-    function obnovNabidku() {
-        if (!nabidka) { return; }
-        var pouzite = {};
-        dlazdice().forEach(function (d) { pouzite[d.dataset.sekce] = true; });
+    function refreshMenu() {
+        if (!menu) { return; }
+        var used = {};
+        tile().forEach(function (d) { used[d.dataset.card] = true; });
         Array.prototype.forEach.call(
-            nabidka.querySelectorAll("[data-pridat]"), function (b) {
-                b.disabled = !!pouzite[b.dataset.pridat];
+            menu.querySelectorAll("[data-add]"), function (b) {
+                b.disabled = !!used[b.dataset.add];
             });
-        mrizka.classList.toggle("dash-prazdno", dlazdice().length === 0);
+        grid.classList.toggle("dash-empty", tile().length === 0);
     }
 
-    // --- přidání a odebrání ---------------------------------------
-    if (nabidka) {
-        nabidka.addEventListener("click", function (event) {
-            var tlacitko = event.target.closest("[data-pridat]");
-            if (!tlacitko || tlacitko.disabled) { return; }
-            var sirka = tlacitko.dataset.sirka || "cela";
-            var nova = document.createElement("div");
-            nova.className = "dash-dlazdice dash-" + sirka;
-            nova.dataset.sekce = tlacitko.dataset.pridat;
-            nova.dataset.sirka = sirka;
+    // --- adding and removing --------------------------------------
+    if (menu) {
+        menu.addEventListener("click", function (event) {
+            var button = event.target.closest("[data-add]");
+            if (!button || button.disabled) { return; }
+            var width = button.dataset.width || "full";
+            var fresh = document.createElement("div");
+            fresh.className = "dash-tile dash-" + width;
+            fresh.dataset.card = button.dataset.add;
+            fresh.dataset.width = width;
 
-            var nazev = document.createElement("span");
-            nazev.className = "dash-dl-nazev";
-            // textContent, ne innerHTML: název je text, ne značky.
-            nazev.textContent =
-                tlacitko.querySelector(".dash-polozka-nazev").textContent;
+            var title = document.createElement("span");
+            title.className = "dash-tile-name";
+            // textContent, not innerHTML: the name is text, not markup.
+            title.textContent =
+                button.querySelector(".dash-item-name").textContent;
 
-            var nastroje = document.createElement("span");
-            nastroje.className = "dash-dl-nastroje";
-            var prepinac = document.createElement("button");
-            prepinac.className = "btn dash-sirka";
-            prepinac.type = "button";
-            prepinac.textContent = ZNACKY[sirka];
-            var pryc = document.createElement("button");
-            pryc.className = "btn dash-pryc";
-            pryc.type = "button";
-            pryc.textContent = "×";
-            nastroje.appendChild(prepinac);
-            nastroje.appendChild(pryc);
+            var tools = document.createElement("span");
+            tools.className = "dash-tile-tools";
+            var toggle = document.createElement("button");
+            toggle.className = "btn dash-width";
+            toggle.type = "button";
+            toggle.textContent = MARKS[width];
+            var gone = document.createElement("button");
+            gone.className = "btn dash-removed";
+            gone.type = "button";
+            gone.textContent = "×";
+            tools.appendChild(toggle);
+            tools.appendChild(gone);
 
-            nova.appendChild(nazev);
-            nova.appendChild(nastroje);
-            mrizka.appendChild(nova);
-            obnovNabidku();
-            nova.scrollIntoView({ block: "nearest" });
+            fresh.appendChild(title);
+            fresh.appendChild(tools);
+            grid.appendChild(fresh);
+            refreshMenu();
+            fresh.scrollIntoView({ block: "nearest" });
         });
     }
 
-    mrizka.addEventListener("click", function (event) {
-        var dl = event.target.closest(".dash-dlazdice");
+    grid.addEventListener("click", function (event) {
+        var dl = event.target.closest(".dash-tile");
         if (!dl) { return; }
 
-        if (event.target.closest(".dash-pryc")) {
+        if (event.target.closest(".dash-removed")) {
             dl.remove();
-            obnovNabidku();
+            refreshMenu();
             return;
         }
-        var prepinac = event.target.closest(".dash-sirka");
-        if (prepinac) {
-            var dalsi = SIRKY[(SIRKY.indexOf(dl.dataset.sirka) + 1) % SIRKY.length];
-            SIRKY.forEach(function (s) { dl.classList.remove("dash-" + s); });
-            dl.classList.add("dash-" + dalsi);
-            dl.dataset.sirka = dalsi;
-            prepinac.textContent = ZNACKY[dalsi];
+        var toggle = event.target.closest(".dash-width");
+        if (toggle) {
+            var next = WIDTHS[(WIDTHS.indexOf(dl.dataset.width) + 1) % WIDTHS.length];
+            WIDTHS.forEach(function (s) { dl.classList.remove("dash-" + s); });
+            dl.classList.add("dash-" + next);
+            dl.dataset.width = next;
+            toggle.textContent = MARKS[next];
         }
     });
 
-    // --- přesouvání tažením ---------------------------------------
-    function spoctiMista() {
-        // Před každou dlaždici jedno místo a za tu poslední ještě
-        // jedno. Geometrie se bere teď a během tažení se nemění.
-        var seznam = [];
-        dlazdice().forEach(function (d) {
+    // --- moving by dragging ---------------------------------------
+    function computeSpots() {
+        // One place before each tile and one more after the last
+        // one. The geometry is taken now and does not change during the drag.
+        var list = [];
+        tile().forEach(function (d) {
             var r = d.getBoundingClientRect();
-            seznam.push({ pred: d, x: r.left - 5, y: r.top, vyska: r.height });
-            seznam.push({ pred: d.nextElementSibling, x: r.right + 5,
-                          y: r.top, vyska: r.height });
+            list.push({ before: d, x: r.left - 5, y: r.top, height: r.height });
+            list.push({ before: d.nextElementSibling, x: r.right + 5,
+                          y: r.top, height: r.height });
         });
-        return seznam;
+        return list;
     }
 
-    function ukazCil(misto) {
-        // Souřadnice míst jsou z okna, ukazatel se kreslí do obsahu
-        // mřížky - a ta se posouvá. Bez připočtení posuvu by proužek
-        // u odrolované mřížky seděl jinde, než kam dlaždice spadne.
-        var r = mrizka.getBoundingClientRect();
-        ukazatel.style.left = (misto.x - r.left + mrizka.scrollLeft) + "px";
-        ukazatel.style.top = (misto.y - r.top + mrizka.scrollTop) + "px";
-        ukazatel.style.height = misto.vyska + "px";
+    function showTarget(spot) {
+        // The places' coordinates are from the window, the marker is drawn into the
+        // grid's content - and that scrolls. Without adding the scroll the stripe
+        // of a scrolled grid would sit elsewhere than where the tile lands.
+        var r = grid.getBoundingClientRect();
+        indicator.style.left = (spot.x - r.left + grid.scrollLeft) + "px";
+        indicator.style.top = (spot.y - r.top + grid.scrollTop) + "px";
+        indicator.style.height = spot.height + "px";
     }
 
-    mrizka.addEventListener("pointerdown", function (event) {
+    grid.addEventListener("pointerdown", function (event) {
         if (event.button !== 0) { return; }
-        if (event.target.closest(".dash-pryc") ||
-            event.target.closest(".dash-sirka")) { return; }
-        tazena = event.target.closest(".dash-dlazdice");
-        if (!tazena) { return; }
+        if (event.target.closest(".dash-removed") ||
+            event.target.closest(".dash-width")) { return; }
+        dragged = event.target.closest(".dash-tile");
+        if (!dragged) { return; }
 
-        mista = spoctiMista();
-        cil = null;
-        tazena.classList.add("dash-tazena");
-        mrizka.classList.add("dash-tahne");
-        ukazatel = document.createElement("div");
-        ukazatel.className = "dash-cil";
-        mrizka.appendChild(ukazatel);
-        if (mrizka.setPointerCapture) { mrizka.setPointerCapture(event.pointerId); }
+        spots = computeSpots();
+        goal = null;
+        dragged.classList.add("dash-dragged");
+        grid.classList.add("dash-dragging");
+        indicator = document.createElement("div");
+        indicator.className = "dash-target";
+        grid.appendChild(indicator);
+        if (grid.setPointerCapture) { grid.setPointerCapture(event.pointerId); }
         event.preventDefault();
     });
 
-    // Posuv během tažení mění, co kde leží - místa se proto spočítají
-    // znovu. Jinak by proužek ukazoval na dlaždice tam, kde už nejsou.
-    mrizka.addEventListener("scroll", function () {
-        if (tazena) { mista = spoctiMista(); }
+    // Scrolling during the drag changes what lies where - so the places are
+    // computed again. Otherwise the stripe would point at tiles where they no longer are.
+    grid.addEventListener("scroll", function () {
+        if (dragged) { spots = computeSpots(); }
     });
 
-    mrizka.addEventListener("pointermove", function (event) {
-        if (!tazena) { return; }
-        var nejlepsi = null;
-        var nejmin = Infinity;
-        mista.forEach(function (m) {
-            // Pustit dlaždici tam, kde už je, nemá smysl.
-            if (m.pred === tazena) { return; }
+    grid.addEventListener("pointermove", function (event) {
+        if (!dragged) { return; }
+        var best = null;
+        var fewest = Infinity;
+        spots.forEach(function (m) {
+            // Dropping a tile where it already is makes no sense.
+            if (m.before === dragged) { return; }
             var dx = event.clientX - m.x;
-            var dy = event.clientY - (m.y + m.vyska / 2);
-            var vzdalenost = dx * dx + dy * dy;
-            if (vzdalenost < nejmin) { nejmin = vzdalenost; nejlepsi = m; }
+            var dy = event.clientY - (m.y + m.height / 2);
+            var distance = dx * dx + dy * dy;
+            if (distance < fewest) { fewest = distance; best = m; }
         });
-        if (!nejlepsi) { return; }
-        cil = nejlepsi;
-        ukazCil(nejlepsi);
+        if (!best) { return; }
+        goal = best;
+        showTarget(best);
     });
 
-    function konecTazeni() {
-        if (!tazena) { return; }
-        // Teprve teď se dlaždice přesune - během tažení se nehýbalo.
-        if (cil) { mrizka.insertBefore(tazena, cil.pred || null); }
-        tazena.classList.remove("dash-tazena");
-        mrizka.classList.remove("dash-tahne");
-        if (ukazatel && ukazatel.parentNode) {
-            ukazatel.parentNode.removeChild(ukazatel);
+    function endDrag() {
+        if (!dragged) { return; }
+        // Only now does the tile move - nothing moved during the drag.
+        if (goal) { grid.insertBefore(dragged, goal.before || null); }
+        dragged.classList.remove("dash-dragged");
+        grid.classList.remove("dash-dragging");
+        if (indicator && indicator.parentNode) {
+            indicator.parentNode.removeChild(indicator);
         }
-        tazena = null;
-        ukazatel = null;
-        cil = null;
+        dragged = null;
+        indicator = null;
+        goal = null;
     }
 
-    mrizka.addEventListener("pointerup", konecTazeni);
-    mrizka.addEventListener("pointercancel", konecTazeni);
+    grid.addEventListener("pointerup", endDrag);
+    grid.addEventListener("pointercancel", endDrag);
 
-    // --- uložení a zavření ----------------------------------------
-    if (formular) {
-        formular.addEventListener("submit", function () {
-            poradiPole.value = zadani();
+    // --- saving and closing ---------------------------------------
+    if (formElement) {
+        formElement.addEventListener("submit", function () {
+            fieldOrder.value = layoutInput();
         });
     }
-    // Zavřít bez uložení - křížek i tlačítko Zrušit. Načte se stránka
-    // znovu, aby v mřížce nezůstalo rozdělané rozvržení: kdo okno
-    // zavřel, ten ho zahodil.
-    if (okno) {
+    // Close without saving - the cross and the Cancel button alike. The page loads
+    // again, so no half-made layout stays in the grid: whoever closed
+    // the window threw it away.
+    if (modal) {
         Array.prototype.forEach.call(
-            okno.querySelectorAll(".dash-zavrit"), function (tlacitko) {
-                tlacitko.addEventListener("click", function () {
-                    okno.close();
-                    if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
+            modal.querySelectorAll(".dash-close"), function (button) {
+                button.addEventListener("click", function () {
+                    modal.close();
+                    if (window.rememberPosition) { window.rememberPosition(); }
                     window.location.reload();
                 });
             });
     }
-    obnovNabidku();
+    refreshMenu();
 }());
 
 // ------------------------------------------------------------------
-// Výběr rozsahu tažením v grafu
+// Picking a range by dragging in a chart
 //
-// Označení úseku nastaví stránce vlastní období - stejné, jako kdyby
-// ho člověk vyklikal v přepínači nahoře. Ve špičce je vidět, že něco
-// teklo; otázka, která přijde vzápětí, je "co to bylo" - a na tu
-// odpovídají tabulky pod grafem, jakmile se zúží na ten úsek.
+// Marking a stretch sets a custom period for the page - the same as if
+// a person clicked it in the switcher at the top. A peak shows that something
+// flowed; the question that comes right after is "what was it" - and the tables
+// under the chart answer it as soon as they narrow to that stretch.
 //
-// Meze se posílají jako okamžiky (`od_ts`/`do_ts`), ne jako text.
-// Prohlížeč nezná zónu aplikace - zná svou. Převod proto dělá server,
-// viz stats.obdobi_z_okamziku().
+// The bounds are sent as instants (`since_ts`/`until_ts`), not as text.
+// The browser does not know the app's time zone - it knows its own. So the server
+// converts, see stats.period_from_instants().
 // ------------------------------------------------------------------
 (function () {
-    var MIN_TAH = 6;   // pod tímhle je to klik, ne tažení
+    var MIN_DRAG = 6;   // below this it is a click, not a drag
 
-    var graf = null, rect = null, zacatek = 0, konec = 0;
+    var chart = null, rect = null, beginning = 0, end = 0;
 
-    // Z pixelu myši na souřadnici uvnitř viewBoxu. SVG se roztahuje
-    // podle šířky stránky, takže poměr se musí počítat z aktuálního
-    // rámečku, ne z čísel ve viewBoxu.
+    // From the mouse's pixel to a coordinate inside the viewBox. The SVG stretches
+    // with the page's width, so the ratio has to be computed from the current
+    // box, not from the numbers in the viewBox.
     //
-    // `null` znamená "tenhle graf se měřit nedá". Stává se to: karta
-    // se sama obnovuje a stisk může trefit graf v okamžiku, kdy ho
-    // výměna zrovna odpojila z dokumentu. Odpojený prvek hlásí nulové
-    // rozměry - a z nich by vyšel výběr od kraje grafu, tedy úsek,
-    // na který nikdo neukazoval.
-    function xVeGrafu(svg, klientX) {
+    // `null` means "this chart cannot be measured". It happens: a card
+    // refreshes itself and a press can hit the chart at the moment the
+    // swap has just detached it from the document. A detached element reports zero
+    // size - and from that a selection from the chart's edge would follow, a stretch
+    // nobody pointed at.
+    function xInChart(svg, pointerX) {
         if (!svg.isConnected) { return null; }
-        var ramecek = svg.getBoundingClientRect();
-        if (!ramecek.width) { return null; }
-        var sirkaViewBox = (svg.viewBox && svg.viewBox.baseVal.width) || ramecek.width;
-        return (klientX - ramecek.left) / ramecek.width * sirkaViewBox;
+        var frame = svg.getBoundingClientRect();
+        if (!frame.width) { return null; }
+        var viewBoxWidth = (svg.viewBox && svg.viewBox.baseVal.width) || frame.width;
+        return (pointerX - frame.left) / frame.width * viewBoxWidth;
     }
 
-    function omez(hodnota, od, doKam) {
-        return Math.min(Math.max(hodnota, od), doKam);
+    function clamp(value, sinceField, destination) {
+        return Math.min(Math.max(value, sinceField), destination);
     }
 
-    // Kde na ose leží zadaný bod - 0 na levém kraji, 1 na pravém.
-    function podil(svg, x) {
-        var xOd = parseFloat(svg.dataset.xOd), xDo = parseFloat(svg.dataset.xDo);
-        return (omez(x, xOd, xDo) - xOd) / Math.max(1, xDo - xOd);
+    // Where on the axis the given point lies - 0 at the left edge, 1 at the right.
+    function share(svg, x) {
+        var xFrom = parseFloat(svg.dataset.xFrom), xTo = parseFloat(svg.dataset.xTo);
+        return (clamp(x, xFrom, xTo) - xFrom) / Math.max(1, xTo - xFrom);
     }
 
-    function cas(svg, x) {
-        var casOd = parseFloat(svg.dataset.casOd), casDo = parseFloat(svg.dataset.casDo);
-        return Math.round(casOd + podil(svg, x) * (casDo - casOd));
+    function time(svg, x) {
+        var timeFrom = parseFloat(svg.dataset.timeFrom), timeTo = parseFloat(svg.dataset.timeTo);
+        return Math.round(timeFrom + share(svg, x) * (timeTo - timeFrom));
     }
 
-    // Graf po dnech neví nic jemnějšího než den, tak se výběr zaokrouhlí
-    // na dny. Kdyby posílal čas, tvářil by se přesněji, než jaký je.
-    function den(svg, x) {
-        var dny = (svg.dataset.dny || "").split(",");
-        var index = Math.round(podil(svg, x) * (dny.length - 1));
-        return dny[Math.min(Math.max(index, 0), dny.length - 1)];
+    // A chart by days knows nothing finer than a day, so the selection is rounded
+    // to days. If it sent a time, it would pretend to be more precise than it is.
+    function day(svg, x) {
+        var days = (svg.dataset.days || "").split(",");
+        var index = Math.round(share(svg, x) * (days.length - 1));
+        return days[Math.min(Math.max(index, 0), days.length - 1)];
     }
 
-    function nakresli() {
-        var od = Math.min(zacatek, konec), doKam = Math.max(zacatek, konec);
-        rect.setAttribute("x", od.toFixed(1));
-        rect.setAttribute("width", (doKam - od).toFixed(1));
-        // Atributem, ne `rect.hidden = false`: vlastnost `hidden` má
-        // jen HTML prvek. Na prvku SVG by se tím založila obyčejná
-        // proměnná, atribut by zůstal - a obdélník výběru by nebyl
-        // vidět, přestože všechno ostatní funguje.
+    function draw() {
+        var sinceField = Math.min(beginning, end), destination = Math.max(beginning, end);
+        rect.setAttribute("x", sinceField.toFixed(1));
+        rect.setAttribute("width", (destination - sinceField).toFixed(1));
+        // By the attribute, not `rect.hidden = false`: only an HTML element has
+        // the `hidden` property. On an SVG element that would create a plain
+        // property, the attribute would stay - and the selection rectangle would not
+        // be visible, although everything else works.
         rect.removeAttribute("hidden");
     }
 
-    function uklid() {
+    function cleanup() {
         if (rect) {
             rect.setAttribute("hidden", "");
             rect.setAttribute("width", "0");
         }
-        if (graf) { graf.classList.remove("chart-tahne"); }
-        delete document.body.dataset.tahne;
-        graf = null;
+        if (chart) { chart.classList.remove("chart-dragging"); }
+        delete document.body.dataset.dragging;
+        chart = null;
         rect = null;
     }
 
     document.addEventListener("pointerdown", function (event) {
         if (event.button !== 0) { return; }
-        var svg = event.target.closest ? event.target.closest("svg[data-vyber]") : null;
+        var svg = event.target.closest ? event.target.closest("svg[data-selection]") : null;
         if (!svg) { return; }
-        rect = svg.querySelector(".chart-vyber");
+        rect = svg.querySelector(".chart-selection");
         if (!rect) { return; }
-        var kde = xVeGrafu(svg, event.clientX);
-        if (kde === null) { return; }
-        graf = svg;
-        zacatek = konec = kde;
-        graf.classList.add("chart-tahne");
-        document.body.dataset.tahne = "1";
-        // Ať tažení pokračuje, i když myš vyjede z grafu ven.
+        var where = xInChart(svg, event.clientX);
+        if (where === null) { return; }
+        chart = svg;
+        beginning = end = where;
+        chart.classList.add("chart-dragging");
+        document.body.dataset.dragging = "1";
+        // So dragging goes on even when the mouse leaves the chart.
         if (svg.setPointerCapture) { svg.setPointerCapture(event.pointerId); }
         event.preventDefault();
     });
 
     document.addEventListener("pointermove", function (event) {
-        if (!graf) { return; }
-        var kde = xVeGrafu(graf, event.clientX);
-        // Graf zmizel pod rukama - výběr zahodíme, ať se nedokreslí
-        // někam, kde už nic není.
-        if (kde === null) { uklid(); return; }
-        konec = kde;
-        nakresli();
+        if (!chart) { return; }
+        var where = xInChart(chart, event.clientX);
+        // The chart vanished under our hands - we drop the selection, so it does not get drawn
+        // somewhere where nothing is any more.
+        if (where === null) { cleanup(); return; }
+        end = where;
+        draw();
     });
 
     document.addEventListener("pointerup", function () {
-        if (!graf) { return; }
-        var svg = graf;
-        var od = Math.min(zacatek, konec), doKam = Math.max(zacatek, konec);
-        uklid();
-        // Krátký tah je omyl nebo obyčejný klik - ten ať si graf
-        // nechá pro bublinu.
-        if (doKam - od < MIN_TAH) { return; }
-        var adresa = new URL(window.location.href);
-        ["days", "od", "do", "od_ts", "do_ts"].forEach(function (jmeno) {
-            adresa.searchParams.delete(jmeno);
+        if (!chart) { return; }
+        var svg = chart;
+        var sinceField = Math.min(beginning, end), destination = Math.max(beginning, end);
+        cleanup();
+        // A short drag is a mistake or a plain click - let the chart
+        // keep that for the tooltip.
+        if (destination - sinceField < MIN_DRAG) { return; }
+        var address = new URL(window.location.href);
+        ["days", "since", "until", "since_ts", "until_ts"].forEach(function (name) {
+            address.searchParams.delete(name);
         });
-        if (svg.dataset.vyber === "dny") {
-            var d1 = den(svg, od), d2 = den(svg, doKam);
+        if (svg.dataset.selection === "days") {
+            var d1 = day(svg, sinceField), d2 = day(svg, destination);
             if (!d1 || !d2) { return; }
-            adresa.searchParams.set("od", d1);
-            adresa.searchParams.set("do", d2);
+            address.searchParams.set("since", d1);
+            address.searchParams.set("until", d2);
         } else {
-            adresa.searchParams.set("od_ts", cas(svg, od));
-            adresa.searchParams.set("do_ts", cas(svg, doKam));
+            address.searchParams.set("since_ts", time(svg, sinceField));
+            address.searchParams.set("until_ts", time(svg, destination));
         }
-        // Totéž co u přepínače období: nové období překreslí celou
-        // stránku a bez tohohle by začala od začátku, i když se tahalo
-        // po grafu někde dole.
-        if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
-        window.location.href = adresa.toString();
+        // The same as with the period switcher: the new period redraws the whole
+        // page and without this it would start from the top, even though the drag was
+        // on a chart somewhere down below.
+        if (window.rememberPosition) { window.rememberPosition(); }
+        window.location.href = address.toString();
     });
 
-    // Útěk klávesou - výběr se zruší a nikam se nejde.
+    // Escape by key - the selection is cancelled and nothing happens.
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" && graf) { uklid(); }
+        if (event.key === "Escape" && chart) { cleanup(); }
     });
 }());
 
 // ------------------------------------------------------------------
 (function () {
-    // Kterykoliv prvek s `data-refresh` a `data-partial` se obnovuje
-    // sam. Drive to bylo napsane napevno pro "prave se hraje"; kdyz
-    // pribyl zivy tok na Siti, byla by z toho druha kopie tehoz -
-    // a ta se casem rozejde s prvni.
-    var box = document.querySelector("[data-refresh][data-partial]");
-    if (!box || !window.fetch) { return; }
+    // Every element with `data-refresh` and `data-partial` refreshes itself,
+    // at its own rhythm. It used to be hard-coded for "Now playing";
+    // when the live flow on Network arrived, that would have made a second copy of the same -
+    // and that drifts apart from the first one over time.
+    //
+    // And only the first such element on a page used to refresh. Since the
+    // *Arr card "Stahuje se" there can be several at once (Sonarr and Radarr
+    // next to "Now playing" on the overview), each with a different rhythm - and the
+    // server decides it: the header X-Jellyscope-Refresh in the response
+    // says in how many seconds to ask next (5 while downloading, otherwise
+    // a minute). Only the element's content is swapped, the rest of the page stands still.
+    if (!window.fetch) { return; }
+    var refreshers = [];
+    // After an unsuccessful response (an expired sign-in, a disconnected app, a server
+    // error) the element asks at most once per this many seconds - otherwise the
+    // card would ask a dead address at a five-second rhythm for as long as the page
+    // is open. The first successful response restores the rhythm.
+    var AFTER_FAILURE = 60;
+    var HALF_TICK = 500;
+    // How many network errors in a row slow the element down. One (sleep, a network switch)
+    // must not stop the card for a minute - while downloading it would stand still.
+    var ERRORS_IN_A_ROW = 3;
+    // What can hold keyboard focus inside a refreshed element.
+    var FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
 
-    var vyrez = box.dataset.partial;
-    var sekund = parseInt(box.dataset.refresh, 10) || 10;
-    var bezi = false;
-
-    function obnov() {
-        // Na skryté kartě prohlížeče nemá smysl se ptát. Ušetří to
-        // server i baterku telefonu; po návratu se stav dotáhne hned.
-        //
-        // Uprostřed tažení taky ne: výměna obsahu by vzala graf
-        // i s rozdělaným výběrem zpod ruky.
-        if (bezi || document.hidden || document.body.dataset.tahne) { return; }
-        bezi = true;
-        fetch(vyrez, {
-            headers: { "X-Requested-With": "fetch" },
-            credentials: "same-origin"
-        })
-            // `redirected` hlídá vypršené přihlášení. Server v takovém
-            // případě odpoví přesměrováním na /login, fetch ho poslušně
-            // následuje - a bez téhle podmínky by se do karty vysypala
-            // přihlašovací stránka.
-            .then(function (r) { return (r.ok && !r.redirected) ? r.text() : null; })
-            .then(function (html) {
-                if (!html) { return; }
-                /* Odpověď mohla doletět až uprostřed tažení v grafu -
-                   hlídka výše brání jen tomu, aby se dotaz spustil,
-                   ne tomu, aby dorazil ten už rozeslaný. Výměna by
-                   vzala graf zpod ruky a označený úsek by zmizel;
-                   počká se tedy na další kolo. */
-                if (document.body.dataset.tahne) { return; }
-                /* Kdyby se obsah vyměnil s otevřeným oknem, okno by
-                   zmizelo uprostřed čtení - a jednou za deset vteřin
-                   by to udělalo znovu. Zapamatujeme si tedy, že bylo
-                   otevřené, a po výměně ho otevřeme zpátky. */
-                var stare = box.querySelector("dialog[open]");
-                var bylOtevreny = stare ? stare.id : null;
-                box.innerHTML = html;
-                if (bylOtevreny) {
-                    var nove = document.getElementById(bylOtevreny);
-                    if (nove && typeof nove.showModal === "function") {
-                        nove.showModal();
-                    }
-                }
-            })
-            .catch(function () { /* výpadek sítě - zkusí se za chvíli */ })
-            .finally(function () { bezi = false; });
+    // Swapping the content also throws away the element keyboard focus is on - whoever
+    // tabbed to a button in the card would be back at the top of the page within a few
+    // seconds. So before the swap it is remembered which element it
+    // was: by what it does (which window it opens, where it leads - blocks
+    // rearrange between refreshes) and which such one it is in the element; the others
+    // by order.
+    function focusPosition(box) {
+        var active = document.activeElement;
+        if (!active || active === box || !box.contains(active)) { return null; }
+        var attr = active.getAttribute("data-modal") ? "data-modal" : (active.getAttribute("href") ? "href" : null);
+        var value = attr ? active.getAttribute(attr) : null;
+        var same = Array.prototype.filter.call(box.querySelectorAll(FOCUSABLE), function (e) {
+            return !attr || e.getAttribute(attr) === value;
+        });
+        return { attribute: attr, value: value, order: same.indexOf(active) };
     }
 
-    // Dřív se výměna přeskakovala, když byla myš nad kartou. Znělo to
-    // ohleduplně, ale mělo to nepříjemný důsledek: kdo si kartu prohlížel
-    // s myší na ní, přestal dostávat nová data úplně. Živý pohled má
-    // ukazovat skutečnost - a v kartě není nic, co by se dalo rozkliknout
-    // omylem.
+    function restoreFocus(box, where) {
+        if (!where || where.order < 0) { return; }
+        var same = Array.prototype.filter.call(box.querySelectorAll(FOCUSABLE), function (e) {
+            return !where.attribute || e.getAttribute(where.attribute) === where.value;
+        });
+        var goal = same[where.order];
+        // preventScroll: the page is not to move because of the returned focus.
+        if (goal && typeof goal.focus === "function") { goal.focus({ preventScroll: true }); }
+    }
 
-    // setInterval sám nestačí. Prohlížeč ho na skryté kartě přiškrtí
-    // na jedno spuštění za minutu a po probuzení počítače nebo uspání
-    // se může rozejít úplně. Proto kontrolujeme čas: když od poslední
-    // úspěšné obnovy uplynul interval, doženeme to hned.
-    var posledni = Date.now();
-    var puvodniObnov = obnov;
-    obnov = function () { posledni = Date.now(); puvodniObnov(); };
+    function scrolls(modal) {
+        return Array.prototype.map.call(modal.querySelectorAll(".modal-body"), function (e) { return e.scrollTop; });
+    }
+
+    function restoreScrolls(modal, whereTo) {
+        Array.prototype.forEach.call(modal.querySelectorAll(".modal-body"), function (e, i) {
+            if (whereTo[i]) { e.scrollTop = whereTo[i]; }
+        });
+    }
+
+    // The new content of an element with an open window in it. If the window were swapped
+    // with the rest of the content, it would close and open again - and a screen reader
+    // would announce it from the start at every refresh. When the new response has
+    // it too (the same id, at the same level), the open window therefore stays the same
+    // element: only its inside and everything around it are swapped. Returns whether
+    // it worked; otherwise the whole content is swapped (see below).
+    function swapAroundModal(box, modal, html) {
+        if (!modal.id || modal.parentNode !== box) { return false; }
+        var newItem = document.createElement("div");
+        newItem.innerHTML = html;
+        var newModal = Array.prototype.filter.call(newItem.children, function (e) {
+            return e.tagName === "DIALOG" && e.id === modal.id;
+        })[0];
+        if (!newModal) { return false; }
+        var focus = focusPosition(modal);
+        var whereTo = scrolls(modal);
+        modal.innerHTML = newModal.innerHTML;
+        restoreScrolls(modal, whereTo);
+        restoreFocus(modal, focus);
+        // After closing, the browser returns focus to the button that opened the window - but
+        // the swap below has already replaced it with a new one. Focus then goes to the button
+        // of the same window in the new content, otherwise it would fall to the top of the page.
+        if (!modal.dataset.focusBack) {
+            modal.dataset.focusBack = "1";
+            modal.addEventListener("close", function () {
+                var active = document.activeElement;
+                if (active && active !== document.body && document.contains(active)) { return; }
+                var trigger = Array.prototype.filter.call(box.querySelectorAll("[data-modal]"), function (e) {
+                    return e.getAttribute("data-modal") === modal.id;
+                })[0];
+                if (trigger) { trigger.focus({ preventScroll: true }); }
+            });
+        }
+        Array.prototype.slice.call(box.childNodes).forEach(function (node) {
+            if (node !== modal) { box.removeChild(node); }
+        });
+        var before = true;
+        Array.prototype.slice.call(newItem.childNodes).forEach(function (node) {
+            if (node === newModal) { before = false; return; }
+            if (before) { box.insertBefore(node, modal); } else { box.appendChild(node); }
+        });
+        return true;
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-refresh][data-partial]"), function (box) {
+        var cutout = box.dataset.partial;
+        var initial = parseInt(box.dataset.refresh, 10) || 10;
+        var seconds = initial;
+        var running = false;
+        var errors = 0;
+
+        function rhythm(newItem) {
+            if (newItem === seconds) { return; }
+            seconds = newItem;
+            box.dataset.refresh = String(newItem);
+        }
+        // setInterval alone is not enough. On a hidden tab the browser throttles it
+        // to one run a minute, and after the computer wakes up or sleeps
+        // it can drift apart entirely. So the time is watched: when the element's
+        // rhythm has passed since the last refresh, it catches up at once.
+        var last = Date.now();
+
+        function reloadAll() {
+            last = Date.now();
+            // Asking makes no sense on a hidden browser tab. It saves the
+            // server and the phone's battery; on return the state is fetched at once.
+            //
+            // Not in the middle of a drag either: swapping the content would pull the chart
+            // out from under the hand, together with the half-made selection.
+            if (running || document.hidden || document.body.dataset.dragging) { return; }
+            running = true;
+            fetch(cutout, {
+                headers: { "X-Requested-With": "fetch" },
+                credentials: "same-origin"
+            })
+                // `redirected` watches for an expired sign-in. In that case the server
+                // answers with a redirect to /login, fetch obediently
+                // follows it - and without this condition the sign-in page would spill
+                // into the card.
+                .then(function (r) {
+                    errors = 0;
+                    if (!r.ok || r.redirected) {
+                        rhythm(Math.max(seconds, AFTER_FAILURE));
+                        return null;
+                    }
+                    // The rhythm from the server: when to ask next. Without the header
+                    // (or with nonsense) the one the page came with holds.
+                    var fromServer = parseInt(r.headers.get("X-Jellyscope-Refresh"), 10);
+                    rhythm(fromServer > 0 ? fromServer : initial);
+                    return r.text();
+                })
+                .then(function (html) {
+                    if (!html) { return; }
+                    /* The response could arrive in the middle of a drag in a chart -
+                       the guard above only keeps the request from starting,
+                       not the one already sent from arriving. The swap would
+                       pull the chart out from under the hand and the marked stretch would vanish;
+                       so it waits for the next round. */
+                    if (document.body.dataset.dragging) { return; }
+                    /* If the content were swapped with an open window, the window would
+                       vanish in the middle of reading - and again at every refresh.
+                       So the window stays (swapAroundModal). Where that is not possible
+                       (the window is deeper in the content), we remember that it was
+                       open and open it again after the swap. When the new
+                       response does not have it (all of a series' downloads finished or
+                       somebody cancelled them), it goes with the old one - there is nothing
+                       left to show. */
+                    var previous = box.querySelector("dialog[open]");
+                    if (previous && swapAroundModal(box, previous, html)) { return; }
+                    var wasOpen = previous ? previous.id : null;
+                    /* A window with long content (a breakdown of twenty downloads) is
+                       scrolled - and after the swap it would jump back up every few
+                       seconds. The scroll is on .modal-body (style.css). */
+                    var whereTo = previous ? scrolls(previous) : [];
+                    var focus = focusPosition(box);
+                    box.innerHTML = html;
+                    var reopened = false;
+                    if (wasOpen) {
+                        var newOnes = document.getElementById(wasOpen);
+                        if (newOnes && box.contains(newOnes) && typeof newOnes.showModal === "function") {
+                            newOnes.showModal();
+                            reopened = true;
+                            restoreScrolls(newOnes, whereTo);
+                        }
+                    }
+                    // A reopened window takes focus by itself (showModal).
+                    if (!reopened) { restoreFocus(box, focus); }
+                })
+                // A network outage (also a proxy with a sign-in that redirects to another
+                // domain - the browser rejects that as an error). The first time it tries again
+                // at the same rhythm, only several errors in a row slow it down.
+                .catch(function () {
+                    errors += 1;
+                    if (errors >= ERRORS_IN_A_ROW) { rhythm(Math.max(seconds, AFTER_FAILURE)); }
+                })
+                .finally(function () { running = false; });
+        }
+
+        refreshers.push({
+            reload: reloadAll,
+            // Half a tick of tolerance: the timer below ticks every second, and not exactly.
+            // A tick that comes a millisecond before the rhythm has passed would otherwise mean
+            // waiting another whole second - five seconds would become six.
+            isDue: function () { return Date.now() - last >= seconds * 1000 - HALF_TICK; }
+        });
+    });
+    if (!refreshers.length) { return; }
+
+    // The swap used to be skipped while the mouse was over the card. That sounded
+    // considerate, but it had an unpleasant consequence: whoever looked at the card
+    // with the mouse on it stopped getting new data altogether. A live view is to
+    // show reality - and there is nothing in the card that could be clicked open
+    // by mistake.
+
+    function allOf() {
+        refreshers.forEach(function (o) { o.reload(); });
+    }
 
     setInterval(function () {
-        if (Date.now() - posledni >= sekund * 1000) { obnov(); }
+        refreshers.forEach(function (o) { if (o.isDue()) { o.reload(); } });
     }, 1000);
 
-    // Po návratu na kartu ukázat aktuální stav hned, ne až za interval.
+    // After returning to the tab, show the current state at once, not after the interval.
     document.addEventListener("visibilitychange", function () {
-        if (!document.hidden) { obnov(); }
+        if (!document.hidden) { allOf(); }
     });
-    // Totéž po probuzení stroje nebo obnovení sítě.
-    window.addEventListener("focus", obnov);
-    window.addEventListener("online", obnov);
+    // The same after the machine wakes up or the network comes back.
+    window.addEventListener("focus", allOf);
+    window.addEventListener("online", allOf);
 })();
 
 // ------------------------------------------------------------------
-// Hlídač doběhnutých úloh
+// The watcher of finished tasks
 //
-// Úloha na pozadí najde nový film a zapíše ho do databáze - a na už
-// otevřené stránce se nic nestane, protože ta ukazuje stav z okamžiku
-// načtení. Tenhle hlídač to řeší pro dvě místa naráz:
+// A background task finds a new film and writes it to the database - and on an
+// already open page nothing happens, because that shows the state from the moment
+// of loading. This watcher solves it for two places at once:
 //
-//   * Přehled - vymění pás "Nedávno přidané",
-//   * Nastavení → Úlohy - načte stránku znovu, aby zmizel proužek
-//     "úloha běží" a doplnil se výsledek.
+//   * the Overview - swaps the "Recently added" strip,
+//   * Settings → Tasks - loads the page again, so the "task running" stripe
+//     disappears and the result is filled in.
 //
-// Rozhoduje **přechod** z "úloha běží" na "neběží". Původně se hlídal
-// jen otisk knihovny, jenže ten se nezmění, když úloha nic nenajde -
-// a proužek o běžící úloze pak zůstal na stránce viset navždy.
-// Otisk zůstává jako druhý spouštěč: zachytí i změnu, kterou neudělala
-// úloha v tomhle procesu (druhá instance, ruční zásah do databáze).
+// What decides is the **transition** from "task running" to "not running". Originally
+// only the library's fingerprint was watched, but that does not change when a task
+// finds nothing - and the stripe about a running task then stayed hanging on the page forever.
+// The fingerprint stays as a second trigger: it also catches a change not made by
+// a task in this process (a second instance, a manual edit of the database).
 //
-// Ptáme se na /health, což je pár set bajtů. Celý výřez se stahuje
-// teprve tehdy, když je co ukázat.
+// We ask /health, which is a few hundred bytes. The whole fragment is downloaded
+// only when there is something to show.
 // ------------------------------------------------------------------
 (function () {
-    var pas = document.getElementById("recently-added");
-    var obnovitStranku = document.body.dataset.reloadOnTask === "1";
-    if ((!pas && !obnovitStranku) || !window.fetch) { return; }
+    var strip = document.getElementById("recently-added");
+    var reloadPage = document.body.dataset.reloadOnTask === "1";
+    if ((!strip && !reloadPage) || !window.fetch) { return; }
 
-    var znamaVerze = pas ? (pas.dataset.version || "") : null;
-    // Kolik úloh doběhlo, když se stránka vykreslovala. Tohle je to
-    // podstatné číslo: podle jeho změny se doběhnutí pozná i tehdy,
-    // když se celá úloha vejde mezi dva dotazy - a u rychlé
-    // synchronizace nad malou knihovnou se vejde snadno.
-    var znameUlohy = document.body.dataset.tasksVersion || "";
-    var bezi = false;
+    var knownVersion = strip ? (strip.dataset.version || "") : null;
+    // How many tasks had finished when the page was being drawn. This is the
+    // number that matters: by its change a finish is recognised even when
+    // the whole task fits between two requests - and for a quick
+    // sync over a small library it fits easily.
+    var knownTasks = document.body.dataset.tasksVersion || "";
+    var running = false;
 
-    function nactiPas() {
+    function loadStrip() {
         return fetch("/partials/recently-added", {
             headers: { "X-Requested-With": "fetch" },
             credentials: "same-origin"
         }).then(function (r) {
-            // Vypršelé přihlášení: server přesměruje na /login a fetch
-            // ho následuje. Bez téhle podmínky by se do pásu plakátů
-            // vysypala přihlašovací stránka.
+            // An expired sign-in: the server redirects to /login and fetch
+            // follows it. Without this condition the sign-in page would spill
+            // into the poster strip.
             return (r.ok && !r.redirected) ? r.text() : null;
         }).then(function (html) {
-            if (html && pas) { pas.innerHTML = html; }
+            if (html && strip) { strip.innerHTML = html; }
         });
     }
 
-    function zkontroluj() {
-        if (bezi || document.hidden) { return; }
-        bezi = true;
-        // cache: no-store je tu nutnost, ne opatrnost. Bez něj může
-        // prohlížeč odpovídat ze své paměti a hlídač by se navěky díval
-        // na stav z prvního dotazu.
+    function verify() {
+        if (running || document.hidden) { return; }
+        running = true;
+        // cache: no-store is a necessity here, not caution. Without it the
+        // browser may answer from its memory and the watcher would look forever
+        // at the state from the first request.
         fetch("/health", { credentials: "same-origin", cache: "no-store" })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
                 if (!data) { return null; }
 
-                // Během běhu se nic neobnovuje - výsledky se mění po
-                // dávkách a stránka by poskakovala uprostřed scanu.
+                // Nothing refreshes while it runs - results change in
+                // batches and the page would jump around in the middle of a scan.
                 if (data.task_running) { return null; }
 
-                var dobehla = data.tasks_version !== undefined
-                           && String(data.tasks_version) !== znameUlohy;
-                if (dobehla) { znameUlohy = String(data.tasks_version); }
+                var finished = data.tasks_version !== undefined
+                           && String(data.tasks_version) !== knownTasks;
+                if (finished) { knownTasks = String(data.tasks_version); }
 
-                if (dobehla && obnovitStranku) {
-                    if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
+                if (finished && reloadPage) {
+                    if (window.rememberPosition) { window.rememberPosition(); }
                     window.location.reload();
                     return null;
                 }
 
-                var zmena = data.library_version
-                         && data.library_version !== znamaVerze;
-                if (pas && (dobehla || zmena)) {
-                    znamaVerze = data.library_version;
-                    return nactiPas();
+                var change = data.library_version
+                         && data.library_version !== knownVersion;
+                if (strip && (finished || change)) {
+                    knownVersion = data.library_version;
+                    return loadStrip();
                 }
                 return null;
             })
-            .catch(function () { /* výpadek sítě - zkusí se za chvíli */ })
-            .finally(function () { bezi = false; });
+            .catch(function () { /* a network outage - it tries again in a while */ })
+            .finally(function () { running = false; });
     }
 
-    // Deset vteřin: dost často na to, aby doběhnutí úlohy neuniklo,
-    // a dost zřídka na to, aby se tím server nezaměstnával.
-    setInterval(zkontroluj, 10000);
+    // Ten seconds: often enough not to miss a task finishing,
+    // and rarely enough not to keep the server busy with it.
+    setInterval(verify, 10000);
     document.addEventListener("visibilitychange", function () {
-        if (!document.hidden) { zkontroluj(); }
+        if (!document.hidden) { verify(); }
     });
-    window.addEventListener("focus", zkontroluj);
-    // Hned po načtení, ať se pozná i úloha, která běžela už předtím.
-    zkontroluj();
+    window.addEventListener("focus", verify);
+    // Right after loading, so a task that was already running is recognised too.
+    verify();
 })();
 
 // ------------------------------------------------------------------
-// Ukazatel průběhu běžící úlohy
+// The progress indicator of a running task
 //
-// Server ví, kolik položek celkem bude (zeptá se Jellyfinu předem)
-// i kolik jich má hotových. Stránka si to bere z /health - stejného
-// místa, kterého se ptá i čekání níže.
+// The server knows how many items there will be in total (it asks Jellyfin first)
+// and how many are done. The page takes that from /health - the same
+// place the waiting below asks.
 //
-// Když celkový počet neznáme, ukáže se aspoň "hotovo N" bez procent.
-// Vymyslet si procenta by bylo horší než je nemít.
+// When the total is unknown, at least "hotovo N" shows, without percent.
+// Making percent up would be worse than not having them.
 // ------------------------------------------------------------------
 (function () {
     var box = document.getElementById("task-progress");
     if (!box || !window.fetch) { return; }
 
-    var pruh = document.getElementById("task-progress-fill");
-    var popis = document.getElementById("task-progress-text");
+    var bar = document.getElementById("task-progress-fill");
+    var description = document.getElementById("task-progress-text");
 
-    function obnov() {
+    function reloadAll() {
         fetch("/health", { credentials: "same-origin", cache: "no-store" })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
@@ -1025,133 +1176,133 @@ document.addEventListener("click", function (event) {
 
                 box.hidden = false;
                 if (p.percent === null || p.percent === undefined) {
-                    pruh.style.width = "100%";
-                    pruh.classList.add("neurcity");
-                    popis.textContent = TEXTY.hotovo + " " + p.done;
+                    bar.style.width = "100%";
+                    bar.classList.add("indeterminate");
+                    description.textContent = TEXTS.done + " " + p.done;
                 } else {
-                    pruh.classList.remove("neurcity");
-                    pruh.style.width = p.percent + "%";
-                    popis.textContent = p.done + " / " + p.total
+                    bar.classList.remove("indeterminate");
+                    bar.style.width = p.percent + "%";
+                    description.textContent = p.done + " / " + p.total
                         + "  (" + p.percent + " %)";
                 }
             })
-            .catch(function () { /* zkusí se za chvíli znovu */ });
+            .catch(function () { /* it tries again in a while */ });
     }
 
-    obnov();
-    setInterval(obnov, 2000);
+    reloadAll();
+    setInterval(reloadAll, 2000);
 })();
 
 // ------------------------------------------------------------------
-// Čekání na restart aplikace a na dokončení zastavené úlohy
+// Waiting for the app's restart and for a stopped task to finish
 //
-// Obojí dřív končilo tím, že si člověk musel stránku obnovit sám -
-// a hlavně nevěděl, kdy už to jde. Tady se čeká za něj.
+// Both used to end with a person having to refresh the page themselves -
+// and above all not knowing when it would work. Here the waiting is done for them.
 //
-// Restart se pozná podle `started_at` z /health: po výměně procesu je
-// to jiné číslo. Čekat na "přestane odpovídat a zase začne" nestačí -
-// restart trvá chvilku a dotaz se do té mezery nemusí trefit.
+// A restart is recognised by `started_at` from /health: after the process is swapped it is
+// a different number. Waiting for "stops answering and starts again" is not enough -
+// a restart takes a moment and a request need not hit that gap.
 // ------------------------------------------------------------------
 (function () {
     if (!window.fetch) { return; }
 
-    var duvod = document.body.dataset.waitFor;   // "restart" | "task"
-    if (!duvod) { return; }
+    var reason = document.body.dataset.waitFor;   // "restart" | "task"
+    if (!reason) { return; }
 
-    // Start procesu, který stránku vykreslil - viz `beh_od` ve web/zaklad.py.
-    // Brát ho z první odpovědi /health je past: restart přijde dřív,
-    // než se stihne první dotaz, a čekárna pak čeká na změnu čísla,
-    // které se už změnilo.
-    var puvodniStart = Number(document.body.dataset.behOd) || null;
-    var videnoBezi = false;
-    var pokusu = 0;
-    var MAX_POKUSU = 900;                        // ~30 minut, pak to vzdáme
+    // The start of the process that drew the page - see `running_since` in web/base.py.
+    // Taking it from the first /health response is a trap: the restart comes before
+    // the first request manages to go out, and the waiting page then waits for a change
+    // of a number that has already changed.
+    var originalStart = Number(document.body.dataset.runSince) || null;
+    var seenRunning = false;
+    var attempts = 0;
+    var MAX_ATTEMPTS = 900;                        // ~30 minutes, then we give up
 
-    function ohlas(text) {
+    function announce(text) {
         var box = document.getElementById("wait-note");
         if (box) { box.textContent = text; }
     }
 
-    function nactiZnovu() {
-        // `replace`, ne `reload`: zároveň se z adresy zahodí ?wait=...,
-        // jinak by se čekání spustilo znovu a stránka by se točila
-        // dokola. A zpětné tlačítko nevede na mezistav.
-        if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
+    function reload() {
+        // `replace`, not `reload`: it also drops ?wait=... from the address,
+        // otherwise the waiting would start again and the page would spin
+        // round and round. And the back button does not lead to an in-between state.
+        if (window.rememberPosition) { window.rememberPosition(); }
         var url = new URL(window.location.href);
         url.searchParams.delete("wait");
         window.location.replace(url.toString());
     }
 
-    function zkus() {
-        if (pokusu++ > MAX_POKUSU) {
-            ohlas(TEXTY.trva_dlouho);
+    function attempt() {
+        if (attempts++ > MAX_ATTEMPTS) {
+            announce(TEXTS.takingLong);
             return;
         }
         fetch("/health", { credentials: "same-origin", cache: "no-store" })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
-                if (!data) { throw new Error("nedostupne"); }
+                if (!data) { throw new Error("unavailable"); }
 
-                if (duvod === "restart") {
-                    if (puvodniStart === null) { puvodniStart = data.started_at; }
-                    else if (data.started_at !== puvodniStart) { nactiZnovu(); return; }
-                    // Jinak se čeká dál - proces je pořád ten původní.
+                if (reason === "restart") {
+                    if (originalStart === null) { originalStart = data.started_at; }
+                    else if (data.started_at !== originalStart) { reload(); return; }
+                    // Otherwise it keeps waiting - the process is still the original one.
                 } else {
-                    // Úloha se spouští na pozadí, takže v první chvíli
-                    // po přesměrování ještě nemusí běžet. Kdybychom
-                    // rovnou usoudili "nic neběží, hotovo", stránka by
-                    // se načetla znovu dřív, než by úloha začala.
+                    // The task starts in the background, so right after
+                    // the redirect it need not be running yet. If we
+                    // concluded straight away "nothing runs, done", the page
+                    // would load again before the task started.
                     //
-                    // Čekáme proto, až ji uvidíme běžet - a teprve pak
-                    // hlídáme, kdy skončí. Když se nerozběhne ani za
-                    // pár pokusů, stránku načteme tak jako tak (třeba
-                    // skončila chybou dřív, než jsme se zeptali).
-                    if (data.task_running) { videnoBezi = true; }
-                    else if (videnoBezi || pokusu > 5) { nactiZnovu(); return; }
+                    // So we wait until we see it running - and only then
+                    // watch for when it ends. When it does not get going even after
+                    // a few tries, we load the page anyway (perhaps
+                    // it ended with an error before we asked).
+                    if (data.task_running) { seenRunning = true; }
+                    else if (seenRunning || attempts > 5) { reload(); return; }
                 }
-                setTimeout(zkus, 2000);
+                setTimeout(attempt, 2000);
             })
             .catch(function () {
-                // Aplikace je právě dole - to je při restartu očekávané.
-                setTimeout(zkus, 2000);
+                // The app is down right now - during a restart that is expected.
+                setTimeout(attempt, 2000);
             });
     }
 
-    zkus();
+    attempt();
 })();
 
 // ------------------------------------------------------------------
-// Přepínač filmy / seriály bez načtení stránky
+// The films / series switch without loading the page
 //
-// Odkazy zůstávají obyčejné odkazy - bez JavaScriptu fungují dál, jen
-// se načte celá stránka. S JavaScriptem si vyžádáme ze serveru jen tu
-// jednu kartu a vyměníme ji na místě, takže zůstaneš tam, kde jsi.
+// The links stay plain links - without JavaScript they keep working, only
+// the whole page loads. With JavaScript we ask the server for just that
+// one card and swap it in place, so you stay where you are.
 //
-// Vykresluje pořád server, stejnou šablonou jako při běžném načtení.
-// Kreslit graf podruhé v JavaScriptu by znamenalo dvě místa, kde se
-// dá udělat chyba - a jedno z nich by se časem rozešlo s druhým.
+// The server still draws it, with the same template as on a normal load.
+// Drawing the chart a second time in JavaScript would mean two places where
+// a mistake can be made - and one of them would drift apart from the other over time.
 // ------------------------------------------------------------------
 (function () {
     if (!window.fetch) { return; }
 
-    /* Jedna obsluha pro každou kartu, která má vlastní přepínač.
-       `id` je prvek karty, `cesta` výřez na serveru a `parametr` jméno
-       té části adresy, kterou přepínač mění. */
-    function prepinatelnaKarta(id, cesta, parametr) {
+    /* One handler for each card that has its own switch.
+       `id` is the card's element, `path` the fragment on the server and `parameter` the name
+       of the part of the address the switch changes. */
+    function switchableCard(id, path, parameter) {
         var card = document.getElementById(id);
         if (!card) { return; }
 
-        var nacita = false;
+        var loading = false;
 
         card.addEventListener("click", function (event) {
             var link = event.target.closest("[data-kind]");
-            if (!link || nacita) { return; }
+            if (!link || loading) { return; }
 
             event.preventDefault();
-            nacita = true;
+            loading = true;
             card.classList.add("is-loading");
 
-            fetch(cesta + "?kind=" + encodeURIComponent(link.dataset.kind), {
+            fetch(path + "?kind=" + encodeURIComponent(link.dataset.kind), {
                 headers: { "X-Requested-With": "fetch" },
                 credentials: "same-origin"
             })
@@ -1161,524 +1312,616 @@ document.addEventListener("click", function (event) {
                 })
                 .then(function (html) {
                     card.innerHTML = html;
-                    // Adresa se přepíše, ať odpovídá tomu, co je vidět -
-                    // obnovení stránky pak ukáže totéž. replaceState místo
-                    // pushState: přepnutí filtru není krok v historii,
-                    // zpětné tlačítko má vést na předchozí stránku.
+                    // The address is rewritten to match what is visible -
+                    // refreshing the page then shows the same. replaceState instead of
+                    // pushState: switching a filter is not a step in history,
+                    // the back button is to lead to the previous page.
                     var url = new URL(window.location.href);
-                    url.searchParams.set(parametr, link.dataset.kind);
+                    url.searchParams.set(parameter, link.dataset.kind);
                     window.history.replaceState({}, "", url);
                 })
                 .catch(function () {
-                    // Když se to nepovede, uděláme to postaru - celou
-                    // stránkou. Uživatel nesmí zůstat s mrtvým tlačítkem.
-                    // Polohu si zapamatujeme znovu: od kliknutí mohla
-                    // uplynout doba, po které už zapamatovaná neplatí.
-                    if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
+                    // When it fails, we do it the old way - with the whole
+                    // page. The user must not be left with a dead button.
+                    // We remember the position again: since the click, enough time
+                    // may have passed for the remembered one to no longer hold.
+                    if (window.rememberPosition) { window.rememberPosition(); }
                     window.location.href = link.href;
                 })
                 .finally(function () {
-                    nacita = false;
+                    loading = false;
                     card.classList.remove("is-loading");
                 });
         });
     }
 
-    /* Okna (<dialog>) v Nastavení. Tlačítko nese data-okno s id toho
-       okna - jeden posluchač tak stačí na všechna, i na ta, která
-       teprve přibudou.
+    /* Windows (<dialog>) in Settings. A button carries data-modal with the id of that
+       window - so one listener is enough for all of them, including those that
+       are yet to come.
 
-       showModal() (a ne show()) schválně: zatemní pozadí, chytí Esc
-       a nedovolí proklikat se na stránku pod oknem. */
+       showModal() (not show()) on purpose: it dims the background, catches Esc
+       and does not let clicks through to the page under the window. */
     document.addEventListener("click", function (event) {
-        var tlacitko = event.target.closest ?
-            event.target.closest("[data-okno]") : null;
-        if (!tlacitko) { return; }
-        var okno = document.getElementById(tlacitko.dataset.okno);
-        if (okno && typeof okno.showModal === "function") {
+        var button = event.target.closest ?
+            event.target.closest("[data-modal]") : null;
+        if (!button) { return; }
+        var modal = document.getElementById(button.dataset.modal);
+        if (modal && typeof modal.showModal === "function") {
             event.preventDefault();
-            okno.showModal();
+            modal.showModal();
         }
     });
 
-    /* Kopírovat - čerstvě vyrobený API klíč (makro bunka_klice).
-       Schránka prohlížeče (navigator.clipboard) jde jen na HTTPS nebo
-       localhost, jenže Jellyscope často běží na obyčejném HTTP
-       v domácí síti. Tam se klíč aspoň označí a zkusí se starší
-       document.execCommand("copy"); když nejde ani to, hláška řekne,
-       ať si ho člověk zkopíruje sám (Ctrl+C). Výsledek jde do
-       role="status" vedle tlačítka - čtečka ho přečte, focus zůstane. */
+    /* The disk choice above the Library growth chart (chips with data-growth-disk).
+       It swaps only the card - the page does not load again and does not move, like
+       the Films/Series switch (switchableCard). The listener is on the whole
+       document: the card is swapped whole, chips included, so a listener on it would
+       vanish after the first swap. When the swap fails, the page loads the old way. */
     document.addEventListener("click", function (event) {
-        var tlacitko = event.target.closest ?
-            event.target.closest("[data-kopirovat]") : null;
-        if (!tlacitko) { return; }
-        var zdroj = document.getElementById(tlacitko.dataset.kopirovat);
-        if (!zdroj) { return; }
-        var stav = tlacitko.parentNode.querySelector('[role="status"]');
-        function oznam(text) { if (stav) { stav.textContent = text; } }
-        function nahradni() {
-            var rozsah = document.createRange();
-            rozsah.selectNodeContents(zdroj);
-            var vyber = window.getSelection();
-            vyber.removeAllRanges();
-            vyber.addRange(rozsah);
-            var povedlo = false;
-            try { povedlo = document.execCommand("copy"); } catch (e) { povedlo = false; }
-            oznam(povedlo ? tlacitko.dataset.hotovo : tlacitko.dataset.oznaceno);
+        var chip = event.target.closest ? event.target.closest("[data-growth-disk]") : null;
+        var cardElement = chip ? chip.closest("#library-growth") : null;
+        if (!cardElement) { return; }
+        event.preventDefault();
+        if (cardElement.classList.contains("is-loading")) { return; }
+        cardElement.classList.add("is-loading");
+
+        fetch("/library/partials/growth?growth_disk=" + encodeURIComponent(chip.dataset.growthDisk), {
+            headers: { "X-Requested-With": "fetch" },
+            credentials: "same-origin"
+        })
+            .then(function (response) {
+                if (!response.ok) { throw new Error(response.status); }
+                return response.text();
+            })
+            .then(function (html) {
+                var wrapper = document.createElement("div");
+                wrapper.innerHTML = html;
+                var fresh = wrapper.querySelector("#library-growth");
+                if (!fresh) { throw new Error("bez karty"); }
+                cardElement.parentNode.replaceChild(fresh, cardElement);
+                // The address matches what is visible; replaceState - a switch
+                // is not a step in history (see switchableCard).
+                var url = new URL(window.location.href);
+                url.searchParams.set("growth_disk", chip.dataset.growthDisk);
+                window.history.replaceState({}, "", url);
+            })
+            .catch(function () {
+                cardElement.classList.remove("is-loading");
+                if (window.rememberPosition) { window.rememberPosition(); }
+                window.location.href = chip.href;
+            });
+    });
+
+    /* Paths of a virtual disk (the Disks card, the disk's window). "Add a path"
+       clones the first row (field + cross) and empties it; the cross removes
+       a row - the last one it only empties, so the form never loses the field
+       for a path. The server drops empty fields on save.
+
+       After every change the rows are renumbered for a screen reader: the first field
+       carries the id the label "Cesty" points at, the other fields and crosses
+       a number ("Cesta 2", "Odebrat cestu 2"). The id of the first field and the texts
+       of the labels are carried by the list (data-paths, data-label…), so they are translated. */
+    function renumber(list) {
+        [].forEach.call(list.querySelectorAll(".path-row"), function (row, order) {
+            var field = row.querySelector("input");
+            var cross = row.querySelector("[data-remove-path]");
+            if (order === 0) {
+                field.id = list.dataset.paths;
+                field.removeAttribute("aria-label");
+            } else {
+                field.removeAttribute("id");
+                field.setAttribute("aria-label", list.dataset.label + " " + (order + 1));
+            }
+            cross.setAttribute("aria-label", list.dataset.labelRemove + " " + (order + 1));
+        });
+    }
+
+    document.addEventListener("click", function (event) {
+        var addButton = event.target.closest ? event.target.closest("[data-add-path]") : null;
+        var remove = event.target.closest ? event.target.closest("[data-remove-path]") : null;
+        if (!addButton && !remove) { return; }
+        var formElement = (addButton || remove).closest("form");
+        var list = formElement ? formElement.querySelector("[data-paths]") : null;
+        if (!list) { return; }
+        event.preventDefault();
+        if (addButton) {
+            var row = list.querySelector(".path-row").cloneNode(true);
+            var field = row.querySelector("input");
+            field.value = "";
+            field.removeAttribute("id");
+            list.appendChild(row);
+            renumber(list);
+            field.focus();
+            return;
+        }
+        var rows = list.querySelectorAll(".path-row");
+        var thisOne = remove.closest(".path-row");
+        if (rows.length > 1) {
+            thisOne.parentNode.removeChild(thisOne);
+            renumber(list);
+        } else {
+            thisOne.querySelector("input").value = "";
+        }
+    });
+
+    /* Copy - a freshly made API key (macro key_cell).
+       The browser's clipboard (navigator.clipboard) works only on HTTPS or
+       localhost, but Jellyscope often runs on plain HTTP
+       in a home network. There the key is at least selected and the older
+       document.execCommand("copy") is tried; when even that fails, the message says
+       to copy it by hand (Ctrl+C). The result goes to
+       role="status" next to the button - a screen reader reads it, focus stays. */
+    document.addEventListener("click", function (event) {
+        var button = event.target.closest ?
+            event.target.closest("[data-copy]") : null;
+        if (!button) { return; }
+        var source = document.getElementById(button.dataset.copy);
+        if (!source) { return; }
+        var state = button.parentNode.querySelector('[role="status"]');
+        function notify(text) { if (state) { state.textContent = text; } }
+        function fallback() {
+            var range = document.createRange();
+            range.selectNodeContents(source);
+            var selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            var succeeded = false;
+            try { succeeded = document.execCommand("copy"); } catch (e) { succeeded = false; }
+            notify(succeeded ? button.dataset.done : button.dataset.marked);
         }
         if (navigator.clipboard && window.isSecureContext) {
-            /* Prohlížeč se může ptát na oprávnění a slib pak visí -
-               bez pojistky by člověk nedostal žádnou odezvu. Co se
-               nevyřídí do vteřiny, dopadne jako na obyčejném HTTP. */
-            var vyrizeno = false;
-            var pojistka = setTimeout(function () {
-                if (!vyrizeno) { vyrizeno = true; nahradni(); }
+            /* The browser may ask for permission and the promise then hangs -
+               without a safety net a person would get no response. What is
+               not settled within a second ends as on plain HTTP. */
+            var settled = false;
+            var safeguard = setTimeout(function () {
+                if (!settled) { settled = true; fallback(); }
             }, 1000);
-            navigator.clipboard.writeText(zdroj.textContent.trim()).then(function () {
-                /* I pozdě (po pojistce): schránka klíč má, takže
-                   hláška „zkopíruj Ctrl+C“ by lhala. */
-                vyrizeno = true;
-                clearTimeout(pojistka);
-                oznam(tlacitko.dataset.hotovo);
+            navigator.clipboard.writeText(source.textContent.trim()).then(function () {
+                /* Even late (after the safety net): the clipboard has the key, so
+                   the message "copy with Ctrl+C" would lie. */
+                settled = true;
+                clearTimeout(safeguard);
+                notify(button.dataset.done);
             }, function () {
-                if (vyrizeno) { return; }
-                vyrizeno = true;
-                clearTimeout(pojistka);
-                nahradni();
+                if (settled) { return; }
+                settled = true;
+                clearTimeout(safeguard);
+                fallback();
             });
         } else {
-            nahradni();
+            fallback();
         }
     });
 
-    /* Celá tabulka v okně (Zjištění). Karta ukáže jen prvních pár
-       řádků podle Nastavení → Rozhraní → Dlouhé seznamy; tlačítko
-       pod ní zkopíruje celou tabulku karty do společného okna
-       #okno-tabulka i s nadpisem karty. Kopie, ne přesun: karta
-       zůstane, jak byla, a jedno okno stačí pro všechny tabulky. */
+    /* The whole table in a window (Insights). A card shows only the first few
+       rows by Settings → Interface → Long lists; the button
+       under it copies the card's whole table into the shared window
+       #table-window together with the card's heading. A copy, not a move: the card
+       stays as it was, and one window is enough for all tables. */
     document.addEventListener("click", function (event) {
-        var tlacitko = event.target.closest ?
-            event.target.closest("[data-okno-tabulka]") : null;
-        if (!tlacitko) { return; }
-        var okno = document.getElementById("okno-tabulka");
-        var karta = tlacitko.closest(".card");
-        var tabulka = karta ? karta.querySelector("table") : null;
-        if (!okno || !tabulka || typeof okno.showModal !== "function") { return; }
+        var button = event.target.closest ?
+            event.target.closest("[data-table-window]") : null;
+        if (!button) { return; }
+        var modal = document.getElementById("table-window");
+        var cardElement = button.closest(".card");
+        var table = cardElement ? cardElement.querySelector("table") : null;
+        if (!modal || !table || typeof modal.showModal !== "function") { return; }
         event.preventDefault();
-        var kopie = tabulka.cloneNode(true);
-        kopie.querySelectorAll(".radek-navic, .jen-desktop").forEach(function (radek) {
-            radek.classList.remove("radek-navic", "jen-desktop");
+        var copy = table.cloneNode(true);
+        copy.querySelectorAll(".extra-row, .desktop-only").forEach(function (row) {
+            row.classList.remove("extra-row", "desktop-only");
         });
-        var nadpis = karta.querySelector(".card-head h2");
-        okno.querySelector(".okno-hlava h2").textContent = nadpis ? nadpis.textContent : "";
-        var obsah = okno.querySelector(".okno-obsah");
-        obsah.innerHTML = "";
-        obsah.appendChild(kopie);
-        // Okno je pro všechny tabulky jedno: bez vynulování by druhá
-        // tabulka začínala tam, kam se odrolovalo v té první - a první
-        // řádky, ty nejdůležitější, by nebyly vidět.
-        obsah.scrollTop = 0;
-        okno.scrollTop = 0;
-        okno.showModal();
+        var heading = cardElement.querySelector(".card-head h2");
+        modal.querySelector(".modal-head h2").textContent = heading ? heading.textContent : "";
+        var content = modal.querySelector(".modal-body");
+        content.innerHTML = "";
+        content.appendChild(copy);
+        // The window is one for all tables: without the reset the second
+        // table would start where the first one was scrolled to - and the first
+        // rows, the most important ones, would not be visible.
+        content.scrollTop = 0;
+        modal.scrollTop = 0;
+        modal.showModal();
     });
 
-    /* Okno s obsahem, který se načte až po kliknutí. Odkaz nese
-       data-okno-nacist s id okna a href s adresou výřezu; bez
-       JavaScriptu se odkaz otevře jako celá stránka (routa umí obojí),
-       takže o seznam nikdo nepřijde. Načtený obsah zůstává v okně -
-       druhé otevření je hned. */
+    /* A window with content that loads only after a click. The link carries
+       data-modal-load with the window's id and href with the fragment's address; without
+       JavaScript the link opens as a whole page (the route can do both),
+       so nobody loses the list. The loaded content stays in the window -
+       the second opening is instant. */
     document.addEventListener("click", function (event) {
-        var odkaz = event.target.closest ?
-            event.target.closest("[data-okno-nacist]") : null;
-        if (!odkaz) { return; }
-        var okno = document.getElementById(odkaz.dataset.oknoNacist);
-        if (!okno || typeof okno.showModal !== "function") { return; }
+        var anchor = event.target.closest ?
+            event.target.closest("[data-modal-load]") : null;
+        if (!anchor) { return; }
+        var modal = document.getElementById(anchor.dataset.modalLoad);
+        if (!modal || typeof modal.showModal !== "function") { return; }
         event.preventDefault();
-        var obsah = okno.querySelector(".okno-obsah");
-        okno.showModal();
-        if (obsah.dataset.nacteno === odkaz.href) { return; }
-        obsah.innerHTML = '<p class="hint">…</p>';
-        fetch(odkaz.href, { headers: { "X-Requested-With": "fetch" },
+        var content = modal.querySelector(".modal-body");
+        modal.showModal();
+        if (content.dataset.loaded === anchor.href) { return; }
+        content.innerHTML = '<p class="hint">…</p>';
+        fetch(anchor.href, { headers: { "X-Requested-With": "fetch" },
                             credentials: "same-origin" })
             .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.text(); })
             .then(function (html) {
-                obsah.innerHTML = html;
-                obsah.dataset.nacteno = odkaz.href;
+                content.innerHTML = html;
+                content.dataset.loaded = anchor.href;
             })
             .catch(function () {
-                // Bez výřezu se otevře celá stránka - stejná úvaha
-                // jako u přepínatelných karet. Poloha se pamatuje
-                // pro cestu zpět: kdo se vrátí, přistane tam, kde
-                // kliknul.
-                if (window.zapamatujPolohu) { window.zapamatujPolohu(); }
-                window.location.href = odkaz.href;
+                // Without the fragment the whole page opens - the same reasoning
+                // as with switchable cards. The position is remembered
+                // for the way back: whoever comes back lands where they
+                // clicked.
+                if (window.rememberPosition) { window.rememberPosition(); }
+                window.location.href = anchor.href;
             });
     });
 
-    /* Výběr cílového titulu (přiřazení z archivu) - viz makro
-       vyber_cile. Hledá se až od dvou znaků a s malou prodlevou, ať
-       se při psaní neposílá dotaz na každé písmeno. Starší odpověď,
-       která dorazí po novější, se zahodí. */
-    document.querySelectorAll("[data-vyber-cile]").forEach(function (box) {
-        var pole = box.querySelector('input[type="search"]');
-        var skryte = box.querySelector('input[type="hidden"]');
-        var seznam = box.querySelector(".vyber-cile-nalezy");
-        var vybrano = box.querySelector(".vyber-cile-vybrano");
-        var casovac = null;
-        var posledni = "";
+    /* Picking the target title (assignment from the archive) - see the macro
+       target_picker. It searches only from two characters on and with a small delay, so
+       typing does not send a request for every letter. An older response
+       that arrives after a newer one is dropped. */
+    document.querySelectorAll("[data-target-picker]").forEach(function (box) {
+        var field = box.querySelector('input[type="search"]');
+        var hiddenOnes = box.querySelector('input[type="hidden"]');
+        var list = box.querySelector(".target-picker-matches");
+        var chosen = box.querySelector(".target-picker-chosen");
+        var timer = null;
+        var last = "";
 
-        function oznam() {
+        function notify() {
             box.dispatchEvent(new Event("change", { bubbles: true }));
         }
-        /* Plakátek - stejný tvar jako makro `plakatek`. Když se
-           obrázek nenačte, zůstane prázdné šedé políčko. */
-        function plakatek(obal, adresa) {
-            obal.textContent = "";
-            if (!adresa) { return; }
+        /* A little poster - a small poster next to the name in the assignment menu. When
+           the image fails to load, an empty grey box of the same size stays. */
+        function smallPoster(wrapper, address) {
+            wrapper.textContent = "";
+            if (!address) { return; }
             var img = document.createElement("img");
             img.alt = "";
             img.loading = "lazy";
             img.onerror = function () { img.remove(); };
-            img.src = adresa;
-            obal.appendChild(img);
+            img.src = address;
+            wrapper.appendChild(img);
         }
-        function kde(p) {
-            return [p.knihovna, p.soubor].filter(Boolean).join(" · ");
+        function where(p) {
+            return [p.library, p.file].filter(Boolean).join(" · ");
         }
-        function vyber(polozka) {
-            skryte.value = polozka.id;
-            /* Pro rekapitulaci hromadného přiřazení. */
-            box.dataset.cilPopis = polozka.popis;
-            box.dataset.cilNahled = polozka.nahled || "";
-            box.dataset.cilKde = kde(polozka);
-            plakatek(vybrano.querySelector(".plakatek"), polozka.nahled);
-            vybrano.querySelector("strong").textContent = polozka.popis;
-            vybrano.querySelector("small").textContent = kde(polozka);
-            vybrano.hidden = false;
-            pole.hidden = true;
-            seznam.hidden = true;
-            oznam();
+        function selection(entry) {
+            hiddenOnes.value = entry.id;
+            /* For the recap of a bulk assignment. */
+            box.dataset.targetDescription = entry.description;
+            box.dataset.targetPreview = entry.thumbnail || "";
+            box.dataset.targetWhere = where(entry);
+            smallPoster(chosen.querySelector(".poster-small"), entry.thumbnail);
+            chosen.querySelector("strong").textContent = entry.description;
+            chosen.querySelector("small").textContent = where(entry);
+            chosen.hidden = false;
+            field.hidden = true;
+            list.hidden = true;
+            notify();
         }
-        function vykresli(polozky, dalsi) {
-            seznam.textContent = "";
-            polozky.forEach(function (p) {
+        function render(entries, next) {
+            list.textContent = "";
+            entries.forEach(function (p) {
                 var li = document.createElement("li");
-                var tlacitko = document.createElement("button");
-                tlacitko.type = "button";
-                var obal = document.createElement("span");
-                obal.className = "plakatek";
-                plakatek(obal, p.nahled);
+                var button = document.createElement("button");
+                button.type = "button";
+                var wrapper = document.createElement("span");
+                wrapper.className = "poster-small";
+                smallPoster(wrapper, p.thumbnail);
                 var text = document.createElement("span");
-                text.className = "vyber-cile-text";
-                var nazev = document.createElement("span");
-                nazev.textContent = p.popis;
-                var misto = document.createElement("small");
-                misto.textContent = kde(p);
-                text.appendChild(nazev);
-                text.appendChild(misto);
-                tlacitko.appendChild(obal);
-                tlacitko.appendChild(text);
-                tlacitko.addEventListener("click", function () { vyber(p); });
-                li.appendChild(tlacitko);
-                seznam.appendChild(li);
+                text.className = "target-picker-text";
+                var title = document.createElement("span");
+                title.textContent = p.description;
+                var spot = document.createElement("small");
+                spot.textContent = where(p);
+                text.appendChild(title);
+                text.appendChild(spot);
+                button.appendChild(wrapper);
+                button.appendChild(text);
+                button.addEventListener("click", function () { selection(p); });
+                li.appendChild(button);
+                list.appendChild(li);
             });
-            /* Prázdný seznam s dalšími výsledky není „nic": prošel se jen
-               strop kandidátů - pak stačí rada upřesnit hledání. */
-            if (!polozky.length && !dalsi) {
-                var nic = document.createElement("li");
-                nic.className = "prazdno";
-                nic.textContent = box.dataset.prazdno || "";
-                seznam.appendChild(nic);
+            /* An empty list with more results is not "nothing": only the cap
+               of candidates was gone through - then a hint to refine the search is enough. */
+            if (!entries.length && !next) {
+                var nothing = document.createElement("li");
+                nothing.className = "empty";
+                nothing.textContent = box.dataset.empty || "";
+                list.appendChild(nothing);
             }
-            /* Server vrací jen prvních pár; kdo hledá šestou řadu,
-               má vědět, že ji najde upřesněním, ne posouváním. */
-            if (dalsi) {
-                var vic = document.createElement("li");
-                vic.className = "prazdno";
-                vic.textContent = box.dataset.dalsi || "";
-                seznam.appendChild(vic);
+            /* The server returns only the first few; whoever looks for the sixth series
+               is to know they will find it by refining, not by scrolling. */
+            if (next) {
+                var more = document.createElement("li");
+                more.className = "empty";
+                more.textContent = box.dataset.next || "";
+                list.appendChild(more);
             }
-            seznam.hidden = false;
+            list.hidden = false;
         }
-        function hledej(dotaz) {
-            posledni = dotaz;
-            fetch("/archiv/hledat?q=" + encodeURIComponent(dotaz),
+        function search(query) {
+            last = query;
+            fetch("/archive/search?q=" + encodeURIComponent(query),
                   { credentials: "same-origin" })
-                .then(function (r) { return r.ok ? r.json() : { polozky: [] }; })
+                .then(function (r) { return r.ok ? r.json() : { items: [] }; })
                 .then(function (data) {
-                    if (dotaz === posledni) { vykresli(data.polozky || [], data.dalsi); }
+                    if (query === last) { render(data.items || [], data.next); }
                 })
-                .catch(function () { /* vypadek site: nabidka zustane, jak byla */ });
+                .catch(function () { /* a network outage: the menu stays as it was */ });
         }
-        pole.addEventListener("input", function () {
-            clearTimeout(casovac);
-            var dotaz = pole.value.trim();
-            if (dotaz.length < 2) {
-                posledni = "";
-                seznam.hidden = true;
+        field.addEventListener("input", function () {
+            clearTimeout(timer);
+            var query = field.value.trim();
+            if (query.length < 2) {
+                last = "";
+                list.hidden = true;
                 return;
             }
-            casovac = setTimeout(function () { hledej(dotaz); }, 250);
+            timer = setTimeout(function () { search(query); }, 250);
         });
-        /* Enter v hledání nemá odeslat formulář - ještě nic nevybral. */
-        pole.addEventListener("keydown", function (event) {
+        /* Enter in the search must not submit the form - nothing has been picked yet. */
+        field.addEventListener("keydown", function (event) {
             if (event.key === "Enter") { event.preventDefault(); }
         });
-        vybrano.querySelector("button").addEventListener("click", function () {
-            skryte.value = "";
-            delete box.dataset.cilPopis;
-            delete box.dataset.cilNahled;
-            delete box.dataset.cilKde;
-            vybrano.hidden = true;
-            pole.hidden = false;
-            pole.value = "";
-            pole.focus();
-            oznam();
+        chosen.querySelector("button").addEventListener("click", function () {
+            hiddenOnes.value = "";
+            delete box.dataset.targetDescription;
+            delete box.dataset.targetPreview;
+            delete box.dataset.targetWhere;
+            chosen.hidden = true;
+            field.hidden = false;
+            field.value = "";
+            field.focus();
+            notify();
         });
     });
 
-    /* Potvrzovací tlačítko přiřazení: dokud není co přiřadit, je
-       vypnuté, a v hromadném okně ukazuje, kolik titulů se přesune. */
-    document.querySelectorAll("form[data-prirazeni]").forEach(function (form) {
-        var potvrdit = form.querySelector("[data-prirazeni-potvrdit]");
-        var pocet = form.querySelector("[data-prirazeni-pocet]");
-        function srovnej() {
-            var vybrano = 0;
-            form.querySelectorAll('.vyber-cile input[type="hidden"]').forEach(function (i) {
-                if (i.value) { vybrano += 1; }
+    /* The assignment's confirm button: while there is nothing to assign, it is
+       off, and in the bulk window it shows how many titles will move. */
+    document.querySelectorAll("form[data-assignment]").forEach(function (form) {
+        var confirmButton = form.querySelector("[data-assignment-confirm]");
+        var count = form.querySelector("[data-assignment-count]");
+        function align() {
+            var chosen = 0;
+            form.querySelectorAll('.target-picker input[type="hidden"]').forEach(function (i) {
+                if (i.value) { chosen += 1; }
             });
-            potvrdit.disabled = vybrano === 0;
-            if (pocet) { pocet.textContent = vybrano; }
+            confirmButton.disabled = chosen === 0;
+            if (count) { count.textContent = chosen; }
         }
-        form.addEventListener("change", srovnej);
-        srovnej();
+        form.addEventListener("change", align);
+        align();
     });
 
-    /* Okna archivu se dvěma kroky - výběr a potvrzení (přiřazení
-       i mazání). Tohle je jejich společná část: přepnutí kroku,
-       „Zpět k výběru" a návrat na výběr po zavření okna. Vrací
-       funkci, která přepne na potvrzení (true) nebo zpět (false).
-       Fokus na potvrzení dostane „Zpět": Enter ze zvyku nic
-       neprovede. */
-    function dvaKroky(form) {
-        var vyber = form.querySelector('[data-krok="vyber"]');
-        var potvrzeni = form.querySelector('[data-krok="potvrzeni"]');
-        var zpet = potvrzeni.querySelector("[data-krok-zpet]");
-        function ukaz(naPotvrzeni) {
-            vyber.hidden = naPotvrzeni;
-            potvrzeni.hidden = !naPotvrzeni;
-            if (naPotvrzeni) { zpet.focus(); }
+    /* Archive windows with two steps - the choice and the confirmation (assigning
+       and deleting). This is their shared part: switching the step,
+       "Back to the choice" and returning to the choice after the window closes. Returns
+       a function that switches to the confirmation (true) or back (false).
+       Focus on the confirmation goes to "Back": Enter out of habit then does
+       nothing. */
+    function twoSteps(form) {
+        var selection = form.querySelector('[data-step="select"]');
+        var confirmation = form.querySelector('[data-step="confirm"]');
+        var back = confirmation.querySelector("[data-step-back]");
+        function show(onConfirm) {
+            selection.hidden = onConfirm;
+            confirmation.hidden = !onConfirm;
+            if (onConfirm) { back.focus(); }
         }
-        zpet.addEventListener("click", function () { ukaz(false); });
-        var okno = form.closest("dialog");
-        if (okno) { okno.addEventListener("close", function () { ukaz(false); }); }
-        return ukaz;
+        back.addEventListener("click", function () { show(false); });
+        var modal = form.closest("dialog");
+        if (modal) { modal.addEventListener("close", function () { show(false); }); }
+        return show;
     }
 
-    /* Jedna položka v potvrzení: (plakátek), název, pod ním poznámka.
-       Bez adresy náhledu - položka z archivu, jejíž obrázek už
-       v Jellyfinu není - se plakátek nekreslí. Text jen přes
-       textContent, nikdy jako HTML. */
-    function rekapPolozka(nahled, popis, poznamka) {
-        var obal = document.createElement("span");
-        obal.className = "rekap-polozka";
-        if (nahled) {
-            var plakat = document.createElement("span");
-            plakat.className = "plakatek";
+    /* One item in the confirmation: (a little poster), the name, a note under it.
+       Without a preview address - an archive item whose image is no longer
+       in Jellyfin - no little poster is drawn. Text only through
+       textContent, never as HTML. */
+    function recapItem(preview, description, note) {
+        var wrapper = document.createElement("span");
+        wrapper.className = "recap-item";
+        if (preview) {
+            var poster = document.createElement("span");
+            poster.className = "poster-small";
             var img = document.createElement("img");
             img.alt = "";
             img.onerror = function () { img.remove(); };
-            img.src = nahled;
-            plakat.appendChild(img);
-            obal.appendChild(plakat);
+            img.src = preview;
+            poster.appendChild(img);
+            wrapper.appendChild(poster);
         }
         var text = document.createElement("span");
-        text.className = "vyber-cile-text";
-        var nazev = document.createElement("strong");
-        nazev.textContent = popis || "?";
-        text.appendChild(nazev);
-        if (poznamka) {
-            var pozn = document.createElement("small");
-            pozn.textContent = poznamka;
-            text.appendChild(pozn);
+        text.className = "target-picker-text";
+        var title = document.createElement("strong");
+        title.textContent = description || "?";
+        text.appendChild(title);
+        if (note) {
+            var noteElement = document.createElement("small");
+            noteElement.textContent = note;
+            text.appendChild(noteElement);
         }
-        obal.appendChild(text);
-        return obal;
+        wrapper.appendChild(text);
+        return wrapper;
     }
 
-    /* Poznámka pod názvem v řádku výběru (přehrávání · soubor) bez
-       zalomení a mezer ze šablony. */
-    function poznamkaRadku(radek) {
-        var small = radek.querySelector("small");
+    /* The note under the name in a row of the choice (plays · file) without
+       the template's line breaks and spaces. */
+    function rowNote(row) {
+        var small = row.querySelector("small");
         return small ? small.textContent.replace(/\s+/g, " ").trim() : "";
     }
 
-    /* Rekapitulace hromadného přiřazení. „Přiřadit (N)" nic
-       neodesílá - jen ukáže, co se stane: každou dvojici archiv →
-       cíl (s plakátem), kolik přehrávání se přesune a kolik položek
-       zůstane. Odesílá až „Ano, přiřadit" (nese potvrzeno=1). */
-    document.querySelectorAll("form[data-rekapitulace]").forEach(function (form) {
-        var ukazKrok = dvaKroky(form);
-        var seznam = form.querySelector("[data-rekap-seznam]");
-        var souhrn = form.querySelector("[data-rekap-souhrn]");
-        var zbytek = form.querySelector("[data-rekap-zbytek]");
-        var jazyk = document.documentElement.lang || "cs";
+    /* The recap of a bulk assignment. "Assign (N)" submits
+       nothing - it only shows what will happen: every pair archive →
+       target (with a poster), how many plays move and how many items
+       remain. Only "Yes, assign" submits (it carries confirmed=1). */
+    document.querySelectorAll("form[data-recap]").forEach(function (form) {
+        var showStep = twoSteps(form);
+        var list = form.querySelector("[data-recap-list]");
+        var summary = form.querySelector("[data-recap-summary]");
+        var remainder = form.querySelector("[data-recap-rest]");
+        var language = document.documentElement.lang || "cs";
 
-        form.querySelector("[data-krok-dal]").addEventListener("click", function () {
-            seznam.textContent = "";
-            var titulu = 0;
-            var prehravani = 0;
-            var bez = 0;
-            form.querySelectorAll(".prirazeni-radek").forEach(function (radek) {
-                var box = radek.querySelector("[data-vyber-cile]");
+        form.querySelector("[data-step-next]").addEventListener("click", function () {
+            list.textContent = "";
+            var titles = 0;
+            var playback = 0;
+            var without = 0;
+            form.querySelectorAll(".assignment-row").forEach(function (row) {
+                var box = row.querySelector("[data-target-picker]");
                 if (!box.querySelector('input[type="hidden"]').value) {
-                    bez += 1;
+                    without += 1;
                     return;
                 }
-                titulu += 1;
-                prehravani += parseInt(radek.dataset.plays || "0", 10) || 0;
-                /* Vlevo položka z archivu (přehrávání · soubor),
-                   vpravo cíl s knihovnou a souborem. */
+                titles += 1;
+                playback += parseInt(row.dataset.plays || "0", 10) || 0;
+                /* On the left the archive item (plays · file),
+                   on the right the target with its library and file. */
                 var li = document.createElement("li");
-                li.appendChild(rekapPolozka("", radek.dataset.popis, poznamkaRadku(radek)));
-                var sipka = document.createElement("span");
-                sipka.className = "rekap-sipka";
-                sipka.setAttribute("aria-hidden", "true");
-                sipka.textContent = "→";
-                li.appendChild(sipka);
-                li.appendChild(rekapPolozka(box.dataset.cilNahled, box.dataset.cilPopis,
-                    box.dataset.cilKde));
-                seznam.appendChild(li);
+                li.appendChild(recapItem("", row.dataset.description, rowNote(row)));
+                var arrow = document.createElement("span");
+                arrow.className = "recap-arrow";
+                arrow.setAttribute("aria-hidden", "true");
+                arrow.textContent = "→";
+                li.appendChild(arrow);
+                li.appendChild(recapItem(box.dataset.targetPreview, box.dataset.targetDescription,
+                    box.dataset.targetWhere));
+                list.appendChild(li);
             });
-            if (!titulu) { return; }
-            souhrn.textContent = souhrn.dataset.sablona
-                .replace("{t}", titulu.toLocaleString(jazyk))
-                .replace("{n}", prehravani.toLocaleString(jazyk));
-            zbytek.textContent = bez
-                ? zbytek.dataset.sablona.replace("{z}", bez.toLocaleString(jazyk)) : "";
-            ukazKrok(true);
+            if (!titles) { return; }
+            summary.textContent = summary.dataset.template
+                .replace("{t}", titles.toLocaleString(language))
+                .replace("{n}", playback.toLocaleString(language));
+            remainder.textContent = without
+                ? remainder.dataset.template.replace("{count}", without.toLocaleString(language)) : "";
+            showStep(true);
         });
     });
 
-    /* Mazání z archivu. Zaškrtávátka u řádků, „Vybrat vše" nahoře
-       (napůl zaškrtnuté, když je vybraná jen část) a tlačítko, které
-       ukazuje, kolik je vybráno. „Smazat vybrané" jen ukáže, co
-       zmizí - maže až „Ano, smazat" (nese potvrzeno=1). */
-    document.querySelectorAll("form[data-mazani-archivu]").forEach(function (form) {
-        var ukazKrok = dvaKroky(form);
-        var vse = form.querySelector("[data-vybrat-vse]");
-        var policka = Array.prototype.slice.call(
-            form.querySelectorAll('.mazani-radek input[type="checkbox"]'));
-        var dal = form.querySelector("[data-krok-dal]");
-        var pocet = form.querySelector("[data-mazani-pocet]");
-        var seznam = form.querySelector("[data-mazani-seznam]");
-        var souhrn = form.querySelector("[data-mazani-souhrn]");
-        var jazyk = document.documentElement.lang || "cs";
+    /* Deleting from the archive. Tick boxes by the rows, "Select all" at the top
+       (half-ticked when only some are chosen) and a button that
+       shows how many are chosen. "Delete selected" only shows what
+       will vanish - only "Ano, smazat" deletes (it carries confirmed=1). */
+    document.querySelectorAll("form[data-archive-delete]").forEach(function (form) {
+        var showStep = twoSteps(form);
+        var everything = form.querySelector("[data-select-all]");
+        var fields = Array.prototype.slice.call(
+            form.querySelectorAll('.delete-row input[type="checkbox"]'));
+        var onward = form.querySelector("[data-step-next]");
+        var count = form.querySelector("[data-delete-count]");
+        var list = form.querySelector("[data-delete-list]");
+        var summary = form.querySelector("[data-delete-summary]");
+        var language = document.documentElement.lang || "cs";
 
-        function vybrane() {
-            return policka.filter(function (p) { return p.checked; });
+        function selected() {
+            return fields.filter(function (p) { return p.checked; });
         }
-        function srovnej() {
-            var n = vybrane().length;
-            pocet.textContent = n.toLocaleString(jazyk);
-            dal.disabled = n === 0;
-            vse.checked = n > 0 && n === policka.length;
-            vse.indeterminate = n > 0 && n < policka.length;
+        function align() {
+            var n = selected().length;
+            count.textContent = n.toLocaleString(language);
+            onward.disabled = n === 0;
+            everything.checked = n > 0 && n === fields.length;
+            everything.indeterminate = n > 0 && n < fields.length;
         }
-        form.addEventListener("change", function (udalost) {
-            if (udalost.target === vse) {
-                policka.forEach(function (p) { p.checked = vse.checked; });
+        form.addEventListener("change", function (evt) {
+            if (evt.target === everything) {
+                fields.forEach(function (p) { p.checked = everything.checked; });
             }
-            srovnej();
+            align();
         });
 
-        dal.addEventListener("click", function () {
-            var zvolene = vybrane();
-            if (!zvolene.length) { return; }
-            seznam.textContent = "";
-            var prehravani = 0;
-            zvolene.forEach(function (policko) {
-                prehravani += parseInt(policko.dataset.plays || "0", 10) || 0;
-                var radek = policko.closest(".mazani-radek");
+        onward.addEventListener("click", function () {
+            var picked = selected();
+            if (!picked.length) { return; }
+            list.textContent = "";
+            var playback = 0;
+            picked.forEach(function (inputField) {
+                playback += parseInt(inputField.dataset.plays || "0", 10) || 0;
+                var row = inputField.closest(".delete-row");
                 var li = document.createElement("li");
-                li.appendChild(rekapPolozka("", radek.querySelector("strong").textContent,
-                    poznamkaRadku(radek)));
-                seznam.appendChild(li);
+                li.appendChild(recapItem("", row.querySelector("strong").textContent,
+                    rowNote(row)));
+                list.appendChild(li);
             });
-            souhrn.textContent = souhrn.dataset.sablona
-                .replace("{t}", zvolene.length.toLocaleString(jazyk))
-                .replace("{n}", prehravani.toLocaleString(jazyk));
-            ukazKrok(true);
+            summary.textContent = summary.dataset.template
+                .replace("{t}", picked.length.toLocaleString(language))
+                .replace("{n}", playback.toLocaleString(language));
+            showStep(true);
         });
-        /* Prohlížeč umí po návratu na stránku obnovit zaškrtnutí -
-           počet na tlačítku musí sedět hned. */
-        srovnej();
+        /* On returning to the page the browser can restore the ticks -
+           the count on the button has to be right at once. */
+        align();
     });
 
-    /* Klik na ztmavené pozadí zavírá. Prohlížeč hlásí kliknutí na
-       samotný <dialog> i tehdy, když se trefíš vedle jeho obsahu -
-       proto se porovnává cíl kliknutí. */
+    /* A click on the dimmed backdrop closes. The browser reports a click on
+       the <dialog> itself even when you miss its content -
+       that is why the click's target is compared. */
     document.addEventListener("click", function (event) {
         if (event.target.tagName === "DIALOG") {
             event.target.close();
         }
     });
 
-    /* Filtr historie: pole pro přesná data se ukážou, jen když si
-       člověk vybere „vlastní období". Bez JavaScriptu jsou vidět
-       taky - `hidden` se sundá až tady, takže se nestane, že by
-       někdo o možnost zadat datum přišel. */
+    /* The history filter: the fields for exact dates show only when
+       a person picks "custom period". Without JavaScript they are visible
+       too - `hidden` is removed only here, so nobody can end up
+       without the option to enter a date. */
     (function () {
-        var volba = document.querySelector("[data-obdobi]");
-        if (!volba) { return; }
-        var pole = document.querySelectorAll(".filtr-vlastni");
+        var choice = document.querySelector("[data-period]");
+        if (!choice) { return; }
+        var field = document.querySelectorAll(".filter-custom");
 
-        function srovnej() {
-            pole.forEach(function (prvek) {
-                prvek.hidden = volba.value !== "vlastni";
+        function align() {
+            field.forEach(function (element) {
+                element.hidden = choice.value !== "custom";
             });
         }
-        volba.addEventListener("change", srovnej);
-        srovnej();
+        choice.addEventListener("change", align);
+        align();
     })();
 
-    /* Filtr uvnitř okna. Obsah okna je už na stránce, takže se nic
-       nenačítá - jen se schovají řádky, které nesedí. Přesně proto
-       je ten filtr "jen v okně": zavřením zmizí a nikam se neukládá. */
+    /* A filter inside a window. The window's content is already on the page, so nothing
+       loads - only rows that do not match hide. That is exactly why
+       the filter is "only in the window": closing makes it vanish and it is saved nowhere. */
     document.addEventListener("change", function (event) {
-        var volba = event.target.closest ?
-            event.target.closest("[data-filtr-okna]") : null;
-        if (!volba) { return; }
+        var choice = event.target.closest ?
+            event.target.closest("[data-filter-modal]") : null;
+        if (!choice) { return; }
 
-        var okno = document.getElementById(volba.dataset.filtrOkna);
-        if (!okno) { return; }
+        var modal = document.getElementById(choice.dataset.filterModal);
+        if (!modal) { return; }
 
-        okno.querySelectorAll(".okno-obsah [data-uzivatel]").forEach(function (radek) {
-            radek.hidden = volba.value !== "" &&
-                           radek.dataset.uzivatel !== volba.value;
+        modal.querySelectorAll(".modal-body [data-user]").forEach(function (row) {
+            row.hidden = choice.value !== "" &&
+                           row.dataset.user !== choice.value;
         });
     });
 
-    prepinatelnaKarta("daily-card", "/partials/daily", "kind");
-    prepinatelnaKarta("top-items-card", "/partials/top-items", "top_kind");
+    switchableCard("daily-card", "/video/partials/daily", "kind");
+    switchableCard("top-items-card", "/video/partials/top-items", "top_kind");
 })();
 
 // ------------------------------------------------------------------
-// Nastavení -> Úlohy: „Zapomenout" diváka
+// Settings -> Tasks: "Zapomenout" (forget) a viewer
 //
-// Nejdřív potvrzovací okno se jménem vybraného diváka, teprve z něj se
-// formulář odešle. Dřív onclick= ve značce - a když v něm jednou chyběla
-// funkce, formulář odešel bez otázky a historie diváka zmizela.
+// First a confirmation window with the chosen viewer's name, only from it is
+// the form submitted. It used to be onclick= in the tag - and when the function
+// was once missing, the form went off without a question and the viewer's history vanished.
 // ------------------------------------------------------------------
 (function () {
-    if (!document.querySelector('[data-akce="zapomenout-divaka"]')) { return; }
+    if (!document.querySelector('[data-action="forget-viewer"]')) { return; }
     document.addEventListener("click", function (event) {
-        var tlacitko = event.target.closest && event.target.closest('[data-akce="zapomenout-divaka"]');
-        if (!tlacitko) { return; }
-        var v = document.getElementById('zapomenout_divaka');
+        var button = event.target.closest && event.target.closest('[data-action="forget-viewer"]');
+        if (!button) { return; }
+        var v = document.getElementById('forget_viewer');
         if (!v || !v.value) { return; }
-        document.getElementById('koho-zapomenout').textContent = v.options[v.selectedIndex].text.trim();
-        document.getElementById('okno-zapomenut').showModal();
+        document.getElementById('whom-to-forget').textContent = v.options[v.selectedIndex].text.trim();
+        document.getElementById('modal-forget').showModal();
     });
 })();
 

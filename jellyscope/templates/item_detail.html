@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tile, tech_badge, method_badge, transcode_popis, vyber_cile, odkaz with context %}
+{% from "_macros.html" import tile, tech_badge, method_badge, transcode_description, target_picker, link with context %}
 {% block title %}{{ item.name }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -9,7 +9,7 @@
             {% if item.library_id %}
                 <a href="/library/{{ item.library_id }}?tab=media">&larr; {{ item.library_name }}</a>
             {% else %}
-                <a href="/library">&larr; {{ _("Knihovny") }}</a>
+                <a href="/library">&larr; {{ _("Libraries") }}</a>
             {% endif %}
         </p>
         <h1>
@@ -18,21 +18,21 @@
         </h1>
         <p class="subtitle">
             {% if item.production_year %}{{ item.production_year }} &middot; {% endif %}
-            {% if item | kod_dilu %}
-                {{ item | kod_dilu }} &middot;
+            {% if item | episode_code %}
+                {{ item | episode_code }} &middot;
             {% endif %}
             {{ tech_badge(item.tech_source) }}
         </p>
     </div>
 
-    {# Načtení metadat jen pro tenhle titul. Když v Jellyfinu opravíš rok
-       nebo jazyk stopy, nemusíš kvůli jedné položce pouštět synchronizaci
-       celé knihovny. Archivovaný titul v Jellyfinu není, tak není co číst. #}
+    {# Loading the metadata for this title only. When you fix the year
+       or a track's language in Jellyfin, you need not run a sync of the
+       whole library for one item. An archived title is not in Jellyfin, so there is nothing to read. #}
     {% if account.is_admin and not item.is_missing %}
     <form method="post" action="/item/{{ item.id }}/refresh">
         <button class="btn" type="submit"
-                title="{{ _("Zeptá se Jellyfinu znovu na tenhle jeden titul. Nic se do Jellyfinu nezapisuje.") }}">
-            &#8635; {{ _("Načíst metadata znovu") }}
+                title="{{ _("Asks Jellyfin about this one title again. Nothing is written to Jellyfin.") }}">
+            &#8635; {{ _("Reload metadata") }}
         </button>
     </form>
     {% endif %}
@@ -41,91 +41,91 @@
 {% if item.tech_error %}
 <div class="flash warning">
     <span class="dot"></span>
-    <span>{{ _("Analýza tohoto souboru selhala") }}: {{ item.tech_error }}</span>
+    <span>{{ _("Analysis of this file failed") }}: {{ stored_text(item.tech_error, item.tech_error_values) }}</span>
 </div>
 {% endif %}
 
 {% if item.is_missing %}
-{# Archivovaná položka. Mazání je schválně až tady a jen ruční: automaticky
-   se nemaže nikdy, protože výpadek Jellyfinu by jinak sebral historii. #}
+{# An archived item. Deleting is here on purpose and only by hand: nothing is ever
+   deleted automatically, otherwise an outage of Jellyfin would take the history. #}
 <div class="flash warning">
     <span class="dot"></span>
     <span>
-        {{ _("Tenhle titul už v Jellyfinu není, je v archivu. Historie přehrávání zůstává, aby ve statistikách nezůstaly bezejmenné záznamy. Když se soubor vrátí, Jellyscope ho podle tmdb ID zase spáruje.") }}
+        {{ _("This title is no longer in Jellyfin; it is archived. The playback history stays so the statistics do not end up with nameless records. When the file comes back, Jellyscope matches it by tmdb ID.") }}
     </span>
 </div>
 {% if account.is_admin %}
-{# Dvě cesty z archivu. Přiřazení je první a výraznější: když historie
-   patří jinému titulu (Jellyfin ho určil špatně a po opravě založil
-   znovu), nic se neztratí. Smazání je až druhé. #}
+{# Two ways out of the archive. Assignment is first and more prominent: when the history
+   belongs to another title (Jellyfin identified it wrongly and created it
+   again after the fix), nothing is lost. Deleting comes second. #}
 <div class="card" style="margin-bottom:18px">
     <div class="card-head">
-        <h2>{{ _("Co s tímhle titulem") }}</h2>
+        <h2>{{ _("What to do with this title") }}</h2>
     </div>
     <p class="card-note" style="margin-bottom:12px">
-        {{ _("Patří-li historie jinému titulu (Jellyfin ho třeba určil špatně a po opravě ho založil znovu pod jiným názvem), přiřaď ji k němu. Jinak jde titul s historií smazat.") }}
+        {{ _("If the history belongs to another title (Jellyfin may have identified it wrongly and created it again under another name after the fix), assign it there. Otherwise the title can be deleted with its history.") }}
     </p>
     <div class="btn-row">
-        <button class="btn primary" type="button" data-okno="okno-priradit">
-            {{ _("Přiřadit k jinému titulu") }}
+        <button class="btn primary" type="button" data-modal="modal-assign">
+            {{ _("Assign to another title") }}
         </button>
-        <button class="btn danger" type="button" data-okno="okno-smazat">
-            {{ _("Smazat titul i historii") }}
+        <button class="btn danger" type="button" data-modal="modal-delete-item">
+            {{ _("Delete title and history") }}
             {% if summary.plays %}({{ summary.plays }}&times;){% endif %}
         </button>
     </div>
 </div>
 
-<dialog class="okno okno-siroke" id="okno-priradit">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ _("Přiřadit k jinému titulu") }}</h2>
-        <button class="btn okno-zavrit" type="submit" aria-label="{{ _("Zavřít") }}">&times;</button>
+<dialog class="modal modal-wide" id="modal-assign">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Assign to another title") }}</h2>
+        <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
-    <form method="post" action="/item/{{ item.id }}/priradit" data-prirazeni>
-        <p class="dialog-label">{{ _("Z archivu") }}</p>
-        {# Bez plakátku: obrázek položky z archivu už v Jellyfinu není,
-           zbylo by jen prázdné políčko. Plakáty mají jen živé tituly. #}
-        <span class="vyber-cile-text" style="margin-bottom:14px">
+    <form method="post" action="/item/{{ item.id }}/assign" data-assignment>
+        <p class="dialog-label">{{ _("From the archive") }}</p>
+        {# No small poster: the image of an item from the archive is no longer in Jellyfin,
+           only an empty box would be left. Only live titles have posters. #}
+        <span class="target-picker-text" style="margin-bottom:14px">
             <strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong>
             {% if item.path %}<small style="word-break:break-all">{{ item.path }}</small>{% endif %}
         </span>
-        <p class="dialog-label">{{ _("Na titul") }}</p>
-        {{ vyber_cile('cil') }}
+        <p class="dialog-label">{{ _("To the title") }}</p>
+        {{ target_picker('target') }}
         <p class="card-note" style="margin-top:14px">
-            {{ _("Historie přehrávání a statistiky přejdou na vybraný titul a položka z archivu se smaže. Těsně před tím se udělá záloha databáze.") }}
-            {% if summary.plays %}{{ _("Přesune se") }} {{ summary.plays | number }} {{ _("přehrávání.") }}{% endif %}
+            {{ _("The playback history and statistics move to the chosen title and the archived item is deleted. A database backup is taken right before.") }}
+            {% if summary.plays %}{{ _n("Moving {n} playbacks.", summary.plays) }}{% endif %}
         </p>
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn" type="button" data-zavrit-okno>{{ _("Zrušit") }}</button>
-            <button class="btn primary" type="submit" data-prirazeni-potvrdit disabled>
-                {{ _("Přiřadit a smazat z archivu") }}
+            <button class="btn" type="button" data-close-modal>{{ _("Cancel") }}</button>
+            <button class="btn primary" type="submit" data-assignment-confirm disabled>
+                {{ _("Assign and remove from the archive") }}
             </button>
         </div>
     </form>
 </dialog>
 
-{# Potvrzení smazání. Vlastní okno místo confirm() prohlížeče: řekne,
-   co se přesně smaže, a Zrušit má fokus - Enter ze zvyku nic nesmaže. #}
-<form method="post" action="/item/{{ item.id }}/delete" id="smazat-titul"></form>
-<dialog id="okno-smazat" class="dialog">
-    <h2>{{ _("Smazat titul natrvalo") }}</h2>
+{# Confirming the delete. A window of our own instead of the browser's confirm(): it says
+   what exactly is deleted, and Cancel has the focus - Enter out of habit deletes nothing. #}
+<form method="post" action="/item/{{ item.id }}/delete" id="delete-title"></form>
+<dialog id="modal-delete-item" class="dialog">
+    <h2>{{ _("Delete the title for good") }}</h2>
 
-    <p class="dialog-label">{{ _("Co se smaže") }}</p>
+    <p class="dialog-label">{{ _("What gets deleted") }}</p>
     <p><strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong></p>
 
     <p>
-        {{ _("Titul i celá jeho historie přehrávání") }}{% if summary.plays %} ({{ summary.plays | number }} {{ _("záznamů") }}){% endif %}.
-        {{ _("Statistiky se o ten čas sníží. Těsně před tím se udělá záloha databáze, jinak to vrátit nejde.") }}
+        {{ _("The title and its whole playback history") }}{% if summary.plays %} ({{ _n("{n} records", summary.plays) }}){% endif %}.
+        {{ _("The statistics lose that time. A database backup is taken right before; otherwise it cannot be undone.") }}
     </p>
     <p class="card-note">
-        {{ _("Patří-li ta historie jinému titulu, použij raději Přiřadit k jinému titulu, nic se tím neztratí.") }}
+        {{ _("If that history belongs to another title, use Assign to another title instead; nothing is lost that way.") }}
     </p>
 
     <div class="btn-row">
         <form method="dialog">
-            <button class="btn" type="submit" autofocus>{{ _("Zrušit") }}</button>
+            <button class="btn" type="submit" autofocus>{{ _("Cancel") }}</button>
         </form>
-        <button class="btn danger" type="submit" form="smazat-titul">{{ _("Ano, smazat") }}</button>
+        <button class="btn danger" type="submit" form="delete-title">{{ _("Yes, delete") }}</button>
     </div>
 </dialog>
 {% endif %}
@@ -135,57 +135,61 @@
     <div>
         <div class="item-poster {{ 'is-archived' if item.is_missing }}">
             <img src="/image/{{ item.id }}?kind=Primary&w=400{{ '&tag=' ~ item.image_tag if item.image_tag }}" alt="" loading="lazy"
-                 data-pri-chybe="skryt-rodice">
+                 data-on-error="hide-parent">
             {% if item.is_missing %}
-                <span class="media-archived">{{ _("Archivováno") }}</span>
+                <span class="media-archived">{{ _("Archived") }}</span>
             {% endif %}
         </div>
     </div>
 
-    {# Titul může ležet na disku víckrát - 4K vedle 1080p. Jellyfin
-       z toho dělá jednu položku s víc soubory, takže se tady dají
-       přepnout. `zobrazena` je buď vybraná verze, nebo údaje samotné
-       položky (ta drží tu, kterou Jellyfin považuje za hlavní). #}
-    {% set zobrazena = namespace(data=item) %}
-    {% if verze_souboru and verze_souboru | length > 1 %}
-        {% for v in verze_souboru %}
-            {% if v.source_id == vybrana_verze %}
-                {% set zobrazena.data = v %}
+    {# A title can lie on the disk more than once - 4K beside 1080p. Jellyfin
+       makes one item with several files of it, so they can be
+       switched here. `shown` is either the chosen version, or the data of the
+       item itself (which holds the one Jellyfin takes as the main one). #}
+    {% set shown = namespace(data=item) %}
+    {% if file_versions and file_versions | length > 1 %}
+        {% for v in file_versions %}
+            {% if v.source_id == chosen_version %}
+                {% set shown.data = v %}
             {% endif %}
         {% endfor %}
     {% endif %}
     <div>
         <div class="kpi-row" style="margin-bottom:16px">
-            {{ tile(_("Délka"), item.runtime_ticks | ticks | seconds) }}
-            {{ tile(_("Velikost"), zobrazena.data.size_bytes | bytes) }}
-            {{ tile(_("Rozlišení"), zobrazena.data.height | resolution(zobrazena.data.width)) }}
-            {{ tile("Bitrate", zobrazena.data.bitrate | bitrate) }}
-            {{ tile(_("Přehrání"), summary.plays | number,
-                    note=_("Naposledy") ~ ' ' ~ (summary.last_played | relative)) }}
+            {{ tile(_("Duration"), item.runtime_ticks | ticks | seconds) }}
+            {{ tile(_("Size"), shown.data.size_bytes | bytes) }}
+            {{ tile(_("Resolution"), shown.data.height | resolution(shown.data.width)) }}
+            {{ tile("Bitrate", shown.data.bitrate | bitrate) }}
+            {{ tile(_("Plays"), summary.plays | number,
+                    note=_("Last seen") ~ ' ' ~ (summary.last_played | relative)) }}
         </div>
 
         {# --------------------------------------------------------- #}
-        {# Soubor                                                     #}
+        {# File                                                      #}
         {# --------------------------------------------------------- #}
         <div class="card">
             <div class="card-head">
-                <h2>{{ _("Soubor") }}</h2>
-                {% if verze_souboru and verze_souboru | length > 1 %}
+                <h2>{{ _("File") }}</h2>
+                {% if files_of_item %}
                 <p class="card-note">
-                    {{ _("tenhle titul je na disku") }} {{ verze_souboru | length }}&times; &ndash;
-                    {{ _("přepni si, který soubor chceš vidět") }}
+                    {{ _("this title is on the disk") }} {{ files_of_item | length }}&times; &ndash;
+                    {{ _("switch to the file you want to see") }}
                 </p>
                 {% endif %}
             </div>
 
-            {% if verze_souboru and verze_souboru | length > 1 %}
-            <div class="filtr-chipy" style="margin-bottom:14px">
-                {% for v in verze_souboru %}
-                <a class="chip {{ 'active' if (v.source_id == vybrana_verze) or (not vybrana_verze and loop.first) }}"
-                   data-keep-scroll
-                   href="/item/{{ item.id }}?verze={{ v.source_id }}">
-                    {{ v.nazev or (v.height | resolution(v.width)) }}
-                    <span class="hint">{{ v.size_bytes | bytes }}</span>
+            {# The file switch (stats.title_files): versions inside the item
+               and further copies of the same film in the same library - such a copy is a separate
+               item in Jellyfin, so its chip leads to its address. Only
+               this card and the streams change; the header and the playback belong to the title. #}
+            {% if files_of_item %}
+            <div class="filter-chips" style="margin-bottom:14px">
+                {% for s in files_of_item %}
+                <a class="chip {{ 'active' if s.active }}"
+                   data-keep-scroll {% if s.path %}title="{{ s.path }}"{% endif %}
+                   href="{{ s.href }}">
+                    {{ s.name or (s.height | resolution(s.width)) }}
+                    <span class="hint">{{ s.size_bytes | bytes }}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -193,20 +197,20 @@
             <div class="table-wrap">
                 <table class="facts">
                     <tbody>
-                    <tr><th>{{ _("Kontejner") }}</th><td>{{ (zobrazena.data.container or '-') | upper }}</td></tr>
-                    {# Délku hlásí Jellyfin i ffprobe; je to první údaj,
-                       podle kterého se pozná, že se soubor spároval
-                       se špatným titulem. #}
-                    <tr><th>{{ _("Délka") }}</th><td>{{ item.runtime_ticks | ticks | timecode }}</td></tr>
-                    <tr><th>{{ _("Velikost") }}</th><td>{{ zobrazena.data.size_bytes | bytes }}</td></tr>
-                    <tr><th>{{ _("Celkový bitrate") }}</th><td>{{ zobrazena.data.bitrate | bitrate }}</td></tr>
-                    <tr><th>{{ _("Dynamický rozsah") }}</th><td>{{ rozsah | video_range if rozsah else '-' }}</td></tr>
-                    <tr><th>{{ _("Knihovna") }}</th><td>{{ item.library_name or '-' }}</td></tr>
-                    <tr><th>{{ _("Přidáno") }}</th><td>{{ item.date_created | datetime }}</td></tr>
-                    <tr><th>{{ _("Data změřena") }}</th><td>{{ item.tech_updated_at | relative }}</td></tr>
+                    <tr><th>{{ _("Container") }}</th><td>{{ (shown.data.container or '-') | upper }}</td></tr>
+                    {# The length is reported by Jellyfin and ffprobe alike; it is the first
+                       fact that tells a file was paired
+                       with the wrong title. #}
+                    <tr><th>{{ _("Duration") }}</th><td>{{ item.runtime_ticks | ticks | timecode }}</td></tr>
+                    <tr><th>{{ _("Size") }}</th><td>{{ shown.data.size_bytes | bytes }}</td></tr>
+                    <tr><th>{{ _("Total bitrate") }}</th><td>{{ shown.data.bitrate | bitrate }}</td></tr>
+                    <tr><th>{{ _("Dynamic range") }}</th><td>{{ dynamic_range | video_range if dynamic_range else '-' }}</td></tr>
+                    <tr><th>{{ _("Library") }}</th><td>{{ item.library_name or '-' }}</td></tr>
+                    <tr><th>{{ _("Added") }}</th><td>{{ item.date_created | datetime }}</td></tr>
+                    <tr><th>{{ _("Data measured") }}</th><td>{{ item.tech_updated_at | relative }}</td></tr>
                     <tr>
-                        <th>{{ _("Cesta") }}</th>
-                        <td><code style="font-size:12px; word-break:break-all">{{ zobrazena.data.path or item.path or '-' }}</code></td>
+                        <th>{{ _("Path") }}</th>
+                        <td><code style="font-size:12px; word-break:break-all">{{ shown.data.path or item.path or '-' }}</code></td>
                     </tr>
                     </tbody>
                 </table>
@@ -214,19 +218,19 @@
         </div>
 
         {# --------------------------------------------------------- #}
-        {# Stopy - to hlavní, kvůli čemu detail vznikl                #}
+        {# Streams - the main thing the detail was made for          #}
         {# --------------------------------------------------------- #}
         <div class="card">
             <div class="card-head">
-                <h2>{{ _("Obraz") }}</h2>
-                <p class="card-note">{{ streams.Video | length }} {{ _("stopa") }}</p>
+                <h2>{{ _("Video#picture") }}</h2>
+                <p class="card-note">{{ streams.Video | length }} {{ _("track") }}</p>
             </div>
             {% if streams.Video %}
             <div class="table-wrap">
                 <table>
                     <thead>
-                    <tr><th>#</th><th>{{ _("Kodek") }}</th><th class="num">{{ _("Rozlišení") }}</th>
-                        <th class="num">Bitrate</th><th>{{ _("Popis") }}</th></tr>
+                    <tr><th>#</th><th>{{ _("Codec") }}</th><th class="num">{{ _("Resolution") }}</th>
+                        <th class="num">Bitrate</th><th>{{ _("Label") }}</th></tr>
                     </thead>
                     <tbody>
                     {% for s in streams.Video %}
@@ -244,22 +248,22 @@
                 </table>
             </div>
             {% else %}
-                <p class="chart-empty">{{ _("Data o stopách nejsou k dispozici. Spusť analýzu v Nastavení.") }}</p>
+                <p class="chart-empty">{{ _("Track data is not available. Run the analysis in Settings.") }}</p>
             {% endif %}
         </div>
 
         <div class="card">
             <div class="card-head">
-                <h2>{{ _("Zvukové stopy") }}</h2>
+                <h2>{{ _("Audio tracks") }}</h2>
                 <p class="card-note">
-                    {{ streams.Audio | length }} {{ _("celkem") }}
-                    {# Jazyk, který slíbil název souboru, ale nejde ho přiřadit
-                       ke konkrétní stopě - viz scanner.doplnit_jazyky_z_nazvu.
-                       Statistika ho zná, tak ať je vidět, odkud. #}
+                    {{ streams.Audio | length }} {{ _("total") }}
+                    {# A language the file name promised, but it cannot be assigned
+                       to a particular stream - see scanner.fill_languages_from_name.
+                       The statistics know it, so let it be seen where it comes from. #}
                     {% if item.audio_from_name %}
-                        &middot; {{ _("podle názvu souboru") }}:
-                        {% for kod in item.audio_from_name.split(',') %}
-                            {{ lang.display(kod) }}{% if not loop.last %},{% endif %}
+                        &middot; {{ _("from the file name") }}:
+                        {% for lang_code in item.audio_from_name.split(',') %}
+                            {{ lang.display(lang_code) }}{% if not loop.last %},{% endif %}
                         {% endfor %}
                     {% endif %}
                 </p>
@@ -268,8 +272,8 @@
             <div class="table-wrap">
                 <table>
                     <thead>
-                    <tr><th>#</th><th>{{ _("Jazyk") }}</th><th>{{ _("Kodek") }}</th>
-                        <th class="num">{{ _("Kanály") }}</th><th>{{ _("Popis") }}</th><th></th></tr>
+                    <tr><th>#</th><th>{{ _("Language") }}</th><th>{{ _("Codec") }}</th>
+                        <th class="num">{{ _("Channels") }}</th><th>{{ _("Label") }}</th><th></th></tr>
                     </thead>
                     <tbody>
                     {% for s in streams.Audio %}
@@ -278,12 +282,12 @@
                         <td class="strong">
                             {{ lang.display(s.language) }}
                             <span class="muted">{{ s.language | upper }}</span>
-                            {# Soubor jazyk neuvádí a doplnil se z knihovny -
-                               ať je poznat, že to není údaj ze souboru. #}
+                            {# The file does not state the language and it was filled from the library -
+                               so it shows this is not a figure from the file. #}
                             {% if s.language_source == 'jellyfin' %}
-                                <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
-                            {% elif s.language_source == 'nazev' %}
-                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin, tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
+                                <span class="muted" title="{{ _("The file does not state a language; filled in from Jellyfin.") }}">{{ _("from Jellyfin") }}</span>
+                            {% elif s.language_source == 'name' %}
+                                <span class="muted" title="{{ _("Neither the file nor Jellyfin knows the language, so this is a guess from the file name. The name tells which languages are in the file, not which track is which.") }}">{{ _("guessed from the name") }}</span>
                             {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
@@ -295,7 +299,7 @@
                         <td class="muted truncate">{{ s.title or '' }}</td>
                         <td>
                             {% if s.is_default %}
-                                <span class="badge chosen"><span class="dot"></span>{{ _("výchozí") }}</span>
+                                <span class="badge chosen"><span class="dot"></span>{{ _("default") }}</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -304,19 +308,19 @@
                 </table>
             </div>
             {% else %}
-                <p class="chart-empty">{{ _("Žádné zvukové stopy neznáme.") }}</p>
+                <p class="chart-empty">{{ _("No audio tracks known.") }}</p>
             {% endif %}
         </div>
 
         <div class="card">
             <div class="card-head">
-                <h2>{{ _("Titulky") }}</h2>
+                <h2>{{ _("Subtitles") }}</h2>
                 <p class="card-note">
-                    {{ streams.Subtitle | length }} {{ _("celkem") }}
+                    {{ streams.Subtitle | length }} {{ _("total") }}
                     {% if item.subtitle_from_name %}
-                        &middot; {{ _("podle názvu souboru") }}:
-                        {% for kod in item.subtitle_from_name.split(',') %}
-                            {{ lang.display(kod) }}{% if not loop.last %},{% endif %}
+                        &middot; {{ _("from the file name") }}:
+                        {% for lang_code in item.subtitle_from_name.split(',') %}
+                            {{ lang.display(lang_code) }}{% if not loop.last %},{% endif %}
                         {% endfor %}
                     {% endif %}
                 </p>
@@ -325,8 +329,8 @@
             <div class="table-wrap">
                 <table>
                     <thead>
-                    <tr><th>#</th><th>{{ _("Jazyk") }}</th><th>{{ _("Formát") }}</th>
-                        <th>{{ _("Popis") }}</th><th></th></tr>
+                    <tr><th>#</th><th>{{ _("Language") }}</th><th>{{ _("Format") }}</th>
+                        <th>{{ _("Label") }}</th><th></th></tr>
                     </thead>
                     <tbody>
                     {% for s in streams.Subtitle %}
@@ -335,25 +339,25 @@
                         <td class="strong">
                             {{ lang.display(s.language) }}
                             <span class="muted">{{ s.language | upper }}</span>
-                            {# Soubor jazyk neuvádí a doplnil se z knihovny -
-                               ať je poznat, že to není údaj ze souboru. #}
+                            {# The file does not state the language and it was filled from the library -
+                               so it shows this is not a figure from the file. #}
                             {% if s.language_source == 'jellyfin' %}
-                                <span class="muted" title="{{ _("Soubor jazyk neuvádí, doplněno z Jellyfinu.") }}">{{ _("z Jellyfinu") }}</span>
-                            {% elif s.language_source == 'nazev' %}
-                                <span class="muted" title="{{ _("Jazyk nezná soubor ani Jellyfin, tohle je odhad podle názvu souboru. Které jazyky v souboru jsou, název prozradí; která stopa je která, už ne.") }}">{{ _("odhad z názvu") }}</span>
+                                <span class="muted" title="{{ _("The file does not state a language; filled in from Jellyfin.") }}">{{ _("from Jellyfin") }}</span>
+                            {% elif s.language_source == 'name' %}
+                                <span class="muted" title="{{ _("Neither the file nor Jellyfin knows the language, so this is a guess from the file name. The name tells which languages are in the file, not which track is which.") }}">{{ _("guessed from the name") }}</span>
                             {% endif %}
                         </td>
                         <td>{{ (s.codec or '-') | upper }}</td>
                         <td class="muted truncate">{{ s.title or '' }}</td>
                         <td>
                             {% if s.is_forced %}
-                                <span class="badge warning"><span class="dot"></span>{{ _("vynucené") }}</span>
+                                <span class="badge warning"><span class="dot"></span>{{ _("forced") }}</span>
                             {% endif %}
                             {% if s.is_default %}
-                                <span class="badge chosen"><span class="dot"></span>{{ _("výchozí") }}</span>
+                                <span class="badge chosen"><span class="dot"></span>{{ _("default") }}</span>
                             {% endif %}
                             {% if s.is_external %}
-                                <span class="badge neutral"><span class="dot"></span>{{ _("externí soubor") }}</span>
+                                <span class="badge neutral"><span class="dot"></span>{{ _("external file") }}</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -362,49 +366,49 @@
                 </table>
             </div>
             {% else %}
-                <p class="chart-empty">{{ _("Žádné titulky.") }}</p>
+                <p class="chart-empty">{{ _("No subtitles.") }}</p>
             {% endif %}
         </div>
 
         {# --------------------------------------------------------- #}
-        {# Historie přehrávání této položky                           #}
+        {# The playback history of this item                         #}
         {# --------------------------------------------------------- #}
-        {# Kdo titul sledoval, je o jiných lidech - divákovi se to
-           neukazuje. Jeho vlastní přehrávání najde ve svojí historii. #}
-        {# Kdo to sledoval (jména, zařízení) - podle oblasti knihovna_kdo,
-           u diváka i u čtenáře. Jména skryje anonymizace. #}
-        {% if vidi("knihovna_kdo") %}
+        {# Who watched the title is about other people - a viewer
+           does not see it. Their own playback is in their history. #}
+        {# Who watched it (names, devices) - by the area library_who,
+           for a viewer and a reader alike. Anonymisation hides the names. #}
+        {% if sees("library_who") %}
         <div class="card">
             <div class="card-head">
-                <h2>{{ _("Historie přehrávání") }}</h2>
+                <h2>{{ _("Playback history") }}</h2>
                 <p class="card-note">
                     {{ summary.plays | number }}&times; &middot; {{ summary.hours | hours }}
-                    &middot; {{ summary.users | number }} {{ _("diváků") }}
+                    &middot; {{ _n("{n} viewers", summary.users) }}
                 </p>
             </div>
             {% if playback %}
             <div class="table-wrap">
                 <table>
                     <thead>
-                    <tr><th>{{ _("Kdy") }}</th><th>{{ _("Uživatel") }}</th><th>{{ _("Jazyk") }}</th>
-                        <th>{{ _("Zařízení") }}</th><th>{{ _("Způsob") }}</th>
-                        <th class="num">{{ _("Délka") }}</th></tr>
+                    <tr><th>{{ _("When") }}</th><th>{{ _("User") }}</th><th>{{ _("Language") }}</th>
+                        <th>{{ _("Device") }}</th><th>{{ _("Method") }}</th>
+                        <th class="num">{{ _("Duration") }}</th></tr>
                     </thead>
                     <tbody>
                     {% for row in playback %}
                     <tr>
                         <td class="nowrap muted">{{ row.started_at | datetime }}</td>
                         <td>
-                            {%- call odkaz(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
+                            {%- call link(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}
                         </td>
                         <td>
                             {{ lang.display(row.audio_language) if row.audio_language else '-' }}
                             {% if row.subtitle_language %}
-                                <span class="muted">+ {{ _("titulky") }} {{ row.subtitle_language | upper }}</span>
+                                <span class="muted">+ {{ _("subtitles") }} {{ row.subtitle_language | upper }}</span>
                             {% endif %}
                         </td>
                         <td class="muted">{{ row.device_name or '?' }}</td>
-                        <td>{{ method_badge(row.play_method, transcode_popis(row.prepocet)) }}</td>
+                        <td>{{ method_badge(row.play_method, transcode_description(row.recount)) }}</td>
                         <td class="num">{{ row.watched_seconds | seconds }}</td>
                     </tr>
                     {% endfor %}
@@ -412,7 +416,7 @@
                 </table>
             </div>
             {% else %}
-                <p class="chart-empty">{{ _("Tenhle titul zatím nikdo nepřehrál.") }}</p>
+                <p class="chart-empty">{{ _("Nobody has played this title yet.") }}</p>
             {% endif %}
         </div>
         {% endif %}
@@ -420,21 +424,21 @@
         {% if siblings %}
         <div class="card">
             <div class="card-head">
-                <h2>{{ _("Ostatní epizody") }}</h2>
-                <p class="card-note">{{ siblings | length }} {{ _("v seriálu") }}</p>
+                <h2>{{ _("Other episodes") }}</h2>
+                <p class="card-note">{{ siblings | length }} {{ _("in the series") }}</p>
             </div>
             <div class="table-wrap">
                 <table>
                     <thead><tr>
-                        <th>{{ _("Epizoda") }}</th><th>{{ _("Název") }}</th>
-                        <th class="num">{{ _("Rozlišení") }}</th><th class="num">{{ _("Velikost") }}</th>
+                        <th>{{ _("Episode#alt") }}</th><th>{{ _("Name") }}</th>
+                        <th class="num">{{ _("Resolution") }}</th><th class="num">{{ _("Size") }}</th>
                     </tr></thead>
                     <tbody>
                     {% for s in siblings %}
                     <tr {{ 'style=font-weight:600' if s.id == item.id }}>
                         <td class="nowrap muted">
-                            {% if s | kod_dilu %}
-                                {{ s | kod_dilu }}
+                            {% if s | episode_code %}
+                                {{ s | episode_code }}
                             {% else %}-{% endif %}
                         </td>
                         <td><a href="/item/{{ s.id }}">{{ s.name }}</a></td>

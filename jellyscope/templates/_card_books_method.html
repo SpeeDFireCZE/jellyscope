@@ -1,0 +1,19 @@
+{# The books card "Audiobooks: direct or transcoded": hours of listening by the playback method.
+
+   From the database (cards_books.py, `d` = stats.books_play_method). Only audiobooks: an e-book is a file nobody plays.
+   Direct streaming (only another container of the file) counts as direct. A library of e-books alone has nothing here. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.direct or d.transcoded %}
+        {{ charts.donut_chart([{'label': _('direct#adverb'), 'value': d.direct / 3600},
+                               {'label': _('transcoded'), 'value': d.transcoded / 3600}]) | safe }}
+        {% if d.reasons %}
+        <p class="card-note">{{ _("Why it was transcoded") }}</p>
+        <ul class="flash-list">
+            {% for r in d.reasons[:5] %}<li>{{ r.reason | transcode_reasons }} <span class="muted">({{ r.count | number }}×)</span></li>{% endfor %}
+        </ul>
+        {% endif %}
+    {% else %}<p class="chart-empty">{{ _("No audiobook was listened to in this period.") }}</p>{% endif %}
+</div>

@@ -1,0 +1,28 @@
+{# The Music section of the Library page (web/library_kinds.py, music_library.library_summary;
+   its data is `content_section.data`):
+   every music library together, next to the video statistics above - what the music libraries
+   hold, in what format and quality, of which years and genres, the largest albums. The cards are the library's
+   cards of Music (cards_music.PAGES["library"]), with the same data shape. #}
+{% from "_macros.html" import tile, table_window with context %}
+<div class="section-head" id="music-in-library">
+    <div>
+        <h2>{{ _("Music") }}</h2>
+        <p class="subtitle">{{ _("All music libraries together. Current state, regardless of the period.") }}</p>
+    </div>
+</div>
+<div class="kpi-row">
+    {{ tile(_("Albums#count"), content_section.data.numbers.album_count | number) }}
+    {{ tile(_("Tracks#count"), content_section.data.numbers.track_count | number) }}
+    {{ tile(_("Artists"), content_section.data.numbers.artist_count | number) }}
+    {{ tile(_("Size"), content_section.data.numbers.size_bytes | bytes) }}
+    {{ tile(_("Duration"), content_section.data.numbers.seconds | seconds) }}
+</div>
+<div class="grid-2">
+    {% for key in ("music_formats", "music_quality", "music_years", "music_library_genres", "music_largest") %}
+        {# `card`, `d` and `prefix` are the names the card templates read. #}
+        {% set card = content_section.data.cards[key] %}{% set d = content_section.data.card_data[key] %}{% set prefix = "" %}
+        <!-- card: {{ key }} -->
+        {% include card.template %}
+    {% endfor %}
+</div>
+{{ table_window() }}

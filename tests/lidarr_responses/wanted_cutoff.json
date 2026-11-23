@@ -1,0 +1,27 @@
+{
+ "page": 1,
+ "pageSize": 1,
+ "sortKey": "albums.releaseDate",
+ "sortDirection": "descending",
+ "totalRecords": 2,
+ "records": [
+  {
+   "id": 21,
+   "title": "Silver Lining",
+   "artistId": 2,
+   "foreignAlbumId": "b0000021-0000-4000-8000-000000000000",
+   "monitored": true,
+   "releaseDate": "2020-03-01T00:00:00Z",
+   "artist": {
+    "id": 2,
+    "artistName": "Nightingale Quartet",
+    "foreignArtistId": "a0000002-0000-4000-8000-000000000000"
+   },
+   "statistics": {
+    "trackFileCount": 4,
+    "trackCount": 10,
+    "sizeOnDisk": 0
+   }
+  }
+ ]
+}

@@ -1,0 +1,38 @@
+[
+ {
+  "id": 1,
+  "title": "Game of Thrones",
+  "year": 2011,
+  "tvdbId": 121361,
+  "tmdbId": 1399,
+  "imdbId": "tt0944947",
+  "added": "2026-11-12T20:50:07Z"
+ },
+ {
+  "id": 2,
+  "title": "Chernobyl",
+  "year": 2019,
+  "tvdbId": 360893,
+  "tmdbId": 87108,
+  "imdbId": "tt7366338",
+  "added": "2026-11-12T22:10:35Z"
+ },
+ {
+  "id": 3,
+  "title": "Dark",
+  "year": 2017,
+  "tvdbId": 334824,
+  "tmdbId": 70523,
+  "imdbId": "tt5753856",
+  "added": "2026-11-13T06:28:48Z"
+ },
+ {
+  "id": 4,
+  "title": "The Expanse",
+  "year": 2015,
+  "tvdbId": 280619,
+  "tmdbId": 63639,
+  "imdbId": "tt3230854",
+  "added": "2026-11-13T06:28:48Z"
+ }
+]

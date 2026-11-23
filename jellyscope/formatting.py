@@ -1,9 +1,9 @@
-"""Prevod cisel na text pro cloveka.
+"""Numbers turned into text for people.
 
-"1099511627776" nikomu nic nerekne. "1,0 TB" ano. Vsechny takove prevody
-jsou tady, aby se v sablonach nemusely opakovat a aby vypadaly vsude stejne.
+"1099511627776" tells nobody anything. "1,0 TB" does. All such conversions are
+here, so they need not repeat in the templates and look the same everywhere.
 
-Registruji se jako filtry Jinja2, takze v sablone se pak pise:
+They register as Jinja2 filters, so a template then says:
     {{ item.size_bytes | bytes }}
 """
 
@@ -21,10 +21,10 @@ _UNITS = ["B", "KB", "MB", "GB", "TB", "PB"]
 
 
 def ticks_seconds(value: Any) -> float:
-    """Jellyfinovy "tik" na sekundy. Jeden tik je 100 nanosekund.
+    """Jellyfin's "tick" to seconds. One tick is 100 nanoseconds.
 
-    Prazdna hodnota je nula, ne chyba: delka chybi u polozek, ktere se
-    jeste nesynchronizovaly, a sablona kvuli tomu nema spadnout.
+    An empty value is zero, not an error: the length is missing for items not
+    synchronised yet, and the template must not fail because of it.
     """
     try:
         return float(value or 0) / 10_000_000
@@ -33,7 +33,7 @@ def ticks_seconds(value: Any) -> float:
 
 
 def bytes_human(value: Any) -> str:
-    """Velikost souboru v jednotkach, ktere clovek precte."""
+    """The size of a file in units a person can read."""
     try:
         size = float(value or 0)
     except (TypeError, ValueError):
@@ -46,25 +46,26 @@ def bytes_human(value: Any) -> str:
         size /= 1024
         index += 1
 
-    # Bajty a kilobajty bez desetinneho mista - u nich by neneslo
-    # zadnou informaci.
-    return f"{cislo_v_jednotce(size, celociselne=index <= 1)} {_UNITS[index]}"
+    # Bytes and kilobytes without a decimal place - for them it would carry
+    # no information.
+    return f"{number_in_unit(size, whole=index <= 1)} {_UNITS[index]}"
 
 
-def cislo_v_jednotce(hodnota: float, celociselne: bool = False) -> str:
-    """Cislo velikosti tak, jak se pise: „28,8" nebo „145".
+def number_in_unit(value: float, whole: bool = False) -> str:
+    """The number of a size as it is written: "28,8" or "145".
 
-    Jedno misto pro dlazdice i pro grafy. Kdyz to bylo na dvou, rozeslo
-    se to: graf psal „29 TB" tam, kde dlazdice vedle nej psala „28,8 TB",
-    a byl z toho pulterabajtovy rozdil ve dvou cislech o tomtez.
+    One place for the tiles and the charts. When it was in two, they drifted
+    apart: a chart wrote "29 TB" where the tile next to it wrote "28,8 TB",
+    and that made half a terabyte of difference between two numbers about
+    the same thing.
     """
-    if celociselne or hodnota >= 100:
-        return f"{hodnota:,.0f}".replace(",", " ")
-    return f"{hodnota:.1f}".replace(".", ",")
+    if whole or value >= 100:
+        return f"{value:,.0f}".replace(",", " ")
+    return f"{value:.1f}".replace(".", ",")
 
 
 def hours_human(value: Any) -> str:
-    """Hodiny jako "3 h 42 min" misto "3.7"."""
+    """Hours as "3 h 42 min" instead of "3.7"."""
     try:
         hours = float(value or 0)
     except (TypeError, ValueError):
@@ -82,42 +83,43 @@ def hours_human(value: Any) -> str:
     return f"{whole_hours} h {minutes:02d} min"
 
 
-def hodiny_hhmm(value: Any) -> str:
-    """Hodiny jako "12:24" misto "12 h".
+def hours_hhmm(value: Any) -> str:
+    """Hours as "12:24" instead of "12 h".
 
-    V grafech se hodiny pisou desetinne a nad deset se desetinna mista
-    utinaji, protoze na ose je "40" citelnejsi nez "39,6". U konkretni
-    hodnoty to ale znamena, ze den se 34,52 hodinami hlasi 35 hodin -
-    skoro pulhodina, ktera nikde nebyla. A "34,5 h" nikomu nerekne
-    pulhodinu; hodiny a minuty ano.
+    In the charts, hours are written as decimals, and above ten the decimal
+    places are cut off, because "40" reads better on an axis than "39,6". For
+    a particular value, though, it means a day with 34.52 hours reports 35
+    hours - nearly half an hour that never was. And "34,5 h" says half an
+    hour to nobody; hours and minutes do.
 
-    Zapina se v Nastaveni -> Rozhrani; viz presny_cas().
+    Switched on in Settings -> Interface; see exact_time().
     """
     try:
-        hodin = float(value or 0)
+        hours = float(value or 0)
     except (TypeError, ValueError):
         return "-"
-    if hodin < 0:
-        hodin = 0.0
-    minut = int(round(hodin * 60))
-    return f"{minut // 60}:{minut % 60:02d}"
+    if hours < 0:
+        hours = 0.0
+    minutes = int(round(hours * 60))
+    return f"{minutes // 60}:{minutes % 60:02d}"
 
 
-def presny_cas() -> bool:
-    """Ma se cas v grafech psat na minuty presne?
+def exact_time() -> bool:
+    """Is the time in the charts to be written exact to the minute?
 
-    Vychozi je zaokrouhleni - kulata cisla se v grafu ctou lip a vetsine
-    lidi staci. Kdo potrebuje presnost, prepne si to v nastaveni.
+    Rounding is the default - round numbers read better in a chart, and they
+    are enough for most people. Whoever needs precision switches it in the
+    settings.
     """
-    from .db import get_setting          # az tady, at nevznikne kruh
+    from .db import get_setting          # only here, so there is no cycle
 
     try:
-        return (get_setting("ui_cas_presne", "0") or "0").strip() == "1"
+        return (get_setting("ui_exact_time", "0") or "0").strip() == "1"
     except Exception:                       # noqa: BLE001
-        # Kresleni grafu nesmi zaviset na tom, jestli je databaze po ruce.
-        # Stava se to pri migraci (tabulka nastaveni jeste neexistuje)
-        # a v testech, ktere zkousi jen tvar grafu. Zaokrouhleni je
-        # vychozi stav, takze se nic neztrati.
+        # Drawing a chart must not depend on whether the database is at
+        # hand. That happens during a migration (the settings table does not
+        # exist yet) and in tests that try just the shape of a chart.
+        # Rounding is the default state, so nothing is lost.
         return False
 
 
@@ -130,30 +132,30 @@ def seconds_human(value: Any) -> str:
 
 
 def timecode(value: Any) -> str:
-    """Cas ve tvaru, jaky ukazuje prehravac: 1:17:04, nebo 17:04.
+    """The time in the shape a player shows: 1:17:04, or 17:04.
 
-    Proc ne "1 h 17 min" jako jinde: tohle cislo se porovnava s tim, co ma
-    divak pred sebou na obrazovce. Kdyz tam stoji 00:01:17, musi to samé
-    stat i tady, jinak si to clovek musi prepocitavat.
+    Why not "1 h 17 min" as elsewhere: this number is compared with what the
+    viewer has on the screen in front of them. When it says 00:01:17 there,
+    the same has to stand here too, otherwise one has to recount it.
 
-    Hodiny se vypisuji jen kdyz nejake jsou - "00:17:04" u ctvrthodinoveho
-    dilu jen zabira misto.
+    Hours are printed only when there are some - "00:17:04" for a
+    quarter-hour episode only takes up space.
     """
     try:
-        celkem = int(float(value or 0))
+        total = int(float(value or 0))
     except (TypeError, ValueError):
         return "-"
-    celkem = max(0, celkem)
+    total = max(0, total)
 
-    hodiny, zbytek = divmod(celkem, 3600)
-    minuty, sekundy = divmod(zbytek, 60)
-    if hodiny:
-        return f"{hodiny}:{minuty:02d}:{sekundy:02d}"
-    return f"{minuty}:{sekundy:02d}"
+    hours, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
 
 
 def bitrate_human(value: Any) -> str:
-    """Bitrate v Mb/s - to je jednotka, ve ktere se o kvalite mluvi."""
+    """The bitrate in Mb/s - the unit quality is talked about in."""
     try:
         bits = float(value or 0)
     except (TypeError, ValueError):
@@ -166,15 +168,17 @@ def bitrate_human(value: Any) -> str:
 
 
 def resolution_human(height: Any, width: Any = None) -> str:
-    """Skupina rozliseni z rozmeru obrazu.
+    """The resolution group from the dimensions of the picture.
 
-    Rozhoduje **sirka**, ne vyska. Filmy natocene v sirokoúhlem formatu
-    maji cerne pruhy uz zapecene v obraze, takze 4K film ve formatu 2.40:1
-    ma rozmery 3840x1608 - vyska 1608 je nizsi nez 1080p prahy a podle ni
-    by takovy film vysel jako "1080p". Sirka 3840 je pritom jednoznacna.
+    The **width** decides, not the height. Movies shot in a widescreen format
+    have the black bars baked into the picture, so a 4K movie in 2.40:1 has
+    the dimensions 3840x1608 - the height 1608 is below the 1080p thresholds,
+    and by it such a movie would come out as "1080p". The width 3840 is
+    unambiguous, though.
 
-    Vyska se pouzije jen jako zaloha, kdyz sirku neznáme (starsi zaznamy)
-    - a taky jako pojistka pro obsah, ktery je naopak uzky a vysoky.
+    The height is used only as a fallback when the width is not known (older
+    records) - and also as a safeguard for content that is narrow and tall
+    the other way round.
     """
     try:
         h = int(height or 0)
@@ -194,30 +198,31 @@ def resolution_human(height: Any, width: Any = None) -> str:
     return f"{h}p" if h > 0 else f"{w}x?"
 
 
-# Jak se vnitrni zkratka rozsahu pise cloveku. "DOVI" je nas zapis, ne
-# nazev technologie, a "nezname" byla vylozene programatorska zkratka -
-# oboji se pritom ukazovalo v grafu tak, jak stoji v databazi.
-ROZSAHY = {"SDR": "SDR", "HDR": "HDR", "DOVI": "Dolby Vision"}
+# How the inner shortcut of a range is written for a person. "DOVI" is our
+# notation, not the name of the technology, and "unknown" was an outright
+# programmer's shortcut - and both used to show in the chart as they stand in
+# the database.
+RANGE_LABELS = {"SDR": "SDR", "HDR": "HDR", "DOVI": "Dolby Vision"}
 
 
-def cesky_datum(iso: Any) -> str:
-    """2026-08-01 -> 1.8.2026. Do formulare i do vet o obdobi."""
+def czech_date(iso: Any) -> str:
+    """2026-08-01 -> 1.8.2026. For the form and for sentences about a period."""
     if not iso:
         return ""
     try:
-        den = date.fromisoformat(str(iso)[:10])
+        day = date.fromisoformat(str(iso)[:10])
     except ValueError:
         return ""
-    return f"{den.day}.{den.month}.{den.year}"
+    return f"{day.day}.{day.month}.{day.year}"
 
 
 def video_range_human(value: Any) -> str:
-    """Dynamicky rozsah pro cloveka. Co neznáme, se prizna."""
-    return ROZSAHY.get(str(value or "").strip().upper()) or _t("neznámé")
+    """The dynamic range for a person. What we do not know is admitted."""
+    return RANGE_LABELS.get(str(value or "").strip().upper()) or _t("unknown#neuter")
 
 
 def number(value: Any) -> str:
-    """Cislo s mezerou po tisicich - ceska konvence."""
+    """A number with a space after the thousands - the Czech convention."""
     try:
         return f"{int(value or 0):,}".replace(",", " ")
     except (TypeError, ValueError):
@@ -231,33 +236,34 @@ def percent(value: Any, decimals: int = 0) -> str:
         return "-"
 
 
-def zona():
-    """Casova zona aplikace. `None` znamena "co rika system".
+def zone():
+    """The application's time zone. `None` means "what the system says".
 
-    Jedno misto pro celou aplikaci. Bez nej zalezelo na tom, jakou zonu
-    ma stroj - a kdyz server bezel v UTC a clovek se dival z Prahy,
-    vecerni spicka v grafech "nastavala" o dve hodiny driv, nez ji zazil.
+    One place for the whole application. Without it, it depended on the
+    zone of the machine - and when the server ran in UTC and someone looked
+    from Prague, the evening peak in the charts "came" two hours earlier
+    than they lived it.
 
-    Vraci se `ZoneInfo`, ne posun v hodinach: posun se behem roku meni
-    (letni cas) a ulozeny udaj z brezna se musi prepocitat jinak nez
-    udaj z prosince.
+    A `ZoneInfo` is returned, not an offset in hours: the offset changes
+    during the year (summer time), and a record stored in March has to be
+    converted differently from a record of December.
     """
-    from .db import get_setting          # az tady, at nevznikne kruh
+    from .db import get_setting          # only here, so there is no cycle
 
-    jmeno = (get_setting("app_timezone", "") or "").strip()
-    if not jmeno:
+    name = (get_setting("app_timezone", "") or "").strip()
+    if not name:
         return None
     try:
-        return ZoneInfo(jmeno)
+        return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError):
-        # Nesmyslna zona nesmi shodit vypis casu - radeji systemova.
+        # A nonsense zone must not bring the printing of times down - the system's instead.
         return None
 
 
-def usek(minut: Any) -> str:
-    """Delka useku grafu: "6 h", "45 min", "2 dny"."""
+def step_label(minutes: Any) -> str:
+    """The length of a chart's step: "6 h", "45 min", "2 dny"."""
     try:
-        m = int(minut or 0)
+        m = int(minutes or 0)
     except (TypeError, ValueError):
         return "-"
     if m <= 0:
@@ -265,14 +271,14 @@ def usek(minut: Any) -> str:
     if m < 90:
         return f"{m} min"
     if m < 60 * 36:
-        hodin = round(m / 60)
-        return f"{hodin} h"
-    dnu = round(m / 60 / 24)
-    return f"{dnu} " + (_t("dny") if dnu < 5 else _t("dnů"))
+        hours = round(m / 60)
+        return f"{hours} h"
+    days = round(m / 60 / 24)
+    return plural("{n} days", days)
 
 
 def datetime_human(value: Any) -> str:
-    """Ulozeny cas (UTC) prevedeny na cas aplikace a hezky vypsany."""
+    """A stored time (UTC) converted to the application's time and printed nicely."""
     if not value:
         return "-"
     text = str(value)
@@ -280,68 +286,59 @@ def datetime_human(value: Any) -> str:
     if parsed is None:
         return text
 
-    local = parsed.astimezone(zona())
+    local = parsed.astimezone(zone())
     return local.strftime("%d.%m.%Y %H:%M")
 
 
-def tvar(n: int, jeden: str, par: str, mnoho: str, **dalsi: Any) -> str:
-    """Číslo se správným tvarem slova: „1 člověk", „3 lidé", „5 lidí".
+def plural(key: str, n: Any, /, **values: Any) -> str:
+    """A text with a count in the current language, in the form the number needs.
 
-    Tři samostatné překladové klíče, vybrané podle češtiny (1 / 2-4 /
-    ostatní - i 0 a 22, jak to má CLDR). Angličtina si „lidé" a „lidí"
-    přeloží stejně („people"), španělština taky; jazyk s jinými pravidly
-    by potřeboval vlastní výběr, ale takový zatím nemáme.
-
-    `dalsi` jsou další zástupná místa věty („{misto} a {n} další místa").
+    `key` is the text without the form suffix ("{n} records"), see
+    i18n.translate_plural.
     """
-    if n == 1:
-        klic = jeden
-    elif 2 <= n <= 4:
-        klic = par
-    else:
-        klic = mnoho
-    return _t(klic).format(n=n, **dalsi)
+    from . import i18n
 
+    return i18n.translate_plural(key, n, None, **values)
 
 def relative_human(value: Any) -> str:
-    """"pred 4 minutami" - u aktualnich udaju citelnejsi nez presny cas."""
+    """"4 minutes ago" - for current data more readable than the exact time."""
     parsed = _parse_any(str(value or ""))
     if parsed is None:
         return "-"
 
     delta = datetime.now(UTC) - parsed
     if delta < timedelta(0):
-        return _t("za chvíli")
+        return _t("in a moment")
     seconds = int(delta.total_seconds())
     if seconds < 60:
-        return _t("právě teď")
-    # Predlozka i jednotka jsou soucasti prekladu: anglictina rika
-    # "5 min ago", cestina "před 5 min" - poradi se lisi, takze slozit
-    # to z kousku by nestacilo.
+        return _t("just now")
+    # The preposition and the unit are part of the translation: English says
+    # "5 min ago", Czech "před 5 min" - the order differs, so putting it
+    # together from pieces would not do.
     if seconds < 3600:
-        return _t("před {n} min").format(n=seconds // 60)
+        return _t("{n} min ago").format(n=seconds // 60)
     if seconds < 86400:
-        return _t("před {n} h").format(n=seconds // 3600)
+        return _t("{n} h ago").format(n=seconds // 3600)
     days = seconds // 86400
     if days < 31:
-        return _t("před {n} dny").format(n=days)
+        return plural("{n} days ago", days)
     return datetime_human(value)
 
 
 def _parse_any(text: str) -> datetime | None:
-    """Zkusi precist cas v nekolika formatech.
+    """Tries to read a time in several formats.
 
-    Nas vlastni format je jen jeden, ale Jellyfin posila casy po svem
-    (s T, s Z, s ruznym poctem desetinnych mist), takze musime byt shovivavi.
+    Our own format is just one, but Jellyfin sends times its own way (with a T,
+    with a Z, with a varying number of decimal places), so we have to be lenient.
     """
     if not text:
         return None
 
     candidate = text.strip().replace("Z", "+00:00")
 
-    # Jellyfin posila az 7 desetinnych mist sekundy, Python zvlada nejvyse 6.
-    # Zlomkovou cast proto oreze na sest cislic a zbytek (pripadnou casovou
-    # zonu) necha na miste.
+    # Jellyfin sends up to 7 decimal places of a second, Python handles 6 at most.
+    # So the fractional part is cut to six digits and the rest (a possible time
+    # zone) is left in place.
     match = re.match(r"^(.*?)\.(\d+)(.*)$", candidate)
     if match:
         head, fraction, tail = match.groups()
@@ -355,75 +352,76 @@ def _parse_any(text: str) -> datetime | None:
             parsed = parser(candidate)
         except ValueError:
             continue
-        # Cas bez zony povazujeme za UTC - tak ho ukladame.
+        # A time without a zone is taken for UTC - that is how we store it.
         return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
 
     return None
 
 
-# Proc Jellyfin prepocitava - jeho kody (TranscodeReason) a veta pro cloveka.
+# Why Jellyfin transcodes - its codes (TranscodeReason) and a sentence for a person.
 #
-# Driv se kod vypisoval tak, jak prisel: "VideoCodecNotSupported,
-# AudioCodecNotSupported". V Historii se kvuli chybejici mezere ani
-# nezalomil a v grafu na Zjistenich se usekl na "AudioCodecNotSupp...".
-# Vety jsou kratke a zacinaji malym pismenem, aby se daly radit za sebe
-# ("nepodporovany kodek videa, nepodporovany kodek zvuku"); velke pismeno
-# dostane jen zacatek celeho textu. Kod, ktery tu neni (novejsi Jellyfin),
-# se ukaze, jak prisel - lepsi cizi kod nez prazdne misto.
-DUVODY_PREPOCTU: dict[str, str] = {
-    "ContainerNotSupported": "nepodporovaný kontejner",
-    "VideoCodecNotSupported": "nepodporovaný kodek videa",
-    "AudioCodecNotSupported": "nepodporovaný kodek zvuku",
-    "SubtitleCodecNotSupported": "nepodporovaný formát titulků",
-    "AudioIsExternal": "zvuk v samostatném souboru",
-    "SecondaryAudioNotSupported": "nepodporovaná další zvuková stopa",
-    "VideoProfileNotSupported": "nepodporovaný profil videa",
-    "VideoLevelNotSupported": "nepodporovaná úroveň videa",
-    "VideoResolutionNotSupported": "nepodporované rozlišení",
-    "VideoBitDepthNotSupported": "nepodporovaná bitová hloubka videa",
-    "VideoFramerateNotSupported": "nepodporovaná snímková frekvence",
-    "RefFramesNotSupported": "nepodporovaný počet referenčních snímků",
-    "AnamorphicVideoNotSupported": "nepodporované anamorfní video",
-    "InterlacedVideoNotSupported": "nepodporované prokládané video",
-    "AudioChannelsNotSupported": "nepodporovaný počet zvukových kanálů",
-    "AudioProfileNotSupported": "nepodporovaný profil zvuku",
-    "AudioSampleRateNotSupported": "nepodporovaná vzorkovací frekvence zvuku",
-    "AudioBitDepthNotSupported": "nepodporovaná bitová hloubka zvuku",
-    "ContainerBitrateExceedsLimit": "datový tok nad limitem",
-    "VideoBitrateNotSupported": "příliš vysoký datový tok videa",
-    "AudioBitrateNotSupported": "příliš vysoký datový tok zvuku",
-    "UnknownVideoStreamInfo": "chybí údaje o videu",
-    "UnknownAudioStreamInfo": "chybí údaje o zvuku",
-    "DirectPlayError": "chyba přímého přehrávání",
-    "VideoRangeTypeNotSupported": "nepodporovaný HDR formát",
-    "VideoCodecTagNotSupported": "nepodporovaná značka kodeku videa",
-    "StreamCountExceedsLimit": "příliš mnoho stop v souboru",
+# The code used to be printed as it came: "VideoCodecNotSupported,
+# AudioCodecNotSupported". In History it did not even wrap for the missing
+# space, and in the chart on Insights it was cut to "AudioCodecNotSupp...".
+# The sentences are short and start with a small letter so they can be put
+# one after another ("nepodporovany kodek videa, nepodporovany kodek zvuku");
+# only the start of the whole text gets a capital letter. A code that is not
+# here (a newer Jellyfin) shows as it came - better a foreign code than an
+# empty space.
+TRANSCODE_REASONS: dict[str, str] = {
+    "ContainerNotSupported": "unsupported container",
+    "VideoCodecNotSupported": "unsupported video codec",
+    "AudioCodecNotSupported": "unsupported audio codec",
+    "SubtitleCodecNotSupported": "unsupported subtitle format",
+    "AudioIsExternal": "audio in a separate file",
+    "SecondaryAudioNotSupported": "unsupported additional audio track",
+    "VideoProfileNotSupported": "unsupported video profile",
+    "VideoLevelNotSupported": "unsupported video level",
+    "VideoResolutionNotSupported": "unsupported resolution",
+    "VideoBitDepthNotSupported": "unsupported video bit depth",
+    "VideoFramerateNotSupported": "unsupported frame rate",
+    "RefFramesNotSupported": "unsupported number of reference frames",
+    "AnamorphicVideoNotSupported": "unsupported anamorphic video",
+    "InterlacedVideoNotSupported": "unsupported interlaced video",
+    "AudioChannelsNotSupported": "unsupported number of audio channels",
+    "AudioProfileNotSupported": "unsupported audio profile",
+    "AudioSampleRateNotSupported": "unsupported audio sample rate",
+    "AudioBitDepthNotSupported": "unsupported audio bit depth",
+    "ContainerBitrateExceedsLimit": "bitrate over the limit",
+    "VideoBitrateNotSupported": "video bitrate too high",
+    "AudioBitrateNotSupported": "audio bitrate too high",
+    "UnknownVideoStreamInfo": "missing video details",
+    "UnknownAudioStreamInfo": "missing audio details",
+    "DirectPlayError": "direct play error",
+    "VideoRangeTypeNotSupported": "unsupported HDR format",
+    "VideoCodecTagNotSupported": "unsupported video codec tag",
+    "StreamCountExceedsLimit": "too many streams in the file",
 }
 
 
-def duvody_prepoctu(text: Any) -> str:
-    """Kódy důvodů od Jellyfinu ("A,B" i "A, B") jako věta pro člověka."""
-    kody = [kod.strip() for kod in str(text or "").split(",") if kod.strip()]
-    vety = [_t(DUVODY_PREPOCTU[kod]) if kod in DUVODY_PREPOCTU else kod for kod in kody]
-    vysledek = ", ".join(vety)
-    return vysledek[:1].upper() + vysledek[1:]
+def transcode_reasons_text(text: Any) -> str:
+    """Jellyfin's reason codes ("A,B" and "A, B") as a sentence for a person."""
+    codes = [code.strip() for code in str(text or "").split(",") if code.strip()]
+    sentences = [_t(TRANSCODE_REASONS[code]) if code in TRANSCODE_REASONS else code for code in codes]
+    result = ", ".join(sentences)
+    return result[:1].upper() + result[1:]
 
 
-def kod_dilu(radek: Any) -> str:
-    """„S01E03" z řádku s `parent_index_number` a `index_number`, jinak prázdno.
+def episode_code(row: Any) -> str:
+    """"S01E03" from a row with `parent_index_number` and `index_number`, otherwise empty.
 
-    Na jednom místě, ne v každé šabloně: kopie se ptaly na pravdivost
-    a speciálům (sezóna 0) kód dílu potichu zmizel.
+    In one place, not in every template: the copies asked for truthiness, and
+    the episode code quietly disappeared for specials (season 0).
     """
-    sezona = (radek or {}).get("parent_index_number")
-    dil = (radek or {}).get("index_number")
-    if sezona is None or dil is None:
+    season = (row or {}).get("parent_index_number")
+    episode = (row or {}).get("index_number")
+    if season is None or episode is None:
         return ""
-    return f"S{int(sezona):02d}E{int(dil):02d}"
+    return f"S{int(season):02d}E{int(episode):02d}"
 
 
 def register(env: Any) -> None:
-    """Prida vsechny filtry do prostredi Jinja2."""
+    """Adds every filter to the Jinja2 environment."""
     env.filters.update({
         "bytes": bytes_human,
         "ticks": ticks_seconds,
@@ -434,13 +432,14 @@ def register(env: Any) -> None:
         "resolution": resolution_human,
         "number": number,
         "percent": percent,
-        # Datum tak, jak ho člověk píše do filtru období - ať je to na
-        # stránce jedno datum, ne dva různé zápisy téhož.
-        "cesky_datum": cesky_datum,
+        # The date as a person writes it into the period filter - so it is one
+        # date on the page, not two different notations of the same.
+        "czech_date": czech_date,
         "datetime": datetime_human,
         "relative": relative_human,
-        "usek": usek,
+        "step_label": step_label,
         "video_range": video_range_human,
-        "duvody": duvody_prepoctu,
-        "kod_dilu": kod_dilu,
+        "transcode_reasons": transcode_reasons_text,
+        "episode_code": episode_code,
     })
+    # A number with the right word form ("1 album", "3 alba", "5 alb") - a function, it takes three keys.

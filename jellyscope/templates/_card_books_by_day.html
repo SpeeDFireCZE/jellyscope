@@ -1,0 +1,14 @@
+{# The books card "Reading and listening by day": hours day by day.
+
+   From the database (cards_books.py, `d.body` = stats.chart_days: days without any are in the chart as zero, not as a gap). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("hours of reading and listening") }}</p>
+    </div>
+    {% if d.body %}
+        {{ charts.area_chart_multi(d.body, 'day', [{'key': 'hours', 'label': _('hours'), 'slot': 1}]) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>
+    {% endif %}
+</div>

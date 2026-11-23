@@ -1,9 +1,9 @@
-"""Spouštěč Jellyscope.
+"""The Jellyscope launcher.
 
-Tohle je soubor, který spouštíš:  python run.py
+This is the file you run:  python run.py
 
-Nedělá nic jiného, než že načte konfiguraci, připraví databázi a předá
-řídicí otěž uvicornu — serveru, který naši webovou aplikaci obsluhuje.
+It does nothing else than load the configuration, prepare the database and
+hand the reins to uvicorn — the server that serves our web application.
 """
 
 from __future__ import annotations
@@ -13,18 +13,17 @@ import uvicorn
 from jellyscope.config import load_config
 
 
-def _rezim_poruchy(config, hlaska: str, hlaska_en: str = "") -> int:
-    """Náhradní server, který jen vysvětlí, proč aplikace neběží.
+def _outage_mode(config, error: Exception) -> int:
+    """A substitute server that only explains why the application is not running.
 
-    Odděleně od `main`, aby bylo na první pohled vidět, že se v tomhle
-    režimu nespouští nic dalšího - žádný sběrač, žádné úlohy. Jen
-    stránka.
+    Apart from `main`, so it is plain at first sight that nothing else starts
+    in this mode - no collector, no tasks. Only the page.
     """
-    from jellyscope import porucha
+    from jellyscope import outage
 
-    print(f"Náhradní stránka běží na  http://{config.host}:{config.port}")
-    print("Až bude přístup k databázi v pořádku, aplikaci restartuj.")
-    uvicorn.run(porucha.aplikace(hlaska, hlaska_en), host=config.host, port=config.port,
+    print(f"A stand-in page runs at  http://{config.host}:{config.port}")
+    print("Once the database can be reached again, restart the application.")
+    uvicorn.run(outage.app(error), host=config.host, port=config.port,
                 log_level="warning", use_colors=False)
     return 1
 
@@ -32,91 +31,96 @@ def _rezim_poruchy(config, hlaska: str, hlaska_en: str = "") -> int:
 def main() -> int:
     config = load_config()
 
-    # Databázi připravíme už tady, ne až ve web/start.py. Díky tomu můžeme rovnou
-    # vypsat, v jakém stavu aplikace je - a případná chyba se objeví
-    # v logu při startu, ne až u prvního požadavku.
-    from jellyscope import accounts, db
+    # We prepare the database already here, not only in web/start.py. Thanks
+    # to that we can print right away what state the application is in - and
+    # a possible error shows in the log at the start, not only at the first request.
+    from jellyscope import accounts, applog, db
 
+    # The log file first: this init_db is the one that converts an old database to English names, and
+    # its summary is what README and update.sh send people to the log for. (The web's start calls
+    # setup() again - it keeps the handler it has.)
+    applog.setup()
     try:
         added = db.init_db()
-    except db.DatabaseNedostupna as chyba:
-        # Bez databáze se nedá dělat nic. Skončit ale znamená, že v
-        # kontejneru nezůstane nic než záznam v logu, kam se nikdo dívat
-        # nešel: v prohlížeči je jen "nelze se připojit". Aplikace proto
-        # naběhne a na každou adresu odpoví jednou stránkou, která říká,
-        # co se stalo a co s tím - viz jellyscope/porucha.py.
+    except db.DatabaseUnavailable as error:
+        # Without the database nothing can be done. But ending means that
+        # nothing stays in the container but a record in the log nobody went
+        # to look at: the browser shows only "cannot connect". So the
+        # application starts and answers every address with one page that
+        # says what happened and what to do about it - see jellyscope/outage.py.
         print()
-        print(str(chyba))
+        print(str(error))
         print()
-        return _rezim_poruchy(config, chyba.cesky, chyba.anglicky)
+        return _outage_mode(config, error)
     if added:
-        print(f"Databáze doplněna o sloupce: {', '.join(added)}")
+        print(f"Columns added to the database: {', '.join(added)}")
 
-    # Ukázkový režim v kontejneru: obraz spouští tenhle soubor, ne
-    # demo.py, takže by ukázka nabehla prázdná - a protože se v ní nic
-    # neukládá, nešel by v ní založit ani správce. Data se proto nachystají
-    # tady. Na běžnou instalaci to nesahá: bez JELLYSCOPE_DEMO se nestane
-    # vůbec nic.
-    ukazka = None
+    # The demo mode in a container: the image runs this file, not demo.py, so
+    # the demo would start empty - and because nothing is stored in it, not
+    # even an administrator could be created in it. So the data are prepared
+    # here. It does not touch a regular installation: without JELLYSCOPE_DEMO
+    # nothing happens at all.
+    demo = None
     if config.demo_mode:
         from jellyscope import demodata
 
-        ukazka = demodata.pripravit(tichy=True)
+        demo = demodata.prepare(quiet=True)
 
     database = db.database_config()
     jellyfin_url, jellyfin_key = db.jellyfin_connection()
 
-    # Verze rovnou na prvním řádku: v kontejneru je `docker compose logs`
-    # jediné místo, kde se dá zjistit, jestli běží to, co člověk před
-    # chvílí nakopíroval - obraz se sám od sebe nepřestaví.
+    # The version right on the first line: in a container `docker compose logs`
+    # is the only place where it can be found out whether what a person copied
+    # a moment ago is running - the image does not rebuild by itself.
     from jellyscope import __version__
 
-    print(f"Jellyscope {__version__} startuje na  http://{config.host}:{config.port}")
-    print(f"Databáze:               {database.describe()}")
+    print(f"Jellyscope {__version__} starts at  http://{config.host}:{config.port}")
+    print(f"Database:               {database.describe()}")
 
-    if ukazka is not None:
-        print("Ukázka:                 " + (
-            f"nachystáno {ukazka['items']} titulů, {ukazka['plays']} přehrávání"
-            if ukazka["items"] else "vymyšlená data už v databázi jsou")
-            + " (nic se v ní neuloží)")
+    if demo is not None:
+        print("Demo:                   " + (
+            f"{demo['items']} titles, {demo['plays']} playbacks prepared"
+            if demo["items"] else "the made-up data is in the database already")
+            + " (nothing is stored in it)")
 
-    # Adresa Jellyfinu ani API klíč nejsou v .env - nastavují se v aplikaci
-    # (Nastavení -> Připojení k Jellyfinu). Nevyplněné připojení proto NENÍ
-    # důvod odmítnout start: uživatel se potřebuje dostat do rozhraní,
-    # aby ho mohl vyplnit. Jen na to upozorníme.
+    # Neither Jellyfin's address nor the API key are in .env - they are set in
+    # the application (Settings -> Connection to Jellyfin). An empty connection
+    # is therefore NOT a reason to refuse the start: the user needs to get into
+    # the interface to fill it in. We only point it out.
     if jellyfin_url and jellyfin_key:
         print(f"Jellyfin:               {jellyfin_url}")
     else:
-        print("Jellyfin:               nenastaven "
-              "- vyplň v Nastavení → Připojení k Jellyfinu")
+        print("Jellyfin:               not set "
+              "- fill it in under Settings → Jellyfin")
 
     if accounts.any_exists():
-        print(f"Účty:                   {accounts.count()} (přihlas se svým účtem)")
+        print(f"Accounts:               {accounts.count()} (sign in with yours)")
     else:
-        print("Účty:                   žádné "
-              "- při prvním otevření si založíš správce")
+        print("Accounts:               none "
+              "- the first visit creates the administrator")
 
-    # Za reverzní proxy je potřeba vědět skutečnou adresu klienta a to,
-    # jestli spojení přišlo po HTTPS. Proxy to posílá v hlavičkách
-    # X-Forwarded-*, ale věřit se jim smí jen tehdy, když víme, že přišly
-    # od naší proxy - jinak by si je mohl podvrhnout kdokoliv.
+    # Behind a reverse proxy the real address of the client is needed and
+    # whether the connection came over HTTPS. The proxy sends it in the
+    # X-Forwarded-* headers, but they may be trusted only when we know they
+    # came from our proxy - otherwise anybody could forge them.
     forwarded = config.forwarded_allow_ips
     if forwarded:
-        print(f"Důvěryhodné proxy:      {forwarded}")
+        print(f"Trusted proxies:        {forwarded}")
     if config.secure_cookies:
-        print("Cookies:                jen po HTTPS (SECURE_COOKIES)")
+        print("Cookies:                over HTTPS only (SECURE_COOKIES)")
 
     uvicorn.run(
         "jellyscope.web:app",
         host=config.host,
         port=config.port,
-        # reload=True by se hodilo při vývoji, ale rozbíjí běh sběrače dat
-        # na pozadí (spouští aplikaci dvakrát), takže ho tu necháváme vypnutý.
+        # reload=True would be handy during development, but it breaks the data
+        # collector running in the background (it starts the application
+        # twice), so we leave it off here.
         reload=False,
         log_level="info",
         proxy_headers=bool(forwarded),
         forwarded_allow_ips=forwarded or None,
-        # Bez barevných escape sekvencí - v logu supervisord by jen překážely.
+        # Without colour escape sequences - in supervisord's log they would only get in the way.
         use_colors=False,
     )
     return 0

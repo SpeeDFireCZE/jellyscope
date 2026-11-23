@@ -1,0 +1,445 @@
+[
+ {
+  "indexerUrls": [
+   "http://127.0.0.1:8990"
+  ],
+  "legacyUrls": [],
+  "definitionName": "Newznab",
+  "description": "Newznab is an API search specification for Usenet",
+  "language": "en-US",
+  "encoding": "Unicode (UTF-8)",
+  "enable": true,
+  "redirect": true,
+  "supportsRss": true,
+  "supportsSearch": true,
+  "supportsRedirect": true,
+  "supportsPagination": true,
+  "appProfileId": 1,
+  "protocol": "usenet",
+  "privacy": "private",
+  "priority": 25,
+  "downloadClientId": 0,
+  "added": "2026-11-15T06:32:18Z",
+  "sortName": "arr test",
+  "name": "arr-test",
+  "fields": [
+   {
+    "order": 0,
+    "name": "baseUrl",
+    "label": "Url",
+    "value": "http://127.0.0.1:8990",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 1,
+    "name": "apiPath",
+    "label": "API Path",
+    "helpText": "Path to the api, usually /api",
+    "value": "/api",
+    "type": "textbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 2,
+    "name": "apiKey",
+    "label": "API Key",
+    "helpText": "Site API Key",
+    "value": "TAJNY-KLIC-APLIKACE",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "apiKey",
+    "isFloat": false
+   },
+   {
+    "order": 3,
+    "name": "additionalParameters",
+    "label": "Additional Parameters",
+    "helpText": "Additional Newznab parameters",
+    "type": "textbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 4,
+    "name": "vipExpiration",
+    "label": "VIP Expiration",
+    "helpText": "Enter date (yyyy-mm-dd) for VIP Expiration or blank, Prowlarr will notify 1 week from expiration of VIP",
+    "value": "",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 5,
+    "name": "baseSettings.queryLimit",
+    "label": "Query Limit",
+    "helpText": "The number of max queries as specified by the respective unit that Prowlarr will allow to the site",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 6,
+    "name": "baseSettings.grabLimit",
+    "label": "Grab Limit",
+    "helpText": "The number of max grabs as specified by the respective unit that Prowlarr will allow to the site",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 7,
+    "name": "baseSettings.limitsUnit",
+    "label": "Limits Unit",
+    "helpText": "The unit of time for counting limits per indexer",
+    "value": 0,
+    "type": "select",
+    "advanced": true,
+    "selectOptions": [
+     {
+      "value": 0,
+      "name": "Day",
+      "order": 0,
+      "hint": "(0)"
+     },
+     {
+      "value": 1,
+      "name": "Hour",
+      "order": 1,
+      "hint": "(1)"
+     }
+    ],
+    "privacy": "normal",
+    "isFloat": false
+   }
+  ],
+  "implementationName": "Newznab",
+  "implementation": "Newznab",
+  "configContract": "NewznabSettings",
+  "infoLink": "https://wiki.servarr.com/prowlarr/supported-indexers#newznab",
+  "tags": [],
+  "id": 1
+ },
+ {
+  "indexerUrls": [
+   "http://127.0.0.1:8990"
+  ],
+  "legacyUrls": [],
+  "definitionName": "Torznab",
+  "description": "A Newznab-like api for torrents.",
+  "language": "en-US",
+  "encoding": "Unicode (UTF-8)",
+  "enable": true,
+  "redirect": false,
+  "supportsRss": true,
+  "supportsSearch": true,
+  "supportsRedirect": true,
+  "supportsPagination": true,
+  "appProfileId": 2,
+  "protocol": "torrent",
+  "privacy": "private",
+  "priority": 25,
+  "downloadClientId": 0,
+  "added": "2026-11-15T06:36:32Z",
+  "sortName": "arr test torrent",
+  "name": "arr-test-torrent",
+  "fields": [
+   {
+    "order": 0,
+    "name": "baseUrl",
+    "label": "Url",
+    "value": "http://127.0.0.1:8990",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 1,
+    "name": "apiPath",
+    "label": "API Path",
+    "helpText": "Path to the api, usually /api",
+    "value": "/torznab/api",
+    "type": "textbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 2,
+    "name": "apiKey",
+    "label": "API Key",
+    "helpText": "Site API Key",
+    "value": "TAJNY-KLIC-APLIKACE",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "apiKey",
+    "isFloat": false
+   },
+   {
+    "order": 3,
+    "name": "torrentBaseSettings.appMinimumSeeders",
+    "label": "Apps Minimum Seeders",
+    "helpText": "Minimum seeders required by the Applications for the indexer to grab, empty is Sync profile's default",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 4,
+    "name": "torrentBaseSettings.seedRatio",
+    "label": "Seed Ratio",
+    "helpText": "The ratio a torrent should reach before stopping, empty uses the download client's default. Ratio should be at least 1.0 and follow the indexers rules",
+    "type": "number",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": true
+   },
+   {
+    "order": 5,
+    "name": "torrentBaseSettings.seedTime",
+    "label": "Seed Time",
+    "unit": "minutes",
+    "helpText": "The time a torrent should be seeded before stopping, empty uses the download client's default",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 6,
+    "name": "torrentBaseSettings.packSeedTime",
+    "label": "Pack Seed Time",
+    "unit": "minutes",
+    "helpText": "The time a pack (season or discography) torrent should be seeded before stopping, empty is app's default",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 7,
+    "name": "torrentBaseSettings.preferMagnetUrl",
+    "label": "Prefer Magnet URL",
+    "helpText": "When enabled, this indexer will prefer the use of magnet URLs for grabs with fallback to torrent links",
+    "value": false,
+    "type": "checkbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 8,
+    "name": "additionalParameters",
+    "label": "Additional Parameters",
+    "helpText": "Additional Newznab parameters",
+    "type": "textbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 9,
+    "name": "vipExpiration",
+    "label": "VIP Expiration",
+    "helpText": "Enter date (yyyy-mm-dd) for VIP Expiration or blank, Prowlarr will notify 1 week from expiration of VIP",
+    "value": "",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 10,
+    "name": "baseSettings.queryLimit",
+    "label": "Query Limit",
+    "helpText": "The number of max queries as specified by the respective unit that Prowlarr will allow to the site",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 11,
+    "name": "baseSettings.grabLimit",
+    "label": "Grab Limit",
+    "helpText": "The number of max grabs as specified by the respective unit that Prowlarr will allow to the site",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 12,
+    "name": "baseSettings.limitsUnit",
+    "label": "Limits Unit",
+    "helpText": "The unit of time for counting limits per indexer",
+    "value": 0,
+    "type": "select",
+    "advanced": true,
+    "selectOptions": [
+     {
+      "value": 0,
+      "name": "Day",
+      "order": 0,
+      "hint": "(0)"
+     },
+     {
+      "value": 1,
+      "name": "Hour",
+      "order": 1,
+      "hint": "(1)"
+     }
+    ],
+    "privacy": "normal",
+    "isFloat": false
+   }
+  ],
+  "implementationName": "Torznab",
+  "implementation": "Torznab",
+  "configContract": "TorznabSettings",
+  "infoLink": "https://wiki.servarr.com/prowlarr/supported-indexers#torznab",
+  "tags": [],
+  "id": 3
+ },
+ {
+  "indexerUrls": [
+   "http://127.0.0.1:8992"
+  ],
+  "legacyUrls": [],
+  "definitionName": "Newznab",
+  "description": "Newznab is an API search specification for Usenet",
+  "language": "en-US",
+  "encoding": "Unicode (UTF-8)",
+  "enable": true,
+  "redirect": true,
+  "supportsRss": true,
+  "supportsSearch": true,
+  "supportsRedirect": true,
+  "supportsPagination": true,
+  "appProfileId": 1,
+  "protocol": "usenet",
+  "privacy": "private",
+  "priority": 25,
+  "downloadClientId": 0,
+  "added": "2026-11-15T06:32:44Z",
+  "sortName": "mrtvy indexer",
+  "name": "mrtvy-indexer",
+  "fields": [
+   {
+    "order": 0,
+    "name": "baseUrl",
+    "label": "Url",
+    "value": "http://127.0.0.1:8992",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 1,
+    "name": "apiPath",
+    "label": "API Path",
+    "helpText": "Path to the api, usually /api",
+    "value": "/api",
+    "type": "textbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 2,
+    "name": "apiKey",
+    "label": "API Key",
+    "helpText": "Site API Key",
+    "value": "TAJNY-KLIC-APLIKACE",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "apiKey",
+    "isFloat": false
+   },
+   {
+    "order": 3,
+    "name": "additionalParameters",
+    "label": "Additional Parameters",
+    "helpText": "Additional Newznab parameters",
+    "type": "textbox",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 4,
+    "name": "vipExpiration",
+    "label": "VIP Expiration",
+    "helpText": "Enter date (yyyy-mm-dd) for VIP Expiration or blank, Prowlarr will notify 1 week from expiration of VIP",
+    "value": "",
+    "type": "textbox",
+    "advanced": false,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 5,
+    "name": "baseSettings.queryLimit",
+    "label": "Query Limit",
+    "helpText": "The number of max queries as specified by the respective unit that Prowlarr will allow to the site",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 6,
+    "name": "baseSettings.grabLimit",
+    "label": "Grab Limit",
+    "helpText": "The number of max grabs as specified by the respective unit that Prowlarr will allow to the site",
+    "type": "number",
+    "advanced": true,
+    "privacy": "normal",
+    "isFloat": false
+   },
+   {
+    "order": 7,
+    "name": "baseSettings.limitsUnit",
+    "label": "Limits Unit",
+    "helpText": "The unit of time for counting limits per indexer",
+    "value": 0,
+    "type": "select",
+    "advanced": true,
+    "selectOptions": [
+     {
+      "value": 0,
+      "name": "Day",
+      "order": 0,
+      "hint": "(0)"
+     },
+     {
+      "value": 1,
+      "name": "Hour",
+      "order": 1,
+      "hint": "(1)"
+     }
+    ],
+    "privacy": "normal",
+    "isFloat": false
+   }
+  ],
+  "implementationName": "Newznab",
+  "implementation": "Newznab",
+  "configContract": "NewznabSettings",
+  "infoLink": "https://wiki.servarr.com/prowlarr/supported-indexers#newznab",
+  "tags": [],
+  "id": 2
+ }
+]

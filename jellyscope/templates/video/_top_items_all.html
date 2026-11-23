@@ -1,0 +1,41 @@
+{# The whole ranking of the most watched titles - a table, not a chart.
+
+   It is drawn in a window (a slice) and as a page of its own; both cases
+   use this one template, so the list in the window cannot differ from
+   the one on the page. A row without a link is a title nothing in the library
+   leads to any more. #}
+{% from "_macros.html" import link with context %}
+{% if not top_items %}
+<p class="hint">{{ _("Nothing was played over this period.") }}</p>
+{% else %}
+<p class="card-note" style="margin-top:0">
+    {{ _n("{n} titles", top_items | length) }} &middot;
+    {% if top_kind == 'movies' %}{{ _("films only") }}{% elif top_kind == 'series' %}{{ _("series only") }}{% else %}{{ _("films and series") }}{% endif %}
+    &middot; {{ _("episodes are summed per series") }}
+</p>
+<div class="table-wrap">
+    <table>
+        <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>{{ _("Title") }}</th>
+            <th class="num">{{ _("Watched") }}</th>
+            <th class="num">{{ _("Plays#starts") }}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for t in top_items %}
+        <tr>
+            <td class="num muted">{{ loop.index }}</td>
+            <td class="strong">
+                {% if t.detail_url %}{% call link(t.detail_url) %}{{ t.label }}{% endcall %}{% else %}{{ t.label }}{% endif %}
+                {% if t.is_series %}<span class="muted"> &middot; {{ _("series") }}</span>{% endif %}
+            </td>
+            <td class="num">{{ t.hours | hours }}</td>
+            <td class="num">{{ t.plays | number }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

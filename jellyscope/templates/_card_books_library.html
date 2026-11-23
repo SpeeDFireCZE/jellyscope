@@ -1,0 +1,14 @@
+{# The books card "Books library numbers": what the library holds now.
+
+   From the database (cards_books.py, `d` = stats.books_library_summary), without what vanished from Jellyfin. An
+   audiobook counts as one book however many files it has. The period does not concern the card. A row of tiles
+   without a heading; in a dashboard it carries a small label "Books · …". A library without an audiobook has no length. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("E-books"), d.ebook_count | number) }}
+    {{ tile(_("Audiobooks"), d.audiobook_count | number) }}
+    {{ tile(_("Authors"), d.author_count | number) }}
+    {{ tile(_("Size"), d.size_bytes | bytes) }}
+    {{ tile(_("Audiobook length"), (d.seconds | seconds) if d.seconds else "–") }}
+</div>

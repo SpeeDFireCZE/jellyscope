@@ -1,0 +1,15 @@
+{# A card of the Network page (network.html).
+
+   Included by that page and by dashboards (cards.py, key `network_numbers`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `network_summary (stats.bandwidth_summary)`. #}
+{% from "_macros.html" import tile with context %}
+<div class="kpi-row">
+    {{ tile(_("Peak"), network_summary.peak_mbit ~ " Mbit/s", note=network_summary.peak_at) }}
+    {{ tile(_("Transferred in total"), network_summary.byte_count | bytes,
+            note=_n("{n} playbacks", network_summary.playbacks)) }}
+    {{ tile(_("Of that transcoded#alt"), network_summary.transcode_share | percent,
+            note=network_summary.byte_count_transcode | bytes) }}
+    {{ tile(_("Average bitrate of one stream"), network_summary.average_mbit ~ " Mbit/s") }}
+</div>

@@ -1,0 +1,211 @@
+{# My account - a page about one account, not a smaller Settings.
+
+   Every signed-in person opens it (an admin, a reader and a Jellyfin viewer); it is
+   in the allow list access.ALWAYS. Nothing of the server is here: the language applies
+   only to this account and only one's own password changes - the routes take the account
+   from the session, not from the form. #}
+{% extends "base.html" %}
+{% from "_macros.html" import key_cell %}
+{% block title %}{{ _("My account") }} &middot; Jellyscope{% endblock %}
+{% block content %}
+<div class="page-head">
+    {# The same circle as in the menu's footer, only bigger: a letter, and over it
+       the profile image from Jellyfin if the account has one. #}
+    <div class="account-head">
+        {% set image = account_image() %}
+        <span class="account-avatar account-avatar-large" aria-hidden="true">{{ account.username[:1] | upper }}
+            {%- if image %}<img src="{{ image }}" alt="" data-on-error="remove">{% endif -%}
+        </span>
+        <div>
+        <h1>{{ _("My account") }}</h1>
+        <p class="subtitle">
+            <strong>{{ account.username }}</strong>
+            {% if account.is_admin %}
+                <span class="badge role"><span class="dot"></span>{{ _("administrator") }}</span>
+            {% elif from_jellyfin %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("Jellyfin viewer") }}</span>
+            {% else %}
+                <span class="badge neutral"><span class="dot"></span>{{ _("reader") }}</span>
+            {% endif %}
+        </p>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="max-width:640px">
+    <div class="card-head">
+        <h2>{{ _("Interface language") }}</h2>
+    </div>
+    <form method="post" action="/account/language">
+        <div class="field">
+            <label for="ui_language">{{ _("Language") }}</label>
+            <select id="ui_language" name="ui_language" style="width:auto">
+                {# An empty value = the server's language. Beside it is written which
+                   one it is now - "podle serveru" alone says nothing. #}
+                <option value="" {{ 'selected' if not account_language }}>
+                    {{ _("As the server ({language})").format(language=ui_languages[server_language]) }}
+                </option>
+                {% for code, name in ui_languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == account_language }}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <p class="hint">{{ _("Applies to your account only. The default language for everyone is set by the administrator in Settings → General.") }}</p>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+    </form>
+</div>
+
+{% if ui_events %}
+<div class="card" style="max-width:640px">
+    <div class="card-head">
+        <h2>{{ _("Decoration animations") }}</h2>
+    </div>
+    <form method="post" action="/account/event-motion">
+        <div class="field">
+            <div class="radio-set" style="margin-top:6px">
+                <label class="radio-card">
+                    <input type="radio" name="motion" value="1"
+                           {{ 'checked' if not account or account.events_motion != '0' }}>
+                    <span><span class="title">{{ _("On#neuter") }}</span></span>
+                </label>
+                <label class="radio-card">
+                    <input type="radio" name="motion" value="0"
+                           {{ 'checked' if account and account.events_motion == '0' }}>
+                    <span><span class="title">{{ _("Off#neuter") }}</span></span>
+                </label>
+            </div>
+            <p class="hint">{{ _("The decorations and holiday colours stay, only nothing moves. Applies only to your account.") }}</p>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:640px">
+    <div class="card-head">
+        <h2>{{ _("Password") }}</h2>
+    </div>
+    {% if from_jellyfin %}
+        {# An account from Jellyfin has no password here - it signs in with the one
+           from Jellyfin, and that is changed there. A form would only promise
+           something that cannot be done. #}
+        <p class="card-note">{{ _("You sign in with your Jellyfin account, so you change your password in Jellyfin.") }}</p>
+    {% else %}
+    <form method="post" action="/account/password">
+        <div class="field">
+            <label for="current_password">{{ _("Current password") }}</label>
+            <input type="password" id="current_password" name="current_password"
+                   autocomplete="current-password" required>
+        </div>
+        <div class="field">
+            <label for="new_password">{{ _("New password") }}</label>
+            <input type="password" id="new_password" name="password"
+                   autocomplete="new-password" required>
+            <p class="hint">{{ _("At least 8 characters.") }}</p>
+        </div>
+        <div class="field">
+            <label for="new_password_again">{{ _("New password again") }}</label>
+            <input type="password" id="new_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Change password") }}</button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+{# My dashboard - a page of one's own from chosen statistics. No permission needed, for
+   everybody; the cards follow the account's permissions. An empty one is built from here,
+   one with cards opens from here (and is in the menu too). #}
+<div class="card" id="my-dashboard" style="max-width:640px">
+    <div class="card-head">
+        <div>
+            <h2>{{ _("My overview") }}</h2>
+            <p class="card-note" style="margin:4px 0 0">{{ _("Your own page from the statistics you pick. Only you see it.") }}</p>
+        </div>
+        <a class="btn" href="/account/dashboard">{{ _("Open") if has_my_dashboard() else _("Put together") }}</a>
+    </div>
+</div>
+
+{# Own API keys. The card is only for whoever the admin allowed them -
+   or whoever has a key already: they have to be able to revoke it, even when the
+   permission was taken meanwhile. A key may exactly what the account itself may, hence
+   the window "How to use it" lists only addresses by this account's permissions, not
+   the whole API. A fresh key shows in its key's row (key_cell). #}
+{% if may_have_key or api_keys %}
+<div class="card" id="keys" style="max-width:640px">
+    {# The guide is in a window, the same as in Settings → API - only with the addresses
+       this account's key may use (see _api_guide.html). #}
+    <div class="card-head">
+        <div>
+            <h2>{{ _("API keys") }}</h2>
+            <p class="card-note" style="margin:4px 0 0">{{ _("for Grafana, Homepage and similar tools, read only") }}</p>
+        </div>
+        <button class="btn" type="button" data-modal="modal-api-docs">
+            {{ _("How to use it") }}
+        </button>
+    </div>
+
+    {% if may_have_key %}
+    <form method="post" action="/account/key" class="btn-row" style="margin-bottom:16px">
+        <input type="text" name="name" maxlength="60"
+               placeholder="{{ _('What it is for, e.g. Grafana') }}"
+               style="max-width:280px">
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Make a key") }}</button>
+    </form>
+    {% else %}
+    <p class="card-note">{{ _("The admin has not allowed you a new key. You can revoke the ones you have.") }}</p>
+    {% endif %}
+
+    {% if api_keys %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Name") }}</th>
+                <th>{{ _("Key") }}</th>
+                <th>{{ _("State") }}</th>
+                <th>{{ _("Made") }}</th>
+                <th>{{ _("Last used") }}</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for key_name in api_keys %}
+            <tr>
+                <td class="strong">{{ key_name.display_name }}</td>
+                {{ key_cell(key_name, fresh_key, 12) }}
+                <td class="nowrap">
+                    {% if key_name.status == "disabled" %}
+                    <span class="badge warning" title="{{ _('The admin disabled it. Only the admin can enable it again.') }}"><span class="dot"></span>{{ _("disabled") }}</span>
+                    {% elif not may_have_key %}
+                    <span class="badge warning" title="{{ _('The admin took the permission away. The key works again once it is given back.') }}"><span class="dot"></span>{{ _("not allowed") }}</span>
+                    {% else %}
+                    <span class="badge good"><span class="dot"></span>{{ _("active") }}</span>
+                    {% endif %}
+                </td>
+                <td class="nowrap muted">{{ key_name.created_at | relative }}</td>
+                <td class="nowrap muted">
+                    {{ key_name.last_used_at | relative if key_name.last_used_at else _("never") }}
+                </td>
+                <td>
+                    <form method="post" action="/account/key/revoke"
+                          data-confirm="{{ _("Revoke this key? Whatever tool uses it stops getting data.") }}">
+                        <input type="hidden" name="token_id" value="{{ key_name.id }}">
+                        <button data-keep-scroll class="btn danger" type="submit">{{ _("Revoke") }}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+</div>
+{% include "_api_guide.html" %}
+{% endif %}
+{% endblock %}

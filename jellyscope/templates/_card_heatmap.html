@@ -1,0 +1,16 @@
+{# The card with the key `when_watched`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("When people watch") }}</h2>
+        {# In the light mode the saturation grows towards dark, in the dark mode towards light -
+           in both cases "more hours" stands out more. So the label must not
+           talk about dark, as it wrongly did here. #}
+        <p class="card-note">{{ _("local time, stronger colour = more hours") }}</p>
+    </div>
+    {{ charts.heatmap(heatmap) | safe }}
+</div>

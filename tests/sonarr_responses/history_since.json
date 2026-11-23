@@ -1,0 +1,2964 @@
+[
+ {
+  "episodeId": 56,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T20:50:18Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/got-s01e01-720",
+   "releaseGroup": "NTb",
+   "age": "0",
+   "ageHours": "1.0007416877222222",
+   "ageMinutes": "60.04450153166667",
+   "publishedDate": "2026-11-12T19:50:16Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "2147483648",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=got-s01e01-720",
+   "guid": "http://127.0.0.1:8990/details/got-s01e01-720",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "Rss",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3254641,
+   "episodeFileId": 6,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "Winter Is Coming",
+   "airDate": "2011-04-17",
+   "airDateUtc": "2011-04-18T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:16:38Z",
+   "runtime": 61,
+   "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 56
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 1
+ },
+ {
+  "episodeId": 56,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 8,
+    "name": "WEBDL-480p",
+    "source": "web",
+    "resolution": 480
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T21:03:36Z",
+  "downloadId": "Blackhole_Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb_639301134216419143",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "1",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "NTb",
+   "customFormatScore": "0",
+   "size": "178129",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3254641,
+   "episodeFileId": 6,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "Winter Is Coming",
+   "airDate": "2011-04-17",
+   "airDateUtc": "2011-04-18T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:16:38Z",
+   "runtime": 61,
+   "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 56
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 2
+ },
+ {
+  "episodeId": 56,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T21:05:38Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/got-s01e01-720",
+   "releaseGroup": "NTb",
+   "age": "0",
+   "ageHours": "1.0006405817777777",
+   "ageMinutes": "60.038434943333336",
+   "publishedDate": "2026-11-12T20:05:36Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "2147483648",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=got-s01e01-720",
+   "guid": "http://127.0.0.1:8990/details/got-s01e01-720",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "Rss",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3254641,
+   "episodeFileId": 6,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "Winter Is Coming",
+   "airDate": "2011-04-17",
+   "airDateUtc": "2011-04-18T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:16:38Z",
+   "runtime": 61,
+   "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 56
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 3
+ },
+ {
+  "episodeId": 141,
+  "seriesId": 2,
+  "sourceTitle": "Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:10:37Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/chernobyl.s01e01.720p.web-dl.dd5.1.h.264-ntb",
+   "releaseGroup": "NTb",
+   "age": "0",
+   "ageHours": "1.0006940553055557",
+   "ageMinutes": "60.04164341166667",
+   "publishedDate": "2026-11-12T21:10:35Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "2147483648",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=chernobyl.s01e01.720p.web-dl.dd5.1.h.264-ntb",
+   "guid": "http://127.0.0.1:8990/details/chernobyl.s01e01.720p.web-dl.dd5.1.h.264-ntb",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "Search",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 2,
+   "tvdbId": 7082952,
+   "episodeFileId": 2,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "1:23:45",
+   "airDate": "2019-05-06",
+   "airDateUtc": "2019-05-07T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:10:35Z",
+   "runtime": 59,
+   "overview": "Plant workers and firefighters put their lives on the line to control a catastrophic 1986 explosion at a Soviet nuclear power plant.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 141
+  },
+  "series": {
+   "title": "Chernobyl",
+   "sortTitle": "chernobyl",
+   "status": "ended",
+   "ended": true,
+   "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    }
+   ],
+   "year": 2019,
+   "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 65,
+   "tvdbId": 360893,
+   "tvRageId": 0,
+   "tvMazeId": 30770,
+   "tmdbId": 87108,
+   "firstAired": "2019-05-06T00:00:00Z",
+   "lastAired": "2019-06-03T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "chernobyl",
+   "imdbId": "tt7366338",
+   "titleSlug": "chernobyl",
+   "certification": "TV-MA",
+   "genres": [
+    "Drama",
+    "History",
+    "Mini-Series",
+    "Thriller"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:10:35Z",
+   "ratings": {
+    "votes": 1076329,
+    "value": 9.3
+   },
+   "languageProfileId": 1,
+   "id": 2
+  },
+  "id": 4
+ },
+ {
+  "episodeId": 141,
+  "seriesId": 2,
+  "sourceTitle": "Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:12:06Z",
+  "downloadId": "Blackhole_Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb_639301182403515878",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "2",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/tv/Chernobyl/Season 1/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "NTb",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 2,
+   "tvdbId": 7082952,
+   "episodeFileId": 2,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "1:23:45",
+   "airDate": "2019-05-06",
+   "airDateUtc": "2019-05-07T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:10:35Z",
+   "runtime": 59,
+   "overview": "Plant workers and firefighters put their lives on the line to control a catastrophic 1986 explosion at a Soviet nuclear power plant.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 141
+  },
+  "series": {
+   "title": "Chernobyl",
+   "sortTitle": "chernobyl",
+   "status": "ended",
+   "ended": true,
+   "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    }
+   ],
+   "year": 2019,
+   "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 65,
+   "tvdbId": 360893,
+   "tvRageId": 0,
+   "tvMazeId": 30770,
+   "tmdbId": 87108,
+   "firstAired": "2019-05-06T00:00:00Z",
+   "lastAired": "2019-06-03T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "chernobyl",
+   "imdbId": "tt7366338",
+   "titleSlug": "chernobyl",
+   "certification": "TV-MA",
+   "genres": [
+    "Drama",
+    "History",
+    "Mini-Series",
+    "Thriller"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:10:35Z",
+   "ratings": {
+    "votes": 1076329,
+    "value": 9.3
+   },
+   "languageProfileId": 1,
+   "id": 2
+  },
+  "id": 5
+ },
+ {
+  "episodeId": 58,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:12:12Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/game.of.thrones.s01e03.720p.web-dl.dd5.1.h.264-flux",
+   "releaseGroup": "FLUX",
+   "age": "0",
+   "ageHours": "1.0007042557222223",
+   "ageMinutes": "60.042255403333336",
+   "publishedDate": "2026-11-12T21:12:10Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "2147483648",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e03.720p.web-dl.dd5.1.h.264-flux",
+   "guid": "http://127.0.0.1:8990/details/game.of.thrones.s01e03.720p.web-dl.dd5.1.h.264-flux",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "UserInvokedSearch",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436421,
+   "episodeFileId": 3,
+   "seasonNumber": 1,
+   "episodeNumber": 3,
+   "title": "Lord Snow",
+   "airDate": "2011-05-01",
+   "airDateUtc": "2011-05-02T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:12:10Z",
+   "runtime": 57,
+   "overview": "Jon impresses Tyrion at Castle Black; Ned confronts his past and future at King's Landing; Daenerys finds herself at odds with Viserys.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 3,
+   "unverifiedSceneNumbering": false,
+   "id": 58
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 6
+ },
+ {
+  "episodeId": 58,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:13:36Z",
+  "downloadId": "Blackhole_Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX_639301183355321560",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "3",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "FLUX",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436421,
+   "episodeFileId": 3,
+   "seasonNumber": 1,
+   "episodeNumber": 3,
+   "title": "Lord Snow",
+   "airDate": "2011-05-01",
+   "airDateUtc": "2011-05-02T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:12:10Z",
+   "runtime": 57,
+   "overview": "Jon impresses Tyrion at Castle Black; Ned confronts his past and future at King's Landing; Daenerys finds herself at odds with Viserys.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 3,
+   "unverifiedSceneNumbering": false,
+   "id": 58
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 7
+ },
+ {
+  "episodeId": 59,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:13:42Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/game.of.thrones.s01e04.720p.web-dl.dd5.1.h.264-ntb",
+   "releaseGroup": "NTb",
+   "age": "0",
+   "ageHours": "1.0007692089722222",
+   "ageMinutes": "60.046152598333336",
+   "publishedDate": "2026-11-12T21:13:40Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "2147483648",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e04.720p.web-dl.dd5.1.h.264-ntb",
+   "guid": "http://127.0.0.1:8990/details/game.of.thrones.s01e04.720p.web-dl.dd5.1.h.264-ntb",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "InteractiveSearch",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436431,
+   "episodeFileId": 4,
+   "seasonNumber": 1,
+   "episodeNumber": 4,
+   "title": "Cripples, Bastards, and Broken Things",
+   "airDate": "2011-05-08",
+   "airDateUtc": "2011-05-09T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:13:40Z",
+   "runtime": 55,
+   "overview": "Ned probes Arryn's death; Jon takes measures to protect Sam; Tyrion is caught in the wrong place.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 4,
+   "unverifiedSceneNumbering": false,
+   "id": 59
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 8
+ },
+ {
+  "episodeId": 59,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:15:07Z",
+  "downloadId": "Blackhole_Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb_639301184227825919",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "4",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "NTb",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436431,
+   "episodeFileId": 4,
+   "seasonNumber": 1,
+   "episodeNumber": 4,
+   "title": "Cripples, Bastards, and Broken Things",
+   "airDate": "2011-05-08",
+   "airDateUtc": "2011-05-09T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:13:40Z",
+   "runtime": 55,
+   "overview": "Ned probes Arryn's death; Jon takes measures to protect Sam; Tyrion is caught in the wrong place.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 4,
+   "unverifiedSceneNumbering": false,
+   "id": 59
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 9
+ },
+ {
+  "episodeId": 60,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:15:08Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "CAKES",
+   "age": "0",
+   "ageHours": "0.0002791570555555556",
+   "ageMinutes": "0.016749466666666667",
+   "publishedDate": "2026-11-12T22:15:07Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e05.720p.web-dl.dd5.1.h.264-cakes",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e05.720p.web-dl.dd5.1.h.264-cakes",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436441,
+   "episodeFileId": 5,
+   "seasonNumber": 1,
+   "episodeNumber": 5,
+   "title": "The Wolf and the Lion",
+   "airDate": "2011-05-15",
+   "airDateUtc": "2011-05-16T01:00:00Z",
+   "runtime": 54,
+   "overview": "Ned refuses an order from the King; Tyrion escapes one perilous encounter, only to find himself in another.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 5,
+   "unverifiedSceneNumbering": false,
+   "id": 60
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 10
+ },
+ {
+  "episodeId": 60,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:16:37Z",
+  "downloadId": "Blackhole_Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES_639301185080169932",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "5",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "CAKES",
+   "customFormatScore": "0",
+   "size": "203381",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436441,
+   "episodeFileId": 5,
+   "seasonNumber": 1,
+   "episodeNumber": 5,
+   "title": "The Wolf and the Lion",
+   "airDate": "2011-05-15",
+   "airDateUtc": "2011-05-16T01:00:00Z",
+   "runtime": 54,
+   "overview": "Ned refuses an order from the King; Tyrion escapes one perilous encounter, only to find himself in another.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 5,
+   "unverifiedSceneNumbering": false,
+   "id": 60
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 11
+ },
+ {
+  "episodeId": 56,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "web",
+    "resolution": 1080
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:16:40Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": "arr-test",
+   "nzbInfoUrl": "http://127.0.0.1:8990/details/game.of.thrones.s01e01.1080p.web-dl.dd5.1.h.264-flux",
+   "releaseGroup": "FLUX",
+   "age": "0",
+   "ageHours": "1.0006369213888888",
+   "ageMinutes": "60.038215351666665",
+   "publishedDate": "2026-11-12T21:16:38Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "4294967296",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e01.1080p.web-dl.dd5.1.h.264-flux",
+   "guid": "http://127.0.0.1:8990/details/game.of.thrones.s01e01.1080p.web-dl.dd5.1.h.264-flux",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "InteractiveSearch",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3254641,
+   "episodeFileId": 6,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "Winter Is Coming",
+   "airDate": "2011-04-17",
+   "airDateUtc": "2011-04-18T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:16:38Z",
+   "runtime": 61,
+   "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 56
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 12
+ },
+ {
+  "episodeId": 56,
+  "seriesId": 1,
+  "sourceTitle": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 8,
+    "name": "WEBDL-480p",
+    "source": "web",
+    "resolution": 480
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:18:07Z",
+  "eventType": "episodeFileDeleted",
+  "data": {
+   "reason": "Upgrade",
+   "releaseGroup": "NTb",
+   "size": "178129",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3254641,
+   "episodeFileId": 6,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "Winter Is Coming",
+   "airDate": "2011-04-17",
+   "airDateUtc": "2011-04-18T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:16:38Z",
+   "runtime": 61,
+   "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 56
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 13
+ },
+ {
+  "episodeId": 56,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 3,
+    "name": "WEBDL-1080p",
+    "source": "web",
+    "resolution": 1080
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:18:07Z",
+  "downloadId": "Blackhole_Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX_639301186003123958",
+  "eventType": "downloadFolderImported",
+  "data": {
+   "fileId": "6",
+   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "releaseGroup": "FLUX",
+   "customFormatScore": "0",
+   "size": "230822",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3254641,
+   "episodeFileId": 6,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "Winter Is Coming",
+   "airDate": "2011-04-17",
+   "airDateUtc": "2011-04-18T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:16:38Z",
+   "runtime": 61,
+   "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 56
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 14
+ },
+ {
+  "episodeId": 57,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E02.720p.WEB-DL.DD5.1.H.264-BROKEN",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:18:10Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "BROKEN",
+   "age": "0",
+   "ageHours": "0.00018574141666666667",
+   "ageMinutes": "0.011144533333333333",
+   "publishedDate": "2026-11-12T22:18:10Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e02.720p.web-dl.dd5.1.h.264-broken",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e02.720p.web-dl.dd5.1.h.264-broken",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436411,
+   "episodeFileId": 0,
+   "seasonNumber": 1,
+   "episodeNumber": 2,
+   "title": "The Kingsroad",
+   "airDate": "2011-04-24",
+   "airDateUtc": "2011-04-25T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:18:10Z",
+   "runtime": 55,
+   "overview": "The Lannisters plot to ensure Bran's silence; Jon and Tyrion head to the Wall; Ned faces a family crisis en route to King's Landing.",
+   "hasFile": false,
+   "monitored": true,
+   "absoluteEpisodeNumber": 2,
+   "unverifiedSceneNumbering": false,
+   "id": 57
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 15
+ },
+ {
+  "episodeId": 57,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E02.720p.WEB-DL.DD5.1.H.264-BROKEN",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:18:10Z",
+  "eventType": "downloadFailed",
+  "data": {
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": null,
+   "message": "Manually marked as failed",
+   "releaseGroup": null,
+   "size": null
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436411,
+   "episodeFileId": 0,
+   "seasonNumber": 1,
+   "episodeNumber": 2,
+   "title": "The Kingsroad",
+   "airDate": "2011-04-24",
+   "airDateUtc": "2011-04-25T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:18:10Z",
+   "runtime": 55,
+   "overview": "The Lannisters plot to ensure Bran's silence; Jon and Tyrion head to the Wall; Ned faces a family crisis en route to King's Landing.",
+   "hasFile": false,
+   "monitored": true,
+   "absoluteEpisodeNumber": 2,
+   "unverifiedSceneNumbering": false,
+   "id": 57
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 16
+ },
+ {
+  "episodeId": 61,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E06.720p.WEB-DL.DD5.1.H.264-PENDING",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:33Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "PENDING",
+   "age": "0",
+   "ageHours": "0.00024380238888888889",
+   "ageMinutes": "0.014628188333333333",
+   "publishedDate": "2026-11-12T22:32:33Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e06.720p.web-dl.dd5.1.h.264-pending",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e06.720p.web-dl.dd5.1.h.264-pending",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436451,
+   "episodeFileId": 0,
+   "seasonNumber": 1,
+   "episodeNumber": 6,
+   "title": "A Golden Crown",
+   "airDate": "2011-05-22",
+   "airDateUtc": "2011-05-23T01:00:00Z",
+   "runtime": 52,
+   "overview": "Ned makes a controversial decree; Tyrion confesses to his 'crimes'; Viserys receives final payment for Daenerys.",
+   "hasFile": false,
+   "monitored": true,
+   "absoluteEpisodeNumber": 6,
+   "unverifiedSceneNumbering": false,
+   "id": 61
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 17
+ },
+ {
+  "episodeId": 62,
+  "seriesId": 1,
+  "sourceTitle": "Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+  "languages": [
+   {
+    "id": 1,
+    "name": "English"
+   }
+  ],
+  "quality": {
+   "quality": {
+    "id": 5,
+    "name": "WEBDL-720p",
+    "source": "web",
+    "resolution": 720
+   },
+   "revision": {
+    "version": 1,
+    "real": 0,
+    "isRepack": false
+   }
+  },
+  "customFormats": [],
+  "customFormatScore": 0,
+  "qualityCutoffNotMet": true,
+  "date": "2026-11-12T22:32:35Z",
+  "eventType": "grabbed",
+  "data": {
+   "indexer": null,
+   "nzbInfoUrl": null,
+   "releaseGroup": "NOAUDIO",
+   "age": "0",
+   "ageHours": "0.0007991106388888889",
+   "ageMinutes": "0.04794668",
+   "publishedDate": "2026-11-12T22:32:33Z",
+   "downloadClient": "Usenet Blackhole",
+   "downloadClientName": "Blackhole",
+   "size": "0",
+   "downloadUrl": "http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e07.720p.web-dl.dd5.1.h.264-noaudio",
+   "guid": "PUSH-http://127.0.0.1:8990/api?t=get&id=game.of.thrones.s01e07.720p.web-dl.dd5.1.h.264-noaudio",
+   "tvdbId": "0",
+   "tvRageId": "0",
+   "imdbId": null,
+   "protocol": "1",
+   "customFormatScore": "0",
+   "seriesMatchType": "Title",
+   "releaseSource": "ReleasePush",
+   "indexerFlags": "0",
+   "releaseType": "SingleEpisode"
+  },
+  "episode": {
+   "seriesId": 1,
+   "tvdbId": 3436461,
+   "episodeFileId": 0,
+   "seasonNumber": 1,
+   "episodeNumber": 7,
+   "title": "You Win or You Die",
+   "airDate": "2011-05-29",
+   "airDateUtc": "2011-05-30T01:00:00Z",
+   "runtime": 57,
+   "overview": "Ned confronts Cersei about her secrets; Jon takes his Night's Watch vows; Drogo promises to lead the Dothraki to King's Landing.",
+   "hasFile": false,
+   "monitored": true,
+   "absoluteEpisodeNumber": 7,
+   "unverifiedSceneNumbering": false,
+   "id": 62
+  },
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 18
+ }
+]

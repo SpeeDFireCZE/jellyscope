@@ -1,0 +1,97 @@
+{
+ "page": 1,
+ "pageSize": 1,
+ "sortKey": "movieMetadata.sortTitle",
+ "sortDirection": "descending",
+ "totalRecords": 4,
+ "records": [
+  {
+   "title": "Tears of Steel",
+   "originalTitle": "Tears of Steel",
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "alternateTitles": [],
+   "secondaryYearSourceId": 0,
+   "sortTitle": "tears of steel",
+   "sizeOnDisk": 203381,
+   "status": "released",
+   "overview": "The film’s premise is about a group of warriors and scientists, who gathered at the “Oude Kerk” in Amsterdam to stage a crucial event from the past, in a desperate attempt to rescue the world from destructive robots.",
+   "inCinemas": "2012-09-25T00:00:00Z",
+   "releaseDate": "2012-12-24T00:00:00Z",
+   "images": [
+    {
+     "coverType": "poster",
+     "url": "/MediaCover/3/poster.jpg?h=f30e98b6b1e1da96d5da",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/8qy3jRmaHR7f8VZh3iXCqCWfFsH.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "url": "/MediaCover/3/fanart.jpg?h=08a2a34912aa346bf0ca",
+     "remoteUrl": "https://image.tmdb.org/t/p/original/fOy6SL5Zs2PFcNXwqEPIDPrLB1q.jpg"
+    }
+   ],
+   "website": "http://www.tearsofsteel.org/",
+   "year": 2012,
+   "youTubeTrailerId": "",
+   "studio": "Blender Foundation",
+   "path": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+   "qualityProfileId": 1,
+   "hasFile": true,
+   "movieFileId": 4,
+   "monitored": true,
+   "minimumAvailability": "released",
+   "isAvailable": true,
+   "folderName": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+   "runtime": 12,
+   "cleanTitle": "tearssteel",
+   "imdbId": "tt2285752",
+   "tmdbId": 133701,
+   "titleSlug": "133701",
+   "genres": [
+    "Science Fiction",
+    "Animation"
+   ],
+   "keywords": [
+    "amsterdam, netherlands",
+    "fictional war",
+    "killer robot",
+    "man vs machine",
+    "saving the world"
+   ],
+   "tags": [],
+   "added": "2026-11-12T22:10:34Z",
+   "ratings": {
+    "imdb": {
+     "votes": 1572,
+     "value": 5.5,
+     "type": "user"
+    },
+    "tmdb": {
+     "votes": 63,
+     "value": 5.659,
+     "type": "user"
+    }
+   },
+   "popularity": 1.9987,
+   "statistics": {
+    "movieFileCount": 1,
+    "sizeOnDisk": 203381,
+    "releaseGroups": [
+     "CAKES"
+    ],
+    "movieFileQualities": [
+     {
+      "id": 5,
+      "name": "WEBDL-720p",
+      "source": "webdl",
+      "resolution": 720,
+      "modifier": "none"
+     }
+    ]
+   },
+   "id": 3
+  }
+ ]
+}

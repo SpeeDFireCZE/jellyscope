@@ -1,0 +1,138 @@
+{# An album in the Library (web/album.py), built like a series: cover and artist,
+   tiles, "About the album" next to the cover, then the tracks by disc. Numbers are
+   over the whole history - the page is about the album, not a period (the artist's
+   page in Music has statistics of a period).
+
+   Data: stats.music_library.album_detail. Every track row has the anchor
+   #track-<id> - links to a track lead there (a track has no page) and the row
+   they point to is highlighted. A track that vanished from Jellyfin stays with a
+   note; size and length count only the present ones. #}
+{% extends "base.html" %}
+{% from "_macros.html" import tile, poster, link, table_window, row_class, whole_table_button with context %}
+{% block title %}{{ d.album.name }} · Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="subtitle" style="margin-bottom:2px">
+            {% if library %}{% call link("/library/" ~ library.id ~ "?tab=albums") %}&larr; {{ library.name }}{% endcall %}
+            {% else %}{% call link("/library") %}&larr; {{ _("Library") }}{% endcall %}{% endif %}
+        </p>
+        <h1>{{ d.album.name or "–" }}</h1>
+        <p class="subtitle">
+            {% if artist_link %}{% call link(artist_link) %}{{ d.album.artist }}{% endcall %}{% else %}{{ d.album.artist or _("unknown artist") }}{% endif %}
+            {% if d.album.year %} &middot; {{ d.album.year }}{% endif %}
+        </p>
+    </div>
+</div>
+
+{% if d.album.missing %}
+<div class="flash warning"><span class="dot"></span>
+    <span>{{ _("No longer in Jellyfin. The listening stays in the history and in the statistics.") }}</span></div>
+{% endif %}
+
+<div class="kpi-row">
+    {# Only tracks that are in Jellyfin - like length and size; a vanished one stays in the list with a note. #}
+    {{ tile(_("Tracks#count"), d.tracks | rejectattr("missing") | list | length | number) }}
+    {{ tile(_("Discs"), d.discs | length | number) }}
+    {{ tile(_("Duration"), d.seconds | seconds) }}
+    {{ tile(_("Size"), d.size | bytes) }}
+    {{ tile(_("Plays"), d.plays | number) }}
+</div>
+
+<div class="item-layout" style="margin-bottom:18px">
+    <div>
+        {{ poster(cover, "poster-frame album-cover detail-cover", placeholder=_("No cover")) }}
+    </div>
+    <div class="card" style="margin-bottom:0">
+        <div class="card-head"><h2>{{ _("About the album") }}</h2></div>
+        {# break-anywhere: a name without spaces (an artist, a library, a genre) breaks anywhere
+           instead of pushing the card wider than the screen. #}
+        <div class="table-wrap">
+            <table class="facts break-anywhere">
+                <tbody>
+                <tr><th>{{ _("Library") }}</th>
+                    <td>{% if library %}{% call link("/library/" ~ library.id ~ "?tab=albums") %}{{ library.name }}{% endcall %}{% else %}{{ d.album.library_name or "–" }}{% endif %}</td></tr>
+                <tr><th>{{ _("Artist") }}</th>
+                    <td>{% if artist_link %}{% call link(artist_link) %}{{ d.album.artist }}{% endcall %}{% else %}{{ d.album.artist or "–" }}{% endif %}</td></tr>
+                <tr><th>{{ _("Year") }}</th><td>{{ d.album.year or "–" }}</td></tr>
+                <tr><th>{{ _("Genres") }}</th><td>{{ genre_list | join(", ") if genre_list else "–" }}</td></tr>
+                <tr><th>{{ _("Formats") }}</th><td>{{ d.formats | join(", ") if d.formats else "–" }}</td></tr>
+                <tr><th>{{ _("Added") }}</th><td>{{ d.album.added_at | datetime if d.album.added_at else "–" }}</td></tr>
+                <tr><th>{{ _("Synced") }}</th><td>{{ d.album.synced_at | relative if d.album.synced_at else "–" }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% for disk in d.discs %}
+<div class="card">
+    <div class="card-head">
+        <h2>{% if several_discs %}{{ _("Disc {n}").format(n=disk.number) }}{% else %}{{ _("Tracks") }}{% endif %}</h2>
+        <p class="card-note">{{ _("plays over the whole history") }}</p>
+    </div>
+    <div class="table-wrap wrapper-by-width"><table class="table-dense album-tracks">
+        <thead><tr>
+            <th class="num">#</th>
+            <th>{{ _("Track") }}</th>
+            <th class="wide-wrapper-only">{{ _("Format") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Bitrate") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Sample rate") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Duration") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Size") }}</th>
+            <th class="num">{{ _("Plays") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for s in disk.tracks %}
+            <tr id="track-{{ s.id }}"{% if s.missing %} class="muted"{% endif %}>
+                <td class="num muted">{{ s.track_number or "–" }}</td>
+                <td class="break-anywhere"><span class="strong">{{ s.name or "–" }}</span>
+                    {% if s.artist and s.artist != d.album.artist %}<div class="cell-sub">{% call link("/music/artist/" ~ s.artist_id if s.artist_id else "") %}{{ s.artist }}{% endcall %}</div>{% endif %}
+                    {% if s.missing %}<div class="cell-sub">{{ _("no longer in Jellyfin") }}</div>{% endif %}
+                    <div class="narrow-wrapper-only cell-sub">{{ s.format or "–" }} &middot; {{ s.bitrate | bitrate }} &middot; {{ s.runtime_ticks | ticks | timecode }} &middot; {{ s.size_bytes | bytes }}</div></td>
+                <td class="wide-wrapper-only">{{ s.format or "–" }}</td>
+                <td class="num wide-wrapper-only">{{ s.bitrate | bitrate }}</td>
+                <td class="num wide-wrapper-only">{% if s.sample_rate %}{{ s.sample_rate | number }} Hz{% if s.bit_depth %} / {{ s.bit_depth }} bit{% endif %}{% else %}–{% endif %}</td>
+                <td class="num wide-wrapper-only">{{ s.runtime_ticks | ticks | timecode }}</td>
+                <td class="num wide-wrapper-only">{{ s.size_bytes | bytes }}</td>
+                <td class="num strong">{{ s.plays | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% else %}
+<div class="card"><p class="chart-empty">{{ _("The album has no track in the library.") }}</p></div>
+{% endfor %}
+
+{# Who listened, over the whole history - only with "...including who listened" (the route
+   sends no names otherwise). Names are guarded by anonymisation; a viewer is a link only for
+   whoever may open their page (the link macro). #}
+{% if d.listeners is not none %}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Who listened") }}</h2><p class="card-note">{{ _("over the whole history") }}</p></div>
+    {% if d.listeners %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Listener") }}</th>
+            <th class="num">{{ _("Listening") }}</th>
+            <th class="num">{{ _("Plays") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for p in d.listeners %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{% call link("/users/" ~ p.user_id if p.user_id else "") %}{{ p.user_name or "–" }}{% endcall %}</td>
+                <td class="num strong">{{ p.seconds | seconds }}</td>
+                <td class="num">{{ p.plays | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.listeners | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("Nobody has listened to it yet.") }}</p>{% endif %}
+</div>
+{% endif %}
+
+{{ table_window() }}
+{% endblock %}

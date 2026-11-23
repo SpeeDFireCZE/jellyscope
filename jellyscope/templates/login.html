@@ -1,123 +1,123 @@
-{%- from "_macros.html" import hlava -%}
+{%- from "_macros.html" import head -%}
 <!doctype html>
-{#- Sezónní výzdoba (viz udalosti.py); bez účtu se vždy hýbe. -#}
-{%- set svatek = udalost() %}
+{#- Seasonal decoration (see seasonal.py); without an account it always moves. -#}
+{%- set holiday = seasonal_event() %}
 <html lang="{{ ui_language | default('cs') }}"
-      {%- if svatek %} data-udalost="{{ svatek }}" data-udalost-pohyb="1"{% endif %}>
+      {%- if holiday %} data-event="{{ holiday }}" data-event-motion="1"{% endif %}>
 <head>
-    {{ hlava(_("Přihlásit")) }}
-    {% include "_udalost_hlava.html" %}
+    {{ head(_("Sign in")) }}
+    {% include "_event_head.html" %}
 </head>
 <body>
 <div class="login-page">
     <form class="login-box" method="post" action="/login">
         <div class="brand" style="margin-bottom:20px; padding:0">
-            {% include "_znacka.html" %}
-            {%- if svatek %}{% include "_udalost_hra.html" %}{% endif %}
+            {% include "_brand.html" %}
+            {%- if holiday %}{% include "_event_game.html" %}{% endif %}
         </div>
 
         {% if error %}
             <div class="flash error"><span class="dot"></span><span>{{ error }}</span></div>
         {% endif %}
 
-        {# V ukázce nemá smysl schovávat heslo - je to jediná cesta dovnitř
-           a nic za ním není. Na vlastní instalaci se tenhle blok nikdy
-           neukáže. #}
+        {# In the demo there is no point hiding the password - it is the only way in
+           and there is nothing behind it. On a real installation this block never
+           shows. #}
         {% if demo_mode %}
             <div class="flash info" style="margin-bottom:14px">
                 <span class="dot"></span>
                 <span>
-                    <strong>{{ _("Ukázka") }}</strong> &ndash;
-                    {{ _("přihlas se jako") }} <code>demo</code> / <code>demodemo</code>.<br>
-                    {{ _("Data jsou vymyšlená a nic se v nich nemění.") }}
+                    <strong>{{ _("Demo") }}</strong> &ndash;
+                    {{ _("sign in as") }} <code>demo</code> / <code>demodemo</code>.<br>
+                    {{ _("The data is made up and nothing in it changes.") }}
                 </span>
             </div>
         {% endif %}
 
         <div class="field" style="margin-bottom:14px">
-            <label for="username">{{ _("Uživatelské jméno") }}</label>
-            {# autocomplete pomáhá správcům hesel správně vyplnit přihlášení #}
+            <label for="username">{{ _("Username") }}</label>
+            {# autocomplete helps password managers fill in the sign-in right #}
             <input type="text" id="username" name="username" value="{{ username or '' }}"
                    autocomplete="username" autofocus required>
         </div>
 
         <div class="field" style="margin-bottom:18px">
-            <label for="password">{{ _("Heslo") }}</label>
+            <label for="password">{{ _("Password") }}</label>
             <input type="password" id="password" name="password"
                    autocomplete="current-password" required>
 
-            {# Odkaz pod polem, zarovnaný doprava - tak, jak to lidé znají
-               odjinud a kde ho hledají. #}
+            {# A link under the field, aligned right - the way people know it
+               from elsewhere and where they look for it. #}
             <div class="forgot-row">
                 <button type="button" class="link-button"
-                        data-otevrit-okno="forgotDialog">
-                    {{ _("Zapomenuté heslo?") }}
+                        data-open-modal="forgotDialog">
+                    {{ _("Forgot password?") }}
                 </button>
             </div>
         </div>
 
-        {# Dvě tlačítka, ne jedno chytré: člověk ví, jaké heslo píše, a
-           aplikace se pak nemusí ptát dvou serverů. Heslo k místnímu účtu
-           tím pádem nikdy neodejde do Jellyfinu a naopak.
+        {# Two buttons, not one clever one: a person knows which password they type, and
+           the app then need not ask two servers. The password of a local account
+           thus never goes to Jellyfin and the other way round.
 
-           Jellyfinové tlačítko se objeví, teprve když správce přihlašování
-           jellyfinovými účty zapne - jinak by nabízelo cestu, která
-           stejně skončí odmítnutím. #}
-        <button class="btn primary" type="submit" name="zpusob" value="mistni"
+           The Jellyfin button appears only when the admin switches on sign-in
+           with Jellyfin accounts - otherwise it would offer a way that
+           ends in a refusal anyway. #}
+        <button class="btn primary" type="submit" name="method" value="local"
                 style="width:100%; justify-content:center">
-            {{ _("Přihlásit") }}
+            {{ _("Sign in") }}
         </button>
 
         {% if jellyfin_login %}
-        <div class="login-nebo"><span>{{ _("nebo") }}</span></div>
-        <button class="btn" type="submit" name="zpusob" value="jellyfin"
+        <div class="login-or"><span>{{ _("or") }}</span></div>
+        <button class="btn" type="submit" name="method" value="jellyfin"
                 style="width:100%; justify-content:center">
-            {{ _("Přihlásit přes Jellyfin") }}
+            {{ _("Sign in with Jellyfin") }}
         </button>
-        {# Quick Connect: heslo se nikam nepíše. Jellyscope si řekne
-           o kód, člověk ho potvrdí ve svém už přihlášeném Jellyfinu -
-           takže nám heslo neprojde ani rukama. #}
-        {# `formnovalidate`: tohle tlacitko zadne heslo nepotrebuje, takze
-           by ho prohlizec nemel nutit vyplnit. Bez nej se na prazdny
-           formular vubec neodesle a clovek jen kouka, proc se nic
-           nedeje. #}
+        {# Quick Connect: no password is typed anywhere. Jellyscope asks
+           for a code, the person confirms it in their Jellyfin where they are signed in already -
+           so the password does not even pass through our hands. #}
+        {# `formnovalidate`: this button needs no password, so
+           the browser should not make anyone fill it in. Without it an empty
+           form is not sent at all and a person just stares why nothing
+           happens. #}
         <button class="btn" type="submit" formaction="/login/quick"
                 formnovalidate
                 style="width:100%; justify-content:center; margin-top:10px">
-            {{ _("Přihlásit kódem (Quick Connect)") }}
+            {{ _("Sign in with a code (Quick Connect)") }}
         </button>
         <p class="hint" style="margin-top:10px; text-align:center">
-            {{ _("Heslem z Jellyfinu, nebo kódem, který potvrdíš v už přihlášeném Jellyfinu. Uvidíš svoje přehrávání; kdo je správce Jellyfinu, uvidí všechno.") }}
+            {{ _("With your Jellyfin password, or with a code you approve in a Jellyfin you are already signed in to. You will see your own playback; a Jellyfin administrator sees everything.") }}
         </p>
         {% endif %}
     </form>
 </div>
 
 {# ------------------------------------------------------------------ #}
-{# Okno se zapomenutým heslem                                          #}
-{#                                                                     #}
-{# Značka <dialog> je vestavěná v prohlížeči: sama řeší zavření        #}
-{# klávesou Esc, přesun fokusu i ztmavení pozadí. Není k ní potřeba    #}
-{# žádná knihovna ani vlastní obsluha klávesnice.                      #}
+{# The forgotten-password window                                      #}
+{#                                                                    #}
+{# The <dialog> tag is built into the browser: it handles closing     #}
+{# with Esc, moving the focus and dimming the background. It needs    #}
+{# no library and no keyboard handling of its own.                    #}
 {# ------------------------------------------------------------------ #}
 <dialog id="forgotDialog" class="dialog">
-    <h2>{{ _("Zapomenuté heslo") }}</h2>
+    <h2>{{ _("Forgot password") }}</h2>
 
-    <p>{{ _("Heslo se ukládá jako otisk a ten zpátky přečíst nejde. Nastav si nové přímo na serveru:") }}</p>
+    <p>{{ _("The password is stored as a hash, which cannot be read back. Set a new one directly on the server:") }}</p>
 
     <p class="dialog-label">Linux</p>
     <pre><code>sudo -u jellyscope /opt/jellyscope/.venv/bin/python \
-     manage.py heslo <em>jméno</em></code></pre>
+     manage.py password <em>{{ _("account name") }}</em></code></pre>
 
     <p class="dialog-label">Windows</p>
-    <pre><code>.\.venv\Scripts\python.exe manage.py heslo <em>jméno</em></code></pre>
+    <pre><code>.\.venv\Scripts\python.exe manage.py password <em>{{ _("account name") }}</em></code></pre>
 
     <p class="card-note">
-        {{ _("Nevíš, jaké účty existují? Vypíše je") }} <code>manage.py ucty</code>.
+        {{ _("Not sure which accounts exist? List them with") }} <code>manage.py accounts</code>.
     </p>
 
     <form method="dialog">
-        <button class="btn primary" type="submit">{{ _("Rozumím") }}</button>
+        <button class="btn primary" type="submit">{{ _("Got it") }}</button>
     </form>
 </dialog>
 </body>

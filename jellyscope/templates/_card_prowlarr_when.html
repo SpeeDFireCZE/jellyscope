@@ -1,0 +1,12 @@
+{# The Prowlarr card "When searches happen": a grid of weekdays and hours.
+
+   From the database (cards_prowlarr.py, `d.heatmapa` = 7 × 24, row 0 = Monday),
+   times in the app's zone. Searches only - RSS queries run the same all the time and
+   would fill the grid evenly. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("searches only, local time") }}</p>
+    </div>
+    {{ charts.heatmap(d.heatmap_data, unit='') | safe }}
+</div>

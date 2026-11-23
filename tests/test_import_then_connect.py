@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Import napřed, připojení Jellyfinu až potom.
+"""The import first, connecting Jellyfin only afterwards.
 
-Přesně tenhle postup je běžný: nejdřív si člověk přenese historii
-z Jellystatu nebo Playback Reportingu, teprve pak nastaví spojení
-s Jellyfinem. V okamžiku importu tedy Jellyscope **nezná ani jednoho
-uživatele, ani jediný titul** — v historii zůstanou otazníky, žádný typ
-položky a ItemId, které nemusí odpovídat ničemu v knihovně.
+Exactly this order is common: one first moves the history over from Jellystat or Playback Reporting, and
+only then sets up the connection to Jellyfin. At the moment of the import Jellyscope therefore **knows not a
+single user, not a single title** - question marks stay in the history, no item type, and ItemIds that need
+not match anything in the library.
 
-Test hlídá, že po první synchronizaci knihovny se to všechno srovná samo:
+The test guards that after the first library synchronization all of it straightens out by itself:
 
-  * jména uživatelů se doplní z tabulky `users`,
-  * typ, knihovna a název seriálu se převezmou z `items`,
-  * historie se přepne na titul, který má stejné tmdb ID (soubor se mezitím
-    překódoval a Jellyfin mu dal nové ItemId),
-  * a to i tehdy, když jeden zdroj píše identifikátory s pomlčkami
-    a Jellyfin bez nich.
+  * the users' names are filled in from the table `users`,
+  * the type, the library and the series' name are taken from `items`,
+  * the history switches to the title with the same tmdb ID (the file was transcoded meanwhile and Jellyfin
+    gave it a new ItemId),
+  * even when one source writes the identifiers with dashes and Jellyfin without them.
 """
 from __future__ import annotations
 
@@ -29,10 +27,10 @@ PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 
 _tmp = tempfile.mkdtemp()
-# Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
-# databáze v data/database.json a test by běžel proti ostré databázi.
+# Its own home: without it DATABASE_PATH would override the database chosen in data/database.json and the
+# test would run against the live database.
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
-os.environ["DATABASE_PATH"] = str(Path(_tmp) / "napojeni.db")
+os.environ["DATABASE_PATH"] = str(Path(_tmp) / "connect.db")
 
 from jellyscope import db, importers  # noqa: E402
 
@@ -41,12 +39,12 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
-def radek(key: str) -> dict:
+def record(key: str) -> dict:
     with db.connect() as conn:
         row = conn.execute(
             """SELECT user_id, user_name, item_id, item_type, library_id, series_name
@@ -58,52 +56,51 @@ def radek(key: str) -> dict:
 
 db.init_db()
 
-# Identifikátory schválně ve dvou tvarech. Jellyfin je v API posílá bez
-# pomlček, Jellystat i plugin Playback Reporting je běžně ukládají
-# s pomlčkami — je to totéž číslo, jen jinak zapsané.
-UZIVATEL_JELLYFIN = "aa11bb22cc33dd44ee55ff6600112233"
-UZIVATEL_IMPORT = "aa11bb22-cc33-dd44-ee55-ff6600112233"
+# The identifiers in two shapes on purpose. Jellyfin sends them without dashes in its API, Jellystat and the
+# Playback Reporting plugin commonly store them with dashes - it is the same number, only written differently.
+USER_JELLYFIN = "aa11bb22cc33dd44ee55ff6600112233"
+USER_IMPORT = "aa11bb22-cc33-dd44-ee55-ff6600112233"
 
-FILM_STARY = "0011223344556677889900aabbccddee"    # id před překódováním
-FILM_NOVY = "ffeeddccbbaa00998877665544332211"     # id, které má Jellyfin teď
-EPIZODA = "1122334455667788990011223344aabb"
+MOVIE_OLD = "0011223344556677889900aabbccddee"    # the id before transcoding
+MOVIE_NEW = "ffeeddccbbaa00998877665544332211"    # the id Jellyfin has now
+EPISODE = "1122334455667788990011223344aabb"
 
-zaloha = {
+backup = {
     "jf_playback_activity": [
         {"Id": 1, "ActivityDateInserted": "2026-07-01 20:00:00",
-         "PlaybackDuration": "3600", "UserId": UZIVATEL_IMPORT,
-         "UserName": "Karel", "NowPlayingItemId": FILM_STARY,
+         "PlaybackDuration": "3600", "UserId": USER_IMPORT,
+         "UserName": "Karel", "NowPlayingItemId": MOVIE_OLD,
          "NowPlayingItemName": "Matrix"},
         {"Id": 2, "ActivityDateInserted": "2026-07-02 21:00:00",
-         "PlaybackDuration": "1800", "UserId": UZIVATEL_IMPORT,
-         "NowPlayingItemId": EPIZODA, "NowPlayingItemName": "Kancelář",
-         "EpisodeId": EPIZODA, "SeriesName": "Kancelář"},
+         "PlaybackDuration": "1800", "UserId": USER_IMPORT,
+         "NowPlayingItemId": EPISODE, "NowPlayingItemName": "Kancelář",
+         "EpisodeId": EPISODE, "SeriesName": "Kancelář"},
     ]
 }
 
 
-print("--- import bez připojeného Jellyfinu ---")
-vysledek = asyncio.run(
-    importers.import_jellystat_json(json.dumps(zaloha).encode("utf-8")))
-check(vysledek.get("status") == "ok", f"import proběhl: {vysledek.get('status')}")
-check(vysledek.get("imported") == 2, f"převzaly se 2 záznamy ({vysledek.get('imported')})")
+print("--- the import without a connected Jellyfin ---")
+result = asyncio.run(
+    importers.import_jellystat_json(json.dumps(backup).encode("utf-8")))
+check(result.get("status") == "ok", f"the import ran: {result.get('status')}")
+check(result.get("imported") == 2, f"2 records were taken over ({result.get('imported')})")
 
-film = radek(":1:")
-# Záloha u prvního záznamu jméno nese, u druhého ne. Kde ho zdroj nepošle,
-# musí zůstat otazník - vymýšlet si ho nebudeme.
-check(film.get("user_name") == "Karel", "jméno, které záloha nesla, se použilo")
-check(radek(":2:").get("user_name") == "?", "jinde je zatím otazník")
-check(film.get("library_id") is None, "knihovna zatím není známá")
-check(importers._orphan_item_ids() != [], "položky historie zatím nikam nevedou")
+movie = record(":1:")
+# The backup carries the name with the first record, not with the second. Where the source does not send it,
+# a question mark must stay - we will not make it up.
+check(movie.get("user_name") == "Karel", "the name the backup carried was used")
+check(record(":2:").get("user_name") == "?", "elsewhere there is a question mark for now")
+check(movie.get("library_id") is None, "the library is not known yet")
+check(importers._orphan_item_ids() != [], "the history's items lead nowhere yet")
 
 
 print()
-print("--- teď se připojí Jellyfin: uživatelé, knihovna, tituly ---")
+print("--- now Jellyfin connects: users, the library, titles ---")
 with db.connect() as conn:
     conn.execute(
         "INSERT INTO users (id, name, is_administrator, is_disabled, synced_at)"
         " VALUES (?,?,0,0,?)",
-        (UZIVATEL_JELLYFIN, "Karel", db.utcnow()),
+        (USER_JELLYFIN, "Karel", db.utcnow()),
     )
     conn.execute(
         "INSERT INTO libraries (id, name, collection_type, synced_at) VALUES (?,?,?,?)",
@@ -113,96 +110,96 @@ with db.connect() as conn:
         "INSERT INTO libraries (id, name, collection_type, synced_at) VALUES (?,?,?,?)",
         ("lib-serialy", "Seriály", "tvshows", db.utcnow()),
     )
-    # Film má po překódování nové ItemId, ale stejné tmdb ID.
+    # After transcoding the movie has a new ItemId but the same tmdb ID.
     conn.execute(
         """INSERT INTO items (id, name, type, library_id, tmdb_id, is_missing, synced_at)
            VALUES (?,?,?,?,?,0,?)""",
-        (FILM_NOVY, "Matrix", "Movie", "lib-filmy", "603", db.utcnow()),
+        (MOVIE_NEW, "Matrix", "Movie", "lib-filmy", "603", db.utcnow()),
     )
-    # Epizoda si id nechala - jen ho Jellyfin píše bez pomlček.
+    # The episode kept its id - only Jellyfin writes it without dashes.
     conn.execute(
         """INSERT INTO items (id, name, type, library_id, series_name, is_missing, synced_at)
            VALUES (?,?,?,?,?,0,?)""",
-        (EPIZODA, "Kancelář", "Episode", "lib-serialy", "Kancelář", db.utcnow()),
+        (EPISODE, "Kancelář", "Episode", "lib-serialy", "Kancelář", db.utcnow()),
     )
 
-# Tohle volá scanner.sync_library() hned po stažení knihovny. Jellyfin tu
-# nakonfigurovaný není, takže krok "zeptej se na stará ItemId" selže
-# a použije se shoda podle názvu - přesně jako u nedostupného serveru.
-souhrn = asyncio.run(importers.link_imported_history())
-check(isinstance(souhrn, dict), f"srovnání proběhlo: {souhrn}")
+# scanner.sync_library() calls this right after downloading the library. Jellyfin is not configured here, so
+# the step "ask about the old ItemIds" fails and the match by name is used - exactly as with an unreachable
+# server.
+summary = asyncio.run(importers.link_imported_history())
+check(isinstance(summary, dict), f"the straightening ran: {summary}")
 
 
 print()
-print("--- uživatelé se spárovali navzdory jinému zápisu id ---")
-for klic, popis in ((":1:", "film"), (":2:", "epizoda")):
-    zaznam = radek(klic)
-    check(zaznam.get("user_id") == UZIVATEL_JELLYFIN,
-          f"{popis}: user_id je ve tvaru z Jellyfinu")
-    check(zaznam.get("user_name") == "Karel", f"{popis}: doplnilo se jméno uživatele")
+print("--- the users paired despite another way of writing the id ---")
+for key, label in ((":1:", "film"), (":2:", "epizoda")):
+    entry = record(key)
+    check(entry.get("user_id") == USER_JELLYFIN,
+          f"{label}: user_id is in Jellyfin's shape")
+    check(entry.get("user_name") == "Karel", f"{label}: the user's name was filled in")
 
 
 print()
-print("--- historie našla tituly v knihovně ---")
-film = radek(":1:")
-check(film.get("item_id") == FILM_NOVY,
-      "film se přepnul na nové ItemId (shoda názvu)")
-check(film.get("item_type") == "Movie", "doplnil se typ Movie")
-check(film.get("library_id") == "lib-filmy", "doplnila se knihovna")
+print("--- the history found the titles in the library ---")
+movie = record(":1:")
+check(movie.get("item_id") == MOVIE_NEW,
+      "the movie switched to the new ItemId (a match of names)")
+check(movie.get("item_type") == "Movie", "the type Movie was filled in")
+check(movie.get("library_id") == "lib-filmy", "the library was filled in")
 
-epizoda = radek(":2:")
-check(epizoda.get("item_id") == EPIZODA, "epizoda ukazuje na správný díl")
-check(epizoda.get("item_type") == "Episode", "doplnil se typ Episode")
-check(epizoda.get("series_name") == "Kancelář", "doplnil se název seriálu")
-check(importers._orphan_item_ids() == [], "žádný záznam už nevisí ve vzduchu")
+episode = record(":2:")
+check(episode.get("item_id") == EPISODE, "the episode points at the right episode")
+check(episode.get("item_type") == "Episode", "the type Episode was filled in")
+check(episode.get("series_name") == "Kancelář", "the series' name was filled in")
+check(importers._orphan_item_ids() == [], "no record hangs in the air any more")
 
 
 print()
-print("--- párování podle tmdb, když Jellyfin staré id ještě zná ---")
-# Druhá cesta: server odpoví, že staré ItemId mělo tmdb 603. Tvar odpovědi
-# je stejný jako z API.
+print("--- pairing by tmdb when Jellyfin still knows the old id ---")
+# The second way: the server answers that the old ItemId had tmdb 603. The answer's shape is the same as from
+# the API.
 with db.connect() as conn:
     conn.execute(
         """INSERT INTO playback (session_key, user_id, item_id, item_name,
                                  started_at, last_seen_at, watched_seconds, is_active)
            VALUES ('import:jst:9:x', ?, ?, 'Matrix', ?, ?, 900, 0)""",
-        (UZIVATEL_IMPORT, "jeste-starsi-id", db.utcnow(), db.utcnow()),
+        (USER_IMPORT, "jeste-starsi-id", db.utcnow(), db.utcnow()),
     )
-polozek, radku = importers._link_by_tmdb(
+items, rows = importers._link_by_tmdb(
     [{"Id": "jeste-starsi-id", "ProviderIds": {"Tmdb": "603"}}])
-check(polozek == 1 and radku == 1, "tmdb spárovalo záznam s titulem v knihovně")
-check(radek(":9:").get("item_id") == FILM_NOVY, "historie ukazuje na titul z knihovny")
+check(items == 1 and rows == 1, "tmdb paired the record with the title in the library")
+check(record(":9:").get("item_id") == MOVIE_NEW, "the history points at the title from the library")
 
 
 print()
-print("--- opakované spuštění už nic nemění ---")
-# Ten záznam z minulé části je čerstvý, takže první průchod ještě má co
-# dělat. Zajímá nás až ten druhý: srovnání musí být idempotentní, jinak by
-# se při každé synchronizaci knihovny zbytečně přepisovala celá historie.
+print("--- a repeated run changes nothing any more ---")
+# The record from the previous part is fresh, so the first pass still has something to do. Only the second
+# one interests us: the straightening must be idempotent, otherwise every library synchronization would
+# rewrite the whole history needlessly.
 importers.refresh_playback_metadata()
 
-zmeny = importers._sjednot_identifikatory()
-check(zmeny == {"user_id": 0, "item_id": 0}, f"není co sjednocovat: {zmeny}")
-zmeny = importers.refresh_playback_metadata()
-check(all(v == 0 for v in zmeny.values()), f"není co doplňovat: {zmeny}")
+changes = importers._unify_ids()
+check(changes == {"user_id": 0, "item_id": 0}, f"nothing to unify: {changes}")
+changes = importers.refresh_playback_metadata()
+check(all(v == 0 for v in changes.values()), f"nothing to fill in: {changes}")
 
 
 print()
-print("--- neznámý uživatel se nepřiřadí k nikomu ---")
+print("--- an unknown user is assigned to nobody ---")
 with db.connect() as conn:
     conn.execute(
         """INSERT INTO playback (session_key, user_id, user_name, item_id,
                                  started_at, last_seen_at, watched_seconds, is_active)
            VALUES ('import:jst:99:x', 'ffffffff-0000-0000-0000-000000000000', '?', ?, ?, ?, 60, 0)""",
-        (FILM_NOVY, db.utcnow(), db.utcnow()),
+        (MOVIE_NEW, db.utcnow(), db.utcnow()),
     )
 importers.refresh_playback_metadata()
-cizi = radek(":99:")
-check(cizi.get("user_id") == "ffffffff-0000-0000-0000-000000000000",
-      "cizí id zůstalo nezměněné")
-check(cizi.get("user_name") == "?", "raději otazník než smyšlené jméno")
+stranger = record(":99:")
+check(stranger.get("user_id") == "ffffffff-0000-0000-0000-000000000000",
+      "the foreign id stayed unchanged")
+check(stranger.get("user_name") == "?", "rather a question mark than a made-up name")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

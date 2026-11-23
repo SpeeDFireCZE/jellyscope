@@ -1,0 +1,36 @@
+{# The music card "Genres by listening": hours of listening by genre.
+
+   From the database (cards_music.py: `d.radky` = stats.music_genres in hours for the
+   chart, `d.tabulka` the same genres with plays for the window). A track with several
+   genres counts towards each, so the sum is more than the listening time - the note
+   says so. The chart shows twelve genres, the table in the window all of them. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+        <p class="card-note">{{ _("a track with several genres counts towards each") }}</p>
+        {{ charts.hbar_chart(d.rows, 'label', 'hours', limit=12) | safe }}
+        <div class="modal-only">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Genre") }}</th>
+                    <th class="num">{{ _("Listening") }}</th>
+                    <th class="num">{{ _("Plays") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for z in d.table %}
+                    <tr>
+                        <td class="strong">{{ z.genre }}</td>
+                        <td class="num">{{ z.seconds | seconds }}</td>
+                        <td class="num">{{ z.plays | number }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+</div>

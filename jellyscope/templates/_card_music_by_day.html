@@ -1,0 +1,15 @@
+{# The music card "Listening by day": hours of listening day by day.
+
+   From the database (cards_music.py, `d.body` = stats.chart_days: days without listening
+   are in the chart as zero, not as a gap). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("hours of listening") }}</p>
+    </div>
+    {% if d.body %}
+        {{ charts.area_chart_multi(d.body, 'day', [{'key': 'hours', 'label': _('hours'), 'slot': 1}]) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>
+    {% endif %}
+</div>

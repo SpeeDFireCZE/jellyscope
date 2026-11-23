@@ -1,0 +1,42 @@
+{# The Prowlarr card "Latest grabbed releases": what each app took last.
+
+   From the database (cards_prowlarr.py, `d.radky` from the newest: the release's name,
+   indexer, app, time in UTC, `result` = ok / selhalo / presmerovano /
+   neznamy and its `label`). "Přesměrováno" is not a result: Prowlarr only
+   sent the app to the indexer. A long table as on Insights: the first rows in the card, the whole one in the window.
+
+   A release's name is one long word - it may wrap anywhere. The table
+   follows the card's width, not the window's (wrapper-by-width): on a narrow card the
+   indexer, the app and the time stand under the name. The narrow shape holds longer than elsewhere
+   (wrapper-from-720): in five columns the name would wrap every few
+   letters below 720 px. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width wrapper-from-720"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Releases") }}</th>
+            <th class="wide-wrapper-only">{{ _("Indexer") }}</th>
+            <th class="wide-wrapper-only">{{ _("App") }}</th>
+            <th class="wide-wrapper-only">{{ _("When") }}</th>
+            <th>{{ _("Result") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="break-anywhere"><span class="strong">{{ r.title or "–" }}</span>
+                    <div class="narrow-wrapper-only cell-sub">{{ r.name }} &middot; {{ r.app }} &middot; {{ r.happened_at | relative }}</div></td>
+                <td class="wide-wrapper-only break-anywhere">{{ r.name }}</td>
+                <td class="wide-wrapper-only">{{ r.app }}</td>
+                <td class="wide-wrapper-only muted nowrap" title="{{ r.happened_at | datetime }}">{{ r.happened_at | relative }}</td>
+                <td><span class="badge {{ {'ok': 'good', 'failed': 'serious'}.get(r.result, 'neutral') }}"><span class="dot"></span>{{ r.label }}</span></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No app grabbed anything in this period.") }}</p>{% endif %}
+</div>

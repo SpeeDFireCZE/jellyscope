@@ -1,0 +1,112 @@
+/* ---------------------------------------------------------------------------
+   Seasonal decoration: Halloween (24.-31. 10.)
+
+   Loaded only during the holiday (see seasonal.py and _event_head.html), after
+   style.css. Only the app's colour changes (--accent, --accent-2 and the text on
+   it); chart colours stay. Contrast is guarded by tests/test_contrast.py.
+   The dark values are there twice, as in style.css: by the system and after a
+   manual switch.
+   --------------------------------------------------------------------------- */
+:root[data-event="halloween"] {
+    --accent:     #b04f00;
+    --accent-2:   #6b3fa0;
+    --accent-ink: #ffffff;
+    --event-bat: #24182e;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-event="halloween"]:not([data-theme="light"]) {
+        --accent:     #ff8c2e;
+        --accent-2:   #b48ae6;
+        --accent-ink: #0b0b0b;
+        --event-bat: #8a74b3;
+    }
+}
+:root[data-event="halloween"][data-theme="dark"] {
+    --accent:     #ff8c2e;
+    --accent-2:   #b48ae6;
+    --accent-ink: #0b0b0b;
+    --event-bat: #8a74b3;
+}
+
+/* A pumpkin by the logo, behind the name a coffin: the lid opens, inside a vampire with
+   glowing eyes, the lid closes again (a 7 s loop). */
+.orn-pumpkin { width: 17px; right: -9px; bottom: -6px; }
+.side-coffin { width: 22px; }
+.side-coffin .lids {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: event-coffin 7s ease-in-out infinite;
+}
+.side-coffin .vampire {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: event-vampire 7s ease-in-out infinite;
+}
+.side-coffin .eyes { animation: event-eyes 7s ease-in-out infinite; }
+@keyframes event-coffin {
+    0%, 16% { transform: scaleX(1) skewY(0); }
+    28%, 72% { transform: scaleX(.14) skewY(-14deg); }
+    84%, 100% { transform: scaleX(1) skewY(0); }
+}
+@keyframes event-vampire { 0%, 28% { transform: translateY(4px); } 38%, 66% { transform: translateY(0); } 76%, 100% { transform: translateY(4px); } }
+@keyframes event-eyes { 0%, 36% { opacity: .25; } 42%, 64% { opacity: 1; } 70%, 100% { opacity: .25; } }
+
+/* Bats across the page and a spider lowering itself top right (events.js). */
+.event-effect .bat {
+    left: 0;
+    top: var(--y);
+    width: var(--s);
+    animation: event-fly var(--d) linear var(--z) infinite both;
+}
+.event-effect .bat.reverse { animation-direction: reverse; }
+.event-effect .bat > i { display: block; animation: event-swing 1.3s ease-in-out infinite alternate; }
+.event-effect .bat svg,
+.event-effect .bat-static svg { display: block; width: 100%; fill: var(--event-bat); }
+.event-effect .bat svg { transform-origin: 50% 35%; animation: event-wave .24s ease-in-out infinite alternate; }
+.event-effect .bat-static { width: 34px; }
+.event-effect .spider {
+    top: 0;
+    left: var(--x);
+    width: 32px;
+    animation: event-spider 10s ease-in-out infinite both;
+}
+.event-effect .spider-static { width: 32px; }
+.event-effect .spider svg,
+.event-effect .spider-static svg { position: relative; display: block; width: 100%; }
+.event-effect .thread {
+    position: absolute;
+    left: 50%;
+    bottom: 60%;
+    width: 1px;
+    height: 900px;
+    background: var(--text-muted);
+    opacity: .55;
+}
+@keyframes event-fly { from { transform: translateX(-70px); } to { transform: translateX(var(--w)); } }
+@keyframes event-swing { from { transform: translateY(-12px); } to { transform: translateY(12px); } }
+@keyframes event-wave { from { transform: scaleY(1); } to { transform: scaleY(.55); } }
+@keyframes event-spider {
+    0% { transform: translateY(-40px); }
+    30% { transform: translateY(var(--depth)); }
+    38% { transform: translateY(calc(var(--depth) - 14px)); }
+    46%, 70% { transform: translateY(var(--depth)); }
+    100% { transform: translateY(-40px); }
+}
+
+/* Without motion: the system says "reduce motion", or the account switched it off. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-event="halloween"] .brand-logo *,
+    :root[data-event="halloween"] .brand-ornaments * { animation: none !important; }
+}
+:root[data-event="halloween"][data-event-motion="0"] .brand-logo *,
+:root[data-event="halloween"][data-event-motion="0"] .brand-ornaments * { animation: none !important; }
+
+/* The game: a pumpkin (games/halloween.js). A cut-out is darkness with a band of flesh
+   at the edge; a lit pumpkin has a flame in the cut-outs and yellower flesh. */
+.event-scene .pumpkin-canvas { cursor: crosshair; }
+.event-scene .glowing-pumpkin .cutout-dark { fill: url(#event-dFlame); }
+.event-scene .glowing-pumpkin .cutout-flesh { fill: #ffe39a; }
+.event-scene .glowing-pumpkin .cutouts { filter: url(#event-dGlow); animation: event-flame 1.4s ease-in-out infinite alternate; }
+.event-scene .pumpkin-light { opacity: 0; transition: opacity .6s; }
+.event-scene .glowing-pumpkin .pumpkin-light { opacity: 1; }
+@keyframes event-flame { 0% { opacity: .82; } 35% { opacity: 1; } 60% { opacity: .9; } 100% { opacity: 1; } }

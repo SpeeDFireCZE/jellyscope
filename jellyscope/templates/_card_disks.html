@@ -1,0 +1,300 @@
+{# The card with the key `disks`.
+
+   Which library lies on which disk, how much space is left there and in how many
+   days it runs out. Drawn on the Library page (under the library cards) and in a
+   custom dashboard - without forms there. Only the admin sees paths and settings:
+   a path on the server tells a reader nothing and gives away more about the server
+   than it should. Data: see stats.disks_overview(). #}
+{% set can_edit = is_admin and not in_dashboard %}
+
+{# The capacity for a form field: in TB from a terabyte up, otherwise in GB, without
+   needless zeros ("1.5", not "1.50"). The form takes a dot and a comma alike.
+   Four decimal places, not two: the window is saved for a rename too,
+   and "1.234 TB" rounded to "1.23" would silently change the capacity. #}
+{% macro capacity_number(size_bytes) -%}
+{%- if size_bytes -%}{{ "%g" | format((size_bytes / (1024 ** 4 if size_bytes >= 1024 ** 4 else 1024 ** 3)) | round(4)) }}{%- endif -%}
+{%- endmacro %}
+{% macro capacity_unit(size_bytes, default_unit="TB") %}
+<select name="unit" aria-label="{{ _('Unit') }}">
+    {% set tb = (size_bytes >= 1024 ** 4) if size_bytes else (default_unit == "TB") %}
+    <option value="GB" {{ 'selected' if not tb }}>GB</option>
+    <option value="TB" {{ 'selected' if tb }}>TB</option>
+</select>
+{% endmacro %}
+
+{# The name, path and capacity of a virtual disk - in the window for adding and for
+   editing. `prefix` makes the field ids unique, `v` is the disk's row (empty
+   when adding). #}
+{% macro virtual_disk_fields(prefix, v={}) %}
+<div class="field">
+    <label for="{{ prefix }}-name">{{ _("Name") }}</label>
+    <input type="text" id="{{ prefix }}-name" name="name" maxlength="60" required
+           value="{{ v.name or '' }}" placeholder="{{ _('Name, e.g. Cloud') }}">
+</div>
+<div class="field">
+    {# There can be several paths (a cloud mount seen through several library folders).
+       A row = a field + a cross; the button under them adds more rows - handled
+       in static/js/app.js (data-add-path, data-remove-path).
+       The server drops empty fields, at least one path has to stay. #}
+    <label for="{{ prefix }}-path">{{ _("Paths") }}</label>
+    {# For a screen reader: the first field has the label "Paths" (label for),
+       the other fields and all crosses a number. After adding and removing a row
+       the script numbers them again and hands the first field's id to the new first one. #}
+    <div data-paths="{{ prefix }}-path" data-label="{{ _('Path') }}"
+         data-label-remove="{{ _('Remove the path') }}">
+        {% for folder_path in (v.paths or ['']) %}
+        <div class="path-row field-with-unit">
+            <input type="text" name="path" list="disks-folders" value="{{ folder_path }}" placeholder="/media/cloud"
+                   {% if loop.first %}id="{{ prefix }}-path"{% else %}aria-label="{{ _('Path') }} {{ loop.index }}"{% endif %}>
+            <button class="btn" type="button" data-remove-path
+                    aria-label="{{ _('Remove the path') }} {{ loop.index }}">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    <button class="btn" type="button" data-add-path>{{ _("Add a path") }}</button>
+    <p class="hint">{{ _("For storage Jellyfin cannot tell apart or reports nonsense about (typically a cloud mount). Files under any of the paths count towards it and not towards the physical disk. The paths are the ones Jellyfin sees; each must lie in a library folder or contain one.") }}</p>
+</div>
+<div class="field">
+    <label for="{{ prefix }}-capacity">{{ _("Capacity") }}</label>
+    <div class="field-with-unit">
+        <input type="text" inputmode="decimal" id="{{ prefix }}-capacity" name="capacity" required
+               value="{{ capacity_number(v.total) }}">
+        {{ capacity_unit(v.total) }}
+    </div>
+</div>
+{% endmacro %}
+{% set names = {} %}
+{% for d in disks.disks %}{% set _x = names.update({d.key: _(d.name) if d.kind == 'single' else d.name}) %}{% endfor %}
+<div id="disks" style="margin-top:30px">
+    <h2 style="margin:0 0 4px">{{ _("Disks") }}</h2>
+    <p class="subtitle" style="margin-bottom:16px">
+        {{ _("Which disk each library is on, and in how many days space runs out at the current rate.") }}
+    </p>
+
+    <div class="card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>{{ _("Disk") }}</th>
+                    <th class="num">{{ _("Capacity") }}</th>
+                    <th class="num">{{ _("Free") }}</th>
+                    <th class="num">{{ _("Jellyfin data") }}</th>
+                    <th class="num">{{ _("Outside Jellyfin") }}</th>
+                    <th class="num">{{ _("Space runs out in") }}</th>
+                    {% if can_edit %}<th aria-label="{{ _('Disk settings') }}"></th>{% endif %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for d in disks.disks %}
+                {% set used_percent = ((d.total - d.free) / d.total * 100) if d.total and d.free is not none else none %}
+                <tr>
+                    <td>
+                        <strong>{{ _(d.name) if d.kind == 'single' else d.name }}</strong>
+                        {% if d.kind == 'virtual' %}<span class="badge info">{{ _("virtual") }}</span>{% endif %}
+                        {# Only for a network: rclone, mergerfs or a USB disk report other types, and "network" would lie about them. #}
+                        {% if d.type == 'Network' %}<span class="badge">{{ _("network") }}</span>{% endif %}
+                        <div class="card-note">
+                            {% if d.source == 'manual' %}{{ _("capacity entered by hand") }}
+                            {% elif d.source == 'jellyfin' %}{{ _("capacity reported by Jellyfin") }}
+                            {% elif d.source == 'disk' %}{{ _("measured on the disk under the app") }}
+                            {% else %}{{ _("free space could not be found out") }}{% endif %}
+                        </div>
+                        {% if d.kind == 'virtual' and d.without_file %}
+                        <div class="card-note" style="color:var(--warning)">
+                            {{ _("No library file is under this path - is there a typo?") }}
+                        </div>
+                        {% endif %}
+                        {% if can_edit %}
+                        {% for a, b in disks.suspicions %}{% if d.key == a %}
+                        <div class="card-note">
+                            <button class="btn" type="button" data-modal="modal-same-disk-{{ loop.index }}">
+                                {{ _("Possibly the same disk as {disk}").format(disk=names[b]) }}
+                            </button>
+                        </div>
+                        {% endif %}{% endfor %}
+                        {% endif %}
+                    </td>
+                    <td class="num">{{ d.total | bytes if d.total else "–" }}</td>
+                    <td class="num">
+                        <span class="strong">{{ d.free | bytes if d.free is not none else "–" }}</span>
+                        {% if used_percent is not none %}
+                        <div class="card-note">{{ _("{percent} % used").format(percent=used_percent | round | int) }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="num">{{ d.library | bytes }}</td>
+                    <td class="num">{{ d.outside | bytes if d.outside is not none else "–" }}</td>
+                    <td class="num strong">
+                        {{ _n("{n} days", d.days_left) if d.days_left is not none else "–" }}
+                    </td>
+                    {% if can_edit %}
+                    <td class="num">
+                        {# A disk's settings are in a window, not under the row: the table stays
+                           a table of disks. A Jellyfin 10.x row has no settings -
+                           the capacity is in Settings → Data there. #}
+                        {% if d.kind in ('physical', 'virtual') %}
+                        <button class="btn" type="button" data-modal="modal-disk-{{ loop.index }}"
+                                aria-label="{{ _('Edit disk {disk}').format(disk=d.name) }}">{{ _("Edit") }}</button>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if disks.suspicions %}
+        <p class="card-note" style="margin-top:10px; color:var(--warning)">
+            {{ _("Some disks may be one and the same (typically Docker volumes). Until an admin confirms or rejects it they are counted separately, so the data outside Jellyfin and the forecast may be overstated.") }}
+        </p>
+        {% endif %}
+        {% if disks.outdated_list %}
+        <p class="card-note" style="margin-top:10px; color:var(--warning)">
+            {{ _("Jellyfin last reported disk space {when}. Free space has not been measured since; manual capacities still apply.").format(when=disks.outdated_list | datetime) }}
+        </p>
+        {% endif %}
+        {% if disks.disks | selectattr("outside", "ne", none) | list %}
+        <p class="card-note" style="margin-top:10px">{{ _("“Outside Jellyfin” is what takes up space on the library disks besides the library (downloads, backups, other apps, the filesystem reserve). It is measured only on disks whose space Jellyfin reports.") }}</p>
+        {% endif %}
+
+        {% if disks.mode == 'single' %}
+        <p class="card-note" style="margin-top:10px">
+            {{ _("This Jellyfin does not report which disk each library is on, so there is one number for the whole library.") }}
+            {% if can_edit %}{{ _("Set the capacity in") }} <a href="/settings?section=data">{{ _("Settings → Data") }}</a>.{% endif %}
+        </p>
+        {% elif can_edit %}
+        {# A virtual disk: a path and a capacity. Files under the path belong to it,
+           not to the physical disk - that solves a cloud mount that reports
+           a different number about itself than it has. #}
+        <div class="btn-row" style="margin-top:14px">
+            <button class="btn" type="button" data-modal="modal-disk-new">{{ _("Add a virtual disk") }}</button>
+        </div>
+        {% endif %}
+
+        {% if can_edit and disks.mode == 'disks' %}
+        {# The paths of library folders as hints for the field "Path" (one for all windows). #}
+        <datalist id="disks-folders">
+            {% for d in disks.disks if d.kind == 'physical' %}{% for folder_path in d.paths %}<option value="{{ folder_path }}">{% endfor %}{% endfor %}
+        </datalist>
+        {% for d in disks.disks %}
+        {% if d.kind == 'physical' %}
+        <dialog class="modal" id="modal-disk-{{ loop.index }}">
+            <form method="dialog" class="modal-head">
+                <h2>{{ _("Disk “{disk}”").format(disk=d.name) }}</h2>
+                <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+            </form>
+            <p class="dialog-label">{{ _("Library folders") }}</p>
+            <p class="card-note" style="margin:0 0 16px; word-break:break-all">
+                {% for folder_path in d.paths %}<code>{{ folder_path }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}
+            </p>
+            {# The capacity: what Jellyfin reports, or by hand - for a mount that
+               reports nonsense about itself. A number in the unit that fits. #}
+            <form method="post" action="/library/disks/capacity">
+                <input type="hidden" name="disk" value="{{ d.key }}">
+                <div class="field" role="radiogroup" aria-labelledby="disk-{{ loop.index }}-source">
+                    <label id="disk-{{ loop.index }}-source">{{ _("Capacity") }}</label>
+                    <div class="radio-set" style="margin:6px 0 10px">
+                        <label class="radio-card">
+                            <input type="radio" name="source" value="jellyfin" {{ 'checked' if d.source != 'manual' }}>
+                            <span>
+                                <span class="title">{{ _("Reported by Jellyfin") }}{% if d.jellyfin_total %} ({{ d.jellyfin_total | bytes }}){% endif %}</span>
+                                <span class="desc">{{ _("Jellyfin measures the free space and the data outside it.") }}</span>
+                            </span>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="source" value="manual" {{ 'checked' if d.source == 'manual' }}>
+                            <span>
+                                <span class="title">{{ _("Enter by hand") }}</span>
+                                <span class="desc">{{ _("When Jellyfin reports nonsense about the disk (a cloud mount, for example). Free space is then the capacity minus the library files on the disk.") }}</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="field-with-unit">
+                        <input type="text" inputmode="decimal" name="capacity" aria-label="{{ _('Manual capacity') }}"
+                               value="{{ capacity_number(d.total) if d.source == 'manual' else '' }}">
+                        {{ capacity_unit(d.total if d.source == 'manual' else d.jellyfin_total) }}
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn" type="button" data-close-modal>{{ _("Cancel") }}</button>
+                    <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+                </div>
+            </form>
+            {% if d.answered %}
+            {# The answer to "the same disk?" can be taken back: a slip of the click,
+               or a volume moved to another disk with the same path. #}
+            <form method="post" action="/library/disks/decision/undo"
+                  style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border)">
+                <input type="hidden" name="disk" value="{{ d.key }}">
+                <p class="dialog-label">{{ _("Is it the same disk?") }}</p>
+                <p class="card-note" style="margin:0 0 10px">
+                    {% if d.device | length > 1 %}{{ _("Merged from devices: {devices}").format(devices=d.device | join(", ")) }}
+                    {% else %}{{ _("Saved: these are different disks.") }}{% endif %}
+                </p>
+                <button data-keep-scroll class="btn" type="submit">{{ _("Withdraw the answer") }}</button>
+            </form>
+            {% endif %}
+        </dialog>
+        {% elif d.kind == 'virtual' %}
+        <dialog class="modal" id="modal-disk-{{ loop.index }}">
+            <form method="dialog" class="modal-head">
+                <h2>{{ _("Virtual disk “{disk}”").format(disk=d.name) }}</h2>
+                <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+            </form>
+            <form method="post" action="/library/disks/virtual/edit">
+                <input type="hidden" name="id" value="{{ d.key[5:] }}">
+                {{ virtual_disk_fields('disk-' ~ loop.index, d) }}
+                <div class="btn-row">
+                    <button class="btn" type="button" data-close-modal>{{ _("Cancel") }}</button>
+                    <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+                </div>
+            </form>
+            <form method="post" action="/library/disks/virtual/delete"
+                  style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border)">
+                <input type="hidden" name="id" value="{{ d.key[5:] }}">
+                <p class="card-note" style="margin:0 0 10px">{{ _("The disk's files count towards the physical disk again. The disk's history stays.") }}</p>
+                <button data-keep-scroll class="btn danger" type="submit">{{ _("Delete the virtual disk") }}</button>
+            </form>
+        </dialog>
+        {% endif %}
+        {% endfor %}
+        <dialog class="modal" id="modal-disk-new">
+            <form method="dialog" class="modal-head">
+                <h2>{{ _("Add a virtual disk") }}</h2>
+                <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+            </form>
+            <form method="post" action="/library/disks/virtual">
+                {{ virtual_disk_fields('disk-novy') }}
+                <div class="btn-row">
+                    <button class="btn" type="button" data-close-modal>{{ _("Cancel") }}</button>
+                    <button data-keep-scroll class="btn primary" type="submit">{{ _("Add") }}</button>
+                </div>
+            </form>
+        </dialog>
+        {% endif %}
+
+        {% if can_edit %}
+        {# A suspicion of the same disk: the same capacity and free space for two
+           different device ids (typically Docker volumes). Only the admin may merge them -
+           two different disks can match by chance. #}
+        {% for a, b in disks.suspicions %}
+        <dialog class="modal" id="modal-same-disk-{{ loop.index }}">
+            <form method="dialog" class="modal-head">
+                <h2>{{ _("Is it the same disk?") }}</h2>
+                <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+            </form>
+            <p class="card-note">
+                {{ _("“{a}” and “{b}” have the same capacity and free space. In Docker every mounted volume has its own id even when it sits on one disk - then it is one disk. But two different disks can also match by chance.").format(a=names[a], b=names[b]) }}
+            </p>
+            <form method="post" action="/library/disks/same" class="btn-row">
+                <input type="hidden" name="a" value="{{ a }}">
+                <input type="hidden" name="b" value="{{ b }}">
+                <button class="btn primary" type="submit" name="answer" value="yes">{{ _("Yes, it is the same disk") }}</button>
+                <button class="btn" type="submit" name="answer" value="no">{{ _("No, they are different disks") }}</button>
+            </form>
+        </dialog>
+        {% endfor %}
+        {% endif %}
+    </div>
+</div>

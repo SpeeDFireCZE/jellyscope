@@ -1,0 +1,31 @@
+{# The card with the key `dubbing`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Dubbing or original?") }}</h2>
+        <p class="card-note">{{ _("only where we know what was on offer") }}</p>
+    </div>
+    {% if dubbing %}
+        {{ charts.stacked_bar(dubbing) | safe }}
+        {{ charts.legend(dubbing) | safe }}
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <tbody>
+                {% for row in dubbing %}
+                <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="num strong">{{ row.percent | percent }}</td>
+                    <td class="num muted">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="chart-empty">{{ _("Not enough data about available tracks yet.") }}</p>
+    {% endif %}
+</div>

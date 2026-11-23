@@ -1,0 +1,17 @@
+{# The Bazarr card "Subtitles per day": subtitles acquired for episodes and films day by day.
+
+   From the database (cards_bazarr.py, `d.body` = stats.chart_days: days with nothing
+   acquired are in the chart as zero, not as a gap). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("for episodes and for movies, number of subtitles") }}</p>
+    </div>
+    {% if d.body %}
+        {{ charts.area_chart_multi(d.body, 'day',
+               [{'key': 'episodes', 'label': _('episodes#label'), 'slot': 1},
+                {'key': 'movies', 'label': _('movies'), 'slot': 2}], unit='', whole_ticks=True) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("No subtitles were obtained in this period.") }}</p>
+    {% endif %}
+</div>

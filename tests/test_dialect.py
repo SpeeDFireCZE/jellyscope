@@ -1,14 +1,16 @@
-r"""Test překladu SQL do PostgreSQL.
+r"""A test of translating SQL to PostgreSQL.
 
-Překlad je nejrizikovější kus celého projektu: běží na každém dotazu a
-chyba v něm se projeví až za běhu, u konkrétní stránky. Proto má vlastní
-test, který kontroluje jednotlivé vzory i skutečné dotazy z aplikace.
+The translation is the riskiest piece of the whole project: it runs on every
+query, and a mistake in it shows only at run time, on a particular page. So it
+has a test of its own that checks the single patterns as well as real queries
+of the application.
 
-Co tenhle test **neumí**: ověřit, že přeložený dotaz PostgreSQL skutečně
-přijme. K tomu je potřeba běžící server. Kontroluje se tvar, ne provedení.
+What this test **cannot** do: check that PostgreSQL really accepts the
+translated query. That takes a running server. The shape is checked, not the
+execution.
 
-Spuštění:
-    .\.venv\Scripts\python.exe tests\test_dialect.py
+Run:
+    .venv/bin/python tests/test_dialect.py
 """
 
 from __future__ import annotations
@@ -26,10 +28,10 @@ from jellyscope import dialect  # noqa: E402
 failures = 0
 
 
-def check(ok: bool, message: str) -> None:
+def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK     ' if ok else 'CHYBA  '}{message}")
-    if not ok:
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
+    if not condition:
         failures += 1
 
 
@@ -37,82 +39,82 @@ def pg(sql: str) -> str:
     return dialect.translate(sql, dialect.POSTGRES)
 
 
-print("--- SQLite zůstává beze změny ---")
+print("--- SQLite stays unchanged ---")
 for sql in [
     "SELECT * FROM items WHERE id = ?",
     "SELECT datetime('now', ?) FROM playback",
     "SELECT name FROM items WHERE name LIKE ?",
 ]:
-    check(dialect.translate(sql, dialect.SQLITE) == sql, f"beze změny: {sql[:40]}")
+    check(dialect.translate(sql, dialect.SQLITE) == sql, f"unchanged: {sql[:40]}")
 
-print("--- zástupné znaky ---")
+print("--- placeholders ---")
 check(pg("SELECT * FROM items WHERE id = ?") == "SELECT * FROM items WHERE id = %s",
-      "otazník na %s")
-check("?" not in pg("SELECT ? , ? , ?"), "všechny otazníky přeloženy")
+      "question mark to %s")
+check("?" not in pg("SELECT ? , ? , ?"), "every question mark translated")
 
-# Otazník uvnitř textu se přepsat nesmí - je to data, ne zástupný znak.
+# A question mark inside text must not be rewritten - it is data, not a placeholder.
 translated = pg("SELECT * FROM items WHERE name = 'kdo?' AND id = ?")
 check("'kdo?'" in translated and translated.endswith("= %s"),
-      f"otazník uvnitř textu zůstal: {translated}")
+      f"the question mark inside text stayed: {translated}")
 
-print("--- procenta ---")
+print("--- percent signs ---")
 translated = pg("SELECT * FROM items WHERE audio_languages NOT LIKE '%cs%'")
-check("'%%cs%%'" in translated, f"procenta zdvojena: {translated}")
-check(translated.count("%s") == 0, "žádný falešný zástupný znak nevznikl")
+check("'%%cs%%'" in translated, f"percent signs doubled: {translated}")
+check(translated.count("%s") == 0, "no false placeholder came into being")
 
 translated = pg("SELECT * FROM items WHERE name LIKE ? AND path NOT LIKE '%tmp%'")
 check("%s" in translated and "'%%tmp%%'" in translated,
-      f"parametr i literál zároveň: {translated}")
+      f"a parameter and a literal at once: {translated}")
 
-print("--- čas ---")
+print("--- time ---")
 translated = pg("WHERE started_at >= datetime('now', ?)")
-check("to_char(" in translated, "datetime se převádí zpět na text")
-check("::interval" in translated, "parametr se čte jako interval")
-check("%s" in translated, "parametr zůstal parametrem")
-# Sloupce jsou textové. Kdyby překlad vrátil timestamp, PostgreSQL by
-# porovnání text >= timestamp odmítl.
-check("'YYYY-MM-DD HH24:MI:SS'" in translated, "výsledek má náš formát času")
+check("to_char(" in translated, "datetime is converted back to text")
+check("::interval" in translated, "the parameter is read as an interval")
+check("%s" in translated, "the parameter stayed a parameter")
+# The columns are text. Were the translation to return a timestamp, PostgreSQL
+# would refuse the comparison text >= timestamp.
+check("'YYYY-MM-DD HH24:MI:SS'" in translated, "the result has our time format")
 
 translated = pg("WHERE substr(date_created, 1, 10) < date('now', '-60 days')")
-check("interval '-60 days'" in translated, f"pevný interval: {translated}")
-check("'YYYY-MM-DD'" in translated, "u date() stačí datum bez času")
+check("interval '-60 days'" in translated, f"a fixed interval: {translated}")
+check("'YYYY-MM-DD'" in translated, "for date() the date without the time is enough")
 
 translated = pg("SELECT (julianday('now') - julianday(?)) * 24 * 60 AS minutes")
 check("EXTRACT(EPOCH FROM" in translated and "/ 60" in translated,
-      f"julianday na minuty: {translated}")
-check("julianday" not in translated, "julianday nikde nezůstal")
+      f"julianday to minutes: {translated}")
+check("julianday" not in translated, "no julianday stayed anywhere")
 
-print("--- místní čas ---")
+print("--- local time ---")
 translated = pg("SELECT date(started_at, 'localtime') AS day")
 check("::date" in translated and "current_setting('TIMEZONE')" in translated,
       f"date(x,'localtime'): {translated}")
 
 translated = pg("SELECT CAST(strftime('%H', started_at, 'localtime') AS INTEGER)")
-check("EXTRACT(HOUR FROM" in translated, f"hodina: {translated}")
-check("strftime" not in translated, "strftime nikde nezůstal")
+check("EXTRACT(HOUR FROM" in translated, f"hour: {translated}")
+check("strftime" not in translated, "no strftime stayed anywhere")
 
 translated = pg("SELECT CAST(strftime('%w', p.started_at, 'localtime') AS INTEGER)")
-check("EXTRACT(DOW FROM" in translated, "den v týdnu")
-check("p.started_at" in translated, "název sloupce s tečkou přežil")
+check("EXTRACT(DOW FROM" in translated, "day of the week")
+check("p.started_at" in translated, "a column name with a dot survived")
 
-print("--- LIKE a ILIKE ---")
-check("ILIKE" in pg("WHERE name LIKE ?"), "LIKE na ILIKE")
-check("NOT ILIKE" in pg("WHERE name NOT LIKE ?"), "NOT LIKE na NOT ILIKE")
-# Uvnitř textu se slovo LIKE přepsat nesmí.
-check("'I LIKE IT'" in pg("SELECT 'I LIKE IT' AS x"), "LIKE uvnitř textu zůstal")
+print("--- LIKE and ILIKE ---")
+check("ILIKE" in pg("WHERE name LIKE ?"), "LIKE to ILIKE")
+check("NOT ILIKE" in pg("WHERE name NOT LIKE ?"), "NOT LIKE to NOT ILIKE")
+# Inside text the word LIKE must not be rewritten.
+check("'I LIKE IT'" in pg("SELECT 'I LIKE IT' AS x"), "LIKE inside text stayed")
 
-print("--- pomocníci pro nepřenosné konstrukce ---")
+print("--- helpers for non-portable constructs ---")
 check(dialect.group_concat(dialect.SQLITE, "path", "','") == "GROUP_CONCAT(path, ',')",
-      "GROUP_CONCAT pro SQLite")
+      "GROUP_CONCAT for SQLite")
 check(dialect.group_concat(dialect.POSTGRES, "path", "','") == "string_agg(path, ',')",
-      "string_agg pro PostgreSQL")
-check(dialect.greatest(dialect.SQLITE, "a", "b") == "MAX(a, b)", "MAX pro SQLite")
+      "string_agg for PostgreSQL")
+check(dialect.greatest(dialect.SQLITE, "a", "b") == "MAX(a, b)", "MAX for SQLite")
 check(dialect.greatest(dialect.POSTGRES, "a", "b") == "GREATEST(a, b)",
-      "GREATEST pro PostgreSQL")
+      "GREATEST for PostgreSQL")
 
-print("--- skutečné dotazy z aplikace ---")
-# Projdeme dotazy tak, jak je aplikace opravdu posílá, a ověříme, že
-# v překladu nezůstal žádný tvar, kterému by PostgreSQL nerozuměl.
+print("--- real queries of the application ---")
+# We go through queries as the application really sends them and check that
+# no shape PostgreSQL would not understand stayed in the translation.
 from jellyscope import db  # noqa: E402
 
 REAL_QUERIES = [
@@ -140,31 +142,31 @@ REAL_QUERIES = [
     WHERE is_missing = 0 AND audio_languages NOT LIKE '%cs%'
     """,
     "SELECT (julianday('now') - julianday(?)) * 24 * 60",
-    # Denní snímek knihovny: zápis přes ON CONFLICT i čtení za období.
+    # The daily library snapshot: writing through ON CONFLICT and reading for a period.
     """
     INSERT INTO library_snapshot
-        (den, polozek, filmu, epizod, velikost, uhd, hdr,
-         bez_technik, volne_misto, zapsano_v)
+        (day, item_count, movie_count, episode_count, size_bytes, uhd, hdr,
+         without_tech, free_space, written_at)
     VALUES (?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT (den) DO UPDATE SET
-        polozek = excluded.polozek, velikost = excluded.velikost
+    ON CONFLICT (day) DO UPDATE SET
+        item_count = excluded.item_count, size_bytes = excluded.size_bytes
     """,
     """
-    SELECT den, polozek, velikost, volne_misto FROM library_snapshot
-    WHERE den >= ? AND den <= ? ORDER BY den
+    SELECT day, item_count, size_bytes, free_space FROM library_snapshot
+    WHERE day >= ? AND day <= ? ORDER BY day
     """,
-    # Podminka "tohle je prepocet" - hleda podle zacatku nazvu, takze nese
-    # procento uvnitr retezce. Viz stats.je_transcode().
+    # The condition "this is a transcode" - it looks by the start of the name,
+    # so it carries a percent sign inside the string. See stats.transcode_condition().
     """
     SELECT COALESCE(SUM(CASE WHEN play_method LIKE 'Transcode%'
                         THEN watched_seconds ELSE 0 END), 0) AS transcoded
     FROM playback WHERE started_at >= ? AND started_at < ?
     """,
-    # Dopoctena minulost knihovny - viz stats._dopoctena_krivka().
+    # The library's past worked out backwards - see stats._backfilled_curve().
     """
-    SELECT substr(date_created, 1, 10) AS vznik,
-           CASE WHEN is_missing = 1 THEN substr(synced_at, 1, 10) END AS naposledy,
-           COALESCE(size_bytes, 0) AS velikost,
+    SELECT substr(date_created, 1, 10) AS created,
+           CASE WHEN is_missing = 1 THEN substr(synced_at, 1, 10) END AS last_at,
+           COALESCE(size_bytes, 0) AS size,
            type
       FROM items
      WHERE date_created IS NOT NULL AND date_created != ''
@@ -177,74 +179,74 @@ BANNED = ["datetime('now'", "julianday", "strftime", "'localtime'",
 for index, query in enumerate(REAL_QUERIES):
     translated = pg(query)
     leftovers = [word for word in BANNED if word in translated]
-    check(not leftovers, f"dotaz {index + 1}: nezůstalo nic nepřenosného {leftovers}")
-    check("?" not in translated, f"dotaz {index + 1}: žádný otazník nezůstal")
+    check(not leftovers, f"query {index + 1}: nothing non-portable stayed {leftovers}")
+    check("?" not in translated, f"query {index + 1}: no question mark stayed")
 
-print("--- nastavení připojení ---")
+print("--- connection settings ---")
 config = dialect.DatabaseConfig(kind="postgres", host="db", port=5433,
-                                database="js", user="u", password="tajne")
-check(config.is_postgres, "rozpozná PostgreSQL")
-check("tajne" not in config.describe(), f"popis neobsahuje heslo: {config.describe()}")
-check("tajne" not in str(config.to_dict(include_password=False)),
-      "export bez hesla ho opravdu neobsahuje")
+                                database="js", user="u", password="secret")
+check(config.is_postgres, "recognises PostgreSQL")
+check("secret" not in config.describe(), f"the description holds no password: {config.describe()}")
+check("secret" not in str(config.to_dict(include_password=False)),
+      "the export without the password really does not hold it")
 
 restored = dialect.DatabaseConfig.from_dict(config.to_dict())
-check(restored.to_dict() == config.to_dict(), "uložení a načtení dá totéž")
+check(restored.to_dict() == config.to_dict(), "saving and reading give the same")
 
-# Neznámý druh databáze musí spadnout na SQLite, ne rozbít start.
+# An unknown kind of database has to fall back to SQLite, not break the start.
 odd = dialect.DatabaseConfig.from_dict({"kind": "oracle"})
-check(odd.kind == dialect.SQLITE, "neznámý druh databáze -> SQLite")
+check(odd.kind == dialect.SQLITE, "an unknown kind of database -> SQLite")
 
 
-print("--- hláška při chybějícím psycopg ---")
-# Dřív radila `pip install "psycopg[binary,pool]"`, takže to vypadalo,
-# že si aplikace vynucuje zásobník spojení - i když ho měl uživatel
-# vypnutý. A holé `pip` by instalovalo mimo virtuální prostředí.
+print("--- the message when psycopg is missing ---")
+# It used to advise `pip install "psycopg[binary,pool]"`, so it looked as if
+# the application enforced the connection pool - even when the user had it
+# switched off. And a bare `pip` would install outside the virtual environment.
 import builtins  # noqa: E402
 
 _real_import = builtins.__import__
 
 
-def _bez_psycopg(name, *args, **kwargs):
+def _without_psycopg(name, *args, **kwargs):
     if name.startswith("psycopg"):
-        raise ImportError("simulovaně chybí")
+        raise ImportError("missing on purpose")
     return _real_import(name, *args, **kwargs)
 
 
-bez_pool = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="x", database="d",
-                                  user="u", password="p", use_pool=False)
-builtins.__import__ = _bez_psycopg
+no_pool = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="x", database="d",
+                                 user="u", password="p", use_pool=False)
+builtins.__import__ = _without_psycopg
 try:
-    db._open_raw(bez_pool)
-    hlaska = ""
+    db._open_raw(no_pool)
+    message = ""
 except RuntimeError as exc:
-    hlaska = str(exc)
+    message = str(exc)
 except Exception as exc:  # noqa: BLE001
-    hlaska = f"jiná výjimka: {type(exc).__name__}"
+    message = f"another exception: {type(exc).__name__}"
 finally:
     builtins.__import__ = _real_import
 
-check("psycopg[binary]\"" in hlaska,
-      "hláška radí základní psycopg[binary], ne rovnou doplněk pool")
-check("psycopg[binary,pool]" not in hlaska,
-      "hláška si nevynucuje zásobník, když je vypnutý")
-check(sys.executable in hlaska,
-      "hláška ukazuje python z virtuálního prostředí, ne obecné 'pip'")
-check("-m pip install" in hlaska, "hláška používá python -m pip")
+check("psycopg[binary]\"" in message,
+      "the message advises the basic psycopg[binary], not the pool extra right away")
+check("psycopg[binary,pool]" not in message,
+      "the message does not enforce the pool when it is switched off")
+check(sys.executable in message,
+      "the message shows the python of the virtual environment, not a general 'pip'")
+check("-m pip install" in message, "the message uses python -m pip")
 
 
-print("--- volba zásobníku se ukládá ---")
-# Zásobník jde vypnout. Musí to přežít uložení do souboru i načtení zpátky,
-# jinak by se po restartu sám zase zapnul.
+print("--- the choice of pool is saved ---")
+# The pool can be switched off. That has to survive saving to the file and
+# reading it back, otherwise it would switch itself on again after a restart.
 off = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="db", database="js",
                              user="u", password="p", use_pool=False)
-check(off.to_dict()["use_pool"] is False, "vypnutý zásobník je v exportu")
+check(off.to_dict()["use_pool"] is False, "a switched-off pool is in the export")
 check(dialect.DatabaseConfig.from_dict(off.to_dict()).use_pool is False,
-      "vypnutý zásobník přežije uložení a načtení")
+      "a switched-off pool survives saving and reading")
 
-# Starý soubor tenhle klíč nemá - tam musí platit zapnuto.
+# An old file does not have this key - on has to apply there.
 check(dialect.DatabaseConfig.from_dict({"kind": "postgres"}).use_pool is True,
-      "starý soubor bez klíče = zapnuto")
+      "an old file without the key = on")
 
 import tempfile  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -253,30 +255,31 @@ with tempfile.TemporaryDirectory() as tmp:
     base = Path(tmp)
     dialect.save_config(base, off)
     loaded = dialect.load_config(base, "data/jellyscope.db")
-    check(loaded.use_pool is False, "volba přežije zápis na disk a načtení")
-    check(loaded.host == "db", "zbytek nastavení se cestou neztratil")
+    check(loaded.use_pool is False, "the choice survives writing to the disk and reading")
+    check(loaded.host == "db", "the rest of the settings did not get lost on the way")
 
 
-print("--- zásobník spojení ---")
-# Zásobník je jen pro PostgreSQL. U SQLite se ho nesmí ani dotknout -
-# otevřít soubor je levné a sdílet jedno spojení mezi vlákny by u sqlite3
-# naopak dělalo potíže.
+print("--- the connection pool ---")
+# The pool is for PostgreSQL only. SQLite must not even touch it - opening a
+# file is cheap, and sharing one connection between threads would, on the
+# contrary, make trouble with sqlite3.
 from jellyscope import db  # noqa: E402
 
 sqlite_config = dialect.DatabaseConfig(kind=dialect.SQLITE, path="data/x.sqlite3")
-check(db._get_pool.__module__ == "jellyscope.db", "zásobník je v db.py")
+check(db._get_pool.__module__ == "jellyscope.db", "the pool is in db.py")
 
 with db.connect(sqlite_config) as conn:
     conn.execute("SELECT 1")
-check(db._pool is None, "SQLite zásobník vůbec nevytvoří")
+check(db._pool is None, "SQLite does not create a pool at all")
 
-# Zavření prázdného zásobníku nesmí spadnout - volá se při každém vypnutí,
-# i když se na PostgreSQL nikdy nesáhlo.
+# Closing an empty pool must not fail - it is called at every shutdown, even
+# when PostgreSQL was never touched.
 db.close_pool()
-check(db._pool is None, "close_pool() na prázdném zásobníku projde")
+check(db._pool is None, "close_pool() on an empty pool passes")
 
-# Když psycopg_pool chybí, _get_pool vrátí None a aplikace jede postaru.
-# Simulujeme to tím, že import knihovny dočasně znemožníme.
+# When psycopg_pool is missing, _get_pool returns None and the application
+# goes the old way. We simulate it by making the import of the library
+# impossible for a while.
 import builtins  # noqa: E402
 
 real_import = builtins.__import__
@@ -284,7 +287,7 @@ real_import = builtins.__import__
 
 def _blocked(name, *args, **kwargs):
     if name.startswith("psycopg"):
-        raise ImportError("simulovaně chybí")
+        raise ImportError("missing on purpose")
     return real_import(name, *args, **kwargs)
 
 
@@ -292,478 +295,530 @@ pg_config = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="db", port=5432,
                                    database="js", user="u", password="p")
 builtins.__import__ = _blocked
 try:
-    check(db._get_pool(pg_config) is None, "bez psycopg_pool vrátí None místo pádu")
+    check(db._get_pool(pg_config) is None, "without psycopg_pool it returns None instead of failing")
 finally:
     builtins.__import__ = real_import
     db.close_pool()
 
-# Zásobník patří ke konkrétnímu serveru. Změna cíle ho musí zahodit,
-# jinak by se nová nastavení dotazovala staré databáze.
-other_config = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="jiny", port=5432,
+# The pool belongs to a particular server. Changing the target has to throw it
+# away, otherwise the new settings would query the old database.
+other_config = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="other", port=5432,
                                       database="js", user="u", password="p")
 check(db._pool_identity(pg_config) != db._pool_identity(other_config),
-      "jiný server = jiná totožnost zásobníku")
+      "another server = another identity of the pool")
 check(db._pool_identity(pg_config) == db._pool_identity(
           dialect.DatabaseConfig(kind=dialect.POSTGRES, host="db", port=5432,
                                  database="js", user="u", password="p")),
-      "stejný server = stejná totožnost zásobníku")
+      "the same server = the same identity of the pool")
 
-# Když je psycopg_pool k dispozici, zkusíme zásobník opravdu postavit.
-# Server k tomu není potřeba - spojení se navazují až na pozadí. Ověřujeme
-# tím, že argumenty, které mu předáváme, knihovna doopravdy přijme.
+# When psycopg_pool is available, we really try to build the pool. No server
+# is needed for it - the connections are made in the background. It checks
+# that the library really accepts the arguments we pass to it.
 try:
     import psycopg_pool  # noqa: F401
 except ImportError:
-    print("PRESKOCENO  psycopg_pool není nainstalované")
+    print("SKIPPED  psycopg_pool is not installed")
 else:
     import warnings
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pool = db._get_pool(pg_config)
-        check(pool is not None, "zásobník se postavil")
-        check(pool.max_size == db.POOL_MAX_SIZE, f"strop je {db.POOL_MAX_SIZE}")
-        check(db._get_pool(pg_config) is pool, "druhé volání vrátí tentýž zásobník")
-        check(db._get_pool(other_config) is not pool, "jiný server = nový zásobník")
+        check(pool is not None, "the pool was built")
+        check(pool.max_size == db.POOL_MAX_SIZE, f"the ceiling is {db.POOL_MAX_SIZE}")
+        check(db._get_pool(pg_config) is pool, "a second call returns the same pool")
+        check(db._get_pool(other_config) is not pool, "another server = a new pool")
         db.close_pool()
-        check(db._pool is None, "close_pool() zásobník uklidil")
+        check(db._pool is None, "close_pool() tidied the pool away")
 
-        # Vypnutá volba znamená "žádný zásobník", i když knihovna je.
-        check(db._get_pool(off) is None, "vypnutá volba zásobník nepostaví")
-        check(db._pool is None, "vypnutá volba po sobě nic nenechá")
+        # A switched-off choice means "no pool", even when the library is there.
+        check(db._get_pool(off) is None, "a switched-off choice builds no pool")
+        check(db._pool is None, "a switched-off choice leaves nothing behind")
 
 # ---------------------------------------------------------------------------
-# Procenta v dotazu bez parametrů
+# Percent signs in a query without parameters
 # ---------------------------------------------------------------------------
 #
-# Překlad zdvojuje procenta (`LIKE '%cs%'` -> `LIKE '%%cs%%'`), protože
-# psycopg čte `%` jako začátek zástupného znaku. Zpátky na jedno procento to
-# složí až psycopg - jenže to dělá jen tehdy, když nějaké parametry dostane.
+# The translation doubles percent signs (`LIKE '%cs%'` -> `LIKE '%%cs%%'`),
+# because psycopg reads `%` as the start of a placeholder. Back to one percent
+# sign they are put only by psycopg - but it does that only when it gets some
+# parameters.
 #
-# Dotaz bez parametrů proto musí dostat prázdnou n-tici, ne None. S None by
-# odešel se zdvojenými procenty a `LIKE '%%cs%%'` by hledal text "%cs%"
-# doslova - filtr by tiše přestal filtrovat.
+# So a query without parameters has to get an empty tuple, not None. With None
+# it would go out with the doubled percent signs, and `LIKE '%%cs%%'` would look
+# for the text "%cs%" literally - the filter would quietly stop filtering.
 
 print()
-print("--- procenta v dotazu bez parametrů ---")
+print("--- percent signs in a query without parameters ---")
 
 
-class FalesnyKurzor:
+class FakeCursor:
     def __init__(self):
-        self.videl = None
+        self.seen = None
 
     def execute(self, query, params=None):
-        self.videl = (query, params)
+        self.seen = (query, params)
         return self
 
 
-class FalesneSpojeni:
+class FakeConnection:
     def __init__(self):
-        self.kurzor = FalesnyKurzor()
+        self.fake_cursor = FakeCursor()
 
     def cursor(self):
-        return self.kurzor
+        return self.fake_cursor
 
 
-syrove = FalesneSpojeni()
-spojeni = db.Connection(syrove, dialect.POSTGRES)
-spojeni.execute("SELECT COUNT(*) FROM items WHERE audio_languages NOT LIKE '%cs%'")
-query, params = syrove.kurzor.videl
+raw = FakeConnection()
+connection = db.Connection(raw, dialect.POSTGRES)
+connection.execute("SELECT COUNT(*) FROM items WHERE audio_languages NOT LIKE '%cs%'")
+query, params = raw.fake_cursor.seen
 
-check(params is not None, "dotaz bez parametrů dostane n-tici, ne None")
-check(params == (), f"a je prázdná: {params!r}")
+check(params is not None, "a query without parameters gets a tuple, not None")
+check(params == (), f"and it is empty: {params!r}")
 
-# A teď doopravdy: co by ze zadaného dotazu poskládalo psycopg?
+# And now for real: what would psycopg put together from the given query?
 try:
     from psycopg._queries import PostgresQuery
     from psycopg.adapt import Transformer
 except ImportError:
-    print("PRESKOCENO  psycopg není nainstalované")
+    print("SKIPPED  psycopg is not installed")
 else:
-    hotovy = PostgresQuery(Transformer())
-    hotovy.convert(query, params)
-    odeslane = hotovy.query.decode()
-    check("'%cs%'" in odeslane, f"na server jde jedno procento: {odeslane}")
-    check("%%" not in odeslane, "žádné zdvojené procento nezůstalo")
+    built = PostgresQuery(Transformer())
+    built.convert(query, params)
+    sent = built.query.decode()
+    check("'%cs%'" in sent, f"one percent sign goes to the server: {sent}")
+    check("%%" not in sent, "no doubled percent sign stayed")
 
 # ---------------------------------------------------------------------------
-# Tiky se do čtyřbajtového INTEGER nevejdou
+# Ticks do not fit into a four-byte INTEGER
 # ---------------------------------------------------------------------------
 #
-# Jellyfin měří čas ve "ticích" po 100 nanosekundách, takže čtvrthodinový
-# díl má přes 9 miliard. V SQLite je to jedno (velikost se řídí hodnotou),
-# ale PostgreSQL má INTEGER čtyřbajtový a spadne na "integer out of range".
+# Jellyfin measures time in "ticks" of 100 nanoseconds, so a quarter-hour
+# episode has over 9 billion. In SQLite it does not matter (the size follows
+# the value), but PostgreSQL has a four-byte INTEGER and fails on "integer out
+# of range".
 #
-# Chyba se projeví až za běhu a jen u jedné z databází - přesně ta, kterou
-# vývoj na SQLite nikdy neukáže. Proto se hlídá tady.
+# The error shows only at run time and only with one of the databases -
+# exactly the one development on SQLite never shows. So it is guarded here.
 
 print()
-print("--- sloupce s tiky musí být BIGINT ---")
-import re  # noqa: E402
+print("--- columns with ticks have to be BIGINT ---")
 
 schema_pg = (PROJECT / "jellyscope" / "schema_postgres.sql").read_text(encoding="utf-8")
-spatne = [
-    radek.strip()
-    for radek in schema_pg.splitlines()
-    if re.search(r"^\s*\w*ticks\w*\s+", radek) and "BIGINT" not in radek.upper()
+wrong = [
+    line.strip()
+    for line in schema_pg.splitlines()
+    if re.search(r"^\s*\w*ticks\w*\s+", line) and "BIGINT" not in line.upper()
 ]
-check(not spatne, f"v schema_postgres.sql; chybné: {spatne}")
+check(not wrong, f"in schema_postgres.sql; wrong: {wrong}")
 
-nalezeno = len(re.findall(r"(?mi)^\s*\w*ticks\w*\s+BIGINT", schema_pg))
-check(nalezeno >= 3, f"a je jich tam dost ({nalezeno})")
+found_count = len(re.findall(r"(?mi)^\s*\w*ticks\w*\s+BIGINT", schema_pg))
+check(found_count >= 3, f"and there are enough of them ({found_count})")
 
-# Totéž platí pro bajty. INTEGER je v PostgreSQL čtyřbajtový, takže se do
-# něj vejde 2,1 GB - knihovna ani volné místo se tam nevejdou. SQLite tuhle
-# past nemá (INTEGER je tam osmibajtový), takže se pozná až na Postgresu.
-BAJTOVE = ("size_bytes", "velikost", "volne_misto", "bitrate")
-spatne_bajty = [
-    radek.strip()
-    for radek in schema_pg.splitlines()
-    if re.match(r"^\s*(" + "|".join(BAJTOVE) + r")\s+", radek)
-    and "BIGINT" not in radek.upper()
+# The same holds for bytes. INTEGER is four bytes in PostgreSQL, so 2.1 GB fit
+# into it - neither the library nor the free space fit there. SQLite does not
+# have this trap (INTEGER is eight bytes there), so it shows only on Postgres.
+BYTE_COLUMNS = ("size_bytes", "free_space", "bitrate", "total", "free", "library", "outside")
+wrong_bytes = [
+    line.strip()
+    for line in schema_pg.splitlines()
+    if re.match(r"^\s*(" + "|".join(BYTE_COLUMNS) + r")\s+", line)
+    and "BIGINT" not in line.upper()
 ]
-check(not spatne_bajty, f"bajtové sloupce jsou BIGINT; chybné: {spatne_bajty}")
+check(not wrong_bytes, f"the byte columns are BIGINT; wrong: {wrong_bytes}")
 check(len([r for r in schema_pg.splitlines()
-           if re.match(r"^\s*(" + "|".join(BAJTOVE) + r")\s+", r)]) >= 6,
-      "a hledá se jich dost")
+           if re.match(r"^\s*(" + "|".join(BYTE_COLUMNS) + r")\s+", r)]) >= 6,
+      "and enough of them are looked for")
 
-spatne_migrace = [
-    f"{tabulka}.{sloupec}"
-    for tabulka, sloupce in db.MIGRATIONS.items()
-    for sloupec, typ in sloupce.items()
-    if "ticks" in sloupec and "BIGINT" not in typ.upper()
+wrong_migrations = [
+    f"{table}.{column}"
+    for table, columns in db.MIGRATIONS.items()
+    for column, column_type in columns.items()
+    if "ticks" in column and "BIGINT" not in column_type.upper()
 ]
-check(not spatne_migrace, f"i v migracích; chybné: {spatne_migrace}")
+check(not wrong_migrations, f"in the migrations too; wrong: {wrong_migrations}")
 
-# Sloupec uz jednou zalozeny se migraci neopravi - na to je TYPE_FIXES.
+# A column once created is not fixed by a migration - TYPE_FIXES are for that.
 check(("playback", "media_runtime_ticks") in db.TYPE_FIXES,
-      "existující sloupec se opraví přes TYPE_FIXES")
-check(all("BIGINT" in typ.upper() or "TEXT" in typ.upper()
-          for typ in db.TYPE_FIXES.values()),
-      "a opravy míří na rozumné typy")
+      "an existing column is fixed through TYPE_FIXES")
+check(all("BIGINT" in column_type.upper() or "TEXT" in column_type.upper()
+          for column_type in db.TYPE_FIXES.values()),
+      "and the fixes aim at sensible types")
 
 # ---------------------------------------------------------------------------
-# PostgreSQL chce ve WHEN pravdivostní hodnotu, ne číslo
+# PostgreSQL wants a truth value in WHEN, not a number
 # ---------------------------------------------------------------------------
 #
-# `CASE WHEN ? THEN ...` s parametrem 1/0 na SQLite funguje (nenula = pravda),
-# ale PostgreSQL odmítne: "argument of CASE/WHEN must be type boolean, not
-# type smallint". Zase past, kterou vývoj na SQLite neukáže.
+# `CASE WHEN ? THEN ...` with a parameter 1/0 works on SQLite (non-zero = true),
+# but PostgreSQL refuses: "argument of CASE/WHEN must be type boolean, not
+# type smallint". Another trap development on SQLite does not show.
 #
-# Řešení není psát `? = 1`, ale rozhodnout se v Pythonu a do SQL poslat
-# rovnou výslednou hodnotu - SQL má ukládat, ne rozhodovat.
+# The solution is not writing `? = 1`, but deciding in Python and sending the
+# resulting value to SQL right away - SQL is to store, not to decide.
 
 print()
-print("--- CASE WHEN s parametrem se nepoužívá ---")
+print("--- CASE WHEN with a parameter is not used ---")
 import ast as _ast  # noqa: E402
 
-nalezene = []
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    zdroj = soubor.read_text(encoding="utf-8")
-    for uzel in _ast.walk(_ast.parse(zdroj)):
-        if isinstance(uzel, _ast.Constant) and isinstance(uzel.value, str):
-            text = uzel.value
-        elif isinstance(uzel, _ast.JoinedStr):
+found = []
+for path in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    source = path.read_text(encoding="utf-8")
+    for node in _ast.walk(_ast.parse(source)):
+        if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+            text = node.value
+        elif isinstance(node, _ast.JoinedStr):
             text = "".join(c.value if isinstance(c, _ast.Constant) else "{X}"
-                           for c in uzel.values)
+                           for c in node.values)
         else:
             continue
-        # Komentář o tom psát smíme; jde o skutečný dotaz.
-        bez_komentaru = "\n".join(
-            radek for radek in text.splitlines() if not radek.strip().startswith("--"))
-        if re.search(r"CASE\s+WHEN\s*\?", bez_komentaru, re.I):
-            nalezene.append(f"{soubor.name}:{uzel.lineno}")
+        # A comment may write about it; what matters is a real query.
+        without_comments = "\n".join(
+            line for line in text.splitlines() if not line.strip().startswith("--"))
+        if re.search(r"CASE\s+WHEN\s*\?", without_comments, re.I):
+            found.append(f"{path.name}:{node.lineno}")
 
-check(not nalezene, f"nikde v projektu; nalezeno: {nalezene}")
+check(not found, f"nowhere in the project; found: {found}")
 
-# Kontrola sama sebe - kdyby hledání přestalo hledat, mlčelo by.
-vzorek = "UPDATE t SET a = CASE WHEN ? THEN ? ELSE a END"
-check(bool(re.search(r"CASE\s+WHEN\s*\?", vzorek, re.I)),
-      "kontrola takový dotaz opravdu pozná")
+# A check of itself - were the search to stop searching, it would stay silent.
+sample = "UPDATE t SET a = CASE WHEN ? THEN ? ELSE a END"
+check(bool(re.search(r"CASE\s+WHEN\s*\?", sample, re.I)),
+      "the check really recognises such a query")
 
 print()
-print("--- `IS ?` se nepoužívá ---")
+print("--- `IS ?` is not used ---")
 #
-# SQLite bere `sloupec IS ?` jako porovnání, které zvládne i NULL.
-# PostgreSQL zná jen `IS NULL` / `IS NOT NULL`, takže z `IS %s` je
-# syntaktická chyba - a vývoj na SQLite ji neukáže.
+# SQLite takes `column IS ?` as a comparison that handles NULL too.
+# PostgreSQL knows only `IS NULL` / `IS NOT NULL`, so `IS %s` is a syntax
+# error - and development on SQLite does not show it.
 #
-# Skutečný případ: rozvržení vlastního přehledu se čte při každém
-# požadavku (kvůli záložce v menu), takže to na PostgreSQL neshodilo
-# jednu stránku, ale celou aplikaci.
+# A real case: the custom dashboard's layout is read with every request
+# (because of the tab in the menu), so on PostgreSQL it brought down not one
+# page but the whole application.
 #
-# Řešení je rozhodnout se v Pythonu: "account_id IS NULL" bez parametru,
-# nebo "account_id = ?" s ním.
-nalezene_is = []
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    zdroj = soubor.read_text(encoding="utf-8")
-    for uzel in _ast.walk(_ast.parse(zdroj)):
-        if isinstance(uzel, _ast.Constant) and isinstance(uzel.value, str):
-            text = uzel.value
-        elif isinstance(uzel, _ast.JoinedStr):
+# The solution is to decide in Python: "account_id IS NULL" without a
+# parameter, or "account_id = ?" with it.
+found_is = []
+for path in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    source = path.read_text(encoding="utf-8")
+    for node in _ast.walk(_ast.parse(source)):
+        if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+            text = node.value
+        elif isinstance(node, _ast.JoinedStr):
             text = "".join(c.value if isinstance(c, _ast.Constant) else "{X}"
-                           for c in uzel.values)
+                           for c in node.values)
         else:
             continue
-        # Docstring o tom psát smíme; jde o skutečný dotaz.
+        # A docstring may write about it; what matters is a real query.
         if "SELECT" not in text.upper() and "DELETE" not in text.upper()                 and "UPDATE" not in text.upper():
             continue
         if re.search(r"\bIS\s+\?", text, re.I):
-            nalezene_is.append(f"{soubor.name}:{uzel.lineno}")
+            found_is.append(f"{path.name}:{node.lineno}")
 
-check(not nalezene_is, f"nikde v projektu; nalezeno: {nalezene_is}")
+check(not found_is, f"nowhere in the project; found: {found_is}")
 check(bool(re.search(r"\bIS\s+\?", "DELETE FROM t WHERE a IS ?", re.I)),
-      "kontrola takový dotaz opravdu pozná")
+      "the check really recognises such a query")
 
 print()
-print("--- řádek se nečte podle pořadí ---")
+print("--- a row is not read by position ---")
 #
-# PostgreSQL vraci radky jako slovniky, SQLite jako `sqlite3.Row`, ze
-# ktereho jde cist obojim zpusobem. `radek[0]` tedy pri vyvoji funguje
-# a u uzivatele s PostgreSQL spadne na `KeyError: 0`.
+# PostgreSQL returns rows as dicts, SQLite as `sqlite3.Row`, which can be read
+# both ways. So `row[0]` works during development and fails for a user with
+# PostgreSQL on `KeyError: 0`.
 #
-# Skutecny pripad: prenos jednoho nastaveni pri startu. Aplikace kvuli
-# nemu vubec nenabehla - ani ne stranka, cely proces.
+# A real case: carrying over one setting at start. Because of it the
+# application did not start at all - not just a page, the whole process.
 
 
-def _cteni_podle_poradi(zdroj: str) -> list[int]:
-    """Radky, kde se ctou data z fetchone() podle poradi."""
-    nalezene = []
-    for uzel in _ast.walk(_ast.parse(zdroj)):
-        # Jen v ramci jedne funkce - stejne jmeno jinde neni totez.
-        if not isinstance(uzel, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+def _read_by_position(source: str) -> list[int]:
+    """Lines where data from fetchone() are read by position."""
+    found = []
+    for node in _ast.walk(_ast.parse(source)):
+        # Within one function only - the same name elsewhere is not the same thing.
+        if not isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
             continue
-        z_radku = set()
-        for pod in _ast.walk(uzel):
-            if (isinstance(pod, _ast.Assign) and isinstance(pod.value, _ast.Call)
-                    and isinstance(pod.value.func, _ast.Attribute)
-                    and pod.value.func.attr == "fetchone"):
-                z_radku.update(cil.id for cil in pod.targets
-                               if isinstance(cil, _ast.Name))
-        for pod in _ast.walk(uzel):
-            if not (isinstance(pod, _ast.Subscript)
-                    and isinstance(pod.slice, _ast.Constant)
-                    and isinstance(pod.slice.value, int)):
+        from_row = set()
+        for sub in _ast.walk(node):
+            if (isinstance(sub, _ast.Assign) and isinstance(sub.value, _ast.Call)
+                    and isinstance(sub.value.func, _ast.Attribute)
+                    and sub.value.func.attr == "fetchone"):
+                from_row.update(target.id for target in sub.targets
+                                if isinstance(target, _ast.Name))
+        for sub in _ast.walk(node):
+            if not (isinstance(sub, _ast.Subscript)
+                    and isinstance(sub.slice, _ast.Constant)
+                    and isinstance(sub.slice.value, int)):
                 continue
-            primo = (isinstance(pod.value, _ast.Call)
-                     and isinstance(pod.value.func, _ast.Attribute)
-                     and pod.value.func.attr == "fetchone")
-            pres_jmeno = (isinstance(pod.value, _ast.Name)
-                          and pod.value.id in z_radku)
-            if primo or pres_jmeno:
-                nalezene.append(pod.lineno)
-    return sorted(set(nalezene))
+            direct = (isinstance(sub.value, _ast.Call)
+                      and isinstance(sub.value.func, _ast.Attribute)
+                      and sub.value.func.attr == "fetchone")
+            through_name = (isinstance(sub.value, _ast.Name)
+                            and sub.value.id in from_row)
+            if direct or through_name:
+                found.append(sub.lineno)
+    return sorted(set(found))
 
 
-podle_poradi = []
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    for radek in _cteni_podle_poradi(soubor.read_text(encoding="utf-8")):
-        podle_poradi.append(f"{soubor.name}:{radek}")
+by_position = []
+for path in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    for line in _read_by_position(path.read_text(encoding="utf-8")):
+        by_position.append(f"{path.name}:{line}")
 
-check(not podle_poradi, f"nikde v projektu; nalezeno: {podle_poradi}")
-SPATNE = """def f(c):
-    radek = c.fetchone()
-    return radek[0]
+check(not by_position, f"nowhere in the project; found: {by_position}")
+WRONG = """def f(c):
+    row = c.fetchone()
+    return row[0]
 """
-DOBRE = """def f(c):
-    radek = c.fetchone()
-    return radek["value"]
+RIGHT = """def f(c):
+    row = c.fetchone()
+    return row["value"]
 """
 
-# Kontrola sama sebe - kdyby hledání přestalo hledat, mlčelo by.
-check(_cteni_podle_poradi(SPATNE) == [3],
-      "kontrola takový zápis opravdu pozná")
-check(_cteni_podle_poradi(DOBRE) == [],
-      "a čtení podle jména nechá být")
+# A check of itself - were the search to stop searching, it would stay silent.
+check(_read_by_position(WRONG) == [3],
+      "the check really recognises such code")
+check(_read_by_position(RIGHT) == [],
+      "and leaves reading by name alone")
 
 # ---------------------------------------------------------------------------
-# Zápisy sběrače: sedí počty parametrů a projdou přes psycopg?
+# The collector's writes: do the parameter counts fit and do they pass psycopg?
 # ---------------------------------------------------------------------------
 #
-# INSERT sběrače má přes třicet sloupců a při každém rozšíření se přidává
-# ručně na tři místa (seznam sloupců, řada otazníků, n-tice hodnot). Když
-# se jedno z nich zapomene, SQLite i PostgreSQL to poznají - ale až za
-# běhu, tedy u uživatele. Tady se to pozná hned.
+# The collector's INSERT has over thirty columns, and with every extension it
+# is added to by hand in three places (the list of columns, the row of question
+# marks, the tuple of values). When one of them is forgotten, both SQLite and
+# PostgreSQL notice - but only at run time, that is with the user. Here it is
+# noticed right away.
 
 print()
-print("--- zápisy sběrače ---")
+print("--- the collector's writes ---")
 
-zdroj_collector = (PROJECT / "jellyscope" / "collector.py").read_text(encoding="utf-8")
-zapisu = 0
-for uzel in _ast.walk(_ast.parse(zdroj_collector)):
-    if not (isinstance(uzel, _ast.Call) and getattr(uzel.func, "attr", "") == "execute"):
+collector_source = (PROJECT / "jellyscope" / "collector.py").read_text(encoding="utf-8")
+writes = 0
+for node in _ast.walk(_ast.parse(collector_source)):
+    if not (isinstance(node, _ast.Call) and getattr(node.func, "attr", "") == "execute"):
         continue
-    if not uzel.args or not isinstance(uzel.args[0], _ast.Constant):
+    if not node.args or not isinstance(node.args[0], _ast.Constant):
         continue
-    sql = uzel.args[0].value
+    sql = node.args[0].value
     if not re.search(r"\b(INSERT|UPDATE)\b", sql, re.I):
         continue
-    if len(uzel.args) < 2 or not isinstance(uzel.args[1], _ast.Tuple):
-        continue          # dotaz bez parametrů
+    if len(node.args) < 2 or not isinstance(node.args[1], _ast.Tuple):
+        continue          # a query without parameters
 
-    zapisu += 1
-    otazniku = sql.count("?")
-    hodnot = len(uzel.args[1].elts)
-    druh = "INSERT" if re.search(r"\bINSERT\b", sql, re.I) else "UPDATE"
-    check(otazniku == hodnot,
-          f"{druh} na řádku {uzel.lineno}: {otazniku} zástupných znaků, {hodnot} hodnot")
+    writes += 1
+    placeholders = sql.count("?")
+    values_count = len(node.args[1].elts)
+    kind = "INSERT" if re.search(r"\bINSERT\b", sql, re.I) else "UPDATE"
+    check(placeholders == values_count,
+          f"{kind} on line {node.lineno}: {placeholders} placeholders, {values_count} values")
 
-    # A jestli přeložený tvar psycopg vůbec přijme - tam se pozná
-    # špatně uzávorkovaný překlad nebo zapomenuté procento.
+    # And whether psycopg accepts the translated shape at all - a badly
+    # bracketed translation or a forgotten percent sign shows there.
     try:
         from psycopg._queries import PostgresQuery
         from psycopg.adapt import Transformer
     except ImportError:
         continue
-    hotovy = PostgresQuery(Transformer())
+    built = PostgresQuery(Transformer())
     try:
-        hotovy.convert(dialect.translate(sql, dialect.POSTGRES),
-                       tuple([None] * otazniku))
-        prosel = True
-    except Exception as chyba:            # noqa: BLE001
-        prosel = False
-        print("       ", chyba)
-    check(prosel, f"{druh} na řádku {uzel.lineno} projde přes psycopg")
+        built.convert(dialect.translate(sql, dialect.POSTGRES),
+                      tuple([None] * placeholders))
+        passed = True
+    except Exception as error:            # noqa: BLE001
+        passed = False
+        print("       ", error)
+    check(passed, f"{kind} on line {node.lineno} passes psycopg")
 
-check(zapisu >= 2, f"našly se oba zápisy sběrače ({zapisu})")
+check(writes >= 2, f"both of the collector's writes were found ({writes})")
 
 
 # ---------------------------------------------------------------------------
-# Sestupné řazení podle sloupce, který smí být NULL
+# Descending order by a column that may be NULL
 # ---------------------------------------------------------------------------
-# SQLite považuje NULL za nejmenší hodnotu, takže u DESC skončí nakonec.
-# PostgreSQL má u DESC výchozí NULLS FIRST a dá je na začátek. U dotazu,
-# který bere JEDEN řádek, to není kosmetika - vrátí se jiný řádek. Přesně
-# takhle by se volné místo měřilo na disku prvního nezměřeného souboru.
+# SQLite takes NULL for the smallest value, so with DESC it ends up last.
+# PostgreSQL has NULLS FIRST as the default with DESC and puts them at the
+# start. For a query that takes ONE row this is no cosmetics - another row is
+# returned. Exactly like this the free space would be measured on the disk of
+# the first unmeasured file.
 
-def _nullovatelne_sloupce() -> set[str]:
-    """Sloupce ze schématu, které smí být NULL."""
+def _nullable_columns() -> set[str]:
+    """Columns of the schema that may be NULL."""
     text = (PROJECT / "jellyscope" / "schema.sql").read_text(encoding="utf-8")
-    text = re.sub(r"--[^\n]*", "", text)          # komentáře pryč
-    volne: set[str] = set()
-    for telo in re.findall(r"CREATE TABLE[^(]*\((.*?)\n\);", text, re.S):
-        for radek in telo.split("\n"):
-            radek = radek.strip().rstrip(",")
+    text = re.sub(r"--[^\n]*", "", text)          # comments away
+    nullable: set[str] = set()
+    for body in re.findall(r"CREATE TABLE[^(]*\((.*?)\n\);", text, re.S):
+        for line in body.split("\n"):
+            line = line.strip().rstrip(",")
             m = re.match(r"^([a-z_][a-z0-9_]*)\s+(TEXT|INTEGER|REAL|BLOB|BIGINT)",
-                         radek, re.I)
-            if m and not re.search(r"NOT NULL|PRIMARY KEY", radek, re.I):
-                volne.add(m.group(1).lower())
-    return volne
+                         line, re.I)
+            if m and not re.search(r"NOT NULL|PRIMARY KEY", line, re.I):
+                nullable.add(m.group(1).lower())
+    return nullable
 
 
-def _terminy(vyraz: str) -> list[str]:
-    """Rozdělí ORDER BY na termíny; čárky uvnitř závorek nedělí."""
-    terminy: list[str] = []
-    hloubka = 0
-    kus = ""
-    for znak in vyraz:
-        if znak == "(":
-            hloubka += 1
-        elif znak == ")":
-            hloubka -= 1
-        if znak == "," and hloubka == 0:
-            terminy.append(kus)
-            kus = ""
+def _terms(expression: str) -> list[str]:
+    """Splits ORDER BY into terms; commas inside brackets do not split."""
+    terms: list[str] = []
+    depth = 0
+    chunk = ""
+    for char in expression:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if char == "," and depth == 0:
+            terms.append(chunk)
+            chunk = ""
         else:
-            kus += znak
-    terminy.append(kus)
-    return [t.strip() for t in terminy if t.strip()]
+            chunk += char
+    terms.append(chunk)
+    return [t.strip() for t in terms if t.strip()]
 
 
-def _sql_z_volani(uzel: ast.Call) -> str:
-    """Text dotazu z prvního argumentu - i když je poskládaný z kusů."""
-    kusy: list[str] = []
-    for arg in uzel.args[:1]:
+def _sql_of_call(node: ast.Call) -> str:
+    """The query's text from the first argument - even when it is put together from pieces."""
+    parts: list[str] = []
+    for arg in node.args[:1]:
         for n in ast.walk(arg):
             if isinstance(n, ast.Constant) and isinstance(n.value, str):
-                kusy.append(n.value)
-    return " ".join(kusy)
+                parts.append(n.value)
+    return " ".join(parts)
 
 
-def _rizikova_razeni(zdroj: str) -> list[str]:
-    """Dotazy na jeden řádek řazené sestupně podle nullovatelného sloupce."""
-    volne = _nullovatelne_sloupce()
-    nalezy: list[str] = []
-    for uzel in ast.walk(ast.parse(zdroj)):
-        if not isinstance(uzel, ast.Call):
+def _risky_orderings(source: str) -> list[str]:
+    """Queries for one row ordered descending by a nullable column."""
+    nullable = _nullable_columns()
+    findings: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
             continue
-        jmeno = (uzel.func.attr if isinstance(uzel.func, ast.Attribute)
-                 else getattr(uzel.func, "id", ""))
-        if jmeno not in ("query_one", "query_value"):
+        function_name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                         else getattr(node.func, "id", ""))
+        if function_name not in ("query_one", "query_value"):
             continue
-        sql = _sql_z_volani(uzel)
-        for vyraz in re.findall(r"ORDER BY\s+(.+?)(?:\s+LIMIT\b|$)", sql, re.I | re.S):
-            for termin in _terminy(vyraz):
-                if not re.search(r"\bDESC\b", termin, re.I):
+        sql = _sql_of_call(node)
+        for expression in re.findall(r"ORDER BY\s+(.+?)(?:\s+LIMIT\b|$)", sql, re.I | re.S):
+            for term in _terms(expression):
+                if not re.search(r"\bDESC\b", term, re.I):
                     continue
-                if re.search(r"COALESCE|NULLS", termin, re.I):
+                if re.search(r"COALESCE|NULLS", term, re.I):
                     continue
-                sloupec = re.sub(r"\bDESC\b", "", termin, flags=re.I).strip()
-                sloupec = sloupec.split(".")[-1].strip().lower()
-                if sloupec in volne:
-                    nalezy.append(f"řádek {uzel.lineno}: ORDER BY {termin.strip()}")
-    return nalezy
+                column = re.sub(r"\bDESC\b", "", term, flags=re.I).strip()
+                column = column.split(".")[-1].strip().lower()
+                if column in nullable:
+                    findings.append(f"line {node.lineno}: ORDER BY {term.strip()}")
+    return findings
 
 
 print()
-print('--- podmínka „tohle je přepočet“ projde překladem ---')
-# Nese procento uvnitř řetězce. Kdyby se nezdvojilo, psycopg by ho četl
-# jako začátek zástupného znaku a dotaz by spadl - a spadl by až na
-# PostgreSQL, na SQLite se nic nestane.
+print('--- the condition "this is a transcode" passes the translation ---')
+# It carries a percent sign inside the string. Were it not doubled, psycopg
+# would read it as the start of a placeholder and the query would fail - and it
+# would fail only on PostgreSQL, nothing happens on SQLite.
 from jellyscope import stats as _stats  # noqa: E402
 
-for sloupec in ("play_method", "p.play_method"):
-    prelozene = pg(f"SELECT 1 WHERE {_stats.je_transcode(sloupec)}")
-    check("'Transcode%%'" in prelozene,
-          f"procento je zdvojené ({sloupec}): {prelozene[-24:]}")
-    check("ILIKE" in prelozene, f"a LIKE se přeložilo na ILIKE ({sloupec})")
+for column in ("play_method", "p.play_method"):
+    translated_condition = pg(f"SELECT 1 WHERE {_stats.transcode_condition(column)}")
+    check("'Transcode%%'" in translated_condition,
+          f"the percent sign is doubled ({column}): {translated_condition[-24:]}")
+    check("ILIKE" in translated_condition, f"and LIKE was translated to ILIKE ({column})")
 
-# Past: kdyby se podmínka psala napevno, tenhle test by nic nehlídal.
-check(_stats.je_transcode().startswith("play_method LIKE 'Transcode"),
-      "podmínka má tvar, na který test spoléhá")
-# A hlavně: nikde se transcode nesmí hledat přesnou shodou. Graf doručení
-# ho hledá podle začátku (kvůli importu "Transcode (v:h264 a:direct)")
-# a druhé pravidlo by znamenalo dvě různá čísla na jedné stránce.
-presna_shoda = []
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    for cislo, radek in enumerate(soubor.read_text(encoding="utf-8").splitlines(), 1):
-        if re.search(r"play_method\s*=\s*'Transcode'", radek):
-            presna_shoda.append(f"{soubor.name}:{cislo}")
-check(not presna_shoda, f"nikde se nehledá přesnou shodou: {presna_shoda}")
+# A trap: were the condition written as a fixed text, this test would guard nothing.
+check(_stats.transcode_condition().startswith("play_method LIKE 'Transcode"),
+      "the condition has the shape the test relies on")
+# And above all: a transcode must never be looked for by an exact match. The
+# delivery chart looks for it by the start (because of the import
+# "Transcode (v:h264 a:direct)"), and a second rule would mean two different
+# numbers on one page.
+exact_match = []
+for path in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if re.search(r"play_method\s*=\s*'Transcode'", line):
+            exact_match.append(f"{path.name}:{number}")
+check(not exact_match, f"nowhere is it looked for by an exact match: {exact_match}")
 
 print()
-print("--- jeden řádek se nebere podle sloupce, který smí být NULL ---")
-spatne: list[str] = []
-for soubor in sorted((PROJECT / "jellyscope").glob("**/*.py")):
-    for nalez in _rizikova_razeni(soubor.read_text(encoding="utf-8")):
-        spatne.append(f"{soubor.name} {nalez}")
-check(not spatne, "žádné rizikové řazení " + (", ".join(spatne) or "(čisto)"))
+print("--- one row is not taken by a column that may be NULL ---")
+wrong: list[str] = []
+for path in sorted((PROJECT / "jellyscope").glob("**/*.py")):
+    for finding in _risky_orderings(path.read_text(encoding="utf-8")):
+        wrong.append(f"{path.name} {finding}")
+check(not wrong, "no risky ordering " + (", ".join(wrong) or "(clean)"))
 
-# Past: bez tohohle by test prošel i nad rozbitým kódem.
-past = _rizikova_razeni(
+# A trap: without this the test would pass even over broken code.
+trap = _risky_orderings(
     'db.query_one("SELECT path FROM items ORDER BY size_bytes DESC")')
-check(len(past) == 1, f"a chybu umí najít ({len(past)})")
-cisto = _rizikova_razeni(
+check(len(trap) == 1, f"and it can find the mistake ({len(trap)})")
+clean = _risky_orderings(
     'db.query_one("SELECT path FROM items ORDER BY COALESCE(size_bytes, 0) DESC")')
-check(not cisto, "COALESCE projde")
-klic = _rizikova_razeni('db.query_one("SELECT id FROM items ORDER BY id DESC")')
-check(not klic, "sloupec, který NULL být nesmí, projde taky")
+check(not clean, "COALESCE passes")
+key_column = _risky_orderings('db.query_one("SELECT id FROM items ORDER BY id DESC")')
+check(not key_column, "a column that must not be NULL passes too")
 
 print()
-print("--- předfiltr: malá písmena jen v ASCII, ne-ASCII řádky vždy dál ---")
-# Předfiltr historie v API (api._predfiltr_historie) smí v SQL pustit víc,
-# nikdy míň než přesný filtr v Pythonu. LOWER v PostgreSQL ale skládá
-# písmena podle locale databáze - v turecké z ASCII „I" udělá „ı" a řádek
-# „INFUSE" by se ztratil. Collation "C" mění jen ASCII, stejně jako SQLite.
-check(dialect.male_pismena(dialect.SQLITE, "p.client") == "LOWER(p.client)",
-      "SQLite: LOWER mění jen ASCII samo")
-check(dialect.male_pismena(dialect.POSTGRES, "p.client") == 'LOWER(p.client COLLATE "C")',
-      "PostgreSQL: LOWER s collation C")
-check(dialect.mimo_ascii(dialect.SQLITE, "p.client") == "p.client GLOB '*[^ -~]*'",
-      "SQLite: řádek s ne-ASCII znakem přes GLOB")
-check(dialect.mimo_ascii(dialect.POSTGRES, "p.client") == "p.client ~ '[^ -~]'",
-      "PostgreSQL: přes regulární výraz")
+print("--- prefilter: lower case in ASCII only, non-ASCII rows always through ---")
+# The API's history prefilter (api._history_prefilter) may let more through in
+# SQL, never less than the exact filter in Python. But PostgreSQL's LOWER folds
+# letters by the database's locale - a Turkish one turns an ASCII "I" into "ı",
+# and the row "INFUSE" would get lost. Collation "C" changes ASCII only, the
+# same as SQLite.
+check(dialect.lower_ascii(dialect.SQLITE, "p.client") == "LOWER(p.client)",
+      "SQLite: LOWER changes ASCII only by itself")
+check(dialect.lower_ascii(dialect.POSTGRES, "p.client") == 'LOWER(p.client COLLATE "C")',
+      "PostgreSQL: LOWER with collation C")
+check(dialect.non_ascii(dialect.SQLITE, "p.client") == "p.client GLOB '*[^ -~]*'",
+      "SQLite: a row with a non-ASCII character through GLOB")
+check(dialect.non_ascii(dialect.POSTGRES, "p.client") == "p.client ~ '[^ -~]'",
+      "PostgreSQL: through a regular expression")
 
 print()
-print("HOTOVO - chyb:", failures)
+print("--- an apostrophe and a question mark in an SQL comment ---")
+# The translation for PostgreSQL (dialect._split_literals) looks for text
+# literals by apostrophes and knows nothing about `--` comments. An apostrophe
+# in a comment ("the file's codecs") thus "opens" a literal up to the next
+# apostrophe, and the question marks after it are not turned into `%s` - the
+# query fails on PostgreSQL ("the query has 0 placeholders") and passes on
+# SQLite. It happened after the comments were translated to English
+# (17. 11. 2026).
+
+
+def _comments_with_quote(source: str) -> list[str]:
+    findings = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            texts = [node.value]
+        elif isinstance(node, ast.JoinedStr):
+            texts = ["".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)]
+        else:
+            continue
+        # Every string, not just the one with SELECT: a piece of SQL is put together from constants without it
+        # too. A comment starts with `--` at the start of a line or after a space (not `--headless` in command
+        # options).
+        for text in texts:
+            for line in text.splitlines():
+                comment = re.search(r"(?:^|\s)(--(?:\s.*|$))", line)
+                if comment and (comment.group(1).count("'") % 2 or "?" in comment.group(1)):
+                    findings.append(comment.group(1).strip())
+    return findings
+
+
+with_quote = []
+for path in sorted((PROJECT / "jellyscope").rglob("*.py")):
+    with_quote += [f"{path.relative_to(PROJECT)}: {r[:60]}"
+                   for r in _comments_with_quote(path.read_text(encoding="utf-8"))]
+check(not with_quote, f"no SQL comment has an odd apostrophe or a question mark ({with_quote[:4]})")
+check(_comments_with_quote('q = """SELECT 1\n  -- the file\'s codec\n WHERE x = ?"""')
+      == ["-- the file's codec"], "the check finds an apostrophe in a comment")
+check(not _comments_with_quote('q = """SELECT 1 -- a \'x\' b\n WHERE x = ?"""'),
+      "and leaves a pair of apostrophes (a closed literal) alone")
+# A question mark in a comment is turned into `%s` as well - psycopg then counts one placeholder too many. And a
+# piece of SQL put into a query elsewhere (the group's columns, a piece of WHERE) need not hold SELECT (review of step 6).
+check(_comments_with_quote('q = """SELECT 1 -- why?\n WHERE x = ?"""') == ["-- why?"],
+      "the check finds a question mark in a comment too")
+check(_comments_with_quote('COLUMNS = """\n  COUNT(*) AS n,\n  -- the group\'s files\n  MAX(x) AS m\n"""')
+      == ["-- the group's files"], "and a piece of SQL without SELECT (columns put into a query elsewhere)")
+
+print()
+print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

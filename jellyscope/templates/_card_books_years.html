@@ -1,0 +1,17 @@
+{# The books card "Release years": books by decade.
+
+   From the database (cards_books.py, `d.rows` = stats.books_decades, from the oldest decade; books without a year at the end). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("number of books") }}</p>
+    </div>
+    {% if d.rows %}
+        {% set decade_rows = [] %}
+        {% for r in d.rows %}
+            {% set ignored = decade_rows.append({'label': (r.decades ~ '–' ~ (r.decades + 9)) if r.decades is not none else _('no year'),
+                                          'work_count': r.work_count}) %}
+        {% endfor %}
+        {{ charts.hbar_chart(decade_rows, 'label', 'work_count', unit='', limit=20) | safe }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

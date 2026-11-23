@@ -1,0 +1,123 @@
+{# A Settings section: the apps of the *Arr page
+
+   Included from `settings.html` through `{% include %}`. The context is built by
+   `_section_arr()` in web/settings/page.py: `arr_apps` is a list of
+   cards, one per app of the registry (jellyscope/arr/registry.py), each
+   with its own form.
+
+   The key is never written into the page - it only shows whether there is one
+   (`has_key`). An empty field on saving therefore means "keep the saved one". #}
+
+<p class="hint" style="margin:0 0 16px">
+    {{ _("Statistics from Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr: what was added and when, from where and how fast, how subtitles are doing and how the indexers serve. Every enabled and connected app has its own tab on the *Arr page.") }}
+</p>
+
+{% for a in arr_apps %}
+<div class="card" id="arr-{{ a.app }}">
+    <div class="card-head">
+        <h2>{{ a.name }}</h2>
+        {% if a.connected %}
+            <span class="badge good">{{ _("connected") }}</span>
+        {% elif a.enabled %}
+            <span class="badge warning">{{ _("enabled, not connected") }}</span>
+        {% else %}
+            <span class="badge neutral">{{ _("off") }}</span>
+        {% endif %}
+    </div>
+
+    {# Both buttons are in this form: the test works with what is filled in,
+       not with what is saved (the same as the connection to Jellyfin). #}
+    <form method="post" action="/settings/arr/{{ a.app }}">
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="enabled" value="1" {{ 'checked' if a.enabled }}>
+            <span>{{ _("on") }}</span>
+        </label>
+
+        <div class="field">
+            <label for="arr_{{ a.app }}_url">{{ _("App address") }}</label>
+            <input type="text" id="arr_{{ a.app }}_url" name="url" value="{{ a.url }}"
+                   placeholder="{{ a.example_url }}">
+            <p class="hint">{{ _("Behind a reverse proxy, include the path, e.g. http://server/{app}.").format(app=a.app) }}</p>
+        </div>
+
+        <div class="field">
+            <label for="arr_{{ a.app }}_api_key">{{ _("API key") }}</label>
+            <input type="password" id="arr_{{ a.app }}_api_key" name="api_key" autocomplete="off"
+                   placeholder="{{ _('the saved key is not shown') if a.has_key else '' }}">
+            <p class="hint">
+                {{ _(a.key_hint_text) }}
+                {% if a.has_key %}<br>{{ _("Leave empty to keep the current key.") }}{% endif %}
+            </p>
+        </div>
+
+        {% if a.draft %}
+            <p class="hint">{{ _("The form shows the details you tested; they are not saved yet.") }}</p>
+        {% endif %}
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit" name="action" value="save">
+                {{ _("Save") }}
+            </button>
+            <button data-keep-scroll class="btn" type="submit" name="action" value="test">
+                {{ _("Test connection") }}
+            </button>
+        </div>
+    </form>
+    {# A sync works with the saved settings, not with the form -
+       hence it is apart (as with Jellyfin). #}
+    <div class="btn-row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+        <form method="post" action="/settings/arr/{{ a.app }}/sync">
+            <button data-keep-scroll class="btn" type="submit" {{ 'disabled' if not a.connected }}>
+                {{ _("Sync now") }}
+            </button>
+        </form>
+        {% if a.count %}
+            <button class="btn danger" type="button" data-modal="modal-arr-delete-{{ a.app }}">
+                {{ _("Delete downloaded data") }}
+            </button>
+        {% endif %}
+    </div>
+
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Downloaded history") }}: {{ _n("{n} records", a.count) }}
+        {% if a.state.at %}
+            &middot; {{ _("Last synchronisation") }}: {{ a.state.at | relative }}
+            {% if a.state.result == 'ok' %}
+                &middot; {{ _("{n} added").format(n=a.state.new_count | number) }}
+            {% else %}
+                <br><span class="badge critical">{{ _("error") }}</span> {{ a.state.error }}
+            {% endif %}
+        {% endif %}
+    </p>
+    {# Bazarr only: it returns an event's time as text in its system's format (bazarr/times.py). #}
+    {% if a.state.without_time %}
+    <p class="card-note">
+        <span class="badge warning">{{ _("note") }}</span>
+        {{ _("The time of part of the history could not be read. Such records count only towards the whole history, newer ones by when Jellyscope first saw them. Deleting the downloaded data and syncing again will try to read them once more.") }}
+    </p>
+    {% endif %}
+
+    {% if a.count %}
+    {# Confirming the delete. A window of our own instead of the browser's confirm(): it says what
+       is deleted and what is not, and Cancel has the focus - Enter out of habit deletes nothing. #}
+    <form method="post" action="/settings/arr/{{ a.app }}/delete" id="arr-delete-{{ a.app }}"></form>
+    <dialog id="modal-arr-delete-{{ a.app }}" class="dialog">
+        <h2>{{ _("Delete the downloaded history of") }} {{ a.name }}</h2>
+        <p>
+            {{ _n("Deletes {n} history records downloaded from {name}. They stay in the app. While the app is connected, the next sync downloads them all again.", a.count, name=a.name) }}
+        </p>
+        {# An app from which a deleted history does not come back whole (Prowlarr) says so here. #}
+        {% if a.deletion_note %}
+        <p><span class="badge warning">{{ _("note") }}</span> {{ _(a.deletion_note) }}</p>
+        {% endif %}
+        <p class="card-note">{{ _("A database backup is made right before.") }}</p>
+        <div class="btn-row">
+            <form method="dialog">
+                <button class="btn" type="submit" autofocus>{{ _("Cancel") }}</button>
+            </form>
+            <button data-keep-scroll class="btn danger" type="submit" form="arr-delete-{{ a.app }}">{{ _("Yes, delete") }}</button>
+        </div>
+    </dialog>
+    {% endif %}
+</div>
+{% endfor %}

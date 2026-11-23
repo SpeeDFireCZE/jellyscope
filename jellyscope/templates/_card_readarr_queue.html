@@ -1,0 +1,32 @@
+{# The Readarr card "Queue items with an error or warning": what got stuck.
+
+   Live from the app (cards_readarr.py, `d` = the live state for the account). Only the admin
+   sees the message of an item (paths on the disk, clients' addresses) - others
+   get it empty, the title and the state stay. Three different kinds of "nothing": the app
+   does not answer, the queue did not load, or there really is nothing with an error in it. #}
+{% from "_macros.html" import link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("stuck while downloading or importing") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.queue is none %}
+        <p class="chart-empty">{{ _("The queue could not be loaded from the app.") }}</p>
+    {% elif d.queue.with_error %}
+    <div class="table-wrap"><table>
+        <tbody>
+        {% for f in d.queue.with_error %}
+            <tr>
+                <td class="strong">{% call link(f.detail_url) %}{{ f.title }}{% endcall %}</td>
+                <td><span class="badge warning">{{ f.state }}</span></td>
+                <td class="muted">{{ f.message }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+        <p class="chart-empty">{{ _("Nothing in the queue has an error.") }}</p>
+    {% endif %}
+</div>

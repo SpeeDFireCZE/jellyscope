@@ -1,36 +1,39 @@
-"""Import ze zálohy Jellystatu (JSON).
+"""The import from a Jellystat backup (JSON).
 
-Část balíku importers (viz jellyscope/importers/__init__.py) - kód přesunutý
-beze změny z původního importers.py."""
+Part of the package importers (see jellyscope/importers/__init__.py)."""
 from __future__ import annotations
 
 import json
 import logging
 from typing import Any
 
-from .. import db, scanner
-from .propojeni import link_imported_history
-from .shoda import _index_prehravani, _known_items, _known_users, _uz_tam_je, _zapamatuj
-from .zaklad import _build_row, _existing_keys, _insert, _parse_time
+from .. import db, i18n, scanner
+from .base import _build_row, _existing_keys, _insert, _parse_time
+from .linking import link_imported_history
+from .matching import (
+    _already_there,
+    _known_items,
+    _known_users,
+    _playback_index,
+    _remember,
+)
 
 log = logging.getLogger("jellyscope.importers")
 
 
 def _jellystat_item_type(record: dict[str, Any]) -> str | None:
-    """Film, nebo epizoda? Jellystat to v zaloze neuvadi primo.
+    """A movie or an episode? Jellystat does not say it in its backup directly.
 
-    Tabulka jf_playback_activity zadny sloupec s typem nema - zna ale
-    nazev serialu a id epizody. Kdyz je vyplneny kterykoliv z nich, jde
-    o epizodu; jinak film.
+    The table jf_playback_activity has no column with the type - it knows the series' name and the
+    episode's id, though. When either is filled in, it is an episode; otherwise a movie.
 
-    Drive se sem omylem cetl `NowPlayingItemName`, tedy **nazev titulu**.
-    Do sloupce item_type se pak ukladalo treba "Duna" a vsechno, co
-    rozlisuje filmy od serialu, prestalo fungovat - graf sledovanosti
-    po dnech zustal prazdny, i kdyz hodiny v souhrnu sedely.
+    `NowPlayingItemName`, i.e. **the title's name**, used to be read here by mistake. Then for example
+    "Duna" was stored into the column item_type and everything that tells movies from series stopped
+    working - the chart of watching by days stayed empty, although the hours in the summary matched.
     """
-    explicitni = _pick(record, "ItemType", "item_type", "NowPlayingItemType", "Type")
-    if explicitni in ("Movie", "Episode", "Series", "Audio"):
-        return explicitni
+    explicit = _pick(record, "ItemType", "item_type", "NowPlayingItemType", "Type")
+    if explicit in ("Movie", "Episode", "Series", "Audio", "Book", "AudioBook"):
+        return explicit
 
     if _pick(record, "SeriesName", "seriesname", "series_name") \
             or _pick(record, "EpisodeId", "episodeid", "SeasonId", "seasonid"):
@@ -39,23 +42,23 @@ def _jellystat_item_type(record: dict[str, Any]) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Jellystat (JSON zaloha)
+# 2. Jellystat (a JSON backup)
 # ---------------------------------------------------------------------------
 
-# Jellystat uklada prehravani do tabulky jf_playback_activity. V zaloze
-# muze byt bud primo seznam, nebo slovnik s nazvy tabulek.
+# Jellystat stores plays in the table jf_playback_activity. The backup may hold either a list directly, or a
+# dict with the tables' names.
 JELLYSTAT_TABLES = ("jf_playback_activity", "playback_activity", "jf_playback")
 
 
 def _find_jellystat_rows(payload: Any) -> list[dict[str, Any]]:
-    """Najde v JSON zaloze seznam prehravani.
+    """Find the list of plays in a JSON backup.
 
-    Jellystat menil format zalohy mezi verzemi, takze se nespolehame na
-    jeden tvar a hledame vic moznosti. Kdyz nic nesedi, rekneme to nahlas
-    misto abychom naimportovali prazdno a tvarili se, ze je hotovo.
+    Jellystat changed the backup's format between versions, so we do not rely on one shape and look for
+    several possibilities. When nothing fits, we say so out loud instead of importing emptiness and
+    pretending it is done.
     """
     if isinstance(payload, list):
-        # Bud rovnou seznam zaznamu, nebo seznam tabulek.
+        # Either a list of records directly, or a list of tables.
         if payload and isinstance(payload[0], dict):
             if any(key in payload[0] for key in ("UserId", "userid", "NowPlayingItemId")):
                 return payload
@@ -70,7 +73,7 @@ def _find_jellystat_rows(payload: Any) -> list[dict[str, Any]]:
             value = payload.get(name)
             if isinstance(value, list):
                 return value
-        # Nekdy je vse zabalene o uroven niz.
+        # Sometimes everything is wrapped one level lower.
         for value in payload.values():
             if isinstance(value, (list, dict)):
                 found = _find_jellystat_rows(value)
@@ -81,7 +84,7 @@ def _find_jellystat_rows(payload: Any) -> list[dict[str, Any]]:
 
 
 def _pick(record: dict[str, Any], *names: str) -> Any:
-    """Vrati prvni vyplnene pole z nekolika moznych nazvu."""
+    """Return the first filled-in field of several possible names."""
     lowered = {str(k).lower(): v for k, v in record.items()}
     for name in names:
         value = lowered.get(name.lower())
@@ -90,26 +93,26 @@ def _pick(record: dict[str, Any], *names: str) -> Any:
     return None
 
 
-def _podle_zdroje(existing: set[str]) -> dict[str, str]:
-    """Zdrojový řádek zálohy → klíč, pod kterým už je v databázi.
+def _by_source(existing: set[str]) -> dict[str, str]:
+    """A source row of the backup → the key it is in the database under already.
 
-    Zdrojový řádek pozná předpona klíče `import:jst:<id řádku v záloze>`;
-    co následuje za ní, je položka, na kterou záznam ukazuje.
+    The source row is recognised by the key's prefix `import:jst:<the row's id in the backup>`; what
+    follows is the item the record points at.
     """
-    # Ke kazdemu zdrojovemu radku (prvni dve casti klice) si zapamatujeme,
-    # pod jakym klicem uz v databazi je. Podle toho se pozna oprava.
-    podle_zdroje: dict[str, str] = {}
-    for klic in existing:
-        casti = klic.split(":")
-        if len(casti) >= 4:
-            podle_zdroje[":".join(casti[:3])] = klic
-    return podle_zdroje
+    # For every source row (the first two parts of the key) we remember under which key it is in the
+    # database already. A repair is recognised by it.
+    by_source: dict[str, str] = {}
+    for key in existing:
+        parts = key.split(":")
+        if len(parts) >= 4:
+            by_source[":".join(parts[:3])] = key
+    return by_source
 
 
-def _precti_zaznam(record: Any, index: int) -> dict[str, Any] | None:
-    """Co je v jednom záznamu zálohy: čas, délka, díl nebo seriál, divák, názvy a klíč.
+def _read_record(record: Any, index: int) -> dict[str, Any] | None:
+    """What one record of the backup holds: the time, the length, the episode or the series, the viewer, the names and the key.
 
-    `None` = záznam se použít nedá (není to slovník, nebo nemá čas).
+    `None` = the record cannot be used (it is not a dict, or it has no time).
     """
     if not isinstance(record, dict):
         return None
@@ -127,55 +130,51 @@ def _precti_zaznam(record: Any, index: int) -> dict[str, Any] | None:
     except (TypeError, ValueError):
         duration = 0
 
-    # U epizody posila Jellystat DVE ruzna id a zalezi, ktere se vezme:
+    # For an episode Jellystat sends TWO different ids and it matters which is taken:
     #
-    #   NowPlayingItemId  = id SERIALU   ("Tym SEAL")
-    #   EpisodeId         = id DILU      (to, co chceme)
+    #   NowPlayingItemId  = the SERIES' id    ("Tym SEAL")
+    #   EpisodeId         = the EPISODE's id  (what we want)
     #
-    # Drive se bralo to prvni, takze cela historie serialu skoncila
-    # na jednom id, ke kteremu v knihovne nic nevede - a protoze se
-    # zaznam jmenoval jmenem serialu, nedal se dil dopocitat vubec.
-    # Zadne dohledavani to uz nespravi; jedina cesta je vzit spravne
-    # id rovnou pri importu.
-    dil_id = _pick(record, "EpisodeId", "episodeid", "episode_id")
-    item_id = dil_id or _pick(record, "NowPlayingItemId", "nowplayingitemid",
-                              "ItemId")
+    # The first one used to be taken, so the whole history of a series ended up on one id nothing in the
+    # library leads to - and since the record was called by the series' name, the episode could not be
+    # worked out at all. No look-up fixes that any more; the only way is to take the right id right at the
+    # import.
+    episode_id = _pick(record, "EpisodeId", "episodeid", "episode_id")
+    item_id = episode_id or _pick(record, "NowPlayingItemId", "nowplayingitemid",
+                                  "ItemId")
     user_id = _pick(record, "UserId", "userid", "user_id")
 
-    # Stejny pribeh u nazvu: NowPlayingItemName je u epizody jmeno
-    # serialu. Jmeno dilu je v EpisodeName - a jmeno serialu si
-    # necháme zvlast, at se prehravani zaradi pod svuj serial.
-    jmeno_serialu = _pick(record, "SeriesName", "seriesname",
-                          "NowPlayingItemName", "ItemName", "item_name")
-    jmeno_dilu = _pick(record, "EpisodeName", "episodename", "episode_name")
-    nazev = (jmeno_dilu if dil_id else None) or _pick(
+    # The same story with the name: NowPlayingItemName is the series' name for an episode. The episode's
+    # name is in EpisodeName - and we keep the series' name apart, so that the play files under its series.
+    series_name = _pick(record, "SeriesName", "seriesname",
+                        "NowPlayingItemName", "ItemName", "item_name")
+    episode_name = _pick(record, "EpisodeName", "episodename", "episode_name")
+    name = (episode_name if episode_id else None) or _pick(
         record, "NowPlayingItemName", "ItemName", "item_name")
 
-    # Klic ma tvar "import:jst:<id radku v zaloze>:<id polozky>".
-    # Prvni dve casti identifikuji ZDROJOVY RADEK, treti to, na co
-    # ukazuje - a prave ta se opravou meni.
-    zaklad = f"import:jst:{_pick(record, 'Id', 'id') or index}"
-    key = f"{zaklad}:{item_id}"
-    return {"started_at": started_at, "duration": duration, "dil_id": dil_id,
-            "item_id": item_id, "user_id": user_id, "jmeno_serialu": jmeno_serialu,
-            "nazev": nazev, "zaklad": zaklad, "key": key}
+    # The key has the shape "import:jst:<the row's id in the backup>:<the item's id>". The first two parts
+    # identify the SOURCE ROW, the third what it points at - and exactly that one changes with a repair.
+    base = f"import:jst:{_pick(record, 'Id', 'id') or index}"
+    key = f"{base}:{item_id}"
+    return {"started_at": started_at, "duration": duration, "episode_id": episode_id,
+            "item_id": item_id, "user_id": user_id, "series_name": series_name,
+            "name": name, "base": base, "key": key}
 
 
-def _oprav_presmerovany(zaznam: dict[str, Any], record: dict[str, Any],
-                       podle_zdroje: dict[str, str], existing: set[str]) -> bool:
-    """Oprava starého importu: tentýž řádek zálohy už v databázi je, jen ukazuje jinam.
+def _fix_redirected(entry: dict[str, Any], record: dict[str, Any],
+                    by_source: dict[str, str], existing: set[str]) -> bool:
+    """A repair of an old import: the same row of the backup is in the database already, it only points elsewhere.
 
-    Opraví ho na místě a `podle_zdroje` i `existing` změní tak, jako by se
-    záznam importoval rovnou správně. `False` = nebylo co opravovat.
+    It repairs it in place and changes `by_source` and `existing` as if the record had been imported right
+    straight away. `False` = there was nothing to repair.
     """
-    key, zaklad, dil_id = zaznam["key"], zaznam["zaklad"], zaznam["dil_id"]
-    item_id, nazev, jmeno_serialu = zaznam["item_id"], zaznam["nazev"], zaznam["jmeno_serialu"]
-    # Tentyz radek zalohy uz v databazi je, jen ukazuje jinam - to je
-    # presne stav po importu, ktery bral id serialu misto dilu.
-    # Opravime ho na miste; kdybychom vlozili novy, mel by clovek
-    # kazde prehravani dvakrat.
-    stary_klic = podle_zdroje.get(zaklad)
-    if stary_klic:
+    key, base, episode_id = entry["key"], entry["base"], entry["episode_id"]
+    item_id, name, series_name = entry["item_id"], entry["name"], entry["series_name"]
+    # The same row of the backup is in the database already, it only points elsewhere - exactly the state
+    # after an import that took the series' id instead of the episode's. We repair it in place; if we
+    # inserted a new one, one would have every play twice.
+    old_key = by_source.get(base)
+    if old_key:
         with db.connect() as conn:
             conn.execute(
                 """UPDATE playback
@@ -183,29 +182,29 @@ def _oprav_presmerovany(zaznam: dict[str, Any], record: dict[str, Any],
                           series_name = COALESCE(?, series_name),
                           item_type = ?
                     WHERE session_key = ?""",
-                (key, item_id, nazev or "?",
-                 jmeno_serialu if dil_id else None,
-                 _jellystat_item_type(record), stary_klic),
+                (key, item_id, name or "?",
+                 series_name if episode_id else None,
+                 _jellystat_item_type(record), old_key),
             )
-        podle_zdroje[zaklad] = key
-        existing.discard(stary_klic)
+        by_source[base] = key
+        existing.discard(old_key)
         existing.add(key)
         return True
     return False
 
 
-def _radek_ze_zaznamu(zaznam: dict[str, Any], record: dict[str, Any],
-                      users: dict[str, str], items: dict[str, dict[str, Any]]) -> tuple[Any, ...]:
-    """Řádek historie pro nový záznam - v pořadí sloupců, jak ho čeká `_insert`."""
+def _row_from_record(entry: dict[str, Any], record: dict[str, Any],
+                     users: dict[str, str], items: dict[str, dict[str, Any]]) -> tuple[Any, ...]:
+    """A history row for a new record - in the order of columns `_insert` expects."""
     return _build_row(
-        key=zaznam["key"],
-        user_id=zaznam["user_id"],
-        item_id=zaznam["item_id"],
-        started_at=zaznam["started_at"],
-        duration=zaznam["duration"],
+        key=entry["key"],
+        user_id=entry["user_id"],
+        item_id=entry["item_id"],
+        started_at=entry["started_at"],
+        duration=entry["duration"],
         item_type=_jellystat_item_type(record),
-        item_name=zaznam["nazev"],
-        series_name=zaznam["jmeno_serialu"] if zaznam["dil_id"] else None,
+        item_name=entry["name"],
+        series_name=entry["series_name"] if entry["episode_id"] else None,
         client=_pick(record, "Client", "client"),
         device=_pick(record, "DeviceName", "device_name"),
         method=_pick(record, "PlayMethod", "play_method", "PlaybackMethod"),
@@ -216,30 +215,27 @@ def _radek_ze_zaznamu(zaznam: dict[str, Any], record: dict[str, Any],
 
 
 async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, Any]:
-    """Prevezme historii z JSON zalohy Jellystatu."""
+    """Take over the history from a Jellystat JSON backup."""
     scan_id = scanner.start_task_log("import")
 
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
     except ValueError as exc:
-        scanner.finish_task_log(scan_id, "error", message="neplatný JSON")
-        return {"status": "error", "message": f"Soubor není platný JSON: {exc}"}
+        scanner.finish_task_log(scan_id, "error", message="The file is not valid JSON.")   # the key, translated for the reader
+        return {"status": "error", "message": i18n.translate_with("The file is not valid JSON: {error}", None, error=exc)}
 
     records = _find_jellystat_rows(payload)
     if not records:
-        scanner.finish_task_log(scan_id, "error", message="tabulka přehrávání nenalezena")
-        return {
-            "status": "error",
-            "message": ("V souboru jsem nenašel tabulku přehrávání "
-                        "(jf_playback_activity). Je to opravdu záloha Jellystatu?"),
-        }
+        no_table = "There is no playback table (jf_playback_activity) in the file. Is it really a Jellystat backup?"
+        scanner.finish_task_log(scan_id, "error", message=no_table)
+        return {"status": "error", "message": no_table}
 
     users = _known_users()
     items = _known_items()
     existing = _existing_keys("import:jst:")
-    podle_zdroje = _podle_zdroje(existing)
-    opraveno = 0
-    index_casu = _index_prehravani()
+    by_source = _by_source(existing)
+    repaired = 0
+    time_index = _playback_index()
 
     rows: list[tuple[Any, ...]] = []
     skipped_short = 0
@@ -247,57 +243,56 @@ async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, 
     skipped_known = 0
 
     for index, record in enumerate(records):
-        zaznam = _precti_zaznam(record, index)
-        if zaznam is None:
+        entry = _read_record(record, index)
+        if entry is None:
             continue
-        if zaznam["duration"] < min_seconds:
+        if entry["duration"] < min_seconds:
             skipped_short += 1
             continue
 
-        key = zaznam["key"]
+        key = entry["key"]
         if key in existing:
             skipped_duplicate += 1
             continue
 
-        if _oprav_presmerovany(zaznam, record, podle_zdroje, existing):
-            opraveno += 1
+        if _fix_redirected(entry, record, by_source, existing):
+            repaired += 1
             continue
 
         existing.add(key)
-        podle_zdroje[zaznam["zaklad"]] = key
+        by_source[entry["base"]] = key
 
-        # Tentyz zaznam uz muze byt v databazi z Playback Reportingu nebo
-        # ze sberace.
-        if _uz_tam_je(index_casu, zaznam["user_id"], zaznam["item_id"],
-                      zaznam["started_at"], zaznam["duration"]):
+        # The same record may be in the database already from Playback Reporting or from the collector.
+        if _already_there(time_index, entry["user_id"], entry["item_id"],
+                          entry["started_at"], entry["duration"]):
             skipped_known += 1
             continue
-        _zapamatuj(index_casu, zaznam["user_id"], zaznam["item_id"],
-                   zaznam["started_at"], zaznam["duration"])
+        _remember(time_index, entry["user_id"], entry["item_id"],
+                  entry["started_at"], entry["duration"])
 
-        rows.append(_radek_ze_zaznamu(zaznam, record, users, items))
+        rows.append(_row_from_record(entry, record, users, items))
 
     imported = _insert(rows)
 
-    # Zaloha Jellystatu tmdb ID neobsahuje - dohledame ho sami.
+    # A Jellystat backup holds no tmdb ID - we look it up ourselves.
     linked = await link_imported_history()
 
     scanner.finish_task_log(
         scan_id, "done", total=len(records), ok=imported, failed=0,
-        message=(f"Jellystat: {imported} nových, {opraveno} opravených, "
-                 f"{skipped_duplicate} již existovalo, "
-                 f"{skipped_known} známých z jiného zdroje, "
-                 f"{skipped_short} příliš krátkých"),
+        message=i18n.Message(
+            "Jellystat - new: {imported}, repaired: {repaired}, already there: {duplicates}, from another source: "
+            "{known}, too short: {short}", imported=imported, repaired=repaired, duplicates=skipped_duplicate,
+            known=skipped_known, short=skipped_short),
     )
-    if opraveno:
-        log.info("import: %s zaznamu preneseno ze serialu na konkretni dil",
-                 opraveno)
+    if repaired:
+        log.info("import: %s records moved from the series to a specific episode",
+                 repaired)
     return {
         "status": "ok",
         "source": "Jellystat",
         "found": len(records),
         "imported": imported,
-        "repaired": opraveno,
+        "repaired": repaired,
         "duplicate": skipped_duplicate,
         "known_elsewhere": skipped_known,
         "too_short": skipped_short,

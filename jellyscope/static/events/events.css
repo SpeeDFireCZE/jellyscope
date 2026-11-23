@@ -1,0 +1,165 @@
+/* ---------------------------------------------------------------------------
+   Seasonal decoration - shared by all holidays.
+
+   Loaded only during a holiday (templates/_event_head.html), together
+   with that holiday's CSS. Here: the logo's wrapper with ornaments, the place for
+   the ornament behind the name and the layer with the animation over the page
+   (events.js creates it).
+   --------------------------------------------------------------------------- */
+
+/* The logo with ornaments: ornaments go around it, the ears behind it too. */
+.brand-logo {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 28px;
+    height: 28px;
+}
+.brand-logo > .brand-mark { position: relative; z-index: 1; }
+.brand-logo > .orn {
+    position: absolute;
+    display: block;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* The ornament right after the name - not at the edge of the panel. */
+.brand-ornaments {
+    display: flex;
+    flex: none;
+    align-items: flex-end;
+    height: 32px;
+    margin-left: -4px;
+}
+.brand-ornaments svg { display: block; overflow: visible; }
+
+/* The animation layer: over the whole page, semi-transparent, clicks go through.
+   Above the content, below dropdown menus and dialogs (50 and 60 in style.css). */
+.event-effect {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow: hidden;
+    opacity: .85;
+    pointer-events: none;
+}
+.event-effect > * { position: absolute; }
+
+/* Without motion (the system's "reduce motion" or the account's option) the layer
+   plays nothing; events.js then only places standing ornaments. */
+@media (prefers-reduced-motion: reduce) {
+    .event-effect * { animation: none !important; }
+}
+[data-event-motion="0"] .event-effect * { animation: none !important; }
+
+/* Decoration does not belong on paper. */
+@media print {
+    .event-effect,
+    .brand-ornaments,
+    .brand-logo > .orn { display: none !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   Games after a click on the ornament (static/events/games/<holiday>.js).
+   The ornament behind the name is a button in a row with the link to the Overview, not inside it.
+   --------------------------------------------------------------------------- */
+.brand-row { display: flex; align-items: center; }
+.event-game {
+    padding: 0 2px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    transition: transform .2s;
+}
+/* Only where there is a mouse - on touch the enlargement would stay stuck after a tap. */
+@media (hover: hover) {
+    .event-game:hover { transform: scale(1.12); }
+}
+.event-game:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The scene: a full-screen dialog, above the effect layer (40) and the menu (60). */
+.event-scene {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity .25s;
+}
+.event-scene.expanded { opacity: 1; }
+.event-scene-backdrop { position: absolute; inset: 0; background: rgba(5, 6, 12, .62); }
+.event-stage { position: relative; width: 380px; max-width: 92vw; text-align: center; color: #fff; }
+/* A low window (a phone in landscape): the stage shrinks to fit with the buttons. */
+.event-stage { width: min(380px, 92vw, calc(100vh - 130px)); }
+.event-stage { width: min(380px, 92vw, calc(100dvh - 130px)); }
+.event-stage:focus { outline: none; }
+.event-stage svg.canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.event-stage [tabindex]:focus-visible { outline: 2px dashed #fff; outline-offset: 4px; }
+.event-close {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .45);
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+.event-close:focus-visible,
+.event-buttons button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.event-hint { margin: 6px 0 0; font-size: 14px; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+.event-buttons { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+.event-buttons button {
+    padding: 8px 14px;
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+.event-buttons button.primary-choice { border-color: #ff8c2e; background: #ff8c2e; color: #1a0d00; font-weight: 650; }
+.event-wish {
+    position: absolute;
+    left: 0;
+    right: 0;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    background: linear-gradient(180deg, #fff3b0, #ffc93c 55%, #f29d1a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 10px rgba(255, 200, 60, .55));
+    pointer-events: none;
+}
+.event-confetti { position: absolute; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; }
+.event-finale { position: fixed; inset: 0; z-index: 70; overflow: hidden; pointer-events: none; }
+
+/* Without motion the games work, only nothing moves by itself. */
+@media (prefers-reduced-motion: reduce) {
+    .event-scene *, .event-game * { animation: none !important; }
+}
+[data-event-motion="0"] .event-scene *,
+[data-event-motion="0"] .event-game * { animation: none !important; }
+@media print {
+    .event-scene, .event-finale { display: none !important; }
+}

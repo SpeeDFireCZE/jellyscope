@@ -1,0 +1,17 @@
+{# The Prowlarr card "Queries per day": searches and RSS queries day by day.
+
+   From the database (cards_prowlarr.py, `d.body` = stats.chart_days: days without
+   queries are in the chart as zero, not as a gap). Days in the app's zone. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("searches and RSS, number of queries") }}</p>
+    </div>
+    {% if d.body %}
+        {{ charts.area_chart_multi(d.body, 'day',
+               [{'key': 'searches', 'label': _('searches'), 'slot': 1},
+                {'key': 'rss', 'label': _('RSS'), 'slot': 2}], unit='', whole_ticks=True) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("No query went through Prowlarr in this period.") }}</p>
+    {% endif %}
+</div>

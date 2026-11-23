@@ -1,18 +1,18 @@
-"""Práce s databází.
+"""Working with the database.
 
-Aplikace umí běžet nad **SQLite** (výchozí, nic se neinstaluje) i nad
-**PostgreSQL** (když už ho doma máš). Zbytek programu o tom ale neví –
-píše se jeden dotaz v SQLite dialektu a `dialect.translate()` ho podle
-potřeby přeloží. Viz [dialect.py](dialect.py).
+The application can run on **SQLite** (the default, nothing to install) as well
+as on **PostgreSQL** (when you already have one at home). The rest of the program
+does not know about it, though - a query is written once in the SQLite dialect and
+`dialect.translate()` translates it when needed. See [dialect.py](dialect.py).
 
-Záměrně tu není žádné ORM (knihovna, která píše SQL za tebe). Jellyscope
-je z devadesáti procent "polož databázi chytrou otázku a nakresli odpověď" –
-a to je přesně to, v čem je SQL dobré. Když se ho naučíš tady, budeš ho
-umět všude.
+There is no ORM here on purpose (a library that writes SQL for you). Jellyscope
+is ninety per cent "ask the database a clever question and draw the answer" -
+and that is exactly what SQL is good at. Learn it here, and you will know it
+everywhere.
 
-Celý modul stojí na jedné funkci: `connect()`. Otevře spojení, dá ti ho,
-a po skončení bloku ho sám zavře a uloží změny (nebo je při chybě vrátí
-zpět).
+The whole module stands on one function: `connect()`. It opens a connection,
+gives it to you, and when the block ends it closes it and saves the changes
+itself (or rolls them back on an error).
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from collections.abc import Iterator
 
 from . import config as app_config
 from . import dialect
+from .i18n import SOURCE_LANGUAGE, TranslatableError, error_text, translate_with
 from .config import BASE_DIR, load_config
 
 log = logging.getLogger("jellyscope.db")
@@ -39,154 +40,173 @@ log = logging.getLogger("jellyscope.db")
 SCHEMA_SQLITE = Path(__file__).resolve().parent / "schema.sql"
 SCHEMA_POSTGRES = Path(__file__).resolve().parent / "schema_postgres.sql"
 
-# Jednotný formát času v celé aplikaci (viz utcnow níže).
+# One time format in the whole application (see utcnow below).
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 DEFAULT_SETTINGS: dict[str, str] = {
-    # --- pripojeni k Jellyfinu -------------------------------------------
-    # Drive bylo v .env. Ted se nastavuje z webu, aby uzivatel nemusel
-    # sahat do souboru a restartovat. Hodnoty z .env slouzi uz jen jako
-    # prvni naplneni pri uplne prvnim startu (viz seed_from_env).
+    # --- the connection to Jellyfin -------------------------------------------
+    # It used to be in .env. Now it is set from the web, so the user does not
+    # have to touch a file and restart. The values from .env only serve as the
+    # first filling at the very first start (see seed_from_env).
     "jellyfin_url": "",
     "jellyfin_api_key": "",
-    # Jazyk rozhrani: 'cs' nebo 'en'.
-    "ui_language": "cs",
-    # Jazyk logu. Zvlast od rozhrani schvalne: log cte casto nekdo jiny
-    # (nebo se posila do issue), takze tam muze davat smysl jiny jazyk.
-    "log_language": "cs",
-    # 'jellyfin' = technicka data ber z Jellyfin API (funguje vzdy, mene detailu)
-    # 'ffprobe'  = analyzuj soubory primo na disku (presnejsi, potrebuje pristup)
+    # Interface language - English for a new installation. An existing one has its choice
+    # stored already (the defaults below fill in only what is missing).
+    "ui_language": "en",
+    # 'jellyfin' = take technical data from the Jellyfin API (always works, fewer details)
+    # 'ffprobe'  = analyse the files on the disk directly (more accurate, needs access)
     "tech_source": "jellyfin",
-    # Jak casto se ptat Jellyfinu, co se prave hraje (v sekundach).
+    # How often to ask Jellyfin what is playing right now (in seconds).
     "poll_interval": "10",
-    # Kdy se ma kazdy den synchronizovat knihovna (mistni cas "HH:MM").
+    # When the library is synchronised every day (local time "HH:MM").
     #
-    # Cas, ne interval: je to nocni uloha, ktera projde celou knihovnu.
-    # Kdyby se pocitala od posledniho behu, kazde rucni spusteni by rozvrh
-    # posunulo a uloha by se casem protocila do odpoledne, kdy se lidi
-    # divaji. Viz tasks.py.
+    # A time, not an interval: it is a night task that goes through the whole
+    # library. Were it counted from the last run, every manual run would move
+    # the schedule, and over time the task would drift into the afternoon,
+    # when people watch. See tasks.py.
     "library_sync_time": "03:30",
-    # Jak casto hledat nove pridane tituly. Uloha stoji par volani do
-    # Jellyfinu (jedno na knihovnu), takze muze bezet casto.
+    # How often to look for newly added titles. The task costs a few calls to
+    # Jellyfin (one per library), so it can run often.
     #
-    # Hranici "co je nove" si urcuje sama podle posledniho znameho titulu,
-    # ne podle tohohle intervalu - viz scanner.sync_recent(). Interval rika
-    # jen JAK CASTO se ptat, ne JAK DALEKO zpet se divat.
+    # It sets the border of "what is new" by itself from the last known
+    # title, not from this interval - see scanner.sync_recent(). The interval
+    # only says HOW OFTEN to ask, not HOW FAR back to look.
     "recent_sync_minutes": "15",
     "task_recent_enabled": "1",
-    # Cesta k programu ffprobe. Prazdne = hledej v PATH.
+    # Path to the ffprobe program. Empty = look in PATH.
     "ffprobe_path": "",
-    # Prepis cest, kdyz Jellyfin vidi soubory jinde nez Jellyscope.
+    # Rewriting paths, when Jellyfin sees the files elsewhere than Jellyscope.
     "path_mappings": "[]",
-    # Kolik souboru analyzovat najednou.
+    # How many files to analyse at once.
     "ffprobe_concurrency": "3",
 
-    # --- naplanovane ulohy (viz tasks.py) ---------------------------------
-    # Verze Jellyfinu, kterou jsme naposledy videli, a rucni volba
-    # generace ("auto" / "12" / "10"). Podle nich se rozhoduje, co ma
-    # smysl serveru posilat - viz jellyfin.hlavicky().
+    # --- scheduled tasks (see tasks.py) ---------------------------------------
+    # The Jellyfin version we saw last, and the manual choice of the
+    # generation ("auto" / "12" / "10"). They decide what makes sense to
+    # send to the server - see jellyfin.headers().
     "jellyfin_version": "",
     "jellyfin_generation": "auto",
     "task_sync_enabled": "1",
     "task_backup_enabled": "0",
-    # Mazani dat nikdy nezacina samo od sebe - viz odklizeni.py.
+    # Deleting data never starts on its own - see purge.py.
     "task_purge_enabled": "0",
     "history_retention_days": "365",
-    # Zaloha je taky nocni uloha - stejny duvod jako u synchronizace.
-    # Kousek za ni, at si nelezou do zamku.
-    # Hlidani nove verze je vychozi VYPNUTE: je to odchozi spojeni
-    # a o tom rozhoduje ten, kdo server provozuje. Viz updates.py.
-    # Kolik polozek karta vypise rovnou, nez zbytek schova do okna.
-    # Vyssi cislo = vic videt bez klikani, ale karta roste a odsouva
-    # vsechno pod sebou. Viz web._context() a sablony _now_playing.html
-    # a languages.html.
+    # The backup is a night task too - the same reason as for the sync.
+    # A little after it, so they do not get into each other's lock.
+    # Checking for a new version is switched OFF by default: it is an
+    # outgoing connection, and that is for whoever runs the server to decide.
+    # See updates.py.
+    # How many items a card lists right away before hiding the rest in a window.
+    # A higher number = more to see without clicking, but the card grows and
+    # pushes everything below it down. See web._context() and the templates
+    # _now_playing.html and languages.html.
     "ui_max_streams": "10",
     "ui_max_viewers": "10",
-    # A totez pro uzkou obrazovku - vejde se tam min, viz web._stropy().
+    # And the same for a narrow screen - less fits there, see web._limits().
     "ui_max_streams_mobile": "3",
     "ui_max_viewers_mobile": "5",
-    # Radky tabulek na strance Zjisteni (nevyuzite misto, transcody...).
-    # Driv mely 15 az 25 radku natvrdo a karta vedle zustavala prazdna.
+    # Table rows on the Insights page (unused space, transcodes...).
+    # They used to have 15 to 25 rows fixed, and the card next to them stayed empty.
     "ui_max_rows": "10",
     "ui_max_rows_mobile": "5",
-    # Jak se priblizuje mapa na strance Sit. "click" schvalne jako
-    # vychozi: kolecko nad mapou by jinak zastavilo rolovani stranky
-    # a clovek by u mapy uvizl. Viz web._stropy() a base.html.
+    # Tables on the *Arr and Seerr pages have their own counts (web.TABLE_LIMITS).
+    "ui_max_rows_arr": "10",
+    "ui_max_rows_arr_mobile": "5",
+    "ui_max_rows_seerr": "10",
+    "ui_max_rows_seerr_mobile": "5",
+    "ui_max_rows_music": "10",
+    "ui_max_rows_music_mobile": "5",
+    # How the map on the Network page zooms. "click" as the default on
+    # purpose: the wheel over the map would otherwise stop the page from
+    # scrolling and you would get stuck at the map. See web._limits() and base.html.
     "ui_map_zoom": "click",
-    "ui_map_podklad": "kresleny",
-    # Vzhled aplikace: "novy" (barvy Jellyfinu) nebo "klasicky" (puvodni
-    # modra na neutralnim podkladu). Neni to jen jina paleta - klasicky
-    # vraci i ploche karty, tecky u odznaku a cislo nad krivkou misto
-    # vedle ni. Viz konec style.css a web._context().
-    "ui_skin": "novy",
-    # Casova zona aplikace (napr. "Europe/Prague"). Prazdne = zona
-    # systemu. Rozhoduje o tom, v jakem case se vypisuji udaje a podle
-    # ceho se deli dny v grafech - viz formatting.zona() a web.lifespan().
+    "ui_map_base": "drawn",
+    # The look of the application: "new" (Jellyfin's colours) or "classic" (the
+    # original blue on a neutral background). It is not just another palette - the
+    # classic one also brings back flat cards, dots on badges and the number above
+    # the curve instead of next to it. See the end of style.css and web._context().
+    "ui_skin": "new",
+    # The default page (navigation.default_page_url): "video", "music" or "dashboard".
+    # Empty = never chosen (an installation from before the menu by sections): the custom
+    # dashboard when it has something to show, otherwise Movies & series - as before.
+    "ui_default_page": "",
+    # The application's time zone (e.g. "Europe/Prague"). Empty = the system's
+    # zone. It decides the time the data are shown in and how days are split
+    # in the charts - see formatting.zone() and web.lifespan().
     "app_timezone": "",
     "task_tidy_enabled": "1",
-    # Mezi synchronizaci (03:30) a zalohou (04:30): narovnani pracuje
-    # s tim, co synchronizace prave stahla, a zaloha uz ma ulozit
-    # srovnana data.
+    # Synchronising the *Arr history (Sonarr, Radarr): on, so a connected
+    # app is downloaded by itself. Without a connected app it does nothing.
+    "task_arr_enabled": "1",
+    # Synchronising requests from Seerr: the same - without a connected Seerr it does nothing.
+    "task_seerr_enabled": "1",
+    "task_music_enabled": "1",
+    "task_books_sync_enabled": "1",
+    # Between the sync (03:30) and the backup (04:30): tidying works with
+    # what the sync has just downloaded, and the backup should already store
+    # the tidied data.
     "task_tidy_time": "04:00",
-    # Rotace logu: kazdy den v tenhle cas se podiva, jestli uz uplynulo
-    # `logrotate_dni`; drzi `logrotate_pocet` starych logu (applog.rotuj).
+    # Rotating the logs: every day at this time it checks whether
+    # `logrotate_days` has passed; it keeps `logrotate_count` old logs (applog.rotate).
     "task_logrotate_enabled": "1",
     "task_logrotate_time": "00:05",
-    "logrotate_dni": "7",
-    "logrotate_pocet": "4",
+    "logrotate_days": "7",
+    "logrotate_count": "4",
     "task_backup_time": "04:30",
     "task_purge_time": "04:45",
     "backup_path": "",
     "backup_keep": "7",
-    # Prazdne = Jellyscope si pg_dump najde sam a vybere verzi,
-    # ktera na server staci. Viz tasks._vyber_pg_dump().
+    # Empty = Jellyscope finds pg_dump itself and picks a version that is
+    # enough for the server. See tasks._choose_pg_dump().
     "pg_dump_path": "",
 }
 
 
-# Nastaveni, ktera uz aplikace nepouziva.
+# Settings the application no longer uses.
 #
-# Nova hodnota se pri startu doplni sama (viz init_db), ale ta stara
-# v tabulce zustane lezet navzdy - a kdo se do databaze podiva, marne
-# hleda, proc se podle ni nic neridi. Proto se pri startu smazou.
+# A new value is added at start by itself (see init_db), but the old one
+# stays lying in the table forever - and whoever looks into the database
+# searches in vain for why nothing follows it. So they are deleted at start.
 #
-# Do seznamu patri klic teprve tehdy, kdyz uz ho nikde v kodu neni.
-ZRUSENA_NASTAVENI = (
-    # Analyza souboru prestala byt samostatnou ulohou - je soucasti
-    # synchronizace a ridi se zdrojem dat. Viz tasks.py.
+# A key belongs on the list only once it is nowhere in the code any more.
+DROPPED_SETTINGS = (
+    # The log file is always English and the Log page shows it in the reader's language (21. 11. 2026).
+    "log_language",
+    # Analysing files stopped being a task of its own - it is part of the
+    # sync and follows the source of data. See tasks.py.
     "task_tech_enabled",
     "task_tech_minutes",
-    # Synchronizace knihovny a zaloha se planuji na cas, ne na interval.
+    # The library sync and the backup are planned for a time, not an interval.
     "library_sync_minutes",
     "task_backup_minutes",
-    # Hlidani nove verze je uloha jako kazda jina - zapina se v Ulohach.
-    # Hodnota se pri startu prenese do `task_updates_enabled`, viz init_db.
+    # Checking for a new version is a task like any other - it is switched on in Tasks.
+    # The value is carried over to `task_updates_enabled` at start, see init_db.
     "update_check_enabled",
 )
 
 
 def utcnow() -> str:
-    """Aktuální čas v UTC jako text.
+    """The current time in UTC as text.
 
-    Čas ukládáme vždy v UTC a vždy ve stejném formátu. Jakmile začneš míchat
-    časové zóny nebo formáty, řazení podle času přestane dávat smysl a hledáš
-    to týden.
+    We always store time in UTC and always in the same format. Once you start
+    mixing time zones or formats, sorting by time stops making sense and you
+    spend a week looking for why.
 
-    Formát "2026-08-12 09:47:00" (s mezerou, ne s T) není náhodný – rozumí
-    mu SQLite i PostgreSQL, když se text přetypuje na časový údaj.
+    The format "2026-08-12 09:47:00" (with a space, not a T) is no accident -
+    both SQLite and PostgreSQL understand it when the text is cast to a time.
     """
     return datetime.now(UTC).strftime(TIME_FORMAT)
 
 
 # ---------------------------------------------------------------------------
-# Nastavení připojení
+# Connection settings
 # ---------------------------------------------------------------------------
 
 _db_config: dialect.DatabaseConfig | None = None
 
 
 def database_config(reload: bool = False) -> dialect.DatabaseConfig:
-    """Které databáze se držíme. Načte se jednou při startu."""
+    """Which database we stick to. Read once at start."""
     global _db_config
     if _db_config is None or reload:
         _db_config = dialect.load_config(
@@ -199,17 +219,26 @@ def current_dialect() -> str:
     return dialect.POSTGRES if database_config().is_postgres else dialect.SQLITE
 
 
+# The columns of a table on PostgreSQL (name and type, in the table's order). One query for every place
+# that asks about columns - `Connection.table_columns`, `columns_of` and `_column_types`.
+# Only in the schema Jellyscope creates its tables in (`current_schema()`): a database can have more
+# schemas, and a table of the same name in another one is not ours. Without that condition the columns
+# of both would merge, and a table that is only elsewhere would look as if it existed.
+_POSTGRES_COLUMNS = ("SELECT column_name, data_type FROM information_schema.columns"
+                     " WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position")
+
+
 # ---------------------------------------------------------------------------
-# Společné rozhraní nad oběma databázemi
+# A common interface over both databases
 # ---------------------------------------------------------------------------
 
 class Connection:
-    """Obálka, která se navenek chová stejně pro SQLite i PostgreSQL.
+    """A wrapper that behaves the same outwardly for SQLite and PostgreSQL.
 
-    Dělá tři věci:
-      1. překládá SQL do dialektu cílové databáze,
-      2. sjednocuje rozhraní (psycopg nemá `executemany` na spojení),
-      3. vrací řádky tak, aby šly číst podle jména sloupce.
+    It does three things:
+      1. translates SQL into the dialect of the target database,
+      2. unifies the interface (psycopg has no `executemany` on the connection),
+      3. returns rows so they can be read by the column's name.
     """
 
     def __init__(self, raw: Any, kind: str) -> None:
@@ -224,13 +253,13 @@ class Connection:
         query = dialect.translate(sql, self.kind)
         if self.is_postgres:
             cursor = self._raw.cursor()
-            # Prazdna n-tice, ne None - i kdyz dotaz zadne parametry nema.
+            # An empty tuple, not None - even when the query has no parameters.
             #
-            # Preklad zdvojuje procenta (`LIKE '%cs%'` -> `LIKE '%%cs%%'`),
-            # protoze psycopg cte `%` jako zacatek zastupneho znaku. Zpatky
-            # na jedno procento je slozi az psycopg - jenze to dela jen
-            # tehdy, kdyz nejake parametry dostane. S `None` by dotaz odesel
-            # se zdvojenymi procenty a hledal by text "%cs%" doslova.
+            # The translation doubles percent signs (`LIKE '%cs%'` -> `LIKE '%%cs%%'`),
+            # because psycopg reads `%` as the start of a placeholder. Back to one
+            # percent sign they are put only by psycopg - but it does that only
+            # when it gets some parameters. With `None` the query would go out
+            # with the doubled percent signs and look for the text "%cs%" literally.
             cursor.execute(query, tuple(params))
             return cursor
         return self._raw.execute(query, params)
@@ -244,27 +273,27 @@ class Connection:
         return self._raw.executemany(query, rows)
 
     def executescript(self, script: str) -> None:
-        """Spustí celý soubor se schématem."""
+        """Runs a whole schema file."""
         if self.is_postgres:
-            # psycopg zvládne víc příkazů v jednom volání, když nejsou
-            # žádné parametry - a schéma žádné nemá.
+            # psycopg handles several statements in one call when there are
+            # no parameters - and the schema has none.
             self._raw.cursor().execute(script)
         else:
             self._raw.executescript(script)
 
     def insert_returning_id(self, sql: str, params: Any = ()) -> int:
-        """Vloží řádek a vrátí jeho nové id.
+        """Inserts a row and returns its new id.
 
-        SQLite na to má `cursor.lastrowid`, PostgreSQL `RETURNING id`.
-        Rozdíl schováme sem, aby o něm zbytek programu nemusel vědět.
+        SQLite has `cursor.lastrowid` for it, PostgreSQL `RETURNING id`.
+        The difference is hidden here, so the rest of the program does not have to know about it.
         """
         if self.is_postgres:
             cursor = self.execute(sql.rstrip().rstrip(";") + " RETURNING id", params)
             row = cursor.fetchone()
             if row is None:
                 return 0
-            # Vetev je jen pro PostgreSQL, a ten vraci slovnik - cist
-            # podle poradi tu neni proc.
+            # The branch is for PostgreSQL only, and that returns a dict -
+            # no reason to read by position here.
             return int(row["id"])
 
         cursor = self.execute(sql, params)
@@ -280,13 +309,12 @@ class Connection:
         self._raw.close()
 
     def table_columns(self, table: str) -> set[str]:
-        """Názvy sloupců tabulky. Používá se při migracích."""
+        """Names of the table's columns. Used in migrations.
+
+        On PostgreSQL only in our schema, see `_POSTGRES_COLUMNS`.
+        """
         if self.is_postgres:
-            cursor = self.execute(
-                "SELECT column_name FROM information_schema.columns"
-                " WHERE table_name = ?",
-                (table,),
-            )
+            cursor = self.execute(_POSTGRES_COLUMNS, (table,))
             return {row["column_name"] if isinstance(row, dict) else row[0]
                     for row in cursor.fetchall()}
 
@@ -294,67 +322,88 @@ class Connection:
         return {row["name"] for row in rows}
 
 
+def _lock_against_1_8(conn: Any) -> None:
+    """The view that stops a start of 1.8.x on this database (schema_names.LOCK_VIEW says why).
+
+    Made only when nothing of that name is there: a table of that name would be an unconverted bin, and
+    the conversion before init_db has renamed it by then.
+    """
+    from . import schema_names
+
+    name = schema_names.LOCK_VIEW
+    if conn.is_postgres:
+        found = conn.execute("SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
+                             " WHERE c.relname = ? AND n.nspname = current_schema()", (name,)).fetchone()
+    else:
+        found = conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (name,)).fetchone()
+    if not found:
+        conn.execute(f"CREATE VIEW {name} AS SELECT CAST('Jellyscope 1.9.0 or newer' AS TEXT) AS database_of")
+
+
 # ---------------------------------------------------------------------------
-# Zásobník spojení (jen PostgreSQL)
+# Connection pool (PostgreSQL only)
 # ---------------------------------------------------------------------------
 #
-# SQLite je soubor na disku - otevřít ho stojí zlomek milisekundy, takže se
-# otevírá a zavírá pokaždé znovu a je to v pořádku.
+# SQLite is a file on the disk - opening it costs a fraction of a millisecond,
+# so it is opened and closed again every time, and that is fine.
 #
-# PostgreSQL je server. Každé spojení znamená TCP handshake, přihlášení a na
-# straně serveru nový proces - na localhostu jednotky milisekund, po síti
-# klidně desítky. Jedna stránka Jellyscope si o data řekne asi dvanáctkrát,
-# takže by se tahle cena zaplatila dvanáctkrát za každé načtení.
+# PostgreSQL is a server. Every connection means a TCP handshake, a sign-in and,
+# on the server's side, a new process - single milliseconds on localhost, easily
+# tens over a network. One Jellyscope page asks for data about twelve times, so
+# this price would be paid twelve times for every load.
 #
-# Zásobník (pool) drží hrstku spojení otevřených a půjčuje je. Cena za
-# navázání se zaplatí jednou při startu, ne při každém dotazu.
+# A pool keeps a handful of connections open and lends them. The price of
+# connecting is paid once at start, not with every query.
 #
-# Co to stojí: každé nečinné spojení drží na serveru proces (řádově jednotky
-# MB paměti). Proto min_size = 1 - v klidu visí jediné, zbytek se navazuje
-# jen když je opravdu potřeba, a po chvíli nečinnosti zase zmizí.
+# What it costs: every idle connection holds a process on the server (in the
+# order of single MB of memory). Hence min_size = 1 - at rest just one hangs
+# there, the rest is connected only when really needed, and disappears again
+# after a while of idleness.
 
 _pool: Any = None
 _pool_key: tuple | None = None
 
-# Strop je 8: sběrač na pozadí + několik souběžných požadavků z webu.
-# Vyšší číslo by nepomohlo - požadavky stejně obsluhuje omezený počet
-# vláken - a jen by zbytečně drželo procesy na databázovém serveru.
+# The ceiling is 8: the collector in the background + a few concurrent requests
+# from the web. A higher number would not help - the requests are served by a
+# limited number of threads anyway - and would only hold processes on the
+# database server for nothing.
 POOL_MAX_SIZE = 8
 
 
 def _pool_identity(config: dialect.DatabaseConfig) -> tuple:
-    """Podle čeho poznáme, že zásobník patří k jinému serveru než teď."""
+    """What tells us the pool belongs to another server than now."""
     return (config.host, config.port, config.database, config.user, config.password)
 
 
 def close_pool() -> None:
-    """Zavře zásobník. Volá se při vypnutí aplikace a před restartem.
+    """Closes the pool. Called when the application shuts down and before a restart.
 
-    Bez tohoto by po `os.execv` zůstala viset spojení, o kterých už nový
-    proces neví, a PostgreSQL by je držel až do vlastního časového limitu.
+    Without this, after `os.execv` connections would stay hanging that the new
+    process knows nothing about, and PostgreSQL would hold them until its own
+    timeout.
     """
     global _pool, _pool_key
     if _pool is not None:
         try:
             _pool.close()
-        except Exception:  # noqa: BLE001 - při vypínání nás chyba nezajímá
+        except Exception:  # noqa: BLE001 - an error does not matter while shutting down
             pass
     _pool = None
     _pool_key = None
 
 
 def _get_pool(config: dialect.DatabaseConfig) -> Any:
-    """Vrátí zásobník pro dané připojení, nebo None.
+    """Returns the pool for the given connection, or None.
 
-    None znamená "jeď postaru, spojení po spojení". Stane se to ve dvou
-    případech a ani jeden není chyba:
+    None means "go the old way, connection by connection". It happens in two
+    cases, and neither is an error:
 
-      * uživatel si zásobník v Nastavení vypnul,
-      * knihovna psycopg_pool není k dispozici a nejde doinstalovat.
+      * the user switched the pool off in Settings,
+      * the psycopg_pool library is not available and cannot be installed.
 
-    V obou případech aplikace funguje dál, jen si ke každému dotazu
-    navazuje nové spojení. Na stejné síti je ten rozdíl malý, po WAN
-    znatelný - ale fungovat musí vždycky.
+    In both cases the application keeps working, only it connects anew for
+    every query. On the same network the difference is small, over a WAN
+    noticeable - but it has to work always.
     """
     global _pool, _pool_key
 
@@ -387,8 +436,8 @@ def _get_pool(config: dialect.DatabaseConfig) -> Any:
         },
         min_size=1,
         max_size=POOL_MAX_SIZE,
-        # Když jsou všechna spojení půjčená, čekej nejvýš 10 s a pak chybu.
-        # Bez limitu by se požadavek zasekl navždy.
+        # When every connection is lent out, wait at most 10 s, then fail.
+        # Without a limit the request would get stuck forever.
         timeout=10.0,
         max_idle=300.0,
         open=True,
@@ -398,83 +447,75 @@ def _get_pool(config: dialect.DatabaseConfig) -> Any:
     return pool
 
 
-class DatabaseNedostupna(RuntimeError):
-    """Databázi nejde otevřít - a víme proč.
+class DatabaseUnavailable(TranslatableError):
+    """The database cannot be opened - and we know why.
 
-    Vlastní typ, aby se dal odchytit ve spouštěči a vypsat bez
-    zásobníku volání: člověku, kterému nenaběhl kontejner, je dvacet
-    řádků z útrob sqlite3 k ničemu.
+    A type of its own, so it can be caught in the launcher and printed without
+    a stack trace: to somebody whose container did not start, twenty lines
+    from the guts of sqlite3 are of no use.
 
-    Nese hlášku česky i anglicky. Přeložit ji dodatečně nejde: překlad
-    se řídí nastavením, které je uložené v databázi - a ta je právě to,
-    co se nepodařilo otevřít.
+    It is made of several sentences, each a key and its values (`lines`).
+    `str(error)` is English (the console), `translated(language)` any language -
+    the outage page shows the one the browser asks for. The interface language
+    cannot be used: it is a setting stored in the database that could not be opened.
     """
 
-    def __init__(self, cesky: str, anglicky: str = "") -> None:
-        super().__init__(cesky)
-        self.cesky = cesky
-        self.anglicky = anglicky or cesky
+    def __init__(self, lines: list[tuple[str, dict[str, Any]]]) -> None:
+        self.lines = lines
+        super().__init__(lines[0][0], **lines[0][1])
+
+    def translated(self, language: str | None = None) -> str:
+        return "\n".join(translate_with(template, language, **values) for template, values in self.lines)
+
+    def __str__(self) -> str:
+        return self.translated(SOURCE_LANGUAGE)
 
 
-def _proc_nejde_otevrit(cesta: Path, chyba: Exception) -> tuple[str, str]:
-    """Proč nejde otevřít databázový soubor - a co s tím. Česky i anglicky.
+class ConversionFailed(DatabaseUnavailable):
+    """The database could not be converted to the English names (jellyscope.conversion) - nothing changed.
 
-    Píše se to sem, protože odpověď zná jen tenhle okamžik: cesta,
-    práva ke složce a to, jestli běžíme v kontejneru. O kus dál už je
-    z toho jen "unable to open database file".
+    A kind of `DatabaseUnavailable`, so the launcher shows the outage page with the reason and what to do.
     """
-    slozka = cesta.parent
-    if not slozka.is_dir():
-        duvod = f"složka {slozka} neexistuje a nejde vyrobit"
-        duvod_en = f"the folder {slozka} does not exist and cannot be created"
-    elif not os.access(slozka, os.W_OK | os.X_OK):
-        duvod = f"do složky {slozka} se nesmí zapisovat"
-        duvod_en = f"the folder {slozka} cannot be written to"
-    elif cesta.exists() and not os.access(cesta, os.W_OK):
-        duvod = f"soubor {cesta} je jen pro čtení"
-        duvod_en = f"the file {cesta} is read-only"
+
+
+# What runs a container's application and how it is fixed: on the host, only the data folder.
+CONTAINER_ADVICE = ("In a container this is nearly always the owner of the mounted folder: inside runs a user "
+                    "with UID 10001, while on the host the folder belongs to somebody else - typically root, "
+                    "when Docker created it itself. Fix it on the host, in the folder next to "
+                    "docker-compose.yml - and only the data folder, not the whole project:")
+
+
+def _why_unopenable(path: Path, error: Exception) -> list[tuple[str, dict[str, Any]]]:
+    """Why the database file cannot be opened - and what to do about it: sentences as keys and values.
+
+    It is written here because only this moment knows the answer: the path,
+    the permissions of the folder and whether we run in a container. A bit
+    further on, all that is left of it is "unable to open database file".
+    """
+    folder = path.parent
+    if not folder.is_dir():
+        lines = [("The database {path} cannot be opened: the folder {folder} does not exist and cannot be created.",
+                  {"path": path, "folder": folder})]
+    elif not os.access(folder, os.W_OK | os.X_OK):
+        lines = [("The database {path} cannot be opened: the folder {folder} cannot be written to.",
+                  {"path": path, "folder": folder})]
+    elif path.exists() and not os.access(path, os.W_OK):
+        lines = [("The database {path} cannot be opened: the file is read-only.", {"path": path})]
     else:
-        duvod = duvod_en = f"{chyba}"
+        lines = [("The database {path} cannot be opened: {error}.", {"path": path, "error": error})]
 
-    radky = [f"Databázi {cesta} nejde otevřít: {duvod}."]
-    radky_en = [f"The database {cesta} cannot be opened: {duvod_en}."]
-
-    # Kdo jsme - bez toho se vlastník složky nedá s ničím porovnat.
+    # Who we are - without it the folder's owner cannot be compared with anything.
     if hasattr(os, "getuid"):
-        radky.append(f"Aplikace běží pod UID {os.getuid()}:{os.getgid()}.")
-        radky_en.append(
-            f"The application runs as UID {os.getuid()}:{os.getgid()}.")
+        lines.append(("The application runs as UID {uid}:{gid}.", {"uid": os.getuid(), "gid": os.getgid()}))
 
-    # Stejná otázka jako jinde v aplikaci, ne vlastní kopie podmínky:
-    # pozná i Podman a test si ji může podvrhnout.
-    if app_config._v_kontejneru():
-        radky.append(
-            "V kontejneru za to skoro vždycky může vlastník připojené "
-            "složky: uvnitř běží uživatel s UID 10001, ale složka na "
-            "hostiteli patří někomu jinému (typicky rootovi, když ji "
-            "vyrobil Docker sám). Sprav to na hostiteli, ve složce "
-            "vedle docker-compose.yml - a jen složce data, ne celému "
-            "projektu:")
-        radky.append("    sudo chown -R 10001:10001 data")
-        radky.append("    docker compose restart")
-        radky_en.append(
-            "In a container this is nearly always the owner of the mounted "
-            "folder: inside runs a user with UID 10001, while on the host "
-            "the folder belongs to somebody else - typically root, when "
-            "Docker created it itself. Fix it on the host, in the folder "
-            "next to docker-compose.yml - and only the data folder, not "
-            "the whole project:")
-        radky_en.append("    sudo chown -R 10001:10001 data")
-        radky_en.append("    docker compose restart")
+    # The same question as elsewhere in the application, not an own copy of the
+    # condition: it recognises Podman too, and a test can substitute it.
+    if app_config._in_container():
+        lines += [(CONTAINER_ADVICE, {}), ("    sudo chown -R 10001:10001 data", {}), ("    docker compose restart", {})]
     else:
-        radky.append(
-            "Zkontroluj, že složka existuje a že do ní smí zapisovat "
-            "uživatel, pod kterým aplikace běží.")
-        radky_en.append(
-            "Check that the folder exists and that the user the "
-            "application runs as is allowed to write into it.")
-
-    return "\n".join(radky), "\n".join(radky_en)
+        lines.append(("Check that the folder exists and that the user the application runs as is allowed to "
+                      "write into it.", {}))
+    return lines
 
 
 def _open_raw(config: dialect.DatabaseConfig) -> Any:
@@ -482,28 +523,26 @@ def _open_raw(config: dialect.DatabaseConfig) -> Any:
         try:
             import psycopg
             from psycopg.rows import dict_row
-        except ImportError as exc:  # pragma: no cover - závisí na instalaci
-            # Dvě věci, na kterých se tahle hláška dřív lámala:
+        except ImportError as exc:  # pragma: no cover - depends on the installation
+            # Two things this message used to break on:
             #
-            # 1. Radila `psycopg[binary,pool]`, takže to vypadalo, že si
-            #    vynucuje zásobník spojení - i když ho měl uživatel vypnutý.
-            #    Zásobník je doplněk navíc; bez psycopg se k PostgreSQL
-            #    nepřipojíš vůbec, ať máš zásobník zapnutý, nebo ne.
+            # 1. It advised `psycopg[binary,pool]`, so it looked as if it
+            #    enforced the connection pool - even when the user had it
+            #    switched off. The pool is an extra; without psycopg you do
+            #    not connect to PostgreSQL at all, pool on or not.
             #
-            # 2. Radila holé `pip`, jenže aplikace běží ve virtuálním
-            #    prostředí. Do systémového pythonu by se instalovalo
-            #    zbytečně (a na novějších Ubuntu by to rovnou odmítl).
-            #    sys.executable je ten správný python - ten, kterým to
-            #    zrovna běží.
-            raise RuntimeError(
-                "Pro PostgreSQL je potřeba knihovna psycopg. Nainstaluj ji "
-                "do stejného prostředí, ve kterém běží aplikace:\n"
-                f'    {sys.executable} -m pip install "psycopg[binary]"\n'
-                "Potom aplikaci restartuj. (Connection pool s tím nesouvisí "
-                "- ten se zapíná zvlášť a přidává doplněk \"pool\".)"
-            ) from exc
+            # 2. It advised a bare `pip`, but the application runs in a
+            #    virtual environment. Installing into the system python
+            #    would be pointless (and newer Ubuntu would refuse it
+            #    outright). sys.executable is the right python - the one
+            #    this is running with right now.
+            raise TranslatableError(
+                "PostgreSQL needs the psycopg library. Install it into the same environment the application "
+                "runs in:\n    {python} -m pip install \"psycopg[binary]\"\nThen restart the application. (The "
+                "connection pool has nothing to do with it - it is switched on separately and adds the extra "
+                "\"pool\".)", python=sys.executable) from exc
 
-        spojeni = psycopg.connect(
+        raw_conn = psycopg.connect(
             host=config.host,
             port=config.port,
             dbname=config.database,
@@ -513,31 +552,31 @@ def _open_raw(config: dialect.DatabaseConfig) -> Any:
             connect_timeout=10,
         )
 
-        # Casova zona spojeni musi byt tataz, v jake pocita aplikace.
+        # The connection's time zone has to be the one the application counts in.
         #
-        # Bez toho se "mistni cas" pocita na DVOU mistech ruzne:
-        #   * v SQL (date(x, 'localtime')) podle zony databazoveho serveru,
-        #   * pri vypisu casu v Pythonu podle zony serveru s aplikaci.
+        # Without it, "local time" is counted in TWO places differently:
+        #   * in SQL (date(x, 'localtime')) by the zone of the database server,
+        #   * when printing times in Python by the zone of the application's server.
         #
-        # Kdyz se lisi - a lisi se casto, PostgreSQL bezi obvykle v UTC -
-        # den v grafu nekonci tam, kde ho konci vypis. Proklik na den pak
-        # ukaze i zaznamy, ktere podle zobrazeneho casu patri jinam.
+        # When they differ - and they often do, PostgreSQL usually runs in UTC -
+        # a day in a chart does not end where the listing ends it. A click on
+        # the day then shows records too that belong elsewhere by the time shown.
         #
-        # TZ nastavuji konfigurace sluzeb v deploy/ (Europe/Prague).
-        zona = os.environ.get("TZ", "").strip()
-        if zona:
+        # TZ is set by the service configurations in deploy/ (Europe/Prague).
+        zone = os.environ.get("TZ", "").strip()
+        if zone:
             try:
-                with spojeni.cursor() as kurzor:
-                    # Nazev zony nejde predat jako parametr, proto ho pred
-                    # vlozenim overime - do SQL smi jen to, co vypada jako
-                    # nazev zony.
-                    if re.fullmatch(r"[A-Za-z0-9_+\-/]{1,64}", zona):
-                        kurzor.execute(f"SET TIME ZONE '{zona}'")
-                spojeni.commit()
-            except Exception:  # noqa: BLE001 - spatna zona nesmi shodit start
-                log.warning("casovou zonu %r se nepodarilo nastavit", zona)
+                with raw_conn.cursor() as cursor:
+                    # The zone name cannot be passed as a parameter, so it is
+                    # checked before it is inserted - only what looks like a
+                    # zone name may go into SQL.
+                    if re.fullmatch(r"[A-Za-z0-9_+\-/]{1,64}", zone):
+                        cursor.execute(f"SET TIME ZONE '{zone}'")
+                raw_conn.commit()
+            except Exception:  # noqa: BLE001 - a wrong zone must not bring the start down
+                log.warning("time zone %r could not be set", zone)
 
-        return spojeni
+        return raw_conn
 
     path = Path(config.path)
     if not path.is_absolute():
@@ -546,44 +585,46 @@ def _open_raw(config: dialect.DatabaseConfig) -> Any:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=15.0)
-        # row_factory nám zařídí, že výsledky lezou jako slovníky (row["name"])
-        # místo anonymních n-tic (row[3]). Kód je pak čitelný.
+        # row_factory makes the results come out as dicts (row["name"])
+        # instead of anonymous tuples (row[3]). The code is readable then.
         connection.row_factory = sqlite3.Row
-        # WAL = Write-Ahead Logging. Umožní, aby jeden proces psal a jiný zároveň
-        # četl. Přesně náš případ: sběrač na pozadí zapisuje, web čte.
+        # WAL = Write-Ahead Logging. It lets one process write while another
+        # reads at the same time. Exactly our case: the collector writes in the
+        # background, the web reads.
         #
-        # Uvnitř `try` schválně: otevřít soubor jen pro čtení SQLite umí,
-        # takže spojení vznikne a teprve tenhle PRAGMA spadne na
-        # "attempt to write a readonly database". Zvenku je to táž
-        # porucha jako "unable to open database file" a patří k ní táž
-        # odpověď.
+        # Inside the `try` on purpose: SQLite can open a file read-only, so
+        # the connection comes into being and only this PRAGMA fails on
+        # "attempt to write a readonly database". From outside it is the same
+        # failure as "unable to open database file", and the same answer
+        # belongs to it.
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA foreign_keys = ON")
-    except (OSError, sqlite3.Error) as chyba:
-        # SQLite umi na tohle jedinou vetu: "unable to open database file"
-        # nebo "attempt to write a readonly database". Neni v ni cesta,
-        # duvod ani co s tim - a v kontejneru je to nejcastejsi chyba
-        # pri prvnim startu vubec.
-        raise DatabaseNedostupna(*_proc_nejde_otevrit(path, chyba)) from chyba
+    except (OSError, sqlite3.Error) as error:
+        # SQLite has a single sentence for this: "unable to open database file"
+        # or "attempt to write a readonly database". There is no path in it,
+        # no reason, nothing about what to do - and in a container it is the
+        # most common error at the first start of all.
+        raise DatabaseUnavailable(_why_unopenable(path, error)) from error
     return connection
 
 
 @contextmanager
 def connect(config: dialect.DatabaseConfig | None = None) -> Iterator[Connection]:
-    """Otevře spojení s databází jako "context manager" (používá se s `with`).
+    """Opens a connection to the database as a "context manager" (used with `with`).
 
         with db.connect() as conn:
             conn.execute("INSERT ...")
-        # tady už je změna uložená a spojení zavřené
+        # here the change is saved and the connection closed
 
-    Když uvnitř bloku nastane chyba, změny se vrátí zpět (rollback) - databáze
-    tedy nikdy nezůstane v půlce rozdělané operace.
+    When an error happens inside the block, the changes are rolled back - so
+    the database never stays in the middle of a half-done operation.
     """
     config = config or database_config()
 
-    # U PostgreSQL si spojení půjčíme ze zásobníku a na konci ho vrátíme
-    # zpátky - nezavíráme ho. `pool.connection()` sám udělá rollback, když
-    # blok skončí výjimkou, a spojení uklidí, než ho půjčí dalšímu.
+    # On PostgreSQL we borrow the connection from the pool and give it back at
+    # the end - we do not close it. `pool.connection()` itself rolls back when
+    # the block ends with an exception, and tidies the connection up before
+    # lending it to the next one.
     pool = _get_pool(config) if config.is_postgres else None
     if pool is not None:
         with pool.connection() as raw:
@@ -603,99 +644,101 @@ def connect(config: dialect.DatabaseConfig | None = None) -> Iterator[Connection
         connection.close()
 
 
-def preskladat() -> bool:
-    """Přepíše databázi tak, aby po smazaných řádcích nezůstala stopa.
+def compact() -> bool:
+    """Rewrites the database so that no trace is left after deleted rows.
 
-    Bez tohohle je „smazáno" jen záznam v seznamu: řádek se přestane
-    hledat, ale jeho bajty leží v souboru dál, dokud je něco nepřepíše.
-    Kdo má přístup k souboru, přečte si je.
+    Without this, "deleted" is just an entry in a list: the row is no longer
+    found, but its bytes stay in the file until something overwrites them.
+    Whoever has access to the file can read them.
 
-    Trvá to úměrně velikosti databáze, protože se soubor opravdu přepisuje.
-    Pouští se proto jen po zásazích, které mažou schválně - ne po každém
-    zápisu.
+    It takes time in proportion to the size of the database, because the file
+    really is rewritten. So it runs only after operations that delete on
+    purpose - not after every write.
 
-    U SQLite je potřeba obojí: `VACUUM` přepíše databázi a `wal_checkpoint`
-    zahodí i deník vedle ní, kde by jinak stopa zůstala taky. U PostgreSQL
-    to umí `VACUUM FULL`, jenže tabulku na tu dobu zamkne - proto jen tu
-    jednu, ne celou databázi.
+    SQLite needs both: `VACUUM` rewrites the database and `wal_checkpoint`
+    throws away the journal next to it too, where the trace would otherwise
+    stay as well. PostgreSQL can do it with `VACUUM FULL`, but that locks the
+    table for the time - so just that one table, not the whole database.
 
-    Vrací, jestli se to povedlo. Když ne, data jsou stejně smazaná; jen
-    po nich v souboru něco zbylo, a to se pozná z logu.
+    Returns whether it worked. When not, the data are deleted anyway; only
+    something of them is left in the file, and that shows in the log.
     """
     config = database_config()
     try:
         if config.is_postgres:
             with connect(config) as conn:
-                # VACUUM nesmi bezet v transakci, a psycopg jednu otevira
-                # samo. Proto autocommit - a na konci zpatky, at si dalsi
-                # vypujcka ze zasobniku nesahne na zmenene spojeni.
-                syrove = conn._raw
-                puvodni = syrove.autocommit
-                syrove.rollback()
-                syrove.autocommit = True
+                # VACUUM must not run in a transaction, and psycopg opens one
+                # by itself. Hence autocommit - and back at the end, so the
+                # next loan from the pool does not get a changed connection.
+                raw = conn._raw
+                previous = raw.autocommit
+                raw.rollback()
+                raw.autocommit = True
                 try:
-                    with syrove.cursor() as kurzor:
-                        kurzor.execute("VACUUM (FULL, ANALYZE) playback")
+                    with raw.cursor() as cursor:
+                        cursor.execute("VACUUM (FULL, ANALYZE) playback")
                 finally:
-                    syrove.autocommit = puvodni
+                    raw.autocommit = previous
         else:
-            spojeni = _open_raw(config)
+            raw_conn = _open_raw(config)
             try:
-                # `isolation_level = None` znamena "zadna transakce".
-                spojeni.isolation_level = None
-                spojeni.execute("VACUUM")
-                spojeni.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                # `isolation_level = None` means "no transaction".
+                raw_conn.isolation_level = None
+                raw_conn.execute("VACUUM")
+                raw_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             finally:
-                spojeni.close()
-    except Exception as chyba:      # noqa: BLE001 - uklid nesmi shodit akci
-        log.warning("databazi se nepodarilo preskladat: %s", chyba)
+                raw_conn.close()
+    except Exception as error:      # noqa: BLE001 - tidying up must not bring the action down
+        log.warning("the database could not be rewritten: %s", error)
         return False
-    log.info("databaze preskladana, po smazanych radcich nezustala stopa")
+    log.info("database rewritten, no trace left of the deleted rows")
     return True
 
 
-def _lze_importovat(jmeno: str) -> bool:
-    """Je knihovna nainstalovaná?
+def _importable(name: str) -> bool:
+    """Is the library installed?
 
-    Ptáme se pokusem o import, ne hledáním souboru: rozbitá instalace
-    (chybí systémová knihovna, na kterou psycopg staví) na disku je,
-    ale importovat se nedá - a pro nás je to totéž jako by nebyla.
+    We ask by trying to import it, not by looking for a file: a broken
+    installation (a missing system library psycopg builds on) is on the disk
+    but cannot be imported - and for us that is the same as if it were not
+    there.
     """
     try:
-        importlib.import_module(jmeno)
+        importlib.import_module(name)
     except ImportError:
         return False
     return True
 
 
 def psycopg_available() -> bool:
-    """Je ovladač PostgreSQL k dispozici?
+    """Is the PostgreSQL driver available?
 
-    Používá to Nastavení: když ovladač je (což po instalaci skriptem
-    obvykle je), nemá smysl uživateli ukazovat návod, jak ho doinstalovat.
-    Rada, kterou nepotřebuješ, jen zabírá místo a mate.
+    Used by Settings: when the driver is there (as it usually is after an
+    installation by the script), it makes no sense to show the user how to
+    install it. Advice you do not need only takes up space and confuses.
     """
-    return _lze_importovat("psycopg")
+    return _importable("psycopg")
 
 
 def pool_available() -> bool:
-    """Je knihovna pro zásobník spojení k dispozici?"""
-    return _lze_importovat("psycopg_pool")
+    """Is the library for the connection pool available?"""
+    return _importable("psycopg_pool")
 
 
 def test_connection(config: dialect.DatabaseConfig) -> tuple[bool, str]:
-    """Zkusí se připojit. Vrací (povedlo se, hláška pro uživatele).
+    """Tries to connect. Returns (success, a message for the user).
 
-    Spojení se tu navazuje **napřímo**, mimo zásobník. Testujeme totiž
-    dostupnost serveru, ne zásobník - a kdyby si test spojení půjčoval,
-    založil by zásobník na server, na který aplikace zatím není přepnutá.
+    The connection is made **directly** here, outside the pool. We test
+    whether the server can be reached, not the pool - and were the test to
+    borrow a connection, it would create a pool for a server the application
+    has not been switched to yet.
     """
     raw = None
     try:
         raw = _open_raw(config)
         Connection(raw, config.kind).execute("SELECT 1 AS ok").fetchone()
-    except Exception as exc:  # noqa: BLE001 - hlášku ukazujeme uživateli
-        return False, f"{type(exc).__name__}: {exc}"
+    except Exception as exc:  # noqa: BLE001 - the message is shown to the user
+        return False, f"{type(exc).__name__}: {error_text(exc)}"
     finally:
         if raw is not None:
             try:
@@ -703,410 +746,547 @@ def test_connection(config: dialect.DatabaseConfig) -> tuple[bool, str]:
             except Exception:  # noqa: BLE001
                 pass
 
-    # Zapnutý zásobník bez knihovny není chyba, ale uživatel to má vědět -
-    # jinak by čekal zrychlení, které nepřijde.
-    note = ""
+    # A pool switched on without the library is not an error, but the user
+    # should know - otherwise they would wait for a speed-up that never comes.
     if config.is_postgres and config.use_pool and not pool_available():
-        note = (" – connection pool ale zapnout nejde, chybí knihovna"
-                " psycopg_pool. Aplikace pojede dál, jen si bude spojení"
-                " navazovat po jednom.")
-    return True, f"Spojení funguje: {config.describe()}{note}"
+        return True, translate_with(
+            "The connection works: {database} - but the connection pool cannot be switched on, the library "
+            "psycopg_pool is missing. The application will go on, it will only open connections one by one.",
+            None, database=config.describe())
+    return True, translate_with("The connection works: {database}", None, database=config.describe())
 
 
 # ---------------------------------------------------------------------------
-# Vytvoření a údržba schématu
+# Creating and maintaining the schema
 # ---------------------------------------------------------------------------
 
-# Sloupce, které v projektu přibyly až dodatečně.
+# Columns added to the project only later.
 #
-# Proč to je potřeba: `CREATE TABLE IF NOT EXISTS` nový sloupec do už
-# existující tabulky nepřidá - příkaz se prostě přeskočí. Kdo aplikaci
-# spustil dřív, měl by po aktualizaci starou tabulku a aplikace by hlásila
-# "no such column". Proto při každém startu ověříme, že všechny očekávané
-# sloupce existují, a chybějící doplníme.
+# Why it is needed: `CREATE TABLE IF NOT EXISTS` does not add a new column to
+# a table that already exists - the statement is simply skipped. Whoever ran
+# the application before would have the old table after an update, and the
+# application would report "no such column". So at every start we check that
+# all the expected columns exist, and add the missing ones.
 #
-# Tomuhle se říká **migrace databáze**. Velké projekty na to mají celé
-# knihovny; pro nás stačí tenhle slovník.
+# This is called a **database migration**. Big projects have whole libraries
+# for it; this dictionary is enough for us.
 MIGRATIONS: dict[str, dict[str, str]] = {
+    "scan_log": {
+        # A task's message as an English key with its values apart (21. 11. 2026), so each reader gets
+        # it in their language - i18n.message_parts / stored_text. Empty in older rows.
+        "message_values": "TEXT",
+    },
+    "libraries": {
+        # Every Jellyfin library is stored since 16. 11. 2026 (the Library page takes them all
+        # over); a library missing from two sync runs in a row is hidden (stats.library_cards).
+        "missing_runs": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "seerr_request": {
+        # The title's id in Jellyfin (media.jellyfinMediaId): a movie = items.id,
+        # a series = items.series_id of its episodes. Episodes carry no TMDB id
+        # (Jellyfin 12 does not send SeriesProviderIds for them), so by TMDB the
+        # series does not pair with the library. The table came into being on
+        # 13. 11. 2026 without it.
+        "jellyfin_id": "TEXT NOT NULL DEFAULT ''",
+        # Posters of requests (13. 11. 2026). `tvdb_id`: Sonarr looks a series
+        # up by its TVDB id (media.tvdbId). `poster`: the poster path from Seerr
+        # (posterPath) for titles that are not in Jellyfin; '' = not looked up
+        # yet (the next sync fills it in), '-' = Seerr has none.
+        "tvdb_id": "TEXT NOT NULL DEFAULT ''",
+        "poster": "TEXT NOT NULL DEFAULT ''",
+    },
+    "music_track": {
+        # The track's file path (16. 11. 2026): music on its disk in the Disks card, in the total
+        # size and in the library growth (content_kinds.py). NULL = the sync has not asked yet.
+        "path": "TEXT",
+    },
+    "library_disk_snapshot": {
+        # A fingerprint of the disk settings (the source of capacity, virtual
+        # disks, merged devices). The pace is counted only across snapshots
+        # with the same fingerprint - see stats.disks._segment().
+        "fingerprint": "TEXT NOT NULL DEFAULT ''",
+        # Bytes by content kind, JSON (16. 11. 2026, content_kinds.py); NULL = a snapshot written
+        # before, video only - completed when read (stats/content_history.py).
+        "kinds": "TEXT",
+    },
+    "library_snapshot": {
+        # Parts by content kind, JSON {"music": {"items", "size"}} (16. 11. 2026); `size_bytes` is the
+        # whole from then on. NULL = written before, video only - completed when read.
+        "kinds": "TEXT",
+    },
     "items": {
-        # Otisk obrazku z Jellyfinu (ImageTags.Primary). Jiny obrazek =
-        # jiny otisk, takze podle nej pozname, ze uz je v mezipameti
-        # neplatny. Viz web.item_image() a scanner._zapomen_obrazky().
+        # The values of an analysis error's key (21. 11. 2026, i18n.message_parts) - the item's page reads
+        # it in the reader's language.
+        "tech_error_values": "TEXT",
+        # Copies of the same movie in one library: on a secondary copy the id
+        # of the main one, otherwise empty. Recounted by scanner.recount_copies().
+        "main_id": "TEXT",
+        # A fingerprint of the image from Jellyfin (ImageTags.Primary). Another
+        # image = another fingerprint, so it tells us the cached one is no
+        # longer valid. See web.item_image() and scanner._forget_images().
         "image_tag": "TEXT",
-        # Otisk plakatu SERIALU (Jellyfin ho hlasi u kazde epizody jako
-        # SeriesPrimaryImageTag). Polozku pro serial nemame, takze bez
-        # nej nebylo u jeho plakatu co porovnat - a jednou stazeny
-        # obrazek tam zustal navzdy.
+        # A fingerprint of the SERIES poster (Jellyfin reports it with every
+        # episode as SeriesPrimaryImageTag). We have no item for the series, so
+        # without it there was nothing to compare its poster with - and an
+        # image once downloaded stayed there forever.
         "series_image_tag": "TEXT",
         "audio_languages": "TEXT",
         "subtitle_languages": "TEXT",
         "default_audio_language": "TEXT",
-        # Co slibuje nazev souboru, ale nejde priradit ke konkretni stope.
-        # Pricita se do souhrnu jazyku - viz scanner._prepocitej_jazyky_polozky.
+        # What the file name promises but cannot be assigned to a particular
+        # stream. Added to the language summaries - see scanner._recount_item_languages.
         "audio_from_name": "TEXT",
         "subtitle_from_name": "TEXT",
-        # Identifikátor z TMDB. Přežije překódování souboru, na rozdíl
-        # od ItemId z Jellyfinu - viz scanner._merge_by_tmdb().
+        # An identifier from TMDB. It survives re-encoding the file, unlike
+        # Jellyfin's ItemId - see scanner._merge_by_tmdb().
         "tmdb_id": "TEXT",
-        # Zanry z Jellyfinu, oddelene svislitkem. Pouzivaji se v detailu
-        # uzivatele - "co ten clovek vlastne sleduje".
+        # Genres from Jellyfin, separated by a vertical bar. Used in the user's
+        # detail - "what does this person actually watch".
         "genres": "TEXT",
-        # Dynamicky rozsah tak, jak ho hlasi Jellyfin (SDR/HDR/DOVI).
-        # Vedle toho, co zmeril ffprobe: Dolby Vision v Matrosce umi cist
-        # az ffmpeg 5, takze starsi ffprobe hlasi jen "HDR" a DV se ztrati.
-        # Jellyfin ho pritom zna. Viz stats.ROZSAH_CASE.
+        # The dynamic range as Jellyfin reports it (SDR/HDR/DOVI).
+        # Next to what ffprobe measured: Dolby Vision in Matroska can be read
+        # only by ffmpeg 5, so an older ffprobe reports just "HDR" and the DV
+        # gets lost. Jellyfin knows it, though. See stats.RANGE_CASE.
         "video_range_reported": "TEXT",
     },
     "dashboard_layout": {
-        # Sirka panelu ve vlastnim prehledu. Prazdna = jak ji ma sekce
-        # v registru; clovek si ji muze prepnout pri uprave prehledu.
-        "sirka": "TEXT",
+        # The width of a card in the custom dashboard. Empty = as the card
+        # has it in the registry; a person can switch it while editing the dashboard.
+        "width": "TEXT",
     },
     "item_streams": {
-        # Odkud jazyk stopy je. Prazdne = ze zdroje technickych dat,
-        # "jellyfin" = soubor ho neuvadel a doplnil se z knihovny.
+        # Where the stream's language comes from. Empty = from the source of
+        # technical data, "jellyfin" = the file did not state it and it was
+        # filled in from the library.
         "language_source": "TEXT",
     },
     "accounts": {
-        # Ke kteremu divakovi v Jellyfinu ucet patri. Prazdne = mistni
-        # ucet, ktery s Jellyfinem nema nic spolecneho. Podle tohohle id
-        # se pozna, ktera prehravani jsou "moje" - je to totez id jako
-        # v tabulce `users`.
+        # Which Jellyfin viewer the account belongs to. Empty = a local
+        # account that has nothing to do with Jellyfin. This id tells which
+        # playbacks are "mine" - it is the same id as in the table `users`.
         "jellyfin_user_id": "TEXT",
-        # Vlastni prava uctu jako JSON, nebo NULL = plati nastaveni
-        # skupiny (ctenari / divaci). Viz pristup.vlastni_prava().
-        "pristup": "TEXT",
-        # Jazyk rozhrani, ktery si ucet vybral na strance Muj ucet.
-        # NULL = jazyk serveru. Viz i18n.current_language().
+        # The account's own permissions as JSON, or NULL = the group's settings
+        # apply (readers / viewers). See access.own_permissions().
+        "permissions": "TEXT",
+        # The interface language the account chose on the My account page.
+        # NULL = the server's language. See i18n.current_language().
         "ui_language": "TEXT",
-        # Smi si ucet vyrobit vlastni API klic? "1" / "0", NULL = podle
-        # skupiny. Viz pristup.smi_klic().
-        "smi_klic": "TEXT",
-        # Smi se sezonni vyzdoba hybat? "0" = ucet si animace vypnul na
-        # strance Muj ucet, NULL = hybou se. Viz udalosti.pohyb().
-        "udalosti_pohyb": "TEXT",
+        # May the account make its own API key? "1" / "0", NULL = by the
+        # group. See access.may_have_key().
+        "may_have_key": "TEXT",
+        # May the seasonal decoration move? "0" = the account switched the
+        # animations off on the My account page, NULL = they move. See seasonal.motion().
+        "events_motion": "TEXT",
     },
     "users": {
-        # Otisk profiloveho obrazku z Jellyfinu (PrimaryImageTag z /Users).
-        # NULL = obrazek nema. Podle otisku se pozna i jeho zmena - je
-        # v adrese, kterou si prohlizec pamatuje. Viz web.muj_obrazek().
+        # A fingerprint of the profile picture from Jellyfin (PrimaryImageTag
+        # from /Users). NULL = no picture. The fingerprint also tells when it
+        # changes - it is in the address the browser remembers. See web.my_image().
         "image_tag": "TEXT",
     },
     "api_tokens": {
-        # Komu klic patri. NULL = root klic (bez vlastnika, vcetne klicu
-        # z doby pred vlastniky). Smazany ucet vezme sve klice s sebou.
-        # Viz api.over_token().
+        # Whom the key belongs to. NULL = a root key (without an owner, keys
+        # from the time before owners included). A deleted account takes its
+        # keys with it. See api.verify_token().
         "account_id": "INTEGER REFERENCES accounts(id) ON DELETE CASCADE",
-        # Prava root klice: NULL = vsechno (i klice pred vlastniky - aby se po
-        # aktualizaci nerozbila Grafana), jinak JSON z api.zabal_prava_klice.
-        "prava": "TEXT",
-        # 'aktivni' / 'vypnuty'. Vypnout a zapnout smi jen spravce;
-        # zneplatneni je smazani radku.
-        "stav": "TEXT NOT NULL DEFAULT 'aktivni'",
+        # Permissions of a root key: NULL = everything (keys from before owners too - so
+        # Grafana does not break after an update), otherwise JSON from api.pack_key_permissions.
+        "permissions": "TEXT",
+        # active / disabled. Only an admin may switch it off and on;
+        # revoking is deleting the row.
+        "status": "TEXT NOT NULL DEFAULT 'active'",
     },
     "playback": {
         "audio_language": "TEXT",
         "subtitle_language": "TEXT",
-        # Bezi, nebo je pozastavene? Prida se za behu i do
-        # starsich databazi - viz migrace nize.
+        # Running, or paused? Added at run time to older databases too - see
+        # the migration below.
         "is_paused": "INTEGER NOT NULL DEFAULT 0",
-        # Rozmery obrazu, ktery relace prave hraje. Drive se braly z tabulky
-        # `items`, takze u epizody, kterou jsme jeste nesynchronizovali,
-        # chybelo rozliseni uplne. Relace to vi sama.
+        # Dimensions of the picture the session is playing right now. They used
+        # to be taken from the table `items`, so for an episode we had not
+        # synchronised yet the resolution was missing altogether. The session
+        # knows it itself.
         "video_width": "INTEGER",
         "video_height": "INTEGER",
-        # Jazyk, ktery hraje PRAVE TED. Vedle nej stoji `audio_language`,
-        # ktery drzi ten prvni zjisteny. Kazdy odpovida na jinou otazku -
-        # viz collector._store_sessions().
-        # Delka poradu, jak ji hlasi sama relace. Drive se brala jen
-        # z tabulky `items`, takze u epizody, kterou jsme jeste
-        # nesynchronizovali, nesel spocitat postup - a ukazatel chybel.
-        # BIGINT, ne INTEGER: jeden tik je 100 nanosekund, takze
-        # ctvrthodinovy dil ma pres 9 miliard - do 4bajtoveho INTEGER
-        # se v PostgreSQL nevejde ("integer out of range").
+        # The language playing RIGHT NOW. Next to it stands `audio_language`,
+        # which keeps the first one found. Each answers a different question -
+        # see collector._store_sessions().
+        # The length of the programme as the session itself reports it. It used
+        # to be taken from the table `items` only, so for an episode we had not
+        # synchronised yet the progress could not be counted - and the
+        # indicator was missing.
+        # BIGINT, not INTEGER: one tick is 100 nanoseconds, so a quarter-hour
+        # episode has over 9 billion - that does not fit into a 4-byte INTEGER
+        # in PostgreSQL ("integer out of range").
         "media_runtime_ticks": "BIGINT",
         "current_audio_language": "TEXT",
         "current_subtitle_language": "TEXT",
-        # Od kdy hraje soucasna kombinace stop a jestli uz se zapocitala
-        # do statistik. Viz collector.MIN_LANGUAGE_SECONDS.
+        # Since when the current combination of streams plays and whether it has
+        # been counted in the statistics yet. See collector.MIN_LANGUAGE_SECONDS.
         "language_since": "TEXT",
         "language_confirmed": "INTEGER NOT NULL DEFAULT 0",
-        # Co presne se pri prepoctu deje - viz collector._describe_stream().
-        # Samotne "transcode" nerika, jestli server prepocitava obraz
-        # (drahe), jen zvuk (levne), nebo vypaluje titulky.
+        # What exactly happens in a transcode - see collector._describe_stream().
+        # A bare "transcode" does not say whether the server re-encodes the
+        # picture (expensive), only the sound (cheap), or burns in subtitles.
         "transcode_video_direct": "INTEGER",
         "transcode_audio_direct": "INTEGER",
         "transcode_hw": "TEXT",
-        # Jak rychle prevod bezi - ted, a prumer pres soucet a pocet
-        # vzorku (cela cisla: na otazku "stiha?" desetiny nemaji vliv).
-        # `video_fps` je snimkovani samotneho videa, se kterym se
-        # rychlost prevodu porovnava. Viz collector._describe_stream().
+        # How fast the conversion runs - now, and the average through the sum
+        # and the number of samples (whole numbers: decimals make no difference
+        # to the question "does it keep up?"). `video_fps` is the frame rate of
+        # the video itself, which the speed of the conversion is compared with.
+        # See collector._describe_stream().
         "transcode_fps": "INTEGER",
-        "transcode_fps_soucet": "INTEGER NOT NULL DEFAULT 0",
-        "transcode_fps_vzorku": "INTEGER NOT NULL DEFAULT 0",
+        "transcode_fps_sum": "INTEGER NOT NULL DEFAULT 0",
+        "transcode_fps_samples": "INTEGER NOT NULL DEFAULT 0",
         "video_fps": "INTEGER",
     },
 }
 
 
-# Sloupce, u kterých se ukázalo, že původní typ nestačí.
+# Columns whose original type turned out not to be enough.
 #
-# Migrace výše umí sloupec jen **přidat**. Když se pak zjistí, že měl mít
-# jiný typ, tabulkám, které už vznikly, to nepomůže - a chyba se projeví
-# až za běhu ("integer out of range").
+# The migrations above can only **add** a column. When it turns out later
+# that it should have had another type, that does not help the tables that
+# already exist - and the error shows only at run time ("integer out of range").
 #
-# Týká se to jen PostgreSQL: tam je INTEGER čtyřbajtový. SQLite si velikost
-# určuje podle hodnoty, takže tam přetéct nemá co.
+# It concerns PostgreSQL only: INTEGER is four bytes there. SQLite sizes it by
+# the value, so there is nothing to overflow.
 TYPE_FIXES: dict[tuple[str, str], str] = {
-    # Jeden tik je 100 nanosekund, takže čtvrthodinový díl má přes
-    # 9 miliard - do čtyřbajtového INTEGER se nevejde.
+    # One tick is 100 nanoseconds, so a quarter-hour episode has over
+    # 9 billion - it does not fit into a four-byte INTEGER.
     ("playback", "media_runtime_ticks"): "BIGINT",
 }
 
 
 def _migrate(conn: Connection) -> list[str]:
-    """Doplní sloupce, které v databázi ještě nejsou. Vrátí, co přidal."""
+    """Adds the columns the database does not have yet. Returns what it added."""
     added: list[str] = []
     for table, columns in MIGRATIONS.items():
         existing = conn.table_columns(table)
         if not existing:
-            continue  # tabulka ještě neexistuje, vytvoří ji schéma
+            continue  # the table does not exist yet, the schema creates it
         for column, column_type in columns.items():
             if column not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
                 added.append(f"{table}.{column}")
 
     if conn.is_postgres:
-        for (table, column), novy_typ in TYPE_FIXES.items():
+        for (table, column), new_type in TYPE_FIXES.items():
             if column in conn.table_columns(table):
-                # Idempotentní: když už je typ správný, PostgreSQL nic
-                # nedělá. Proto se to nemusí nijak evidovat.
+                # Idempotent: when the type is right already, PostgreSQL does
+                # nothing. So it does not have to be recorded anywhere.
                 conn.execute(
-                    f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {novy_typ}"
+                    f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {new_type}"
                 )
     return added
 
 
-def _je_index(prikaz: str) -> bool:
-    """Je tenhle příkaz zakládání indexu? Úvodní komentáře přeskočíme."""
-    for radek in prikaz.splitlines():
-        ocisteny = radek.strip()
-        if not ocisteny or ocisteny.startswith("--"):
+# Until 15. 11. 2026 Sonarr and Radarr had shared tables `arr_event` and `arr_titul` with a column
+# `app`. Now every app has its own (see schema.sql). What is copied from an old table where:
+# {old table: {app: (new table, columns)}} - the columns under their names in the OLD table (that
+# shape is fixed for good); they land in the new table's columns through schema_names (the names
+# were Czech until 1.9.0 - such a database goes straight into the English ones). A movie has no
+# episode, TVDB id or Jellyfin series id - Radarr never filled those columns, and its tables do not
+# have them.
+_EVENT_COLUMNS = ("arr_id", "typ", "datum", "titul", "epizoda", "polozka", "titul_id", "kvalita", "rozliseni", "velikost",
+                  "indexer", "release_group", "klient", "protokol", "zdroj", "duvod", "download_id", "vydano", "cf_skore")
+_TITLE_COLUMNS = ("titul_id", "nazev", "tmdb_id", "tvdb_id", "imdb_id", "jellyfin_id", "pridano", "synchronizovano")
+_OLD_ARR_TABLES: dict[str, dict[str, tuple[str, tuple[str, ...]]]] = {
+    "arr_event": {"sonarr": ("sonarr_event", _EVENT_COLUMNS),
+                  "radarr": ("radarr_event", tuple(s for s in _EVENT_COLUMNS if s != "epizoda"))},
+    "arr_titul": {"sonarr": ("sonarr_title", _TITLE_COLUMNS),
+                  "radarr": ("radarr_title", tuple(s for s in _TITLE_COLUMNS if s not in ("tvdb_id", "jellyfin_id")))},
+}
+
+
+def _row_count(conn: Connection, table: str, where: str = "", params: tuple[Any, ...] = ()) -> int:
+    """The number of the table's rows (the name and the condition are constants of the code, values go as parameters)."""
+    return int(dict(conn.execute(f"SELECT COUNT(*) AS count FROM {table}{where}", params).fetchone())["count"] or 0)
+
+
+def _convert_table(conn: Connection, old: str, targets: dict[str, tuple[str, tuple[str, ...]]]) -> int:
+    """Rows of one old shared table into the apps' tables; then deletes the old one. Returns how many it really inserted."""
+    from . import schema_names
+
+    has = conn.table_columns(old)
+    found = inserted = 0
+    for app, (new_table, columns) in targets.items():
+        # Only the columns the old table really has: the titles table came into
+        # being on 13. 11. 2026 without the time added (`pridano`), and not every one got it in time.
+        present = [s for s in columns if s in has]
+        names = next((t.columns for t in schema_names.TABLES if t.new == new_table), {})
+        shared, renamed = ", ".join(present), ", ".join(names.get(s, s) for s in present)
+        found += _row_count(conn, old, " WHERE app = ?", (app,))
+        # ON CONFLICT DO NOTHING: what is in the new table already stands - nothing is doubled or overwritten.
+        # How many really got inserted is told by the row count of the new table before and after (it runs in
+        # the start's transaction, nobody else writes into it) - the driver's `rowcount` is not relied on here.
+        before = _row_count(conn, new_table)
+        conn.execute(f"INSERT INTO {new_table} ({renamed}) SELECT {shared} FROM {old} WHERE app = ?"
+                     " ON CONFLICT DO NOTHING", (app,))
+        inserted += _row_count(conn, new_table) - before
+    if found != inserted:
+        log.info("table %s: %s rows were already in the new tables and stay unchanged", old, found - inserted)
+    total = _row_count(conn, old)
+    if total != found:
+        # A row of an app Jellyscope does not know has nowhere to go. It is a copy of someone else's history - it can be downloaded again.
+        log.warning("table %s: %s rows of an unknown app were not converted", old, total - found)
+    conn.execute(f"DROP TABLE {old}")
+    return inserted
+
+
+def _convert_arr_tables(conn: Connection) -> int:
+    """Converts a database with the shared tables of Sonarr and Radarr to tables per app.
+
+    Called at start right after the tables are created. A database in the new
+    shape does not have the old tables, and nothing happens. Otherwise the rows
+    are copied by app into the new tables and the old ones are deleted - all in
+    the start's transaction: an error in the middle leaves the database as it
+    was, and the next start tries again. The sync marks are in the settings and
+    do not change, so nothing is downloaded twice after the conversion. Returns
+    the number of converted rows.
+    """
+    converted, old_count = 0, 0
+    for old, targets in _OLD_ARR_TABLES.items():
+        if conn.table_columns(old):
+            old_count += 1
+            converted += _convert_table(conn, old, targets)
+    if old_count:
+        # Even with zero: an old table was deleted, and that must not happen without a word.
+        log.info("Sonarr and Radarr tables converted to per-app tables: %s rows", converted)
+    return converted
+
+
+def _is_index(statement: str) -> bool:
+    """Does this statement create an index? Leading comments are skipped."""
+    for line in statement.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
             continue
-        return ocisteny.upper().startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
+        return stripped.upper().startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
     return False
 
 
-def _oddel_indexy(script: str) -> tuple[str, str]:
-    """Rozdělí schéma na dvě části: tabulky a indexy.
+def _split_indexes(script: str) -> tuple[str, str]:
+    """Splits the schema into two parts: tables and indexes.
 
-    Proč: index se odkazuje na sloupec, a `CREATE TABLE IF NOT EXISTS`
-    do už existující tabulky nový sloupec nepřidá. Kdo aplikaci spustil
-    dřív, měl by proto starou tabulku bez `tmdb_id`, ale schéma by hned
-    zkusilo založit `idx_items_tmdb` - a celý start by spadl na
-    "no such column: tmdb_id".
+    Why: an index refers to a column, and `CREATE TABLE IF NOT EXISTS` does
+    not add a new column to a table that already exists. Whoever ran the
+    application before would therefore have an old table without `tmdb_id`,
+    but the schema would try to create `idx_items_tmdb` right away - and the
+    whole start would fail on "no such column: tmdb_id".
 
-    Správné pořadí je tedy: **tabulky, pak migrace, teprve pak indexy.**
-    Rozdělení je řádkové - příkaz končí řádkem zakončeným středníkem.
-    Na to nám tady stačí; složitější SQL (třeba spouště s vnořeným
-    `BEGIN ... END;`) schéma nemá.
+    So the right order is: **tables, then migrations, only then indexes.**
+    The split goes by lines - a statement ends with a line ending in a
+    semicolon. That is enough for us here; more complex SQL (say triggers
+    with a nested `BEGIN ... END;`) the schema does not have.
     """
-    tabulky: list[str] = []
-    indexy: list[str] = []
-    prikaz: list[str] = []
+    tables: list[str] = []
+    indexes: list[str] = []
+    statement: list[str] = []
 
-    for radek in script.splitlines(keepends=True):
-        prikaz.append(radek)
-        if radek.rstrip().endswith(";"):
-            text = "".join(prikaz)
-            (indexy if _je_index(text) else tabulky).append(text)
-            prikaz = []
+    for line in script.splitlines(keepends=True):
+        statement.append(line)
+        if line.rstrip().endswith(";"):
+            text = "".join(statement)
+            (indexes if _is_index(text) else tables).append(text)
+            statement = []
 
-    if prikaz:
-        # Zbytek bez středníku - typicky komentář na konci souboru.
-        tabulky.append("".join(prikaz))
+    if statement:
+        # The rest without a semicolon - typically a comment at the end of the file.
+        tables.append("".join(statement))
 
-    return "".join(tabulky), "".join(indexy)
+    return "".join(tables), "".join(indexes)
 
 
 def init_db(config: dialect.DatabaseConfig | None = None) -> list[str]:
-    """Vytvoří tabulky, doplní chybějící sloupce a nastaví výchozí hodnoty.
+    """Creates the tables, adds the missing columns and sets the default values.
 
-    Když se přitom ukáže, že do databáze nejde psát, vyletí
-    `DatabaseNedostupna` se srozumitelným vysvětlením - viz `_open_raw`.
-    Zjistit se to totiž nemusí při otevírání: soubor jen pro čtení se
-    otevře v pořádku a teprve první zápis řekne, že to nepůjde.
+    When it turns out meanwhile that the database cannot be written to,
+    `DatabaseUnavailable` is raised with an understandable explanation - see
+    `_open_raw`. It need not show when opening: a read-only file opens fine,
+    and only the first write tells it will not work.
     """
     config = config or database_config()
     schema_file = SCHEMA_POSTGRES if config.is_postgres else SCHEMA_SQLITE
-    tabulky, indexy = _oddel_indexy(schema_file.read_text(encoding="utf-8"))
+    tables, indexes = _split_indexes(schema_file.read_text(encoding="utf-8"))
 
-    with _hlidane_psani(config):
-        return _init_db(config, tabulky, indexy)
+    with _guarded_writes(config):
+        # The old names first: the schema's CREATE TABLE IF NOT EXISTS would make the new ones empty beside them.
+        from . import conversion
+        conversion.convert(config)
+        return _init_db(config, tables, indexes)
 
 
 @contextmanager
-def _hlidane_psani(config: dialect.DatabaseConfig) -> Iterator[None]:
-    """Zápis, který selhal kvůli právům, přeloží na `DatabaseNedostupna`."""
+def _guarded_writes(config: dialect.DatabaseConfig) -> Iterator[None]:
+    """A write that failed for lack of permissions turned into `DatabaseUnavailable`."""
     try:
         yield
-    except sqlite3.Error as chyba:
+    except sqlite3.Error as error:
         if config.is_postgres:
             raise
-        cesta = Path(config.path)
-        if not cesta.is_absolute():
-            cesta = BASE_DIR / cesta
-        raise DatabaseNedostupna(*_proc_nejde_otevrit(cesta, chyba)) from chyba
+        path = Path(config.path)
+        if not path.is_absolute():
+            path = BASE_DIR / path
+        raise DatabaseUnavailable(_why_unopenable(path, error)) from error
 
 
-def _init_db(config: dialect.DatabaseConfig, tabulky: str,
-             indexy: str) -> list[str]:
+def _init_db(config: dialect.DatabaseConfig, tables: str,
+             indexes: str) -> list[str]:
     with connect(config) as conn:
-        conn.executescript(tabulky)
+        conn.executescript(tables)
         added = _migrate(conn)
-        _zajisti_kos(conn)
-        if indexy.strip():
-            conn.executescript(indexy)
+        _convert_arr_tables(conn)
+        _ensure_playback_bin(conn)
+        _lock_against_1_8(conn)
+        if indexes.strip():
+            conn.executescript(indexes)
         for key, value in DEFAULT_SETTINGS.items():
-            # ON CONFLICT DO NOTHING rozumí obě databáze - na rozdíl od
-            # SQLite konstrukce INSERT OR IGNORE, která je jen její.
+            # ON CONFLICT DO NOTHING is understood by both databases - unlike
+            # SQLite's construct INSERT OR IGNORE, which is its own only.
             conn.execute(
                 "INSERT INTO settings (key, value) VALUES (?, ?)"
                 " ON CONFLICT (key) DO NOTHING",
                 (key, value),
             )
-        # Hlidani nove verze se prestehovalo mezi ulohy. Kdo ho mel
-        # zapnute, ma ho mit zapnute i dal - jinak by mu po aktualizaci
-        # tise prestalo fungovat a nemel by jak poznat proc.
-        stare = conn.execute(
+        # Checking for a new version moved among the tasks. Whoever had it
+        # switched on should keep it on - otherwise it would quietly stop
+        # working after an update, with no way of telling why.
+        old_check = conn.execute(
             "SELECT value FROM settings WHERE key = 'update_check_enabled'"
         ).fetchone()
-        # Podle jmena sloupce, ne podle poradi: PostgreSQL vraci slovnik
-        # a `radek[0]` je na nem KeyError. SQLite zvlada oboji, takze se
-        # to pri vyvoji neprojevi - projevi se to az pri startu u lidi
-        # s PostgreSQL, a to tak, ze aplikace vubec nenabehne.
-        if stare is not None and str(dict(stare).get("value")) == "1":
+        # By the column's name, not by position: PostgreSQL returns a dict and
+        # `row[0]` is a KeyError on it. SQLite handles both, so it does not
+        # show during development - it shows only at start for people with
+        # PostgreSQL, and in such a way that the application does not start at all.
+        if old_check is not None and str(dict(old_check).get("value")) == "1":
             conn.execute(
                 "INSERT INTO settings (key, value) VALUES ('task_updates_enabled', '1')"
                 " ON CONFLICT (key) DO NOTHING")
 
-        for key in ZRUSENA_NASTAVENI:
+        for key in DROPPED_SETTINGS:
             conn.execute("DELETE FROM settings WHERE key = ?", (key,))
 
-    forget_settings()   # schema se mohlo zmenit
+    forget_settings()   # the schema may have changed
 
-    # První naplnění z .env děláme jen pro databázi, kterou aplikace
-    # doopravdy používá.
+    # The first filling from .env is done only for the database the
+    # application really uses.
     #
-    # `init_db()` se totiž volá i na **cizí** databázi - když se v Nastavení
-    # přenášejí data jinam, zakládá se tam schéma stejnou funkcí. Jenže
-    # seed_from_env() čte i zapisuje přes výchozí spojení, takže by sahalo
-    # do databáze, o kterou tady vůbec nejde (a při přenosu do ještě
-    # nezaložené databáze by rovnou spadlo).
+    # `init_db()` is called on a **foreign** database too - when data are
+    # moved elsewhere in Settings, the schema is created there by the same
+    # function. But seed_from_env() reads and writes through the default
+    # connection, so it would touch a database that is not the point here at
+    # all (and when moving into a database not created yet, it would fail
+    # outright).
     if config is database_config():
         seed_from_env()
     return added
 
 
-# Všechny tabulky ze schématu, v pořadí, ve kterém se dají naplnit:
-# `item_streams` odkazuje na `items`, `dashboard_layout` a `api_tokens` na
-# `accounts`. Mazat se mají v obráceném pořadí.
+# Every table of the schema, in the order they can be filled in:
+# `item_streams` refers to `items`, `dashboard_layout` and `api_tokens` to
+# `accounts`. They are to be deleted in the reverse order.
 #
-# Jediný seznam pro zálohu vlastním exportem (tasks.ZALOHOVANE_TABULKY)
-# i pro převod SQLite <-> PostgreSQL (dbmigrate.TABLES). Převod měl dřív
-# vlastní, ručně psaný seznam - a s novými tabulkami tiše vynechával API
-# klíče, přehledy nebo verze souborů. Proti oběma schématům ho hlídají
-# testy (test_vlastni_export_pg, test_prevod_databaze): tabulka, která
-# přibude do schema.sql, musí přibýt i sem.
-TABULKY = ("libraries", "users", "items", "item_versions", "item_streams",
-           "accounts", "dashboard_layout", "library_snapshot",
-           "settings", "scan_log", "api_tokens", "login_blocks",
-           "zapomenuti", "playback", "mapa_dlazdice")
+# The single list for the backup by own export (tasks.BACKED_UP_TABLES)
+# and for the conversion SQLite <-> PostgreSQL (dbmigrate.TABLES). The
+# conversion used to have its own, hand-written list - and with new tables
+# it silently left out API keys, dashboards or file versions. Tests guard it
+# against both schemas (test_own_export_pg, test_database_conversion): a
+# table added to schema.sql has to be added here too.
+TABLES = ("libraries", "users", "items", "item_versions", "item_streams",
+          "accounts", "dashboard_layout", "library_snapshot", "library_disk_snapshot",
+          "settings", "scan_log", "api_tokens", "login_blocks",
+          "forgettings", "playback", "detailed_map_tile", "sonarr_event", "sonarr_title", "radarr_event", "radarr_title",
+          "lidarr_event", "lidarr_title", "readarr_event", "readarr_title", "seerr_request", "bazarr_event",
+          "prowlarr_hour", "prowlarr_grab", "prowlarr_indexer",
+          "music_artist", "music_album", "music_track", "book")
 
 
-# Koš na zapomenuté diváky. Řádky se při zapomenutí **přesunou** sem,
-# takže je do noci jde vrátit; v noci se vysypou doopravdy.
-KOS = "playback_kos"
+# The bin of forgotten viewers. On forgetting, rows are **moved** here, so
+# they can be brought back until night; at night the bin is emptied for real.
+PLAYBACK_BIN = "playback_bin"
 
 
-def sloupce(conn: Any, tabulka: str) -> list[str]:
-    """Názvy sloupců tabulky. Prázdný seznam = tabulka není."""
-    if conn.kind == dialect.POSTGRES:
-        radky = conn.execute(
-            "SELECT column_name FROM information_schema.columns"
-            " WHERE table_name = ? ORDER BY ordinal_position",
-            (tabulka,)).fetchall()
-        return [str(dict(r)["column_name"]) for r in radky]
-    radky = conn.execute(f"PRAGMA table_info({tabulka})").fetchall()
-    return [str(dict(r)["name"]) for r in radky]
+def columns_of(conn: Any, table: str) -> list[str]:
+    """Names of the table's columns. An empty list = there is no such table.
 
-
-def _typy_sloupcu(conn: Any, tabulka: str) -> dict[str, str]:
-    if conn.kind == dialect.POSTGRES:
-        radky = conn.execute(
-            "SELECT column_name, data_type FROM information_schema.columns"
-            " WHERE table_name = ?", (tabulka,)).fetchall()
-        return {str(dict(r)["column_name"]): str(dict(r)["data_type"])
-                for r in radky}
-    radky = conn.execute(f"PRAGMA table_info({tabulka})").fetchall()
-    return {str(dict(r)["name"]): str(dict(r)["type"] or "TEXT")
-            for r in radky}
-
-
-def _zajisti_kos(conn: Any) -> None:
-    """Založí koš a dorovná jeho sloupce podle `playback`.
-
-    Koš schválně **není** v schema.sql: kdyby se psal ručně, po přidání
-    sloupce do `playback` by tiše ztrácel část dat - a poznalo by se to
-    až ve chvíli, kdy by někdo chtěl vrátit zapomenutého diváka, tedy
-    přesně tehdy, kdy na tom záleží. Takhle vzniká z jeho tvaru.
-
-    `udalost` navíc: podle ní se pozná, ke kterému zapomenutí řádek
-    patří, a vrací se celá skupina najednou.
+    On PostgreSQL only in our schema, see `_POSTGRES_COLUMNS`.
     """
-    if not sloupce(conn, KOS):
-        # Tvar se bere z prazdneho vyberu, ne z `CREATE TABLE (LIKE ...)`:
-        # tohle umi obe databaze stejne - a hlavne tudy neprojde slovo
-        # LIKE, ktere nas prekladac dialektu zmeni na ILIKE (viz
-        # dialect.translate) a PostgreSQL pak DDL odmitne.
-        conn.execute(f"CREATE TABLE IF NOT EXISTS {KOS} AS"
+    if conn.kind == dialect.POSTGRES:
+        rows = conn.execute(_POSTGRES_COLUMNS, (table,)).fetchall()
+        return [str(dict(r)["column_name"]) for r in rows]
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return [str(dict(r)["name"]) for r in rows]
+
+
+def _column_types(conn: Any, table: str) -> dict[str, str]:
+    if conn.kind == dialect.POSTGRES:
+        rows = conn.execute(_POSTGRES_COLUMNS, (table,)).fetchall()
+        return {str(dict(r)["column_name"]): str(dict(r)["data_type"])
+                for r in rows}
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {str(dict(r)["name"]): str(dict(r)["type"] or "TEXT")
+            for r in rows}
+
+
+def _ensure_playback_bin(conn: Any) -> None:
+    """Creates the bin and evens its columns up with `playback`.
+
+    The bin is **not** in schema.sql on purpose: were it written by hand,
+    after a column was added to `playback` it would silently lose a part of
+    the data - and that would show only when somebody wanted to bring a
+    forgotten viewer back, that is exactly when it matters. This way it is
+    made from its shape.
+
+    `event_id` in addition: it tells which forgetting a row belongs to, and a
+    whole group is brought back at once.
+    """
+    if not columns_of(conn, PLAYBACK_BIN):
+        # The shape is taken from an empty select, not from `CREATE TABLE (LIKE ...)`:
+        # both databases do this the same - and above all, the word LIKE does not
+        # pass this way, which our dialect translator changes to ILIKE (see
+        # dialect.translate) and PostgreSQL then refuses the DDL.
+        conn.execute(f"CREATE TABLE IF NOT EXISTS {PLAYBACK_BIN} AS"
                      " SELECT * FROM playback WHERE 1=0")
-        conn.execute(f"ALTER TABLE {KOS} ADD COLUMN udalost INTEGER")
-        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_kos_udalost"
-                     f" ON {KOS} (udalost)")
+        conn.execute(f"ALTER TABLE {PLAYBACK_BIN} ADD COLUMN event_id INTEGER")
+    # On every start, not only with a new bin: the bin is not in schema.sql, and the conversion to
+    # English names on SQLite (which cannot rename an index) drops its old index.
+    conn.execute(f"CREATE INDEX IF NOT EXISTS idx_playback_bin_event"
+                 f" ON {PLAYBACK_BIN} (event_id)")
 
-    # Sloupce, ktere v `playback` pribyly az po zalozeni kose.
-    typy = _typy_sloupcu(conn, "playback")
-    ma = set(sloupce(conn, KOS))
-    for jmeno, typ in typy.items():
-        if jmeno not in ma:
-            conn.execute(f"ALTER TABLE {KOS} ADD COLUMN {jmeno} {typ}")
-            log.info("kos: doplnen sloupec %s", jmeno)
+    # Columns added to `playback` only after the bin was created.
+    types = _column_types(conn, "playback")
+    has = set(columns_of(conn, PLAYBACK_BIN))
+    for column, column_type in types.items():
+        if column not in has:
+            conn.execute(f"ALTER TABLE {PLAYBACK_BIN} ADD COLUMN {column} {column_type}")
+            log.info("bin: column %s added", column)
 
 
 # ---------------------------------------------------------------------------
-# Nastavení
+# Settings
 # ---------------------------------------------------------------------------
 
-# Nastavení se čte hodně často - a dřív to znamenalo pokaždé nové spojení
-# do databáze. Nejhůř to bilo do očí u překladu: každé `_("text")` v šabloně
-# volalo `get_setting("ui_language")`, takže jedna stránka otevřela přes sto
-# spojení a strávila tím většinu svého času.
+# Settings are read very often - and that used to mean a new connection to the
+# database every time. It showed worst in translation: every `_("text")` in a
+# template called `get_setting("ui_language")`, so one page opened over a
+# hundred connections and spent most of its time doing it.
 #
-# Proto se celá tabulka drží v paměti. Je malá (pár desítek řádků) a mění
-# se zřídka.
+# So the whole table is kept in memory. It is small (a few dozen rows) and
+# changes rarely.
 #
-# Platnost je omezená na pár vteřin. Při zápisu se paměť zahodí hned, takže
-# ve vlastním procesu je změna okamžitá; krátká platnost je jen pojistka
-# pro případ, že by aplikace jednou běžela ve víc procesech nad společným
-# PostgreSQL a nastavení změnil ten druhý.
+# The validity is limited to a few seconds. On a write the memory is thrown
+# away at once, so within the own process a change is immediate; the short
+# validity is only a safeguard in case the application one day runs in more
+# processes over a shared PostgreSQL and the other one changed a setting.
 _settings_cache: dict[str, str] | None = None
 _settings_cached_at: float = 0.0
 SETTINGS_CACHE_SECONDS = 5.0
 
 
 def _stored_settings() -> dict[str, str]:
-    """Co je opravdu v tabulce settings (bez výchozích hodnot)."""
+    """What really is in the settings table (without the default values)."""
     global _settings_cache, _settings_cached_at
 
     now = time.monotonic()
@@ -1122,7 +1302,7 @@ def _stored_settings() -> dict[str, str]:
 
 
 def forget_settings() -> None:
-    """Zahodí zapamatovaná nastavení. Volá se po každém zápisu."""
+    """Throws the remembered settings away. Called after every write."""
     global _settings_cache
     _settings_cache = None
 
@@ -1136,50 +1316,56 @@ def get_setting(key: str, default: str | None = None) -> str:
     return DEFAULT_SETTINGS.get(key, "")
 
 
-# Nastavení, která se nikdy nesmí dostat do stránky.
+# Settings that must never get into a page or a template.
 #
-# API klíč k Jellyfinu je heslo: kdo ho má, může s cizím serverem dělat
-# cokoliv, co umí jeho vlastník. Do prohlížeče proto nepatří ani omylem.
-# Nastaveni, ktera se nesmi dostat do sablony. Heslo k SMTP, webhook
-# Discordu i token Telegramu jsou pristupove udaje jako klic k Jellyfinu -
-# kdo je ma, muze posilat zpravy misto tebe.
-TAJNA_NASTAVENI = ("jellyfin_api_key", "notify_smtp_heslo",
-                   "notify_discord_webhook", "notify_telegram_token")
+# The API key for Jellyfin is a password: whoever has it can do anything with
+# someone else's server that its owner can. So it does not belong in the
+# browser, not even by mistake. The SMTP password, the Discord webhook and the
+# Telegram token are access credentials like the Jellyfin key - whoever has
+# them can send messages in your name.
+SECRET_SETTINGS = ("jellyfin_api_key", "notify_smtp_password",
+                   "notify_discord_webhook", "notify_telegram_token",
+                   # The keys of the *Arr apps (jellyscope/arr/). Listed: db must not
+                   # reach for the apps' packages (a cycle) - a new app adds its
+                   # row, guarded by tests/test_arr_registry.py.
+                   "arr_sonarr_api_key", "arr_radarr_api_key", "arr_lidarr_api_key", "arr_readarr_api_key", "arr_bazarr_api_key", "arr_prowlarr_api_key",
+                   # The Seerr key (jellyscope/seerr/).
+                   "seerr_api_key")
 
 
-def predvyplnene_zalohy() -> str:
-    """V NASEM obrazu nastavi slozku na zalohy, pokud zadna nastavena neni.
+def prefill_backup_folder() -> str:
+    """In OUR image, sets the backup folder when none is set.
 
-    Bez toho uloha zalohovani skoncila na "Neni nastavena cesta pro
-    zalohy" - a kdo cestu vyplnil, snadno trefil misto mimo pripojenou
-    slozku. Takova zaloha se ulozi dovnitr kontejneru a pri dalsim buildu
-    zmizi; uloha pritom mesice hlasi, ze probehla.
+    Without it the backup task ended on "Neni nastavena cesta pro zalohy" -
+    and whoever filled the path in easily hit a place outside the mounted
+    folder. Such a backup is stored inside the container and disappears with
+    the next build; meanwhile the task reports for months that it ran.
 
-    Vedle databaze je proto `backups/`, tedy uvnitr /app/data - slozky,
-    kterou nas compose ven pripojuje vzdycky, takze se k zaloze da
-    dostat i z hostitele.
+    So next to the database there is `backups/`, that is inside /app/data - a
+    folder our compose always mounts outside, so the backup can be reached
+    from the host too.
 
-    **Jen u naseho obrazu.** Drive stacilo "jsem v jakemkoliv kontejneru"
-    a to bylo hadani: v cizim kontejneru (LXC, cizi image) o zadnem
-    pripojenem svazku nic nevime, takze `data/backups` neni chytry
-    vychozi stav, ale nevyzadana zmena nastaveni. A na vlastnim stroji uz
-    vubec: tam je smysluplne misto pro zalohy jiny disk nebo sit, ne
-    slozka vedle databaze.
+    **Only for our image.** It used to be enough to be "in any container",
+    and that was guessing: in someone else's container (LXC, a foreign image)
+    we know nothing about a mounted volume, so `data/backups` is not a clever
+    default but an unrequested change of settings. And on an own machine even
+    less: there the sensible place for backups is another disk or the
+    network, not a folder next to the database.
     """
     from .config import load_config
 
     config = load_config()
-    if not config.nas_obraz or get_setting("backup_path", "").strip():
+    if not config.our_image or get_setting("backup_path", "").strip():
         return ""
 
-    cesta = config.database_path.parent / "backups"
-    set_setting("backup_path", str(cesta))
-    log.info("zalohy se budou ukladat do %s", cesta)
-    return str(cesta)
+    path = config.database_path.parent / "backups"
+    set_setting("backup_path", str(path))
+    log.info("backups will be written to %s", path)
+    return str(path)
 
 
 def get_settings() -> dict[str, str]:
-    """Všechna nastavení najednou - výchozí hodnoty přebité tím, co je v DB."""
+    """All the settings at once - the default values overridden by what is in the DB."""
     values = dict(DEFAULT_SETTINGS)
     for key, value in _stored_settings().items():
         values[key] = value if value is not None else ""
@@ -1187,77 +1373,95 @@ def get_settings() -> dict[str, str]:
 
 
 def get_public_settings() -> dict[str, str]:
-    """Nastavení bez tajemství - tohle se smí předat šabloně.
+    """The settings without secrets - this may be passed to a template.
 
-    Šablony dnes API klíč nikde nevypisují, ale celý slovník se jim
-    předával včetně něj. Stačilo by jedno `{{ settings.jellyfin_api_key }}`
-    (třeba při ladění) a klíč by skončil ve zdroji stránky. Levnější je
-    ho sem vůbec nepustit než hlídat, že ho nikdo nevypíše.
+    Templates print the API key nowhere today, but the whole dictionary used
+    to be passed to them, the key included. One `{{ settings.jellyfin_api_key }}`
+    would do (say while debugging) and the key would end up in the page
+    source. It is cheaper not to let it in here at all than to watch that
+    nobody prints it.
     """
     values = get_settings()
-    for klic in TAJNA_NASTAVENI:
-        values.pop(klic, None)
+    for key in SECRET_SETTINGS:
+        values.pop(key, None)
     return values
 
 
-# Co se do logu píše jen jménem. Heslo, token ani klíč tam nemají co
-# delat - staci vedet, ze se zmenily.
-TAJNE_CASTI = ("heslo", "password", "token", "webhook", "api_key", "secret")
+# What is written into the log by name only. A password, a token or a key
+# have no business there - it is enough to know they changed.
+SECRET_PARTS = ("heslo", "password", "token", "webhook", "api_key", "secret")
 
-# Provozni zaznamy, ne nastaveni: prepisuji se samy a v logu by po nich
-# nezustalo nic nez sum. Podtrzitko na zacatku maji zaznamy sberace - cas
-# posledniho dotazu se prepisuje pri kazdem dotazu na Jellyfin.
-NELOGOVANE = ("_", "jellyfin_version", "notify_state_", "db_compaction_pending")
+# Operational records, not settings: they rewrite themselves, and nothing but
+# noise would be left of them in the log. An underscore at the start marks the
+# collector's records - the time of the last query is rewritten with every
+# query to Jellyfin.
+UNLOGGED_SETTINGS = ("_", "jellyfin_version", "notify_state_", "db_compaction_pending",
+                     # The state and the mark of the *Arr sync change with every run (once
+                     # an hour) - in the log they would be just noise. Listed per app: db
+                     # must not reach for the arr package (a cycle); a new app adds its two rows.
+                     "arr_sonarr_state", "arr_sonarr_last_sync", "arr_radarr_state", "arr_radarr_last_sync",
+                     "arr_lidarr_state", "arr_lidarr_last_sync", "arr_lidarr_titles", "arr_lidarr_titles_version",
+                     "arr_readarr_state", "arr_readarr_last_sync", "arr_readarr_titles", "arr_readarr_titles_version", "arr_readarr_app_name",
+                     "arr_bazarr_state", "arr_bazarr_last_sync",
+                     "arr_prowlarr_state", "arr_prowlarr_last_id", "arr_prowlarr_last_event_at", "arr_prowlarr_counted",
+                     "arr_sonarr_titles", "arr_radarr_titles", "arr_sonarr_titles_version", "arr_radarr_titles_version",
+                     "seerr_state", "seerr_last_sync",
+                     # What Jellyscope finds out about Seerr by itself with every sync.
+                     "seerr_images", "seerr_web", "seerr_posters_retry",
+                     # The state of the music sync (every hour).
+                     "music_state", "music_full_pass", "music_vanished_libraries",
+                     # The same for the books sync.
+                     "books_state", "books_full_pass", "books_vanished_libraries")
 
 
-# Konce jmen, u kterych se hodnota vypsat smi. Cisla, prepinace, adresa
-# serveru - nic z toho o nikom nic nerika.
-BEZPECNE_KONCE = ("enabled", "host", "port", "tls", "time", "interval",
-                  "minutes", "days", "keep", "concurrency", "zoom",
-                  "language", "skin", "source", "generation", "capacity",
-                  "unit", "path", "mappings", "timezone")
+# Name endings whose value may be printed. Numbers, switches, the server's
+# address - none of it says anything about anybody.
+SAFE_SUFFIXES = ("enabled", "host", "port", "tls", "time", "interval",
+                 "minutes", "days", "keep", "concurrency", "zoom",
+                 "language", "skin", "source", "generation", "capacity",
+                 "unit", "path", "mappings", "timezone")
 
 
-def _je_tajne(key: str) -> bool:
-    return any(cast in key for cast in TAJNE_CASTI)
+def _is_secret(key: str) -> bool:
+    return any(part in key for part in SECRET_PARTS)
 
 
-def _smi_do_logu_i_hodnota(key: str) -> bool:
-    """Smí se u tohohle nastavení vypsat i hodnota?
+def _value_may_be_logged(key: str) -> bool:
+    """May the value be printed for this setting too?
 
-    Seznam je schválně **obrácený**: povoluje se, ne zakazuje. Zakazovat
-    znamená muset předem znát každé tajemství, které kdy přibude, a to,
-    na které se zapomene, se do logu vypíše celé. Takhle nové nastavení
-    mlčí, dokud někdo vědomě neřekne, že se ukázat smí.
+    The list is **inverted** on purpose: it allows, it does not forbid.
+    Forbidding means having to know in advance every secret that ever comes,
+    and the one that gets forgotten is printed into the log in full. This way
+    a new setting stays silent until somebody consciously says it may be shown.
 
-    Nejde jen o hesla. `smtp_komu` je e-mailová adresa a `smtp_uzivatel`
-    jméno účtu - do logu, který se přeposílá, když se něco pokazí, nepatří
-    ani jedno.
+    It is not only about passwords. `notify_smtp_recipient` is an e-mail address and
+    `notify_smtp_user` an account name - neither belongs in a log that gets
+    forwarded when something goes wrong.
     """
-    if _je_tajne(key):
+    if _is_secret(key):
         return False
     if key in DEFAULT_SETTINGS:
         return True
-    # Klice upozorneni vznikaji az za behu (notify_<kanal>_<pole>),
-    # takze se poznavaji podle konce jmena.
-    return key.rsplit("_", 1)[-1] in BEZPECNE_KONCE
+    # Notification keys come into being only at run time (notify_<channel>_<field>),
+    # so they are recognised by the end of the name.
+    return key.rsplit("_", 1)[-1] in SAFE_SUFFIXES
 
 
-def _zaloguj_zmenu(key: str, stara: str, nova: str) -> None:
-    """Řádek do logu o změně nastavení. Beze změny mlčí."""
-    if stara == nova or any(key.startswith(p) or key == p for p in NELOGOVANE):
+def _log_change(key: str, old: str, new: str) -> None:
+    """A line in the log about a changed setting. Silent without a change."""
+    if old == new or any(key.startswith(p) or key == p for p in UNLOGGED_SETTINGS):
         return
-    if not _smi_do_logu_i_hodnota(key):
-        log.info("nastaveni %s zmeneno", key)
+    if not _value_may_be_logged(key):
+        log.info("setting %s changed", key)
         return
-    log.info("nastaveni %s: %s -> %s", key, stara or "(prazdne)",
-             nova or "(prazdne)")
+    log.info("setting %s: %s -> %s", key, old or "(empty)",
+             new or "(empty)")
 
 
 def set_setting(key: str, value: str) -> None:
-    # Stara hodnota se cte pred zapisem - jinak uz neni s cim porovnavat
-    # a log by hlasil zmenu i tam, kde se nic nezmenilo.
-    stara = get_setting(key, "")
+    # The old value is read before the write - otherwise there is nothing to
+    # compare with, and the log would report a change even where nothing changed.
+    old = get_setting(key, "")
     with connect() as conn:
         conn.execute(
             """
@@ -1267,18 +1471,19 @@ def set_setting(key: str, value: str) -> None:
             (key, value),
         )
     forget_settings()
-    _zaloguj_zmenu(key, str(stara or ""), str(value or ""))
+    _log_change(key, str(old or ""), str(value or ""))
 
 
 def seed_from_env() -> None:
-    """První naplnění připojení k Jellyfinu z .env.
+    """The first filling of the Jellyfin connection from .env.
 
-    Dřív se adresa a klíč četly z .env při každém startu. Teď žijí
-    v databázi a mění se z webu - ale kdo aplikaci už používal, má je
-    pořád jen v .env. Proto je při prvním startu jednou překopírujeme.
+    The address and the key used to be read from .env at every start. Now
+    they live in the database and are changed from the web - but whoever used
+    the application already still has them only in .env. So they are copied
+    over once at the first start.
 
-    Podmínka "jen když je hodnota v databázi prázdná" je důležitá: bez ní
-    by .env při každém startu přepsalo to, co uživatel nastavil na webu.
+    The condition "only when the value in the database is empty" matters:
+    without it .env would overwrite at every start what the user set on the web.
     """
     import os
 
@@ -1292,7 +1497,7 @@ def seed_from_env() -> None:
 
 
 def jellyfin_connection() -> tuple[str, str]:
-    """Adresa a API klíč Jellyfinu - jediné místo, odkud je brát."""
+    """Jellyfin's address and API key - the one place to take them from."""
     return (
         get_setting("jellyfin_url", "").strip().rstrip("/"),
         get_setting("jellyfin_api_key", "").strip(),
@@ -1300,10 +1505,10 @@ def jellyfin_connection() -> tuple[str, str]:
 
 
 def get_int_setting(key: str, minimum: int, maximum: int, fallback: int) -> int:
-    """Číslo z nastavení, oříznuté do rozumných mezí.
+    """A number from the settings, clamped to sensible limits.
 
-    Uživatel může do formuláře napsat cokoliv. Nikdy nedůvěřuj vstupu -
-    ani vlastnímu.
+    The user can write anything into the form. Never trust input - not even
+    your own.
     """
     try:
         value = int(float(get_setting(key)))
@@ -1313,13 +1518,43 @@ def get_int_setting(key: str, minimum: int, maximum: int, fallback: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Malí pomocníci, ať se pak v kódu neopakuje totéž dokola
+# Small helpers, so the code does not repeat the same over and over
 # ---------------------------------------------------------------------------
+
+def query_all_in(sql: str, values: Any, before: tuple = (), batch: int = 400) -> list[dict[str, Any]]:
+    """A query with a list of values in `IN (...)`: `sql` has one `{}` in place of the question marks.
+
+    A long list is sent in batches - databases have a ceiling on the number
+    of parameters of one query (older SQLite 999). `before` are the
+    parameters that stand in the query before the list. An empty list = no
+    query.
+
+        db.query_all_in("SELECT id FROM items WHERE type = ? AND id IN ({})", ids, ("Movie",))
+    """
+    values = list(values)
+    result: list[dict[str, Any]] = []
+    for start in range(0, len(values), batch):
+        chunk = values[start:start + batch]
+        result += query_all(sql.format(", ".join("?" * len(chunk))), (*before, *chunk))
+    return result
+
 
 def query_all(sql: str, params: Any = ()) -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
+
+
+def query_iter(sql: str, params: Any = ()) -> Iterator[dict[str, Any]]:
+    """Like query_all, only row by row: a big result is not held in memory twice (rows and dicts).
+
+    For queries with hundreds of thousands of rows (the analysis of listening over the whole history). The
+    connection stays open until the result is read to the end - so read it right away, do not keep the
+    generator for later.
+    """
+    with connect() as conn:
+        for row in conn.execute(sql, params):
+            yield dict(row)
 
 
 def query_one(sql: str, params: Any = ()) -> dict[str, Any] | None:
@@ -1329,13 +1564,13 @@ def query_one(sql: str, params: Any = ()) -> dict[str, Any] | None:
 
 
 def query_value(sql: str, params: Any = (), default: Any = 0) -> Any:
-    """První sloupec prvního řádku - typicky pro `SELECT COUNT(*) ...`."""
+    """The first column of the first row - typically for `SELECT COUNT(*) ...`."""
     with connect() as conn:
         row = conn.execute(sql, params).fetchone()
     if row is None:
         return default
 
-    # PostgreSQL vrací slovník, SQLite řádek, ze kterého jde číst i podle
-    # pořadí. Bereme první hodnotu bez ohledu na to, jak se sloupec jmenuje.
+    # PostgreSQL returns a dict, SQLite a row that can be read by position too.
+    # We take the first value regardless of what the column is called.
     value = next(iter(dict(row).values()))
     return default if value is None else value

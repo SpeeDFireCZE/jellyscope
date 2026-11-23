@@ -1,0 +1,138 @@
+{
+ "page": 2,
+ "pageSize": 15,
+ "sortKey": "date",
+ "sortDirection": "ascending",
+ "totalRecords": 23,
+ "records": [
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:34:11Z",
+   "successful": true,
+   "eventType": "releaseGrabbed",
+   "data": {
+    "source": "Radarr",
+    "host": "localhost",
+    "grabMethod": "Redirect",
+    "grabTitle": "Prowlarr.Test.Zmizele.2020.720p.WEB-DL-TEST",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU"
+   },
+   "id": 16
+  },
+  {
+   "indexerId": 3,
+   "date": "2026-11-15T06:36:41Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "3",
+    "query": "Game of Thrones",
+    "queryType": "search",
+    "categories": "",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "10",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 17
+  },
+  {
+   "indexerId": 3,
+   "date": "2026-11-15T06:36:43Z",
+   "successful": true,
+   "eventType": "releaseGrabbed",
+   "data": {
+    "source": "Sonarr",
+    "host": "localhost",
+    "grabMethod": "Proxy",
+    "grabTitle": "Arr.Test.Placeholder.S01E01.720p.WEB-DL.DD5.1.H.264-TEST",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "elapsedTime": "1"
+   },
+   "id": 18
+  },
+  {
+   "indexerId": 3,
+   "date": "2026-11-15T06:36:45Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "0",
+    "query": "Prowlarr Test Zmizely Torrent",
+    "queryType": "search",
+    "categories": "",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "11",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 19
+  },
+  {
+   "indexerId": 3,
+   "date": "2026-11-15T06:36:47Z",
+   "successful": false,
+   "eventType": "releaseGrabbed",
+   "data": {
+    "source": "Radarr",
+    "host": "localhost",
+    "grabMethod": "Proxy",
+    "grabTitle": "Prowlarr.Test.Zmizely.Torrent.2021.1080p.WEB-DL-TEST",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU"
+   },
+   "id": 20
+  },
+  {
+   "indexerId": 2,
+   "date": "2026-11-15T06:37:34Z",
+   "successful": false,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "0",
+    "query": "dark",
+    "queryType": "search",
+    "categories": "",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "0",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 21
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:37:34Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "0",
+    "query": "Prowlarr Test Zmizele",
+    "queryType": "search",
+    "categories": "",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "11",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 22
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:37:34Z",
+   "successful": true,
+   "eventType": "releaseGrabbed",
+   "data": {
+    "source": "Radarr",
+    "host": "localhost",
+    "grabMethod": "Redirect",
+    "grabTitle": "Prowlarr.Test.Zmizele.2020.720p.WEB-DL-TEST",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU"
+   },
+   "id": 23
+  }
+ ]
+}

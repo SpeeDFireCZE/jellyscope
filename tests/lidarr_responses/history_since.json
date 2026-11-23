@@ -1,0 +1,1148 @@
+[
+  {
+    "id": 101,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 0,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T20:50:18Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "arr-test",
+      "releaseGroup": "WRE",
+      "downloadClient": "SABnzbd",
+      "size": "45000000",
+      "protocol": "1",
+      "customFormatScore": "0",
+      "releaseSource": "Rss",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "age": "0",
+      "guid": "http://127.0.0.1:8990/details/x"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 102,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1101,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T21:00:05Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/x/0.mp3",
+      "importedPath": "/music/K/0.mp3",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "15000000",
+      "fileId": "1102",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 103,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1102,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T21:01:05Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/x/1.mp3",
+      "importedPath": "/music/K/1.mp3",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "15000000",
+      "fileId": "1103",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 104,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1103,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T21:02:05Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/x/2.mp3",
+      "importedPath": "/music/K/2.mp3",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "15000000",
+      "fileId": "1104",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 105,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 0,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T21:03:30Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "downloadImported",
+    "data": {
+      "indexer": "arr-test",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd",
+      "protocol": "1"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 106,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 0,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [FLAC]",
+    "quality": {
+      "quality": {
+        "id": 6,
+        "name": "FLAC"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T08:10:00Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "arr-test",
+      "releaseGroup": "FLACGRP",
+      "downloadClient": "SABnzbd",
+      "size": "210000000",
+      "protocol": "1",
+      "customFormatScore": "0",
+      "releaseSource": "InteractiveSearch",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "age": "0",
+      "guid": "http://127.0.0.1:8990/details/x"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 107,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1101,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:00Z",
+    "downloadId": null,
+    "eventType": "trackFileDeleted",
+    "data": {
+      "reason": "Upgrade",
+      "size": "15000000"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 108,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1101,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [FLAC]",
+    "quality": {
+      "quality": {
+        "id": 6,
+        "name": "FLAC"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:10Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/y/0.flac",
+      "importedPath": "/music/K/0.flac",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "FLACGRP",
+      "size": "70000000",
+      "fileId": "1108",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 109,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1102,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:01Z",
+    "downloadId": null,
+    "eventType": "trackFileDeleted",
+    "data": {
+      "reason": "Upgrade",
+      "size": "15000000"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 110,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1102,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [FLAC]",
+    "quality": {
+      "quality": {
+        "id": 6,
+        "name": "FLAC"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:11Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/y/1.flac",
+      "importedPath": "/music/K/1.flac",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "FLACGRP",
+      "size": "70000000",
+      "fileId": "1110",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 111,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1103,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:02Z",
+    "downloadId": null,
+    "eventType": "trackFileDeleted",
+    "data": {
+      "reason": "Upgrade",
+      "size": "15000000"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 112,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 1103,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [FLAC]",
+    "quality": {
+      "quality": {
+        "id": 6,
+        "name": "FLAC"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:12Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/y/2.flac",
+      "importedPath": "/music/K/2.flac",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "FLACGRP",
+      "size": "70000000",
+      "fileId": "1112",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 113,
+    "albumId": 11,
+    "artistId": 1,
+    "trackId": 0,
+    "sourceTitle": "Kryštof - Hvězdy (2019) [FLAC]",
+    "quality": {
+      "quality": {
+        "id": 6,
+        "name": "FLAC"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:30Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "downloadImported",
+    "data": {
+      "indexer": "arr-test",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd",
+      "protocol": "1"
+    },
+    "album": {
+      "id": 11,
+      "title": "Hvězdy",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+      "releaseDate": "2019-05-17T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 114,
+    "albumId": 12,
+    "artistId": 1,
+    "trackId": 1201,
+    "sourceTitle": "Kryštof - Šípková Růžena (2019) [FLAC 24bit]",
+    "quality": {
+      "quality": {
+        "id": 10,
+        "name": "FLAC 24bit"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-15T10:00:00Z",
+    "downloadId": null,
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/manual/0.flac",
+      "importedPath": "/music/K/s0.flac",
+      "downloadClient": "",
+      "releaseGroup": "",
+      "size": "90000000",
+      "fileId": "1114",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 12,
+      "title": "Šípková Růžena",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000012",
+      "releaseDate": "2021-02-26T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 115,
+    "albumId": 12,
+    "artistId": 1,
+    "trackId": 1202,
+    "sourceTitle": "Kryštof - Šípková Růžena (2019) [FLAC 24bit]",
+    "quality": {
+      "quality": {
+        "id": 10,
+        "name": "FLAC 24bit"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-15T10:00:01Z",
+    "downloadId": null,
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/manual/1.flac",
+      "importedPath": "/music/K/s1.flac",
+      "downloadClient": "",
+      "releaseGroup": "",
+      "size": "90000000",
+      "fileId": "1115",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 12,
+      "title": "Šípková Růžena",
+      "artistId": 1,
+      "foreignAlbumId": "b1111111-0000-4000-8000-000000000012",
+      "releaseDate": "2021-02-26T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 1,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 116,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 0,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [AAC-256]",
+    "quality": {
+      "quality": {
+        "id": 4,
+        "name": "AAC-256"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-16T12:00:00Z",
+    "downloadId": "tor_hash_ccc333",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "tracker",
+      "releaseGroup": "TGRP",
+      "downloadClient": "qBittorrent",
+      "size": "60000000",
+      "protocol": "2",
+      "customFormatScore": "0",
+      "releaseSource": "Search",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "age": "0",
+      "guid": "http://127.0.0.1:8990/details/x"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 117,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 0,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [AAC-256]",
+    "quality": {
+      "quality": {
+        "id": 4,
+        "name": "AAC-256"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-16T12:30:00Z",
+    "downloadId": "tor_hash_ccc333",
+    "eventType": "downloadFailed",
+    "data": {
+      "message": "Download client failed",
+      "indexer": "tracker",
+      "downloadClient": "qBittorrent",
+      "protocol": "2"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 118,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 0,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T12:00:00Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "arr-test",
+      "releaseGroup": "WRE",
+      "downloadClient": "SABnzbd",
+      "size": "98000000",
+      "protocol": "1",
+      "customFormatScore": "0",
+      "releaseSource": "UserInvokedSearch",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "age": "0",
+      "guid": "http://127.0.0.1:8990/details/x"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 119,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 0,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T12:40:00Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "albumImportIncomplete",
+    "data": {
+      "statusMessages": "[]",
+      "indexer": "arr-test",
+      "downloadClient": "SABnzbd"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 120,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 2201,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T13:00:00Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/z.mp3",
+      "importedPath": "/music/N/z.mp3",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "20000000",
+      "fileId": "1120",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 121,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 2202,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T13:00:01Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "trackFileImported",
+    "data": {
+      "droppedPath": "/dl/z.mp3",
+      "importedPath": "/music/N/z.mp3",
+      "downloadClient": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "20000000",
+      "fileId": "1121",
+      "indexerFlags": "0"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 122,
+    "albumId": 21,
+    "artistId": 2,
+    "trackId": 0,
+    "sourceTitle": "Nightingale Quartet - Silver Lining (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T07:00:00Z",
+    "downloadId": "SABnzbd_nzo_eee555",
+    "eventType": "downloadIgnored",
+    "data": {
+      "indexer": "arr-test",
+      "downloadClient": "SABnzbd"
+    },
+    "album": {
+      "id": 21,
+      "title": "Silver Lining",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000021",
+      "releaseDate": "2023-09-01T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 123,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 2201,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T08:00:00Z",
+    "downloadId": null,
+    "eventType": "trackFileRenamed",
+    "data": {
+      "sourcePath": "/music/N/z.mp3",
+      "path": "/music/N/01 z.mp3"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 124,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 2201,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T08:05:00Z",
+    "downloadId": null,
+    "eventType": "trackFileRetagged",
+    "data": {
+      "diff": "[]",
+      "tagsScrubbed": "False"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 125,
+    "albumId": 22,
+    "artistId": 2,
+    "trackId": 0,
+    "sourceTitle": "Nightingale Quartet - Blue Hour (2019) [MP3-320]",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T09:00:00Z",
+    "downloadId": null,
+    "eventType": "artistFolderImported",
+    "data": {
+      "droppedPath": "/music/N",
+      "importedPath": "/music/N"
+    },
+    "album": {
+      "id": 22,
+      "title": "Blue Hour",
+      "artistId": 2,
+      "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+      "releaseDate": "2024-03-08T00:00:00Z",
+      "monitored": true
+    },
+    "artist": {
+      "id": 2,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "status": "continuing"
+    }
+  },
+  {
+    "id": 126,
+    "albumId": 21,
+    "artistId": 2,
+    "trackId": 2101,
+    "sourceTitle": "Nightingale.Quartet.Silver.Lining.2023.MP3-320-WRE",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "MP3-320"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-19T09:00:00Z",
+    "downloadId": null,
+    "eventType": "trackFileDeleted",
+    "data": {
+      "reason": "Manual",
+      "size": "12345678"
+    },
+    "album": null,
+    "artist": null
+  }
+]

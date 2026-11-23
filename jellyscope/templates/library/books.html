@@ -1,0 +1,178 @@
+{# A books library (web/books_library.py), with the tabs of a video and a music library: Overview (what it holds now),
+   Books (the grid, like the series of a video library) and Activity (reading and listening of the period). The tab is
+   in the address (?tab=), so the back button and links work. Books that vanished from Jellyfin are not in the grid -
+   their page stays for links from the Books cards (the History does not link books). #}
+{% extends "base.html" %}
+{% from "_macros.html" import pager, tile, link, period_filter, method_badge, table_window with context %}
+{% block title %}{{ library.name }} · Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="subtitle" style="margin-bottom:2px"><a href="/library">&larr; {{ _("Library") }}</a></p>
+        <h1>{{ library.name }}</h1>
+        <p class="subtitle">{{ _("Books") }}</p>
+    </div>
+</div>
+
+{# Overview and Activity only with the Books area (web/books_library.library_page). #}
+<div class="tabs">
+    {% for key, label in (("overview", _("Overview")), ("books", _("Books")), ("activity", _("Activity"))) if key in tabs %}
+        <a href="/library/{{ library.id }}?tab={{ key }}" class="{{ 'active' if tab == key }}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+{# ================================================================== #}
+{% if tab == 'overview' %}
+{# ================================================================== #}
+<div class="kpi-row">
+    {{ tile(_("E-books"), overview.ebook_count | number) }}
+    {{ tile(_("Audiobooks"), overview.audiobook_count | number) }}
+    {{ tile(_("Authors"), overview.author_count | number) }}
+    {{ tile(_("Size"), overview.size_bytes | bytes) }}
+    {{ tile(_("Audiobook length"), (overview.seconds | seconds) if overview.seconds else "–") }}
+</div>
+{# The library cards of the Books page, over this one library (same templates and data shape). #}
+<div class="grid-2">
+    {% for key in card_keys %}
+        {# `card`, `d` and `prefix` are the names the card templates read. #}
+        {% set card = books_cards[key] %}{% set d = books_card_data[key] %}{% set prefix = "" %}
+        <!-- card: {{ key }} -->
+        {% include card.template %}
+    {% endfor %}
+</div>
+
+{# ================================================================== #}
+{% elif tab == 'books' %}
+{# ================================================================== #}
+<div class="card">
+    <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
+        <input type="hidden" name="tab" value="books">
+        <input type="search" name="search" value="{{ search }}" maxlength="200"
+               placeholder="{{ _('Search title, author or series...') }}" style="width:260px">
+        <select name="sort" style="width:auto" aria-label="{{ _('Sorting') }}">
+            {% for key, label in (("added", _("By date added")), ("name", _("By name")), ("author", _("By author")),
+                                    ("year", _("By year")), ("size", _("By size"))) %}
+                <option value="{{ key }}"{{ ' selected' if sort == key }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn primary" type="submit">{{ _("Show") }}</button>
+        {% if search %}
+            <a class="btn" href="/library/{{ library.id }}?tab=books&sort={{ sort }}">{{ _("Clear search") }}</a>
+        {% endif %}
+        <span class="card-note">{{ total | number }} {{ _("found") }}</span>
+    </form>
+</div>
+
+{% if books %}
+<div class="media-grid">
+    {% for book in books %}
+    <a class="media-card" href="{{ book.link }}">
+        <div class="media-poster">
+            {% if book.cover %}
+                <img src="{{ book.cover }}" alt="" loading="lazy" data-on-error="hide">
+            {% endif %}
+            {% if book.size_bytes %}<span class="media-size">{{ book.size_bytes | bytes }}</span>{% endif %}
+        </div>
+        <div class="media-name" title="{{ book.title }}">{{ book.title or "–" }}</div>
+        <div class="media-meta">
+            {{ book.author or _("unknown author") }}{% if book.year %} &middot; {{ book.year }}{% endif %}
+            &middot; {{ _("Audiobook") if book.kind == "audiobook" else _("E-book") }}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% set extra %}&tab=books&sort={{ sort }}{% if search %}&search={{ search | urlencode }}{% endif %}{% endset %}
+{{ pager(page, pages, total, '/library/' ~ library.id, extra) }}
+{% else %}
+<div class="card"><p class="chart-empty">{{ _("Nothing found.") }}</p></div>
+{% endif %}
+
+{# ================================================================== #}
+{% else %}
+{# ================================================================== #}
+{# Reading and listening of the chosen period (remembered between pages, like everywhere). The switch carries `tab`,
+   otherwise a click on "year" would end on the Overview. #}
+<div class="section-head">
+    <div>
+        <p class="card-note">
+            {# The whole history comes as a period of its own (period.own too), so it goes first. #}
+            {% if period.whole_history %}{{ _("What was read and listened to from the library over the whole history.") }}
+            {% elif period.own %}{{ _("What was read and listened to from the library in the selected period.") }}
+            {% elif days == 365 %}{{ _("What was read and listened to from the library over the last year.") }}
+            {% else %}{{ _("What was read and listened to from the library over the last {period}.").format(period=_(day_labels[days])) }}
+            {% endif %}
+        </p>
+    </div>
+    {{ period_filter(period, '/library/' ~ library.id, {'tab': 'activity'}) }}
+</div>
+
+<div class="kpi-row">
+    {{ tile(_("Audiobook listening"), activity.totals.listening | seconds) }}
+    {% if reading_reported %}{{ tile(_("Reading time"), activity.totals.reading | seconds) }}
+    {% else %}{{ tile(_("Reading time"), "–", note=_("Jellyfin does not report reading e-books.")) }}{% endif %}
+    {{ tile(_("Readers and listeners"), activity.totals.reader_count | number) }}
+    {{ tile(_("Different books"), activity.totals.work_count | number) }}
+</div>
+
+{# Readers and the last rows = "...including who read and listened" (books_who), like the book page. Without it the most
+   read books stay, across the full width. #}
+<div class="{{ 'grid-2' if activity.readers is not none }}">
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Most read books") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
+        </div>
+        {% if activity.top_works %}{{ charts.hbar_chart(activity.top_works, 'label', 'hours') | safe }}
+        {% else %}<p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>{% endif %}
+    </div>
+
+    {% if activity.readers is not none %}
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ _("Readers and listeners") }}</h2>
+            <p class="card-note">{{ _("in hours") }}</p>
+        </div>
+        {% if activity.readers %}{{ charts.hbar_chart(activity.readers, 'label', 'hours') | safe }}
+        {% else %}<p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% if activity.recent is not none %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Latest reading and listening") }}</h2>
+        <p class="card-note">{{ _("the last 25, whatever the period") }}</p>
+    </div>
+    {% if activity.recent %}
+    <div class="table-wrap wrapper-by-width">
+        <table class="table-dense">
+            <thead>
+            <tr>
+                <th>{{ _("When") }}</th><th>{{ _("Reader") }}</th><th>{{ _("Book") }}</th>
+                <th class="wide-wrapper-only">{{ _("Method") }}</th><th class="num">{{ _("Duration") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in activity.recent %}
+            <tr>
+                <td class="nowrap muted">{{ row.started_at | datetime }}</td>
+                <td class="break-anywhere">{%- call link(row.user_id and "/users/" ~ row.user_id) %}{{ row.user_name or '?' }}{% endcall %}</td>
+                <td class="break-anywhere">
+                    {% call link(row.link) %}{% if row.author %}<span class="muted">{{ row.author }} &ndash;</span> {% endif %}{{ row.title or "–" }}{% endcall %}
+                </td>
+                <td class="wide-wrapper-only">{% if row.item_type == "Book" %}{{ _("E-book") }}{% else %}{{ method_badge(row.play_method) }}{% endif %}</td>
+                <td class="num">{{ row.watched_seconds | seconds }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="chart-empty">{{ _("Nothing from this library has been read or listened to yet.") }}</p>{% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+{{ table_window() }}
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_compare.html" import switches, notes, nothing_to_compare, groups_table, chart_pair with context %}
+{% block title %}{{ _("Period comparison") }} &middot; {{ _("Music") }} &middot; Jellyscope{% endblock %}
+
+{# Music's comparison of two periods - laid out like the one of Movies & series (video/compare.html), with the
+   same macros (_compare.html); the numbers from stats.music_comparison(). The listeners' chart only with
+   "...including who listened" (`shows_listeners`, the route hands no listener otherwise). #}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Period comparison") }}</h1>
+        <p class="subtitle">
+            {{ _("Any two periods of listening side by side, with the same statistics under each other.") }}
+        </p>
+    </div>
+</div>
+
+{{ switches('/music/compare', period_a, period_b, query_a, query_b) }}
+{{ notes(comparison) }}
+
+{% if not comparison.has_data %}
+{{ nothing_to_compare(_("Neither of the chosen periods has any recorded listening. Try other periods. History is collected from the moment Jellyscope runs.")) }}
+{% else %}
+
+{{ groups_table(comparison, period_a, period_b) }}
+
+{# A track the music sync does not know yet has no album: "unknown album", like the cards of Music. #}
+{{ chart_pair(_("Most played albums"), comparison, period_a, period_b, "top", unnamed=_("unknown album")) }}
+{% if shows_listeners %}
+{{ chart_pair(_("Most active listeners"), comparison, period_a, period_b, "users", people=True) }}
+{% endif %}
+
+{% endif %}
+{% endblock %}

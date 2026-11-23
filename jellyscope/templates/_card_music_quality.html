@@ -1,0 +1,23 @@
+{# The music card "Sound quality": lossless and lossy sound.
+
+   From the database (cards_music.py, `d` = stats.music_quality). Hi-res is
+   lossless sound with more than 16 bits or more than 48 kHz - it is a part of
+   the lossless, hence its own row under them. Lossy sound by
+   bitrate band: under 128, 128-255 and from 256 kb/s. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("number of tracks") }}</p>
+    </div>
+    {% set quality_rows = [
+        {'label': _('lossless'), 'count': d.lossless},
+        {'label': _('of which hi-res'), 'count': d.hires},
+        {'label': _('lossy from 256 kb/s'), 'count': d.lossy.from_256},
+        {'label': _('lossy 128–255 kb/s'), 'count': d.lossy.up_to_256},
+        {'label': _('lossy below 128 kb/s'), 'count': d.lossy.up_to_128},
+        {'label': _('unknown'), 'count': d.unknown},
+    ] %}
+    {% if d.lossless or d.unknown or d.lossy.from_256 or d.lossy.up_to_256 or d.lossy.up_to_128 %}
+        {{ charts.hbar_chart(quality_rows, 'label', 'count', unit='', limit=6, labels_above=True) | safe }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

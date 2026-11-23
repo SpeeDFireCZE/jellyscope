@@ -1,0 +1,235 @@
+{# A Settings section: keys for tools and the documentation of the read API
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker, key_cell, area_name, permissions_tree %}
+
+{# What a root key may - shared by the new key's window and the Permissions window.
+   With "Všechno" the rest hides (the script below): the tree would only confuse there,
+   the key may everything regardless of the ticks. Without the script everything
+   is visible and the switch decides. #}
+{% macro key_permissions(permissions, group_id, dashboard_name) %}
+<div class="field" role="radiogroup" aria-labelledby="{{ group_id }}">
+    <label id="{{ group_id }}">{{ _("What the key may do") }}</label>
+    <label class="switch">
+        <input type="radio" name="mode" value="all" {{ 'checked' if permissions.all }}>
+        <span>
+            {{ _("Everything (including areas added later)") }}
+            <span class="hint">{{ _("Like an admin: every API address, the playback history and the viewers' real names.") }}</span>
+        </span>
+    </label>
+    <label class="switch" style="margin-top:8px">
+        <input type="radio" name="mode" value="selected" {{ 'checked' if not permissions.all }}>
+        <span>
+            {{ _("Only selected") }}
+            <span class="hint">{{ _("Only what you tick below. An area added in a new version stays off until you tick it.") }}</span>
+        </span>
+    </label>
+</div>
+<div class="permissions-selected">
+    {{ permissions_tree(permissions.tree, dashboard_name, css_class="permissions-tree") }}
+    <label class="switch" style="margin-top:14px">
+        <input type="checkbox" name="history" {{ 'checked' if permissions.history }}>
+        <span>
+            {{ _("Playback history") }}
+            <span class="hint">{{ _("The /api/v1/history address - who watched what and when. Without this tick the key does not get it.") }}</span>
+        </span>
+    </label>
+    <label class="switch" style="margin-top:8px">
+        <input type="checkbox" name="anonymise" {{ 'checked' if permissions.anonymizace }}>
+        <span>{{ _("Hide viewers' names and addresses") }}</span>
+    </label>
+</div>
+{% endmacro %}
+
+{# ================================================================== #}
+{# The read API for tools. A section of its own, because it is another question than
+   accounts: not "who signs in here", but "what may take numbers away from here".
+
+   The key shows **once**, right after it is made. Only a fingerprint is stored,
+   so after leaving the page there is nowhere to take it from - and the page says so
+   before anybody closes it. #}
+<div class="page-head" style="margin-bottom:14px">
+    <div>
+        <h1>{{ _("API for tools") }}</h1>
+        <p class="subtitle">{{ _("Numbers for Grafana, Homepage and the like, read-only.") }}</p>
+    </div>
+    <button class="btn" type="button" data-modal="modal-api-docs">
+        {{ _("How to use it") }}
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Keys") }}</h2>
+        <p class="card-note">{{ _("total") }} {{ api_tokens | length }}</p>
+    </div>
+
+    {# A root key is made here: it belongs to no account and may only what
+       the admin sets in the window. Everybody makes a key of their own with their account's
+       permissions in My account. #}
+    <div class="btn-row" style="margin-bottom:16px">
+        <button class="btn primary" type="button" data-modal="modal-new-key">{{ _("Make a root key") }}</button>
+    </div>
+
+    {% if api_tokens %}
+    {# All keys on the server, the others' too: the admin is the one who has to recognise
+       and stop a key that leaked. Disable = for a while, records included;
+       revoke = for good. #}
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>{{ _("Name") }}</th>
+                <th>{{ _("Type and rights") }}</th>
+                <th>{{ _("Key") }}</th>
+                <th>{{ _("State") }}</th>
+                <th>{{ _("Made") }}</th>
+                <th>{{ _("Last used") }}</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for token in api_tokens %}
+            <tr>
+                <td class="strong">{{ token.display_name }}</td>
+                {# A root key: what it may, briefly (all of it is in the Permissions window).
+                   A user's key: whose it is - it has the permissions of its account. #}
+                <td class="key-type">
+                    {% if token.account_id is none %}
+                    {% set p = api_key_permissions[token.id] %}
+                    {%- set pieces = [] -%}
+                    {%- if p.all -%}
+                        {%- set x = pieces.append(_("everything")) -%}
+                    {%- else -%}
+                        {%- for area in p.areas[:3] -%}
+                            {%- set x = pieces.append(area_name(area, with_section=true)) -%}
+                        {%- endfor -%}
+                        {%- if p.areas | length > 3 -%}
+                            {%- set x = pieces.append(_n("and {n} more", p.areas | length - 3)) -%}
+                        {%- endif -%}
+                        {%- if p.history %}{% set x = pieces.append(_("history")) %}{% endif -%}
+                        {%- if p.anonymizace %}{% set x = pieces.append(_("names hidden")) %}{% endif -%}
+                    {%- endif -%}
+                    {{ _("Root") }} · {{ pieces | join(", ") }}
+                    {% else %}
+                    {{ _("User#adjective") }} ·
+                    <a href="/settings?section=log&amp;log_kind=api&amp;log_account={{ token.owner | urlencode }}"
+                       title="{{ _('Usage of every key of this account') }}">{{ token.owner }}</a>
+                    {% endif %}
+                </td>
+                {# The first few characters and the rest as asterisks - the whole key is not
+                   here, because it is not stored. Only right after it is made does it
+                   show whole, in this row (see key_cell). #}
+                {{ key_cell(token, new_token) }}
+                <td class="nowrap">
+                    {% if token.status == "disabled" %}
+                    <span class="badge warning"><span class="dot"></span>{{ _("disabled") }}</span>
+                    {% else %}
+                    <span class="badge good"><span class="dot"></span>{{ _("active") }}</span>
+                    {% endif %}
+                </td>
+                <td class="nowrap muted">{{ token.created_at | relative }}</td>
+                <td class="nowrap muted">
+                    {{ token.last_used_at | relative if token.last_used_at else _("never") }}
+                </td>
+                <td>
+                    <div class="btn-row" style="flex-wrap:nowrap">
+                        <a class="btn" href="/settings?section=log&amp;log_kind=api&amp;log_key={{ token.id }}">{{ _("Usage") }}</a>
+                        {% if token.account_id is none %}
+                        <button class="btn" type="button" data-modal="modal-key-permissions-{{ token.id }}">{{ _("Rights") }}</button>
+                        {% endif %}
+                        {% if token.status == "disabled" %}
+                        <form method="post" action="/settings/api/token/enable">
+                            <input type="hidden" name="token_id" value="{{ token.id }}">
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Enable") }}</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/settings/api/token/disable">
+                            <input type="hidden" name="token_id" value="{{ token.id }}">
+                            <button data-keep-scroll class="btn" type="submit"
+                                    title="{{ _('The key stops working but stays, along with its usage log. It can be enabled again.') }}">{{ _("Disable") }}</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="/settings/api/token/revoke"
+                              data-confirm="{{ _("Revoke this key? Whatever tool uses it stops getting data.") }}">
+                            <input type="hidden" name="token_id" value="{{ token.id }}">
+                            <button data-keep-scroll class="btn danger" type="submit">{{ _("Revoke") }}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="card-note">{{ _("No key yet. Without one the API answers nobody.") }}</p>
+    {% endif %}
+</div>
+
+{# A new root key. A window, not a row above the table: the tree of areas is taller
+   than a phone's screen - only the content scrolls, Make stays visible. #}
+<dialog class="modal modal-scrolling" id="modal-new-key">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("New root key") }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/api/token" class="key-permissions">
+        <div class="modal-body">
+            <div class="field">
+                <label for="new-key-name">{{ _("Name") }}</label>
+                <input id="new-key-name" type="text" name="name" maxlength="60"
+                       placeholder="{{ _('What it is for, e.g. Grafana') }}">
+            </div>
+            {{ key_permissions(api_new_key, "new-key-smi", dashboard_name) }}
+        </div>
+        <div class="modal-foot">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Make a key") }}</button>
+        </div>
+    </form>
+</dialog>
+
+{# The permissions of one root key. Pre-filled with what applies; saving applies
+   from the key's next query. #}
+{% for token in api_tokens if token.id in api_key_permissions %}
+<dialog class="modal modal-scrolling" id="modal-key-permissions-{{ token.id }}">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Rights of key") }} {{ token.display_name }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/api/token/permissions" class="key-permissions">
+        <input type="hidden" name="token_id" value="{{ token.id }}">
+        <div class="modal-body">
+            {{ key_permissions(api_key_permissions[token.id], "key-permissions-may-" ~ token.id, dashboard_name) }}
+        </div>
+        <div class="modal-foot">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save rights") }}</button>
+        </div>
+    </form>
+</dialog>
+{% endfor %}
+
+<script src="/static/js/settings-api.js?v={{ asset_version }}" defer></script>
+
+{# The usage log is the API log in Settings → Log: with filters by owner,
+   key and IP, to download, and how long it is kept is set by the task Log rotation. #}
+<div class="card" id="usage">
+    <div class="card-head">
+        <h2>{{ _("Usage") }}</h2>
+    </div>
+    <p class="card-note">
+        {{ _("Every request with an existing key is written to the API log: when, the result, where from, whose key and where to. Disabled or refused ones too - those are exactly what matters when a key may have leaked. How long it is kept is up to the Log rotation task.") }}
+    </p>
+    <div class="btn-row" style="margin-top:12px">
+        <a class="btn" href="/settings?section=log&amp;log_kind=api">{{ _("Open the API log") }}</a>
+    </div>
+</div>
+
+{# The guide is shared with the My account page - there only with the addresses
+   the user's key may use. The admin sees all of them. #}
+{% include "_api_guide.html" %}

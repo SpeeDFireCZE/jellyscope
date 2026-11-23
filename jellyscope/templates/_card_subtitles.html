@@ -1,0 +1,37 @@
+{# The card with the key `subtitles`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Subtitles") }}</h2>
+        <p class="card-note">{{ _("share of time with subtitles on") }}</p>
+    </div>
+    <div class="tile-value">{{ subtitles.percent | percent(1) }}</div>
+    <div class="delta flat">
+        {{ _("with subtitles") }} {{ subtitles.with_hours | hours }}
+        &middot; {{ _("without subtitles") }} {{ subtitles.without_hours | hours }}
+    </div>
+
+    {% if subtitles.rows %}
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <thead><tr>
+                <th>{{ _("Subtitle language") }}</th><th class="num">{{ _("Watched") }}</th>
+                <th class="num">{{ _("Plays#starts") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for row in subtitles.rows %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num muted">{{ row.plays | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>

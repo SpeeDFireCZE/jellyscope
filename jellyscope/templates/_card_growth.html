@@ -1,0 +1,94 @@
+{# The card "Library growth" (key `library_growth`).
+
+   A template of its own, because it is drawn in two places: on the Library page and in
+   a custom dashboard, where a person can rearrange it. One copy, so the
+   two places do not drift apart - see jellyscope/cards.py.
+
+   The template imports the macro `tile` itself: in a custom dashboard it is drawn
+   on its own, so it must not rely on the import of the page around it.
+
+   Expects `snapshots` (daily rows) and `growth` (the summary, see stats.library_growth).
+   Snapshots are written after a sync and there is nowhere to take them from backwards,
+   so in the first days the curve is short - and it is better to say so than to draw emptiness. #}
+{% from "_macros.html" import tile with context %}
+{% set remark = _("Jellyfin data on disk “{disk}” day by day").format(disk=growth_disk_name)
+                   if growth_disk_name else _("the size of the library day by day") %}
+<div class="card" id="library-growth">
+    {% if growth_disks %}
+    {# The disk choice: "All" is the whole library (all disks together), then
+       the disks with names from the Disks card. A script (static/js/app.js, data-growth-disk)
+       replaces only this card, so the page stays where it is; without the script
+       they are plain links. The choice is remembered in the session
+       (web.periods._growth_disk). #}
+    <div class="card-head">
+        <h2>{{ _("Library growth") }}</h2>
+        <div class="filters">
+            <a class="chip {{ 'active' if growth_disk == 'all' }}" href="?growth_disk=all" data-growth-disk="all">{{ _("All") }}</a>
+            {% for d in growth_disks %}
+            {# A fingerprint of the key in the address, not the key: the key is the device id = a path on the server. #}
+            <a class="chip {{ 'active' if growth_disk == d.choice }}" href="?growth_disk={{ d.choice }}"
+               data-growth-disk="{{ d.choice }}">{{ d.name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+    <p class="card-note" style="margin:-6px 0 12px">{{ remark }}</p>
+    {% else %}
+    <div class="card-head">
+        <h2>{{ _("Library growth") }}</h2>
+        <p class="card-note">{{ remark }}</p>
+    </div>
+    {% endif %}
+
+    {% if growth.enough_data %}
+        {# Two series, not one: a backfilled past must not pass for a
+           measurement. The colour belongs to the thing, not to the order - the backfill is always
+           muted, the measurement always in the app's colour. #}
+        {# The unit is chosen by `cards.growth_data()` by the library's size -
+           so the axis says the same as the tile "Total size". #}
+        {{ charts.area_chart_multi(snapshots, 'day',
+               [{'key': 'gb_backfilled', 'label': _('reconstructed'),
+                 'color': 'var(--text-muted)'},
+                {'key': 'gb_measured', 'label': _('measured'),
+                 'color': 'var(--data-color)', 'slot': 2}]
+               + ([{'key': 'gb_outside', 'label': _('outside Jellyfin'),
+                    'color': 'var(--line-3)', 'slot': 3}] if growth_outside else []),
+               unit=growth_unit) | safe }}
+        {% if growth_outside %}
+        {# A disk fills with things that do not belong to the library too (downloads, backups).
+           The forecast "space runs out in" counts with it - hence it is shown. #}
+        <p class="card-note" style="margin-top:6px">
+            {{ _("“Outside Jellyfin” is what takes up space on the library disks besides the library (downloads, backups, other apps, the filesystem reserve). It is measured only on disks whose space Jellyfin reports.") }}
+        </p>
+        {% endif %}
+
+        {% if growth.backfilled %}
+        <p class="card-note" style="margin-top:10px">
+            {{ _("Up to {date} the curve is reconstructed from when the items were created and anchored to the first measured value: we know when things arrived, but the past is described with today's sizes. From then on these are daily snapshots, that is, what was actually measured.").format(date=growth.backfilled_until | czech_date) }}
+            {% if growth_disk_name %}{{ _("Files are assigned to the disk by today's folders and virtual disks.") }}{% endif %}
+        </p>
+        {% endif %}
+
+        <div class="kpi-row" style="margin-top:14px">
+            {# Snapshots of disks carry no item count - no note for a disk. #}
+            {{ tile(_("Added over the period"), growth.increase | bytes,
+                    note=(_("items") ~ ': ' ~ (growth.item_count | number)) if growth.item_count is not none else none) }}
+            {{ tile(_("Per day"), growth.daily | bytes) }}
+            {% if growth.days_left is not none %}
+                {# We know the free space only where the app sees the files.
+                   When we know it, this is the more useful answer. #}
+                {{ tile(_("Space runs out in"),
+                        _n("{n} days", growth.days_left),
+                        note=(_("disk “{disk}”").format(disk=growth.disk_name) ~ ', '
+                              if growth.disk_name else '')
+                             ~ _("free space") ~ ': ' ~ (growth.free_space | bytes)) }}
+            {% elif growth.per_year %}
+                {{ tile(_("In a year it grows to"), growth.per_year | bytes,
+                        note=_("the application cannot see the free space")) }}
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="card-note">
+            {{ _("Not enough data yet; the curve will mean something in a few days. A snapshot is taken after every library sync.") }}
+        </p>
+    {% endif %}
+</div>

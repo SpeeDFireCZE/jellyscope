@@ -1,0 +1,92 @@
+{# A Settings section: addresses blocked after failed sign-ins
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Blocked addresses") }}</h2>
+        <p class="card-note">{{ _("signing in, not access to the app") }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:14px">
+        {# Whole sentences with the number inside, not fragments around it: `_("Po")` is
+           also the abbreviation of Monday, and in English it used to say "Mon 5 failed…" here. #}
+        {{ _("After {n} failed attempts from one address, signing in from it closes for a while. Each block in a row lasts longer:").format(n=block_attempts) }}
+        {% for block_seconds in block_levels %}{{ (block_seconds / 60) | round | int }} min{{ ", " if not loop.last }}{% endfor %},
+        {{ _("and then permanently.") }}
+        {{ _n("When an address behaves for {n} hours, the counting starts over.", block_forget_hours) }}
+    </p>
+
+    {% if not blocks %}
+    <p class="chart-empty">{{ _("Nobody so far. That is a good sign.") }}</p>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Address") }}</th>
+                <th>{{ _("State") }}</th>
+                <th class="num">{{ _("Blocks in a row") }}</th>
+                <th class="num">{{ _("Attempts") }}</th>
+                <th>{{ _("Last seen") }}</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for line in blocks %}
+            <tr>
+                <td class="strong nowrap">{{ line.ip }}</td>
+                <td class="nowrap">
+                    {% if line.permanent %}
+                        <span class="badge critical"><span class="dot"></span>{{ _("permanent") }}</span>
+                    {% elif line.seconds_left > 0 %}
+                        <span class="badge warning"><span class="dot"></span>
+                            {{ _("still") }}
+                            {% if line.seconds_left >= 60 %}
+                                {{ (line.seconds_left / 60) | round | int }} min
+                            {% else %}
+                                {{ line.seconds_left }} s
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("expired") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ line.level }}</td>
+                <td class="num">{{ line.failures | number }}</td>
+                <td class="nowrap muted">{{ line.last_failure | relative }}</td>
+                <td class="num nowrap">
+                    <div class="btn-row" style="justify-content:flex-end">
+                        {% if not line.permanent %}
+                        <form method="post" action="/settings/blocks/permanent">
+                            <input type="hidden" name="ip" value="{{ line.ip }}">
+                            <button data-keep-scroll class="btn danger" type="submit">{{ _("Block permanently") }}</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="/settings/blocks/unblock">
+                            <input type="hidden" name="ip" value="{{ line.ip }}">
+                            <button data-keep-scroll class="btn" type="submit">{{ _("Unblock") }}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <p class="card-note" style="margin-top:14px">
+        {{ _("The address comes from the connection. If a reverse proxy sits in front of Jellyscope, fill in FORWARDED_ALLOW_IPS in .env. Otherwise this will always be the proxy's address and a block would apply to everyone at once.") }}
+    </p>
+</div>
+
+
+{# ================================================================== #}

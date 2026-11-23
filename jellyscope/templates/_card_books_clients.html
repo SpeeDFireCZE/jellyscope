@@ -1,0 +1,30 @@
+{# The books card "Apps and devices": what people read and listen in.
+
+   From the database (cards_books.py, `d.rows` = stats.books_apps). The app is what Jellyfin reports as the client; the
+   devices are the number of different devices with that app. A long table: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("App") }}</th>
+            <th class="num">{{ _("Time") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Device") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for a in d.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{{ a.app or _("unknown#feminine") }}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Device") }} {{ a.device | number }}</div></td>
+                <td class="num strong">{{ a.seconds | seconds }}</td>
+                <td class="num wide-wrapper-only">{{ a.device | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length) }}
+    {% else %}<p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>{% endif %}
+</div>

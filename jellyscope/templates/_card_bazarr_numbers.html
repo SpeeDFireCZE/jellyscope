@@ -1,0 +1,14 @@
+{# The Bazarr card "Subtitle numbers": how many subtitles were acquired in the period and how.
+
+   From the database (cards_bazarr.py, `d` = stats.bazarr_numbers). "Získané" are
+   downloaded, picked by hand, replaced by better ones, uploaded, translated and extracted
+   from the file; "ručně" is a manual pick and an own file. A row of tiles without
+   a heading; in a dashboard it carries a small label with the app. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Subtitles obtained"), d.obtained_count | number) }}
+    {{ tile(_("Automatic"), d.automatic | number) }}
+    {{ tile(_("Manually"), d.manual | number) }}
+    {{ tile(_("By upgrade"), d.upgrade_count | number) }}
+</div>

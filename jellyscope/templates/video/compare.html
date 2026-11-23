@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_compare.html" import switches, notes, nothing_to_compare, groups_table, chart_pair with context %}
+{% block title %}{{ _("Period comparison") }} &middot; Jellyscope{% endblock %}
+
+{# The comparison of two periods.
+
+   "Against the previous period" is on the Overview already, but the previous period
+   is not chosen by a person - it is the window right before the chosen one. It cannot
+   answer "was August better than December?". Here both periods
+   are chosen and the numbers stand side by side.
+
+   The shape is a table, not two columns of charts: a comparison is the question
+   "how much more", and a number beside a number answers it. The parts are the macros
+   of _compare.html, shared with Music's comparison. #}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Period comparison") }}</h1>
+        <p class="subtitle">
+            {{ _("Any two periods side by side, with the same statistics under each other.") }}
+        </p>
+    </div>
+</div>
+
+{{ switches('/video/compare', period_a, period_b, query_a, query_b) }}
+{{ notes(comparison) }}
+
+{% if not comparison.has_data %}
+{{ nothing_to_compare(_("Neither of the chosen periods has any recorded playback. Try other periods. History is collected from the moment Jellyscope runs.")) }}
+{% else %}
+
+{{ groups_table(comparison, period_a, period_b) }}
+
+{# A backfilled past is not a measurement and must not pass for one. #}
+{% if comparison.library_known and comparison.library_backfilled %}
+<p class="card-note" style="margin:-8px 0 18px 4px">
+    {{ _("Part of the library growth is reconstructed from when the items were created. It describes the past with today's sizes, so a re-encoded film was always small in it.") }}
+</p>
+{% endif %}
+
+{# When we know nothing about the library's growth in a period, it is said. A silently
+   missing table looks like a mistake, and "nothing was added" is something other
+   than "we do not know". #}
+{% if not comparison.library_known %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Library") }}</h2>
+    </div>
+    <p class="card-note">
+        {{ _("Library growth can only be compared once daily snapshots are being written, at least two in each of the periods. There is nowhere to take them from for earlier periods.") }}
+    </p>
+</div>
+{% endif %}
+
+{{ chart_pair(_("Most watched titles"), comparison, period_a, period_b, "top") }}
+{{ chart_pair(_("Most active users"), comparison, period_a, period_b, "users", people=True) }}
+
+{% endif %}
+{% endblock %}

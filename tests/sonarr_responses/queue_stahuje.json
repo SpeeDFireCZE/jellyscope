@@ -1,0 +1,1608 @@
+{
+ "page": 1,
+ "pageSize": 200,
+ "sortKey": "timeleft",
+ "sortDirection": "descending",
+ "totalRecords": 11,
+ "records": [
+  {
+   "seriesId": 4,
+   "episodeId": 231,
+   "seasonNumber": 1,
+   "series": {
+    "title": "The Expanse",
+    "sortTitle": "expanse",
+    "status": "ended",
+    "ended": true,
+    "overview": "Two hundred years in the future, in a fully colonized solar system, police detective Josephus Miller is given the assignment to find a missing young woman, Julie Mao. Joining his task is James Holden, former first officer of an ice freighter who is involved in an incident caused by the tense relationship between Earth, Mars and the Belt. Far from their struggles in space, United Nations executive Chrisjen Avasarala works to prevent war between Earth and Mars. Soon the three find out that the missing woman is connected to a vast conspiracy that threatens all humanity.",
+    "network": "Prime Video",
+    "airTime": "00:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/280619-g6.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/280619/posters/61acea8cc0aab.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/280619-12.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/280619/clearlogo/697e889c6dfc1.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 4,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 5,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 6,
+      "monitored": false
+     }
+    ],
+    "year": 2015,
+    "path": "/home/coder/projects/arr-test/media/tv/The Expanse",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 46,
+    "tvdbId": 280619,
+    "tvRageId": 41967,
+    "tvMazeId": 1825,
+    "tmdbId": 63639,
+    "firstAired": "2015-12-14T00:00:00Z",
+    "lastAired": "2022-01-14T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "theexpanse",
+    "imdbId": "tt3230854",
+    "titleSlug": "the-expanse",
+    "certification": "TV-14",
+    "genres": [
+     "Drama",
+     "Mystery",
+     "Science Fiction",
+     "Suspense",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:48Z",
+    "ratings": {
+     "votes": 196343,
+     "value": 8.5
+    },
+    "languageProfileId": 1,
+    "id": 4
+   },
+   "episode": {
+    "seriesId": 4,
+    "tvdbId": 5280275,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Remember the Cant",
+    "airDate": "2015-12-22",
+    "airDateUtc": "2015-12-22T05:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:55Z",
+    "runtime": 43,
+    "overview": "While Avasarala plays a dangerous game of politics, Holden and his crew begin to turn on one another while held captive by the Martian Navy.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 3,
+    "unverifiedSceneNumbering": false,
+    "id": 231
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "web",
+     "resolution": 720
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 2147483648,
+   "title": "The.Expanse.S01E03.720p.WEB-DL.DD5.1.H.264-NTb",
+   "added": "2026-11-14T07:52:57Z",
+   "status": "paused",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_3327ce16",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 2147483648,
+   "id": 1085511966
+  },
+  {
+   "seriesId": 2,
+   "episodeId": 141,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Chernobyl",
+    "sortTitle": "chernobyl",
+    "status": "ended",
+    "ended": true,
+    "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     }
+    ],
+    "year": 2019,
+    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 65,
+    "tvdbId": 360893,
+    "tvRageId": 0,
+    "tvMazeId": 30770,
+    "tmdbId": 87108,
+    "firstAired": "2019-05-06T00:00:00Z",
+    "lastAired": "2019-06-03T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "chernobyl",
+    "imdbId": "tt7366338",
+    "titleSlug": "chernobyl",
+    "certification": "TV-MA",
+    "genres": [
+     "Drama",
+     "History",
+     "Mini-Series",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:10:35Z",
+    "ratings": {
+     "votes": 1076329,
+     "value": 9.3
+    },
+    "languageProfileId": 1,
+    "id": 2
+   },
+   "episode": {
+    "seriesId": 2,
+    "tvdbId": 7082952,
+    "episodeFileId": 2,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "1:23:45",
+    "airDate": "2019-05-06",
+    "airDateUtc": "2019-05-07T01:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:57Z",
+    "runtime": 59,
+    "overview": "Plant workers and firefighters put their lives on the line to control a catastrophic 1986 explosion at a Soviet nuclear power plant.",
+    "hasFile": true,
+    "monitored": true,
+    "absoluteEpisodeNumber": 1,
+    "unverifiedSceneNumbering": false,
+    "id": 141
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 7,
+     "name": "Bluray-1080p",
+     "source": "bluray",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 21474836480,
+   "title": "Chernobyl.S01.1080p.BluRay.x264-PACK",
+   "estimatedCompletionTime": "2026-11-14T13:29:40Z",
+   "added": "2026-11-14T07:52:59Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_b68668cd",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": true,
+   "sizeleft": 21104689152,
+   "timeleft": "05:35:27",
+   "id": 1423345600
+  },
+  {
+   "seriesId": 2,
+   "episodeId": 142,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Chernobyl",
+    "sortTitle": "chernobyl",
+    "status": "ended",
+    "ended": true,
+    "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     }
+    ],
+    "year": 2019,
+    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 65,
+    "tvdbId": 360893,
+    "tvRageId": 0,
+    "tvMazeId": 30770,
+    "tmdbId": 87108,
+    "firstAired": "2019-05-06T00:00:00Z",
+    "lastAired": "2019-06-03T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "chernobyl",
+    "imdbId": "tt7366338",
+    "titleSlug": "chernobyl",
+    "certification": "TV-MA",
+    "genres": [
+     "Drama",
+     "History",
+     "Mini-Series",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:10:35Z",
+    "ratings": {
+     "votes": 1076329,
+     "value": 9.3
+    },
+    "languageProfileId": 1,
+    "id": 2
+   },
+   "episode": {
+    "seriesId": 2,
+    "tvdbId": 7109113,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "Please Remain Calm",
+    "airDate": "2019-05-13",
+    "airDateUtc": "2019-05-14T01:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:57Z",
+    "runtime": 65,
+    "overview": "With untold millions at risk after the Chernobyl explosion, nuclear physicist Ulana Khomyuk makes a desperate attempt to reach Valery Legasov, a leading Soviet nuclear physicist, and warn him about the threat of second explosion that could devastate the continent.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 2,
+    "unverifiedSceneNumbering": false,
+    "id": 142
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 7,
+     "name": "Bluray-1080p",
+     "source": "bluray",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 21474836480,
+   "title": "Chernobyl.S01.1080p.BluRay.x264-PACK",
+   "estimatedCompletionTime": "2026-11-14T13:29:40Z",
+   "added": "2026-11-14T07:52:59Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_b68668cd",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 21104689152,
+   "timeleft": "05:35:27",
+   "id": 524032325
+  },
+  {
+   "seriesId": 2,
+   "episodeId": 143,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Chernobyl",
+    "sortTitle": "chernobyl",
+    "status": "ended",
+    "ended": true,
+    "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     }
+    ],
+    "year": 2019,
+    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 65,
+    "tvdbId": 360893,
+    "tvRageId": 0,
+    "tvMazeId": 30770,
+    "tmdbId": 87108,
+    "firstAired": "2019-05-06T00:00:00Z",
+    "lastAired": "2019-06-03T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "chernobyl",
+    "imdbId": "tt7366338",
+    "titleSlug": "chernobyl",
+    "certification": "TV-MA",
+    "genres": [
+     "Drama",
+     "History",
+     "Mini-Series",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:10:35Z",
+    "ratings": {
+     "votes": 1076329,
+     "value": 9.3
+    },
+    "languageProfileId": 1,
+    "id": 2
+   },
+   "episode": {
+    "seriesId": 2,
+    "tvdbId": 7223774,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Open Wide, O Earth",
+    "airDate": "2019-05-20",
+    "airDateUtc": "2019-05-21T01:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:57Z",
+    "runtime": 62,
+    "overview": "Lyudmilla Ignatenko, a Pripyat resident, ignores warning about her firefighter husband's contamination; Valery Legasov lays out a decontamination plan, complete with human risks.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 3,
+    "unverifiedSceneNumbering": false,
+    "id": 143
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 7,
+     "name": "Bluray-1080p",
+     "source": "bluray",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 21474836480,
+   "title": "Chernobyl.S01.1080p.BluRay.x264-PACK",
+   "estimatedCompletionTime": "2026-11-14T13:29:40Z",
+   "added": "2026-11-14T07:52:59Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_b68668cd",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 21104689152,
+   "timeleft": "05:35:27",
+   "id": 1512338951
+  },
+  {
+   "seriesId": 2,
+   "episodeId": 144,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Chernobyl",
+    "sortTitle": "chernobyl",
+    "status": "ended",
+    "ended": true,
+    "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     }
+    ],
+    "year": 2019,
+    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 65,
+    "tvdbId": 360893,
+    "tvRageId": 0,
+    "tvMazeId": 30770,
+    "tmdbId": 87108,
+    "firstAired": "2019-05-06T00:00:00Z",
+    "lastAired": "2019-06-03T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "chernobyl",
+    "imdbId": "tt7366338",
+    "titleSlug": "chernobyl",
+    "certification": "TV-MA",
+    "genres": [
+     "Drama",
+     "History",
+     "Mini-Series",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:10:35Z",
+    "ratings": {
+     "votes": 1076329,
+     "value": 9.3
+    },
+    "languageProfileId": 1,
+    "id": 2
+   },
+   "episode": {
+    "seriesId": 2,
+    "tvdbId": 7116984,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "The Happiness of All Mankind",
+    "airDate": "2019-05-27",
+    "airDateUtc": "2019-05-28T01:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:57Z",
+    "runtime": 65,
+    "overview": "Valery Legasov and Soviet Deputy Prime Minister Boris Shcherbina consider using lunar rovers to remove radioactive debris. Ulana Khomyuk faces government hurdles in determining the truth about the cause of the explosion.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 4,
+    "unverifiedSceneNumbering": false,
+    "id": 144
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 7,
+     "name": "Bluray-1080p",
+     "source": "bluray",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 21474836480,
+   "title": "Chernobyl.S01.1080p.BluRay.x264-PACK",
+   "estimatedCompletionTime": "2026-11-14T13:29:40Z",
+   "added": "2026-11-14T07:52:59Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_b68668cd",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 21104689152,
+   "timeleft": "05:35:27",
+   "id": 1968520299
+  },
+  {
+   "seriesId": 2,
+   "episodeId": 145,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Chernobyl",
+    "sortTitle": "chernobyl",
+    "status": "ended",
+    "ended": true,
+    "overview": "Chernobyl dramatizes the story of the 1986 nuclear accident — one of the worst man-made catastrophes in history — and the sacrifices made to save Europe from unimaginable disaster.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/banners/6751caac5a993.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/5cc12861c93e4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/series/360893/backgrounds/62017319.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/360893/clearlogo/611be4d52d6a8.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     }
+    ],
+    "year": 2019,
+    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 65,
+    "tvdbId": 360893,
+    "tvRageId": 0,
+    "tvMazeId": 30770,
+    "tmdbId": 87108,
+    "firstAired": "2019-05-06T00:00:00Z",
+    "lastAired": "2019-06-03T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "chernobyl",
+    "imdbId": "tt7366338",
+    "titleSlug": "chernobyl",
+    "certification": "TV-MA",
+    "genres": [
+     "Drama",
+     "History",
+     "Mini-Series",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:10:35Z",
+    "ratings": {
+     "votes": 1076329,
+     "value": 9.3
+    },
+    "languageProfileId": 1,
+    "id": 2
+   },
+   "episode": {
+    "seriesId": 2,
+    "tvdbId": 7116987,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 5,
+    "title": "Vichnaya Pamyat",
+    "airDate": "2019-06-03",
+    "airDateUtc": "2019-06-04T01:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:57Z",
+    "runtime": 72,
+    "finaleType": "series",
+    "overview": "Valery Legasov, Boris Shcherbina and Ulana Khomyuk risk their lives and reputations to expose the truth about Chernobyl.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 5,
+    "unverifiedSceneNumbering": false,
+    "id": 145
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 7,
+     "name": "Bluray-1080p",
+     "source": "bluray",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 21474836480,
+   "title": "Chernobyl.S01.1080p.BluRay.x264-PACK",
+   "estimatedCompletionTime": "2026-11-14T13:29:40Z",
+   "added": "2026-11-14T07:52:59Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_b68668cd",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 21104689152,
+   "timeleft": "05:35:27",
+   "id": 930626741
+  },
+  {
+   "seriesId": 4,
+   "episodeId": 229,
+   "seasonNumber": 1,
+   "series": {
+    "title": "The Expanse",
+    "sortTitle": "expanse",
+    "status": "ended",
+    "ended": true,
+    "overview": "Two hundred years in the future, in a fully colonized solar system, police detective Josephus Miller is given the assignment to find a missing young woman, Julie Mao. Joining his task is James Holden, former first officer of an ice freighter who is involved in an incident caused by the tense relationship between Earth, Mars and the Belt. Far from their struggles in space, United Nations executive Chrisjen Avasarala works to prevent war between Earth and Mars. Soon the three find out that the missing woman is connected to a vast conspiracy that threatens all humanity.",
+    "network": "Prime Video",
+    "airTime": "00:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/280619-g6.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/280619/posters/61acea8cc0aab.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/280619-12.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/280619/clearlogo/697e889c6dfc1.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 4,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 5,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 6,
+      "monitored": false
+     }
+    ],
+    "year": 2015,
+    "path": "/home/coder/projects/arr-test/media/tv/The Expanse",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 46,
+    "tvdbId": 280619,
+    "tvRageId": 41967,
+    "tvMazeId": 1825,
+    "tmdbId": 63639,
+    "firstAired": "2015-12-14T00:00:00Z",
+    "lastAired": "2022-01-14T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "theexpanse",
+    "imdbId": "tt3230854",
+    "titleSlug": "the-expanse",
+    "certification": "TV-14",
+    "genres": [
+     "Drama",
+     "Mystery",
+     "Science Fiction",
+     "Suspense",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:48Z",
+    "ratings": {
+     "votes": 196343,
+     "value": 8.5
+    },
+    "languageProfileId": 1,
+    "id": 4
+   },
+   "episode": {
+    "seriesId": 4,
+    "tvdbId": 4856662,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "Dulcinea",
+    "airDate": "2015-12-14",
+    "airDateUtc": "2015-12-14T05:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:51Z",
+    "runtime": 44,
+    "overview": "In the outer solar system near Saturn, James Holden and the crew of the ice freighter Canterbury investigate a distress call from a mysterious derelict ship, the Scopuli. On Ceres Station, Detective Miller begins an off-the-books investigation of a missing heiress, Julie Mao.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 1,
+    "unverifiedSceneNumbering": false,
+    "id": 229
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "web",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 4294967296,
+   "title": "The.Expanse.S01E01.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "estimatedCompletionTime": "2026-11-14T08:56:36Z",
+   "added": "2026-11-14T07:52:53Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_c51e17ac",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 3924819968,
+   "timeleft": "01:02:23",
+   "id": 9911319
+  },
+  {
+   "seriesId": 4,
+   "episodeId": 230,
+   "seasonNumber": 1,
+   "series": {
+    "title": "The Expanse",
+    "sortTitle": "expanse",
+    "status": "ended",
+    "ended": true,
+    "overview": "Two hundred years in the future, in a fully colonized solar system, police detective Josephus Miller is given the assignment to find a missing young woman, Julie Mao. Joining his task is James Holden, former first officer of an ice freighter who is involved in an incident caused by the tense relationship between Earth, Mars and the Belt. Far from their struggles in space, United Nations executive Chrisjen Avasarala works to prevent war between Earth and Mars. Soon the three find out that the missing woman is connected to a vast conspiracy that threatens all humanity.",
+    "network": "Prime Video",
+    "airTime": "00:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/280619-g6.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/280619/posters/61acea8cc0aab.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/280619-12.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/280619/clearlogo/697e889c6dfc1.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 4,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 5,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 6,
+      "monitored": false
+     }
+    ],
+    "year": 2015,
+    "path": "/home/coder/projects/arr-test/media/tv/The Expanse",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 46,
+    "tvdbId": 280619,
+    "tvRageId": 41967,
+    "tvMazeId": 1825,
+    "tmdbId": 63639,
+    "firstAired": "2015-12-14T00:00:00Z",
+    "lastAired": "2022-01-14T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "theexpanse",
+    "imdbId": "tt3230854",
+    "titleSlug": "the-expanse",
+    "certification": "TV-14",
+    "genres": [
+     "Drama",
+     "Mystery",
+     "Science Fiction",
+     "Suspense",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:48Z",
+    "ratings": {
+     "votes": 196343,
+     "value": 8.5
+    },
+    "languageProfileId": 1,
+    "id": 4
+   },
+   "episode": {
+    "seriesId": 4,
+    "tvdbId": 5280274,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "The Big Empty",
+    "airDate": "2015-12-15",
+    "airDateUtc": "2015-12-15T05:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:53Z",
+    "runtime": 44,
+    "overview": "Holden and crew are trapped in a badly damaged shuttle. On Ceres, Miller uncovers clues about Julie Mao. On Earth, Chrisjen Avasarala questions a terrorist.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 2,
+    "unverifiedSceneNumbering": false,
+    "id": 230
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "web",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 4294967296,
+   "title": "The.Expanse.S01E02.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "estimatedCompletionTime": "2026-11-14T08:56:36Z",
+   "added": "2026-11-14T07:52:55Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_6d369403",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 3924819968,
+   "timeleft": "01:02:23",
+   "id": 2142186277
+  },
+  {
+   "seriesId": 3,
+   "episodeId": 149,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Dark",
+    "sortTitle": "dark",
+    "status": "ended",
+    "ended": true,
+    "overview": "A missing child sets four families on a frantic hunt for answers as they unearth a mind-bending mystery that spans three generations.",
+    "network": "Netflix",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/5d0d7406d7e0e.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/334824-1.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/334824-16.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/334824/clearlogo/611bb02bc5c7d.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 4,
+     "name": "German"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": false
+     }
+    ],
+    "year": 2017,
+    "path": "/home/coder/projects/arr-test/media/tv/Dark",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 56,
+    "tvdbId": 334824,
+    "tvRageId": 0,
+    "tvMazeId": 17861,
+    "tmdbId": 70523,
+    "firstAired": "2017-12-01T00:00:00Z",
+    "lastAired": "2020-06-27T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "dark",
+    "imdbId": "tt5753856",
+    "titleSlug": "dark",
+    "certification": "TV-14",
+    "genres": [
+     "Crime",
+     "Mystery",
+     "Science Fiction",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:48Z",
+    "ratings": {
+     "votes": 568385,
+     "value": 8.7
+    },
+    "languageProfileId": 1,
+    "id": 3
+   },
+   "episode": {
+    "seriesId": 3,
+    "tvdbId": 6347553,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "Double Lives",
+    "airDate": "2017-12-01",
+    "airDateUtc": "2017-12-01T05:00:00Z",
+    "lastSearchTime": "2026-11-14T07:53:58Z",
+    "runtime": 47,
+    "overview": "Bizarre occurrences give Charlotte a sense of déjà vu, and she suspects Peter is hiding something. Franziska snaps when Magnus confronts her.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 4,
+    "unverifiedSceneNumbering": false,
+    "id": 149
+   },
+   "languages": [
+    {
+     "id": 4,
+     "name": "German"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "web",
+     "resolution": 720
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 2147483648,
+   "title": "Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
+   "estimatedCompletionTime": "2026-11-14T07:54:13Z",
+   "added": "2026-11-14T07:54:00Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importPending",
+   "statusMessages": [
+    {
+     "title": "Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
+     "messages": [
+      "No files found are eligible for import in /home/coder/projects/arr-test/klient/hotove/Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb"
+     ]
+    }
+   ],
+   "errorMessage": "",
+   "downloadId": "SABnzbd_nzo_bf237be1",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "outputPath": "/home/coder/projects/arr-test/klient/hotove/Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
+   "episodeHasFile": false,
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "id": 379483607
+  },
+  {
+   "seriesId": 1,
+   "episodeId": 62,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Game of Thrones",
+    "sortTitle": "game of thrones",
+    "status": "ended",
+    "ended": true,
+    "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 4,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 5,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 6,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 7,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 8,
+      "monitored": true
+     }
+    ],
+    "year": 2011,
+    "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 57,
+    "tvdbId": 121361,
+    "tvRageId": 24493,
+    "tvMazeId": 82,
+    "tmdbId": 1399,
+    "firstAired": "2011-04-17T00:00:00Z",
+    "lastAired": "2019-05-19T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "gamethrones",
+    "imdbId": "tt0944947",
+    "titleSlug": "game-of-thrones",
+    "certification": "TV-MA",
+    "genres": [
+     "Action",
+     "Adventure",
+     "Drama",
+     "Fantasy"
+    ],
+    "tags": [],
+    "added": "2026-11-12T20:50:07Z",
+    "ratings": {
+     "votes": 2683620,
+     "value": 9.2
+    },
+    "languageProfileId": 1,
+    "id": 1
+   },
+   "episode": {
+    "seriesId": 1,
+    "tvdbId": 3436461,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 7,
+    "title": "You Win or You Die",
+    "airDate": "2011-05-29",
+    "airDateUtc": "2011-05-30T01:00:00Z",
+    "runtime": 57,
+    "overview": "Ned confronts Cersei about her secrets; Jon takes his Night's Watch vows; Drogo promises to lead the Dothraki to King's Landing.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 7,
+    "unverifiedSceneNumbering": false,
+    "id": 62
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "web",
+     "resolution": 720
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 60306,
+   "title": "Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+   "estimatedCompletionTime": "2026-11-14T07:54:13Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importBlocked",
+   "statusMessages": [
+    {
+     "title": "One or more episodes expected in this release were not imported or missing from the release",
+     "messages": []
+    },
+    {
+     "title": "Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO.mkv",
+     "messages": [
+      "No audio tracks detected"
+     ]
+    }
+   ],
+   "downloadId": "Blackhole_Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO_639301195559464090",
+   "protocol": "usenet",
+   "downloadClient": "Blackhole",
+   "downloadClientHasPostImportCategory": false,
+   "outputPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+   "episodeHasFile": false,
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "id": 170869779
+  },
+  {
+   "seriesId": 3,
+   "episodeId": 148,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Dark",
+    "sortTitle": "dark",
+    "status": "ended",
+    "ended": true,
+    "overview": "A missing child sets four families on a frantic hunt for answers as they unearth a mind-bending mystery that spans three generations.",
+    "network": "Netflix",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/5d0d7406d7e0e.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/334824-1.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/334824-16.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/334824/clearlogo/611bb02bc5c7d.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 4,
+     "name": "German"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": false
+     }
+    ],
+    "year": 2017,
+    "path": "/home/coder/projects/arr-test/media/tv/Dark",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 56,
+    "tvdbId": 334824,
+    "tvRageId": 0,
+    "tvMazeId": 17861,
+    "tmdbId": 70523,
+    "firstAired": "2017-12-01T00:00:00Z",
+    "lastAired": "2020-06-27T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "dark",
+    "imdbId": "tt5753856",
+    "titleSlug": "dark",
+    "certification": "TV-14",
+    "genres": [
+     "Crime",
+     "Mystery",
+     "Science Fiction",
+     "Thriller"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:48Z",
+    "ratings": {
+     "votes": 568385,
+     "value": 8.7
+    },
+    "languageProfileId": 1,
+    "id": 3
+   },
+   "episode": {
+    "seriesId": 3,
+    "tvdbId": 6347552,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Past and Present",
+    "airDate": "2017-12-01",
+    "airDateUtc": "2017-12-01T05:00:00Z",
+    "lastSearchTime": "2026-11-14T07:52:59Z",
+    "runtime": 45,
+    "overview": "It's 1986, and Ulrich's brother, Mads, has been missing for a month. Confusion reigns as past and present intertwine.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 3,
+    "unverifiedSceneNumbering": false,
+    "id": 148
+   },
+   "languages": [
+    {
+     "id": 4,
+     "name": "German"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "web",
+     "resolution": 1080
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 4294967296,
+   "title": "Dark.S01E03.1080p.WEB-DL.DD5.1.H.264-NTb",
+   "estimatedCompletionTime": "2026-11-14T07:54:13Z",
+   "added": "2026-11-14T07:53:01Z",
+   "status": "queued",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_8e2286c4",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "episodeHasFile": false,
+   "sizeleft": 4294967296,
+   "timeleft": "00:00:00",
+   "id": 952582496
+  }
+ ]
+}

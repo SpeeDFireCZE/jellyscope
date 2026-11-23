@@ -1,0 +1,35 @@
+{# The music card "What nobody listens to": albums without a single play.
+
+   From the database (cards_music.py, `d.radky` = stats.music_unplayed). Over
+   the whole history, not the period - hence the filter does not concern it. A short
+   skip of a track (under 30 seconds and under half the track) is not a play.
+   The longest in the library first. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("whole history") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Album") }}</th>
+            <th class="wide-wrapper-only">{{ _("Artist") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Tracks#count") }}</th>
+            <th class="num">{{ _("In the library since") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for a in d.rows %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{% call link(a.link) %}{{ a.name or "–" }}{% endcall %}
+                    <div class="narrow-wrapper-only cell-sub">{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %}</div></td>
+                <td class="wide-wrapper-only break-anywhere">{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %}</td>
+                <td class="num wide-wrapper-only">{{ a.track_count | number }}</td>
+                <td class="num muted">{{ a.added_at | relative }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("Every album has been played at least once.") }}</p>{% endif %}
+</div>

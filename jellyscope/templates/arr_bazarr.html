@@ -1,0 +1,88 @@
+{# The *Arr page, the Bazarr tab: subtitles for series and films.
+
+   The cards are from the registry (jellyscope/cards_bazarr.py) - the same ones that can
+   be added to a custom dashboard. Here they have a fixed layout by sections;
+   every place is {{ c("…") }} = a card of Bazarr. Which cards the account sees was
+   decided by the route (web/arr.py, `cards`), not the template, and it computed only
+   their data. Card names and the order of sections: cards_bazarr.SECTIONS - that they
+   match the template is checked by tests/test_bazarr_web.py.
+
+   The route is shared by all apps of the *Arr page (web/arr.py), `app` is the one
+   shown; the *Arr submenu switches between apps (jellyscope/navigation.py).
+   A disconnected Bazarr never gets here (404). #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}*Arr · {{ app_name }} · Jellyscope{% endblock %}
+
+{# A Bazarr card by its name ("numbers" -> bazarr_numbers). #}
+{% macro c(card_name) %}{{ show_card("bazarr_" ~ card_name) }}{% endmacro %}
+
+{# A section heading - only when the account sees at least one of its cards (`sections_shown`). #}
+{% macro page_section(key_name, heading, subtitle) %}
+{% if key_name in sections_shown %}
+<div class="section-head">
+    <div>
+        <h2>{{ heading }}</h2>
+        <p class="subtitle">{{ subtitle }}</p>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        {# The tab bar is gone (the *Arr submenu took over), so the heading names the app. #}
+        <h1>{{ app_name }}</h1>
+        <p class="subtitle">
+            {{ _("Subtitles from Bazarr: what is missing, what was obtained, how well they fit and how fast they arrive.") }}
+        </p>
+    </div>
+    {{ period_filter(period, '/arr/' ~ app) }}
+</div>
+
+
+{# ------------------------------------------------------------------ #}
+{# At the top the state right now: what is missing and what does not  #}
+{# work. The period switch does not affect this section.              #}
+{{ page_section("In the app right now", _("In the app right now"), _("The state at this moment. The selected period does not affect it.")) }}
+{{ c("live_numbers") }}
+<div class="grid-2 align-top">
+    {{ c("missing_languages") }}
+    {{ c("providers_now") }}
+</div>
+{{ c("health") }}
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("What was downloaded", _("What was downloaded"), _("Subtitles obtained in the selected period: downloaded, picked manually, replaced by better ones, uploaded, translated and extracted from the file.")) }}
+{{ c("numbers") }}
+{{ c("by_day") }}
+<div class="grid-2 align-top">
+    {{ c("when") }}
+    {{ c("how") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Languages and providers", _("Languages and providers"), _("Which language the obtained subtitles are in and where they come from. The share is of the number of subtitles obtained.")) }}
+<div class="grid-2 align-top">
+    {{ c("languages") }}
+    {{ c("providers") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("How good they are", _("How good they are"), _("The match is the score Bazarr gave the subtitles: how well they correspond to the file.")) }}
+<div class="grid-2 align-top">
+    {{ c("score") }}
+    {{ c("upgrades") }}
+</div>
+{{ c("changed") }}
+
+{# ------------------------------------------------------------------ #}
+{# Only with Sonarr or Radarr connected: the time since a file was    #}
+{# imported needs their history (otherwise no card and no heading).   #}
+{{ page_section("How fast they arrive", _("How fast they arrive"), _("How long after the file its subtitles are there.")) }}
+{{ c("speed") }}
+
+{# One window for the whole table of any card (whole_table_button). #}
+{{ table_window() }}
+{% endblock %}

@@ -1,7 +1,8 @@
-# Co do obrazu nepatří.
+# What does not belong in the image.
 #
-# Hlavně `data/` a `.env`. Databáze i tajný klíč patří do svazku a do
-# prostředí, ne do obrazu - obraz se posílá dál, data ne.
+# Above all `data/` and `.env`. The database and the secret key belong in
+# a volume and in the environment, not in the image - an image gets passed
+# on, data does not.
 data/
 .venv/
 venv/

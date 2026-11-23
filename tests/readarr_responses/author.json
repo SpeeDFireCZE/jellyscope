@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "authorName": "Karel Čapek",
+    "foreignAuthorId": "100001",
+    "added": "2026-11-12T20:50:07Z",
+    "status": "ended",
+    "monitored": true
+  },
+  {
+    "id": 2,
+    "authorName": "Terry Pratchett",
+    "foreignAuthorId": "100002",
+    "added": "2026-11-12T20:51:30Z",
+    "status": "ended",
+    "monitored": true
+  }
+]

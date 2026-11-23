@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-r"""Přihlášení kódem (Quick Connect): heslo tudy neprojde vůbec.
+r"""Signing in with a code (Quick Connect): the password does not pass this way at all.
 
-Přihlášení jellyfinovým heslem znamená, že cizí heslo prochází naší
-aplikací. Quick Connect to obrací: Jellyscope si řekne o kód, člověk ho
-potvrdí ve svém **už přihlášeném Jellyfinu**, a teprve pak dostaneme
-identitu.
+Signing in with a Jellyfin password means that somebody else's password passes through our
+application. Quick Connect turns it around: Jellyscope asks for a code, a person
+confirms it in their **already signed-in Jellyfin**, and only then we get
+the identity.
 
-Celé to stojí na jednom rozdílu, který test hlídá: do prohlížeče jde
-**kód**, na serveru zůstává **tajemství**. Kód sám o sobě nikoho nikam
-nepustí - bez potvrzení v Jellyfinu je to šest číslic. Tajemství pustí,
-a proto se nikdy nesmí objevit na stránce.
+It all stands on one difference the test watches: what goes to the browser is
+**the code**, what stays on the server is **the secret**. The code by itself lets nobody
+anywhere - without the confirmation in Jellyfin it is six digits. The secret lets one in,
+and that is why it must never appear on the page.
 
-Spuštění:
-    .\.venv\Scripts\python.exe tests\test_quick_connect.py
+Run:
+    .venv/bin/python tests/test_quick_connect.py
 """
 from __future__ import annotations
 
@@ -34,200 +34,200 @@ os.environ["JELLYFIN_API_KEY"] = "test-key"
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import accounts, db, jellyfin, pristup, web  # noqa: E402
+from jellyscope import access, accounts, db, jellyfin, web  # noqa: E402
 
 failures = 0
 
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
-TAJEMSTVI = "TajemstviQXZ0123456789"
-KOD = "909919"
+SECRET = "TajemstviQXZ0123456789"
+CODE = "909919"
 
 db.init_db()
 db.set_setting("jellyfin_url", "http://jellyfin.test")
 db.set_setting("jellyfin_api_key", "ApiKlicQXZ")
 db.forget_settings()
-# Bez jedineho uctu posila /login na prvotni nastaveni - prihlasovaci
-# stranka by se vubec nevykreslila.
-accounts.create("spravce", "dlouheheslo", is_admin=True)
+# Without a single account /login sends to the first setup - the sign-in
+# page would not be drawn at all.
+accounts.create("admin", "longpassword", is_admin=True)
 
-# Stav predstiraneho serveru: co odpovida a co uz od nas dostal.
-stav = {"zapnuto": True, "potvrzeno": False}
-ZADOSTI: list[httpx.Request] = []
-ZRUSENE: list[str] = []
+# The state of the pretend server: what it answers and what it has already got from us.
+state = {"enabled": True, "confirmed": False}
+REQUESTS: list[httpx.Request] = []
+REVOKED: list[str] = []
 
 
-def server(zadost: httpx.Request) -> httpx.Response:
-    ZADOSTI.append(zadost)
-    cesta = zadost.url.path
-    if cesta == "/QuickConnect/Enabled":
-        return httpx.Response(200, text="true" if stav["zapnuto"] else "false")
-    if cesta == "/QuickConnect/Initiate":
+def server(request: httpx.Request) -> httpx.Response:
+    REQUESTS.append(request)
+    path = request.url.path
+    if path == "/QuickConnect/Enabled":
+        return httpx.Response(200, text="true" if state["enabled"] else "false")
+    if path == "/QuickConnect/Initiate":
         return httpx.Response(200, json={"Authenticated": False,
-                                         "Secret": TAJEMSTVI, "Code": KOD})
-    if cesta == "/QuickConnect/Connect":
-        return httpx.Response(200, json={"Authenticated": stav["potvrzeno"]})
-    if cesta == "/Users/AuthenticateWithQuickConnect":
+                                         "Secret": SECRET, "Code": CODE})
+    if path == "/QuickConnect/Connect":
+        return httpx.Response(200, json={"Authenticated": state["confirmed"]})
+    if path == "/Users/AuthenticateWithQuickConnect":
         return httpx.Response(200, json={
             "AccessToken": "TokenQXZ",
             "User": {"Id": "u-mirek", "Name": "Mirek", "Policy": {},
                      "PrimaryImageTag": "qc-novy"}})
-    if cesta == "/Sessions/Logout":
-        ZRUSENE.append(zadost.headers.get("Authorization", ""))
+    if path == "/Sessions/Logout":
+        REVOKED.append(request.headers.get("Authorization", ""))
         return httpx.Response(204)
     return httpx.Response(200, json={"Items": [], "TotalRecordCount": 0})
 
 
-async def podvrzeny_klient(self):
+async def fake_client(self):
     self._client = httpx.AsyncClient(transport=httpx.MockTransport(server),
                                      base_url="http://jellyfin.test")
     return self
 
 
-jellyfin.JellyfinClient.__aenter__ = podvrzeny_klient
+jellyfin.JellyfinClient.__aenter__ = fake_client
 
-print("--- dokud správce jellyfinový login nezapne, není tudy cesta ---")
-klient = TestClient(web.app)
-check("/login/quick" not in klient.get("/login").text,
-      "tlačítko se na přihlašovací stránce neukazuje")
-odpoved = klient.post("/login/quick")
-check(odpoved.status_code == 400, f"a routa odmítá ({odpoved.status_code})")
-check(not ZADOSTI, "Jellyfinu se přitom nikdo na nic neptal")
+print("--- until the administrator switches the Jellyfin login on, there is no way through here ---")
+client = TestClient(web.app)
+check("/login/quick" not in client.get("/login").text,
+      "the button does not show on the sign-in page")
+response = client.post("/login/quick")
+check(response.status_code == 400, f"and the route refuses ({response.status_code})")
+check(not REQUESTS, "nobody asked Jellyfin anything meanwhile")
 
-db.set_setting(pristup.LOGIN_KLIC, "1")
+db.set_setting(access.LOGIN_KEY, "1")
 db.forget_settings()
 
 print()
-print("--- zapnuto: na stránce je kód, tajemství zůstalo na serveru ---")
-stranka = klient.get("/login").text
-check("/login/quick" in stranka, "tlačítko se objevilo")
+print("--- switched on: the code is on the page, the secret stayed on the server ---")
+page = client.get("/login").text
+check("/login/quick" in page, "the button appeared")
 
-odpoved = klient.post("/login/quick")
-check(odpoved.status_code == 200, f"okno s kódem se otevřelo "
-                                  f"({odpoved.status_code})")
-check(KOD in odpoved.text, "a kód je v něm vidět")
-check(TAJEMSTVI not in odpoved.text,
-      "tajemství na stránce NENÍ - s ním by se přihlásil kdokoli")
-check(TAJEMSTVI not in str(odpoved.cookies), "ani v cookie")
+response = client.post("/login/quick")
+check(response.status_code == 200, f"the dialog with the code opened "
+                                   f"({response.status_code})")
+check(CODE in response.text, "and the code is seen in it")
+check(SECRET not in response.text,
+      "the secret is NOT on the page - with it anybody would sign in")
+check(SECRET not in str(response.cookies), "nor in a cookie")
 
 print()
-print("--- čekání na potvrzení ---")
-stav_odpoved = klient.get("/login/quick/stav")
-check(stav_odpoved.json() == {"hotovo": False},
-      f"nepotvrzeno = nic víc než „ještě ne\" ({stav_odpoved.json()})")
+print("--- waiting for the confirmation ---")
+status_response = client.get("/login/quick/status")
+check(status_response.json() == {"done": False},
+      f"unconfirmed = nothing more than \"not yet\" ({status_response.json()})")
 check(not db.query_one(
     "SELECT id FROM accounts WHERE jellyfin_user_id = 'u-mirek'"),
-    "účet zatím nevznikl")
-check(klient.get("/", follow_redirects=False).status_code == 303,
-      "a dovnitř se zatím nikdo nedostal")
+    "the account has not been created yet")
+check(client.get("/", follow_redirects=False).status_code == 303,
+      "and nobody got in yet")
 
-# Divák už je synchronizovaný, se starým profilovým obrázkem.
+# The viewer is already synchronised, with the old profile image.
 with db.connect() as conn:
     conn.execute("INSERT INTO users (id, name, is_administrator, is_disabled, image_tag)"
                  " VALUES ('u-mirek', 'Mirek', 0, 0, 'qc-stary')")
     conn.commit()
 
-stav["potvrzeno"] = True
-stav_odpoved = klient.get("/login/quick/stav")
-check(stav_odpoved.json() == {"hotovo": True},
-      f"po potvrzení se přihlásil ({stav_odpoved.json()})")
+state["confirmed"] = True
+status_response = client.get("/login/quick/status")
+check(status_response.json() == {"done": True},
+      f"after the confirmation they signed in ({status_response.json()})")
 
-ucet = db.query_one(
+account = db.query_one(
     "SELECT * FROM accounts WHERE jellyfin_user_id = 'u-mirek'")
-check(ucet is not None, "účet se založil z toho, co řekl Jellyfin")
-check(not (dict(ucet or {}).get("password_hash") or ""),
-      "a žádné heslo u něj není - přes Quick Connect žádné nepadlo")
-check(not dict(ucet or {}).get("is_admin"),
-      "kdo není správce v Jellyfinu, není správce ani tady")
+check(account is not None, "the account was created from what Jellyfin said")
+check(not (dict(account or {}).get("password_hash") or ""),
+      "and it has no password - none was given through Quick Connect")
+check(not dict(account or {}).get("is_admin"),
+      "whoever is not an administrator in Jellyfin is not an administrator here either")
 check(db.query_one("SELECT image_tag FROM users WHERE id = 'u-mirek'")["image_tag"]
-      == "qc-novy", "otisk profilového obrázku se obnovil s přihlášením")
+      == "qc-novy", "the profile image's fingerprint was refreshed with the sign-in")
 
 print()
-print("--- co odešlo a co po nás zůstalo ---")
-check(not [z for z in ZADOSTI if z.url.path == "/Users/AuthenticateByName"],
-      "server se nikdy nedozvěděl žádné heslo")
-zahajeni = [z for z in ZADOSTI if z.url.path == "/QuickConnect/Initiate"]
-check(len(zahajeni) == 1, f"kód se vyžádal jednou ({len(zahajeni)})")
-check("Authorization" in zahajeni[0].headers,
-      "náš klíč jde v hlavičce, ne v adrese")
-check("ApiKlicQXZ" not in str(zahajeni[0].url), "v adrese opravdu není")
-check(all(z.url.host == "jellyfin.test" for z in ZADOSTI),
-      "a všechno jen na server z nastavení")
-check(ZRUSENE and "TokenQXZ" in ZRUSENE[0],
-      f"token z přihlášení se hned zrušil ({ZRUSENE})")
+print("--- what went out and what we left behind ---")
+check(not [z for z in REQUESTS if z.url.path == "/Users/AuthenticateByName"],
+      "the server never learnt any password")
+initiations = [z for z in REQUESTS if z.url.path == "/QuickConnect/Initiate"]
+check(len(initiations) == 1, f"the code was requested once ({len(initiations)})")
+check("Authorization" in initiations[0].headers,
+      "our key goes in the header, not in the address")
+check("ApiKlicQXZ" not in str(initiations[0].url), "it really is not in the address")
+check(all(z.url.host == "jellyfin.test" for z in REQUESTS),
+      "and everything only to the server from the settings")
+check(REVOKED and "TokenQXZ" in REVOKED[0],
+      f"the token from the sign-in was revoked right away ({REVOKED})")
 
-# `DeviceId` musi byt pri zahajeni i dokonceni stejny - Jellyfin podle
-# nej paruje zadost s potvrzenim. Kdyby se lisil, kod by slo potvrdit
-# a prihlaseni by presto nikdy nedobehlo.
-dokonceni = [z for z in ZADOSTI
-             if z.url.path == "/Users/AuthenticateWithQuickConnect"]
-check(len(dokonceni) == 1, "a dokončilo se jednou")
-check(zahajeni[0].headers.get("Authorization")
-      == dokonceni[0].headers.get("Authorization"),
-      "zahájení i dokončení se hlásí stejným zařízením")
-
-print()
-print("--- divák vidí svoje, do nastavení nesmí ---")
-check(klient.get("/settings", follow_redirects=False).status_code == 403,
-      "Nastavení je pro správce")
-check(klient.get("/", follow_redirects=False).status_code == 303,
-      "a rozcestník ho posílá na jeho vlastní stránku")
+# `DeviceId` must be the same at the start and at the end - Jellyfin pairs
+# the request with the confirmation by it. If it differed, the code could be confirmed
+# and the sign-in would still never finish.
+completions = [z for z in REQUESTS
+               if z.url.path == "/Users/AuthenticateWithQuickConnect"]
+check(len(completions) == 1, "and it finished once")
+check(initiations[0].headers.get("Authorization")
+      == completions[0].headers.get("Authorization"),
+      "the start and the end report with the same device")
 
 print()
-print("--- když Quick Connect nemá zapnutý server ---")
-stav["zapnuto"] = False
-novy = TestClient(web.app)
-odpoved = novy.post("/login/quick")
-check(odpoved.status_code == 400, f"neotevře se okno s kódem "
-                                  f"({odpoved.status_code})")
-check("Quick Connect" in odpoved.text,
-      "a stránka řekne, že se zapíná v Jellyfinu")
-stav["zapnuto"] = True
+print("--- a viewer sees their own, may not go into the settings ---")
+check(client.get("/settings", follow_redirects=False).status_code == 403,
+      "Settings are for the administrator")
+check(client.get("/", follow_redirects=False).status_code == 303,
+      "and the signpost sends them to their own page")
 
 print()
-print("--- vypršelý nebo cizí kód nikoho nepustí ---")
-cizi = TestClient(web.app)
-check(cizi.get("/login/quick/stav").json() == {"hotovo": False, "konec": True},
-      "bez zahájení není co dokončovat")
+print("--- when the server does not have Quick Connect switched on ---")
+state["enabled"] = False
+fresh = TestClient(web.app)
+response = fresh.post("/login/quick")
+check(response.status_code == 400, f"the dialog with the code does not open "
+                                   f"({response.status_code})")
+check("Quick Connect" in response.text,
+      "and the page says it is switched on in Jellyfin")
+state["enabled"] = True
 
-vypnuty = TestClient(web.app)
-vypnuty.post("/login/quick")
-db.set_setting(pristup.LOGIN_KLIC, "0")
+print()
+print("--- an expired or somebody else's code lets nobody in ---")
+stranger = TestClient(web.app)
+check(stranger.get("/login/quick/status").json() == {"done": False, "end": True},
+      "without a start there is nothing to finish")
+
+switched_off = TestClient(web.app)
+switched_off.post("/login/quick")
+db.set_setting(access.LOGIN_KEY, "0")
 db.forget_settings()
-check(vypnuty.get("/login/quick/stav").json()
-      == {"hotovo": False, "konec": True},
-      "a rozdělaný kód skončí ve chvíli, kdy správce login vypne")
+check(switched_off.get("/login/quick/status").json()
+      == {"done": False, "end": True},
+      "and a code in progress ends the moment the administrator switches the login off")
 
 print()
-print("--- brzda: kódy se nedají zakládat donekonečna ---")
-db.set_setting(pristup.LOGIN_KLIC, "1")
+print("--- the brake: codes cannot be started endlessly ---")
+db.set_setting(access.LOGIN_KEY, "1")
 db.forget_settings()
-stav["zapnuto"] = True
-from jellyscope import accounts as _ucty  # noqa: E402
+state["enabled"] = True
+from jellyscope import accounts as _accounts  # noqa: E402
 
-_ucty._pokusy.clear()
-zahajeni_pred = len([z for z in ZADOSTI if z.url.path == "/QuickConnect/Initiate"])
-hadac = TestClient(web.app)
-kody = [hadac.post("/login/quick").status_code for _ in range(12)]
-check(kody[:7] == [200] * 7, f"pár kódů projde ({kody[:7]})")
-check(429 in kody, f"pak brzda ({kody})")
-zahajeno = len([z for z in ZADOSTI if z.url.path == "/QuickConnect/Initiate"]) - zahajeni_pred
-check(zahajeno < 12, f"a do Jellyfinu už další nechodí ({zahajeno} z 12)")
-check(hadac.post("/login", data={"username": "spravce", "password": "dlouheheslo",
-                                 "zpusob": "mistni"},
-                 follow_redirects=False).status_code == 429,
-      "blokace platí i pro heslo - je to jedna adresa")
+_accounts._attempts.clear()
+initiations_before = len([z for z in REQUESTS if z.url.path == "/QuickConnect/Initiate"])
+guesser = TestClient(web.app)
+codes = [guesser.post("/login/quick").status_code for _ in range(12)]
+check(codes[:7] == [200] * 7, f"a few codes pass ({codes[:7]})")
+check(429 in codes, f"then the brake ({codes})")
+initiated = len([z for z in REQUESTS if z.url.path == "/QuickConnect/Initiate"]) - initiations_before
+check(initiated < 12, f"and no more go to Jellyfin ({initiated} of 12)")
+check(guesser.post("/login", data={"username": "admin", "password": "longpassword",
+                                   "method": "local"},
+                   follow_redirects=False).status_code == 429,
+      "the block holds for the password too - it is one address")
 with db.connect() as conn:
     conn.execute("DELETE FROM login_blocks")
     conn.commit()
-_ucty._pokusy.clear()
+_accounts._attempts.clear()
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

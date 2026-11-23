@@ -1,0 +1,18 @@
+{# The Lidarr card "How long downloads take": from sending to the client to the import into the library.
+
+   From the database (cards_lidarr.py). The durations are put together by cards_base.duration: long
+   ones in days, not in thousands of hours; an unknown one is "–". #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("from sending to the client until import") }}</p>
+    </div>
+    <div class="kpi-row">
+        {{ tile(_("Median"), d.median) }}
+        {{ tile(_("90% within"), d.p90) }}
+    </div>
+    <p class="card-note">
+        {{ _n("Download is the time from the moment the app sent the release to the client until its first track was imported into the library ({n} albums with a known download).", d.count) }}
+    </p>
+</div>

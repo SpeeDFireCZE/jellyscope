@@ -1,0 +1,8 @@
+[
+ {
+  "source": "IndexerStatusCheck",
+  "type": "warning",
+  "message": "Indexers unavailable due to failures: Test",
+  "wikiUrl": "https://wiki.servarr.com/lidarr/system#indexers-are-unavailable-due-to-failures"
+ }
+]

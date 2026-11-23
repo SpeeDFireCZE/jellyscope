@@ -1,0 +1,23 @@
+{# The card with the key `library_languages`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Languages in the library") }}</h2>
+        <p class="card-note">{{ _("how many titles contain each track") }}</p>
+    </div>
+    {% if library %}
+        {{ charts.hbar_chart(library, 'label', 'item_count', unit='') | safe }}
+        <p class="card-note" style="margin-top:14px">
+            {{ _("A title counts towards every track it has: a movie with both Czech and English audio appears in both rows. The total therefore exceeds the number of titles.") }}
+        </p>
+    {% else %}
+        <p class="chart-empty">
+            {{ _("No language data.") }}
+            {{ _("No libraries. Run a synchronisation in Settings.") }}
+        </p>
+    {% endif %}
+</div>

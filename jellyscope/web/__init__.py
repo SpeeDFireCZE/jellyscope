@@ -1,35 +1,39 @@
-"""Webova aplikace - routy, sablony, prihlaseni.
+"""The web application - routes, templates, sign-in.
 
-FastAPI je knihovna, ktera prirazuje adresy funkcim. Kdyz prohlizec pozada
-o "/library", zavola se funkce oznacena @app.get("/library"). Nic vic v tom
-neni.
+FastAPI is a library that assigns addresses to functions. When the browser asks
+for "/library", the function marked @app.get("/library") is called. There is
+nothing more to it.
 
-Kazda routa v balicku dela totez ve trech krocich:
-    1. precti parametry z adresy (napr. za jak dlouhe obdobi)
-    2. zeptej se modulu stats / insights na data
-    3. predej data sablone, at je vykresli
+Every route of the package does the same in three steps:
+    1. read the parameters from the address (say the period)
+    2. ask the modules stats / insights for the data
+    3. hand the data to the template to draw
 
-Zadne SQL, zadne pocitani. Kdyz se v balicku web objevi vzorec, patri
-jinam.
+No SQL, no computing. When a formula shows up in the web package, it belongs
+elsewhere.
 
-Balík podle oblastí (jellyscope/web/). Routy jsou v podmodulech jako
-@router.get("/library") - router je skupina rout, kterou tenhle soubor
-připojí k aplikaci (app.include_router):
+The package goes by areas (jellyscope/web/). The routes are in submodules as
+@router.get("/library") - a router is a group of routes this file attaches to
+the application (app.include_router):
 
-* `__init__` - aplikace: app, middleware, ošetření chyb, připojení rout
-* `start` - spuštění a vypnutí (lifespan)
-* `zaklad` - co potřebuje každá stránka (šablony, kontext, hlášky, závora přihlášení)
-* `nastaveni` - Nastavení
-* `obdobi` - výběr období a druhu obsahu
-* `prihlaseni` - první spuštění, přihlášení, odhlášení
-* `ucet` - můj účet
-* `prehled` - přehled a jeho karty, srovnání, vlastní přehledy, Postřehy
-* `knihovna` - knihovna, tituly, archiv, obrázky
-* `uzivatele` - uživatelé
-* `historie` - historie přehrání
-* `jazyky` - jazyky
-* `sit` - síť
-* `stav` - malé JSON rozhraní (/health, /api/now-playing)
+* `__init__` - the application: app, middleware, error handling, attaching the routes
+* `start` - start and shutdown (lifespan)
+* `base` - what every page needs (templates, context, flash messages, the sign-in guard)
+* `settings` - Settings
+* `periods` - the choice of the period and of the kind of content
+* `login` - the first run, sign-in, sign-out
+* `my_account` - my account
+* `dashboards` - custom dashboards (for everyone and My dashboard), shared partials
+* `video` - the Movies & series section (/video/…): overview, comparison, insights, languages
+* `legacy` - old page addresses: redirects to the new ones (jellyscope/legacy_urls.py)
+* `music`, `books` - the Music and Books sections (/music/…, /books/…): overview, artist, comparison…
+* `album` - the album page of the Library (/album/<id>)
+* `library` - the library, titles, the archive, images
+* `disks` - the forms of the Disks card
+* `users` - users
+* `history` - the play history
+* `network` - the network
+* `status` - a small JSON interface (/health, /api/now-playing)
 """
 
 from __future__ import annotations
@@ -45,274 +49,270 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from jinja2 import pass_context
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from .. import (api, api_dotaz, charts, formatting,
-               i18n, languages,
-               pristup,
-               sekce,
-               stats, udalosti)
-# Verze běžícího procesu. Schválně natvrdo při importu: po `git pull`
-# leží na disku nová, ale tenhle proces pořád běží starý kód - a čekárna
-# po aktualizaci potřebuje vědět přesně to, co běží tady, ne co je na
-# disku. Až se proces vymění, načte se soubor znovu i s novým číslem.
-from .. import __version__  # noqa: F401 - čte se i zvenku
-# Zaklad webu bydli vedle - potrebuji ho vsechny casti rout, takze
-# by jinak musely importovat tenhle modul a on je.
-from .zaklad import (  # noqa: F401 - dal se pouzivaji i zvenku
-    KAPACITA_JEDNOTKY,
+from .. import (access, api, api_query, cards, charts,
+                formatting, i18n,
+                languages,
+                seasonal,
+                stats)
+# The version of the running process. Fixed at import on purpose: after `git pull`
+# a new one lies on the disk, but this process still runs the old code - and the
+# waiting room after an update needs to know exactly what runs here, not what is on
+# the disk. Once the process is replaced, the file is read again with the new number.
+from .. import __version__  # noqa: F401 - read from the outside too
+# The base of the web lives next door - every part of the routes needs it, so
+# they would otherwise have to import this module and it them.
+from .base import (  # noqa: F401 - used from the outside too
+    BACK_TO_IMPORT,
+    CAPACITY_UNITS,
+    LIMIT_MAX,
+    LIMIT_MIN,
     PACKAGE_DIR,
     SETTINGS_SECTIONS,
+    SKINS,
     STARTED_AT,
-    STROP_MAX,
-    STROP_MIN,
+    TABLE_LIMITS,
     TEMPLATES_DIR,
-    VZHLEDY,
-    ZOOM_REZIMY,
-    ZPET_NA_IMPORT,
-    _bez_mezipameti,
-    _cas_presne,
-    _cesky_datum,
-    _cislo_z_formulare,
+    ZOOM_MODES,
     _clamp,
     _context,
+    _czech_date,
+    _exact_time,
+    _fixed_note,
     _flash,
-    _hlaska_importu,
+    _form_number,
+    _import_message,
     _known_note,
+    _last_day,
+    _limits,
     _linked_note,
-    _novy_klic,
-    _obdobi_do_sablony,
-    _obdobi_popis,
-    _opraveno_note,
-    _posledni_den,
-    _rychla_obdobi,
-    _stropy,
-    _veta,
-    _vzhled,
-    _podklad_mapy,
-    _zoom_rezim,
+    _map_basemap,
+    _new_key,
+    _no_cache,
+    _period_for_template,
+    _period_label,
+    _quick_periods,
+    _sentence,
+    _skin,
+    _zoom_mode,
+    account_image_tag,
     config,
     current_account,
-    prihlas_do_relace,
     log,
-    muj_divak,
-    otisk_obrazku_uctu,
+    own_viewer,
     require_admin,
     require_login,
+    start_session,
     templates,
 )
-from .zaklad import OSM_DLAZDICE, csp  # noqa: F401 - OSM_DLAZDICE čte se i zvenku
-from .obdobi import ALLOWED_DAYS, DAY_LABELS
-from .prihlaseni import _adresa_klienta
+from .base import OSM_TILES, csp  # noqa: F401 - OSM_TILES is read from the outside too
+from .login import _client_address
+from .periods import ALLOWED_DAYS, DAY_LABELS
 from .start import lifespan
 
-# Podmoduly s routami - připojí je app.include_router na konci souboru.
-from . import (historie, jazyky, knihovna, nastaveni, prehled, prihlaseni, sit, stav, ucet,
-               uzivatele)
+# The submodules with routes - app.include_router at the end of the file attaches them.
+from . import (album, arr, books, dashboards, disks, history, legacy, library, login, music, my_account, network, seerr, settings,
+               status, users, video)
+from ..arr.registry import connected as _arr_connected
+from ..music import has_music as _has_music
+from ..seerr import is_connected as _seerr_connected
 
-# Vstupní dveře: jména z podmodulů, která se čtou i zvenku (web.X, testy).
-# Kód balíku si je bere přímo z podmodulu, ne odsud.
-from .knihovna import STROP_MAZANI_ARCHIVU, item_image  # noqa: F401 - čte se i zvenku
-from .obdobi import _kind  # noqa: F401 - čte se i zvenku
-from .prihlaseni import _setup_context  # noqa: F401 - čte se i zvenku
-from .ucet import muj_obrazek  # noqa: F401 - čte se i zvenku
+# The door: the names from the submodules that are read from the outside too (web.X, tests).
+# The package's code takes them straight from the submodule, not from here.
+from .library import ARCHIVE_DELETE_LIMIT, item_image  # noqa: F401 - read from the outside too
+from .login import _setup_context  # noqa: F401 - read from the outside too
+from .my_account import my_image  # noqa: F401 - read from the outside too
+from .periods import _kind  # noqa: F401 - read from the outside too
 
 
 STATIC_DIR = PACKAGE_DIR / "static"
 
 
-app = FastAPI(title="Jellyscope", lifespan=lifespan, docs_url=None, redoc_url=None)
-def _cesta_odkud_prisel(referer: str | None) -> str:
-    """Cesta z `referer`, nebo domů. Nikdy adresa na cizí server.
+# No machine description of the app: FastAPI would otherwise hand /openapi.json to anybody, signed in or
+# not - the list of every address with the routes' docstrings, a map of the app including the
+# administrator's actions. The read API has a guide of its own (Settings -> API); the browsers of the
+# description (/docs, /redoc) are off for the same reason. tests/test_security.py guards it.
+app = FastAPI(title="Jellyscope", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
-    Vrací se schválně jen cesta - bez schématu a hostitele. Takový odkaz
-    je vždycky na tomtéž serveru, takže se nedá zneužít k odvedení
-    člověka jinam, a přitom ho vrátí přesně tam, kde byl.
 
-    `//zlo.cz/x` vypadá jako cesta, ale prohlížeč ho čte jako adresu na
-    cizí server, takže neprojde.
+def _referer_path(referer: str | None) -> str:
+    """The path from `referer`, or home. Never an address on a foreign server.
+
+    Only the path is returned on purpose - without the scheme and the host. Such a
+    link is always on the same server, so it cannot be abused to lead a person
+    elsewhere, and still returns them exactly where they were.
+
+    `//evil.example/x` looks like a path, but the browser reads it as an address on
+    a foreign server, so it does not pass.
     """
-    adresa = urlsplit(referer or "")
-    kam = adresa.path or "/"
-    if adresa.query:
-        kam = f"{kam}?{adresa.query}"
-    if not kam.startswith("/") or kam.startswith("//"):
+    address = urlsplit(referer or "")
+    target = address.path or "/"
+    if address.query:
+        target = f"{target}?{address.query}"
+    if not target.startswith("/") or target.startswith("//"):
         return "/"
-    return kam
+    return target
 
 
 @app.middleware("http")
-async def ukazkovy_rezim(request: Request, call_next):
-    """V ukázce se nic nemění - místo akce se objeví hláška.
+async def demo_mode_middleware(request: Request, call_next):
+    """In the demo nothing changes - a message shows instead of the action.
 
-    Ukázka běží na veřejné adrese a přihlašovací údaje jsou rovnou
-    v přihlašovacím okně, takže dovnitř se dostane kdokoliv. Bez téhle
-    pojistky by první návštěvník přepsal adresu Jellyfinu, spustil import
-    nebo restart - a pro všechny ostatní by ukázka skončila.
+    The demo runs on a public address and the credentials are right in the sign-in
+    window, so anybody gets in. Without this safeguard the first visitor would
+    rewrite Jellyfin's address, start an import or a restart - and the demo would
+    be over for everybody else.
 
-    Hlídá se to tady, na jednom místě, a ne v každé routě zvlášť: routa,
-    na kterou by se zapomnělo, je přesně ta, kterou někdo najde. Seznam
-    výjimek je v DEMO_POVOLENO.
+    It is guarded here, in one place, and not in every route separately: the route
+    somebody forgot is exactly the one somebody finds. The list of exceptions is
+    in DEMO_ALLOWED.
 
-    Tlačítka zůstávají vidět schválně - ukázka má ukázat, co aplikace
-    umí. Jen místo práce odpoví hláškou.
+    The buttons stay visible on purpose - the demo is to show what the app can do.
+    They only answer with a message instead of working.
     """
-    if _demo_blokuje(request):
-        _flash(request, "Tohle je ukázka, data se v ní nemění. "
-                        "Na vlastní instalaci tlačítko funguje.", "info")
-        # Zpátky přesně tam, odkud člověk přišel - ne na Přehled. Kdo
-        # zkoumá Nastavení, má po kliknutí zůstat v Nastavení; vyhodit ho
-        # na úvodní stránku je trest za zvědavost.
+    if _demo_blocks(request):
+        _flash(request, "This is a demo, so nothing here "
+                        "changes. On your own install the button works.", "info")
+        # Back exactly where the person came from - not to the Overview. Whoever
+        # explores Settings is to stay in Settings after a click; throwing them out
+        # to the start page is a punishment for curiosity.
         #
-        # `referer` posílá prohlížeč u formuláře odeslaného ze stránky
-        # vždycky - jenže je to hlavička od návštěvníka, tedy údaj zvenku.
-        # Přesměrovat podle ní na celou adresu by z ukázky udělalo
-        # otevřený přesměrovávač.
+        # The browser always sends `referer` with a form sent from a page - only
+        # it is a header from the visitor, that is data from the outside.
+        # Redirecting to a whole address by it would turn the demo into an open
+        # redirector.
         #
-        # Bere se proto jen **cesta**. Hostitel se neporovnává vůbec:
-        # kontrola "začíná naší adresou" tu jednou byla a pouštěla
-        # `https://jellyscope.cz.utocnik.cz/`, protože naší adresou
-        # opravdu začíná. Relativní cesta nikam odejít nemůže, ať referer
-        # přijde odkudkoliv, a nerozbije se za proxy, kde se liší schéma
-        # i port.
-        kam = _cesta_odkud_prisel(request.headers.get("referer"))
-        return RedirectResponse(kam, status_code=303)
+        # So only the **path** is taken. The host is not compared at all: a check
+        # "starts with our address" was here once and let
+        # `https://jellyscope.cz.utocnik.cz/` through, because it really does start
+        # with our address. A relative path cannot leave, wherever the referer
+        # comes from, and it does not break behind a proxy where the scheme and
+        # the port differ.
+        target = _referer_path(request.headers.get("referer"))
+        return RedirectResponse(target, status_code=303)
     return await call_next(request)
 
 
-# Co smí divák z Jellyfinu odeslat (POST). Jinak jen čte. Vlastní API
-# klíč si vyrobí jen s povolením - to hlídá routa sama.
-DIVAK_SMI_POST = frozenset({"/logout", "/account/language", "/account/password",
-                            "/account/klic", "/account/klic/zrusit",
-                            # Bez pohybu u sezónní výzdoby - jen pro sebe.
-                            "/account/udalosti-pohyb",
-                            # Můj přehled - vlastní rozvržení, nikoho jiného.
-                            "/account/prehled"})
+# What a viewer from Jellyfin may send (POST). Otherwise they only read. An API
+# key of their own they make only with permission - the route itself guards that.
+VIEWER_MAY_POST = frozenset({"/logout", "/account/language", "/account/password",
+                             "/account/key", "/account/key/revoke",
+                             # Without motion in the seasonal decoration - only for themselves.
+                             "/account/event-motion",
+                             # My dashboard - their own layout, nobody else's.
+                             "/account/dashboard"})
 
 
 @app.middleware("http")
-async def rozsah_divaka(request: Request, call_next):
-    """Kdo není správce, vidí jen to, co mu správce zaškrtl.
+async def viewer_scope_middleware(request: Request, call_next):
+    """Whoever is not the administrator sees only what the administrator ticked.
 
-    Hlídá se to **na jednom místě**, ne v každé routě: kdyby se na jednu
-    zapomnělo, neprojeví se to jako chyba, ale jako cizí historie na
-    obrazovce někoho, komu do ní nic není. Proto povolující seznam a
-    zamčené dveře - co v něm není, končí tady.
+    It is guarded **in one place**, not in every route: were one forgotten, it
+    would not show as an error but as somebody else's history on the screen of a
+    person it is none of whose business. Hence an allowing list and a locked
+    door - what is not in it ends here.
 
-    Skupiny jsou dvě a liší se v tom, co znamená „moje":
+    There are two groups and they differ in what "mine" means:
 
-    * **divák z Jellyfinu** má svůj účet u konkrétního člověka, takže mu
-      vlastní čísla patří vždycky. Přehled ho pošle na jeho stránku,
-      cizí stránka diváka je zavřená a nic nemění - jen čte.
-    * **místní čtenářský účet** nikomu konkrétnímu nepatří (zakládá ho
-      správce), takže „moje historie" u něj nedává smysl. Platí pro něj
-      jen zaškrtnuté oblasti.
+    * **a viewer from Jellyfin** has an account tied to a particular person, so
+      their own numbers always belong to them. The overview sends them to their
+      page, another viewer's page is closed and they change nothing - they only read.
+    * **a local reader account** belongs to nobody in particular (the administrator
+      creates it), so "my history" makes no sense for it. Only the ticked areas
+      hold for it.
     """
-    ucet = current_account(request)
-    kdo = pristup.role(ucet)
-    if kdo in ("", pristup.SPRAVCE):
+    account = current_account(request)
+    who = access.role(account)
+    if who in ("", access.ADMIN):
         return await call_next(request)
 
-    divak = muj_divak(ucet)
-    cesta = request.url.path
+    viewer = own_viewer(account)
+    path = request.url.path
 
-    # Kdo nesmi Prehled, toho / posle na prvni stranku, kterou smi (divaka
-    # na jeho vlastni) - ne na „sem nemas pristup". Sem miri i prihlaseni,
-    # heslem i kodem, takze se po nem nikdo nezasekne na zavrenych dverich.
-    # `ucet` jde s kazdym dotazem dal: ucet muze mit vlastni prava, ktera
-    # skupinu prebiji (Nastaveni -> Ucty -> Prava).
-    if cesta == "/" and not pristup.vidi(kdo, "prehled", ucet):
-        return RedirectResponse(pristup.domovska(kdo, divak, ucet), status_code=303)
-    if divak:
-        # Divak nic nemeni, jen cte - s vyjimkou odhlaseni a sveho uctu
-        # (Muj ucet). Vycet, ne predpona /account/: kazda dalsi zapisujici
-        # routa se sem musi pridat vedome, jinak by byla divakum otevrena
-        # sama od sebe. Routy berou ucet z relace a heslo uctu z Jellyfinu
-        # odmitne sama routa (accounts.zmen_vlastni_heslo).
-        if request.method != "GET" and cesta not in DIVAK_SMI_POST:
-            return _nesmis(request)
+    # `/` is always open: it only redirects to the account's default page, or the first page
+    # it may open (navigation.default_page_url, web/legacy.py) - never to "you may not".
+    if viewer:
+        # A viewer changes nothing, only reads - except signing out and their own
+        # account (My account). A list, not the prefix /account/: every further
+        # writing route has to be added here knowingly, otherwise it would be open
+        # to viewers by itself. The routes take the account from the session and
+        # the password of a Jellyfin account is refused by the route itself
+        # (accounts.change_own_password).
+        if request.method != "GET" and path not in VIEWER_MAY_POST:
+            return _forbidden(request)
 
-    # Stejne pravidlo kresli v sablonach odkazy (smi), takze odkaz vede
-    # jen tam, kam se opravdu da vejit.
-    if not pristup.smi_otevrit(ucet, cesta):
-        return _nesmis(request)
+    # The same rule draws the links in the templates (may_open), so a link leads
+    # only where one can really enter.
+    if not access.may_open(account, path):
+        return _forbidden(request)
 
     return await call_next(request)
 
 
-def _nesmis(request: Request):
-    """Odpověď na „tohle ti nepatří". Stránka, ne holé 403."""
-    ucet = current_account(request)
+def _forbidden(request: Request):
+    """The answer to "this is not yours". A page, not a bare 403."""
+    account = current_account(request)
     return templates.TemplateResponse(
-        request, "nesmis.html", _context(request, ucet), status_code=403)
+        request, "forbidden.html", _context(request, account), status_code=403)
 
 
 @app.middleware("http")
-async def jazyk_uctu(request: Request, call_next):
-    """Jazyk, který si přihlášený účet vybral na stránce Můj účet.
+async def account_language_middleware(request: Request, call_next):
+    """The language the signed-in account chose on the My account page.
 
-    Pořadí middlewarů tu rozhoduje: každý další obaluje ty předchozí.
-    Tenhle potřebuje relaci, takže musí být uvnitř SessionMiddleware (ten
-    se přidává hned pod ním), a zároveň vně `rozsah_divaka`
-    a `ukazkovy_rezim` - i jejich stránky („sem nemáš přístup", hláška
-    ukázky) mají být v jazyce účtu. Bez účtu (přihlášení, API klíčem)
-    zůstane jazyk serveru.
+    The order of the middleware decides here: every further one wraps the previous
+    ones. This one needs the session, so it has to be inside SessionMiddleware (that
+    is added right under it), and outside `viewer_scope_middleware` and
+    `demo_mode_middleware` - their pages too ("you have no access here", the demo's
+    message) are to be in the account's language. Without an account (sign-in, an
+    API key) the server's language stays.
     """
-    ucet = current_account(request)
-    token = i18n.nastav_jazyk_uctu((ucet or {}).get("ui_language"))
+    account = current_account(request)
+    token = i18n.set_account_language((account or {}).get("ui_language"))
     try:
         return await call_next(request)
     finally:
-        i18n.vrat_jazyk_uctu(token)
+        i18n.reset_account_language(token)
 
 
+# The session's old keys (TODO.md item 0): added before SessionMiddleware = right inside it, before every reader.
+app.add_middleware(legacy.LegacySession)
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.secret_key,
     session_cookie="jellyscope_session",
     max_age=14 * 24 * 3600,
-    # same_site="lax" znamena, ze cookie se neposle pri pozadavku z ciziho
-    # webu. Diky tomu nemuze cizi stranka odeslat formular tvym jmenem.
+    # same_site="lax": the cookie is not sent with a request from a foreign site - its form cannot act in your name.
     same_site="lax",
-    # Za HTTPS proxy zapnout pres SECURE_COOKIES=1 v .env. Prohlizec pak
-    # cookie posle jen po sifrovanem spojeni. Pri behu na localhostu bez
-    # HTTPS musi zustat vypnute, jinak by se nikdo neprihlasil.
+    # Behind an HTTPS proxy SECURE_COOKIES=1 in .env: the cookie goes only over an encrypted connection. On
+    # localhost without HTTPS it stays off, otherwise nobody would sign in.
     https_only=config.secure_cookies,
 )
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Tri hlavicky, ktere prohlizeci rikaji, co s odpovedi nesmi delat.
-# Stoji jeden middleware a zavirají cele skupiny utoku dopredu.
-# Co smi ukazkovy rezim zmenit: prihlaseni a odhlaseni, nic vic.
-#
-# Ukazka bezi na verejne adrese a prihlasit se do ni muze kdokoliv -
-# udaje jsou v prihlasovacim okne. Cokoliv ulozeneho plati pro vsechny
-# dalsi navstevniky, takze i neskodne veci jako jazyk rozhrani jsou
-# zamcene: kdo si prepne na cestinu, prepne ji i tomu po sobe.
-#
-# Tlacitka zustavaji videt schvalne: ukazka ma ukazat, co aplikace umi.
-# Misto akce se objevi hlaska.
-# Ctecí API. Vlastni modul a vlastni zavora: stranky se prokazuji
-# prihlasovaci cookie, API tokenem. Nic pod /api/ nic nemeni - jsou tam
-# sama GET.
+# The read API. A module and a guard of its own: pages prove themselves by the
+# sign-in cookie, the API by a token. Nothing under /api/ changes anything - there
+# are only GETs.
 app.include_router(api.router)
 
 
-class ZaznamPouzitiApi:
-    """Každý požadavek s existujícím klíčem se zapíše - až po odpovědi.
+class ApiUsageLog:
+    """Every request with an existing key is written down - only after the response.
 
-    Až teprve po ní je známý výsledek (200, 403, ...). Klíč (id, jméno,
-    vlastník) sem nechává api.over_token() v `request.state`; neplatný
-    klíč ho nenechá, a tak se nezapíše. Zapisuje se do logu API.
+    Only after it the result is known (200, 403, ...). api.verify_token() leaves the
+    key (id, name, owner) here in `request.state`; an invalid key does not leave
+    it, and so it is not written. It goes to the API log.
 
-    Čisté ASGI, ne `@app.middleware`: tam odchází tělo odpovědi až po
-    návratu middlewaru, takže by zápis zdržel každou odpověď API. Tady má
-    klient odpověď dřív, než se zapisuje.
+    Pure ASGI, not `@app.middleware`: there the body of the response leaves only
+    after the middleware returns, so the write would hold every API response up.
+    Here the client has the response before the write.
 
-    Zápis nesmí shodit odpověď: kdo se ptá na čísla, má je dostat, i když
-    se záznam zrovna nepovedl. A neodchycená chyba routy (500) se zapíše
-    taky - pak se pošle dál, ať ji obslouží Starlette jako dřív.
+    The write must not bring the response down: whoever asks for numbers is to get
+    them even when the record just failed. And an uncaught error of a route (500) is
+    written too - then it is passed on for Starlette to handle as before.
     """
 
     def __init__(self, app) -> None:
@@ -322,163 +322,192 @@ class ZaznamPouzitiApi:
         if scope["type"] != "http" or not scope["path"].startswith("/api/"):
             await self.app(scope, receive, send)
             return
-        vysledek = 500
+        result = 500
 
-        async def posli(zprava) -> None:
-            nonlocal vysledek
-            if zprava["type"] == "http.response.start":
-                vysledek = zprava["status"]
-            await send(zprava)
+        async def forward(message) -> None:
+            nonlocal result
+            if message["type"] == "http.response.start":
+                result = message["status"]
+            await send(message)
 
         try:
-            await self.app(scope, receive, posli)
+            await self.app(scope, receive, forward)
         except Exception:
-            await _zapis_pouziti(scope, vysledek)
+            await _record_usage(scope, result)
             raise
-        await _zapis_pouziti(scope, vysledek)
+        await _record_usage(scope, result)
 
 
-# Kdy se naposledy zalogovala chyba zapisu pouziti. Kdyz zapis selhava
-# porad (plny disk, prava), Grafana by kazdych par vterin pridala do logu
-# celou chybovou hlasku - staci jedna za ctvrt hodiny.
-CHYBA_ZAPISU_PO_SEKUNDACH = 900
-_posledni_chyba_zapisu = 0.0
+# When an error of writing the usage was last logged. When the write keeps failing
+# (a full disk, permissions), Grafana would add the whole error message to the log
+# every few seconds - one per quarter of an hour is enough.
+WRITE_ERROR_EVERY_SECONDS = 900
+_last_write_error = 0.0
 
 
-async def _zapis_pouziti(scope, vysledek: int) -> None:
-    global _posledni_chyba_zapisu
-    klic = (scope.get("state") or {}).get("api_klic_do_logu")
-    if not klic:
+async def _record_usage(scope, result: int) -> None:
+    global _last_write_error
+    key = (scope.get("state") or {}).get("api_key_in_log")
+    if not key:
         return
-    cesta = scope["path"]
-    dotaz = scope.get("query_string", b"").decode("latin-1")
-    if dotaz:
-        cesta = f"{cesta}?{dotaz}"
+    path = scope["path"]
+    query = scope.get("query_string", b"").decode("latin-1")
+    if query:
+        path = f"{path}?{query}"
     try:
-        await asyncio.to_thread(api.zapis_pouziti, klic, cesta,
-                                _adresa_klienta(Request(scope)), vysledek)
-    except Exception:  # noqa: BLE001 - zaznam je navic, odpoved ne
-        if time.time() - _posledni_chyba_zapisu >= CHYBA_ZAPISU_PO_SEKUNDACH:
-            _posledni_chyba_zapisu = time.time()
-            log.exception("Zapis pouziti API klice se nepovedl")
+        await asyncio.to_thread(api.record_use, key, path,
+                                _client_address(Request(scope)), result)
+    except Exception:  # noqa: BLE001 - the record is an extra, the response is not
+        if time.time() - _last_write_error >= WRITE_ERROR_EVERY_SECONDS:
+            _last_write_error = time.time()
+            log.exception("Could not write the API key usage log entry")
 
 
-app.add_middleware(ZaznamPouzitiApi)
+app.add_middleware(ApiUsageLog)
 
 
-DEMO_POVOLENO = frozenset({
+# What the demo mode may change: signing in and out, nothing more.
+#
+# The demo runs on a public address and anybody can sign in - the credentials
+# are in the sign-in window. Anything saved holds for all further visitors, so
+# even harmless things like the interface language are locked: whoever switches
+# to Czech switches it for the next visitor too.
+#
+# The buttons stay visible on purpose: the demo is to show what the app can do.
+# A message shows instead of the action.
+DEMO_ALLOWED = frozenset({
     "/login",
     "/logout",
 })
 
 
-def _demo_blokuje(request: Request) -> bool:
-    """Ma se tenhle pozadavek v ukazce zastavit?"""
+def _demo_blocks(request: Request) -> bool:
+    """Is this request to be stopped in the demo?"""
     if not config.demo_mode or request.method in ("GET", "HEAD", "OPTIONS"):
         return False
-    return request.url.path not in DEMO_POVOLENO
+    return request.url.path not in DEMO_ALLOWED
 
 
+# Old names (web/legacy.py, TODO.md item 0): old page parameters redirect before the session and the guards
+# (the redirect gives away nothing but an address); a form with an old field name saves nothing.
+legacy.wire_up(app)
+
+
+# Headers that tell the browser what it must not do with the response.
+# They cost one middleware and close whole groups of attacks in advance.
 @app.middleware("http")
-async def bezpecnostni_hlavicky(request: Request, call_next):
+async def security_headers(request: Request, call_next):
     response = await call_next(request)
-    # Podklad mapy z OpenStreetMap meni dve hlavicky (CSP a Referrer-Policy).
-    # Kdyz nastaveni nejde precist (databaze zrovna nebezi), plati prisna
-    # varianta - hlavicka nesmi shodit odpoved, ani /health nebo styly.
+    # The OpenStreetMap basemap changes two headers (CSP and Referrer-Policy).
+    # When the settings cannot be read (the database is down right now), the strict
+    # variant holds - a header must not bring the response down, nor /health or styles.
     try:
-        osm = _podklad_mapy() == "osm"
-    except Exception:  # noqa: BLE001 - jakakoliv chyba = prisne hlavicky
+        osm = _map_basemap() == "osm"
+    except Exception:  # noqa: BLE001 - any error = strict headers
         osm = False
-    # "Neuhaduj typ obsahu." Bez toho prohlizec u souboru, ktery vypada
-    # jako HTML, ignoruje deklarovany typ a spusti ho jako stranku -
-    # tyka se to hlavne obrazku, ktere vodime z Jellyfinu.
+    # "Do not guess the content type." Without it the browser ignores the declared
+    # type of a file that looks like HTML and runs it as a page -
+    # it concerns mainly the images passed on from Jellyfin.
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    # "Nevkladej me do ramecku na cizi strance." Bez toho jde stranku
-    # prekryt neviditelnou vrstvou a nechat cloveka klikat na neco
-    # jineho, nez si mysli (clickjacking).
+    # "Do not put me into a frame on a foreign page." Without it the page can be
+    # covered with an invisible layer and a person made to click on something
+    # other than they think (clickjacking).
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-    # "Pri odchodu na cizi web neposilej, odkud clovek prisel."
-    # Adresy Jellyscope obsahuji id polozek i uzivatelu.
+    # "When leaving for a foreign site, do not send where the person came from."
+    # Jellyscope's addresses hold ids of items and users.
     #
-    # Se zapnutym podkladem z OSM jde ven adresa serveru (bez cesty, takze
-    # bez id): OSM dlazdice bez Refereru odmita a atribut referrerpolicy
-    # u SVG <image> nemusi kazdy prohlizec znat. U volby to stoji.
+    # With the OSM basemap on, the server's address goes out (without the path, so
+    # without ids): OSM refuses tiles without a Referer and not every browser needs
+    # to know the referrerpolicy attribute of an SVG <image>. It says so at the choice.
     response.headers.setdefault(
         "Referrer-Policy", "strict-origin-when-cross-origin" if osm else "same-origin")
-    # Nic z tohohle aplikace nepotrebuje, tak at si to o to nemuze rict
-    # ani kus stranky, ktery by se sem nedopatrenim dostal.
+    # The app needs none of this, so not even a piece of a page that got here by
+    # mistake can ask for it.
     response.headers.setdefault(
         "Permissions-Policy",
         "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
-    # HSTS jen tam, kde uz aplikace bezi po HTTPS (SECURE_COOKIES) -
-    # prohlizec si ho pamatuje dlouho, takze zaplé na serveru bez
-    # certifikatu by lidi zamklo venku. Bez `includeSubDomains`
-    # a `preload` zamerne: to jsou rozhodnuti o cele domene, ne o nas.
+    # HSTS only where the app already runs over HTTPS (SECURE_COOKIES) -
+    # the browser remembers it for long, so switched on at a server without a
+    # certificate it would lock people out. Without `includeSubDomains`
+    # and `preload` on purpose: those are decisions about a whole domain, not about us.
     if config.secure_cookies:
         response.headers.setdefault("Strict-Transport-Security",
                                     "max-age=31536000")
-    # Odkud smi stranka cokoliv nacist a kam smi cokoliv poslat.
+    # Where a page may load anything from and where it may send anything to.
     #
-    # Jellyscope nema jediny cizi zdroj - zadne CDN, zadne pismo z internetu,
-    # obrazky vodime pres vlastni server. Muzeme si proto dovolit rict
-    # "jenom odsud" a nic tim nerozbit.
+    # Jellyscope has not a single foreign source - no CDN, no font from the internet,
+    # images are passed through its own server. So it can afford to say
+    # "only from here" and break nothing by it.
     #
-    # Skripty jen ze souboru aplikace (`script-src 'self'`), zadny vlozeny:
-    # kdyby se kdekoliv ve vypisu dat objevila chyba v escapovani, vlozeny
-    # <script> ani onerror= prohlizec nespusti. Proto aplikace sama zadny
-    # vlozeny kod nema - novy skript patri do static/js, hodnoty ze sablony
-    # do datoveho bloku `texty-js` nebo atributu data-…, obsluha prvku do
-    # data-… (static/js/zaklad.js). Hlida to tests/test_bez_vlozeneho_js.py;
-    # `'unsafe-inline'` sem nevracet ani „docasne".
+    # Scripts only from the app's files (`script-src 'self'`), none inline:
+    # were an escaping bug to show up anywhere in the output of data, the browser
+    # runs neither an inline <script> nor onerror=. Hence the app itself has no
+    # inline code - a new script belongs in static/js, values from a template
+    # in the data block `texts-js` or data-… attributes, handlers of elements in
+    # data-… (static/js/base.js). tests/test_no_inline_js.py guards it;
+    # never put `'unsafe-inline'` back here, not even "for a while".
     #
-    # Dal CSP bere utocnikovi, co by s kodem chtel delat: stahnout si dalsi
-    # odjinud (script-src), odeslat data na cizi server (connect-src),
-    # poslat formular jinam (form-action) nebo stranku zaramovat
-    # (frame-ancestors). Styly vlozene byt smi (style-src) - jsou jich
-    # stovky a bezpecnostni zisk by byl maly.
+    # CSP further takes from an attacker what they would want to do with code:
+    # download more from elsewhere (script-src), send data to a foreign server
+    # (connect-src), send a form elsewhere (form-action) or frame the page
+    # (frame-ancestors). Inline styles are allowed (style-src) - there are
+    # hundreds of them and the security gain would be small.
     #
-    # Jedina vyjimka: cekarna po aktualizaci. Sklada ji Python a kresli ji
-    # stara verze nad novymi soubory, takze nesmi sahnout na nic, co se
-    # s verzi meni (ani na static/js). Jeji skript nese jednorazovy nonce,
-    # ktery routa necha v request.state - jinak by se po aktualizaci
-    # z prohlizece stranka nikdy nepohnula.
+    # The only exception: the waiting room after an update. Python puts it together
+    # and the old version draws it over the new files, so it must not touch anything
+    # that changes with the version (not even static/js). Its script carries a
+    # one-time nonce the route leaves in request.state - otherwise the page would
+    # never move in the browser after an update.
     nonce = getattr(request.state, "csp_nonce", None)
     response.headers.setdefault("Content-Security-Policy", csp(osm, nonce))
     return response
 
 
 formatting.register(templates.env)
-# Druh polozky cesky ("Episode" -> "Díl seriálu"). Bydli ve stats, protoze
-# tam se rozhoduje, co je film, serial a co "ostatní" - sablona jen vypisuje.
-templates.env.filters["type_name"] = stats.nazev_typu
-# Sablony smi volat funkce z charts - kresleni patri do sablony, ne do routy.
+# The kind of an item in Czech ("Episode" -> "Episode"). It lives in stats, because
+# that is where it is decided what is a movie, a series and "other" - the template only writes it.
+templates.env.filters["type_name"] = stats.type_label
+# Templates may call the functions of charts - drawing belongs in the template, not in the route.
 templates.env.globals["charts"] = charts
 templates.env.globals["day_labels"] = DAY_LABELS
-# Makro karta() (dashboard.html): překlep v názvu karty = chyba, ne tichá díra.
-templates.env.globals["over_kartu"] = sekce.over_kartu
+# The macro show_card() (_macros.html): a typo in a card's name = an error, not a silent hole.
+templates.env.globals["check_card"] = cards.check_card
+
+
+@pass_context
+def _template_card_data(context: Any, key: str) -> Any:
+    """The data of a card that returns them under its key (the apps' cards) - see _card.html.
+
+    The card's template reads them as `d`. An old card has nothing under its key
+    (it puts its data straight into the context) and gets `None`, which it does not read.
+    """
+    return context.get(key)
+
+
+templates.env.globals["card_data"] = _template_card_data
 templates.env.globals["allowed_days"] = ALLOWED_DAYS
-# `lang` je v sablonach potreba na kazde strance, kde se zobrazuje jazyk -
-# proto globalne, aby ho nemusela predavat kazda routa zvlast.
+# `lang` is needed in templates on every page that shows a language -
+# hence global, so that not every route has to pass it separately.
 templates.env.globals["lang"] = languages
-# Preklad rozhrani - v sablonach se pouziva jako funkce _("text").
+# The interface translation - in templates it is used as the function _("text").
 i18n.register(templates.env)
 
 
 def _asset_version() -> str:
-    """Otisk statickych souboru pro adresu stylu a obrazku.
+    """The fingerprint of the static files for the address of styles and images.
 
-    K cemu to je: prohlizec si CSS ulozi a priste ho nestahuje znovu.
-    U reverzni proxy, ktera /static/ jeste cachuje (viz priklady ve
-    slozce deploy/), by zmena vzhledu byla tyden neviditelna - uzivatel
-    by videl starou stranku a marne hledal, proc uprava nefunguje.
+    What it is for: the browser saves the CSS and does not download it again next
+    time. With a reverse proxy that caches /static/ on top (see the examples in
+    the deploy/ folder), a change of the look would be invisible for a week - the
+    user would see the old page and wonder in vain why the change does not work.
 
-    Reseni je stara a spolehliva finta: k adrese se pripoji cislo, ktere
-    se pri zmene souboru zmeni. Jina adresa = jiny soubor = prohlizec ho
-    stahne znovu. Dokud se nic nemeni, cachuje se dal.
+    The fix is an old and reliable trick: a number that changes when a file
+    changes is attached to the address. Another address = another file = the
+    browser downloads it again. As long as nothing changes, it stays cached.
 
-    Bereme cas posledni zmeny nejnovejsiho souboru ve static/. Pocita se
-    jednou pri startu, takze po uprave stylu je potreba restart - stejne
-    jako u sablon.
+    The time of the last change of the newest file in static/ is taken. It is
+    computed once at start, so after a change of styles a restart is needed - the
+    same as with templates.
     """
     try:
         newest = max(path.stat().st_mtime
@@ -489,84 +518,83 @@ def _asset_version() -> str:
 
 
 templates.env.globals["asset_version"] = _asset_version()
-# Sezónní výzdoba: který svátek je (klíč, nebo "") a smí se účtu hýbat.
-# Globální funkce, ne kontext - přihlašovací stránky žádný _context nemají.
-templates.env.globals["udalost"] = udalosti.pro_sablonu
-templates.env.globals["udalost_pohyb"] = udalosti.pohyb
-templates.env.globals["udalost_rok"] = udalosti.rok_pro_sablonu
-# Ukazkovy rezim pozna i sablona: prihlasovaci stranka v nem rovnou rekne,
-# jakymi udaji se dovnitr. Je to globalni promenna, protoze prihlasovaci
-# stranka zadny vlastni kontext nema.
+# Seasonal decoration: which holiday it is (a key, or "") and whether it may move for the account.
+# A global function, not context - the sign-in pages have no _context.
+templates.env.globals["seasonal_event"] = seasonal.for_template
+templates.env.globals["seasonal_motion"] = seasonal.motion
+# The connected apps and music for Settings (the cards of *Arr, Seerr and the music rows in Interface).
+# The menu asks the same by itself (navigation.py).
+templates.env.globals["arr_connected"] = _arr_connected
+templates.env.globals["seerr_connected"] = _seerr_connected
+templates.env.globals["has_music"] = _has_music
+templates.env.globals["seasonal_year"] = seasonal.year_for_template
+# The template knows the demo mode too: the sign-in page in it says straight away
+# which credentials get one in. It is a global variable, because the sign-in
+# page has no context of its own.
 templates.env.globals["demo_mode"] = config.demo_mode
 
 
-# Kód chyby u HTTP chyb API, které nevznikly jako ChybaApi (neznámá adresa,
-# jiná metoda než GET) - program pozná, co je špatně, bez čtení věty.
-KODY_HTTP_CHYB = {401: "unauthorized", 403: "forbidden", 404: "not_found",
-                  405: "method_not_allowed"}
+# The error code of the API's HTTP errors that did not arise as an ApiError (an unknown
+# address, another method than GET) - a program knows what is wrong without reading a sentence.
+HTTP_ERROR_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found",
+                    405: "method_not_allowed"}
 
 
 @app.exception_handler(HTTPException)
 @app.exception_handler(StarletteHTTPException)
 async def handle_http_error(request: Request, exc: StarletteHTTPException):
-    """Presmerovani misto chybove hlasky u nepřihlaseneho uzivatele."""
+    """A redirect instead of an error message for a user who is not signed in."""
     if exc.status_code == 307 and "Location" in (exc.headers or {}):
         return RedirectResponse(exc.headers["Location"], status_code=303)
-    # API se ptaji programy (Grafana, Homepage), ne lide: chybova stranka
-    # v HTML by jim nerekla nic. Tam je kazda chyba JSON s duvodem.
-    api_pozadavek = request.url.path.startswith("/api/")
-    if exc.status_code == 403 and not api_pozadavek:
+    # The API is asked by programs (Grafana, Homepage), not people: an error page
+    # in HTML would tell them nothing. There every error is JSON with a reason.
+    api_request = request.url.path.startswith("/api/")
+    if exc.status_code == 403 and not api_request:
         return templates.TemplateResponse(
             request, "error.html",
             {"code": 403, "message": exc.detail}, status_code=403,
         )
-    if exc.status_code == 404 and not api_pozadavek:
+    if exc.status_code == 404 and not api_request:
         return templates.TemplateResponse(
             request, "error.html",
-            {"code": 404, "message": exc.detail or "Stranka nenalezena."},
+            # Starlette's own "Not Found" (an address without a route) gets the app's sentence.
+            {"code": 404, "message": exc.detail if exc.detail and exc.detail != "Not Found" else "Page not found."},
             status_code=404,
         )
-    # Hlavičky výjimky patří do odpovědi. U 401 z API je v nich
-    # `WWW-Authenticate: Bearer`, tedy jediná věta, která volajícímu
-    # řekne, čím se má prokázat - bez ní je to jen "nesmíš".
-    telo: dict[str, Any] = {"detail": exc.detail}
-    if api_pozadavek:
-        telo["error"] = KODY_HTTP_CHYB.get(exc.status_code, "http_error")
-    return JSONResponse(telo, status_code=exc.status_code,
+    # The exception's headers belong in the response. With a 401 from the API they
+    # hold `WWW-Authenticate: Bearer`, the only sentence that tells the caller
+    # what to prove itself with - without it it is just "you may not".
+    body: dict[str, Any] = {"detail": exc.detail}
+    if api_request:
+        body["error"] = HTTP_ERROR_CODES.get(exc.status_code, "http_error")
+    return JSONResponse(body, status_code=exc.status_code,
                         headers=exc.headers or None)
 
 
-@app.exception_handler(api_dotaz.ChybaApi)
-async def handle_api_error(request: Request, exc: api_dotaz.ChybaApi):
-    """Chyba API: vždy JSON se stejným tělem (`detail` + `error`).
+@app.exception_handler(api_query.ApiError)
+async def handle_api_error(request: Request, exc: api_query.ApiError):
+    """An API error: always JSON with the same body (`detail` + `error`).
 
-    Program podle `error` pozná, co je špatně, bez čtení věty. U 401 jde
-    s odpovědí i `WWW-Authenticate: Bearer`.
+    By `error` a program knows what is wrong without reading a sentence. With a 401
+    `WWW-Authenticate: Bearer` goes with the response too.
     """
-    return JSONResponse(exc.telo(), status_code=exc.status, headers=exc.hlavicky)
+    return JSONResponse(exc.body(), status_code=exc.status, headers=exc.headers)
 
 
-# Routy bydlí v podmodulech podle oblastí; podmoduly si berou ze `zaklad`,
-# ne z tohohle souboru, takže nic nevzniká dokola. Na pořadí nezáleží - žádné
-# dvě routy nemají stejnou adresu se stejnou metodou (tests/test_web_balik.py).
-app.include_router(prihlaseni.router)
-app.include_router(ucet.router)
-app.include_router(prehled.router)
-app.include_router(knihovna.router)
-app.include_router(uzivatele.router)
-app.include_router(historie.router)
-app.include_router(jazyky.router)
-app.include_router(sit.router)
-app.include_router(stav.router)
-app.include_router(nastaveni.router)
+# The routes live in submodules by areas; the submodules take from `base`,
+# not from this file, so nothing goes in a circle. The order does not matter - no
+# two routes have the same address with the same method (tests/test_web_package.py).
+for _submodule in (login, my_account, legacy, video, dashboards, library, music, books, album, disks, users, history, network, arr,
+                   seerr, status, settings):
+    app.include_router(_submodule.router)
 
-# Nástroje jen pro vývoj (jellyscope/vyvoj.py - datum pro sezónní výzdobu).
-# Do produ a dema se nekopírují (deploy/sync-do-produ.py, JEN_DEV), takže
-# tam soubor chybí a tady se jen přeskočí. Demo spuštěné z dev složky
-# (demo.py) ho sice má, ale přepínání data tam nepatří. find_spec, ne
-# `except ImportError`: chyba UVNITŘ vyvoj.py se nemá tiše spolknout.
-if not config.demo_mode and importlib.util.find_spec("..vyvoj", __package__) is not None:
-    from .. import vyvoj  # noqa: E402
-    vyvoj.zapoj(app, templates)
+# Tools for development only (jellyscope/devtools.py - the date for the seasonal decoration).
+# They are not copied to prod and demo (deploy/sync-do-produ.py, DEV_ONLY), so
+# the file is missing there and is just skipped here. A demo started from the dev folder
+# (demo.py) does have it, but switching the date does not belong there. find_spec, not
+# `except ImportError`: an error INSIDE devtools.py is not to be swallowed silently.
+if not config.demo_mode and importlib.util.find_spec("..devtools", __package__) is not None:
+    from .. import devtools  # noqa: E402
+    devtools.wire_up(app, templates)
 else:
-    vyvoj = None
+    devtools = None

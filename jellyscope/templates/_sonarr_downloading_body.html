@@ -1,0 +1,100 @@
+{# The body of the Sonarr card "Downloading": what Sonarr downloads right now and how far it is.
+
+   Included by the card (_card_sonarr_downloading.html) and returned by itself as the slice
+   `/partials/arr/sonarr/downloading` - the browser fetches it by itself in the rhythm
+   the server tells it (5 s while downloading, a minute otherwise), so
+   nothing else moves but this piece. Expects `d` (cards_sonarr.downloading).
+
+   One block per series (shaped like "Now playing"): poster, name, state,
+   progress bar. A series with several downloads - an average over episodes says nothing - has no summary
+   progress. It has the count on the poster, the poster is a button and the block
+   has a link: both open a window with the progress of each download apart. The window
+   has a fixed id (the app + the series's id), by which the handler opens it again after
+   the content is replaced (static/js/app.js); when it is not in the new answer, everything
+   is done or cancelled and the window disappears.
+
+   Messages from the app (paths on the disk, clients' addresses) are not here at all -
+   not even for the admin; the admin has them in the card "Queue items with an error or warning". #}
+{% from "_macros.html" import poster, link with context %}
+
+{% macro progress_bar(x) %}
+<div class="session-progress">
+    {% if x.percent is not none %}
+    <div class="session-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ x.percent }}"
+         aria-label="{{ _("Downloaded") }}"><i style="width: {{ x.percent }}%"></i></div>
+    {% endif %}
+    <span class="session-time">
+        {#- The figures are put together by cards_sonarr (downloaded of the whole, left, client); they are only joined here. -#}
+        {%- if x.percent is not none %}{{ x.percent }} %{% endif %}
+        {%- for info in x.details %} <span class="muted">{% if not loop.first or x.percent is not none %}&middot; {% endif %}{{ info }}</span>{% endfor -%}
+    </span>
+</div>
+{% endmacro %}
+
+{% macro status_badge(x) %}<span class="badge {{ x.state_class }}"><span class="dot"></span>{{ x.state_text }}</span>{% endmacro %}
+
+{% if not d.available %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("The app is not responding.") }}
+        {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
+    </span>
+</div>
+{% elif d.blocks %}
+<div class="sessions">
+    {% for b in d.blocks %}
+    <div class="session">
+        {% if b.window %}
+        <button class="poster-button" type="button" data-modal="{{ b.window }}"
+                aria-label="{{ _("Downloads of this title") }}: {{ b.title }}" title="{{ _("Downloads of this title") }}">
+            {{- poster(b.poster, "session-poster", badge=b.count_text) -}}
+        </button>
+        {% else %}
+        {{ poster(b.poster, "session-poster", detail=b.detail_url) }}
+        {% endif %}
+        <div class="session-body">
+            <div class="session-title">{% call link(b.detail_url) %}{{ b.title }}{% endcall %}</div>
+            {% if b.count_text or b.description or b.episode_count_text %}
+            <div class="session-facts"><span class="muted">{{ b.count_text or b.description or b.episode_count_text }}{% if b.description and b.episode_count_text %} &middot; {{ b.episode_count_text }}{% endif %}</span></div>
+            {% endif %}
+            <div class="session-tags">{{ status_badge(b) }}</div>
+            {% if b.window %}
+            <div class="session-progress">
+                <button class="session-link" type="button" data-modal="{{ b.window }}">{{ _("show progress") }} &rarr;</button>
+            </div>
+            {% else %}
+            {{ progress_bar(b) }}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% if d.more_count %}
+<p class="card-note">{{ d.more_count }}</p>
+{% endif %}
+{% if d.incomplete %}
+<p class="card-note">{{ _("The queue is longer than fits here. All of it is in the app.") }}</p>
+{% endif %}
+{% for b in d.blocks if b.window %}
+<dialog class="modal" id="{{ b.window }}">
+    <form method="dialog" class="modal-head">
+        <h2>{{ b.title }} &middot; {{ _("downloading") }}</h2>
+        <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <div class="modal-body">
+        {% for s in b.downloads %}
+        <div class="download-row">
+            <div class="download-head">
+                <strong>{{ s.description or b.title }}</strong>{% if s.description and s.episode_count_text %} <span class="muted">&middot; {{ s.episode_count_text }}</span>{% endif %}
+                {{ status_badge(s) }}
+            </div>
+            {{ progress_bar(s) }}
+        </div>
+        {% endfor %}
+    </div>
+</dialog>
+{% endfor %}
+{% else %}
+<p class="card-note">{{ _("Nothing is downloading right now.") }}</p>
+{% endif %}

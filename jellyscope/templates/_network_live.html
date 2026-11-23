@@ -1,0 +1,42 @@
+{# The live flow - it refreshes itself, see /partials/network-live.
+
+   A template of its own for the same reason as "now playing": it is drawn
+   from two places (when the page loads and at every refresh) and two copies
+   would drift apart in time. #}
+<div class="card live-card">
+    <div class="card-head">
+        <h2>{{ _("Flowing right now") }}</h2>
+        {# The window follows the filter at the top, not a fixed hour - and that has to
+           show, otherwise the card looks as if it ignored the filter. #}
+        <p class="card-note">
+            {% if live %}{{ _("one point") }} {{ live[0].step_minutes | step_label }}{% endif %}
+        </p>
+    </div>
+
+    <div class="live-number">
+        <div>
+            <div class="hero">{{ now.mbit }}<small> Mbit/s</small></div>
+            <p class="card-note" style="margin-top:2px">
+                {% if now.stream_count %}
+                    {{ now.stream_count }} {{ _("streams flowing") }}
+                    {%- if now.recounted %} &middot; {{ now.recounted }} {{ _("of them transcoding") }}{% endif %}
+                {% else %}
+                    {{ _("nobody is watching right now") }}
+                {% endif %}
+                {%- if now.paused_count %} &middot; {{ now.paused_count }} {{ _("paused") }}{% endif %}
+                {%- if now.without_traffic %} &middot; {{ now.without_traffic }} {{ _("with no known rate") }}{% endif %}
+            </p>
+        </div>
+        <div class="live-chart">
+            {# One series, so the app's colour - no category is told apart
+               here. unit='' on purpose: the series' name carries the unit. #}
+            {# `steps=True`: the flow does not change smoothly. Until somebody starts
+               or stops, it stays the same - and the moment a stream
+               starts up, it jumps. A smoothed curve between the points drew
+               a start-up that never happened. #}
+            {{ charts.area_chart_multi(live, 'label',
+                   [{'key': 'mbit', 'label': _('Mbit/s'), 'color': 'var(--data-color)'}],
+                   unit='', steps=True, selectable=True) | safe }}
+        </div>
+    </div>
+</div>

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter with context %}
+{% block title %}{{ _("Languages") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Languages") }}</h1>
+        <p class="subtitle">
+            {{ _("Which language people really watch in, and what the library offers.") }}
+        </p>
+    </div>
+    {{ period_filter(period, '/video/languages') }}
+</div>
+
+{# What did not get into the numbers, the reader has to know. A statistic that
+   silently leaves something out is worse than none.
+
+   The number talks about imported records WITHOUT a language - an import that carries
+   the track's language enters the statistics normally (see langstats.py). #}
+{% if imported_plays %}
+<div class="flash">
+    <span class="dot"></span>
+    <span>
+        {{ _n("{n} playbacks from imports are not counted here.", imported_plays) }}
+        {{ _('Imports often carry no audio track language, so they would only dilute the figures below into "Unknown". What counts is therefore what Jellyscope collected itself, plus those imports that did carry a language. For subtitles no import counts at all, because an import never contains that detail.') }}
+    </span>
+</div>
+{% endif %}
+
+{# Honesty above all: when we have no data, we say so right at the top. #}
+{% if coverage.plays_percent < 60 and coverage.plays_total > 0 %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("Playbacks with a known language") }}:
+        {{ coverage.plays_with_language | number }} / {{ coverage.plays_total | number }}
+        ({{ coverage.plays_percent | percent }}).
+        {{ _("When coverage is low, the percentages above describe only the part we know.") }}
+        {{ _("A playback's language only counts once the viewer stays with it for at least a minute. The first four minutes are skipped entirely, because that is logos and intros. A track switched away right at the start therefore never reaches the statistics.") }}
+    </span>
+</div>
+{% endif %}
+
+{% if not watched.rows %}
+<div class="card">
+    <h2>{{ _("No data yet") }}</h2>
+    {# There used to be only "let it collect for a few days" here - even when Jellyscope
+       had recorded several plays and they just did not pass the threshold. A person then
+       waits days for something that will not happen. Better to say at once what is missing. #}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Language statistics count playbacks longer than") }}
+        {{ min_play_seconds }} {{ _("seconds#alt") }} –
+        {{ _("shorter stretches say nothing about habits. Time counts only while it actually plays, not while paused.") }}
+    </p>
+    {% if short_plays %}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("Playbacks recorded in this period") }}: {{ short_plays | number }},
+        {{ _("but all of them are shorter. Try watching something longer, or pick a longer period.") }}
+    </p>
+    {% else %}
+    <p class="card-note" style="margin-top:10px">
+        {{ _("The language is recorded only from the moment Jellyscope runs. Let it collect for a few days and come back.") }}
+    </p>
+    {% endif %}
+</div>
+{% else %}
+
+{# ------------------------------------------------------------------ #}
+{# The main number: the share of Czech                                #}
+{# ------------------------------------------------------------------ #}
+<div class="card">
+    <div class="card-head">
+        <div>
+            <p class="tile-label">
+                {{ _("Share of") }} {{ watched.preferred_name }}
+                {{ _("in watched time") }}
+            </p>
+            <div class="hero">{{ watched.preferred_percent | percent(1) }}</div>
+            <div class="delta flat">
+                {% if watched.second_name %}
+                    {{ watched.second_name }} {{ watched.second_percent | percent(1) }}
+                    &middot;
+                {% endif %}
+                {{ _("total") }} {{ watched.total_hours | hours }}
+                {# For a custom period (and the whole history) `day_labels` has nothing
+                   to say - the range is written. #}
+                {% if period.own %}
+                    {{ _("over {period}").format(period=period.since_label ~ " – " ~ period.until_label) }}
+                {% else %}
+                    {{ _("over {period}").format(period=_(day_labels[days])) }}
+                {% endif %}
+            </div>
+        </div>
+
+        {# The choice of the language the whole page turns around. Only languages
+           that really are in the library are offered - the one looked for is among them
+           by the nature of things, because a person builds the library for it.
+           The choice is saved, so it stays after a refresh. #}
+        {% if language_options and account.is_admin %}
+        <form method="post" action="/video/languages/preferred" class="lang-picker">
+            {# Only a number of days: a custom period is remembered by the session and
+               writing the object out would break the form (422). #}
+            {% if days is number %}
+            <input type="hidden" name="days" value="{{ days }}">
+            {% endif %}
+            <label class="tile-label" for="preferred">{{ _("Preferred language") }}</label>
+            <select id="preferred" name="code" data-submit-on-change>
+                {% for option in language_options %}
+                <option value="{{ option.code }}"
+                        {% if option.code == preferred %}selected{% endif %}>
+                    {{ option.name }} ({{ option.title_count | number }})
+                </option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit">{{ _("Save") }}</button></noscript>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# The share of languages                                             #}
+{# ------------------------------------------------------------------ #}
+{% include "_card_language_share.html" %}
+
+{# ------------------------------------------------------------------ #}
+{# Who how                                                            #}
+{# ------------------------------------------------------------------ #}
+{% include "_card_viewer_languages.html" %}
+
+{# ------------------------------------------------------------------ #}
+{# Dub versus original + subtitles                                    #}
+{# ------------------------------------------------------------------ #}
+<div class="grid-2">
+    {% include "_card_dub.html" %}
+
+    {% include "_card_subtitles.html" %}
+</div>
+
+{% endif %}{# the end of the block that needs history #}
+
+{# ------------------------------------------------------------------ #}
+{# What is in the library.                                            #}
+{#                                                                    #}
+{# This part does NOT follow the period switch - it describes the     #}
+{# library here and now. "How many Czech films do I have" is not      #}
+{# a question for "the last 30 days". The heading says so aloud.      #}
+{# ------------------------------------------------------------------ #}
+<h2 style="margin:28px 0 4px">{{ _("Library composition") }}</h2>
+<p class="subtitle" style="margin-bottom:16px">
+    {{ _("Current library contents. The selected period does not apply.") }}
+</p>
+
+<div class="grid-2">
+    {% include "_card_library_languages.html" %}
+
+    {% include "_card_stream_combinations.html" %}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Missing Czech                                                      #}
+{# ------------------------------------------------------------------ #}
+{% if missing_preferred.rows %}
+{% include "_card_missing_stream.html" %}
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
+{# Data coverage                                                      #}
+{# ------------------------------------------------------------------ #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Where the numbers come from") }}</h2>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <tbody>
+            <tr>
+                <td>{{ _("Titles with known track languages") }}</td>
+                <td class="num strong">{{ coverage.items_with_languages | number }}
+                    / {{ coverage.items_total | number }}</td>
+                <td class="num">{{ coverage.items_percent | percent }}</td>
+            </tr>
+            <tr>
+                <td>{{ _("Playbacks with a known language") }}</td>
+                <td class="num strong">{{ coverage.plays_with_language | number }}
+                    / {{ coverage.plays_total | number }}</td>
+                <td class="num">{{ coverage.plays_percent | percent }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

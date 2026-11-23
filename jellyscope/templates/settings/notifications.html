@@ -1,0 +1,353 @@
+{# A Settings section: which way to send notifications and what to speak up about
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# Notifications.
+                                                                       #}
+{# Jellyscope is passive: you open it when something interests you. The collector
+   asks Jellyfin every few seconds though, and when its token expires, the
+   app runs on and the history silently stops. You learn about it by a hole
+   in the chart that nothing fills any more.
+
+   First the channels (which way), then the events (about what). This order is the one
+   that makes sense to read: switching on a notification about something that has no way
+   to arrive is only a trap. #}
+
+<div class="flash info">
+    <span class="dot"></span>
+    <span>
+        {{ _("These notifications only report on what happens inside Jellyscope. If Jellyscope is not running, neither are the notifications. To check that Jellyscope itself is up, use something like Uptime Kuma.") }}
+    </span>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Which way messages go                                              #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="channels">
+    <div class="card-head">
+        <h2>{{ _("How to send") }}</h2>
+        <p class="card-note">{{ _("one channel is enough; with several, the message goes through all of them") }}</p>
+    </div>
+
+    {% if notification_state.last_sent %}
+    <p class="card-note" style="margin-bottom:14px">
+        {{ _("Last sent") }}: {{ notification_state.last_sent | datetime }}
+        {% if notification_state.last_error %}
+            &middot; <span class="badge warning"><span class="dot"></span>{{ notification_state.last_error }}</span>
+        {% endif %}
+    </p>
+    {% endif %}
+
+    <form method="post" action="/settings/notifications">
+
+        {# --- SMTP --- #}
+        <h3 class="group">{{ _("E-mail (SMTP)") }}</h3>
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="smtp_enabled" value="1"
+                   {{ 'checked' if settings.notify_smtp_enabled == '1' }}>
+            <span>{{ _("send by e-mail") }}</span>
+        </label>
+
+        <div class="period-fields">
+            <div class="field">
+                <label for="smtp-host">{{ _("Host") }}</label>
+                <input type="text" id="smtp-host" name="smtp_host"
+                       value="{{ settings.notify_smtp_host or '' }}"
+                       placeholder="smtp.seznam.cz" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="smtp-port">{{ _("Port") }}</label>
+                <input type="number" id="smtp-port" name="smtp_port" min="1" max="65535"
+                       value="{{ settings.notify_smtp_port or '587' }}">
+                {# 465 is encrypted from the first byte, 587 is upgraded through
+                   STARTTLS. Mixing them up means the connection just hangs. #}
+                <p class="hint">{{ _("587 for STARTTLS, 465 for SMTPS") }}</p>
+            </div>
+        </div>
+
+        <div class="period-fields">
+            <div class="field">
+                <label for="smtp-user">{{ _("User") }}</label>
+                <input type="text" id="smtp-user" name="smtp_user"
+                       value="{{ settings.notify_smtp_user or '' }}"
+                       autocomplete="off">
+                <p class="hint">{{ _("Empty = the server wants no login.") }}</p>
+            </div>
+            <div class="field">
+                <label for="smtp-password">{{ _("Password") }}</label>
+                <input type="password" id="smtp-password" name="smtp_password"
+                       value="" autocomplete="new-password"
+                       placeholder="{{ _('stored (leave empty to keep it)') if has_smtp_password else '' }}">
+                <p class="hint">{{ _("A stored password is never written into the page. An empty field leaves it alone.") }}</p>
+            </div>
+        </div>
+
+        <div class="period-fields">
+            <div class="field">
+                <label for="smtp-sender">{{ _("From#sender") }}</label>
+                <input type="text" id="smtp-sender" name="smtp_from"
+                       value="{{ settings.notify_smtp_sender or '' }}"
+                       placeholder="jellyscope@doma.cz" autocomplete="off">
+                <p class="hint">{{ _("Empty = the user is used.") }}</p>
+            </div>
+            <div class="field">
+                <label for="smtp-to">{{ _("To#recipient") }}</label>
+                <input type="text" id="smtp-to" name="smtp_to"
+                       value="{{ settings.notify_smtp_recipient or '' }}"
+                       placeholder="ja@doma.cz" autocomplete="off">
+            </div>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:20px">
+            <input type="checkbox" name="smtp_tls" value="1"
+                   {{ 'checked' if settings.notify_smtp_tls != '0' }}>
+            <span>{{ _("upgrade the connection with STARTTLS") }}</span>
+        </label>
+
+        {# --- Discord --- #}
+        <h3 class="group">{{ _("Discord") }}</h3>
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="discord_enabled" value="1"
+                   {{ 'checked' if settings.notify_discord_enabled == '1' }}>
+            <span>{{ _("send to Discord") }}</span>
+        </label>
+
+        <div class="field" style="max-width:100%">
+            <label for="discord-webhook">{{ _("Webhook address") }}</label>
+            <input type="password" id="discord-webhook" name="discord_webhook"
+                   value="" autocomplete="off"
+                   placeholder="{{ _('stored (leave empty to keep it)') if has_discord else 'https://discord.com/api/webhooks/…' }}">
+            <p class="hint">{{ _("On the channel: Edit Channel -> Integrations -> Webhooks. Anyone with that address can post to the channel as you, which is why it is not written back here.") }}</p>
+        </div>
+
+        {# --- Telegram --- #}
+        <h3 class="group">{{ _("Telegram") }}</h3>
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="telegram_enabled" value="1"
+                   {{ 'checked' if settings.notify_telegram_enabled == '1' }}>
+            <span>{{ _("send to Telegram") }}</span>
+        </label>
+
+        <div class="period-fields">
+            <div class="field">
+                <label for="telegram-token">{{ _("Bot token") }}</label>
+                <input type="password" id="telegram-token" name="telegram_token"
+                       value="" autocomplete="off"
+                       placeholder="{{ _('stored (leave empty to keep it)') if has_telegram else '123456:ABC…' }}">
+                <p class="hint">{{ _("@BotFather creates the bot.") }}</p>
+            </div>
+            <div class="field">
+                <label for="telegram-chat">{{ _("Chat ID") }}</label>
+                <input type="text" id="telegram-chat" name="telegram_chat"
+                       value="{{ settings.notify_telegram_chat or '' }}"
+                       autocomplete="off">
+                <p class="hint">{{ _("Message the bot, then find the ID with @userinfobot.") }}</p>
+            </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+    </form>
+
+    {# The test message. Without it the settings are checked only when something
+       breaks - and that is exactly the moment they have to work. #}
+    <div class="btn-row" style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px">
+        {% for channel in notification_state.channels %}
+        <form method="post" action="/settings/notifications/test" style="display:inline">
+            <input type="hidden" name="channel" value="{{ channel.key }}">
+            <button data-keep-scroll class="btn" type="submit" {{ 'disabled' if not channel.configured }}>
+                {{ _("Try") }} {{ channel_names[channel.key] }}
+            </button>
+        </form>
+        {% endfor %}
+    </div>
+    <p class="card-note" style="margin-top:8px">
+        {{ _("The test message goes out at once, through that one channel only.") }}
+    </p>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# What to notify of                                                  #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="events">
+    <div class="card-head">
+        <h2>{{ _("What to speak up about") }}</h2>
+        <p class="card-note">{{ _("a message goes out on change only, not over and over") }}</p>
+    </div>
+
+    <form method="post" action="/settings/notifications/events">
+        <div class="field" style="max-width:100%">
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="event_collector" value="1"
+                       {{ 'checked' if settings.notify_event_collector == '1' }}>
+                <span>
+                    <span class="title">{{ _("The collector runs but collects nothing") }}</span>
+                    <span class="desc">
+                        {{ _("A token expires, the Jellyfin address changes or authentication breaks. The application keeps running and history quietly stops. Playback can be imported afterwards, but an import carries neither the track language nor the bitrate, so the hole stays.") }}
+                    </span>
+                </span>
+            </label>
+
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="event_free_space" value="1"
+                       {{ 'checked' if settings.notify_event_space == '1' }}>
+                <span>
+                    <span class="title">{{ _("The disk is filling up") }}</span>
+                    <span class="desc">
+                        {{ _("Watches the disk that runs out of space first. For a disk whose space Jellyfin reports, the pace comes from the drop in free space, so downloads and backups count too. Storage Jellyfin cannot tell apart (cloud, a shared disk) is set up in Library → Disks: with a manual capacity or a virtual disk. On Jellyfin without the per-disk report, the capacity is entered in Data collection.") }}
+                    </span>
+                </span>
+            </label>
+
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="event_summary" value="1"
+                       {{ 'checked' if settings.notify_event_summary == '1' }}>
+                <span>
+                    <span class="title">{{ _("Weekly summary") }}</span>
+                    <span class="desc">
+                        {{ _("Not a fault: how much was watched over the week, what was watched most and who was busiest.") }}
+                    </span>
+                </span>
+            </label>
+        </div>
+
+        <div class="period-fields" style="margin-top:6px">
+            <div class="field">
+                <label for="quiet-minutes">{{ _("Collector silence (minutes)") }}</label>
+                <input type="number" id="quiet-minutes" name="silence_minutes" min="5" max="1440"
+                       value="{{ notification_state.quiet_minutes }}">
+                <p class="hint">{{ _("The collector asks every few seconds, so half an hour is a safe margin. A short network outage would otherwise send a message every time.") }}</p>
+            </div>
+            <div class="field">
+                <label for="space-days">{{ _("Speak up when space runs out within (days)") }}</label>
+                <input type="number" id="space-days" name="free_space_days" min="1" max="365"
+                       value="{{ notification_state.space_days }}">
+            </div>
+        </div>
+
+        <div class="period-fields">
+            <div class="field">
+                <label for="summary-day">{{ _("Send the summary on") }}</label>
+                <select id="summary-day" name="summary_day">
+                    {% for day_number, day_name in weekdays %}
+                        <option value="{{ day_number }}"
+                                {{ 'selected' if day_number == notification_state.summary_day }}>{{ day_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="summary-hour">{{ _("At what time") }}</label>
+                {# Two numbers, not <input type="time">. That one is drawn by the browser
+                   and looks different in each - the same thinking as with the task schedule
+                   and the date in the period filter. #}
+                <div class="time-picker">
+                    <input type="number" id="summary-hour" name="summary_hour"
+                           value="{{ notification_state.summary_time.split(':')[0] }}"
+                           min="0" max="23" aria-label="{{ _('Hour') }}">
+                    <span aria-hidden="true">:</span>
+                    <input type="number" name="summary_minute"
+                           value="{{ notification_state.summary_time.split(':')[1] }}"
+                           min="0" max="59" aria-label="{{ _('Minute') }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+    </form>
+
+    <p class="card-note" style="margin-top:14px">
+        {{ _('The check is run by the "Notifications" task. How often is set in Tasks and backups.') }}
+    </p>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Message texts                                                      #}
+{#                                                                    #}
+{# The default wording is in the field as a hint (placeholder): one   #}
+{# sees what would come, and an empty field keeps it. Write your own  #}
+{# to change it. An outage and its end are two messages: one with     #}
+{# the outage's name under "zase to běží" read as another alarm.      #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="texts">
+    <div class="card-head">
+        <h2>{{ _("Message wording") }}</h2>
+        <p class="card-note">{{ _("an empty field = the default wording, shown in grey") }}</p>
+    </div>
+
+    <form method="post" action="/settings/notifications/texts">
+        {% for msg in notification_state.messages %}
+        <div class="field" style="max-width:100%; margin-bottom:14px">
+            <label for="text-{{ msg.key }}-subject"><strong>{{ _(msg.name) }}</strong></label>
+            <input type="text" id="text-{{ msg.key }}-subject"
+                   name="text_{{ msg.key }}_subject" maxlength="500"
+                   value="{{ msg.subject }}" placeholder="{{ msg.subject_default }}"
+                   aria-label="{{ _('Subject') }}">
+            {% if msg.has_text %}
+            <textarea id="text-{{ msg.key }}-text" name="text_{{ msg.key }}_text"
+                      rows="2" maxlength="500" style="margin-top:6px; min-height:58px"
+                      placeholder="{{ msg.text_default }}"
+                      aria-label="{{ _('Text') }}">{{ msg.text }}</textarea>
+            {% endif %}
+            {% if msg.variables %}
+            {# Variables go into the subject and the text. Every message knows different ones
+               ({threshold} is the silence in minutes for the collector, the limit
+               in days for the space), hence each has its own window with what they mean. #}
+            <p class="hint">
+                {{ _("Variables") }}:
+                {% for p in msg.variables %}<code>{{ "{" ~ p.name ~ "}" }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+                · <button class="link-button" type="button" data-modal="modal-variables-{{ msg.key }}">{{ _("what they mean") }}</button>
+            </p>
+            {% elif not msg.has_text %}
+            <p class="hint">{{ _("The summary has a subject only; its body is built from the week's numbers.") }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save wording") }}</button>
+        </div>
+    </form>
+
+    {# The variables of each message: English names, so an own text applies
+       in every interface language. An unknown curly bracket stays in the text
+       as it is. The content in .modal-body - it scrolls on a low display. #}
+    {% for msg in notification_state.messages if msg.variables %}
+    <dialog class="modal modal-wide" id="modal-variables-{{ msg.key }}">
+        <form method="dialog" class="modal-head">
+            <h2>{{ _("Variables: {message}").format(message=_(msg.name)) }}</h2>
+            <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+        </form>
+        <div class="modal-body">
+            <p class="card-note" style="margin:0 0 12px">
+                {{ _("Write them into the subject or text including the curly braces. Anything the message does not know stays in the text as it is.") }}
+            </p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr><th>{{ _("Variable") }}</th><th>{{ _("What it fills in") }}</th><th>{{ _("Example") }}</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for p in msg.variables %}
+                    <tr>
+                        <td><code>{{ "{" ~ p.name ~ "}" }}</code></td>
+                        <td>{{ _(p.description) }}</td>
+                        <td>{{ _(p.example) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </dialog>
+    {% endfor %}
+</div>

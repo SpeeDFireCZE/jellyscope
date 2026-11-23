@@ -1,11 +1,11 @@
-r"""Kontrola nastavení pro nasazení na server.
+r"""A check of the settings for deploying to a server.
 
-Netestuje běžící aplikaci, ale **konfiguraci** — a to má smysl: chyba
-v ní se projeví až na produkci, kde se hledá nejhůř. Typicky tak, že se
-nikdo nepřihlásí a není vidět proč.
+It does not test the running app but the **configuration** — and that makes sense: a mistake
+in it shows only in production, where it is hardest to look for. Typically in that
+nobody signs in and it is not seen why.
 
-Spuštění:
-    .\.venv\Scripts\python.exe tests\test_deploy.py
+Run:
+    .venv/bin/python tests/test_deploy.py
 """
 
 from __future__ import annotations
@@ -26,26 +26,26 @@ failures = 0
 
 def check(ok: bool, message: str) -> None:
     global failures
-    print(f"{'OK     ' if ok else 'CHYBA  '}{message}")
+    print(f"{'OK     ' if ok else 'FAIL   '}{message}")
     if not ok:
         failures += 1
 
 
-print("--- výchozí stav (bez proměnných) ---")
-# Výchozí hodnoty musí být ty bezpečné pro místní běh. Kdyby se zapnuly
-# samy, aplikace by po instalaci nešla otevřít.
+print("--- the default state (without variables) ---")
+# The defaults must be the safe ones for running locally. Were they switched on
+# by themselves, the app could not be opened after installation.
 for key in ("SECURE_COOKIES", "FORWARDED_ALLOW_IPS"):
     os.environ.pop(key, None)
 os.environ.setdefault("SECRET_KEY", "testovaci-klic")
 
 config = cfg.load_config(reload=True)
-check(config.secure_cookies is False, "SECURE_COOKIES výchozí = vypnuto")
+check(config.secure_cookies is False, "SECURE_COOKIES default = off")
 check(config.forwarded_allow_ips == "",
-      "FORWARDED_ALLOW_IPS výchozí = prázdné (nevěřit nikomu)")
+      "FORWARDED_ALLOW_IPS default = empty (trust nobody)")
 
-print("--- různé tvary pravdivostní hodnoty ---")
-# Lidé píšou "1", "true", "yes"... Hádat se s uživatelem o tvar hodnoty
-# nemá smysl, ale nesmysl se musí chovat jako vypnuto.
+print("--- different shapes of a truth value ---")
+# People write "1", "true", "yes"... Arguing with the user about the value's shape
+# makes no sense, but nonsense must behave as off.
 for value, want in [("1", True), ("true", True), ("TRUE", True), ("yes", True),
                     ("on", True), ("0", False), ("false", False), ("", False),
                     ("nesmysl", False)]:
@@ -55,719 +55,735 @@ for value, want in [("1", True), ("true", True), ("TRUE", True), ("yes", True),
 
 os.environ["FORWARDED_ALLOW_IPS"] = " 127.0.0.1 "
 check(cfg.load_config(reload=True).forwarded_allow_ips == "127.0.0.1",
-      "mezery kolem adresy proxy se ořežou")
+      "spaces around the proxy's address are trimmed")
 
-print("--- start bez nastaveného Jellyfinu ---")
-# Adresa Jellyfinu a API klíč se nastavují v aplikaci, ne v .env. Spouštěč
-# proto NESMÍ odmítnout start, když nejsou vyplněné - uživatel se potřebuje
-# dostat do rozhraní, aby je mohl vyplnit. Přesně tohle tu jednou bylo
-# a aplikace by na čerstvém serveru vůbec nenaběhla.
+print("--- starting without Jellyfin set up ---")
+# Jellyfin's address and the API key are set in the app, not in .env. The launcher
+# therefore must NOT refuse to start when they are not filled in - the user needs to
+# get into the interface to fill them in. Exactly this was here once,
+# and the app would not start on a fresh server at all.
 launcher = (PROJECT / "run.py").read_text(encoding="utf-8")
 check("config.jellyfin_api_key" not in launcher,
-      "spouštěč nečte API klíč z .env")
-# Ani nedostupna databaze uz start neukonci: aplikace nabehne a na
-# kazdou adresu odpovi strankou, ktera rekne proc. Skoncit by znamenalo,
-# ze v prohlizeci je "nelze se pripojit" a duvod lezi v logu.
-check(re.search(r"except db\.DatabaseNedostupna[\s\S]{0,700}?_rezim_poruchy",
+      "the launcher does not read the API key from .env")
+# Not even an unavailable database ends the start any more: the app comes up and answers
+# every address with a page that says why. Ending would mean
+# "unable to connect" in the browser and the reason lying in the log.
+check(re.search(r"except db\.DatabaseUnavailable[\s\S]{0,700}?_outage_mode",
                 launcher) is not None,
-      "nedostupná databáze vede na náhradní stránku, ne na konec")
-check("porucha.aplikace" in launcher,
-      "a tu stránku obsluhuje samostatný modul")
+      "an unavailable database leads to a stand-in page, not to the end")
+check("outage.app" in launcher,
+      "and that page is served by a module of its own")
 
-print("--- soubory pro nasazení ---")
+print("--- the files for deploying ---")
 for name in ("DEPLOY.md", "README.md", "deploy/jellyscope.conf", "deploy/jellyscope.service"):
-    check((PROJECT / name).is_file(), f"{name} existuje")
+    check((PROJECT / name).is_file(), f"{name} exists")
 
 supervisor = (PROJECT / "deploy" / "jellyscope.conf").read_text(encoding="utf-8")
 for needle, why in [
-    ("/opt/jellyscope/.venv/bin/python", "plná cesta k pythonu (supervisord nezná PATH)"),
-    ("user=jellyscope", "neběží pod rootem"),
-    ("stopasgroup=true", "ukončí i ffprobe a pg_dump"),
-    ("TZ=", "časová zóna pro denní součty"),
-    ("autorestart=true", "restart po pádu"),
-    ("directory=/opt/jellyscope", "pracovní adresář"),
+    ("/opt/jellyscope/.venv/bin/python", "the full path to python (supervisord does not know PATH)"),
+    ("user=jellyscope", "does not run as root"),
+    ("stopasgroup=true", "stops ffprobe and pg_dump too"),
+    ("TZ=", "the time zone for the daily sums"),
+    ("autorestart=true", "a restart after a crash"),
+    ("directory=/opt/jellyscope", "the working directory"),
 ]:
     check(needle in supervisor, f"supervisord: {why}")
 
-# Systemd unit musí umět totéž co konfigurace pro supervisord - jinak by
-# volba správce procesů měnila chování aplikace, ne jen způsob spuštění.
+# The systemd unit must be able to do the same as the configuration for supervisord - otherwise
+# the choice of a process manager would change the app's behaviour, not only how it is started.
 systemd = (PROJECT / "deploy" / "jellyscope.service").read_text(encoding="utf-8")
 for needle, why in [
-    ("/opt/jellyscope/.venv/bin/python", "plná cesta k pythonu (systemd nezná PATH)"),
-    ("User=jellyscope", "neběží pod rootem"),
-    ("WorkingDirectory=/opt/jellyscope", "pracovní adresář"),
-    ("Environment=TZ=", "časová zóna pro denní součty"),
-    ("Restart=always", "restart po pádu"),
-    ("KillMode=control-group", "ukončí i ffprobe a pg_dump"),
-    ("TimeoutStopSec=30", "dá aplikaci čas na slušné vypnutí"),
-    ("WantedBy=multi-user.target", "nastartuje po rebootu"),
-    ("ReadWritePaths=/opt/jellyscope/data", "smí psát jen do své složky data/"),
+    ("/opt/jellyscope/.venv/bin/python", "the full path to python (systemd does not know PATH)"),
+    ("User=jellyscope", "does not run as root"),
+    ("WorkingDirectory=/opt/jellyscope", "the working directory"),
+    ("Environment=TZ=", "the time zone for the daily sums"),
+    ("Restart=always", "a restart after a crash"),
+    ("KillMode=control-group", "stops ffprobe and pg_dump too"),
+    ("TimeoutStopSec=30", "gives the app time for a decent shutdown"),
+    ("WantedBy=multi-user.target", "starts after a reboot"),
+    ("ReadWritePaths=/opt/jellyscope/data", "may write only into its data/ folder"),
 ]:
     check(needle in systemd, f"systemd: {why}")
 
-print("--- instalační skripty ---")
-# Konfigurace služeb musí mít LF taky - systemd i supervisord si s CR
-# na konci řádku poradí různě dobře a hledá se to mizerně.
+print("--- the installation scripts ---")
+# The services' configuration must have LF too - systemd and supervisord cope with a CR
+# at the end of a line differently well, and it is miserable to look for.
 for name in ("deploy/jellyscope.service", "deploy/jellyscope.conf"):
     raw = (PROJECT / name).read_bytes()
-    check(b"\r" not in raw, f"{name} má unixové konce řádků (LF)")
+    check(b"\r" not in raw, f"{name} has Unix line ends (LF)")
 
 for name in ("deploy/install.sh", "deploy/update.sh"):
     path = PROJECT / name
-    check(path.is_file(), f"{name} existuje")
+    check(path.is_file(), f"{name} exists")
     if not path.is_file():
         continue
 
     raw = path.read_bytes()
-    # Windowsové konce řádků by na Linuxu shodily bash hned na shebangu
-    # hláškou "bad interpreter: /bin/bash^M". Řeší to .gitattributes,
-    # ale test hlídá i soubor v pracovní kopii.
-    check(b"\r\n" not in raw, f"{name} má unixové konce řádků (LF)")
-    check(raw.startswith(b"#!/bin/bash"), f"{name} má shebang")
+    # Windows line ends would bring bash down on Linux right at the shebang
+    # with the message "bad interpreter: /bin/bash^M". .gitattributes deals with it,
+    # but the test watches the file in the working copy too.
+    check(b"\r\n" not in raw, f"{name} has Unix line ends (LF)")
+    check(raw.startswith(b"#!/bin/bash"), f"{name} has a shebang")
 
-    # Príznak spustitelnosti musí být i v gitu, ne jen na disku.
+    # The executable flag must be in git too, not only on disk.
     #
-    # Windows ho na souborech nezná, takže se skripty snadno commitnou
-    # jako 100644. Po `git clone` na serveru pak nejsou spustitelné
-    # a sudo odpoví matoucím "command not found" - jako by soubor
-    # neexistoval.
-    rezim = subprocess.run(
+    # Windows does not know it on files, so the scripts are easily committed
+    # as 100644. After `git clone` on the server they are not executable then,
+    # and sudo answers with a confusing "command not found" - as if the file
+    # did not exist.
+    mode = subprocess.run(
         ["git", "ls-files", "-s", name],
         cwd=str(PROJECT), capture_output=True, text=True,
     ).stdout.strip()
-    if not rezim:
-        print(f"PRESKOCENO  {name} není v gitu")
+    if not mode:
+        print(f"SKIPPED  {name} is not in git")
     else:
-        check(rezim.startswith("100755"),
-              f"{name} je v gitu spustitelný ({rezim.split()[0]})")
+        check(mode.startswith("100755"),
+              f"{name} is executable in git ({mode.split()[0]})")
 
     text = raw.decode("utf-8")
     check("set -euo pipefail" in text,
-          f"{name}: skončí při první chybě místo aby pokračoval")
+          f"{name}: stops at the first error instead of going on")
 
 install = (PROJECT / "deploy" / "install.sh").read_text(encoding="utf-8")
 update = (PROJECT / "deploy" / "update.sh").read_text(encoding="utf-8")
 for needle, why in [
-    ("EUID -eq 0", "pozná, jestli běží pod rootem"),
-    ("secrets.token_hex", "generuje vlastní SECRET_KEY"),
-    ("useradd --system", "poradí, jak si založit vyhrazený účet"),
-    ("/setup", "zkušebně ověří, že aplikace naběhne"),
-    ("REVERSE PROXY", "vypíše, kam poslat provoz"),
-    ("X-Forwarded-Proto", "vypíše potřebné hlavičky"),
-    ("SECURE_COOKIES=1", "vypíše, co zapnout po zprovoznění HTTPS"),
-    ("/run/systemd/system", "pozná, jestli systemd doopravdy běží jako init"),
-    ("command -v supervisorctl", "pozná supervisord"),
-    ("systemctl enable --now jellyscope", "poradí, jak zapnout start po rebootu"),
-    ("supervisorctl reread", "poradí, jak načíst konfiguraci supervisordu"),
-    ("jellyscope.service.ready", "připraví vyplněnou konfiguraci pro systemd"),
-    ("jellyscope.conf.ready", "připraví vyplněnou konfiguraci pro supervisord"),
+    ("EUID -eq 0", "recognises whether it runs as root"),
+    ("secrets.token_hex", "generates its own SECRET_KEY"),
+    ("useradd --system", "advises how to create a dedicated account"),
+    ("/setup", "checks by a trial that the app comes up"),
+    ("REVERSE PROXY", "writes out where to send the traffic"),
+    ("X-Forwarded-Proto", "writes out the headers needed"),
+    ("SECURE_COOKIES=1", "writes out what to switch on after HTTPS works"),
+    ("/run/systemd/system", "recognises whether systemd really runs as init"),
+    ("command -v supervisorctl", "recognises supervisord"),
+    ("systemctl enable --now jellyscope", "advises how to switch on the start after a reboot"),
+    ("supervisorctl reread", "advises how to load supervisord's configuration"),
+    ("jellyscope.service.ready", "prepares a filled-in configuration for systemd"),
+    ("jellyscope.conf.ready", "prepares a filled-in configuration for supervisord"),
 ]:
     check(needle in install, f"install.sh: {why}")
 
-# Webový server ani správce procesů si každý řeší po svém - skript
-# do nich nesmí sahat. Doinstalovat supervisord na server, který má
-# systemd, je přesně ten druh "pomoci", co po sobě nechá binec.
+# Everybody deals with the web server and the process manager in their own way - the script
+# must not touch them. Installing supervisord on a server that has systemd is
+# exactly the kind of "help" that leaves a mess behind.
 for needle in ("apt-get install -y -qq nginx", "systemctl reload nginx", "certbot"):
-    check(needle not in install, f"install.sh nenastavuje webový server ({needle})")
+    check(needle not in install, f"install.sh does not set up a web server ({needle})")
 
 check("MISSING+=(supervisor)" not in install,
-      "install.sh neinstaluje supervisord")
+      "install.sh does not install supervisord")
 
 
-def spustitelny_kod(text: str) -> str:
-    """Ze shell skriptu vrátí jen to, co se doopravdy spouští.
+def runnable_code(text: str) -> str:
+    """Returns from a shell script only what really runs.
 
-    Vyhodí tři věci, které vypadají jako příkazy, ale nejsou:
-      * komentáře,
-      * obsah dvojitých uvozovek (víceřádkové texty die/warn s návody),
-      * heredocy (závěrečný výpis s příkazy, které má spustit uživatel).
+    It throws away three things that look like commands, but are not:
+      * comments,
+      * the content of double quotes (multi-line die/warn texts with instructions),
+      * heredocs (the closing output with the commands the user is to run).
 
-    Bez toho by test hlásil chybu tam, kde je jen nápověda - a přesně
-    to je rozdíl mezi "skript to udělá" a "skript to poradí".
+    Without that the test would report an error where there is only help - and exactly
+    that is the difference between "the script does it" and "the script advises it".
     """
-    # 1. heredocy pryč (cat <<EOF ... EOF)
-    radky = text.split("\n")
-    bez_heredocu: list[str] = []
-    v_heredocu = False
-    for radek in radky:
-        if v_heredocu:
-            bez_heredocu.append("")
-            if radek.strip() == "EOF":
-                v_heredocu = False
+    # 1. heredocs away (cat <<EOF ... EOF)
+    lines = text.split("\n")
+    without_heredocs: list[str] = []
+    in_heredoc = False
+    for line in lines:
+        if in_heredoc:
+            without_heredocs.append("")
+            if line.strip() == "EOF":
+                in_heredoc = False
             continue
-        if re.search(r"<<-?'?EOF'?", radek):
-            v_heredocu = True
-            bez_heredocu.append("")
+        if re.search(r"<<-?'?EOF'?", line):
+            in_heredoc = True
+            without_heredocs.append("")
             continue
-        bez_heredocu.append(radek)
+        without_heredocs.append(line)
 
-    # 2. obsah dvojitých uvozovek pryč, řádkování zachovat
-    ven: list[str] = []
-    v_retezci = False
-    spojene = "\n".join(bez_heredocu)
+    # 2. the content of double quotes away, keep the lines
+    out: list[str] = []
+    in_string = False
+    joined = "\n".join(without_heredocs)
     index = 0
-    while index < len(spojene):
-        znak = spojene[index]
-        if znak == "\\" and index + 1 < len(spojene):
+    while index < len(joined):
+        char = joined[index]
+        if char == "\\" and index + 1 < len(joined):
             index += 2
             continue
-        if znak == '"':
-            v_retezci = not v_retezci
-        elif not v_retezci or znak == "\n":
-            ven.append(znak)
+        if char == '"':
+            in_string = not in_string
+        elif not in_string or char == "\n":
+            out.append(char)
         index += 1
 
-    # 3. komentáře pryč
+    # 3. comments away
     return "\n".join(
-        "" if radek.lstrip().startswith("#") else radek
-        for radek in "".join(ven).split("\n")
+        "" if line.lstrip().startswith("#") else line
+        for line in "".join(out).split("\n")
     )
 
 
-# Instalace běží pod tím, kdo ji spustil. Žádné zakládání systémového
-# účtu, žádné přebírání vlastnictví - tím odpadá celá kategorie potíží
-# s právy, na kterou se při nasazení naráží nejčastěji.
-kod_install = spustitelny_kod(install)
-kod_update = spustitelny_kod(update)
+# The installation runs as whoever started it. No creating a system
+# account, no taking over ownership - that removes a whole category of trouble
+# with rights, the one run into most often when deploying.
+install_code = runnable_code(install)
+update_code = runnable_code(update)
 
-check("useradd" not in kod_install, "install.sh nezakládá systémového uživatele")
-check("sudo -u" not in kod_install, "install.sh nespouští nic přes sudo -u")
-check("sudo -u" not in kod_update, "update.sh nespouští nic přes sudo -u")
+check("useradd" not in install_code, "install.sh creates no system user")
+check("sudo -u" not in install_code, "install.sh runs nothing through sudo -u")
+check("sudo -u" not in update_code, "update.sh runs nothing through sudo -u")
 check("APP_USER=\"${SUDO_USER:-$(id -un)}\"" in install,
-      "install.sh vezme uživatele ze SUDO_USER, ne natvrdo 'jellyscope'")
+      "install.sh takes the user from SUDO_USER, not a hard-coded 'jellyscope'")
 
-# Aplikace nesmí skončit puštěná pod rootem. Mluví po síti, čte cizí
-# soubory a spouští ffprobe - kdyby ji někdo obešel, měl by celý stroj.
+# The app must not end up started as root. It talks over the network, reads other people's
+# files and starts ffprobe - whoever got around it would have the whole machine.
 check('"$APP_USER" == "root"' in install,
-      "install.sh odmítne nastavit aplikaci pod rootem")
+      "install.sh refuses to set the app up as root")
 
-# Kontroly smí volat die() až poté, co je definované - jinak by uživatel
-# místo vysvětlení dostal "die: command not found". Tohle se tu jednou
-# stalo, protože pojistka vznikla nahoře u proměnných.
-radky_install = install.splitlines()
-kde_die = next(i for i, r in enumerate(radky_install) if r.startswith("die()"))
-kde_kontroly = [i for i, r in enumerate(radky_install)
-                if "die " in r and not r.strip().startswith("#")
-                and not r.startswith("die()")]
-check(all(i > kde_die for i in kde_kontroly),
-      f"install.sh volá die() až po jeho definici (řádek {kde_die + 1})")
+# The checks may call die() only after it is defined - otherwise the user would
+# get "die: command not found" instead of an explanation. This happened here
+# once, because the safeguard came about at the top by the variables.
+install_lines = install.splitlines()
+die_at = next(i for i, r in enumerate(install_lines) if r.startswith("die()"))
+checks_at = [i for i, r in enumerate(install_lines)
+             if "die " in r and not r.strip().startswith("#")
+             and not r.startswith("die()")]
+check(all(i > die_at for i in checks_at),
+      f"install.sh calls die() only after its definition (line {die_at + 1})")
 check("ALLOW_ROOT" in install and "ALLOW_ROOT" in update,
-      "obě skripty mají vědomou výjimku ALLOW_ROOT (kontejnery)")
+      "both scripts have the deliberate exception ALLOW_ROOT (containers)")
 
-# Logy patří do složky projektu, ne do /var/log - tam by mohl psát
-# jen root a byli bychom zpátky u řešení práv.
-check("$APP_DIR/data/logs" in install, "install.sh dává logy do složky projektu")
+# The logs belong in the project's folder, not in /var/log - only root could write
+# there and we would be back at solving rights.
+check("$APP_DIR/data/logs" in install, "install.sh puts the logs into the project's folder")
 service_conf = (PROJECT / "deploy" / "jellyscope.conf").read_text(encoding="utf-8")
 check("/var/log/jellyscope" not in service_conf,
-      "šablona supervisordu nepíše do /var/log")
+      "the supervisord template does not write into /var/log")
 
-# Uživatelská systemd služba - autostart úplně bez roota.
+# A user systemd service - an autostart entirely without root.
 check("jellyscope.user.service.ready" in install,
-      "install.sh připraví i uživatelskou systemd službu")
+      "install.sh prepares a user systemd service too")
 check("loginctl enable-linger" in install,
-      "install.sh poradí lingering, aby služba jela i po odhlášení")
+      "install.sh advises lingering, so the service runs after signing out too")
 check("systemctl --user cat jellyscope.service" in update,
-      "update.sh pozná uživatelskou službu a restartuje ji bez roota")
+      "update.sh recognises a user service and restarts it without root")
 
-# ProtectHome=true schová celý /home. Dokud aplikace bydlela v /opt, byla
-# to čistá výhra. Jakmile se doporučenou cestou stala instalace do
-# domovského adresáře, znamenalo by to službu, která se nedostane ke
-# svému vlastnímu kódu - a systemd ji vůbec nespustí.
+# ProtectHome=true hides the whole /home. While the app lived in /opt, it was
+# a clean win. As soon as installing into the home directory became the recommended
+# way, it would mean a service that does not get to its own
+# code - and systemd would not start it at all.
 check('"$APP_DIR" == /home/*' in install,
-      "install.sh pozná instalaci v domovském adresáři")
+      "install.sh recognises an installation in a home directory")
 check("PROTECT_HOME" in install,
-      "install.sh umí ProtectHome vypnout, když by aplikaci zablokoval")
+      "install.sh can switch ProtectHome off when it would block the app")
 
-# Složka může být kdekoliv (typicky /opt/jellyscope) - musí ale patřit
-# tomu, pod kým aplikace poběží. Skript to spraví sám, ať se uživatel
-# nemusí babrat v právech.
+# The folder can be anywhere (typically /opt/jellyscope) - but it must belong
+# to whoever the app will run as. The script sets it right itself, so the user
+# need not fiddle with rights.
 check('OWNER="$(stat -c' in install,
-      "install.sh zjistí, komu složka patří")
+      "install.sh finds out whom the folder belongs to")
 check('as_root chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"' in install,
-      "install.sh složku sám převede na uživatele, pod kterým se instaluje")
+      "install.sh hands the folder over itself to the user it installs as")
 
-# Plošné chmod 755 by zpřístupnilo i .env s podpisovým klíčem cookies.
-check("chmod -R" not in kod_install, "install.sh nedělá plošné chmod")
+# A blanket chmod 755 would make .env with the cookies' signing key accessible too.
+check("chmod -R" not in install_code, "install.sh does no blanket chmod")
 
-# Ovladač PostgreSQL se instaluje rovnou, ať si ho nikdo nemusí shánět
-# přes příkazovou řádku, když si v Nastavení přepne databázi.
+# The PostgreSQL driver is installed straight away, so nobody has to hunt for it
+# through the command line when they switch the database in Settings.
 check('pip install --quiet "psycopg[binary,pool]"' in install,
-      "install.sh doinstaluje ovladač PostgreSQL")
+      "install.sh installs the PostgreSQL driver as well")
 
-# Jeho selhání ale nesmí shodit instalaci: psycopg-binary nemá balíčky
-# pro každou platformu a `set -e` by vzal s sebou i instalaci pro toho,
-# kdo chce jen SQLite.
-# Hledáme v původním textu, ne ve filtrovaném kódu: filtr zahazuje
-# obsah uvozovek, takže by z řádku zmizel právě název balíčku.
-psycopg_radek = next(
+# Its failure must not bring the installation down though: psycopg-binary has no packages
+# for every platform, and `set -e` would take along the installation for whoever
+# wants only SQLite.
+# We search the original text, not the filtered code: the filter throws away
+# the content of quotes, so exactly the package's name would vanish from the line.
+psycopg_line = next(
     (r for r in install.splitlines()
      if 'psycopg[binary,pool]' in r and "pip install" in r), ""
 )
-check(psycopg_radek.strip().startswith("if "),
-      f"selhání psycopg neshodí instalaci (řádek: {psycopg_radek.strip()!r})")
+check(psycopg_line.strip().startswith("if "),
+      f"a failure of psycopg does not bring the installation down (line: {psycopg_line.strip()!r})")
 check("psycopg" not in (PROJECT / "requirements.txt").read_text(encoding="utf-8")
       .split("# ---")[0],
-      "psycopg není mezi povinnými závislostmi")
+      "psycopg is not among the required dependencies")
 
-# ffprobe (balíček ffmpeg) se doinstaluje taky - jinak by volba
-# "ffprobe + Jellyfin" v Nastavení byla k nekliknutí.
-# Ubuntu 20.04 ma Python 3.8 a instalace na nem koncila hlaskou
+# ffprobe (the ffmpeg package) is installed as well - otherwise the choice
+# "ffprobe + Jellyfin" in Settings would be unclickable.
+# Ubuntu 20.04 has Python 3.8, and installing on it ended with the message
 # "Could not find a version that satisfies the requirement uvicorn",
-# ktera pricinu vubec nepojmenuje. Skript to musi poznat driv.
-check('MIN_MINOR="${MIN_PY#3.}"' in install, "install.sh zna minimalni verzi Pythonu (z deploy/python-minimum)")
-check("python3.11" in install, "hleda novejsi Python nainstalovany vedle")
-check("deadsnakes" in install, "poradi, jak novejsi Python pridat")
-# Minimum drzi pohromade s tim, co si zada FastAPI z requirements.txt.
-# Kdyby se cislo zmenilo jen na jednom miste, instalace by prosla
-# a spadla az pri pip installu - s hlaskou, ktera pricinu nepojmenuje.
+# which does not name the cause at all. The script must recognise it earlier.
+check('MIN_MINOR="${MIN_PY#3.}"' in install, "install.sh knows the minimum Python version (from deploy/python-minimum)")
+check("python3.11" in install, "looks for a newer Python installed beside")
+check("deadsnakes" in install, "advises how to add a newer Python")
+# The minimum holds together with what FastAPI from requirements.txt asks for.
+# Were the number changed in one place only, the installation would pass
+# and fall over only at pip install - with a message that does not name the cause.
 minimum = PROJECT / "deploy" / "python-minimum"
 check(minimum.is_file() and minimum.read_text(encoding="utf-8").strip() == "3.11",
-      "minimum Pythonu na jednom strojově čitelném místě: deploy/python-minimum")
+      "the Python minimum in one machine-readable place: deploy/python-minimum")
 check("deploy/python-minimum" in install and "deploy/python-minimum" in update,
-      "install.sh i update.sh berou minimum z něj")
+      "install.sh and update.sh take the minimum from it")
 check("JELLYSCOPE_UPDATE_ZNOVU" in update
       and re.search(r'exec env JELLYSCOPE_UPDATE_ZNOVU=1 JELLYSCOPE_UPDATE_PRED="\$BEFORE"'
                     r' bash "\$APP_DIR/deploy/update.sh"', update),
-      "update.sh po stažení spustí svou novou verzi, když se změnila, a předá jí původní verzi")
-# Nova verze skriptu uz nestahuje znovu: jinak by za "puvodni verzi" vzala
-# tu prave stazenou a rada "git reset --hard $BEFORE" by vracela nikam.
-krok2 = update[update.find("# --- 2."):update.find("# --- 3.")]
-znovu = re.search(r'if \[\[ "\$\{JELLYSCOPE_UPDATE_ZNOVU:-\}" == "1" \]\]; then\n(.*?)\nelse\n',
-                  krok2, re.S)
-check(bool(znovu) and not re.search(r"git_ (pull|merge|fetch)", znovu.group(1))
-      and "JELLYSCOPE_UPDATE_PRED" in znovu.group(1),
-      "update.sh spuštěný znovu nestahuje a původní verzi bere z JELLYSCOPE_UPDATE_PRED")
-# Python se kontroluje PRED stazenim, s minimem z toho, co prijde. Po
-# stazeni by uz bezely nove sablony nad starym kodem - a zprava "nic se
-# nezmenilo" by nebyla pravda.
-check('git_ show "$UPSTREAM:deploy/python-minimum"' in krok2
-      and krok2.find('git_ show "$UPSTREAM:deploy/python-minimum"') < krok2.find("git_ merge --ff-only"),
-      "update.sh zkontroluje Python před stažením, s minimem nové verze")
+      "update.sh after the download runs its new version, when it changed, and hands it the original version")
+# The new version of the script does not download again: otherwise it would take the one just
+# downloaded for "the original version" and the advice "git reset --hard $BEFORE" would lead nowhere.
+step2 = update[update.find("# --- 2."):update.find("# --- 3.")]
+again = re.search(r'if \[\[ "\$\{JELLYSCOPE_UPDATE_ZNOVU:-\}" == "1" \]\]; then\n(.*?)\nelse\n',
+                  step2, re.S)
+check(bool(again) and not re.search(r"git_ (pull|merge|fetch)", again.group(1))
+      and "JELLYSCOPE_UPDATE_PRED" in again.group(1),
+      "update.sh run again does not download and takes the original version from JELLYSCOPE_UPDATE_PRED")
+# Python is checked BEFORE the download, with the minimum of what is coming. After
+# the download new templates would already run over old code - and the message "nothing
+# changed" would not be true.
+check('git_ show "$UPSTREAM:deploy/python-minimum"' in step2
+      and step2.find('git_ show "$UPSTREAM:deploy/python-minimum"') < step2.find("git_ merge --ff-only"),
+      "update.sh checks Python before the download, with the new version's minimum")
 check("Python 3.11 or newer" in (PROJECT / "requirements.txt").read_text(encoding="utf-8"),
-      "a requirements.txt rika totez")
+      "and requirements.txt says the same")
 
-# Deadsnakes je az druha volba: nestavi balicky pro ARM a je to cizi
-# zdroj. Ubuntu 22.04 a novejsi ma python3.11 primo u sebe (universe).
-check("python3.11-venv" in install, "nabizi python3.11 z repozitare Ubuntu")
+# Deadsnakes is only the second choice: it builds no packages for ARM and it is a foreign
+# source. Ubuntu 22.04 and newer has python3.11 right at home (universe).
+check("python3.11-venv" in install, "offers python3.11 from Ubuntu's repository")
 check(install.index("python3.11-venv") < install.index("ppa:deadsnakes"),
-      "a nabizi ho DRIV nez PPA deadsnakes")
+      "and offers it BEFORE the deadsnakes PPA")
 check("dpkg --print-architecture" in install,
-      "kdyz PPA nezabere, poradi zjistit architekturu (deadsnakes neumi ARM)")
-# Kontroluje se, ze skript apt upgrade NESPOUSTI. V textu hlasky
-# se objevit smi - tam naopak varuje, aby ho uzivatel nedelal.
-check("apt upgrade" not in spustitelny_kod(install),
-      "install.sh nespousti apt upgrade")
-check("apt upgrade" in install, "ale varuje, aby ho uzivatel nedelal")
+      "when the PPA does not work, it advises finding out the architecture (deadsnakes cannot do ARM)")
+# It is checked that the script does NOT run apt upgrade. In the message's text
+# it may appear - there on the contrary it warns the user not to do it.
+check("apt upgrade" not in runnable_code(install),
+      "install.sh does not run apt upgrade")
+check("apt upgrade" in install, "but warns the user not to do it")
 check('"$PYTHON_BIN" -m venv' in install,
-      "prostredi se stavi vybranym interpretem, ne natvrdo python3")
+      "the environment is built with the chosen interpreter, not a hard-coded python3")
 
-# Nejcastejsi past na Ubuntu 20.04: prvni pokus postavi .venv Pythonem 3.8,
-# spadne na "Could not find a version that satisfies the requirement
-# fastapi", uzivatel doinstaluje python3.11 - a chyba se opakuje, protoze
-# .venv porad stoji na 3.8. Zvenku to vypada, ze instalace Pythonu
-# nepomohla. Skript musi stare prostredi poznat a zahodit.
-# Hledame v surovem textu, ne v spustitelny_kod(): ten vyhazuje obsah
-# uvozovek, takze by z prikazu zbylo jen "verze_staci".
-prikazove_radky = [r for r in install.splitlines() if not r.strip().startswith("#")]
-check(any('version_ok "$VENV/bin/python"' in r for r in prikazove_radky),
-      "skript overuje verzi Pythonu i u UZ EXISTUJICIHO prostredi")
-kus = install[install.find('version_ok "$VENV/bin/python"'):]
-check('rm -rf "$VENV"' in kus[:600],
-      "a stare prostredi zahodi, misto aby ho pouzil")
+# The most frequent trap on Ubuntu 20.04: the first attempt builds .venv with Python 3.8,
+# falls over on "Could not find a version that satisfies the requirement
+# fastapi", the user installs python3.11 - and the error repeats, because
+# .venv still stands on 3.8. From outside it looks as if installing Python
+# did not help. The script must recognise the old environment and throw it away.
+# We search the raw text, not runnable_code(): that throws away the content of
+# quotes, so only "version_ok" would be left of the command.
+command_lines = [r for r in install.splitlines() if not r.strip().startswith("#")]
+check(any('version_ok "$VENV/bin/python"' in r for r in command_lines),
+      "the script checks the Python version of an ALREADY EXISTING environment too")
+piece = install[install.find('version_ok "$VENV/bin/python"'):]
+check('rm -rf "$VENV"' in piece[:600],
+      "and throws the old environment away instead of using it")
 check("Could not find a version" in install,
-      "hlaska pri selhani zminuje presne to, co pip vypise")
+      "the message on a failure mentions exactly what pip writes out")
 
-# Port a adresa se musi propsat i do UZ EXISTUJICIHO .env - jinak druha
-# instalace s PORT=... skonci tim, ze aplikace nabehne na starem portu
-# a nikdo nevi proc.
+# The port and the address must be written into an ALREADY EXISTING .env too - otherwise a second
+# installation with PORT=... ends with the app coming up on the old port
+# and nobody knowing why.
 check("PORT_GIVEN" in install and "HOST_GIVEN" in install,
-      "skript pozna, jestli byl port a adresa vyslovne zadane")
-check("set_env PORT" in spustitelny_kod(install),
-      "a zadany port promitne do existujiciho .env")
-check("set_env HOST" in spustitelny_kod(install),
-      "totez pro adresu")
-# Prepsat cely .env by znamenalo novy SECRET_KEY a odhlaseni vsech -
-# proto se meni jen jeden radek pres sed.
+      "the script recognises whether the port and the address were given explicitly")
+check("set_env PORT" in runnable_code(install),
+      "and puts a given port into an existing .env")
+check("set_env HOST" in runnable_code(install),
+      "the same for the address")
+# Rewriting the whole .env would mean a new SECRET_KEY and signing everybody out -
+# so only one line is changed through sed.
 check('sed -i "s|^${key}=' in install,
-      "meni se jen jeden radek, ne cely soubor")
+      "only one line is changed, not the whole file")
 
-# Po zapisu se musi cist skutecne hodnoty z .env - jinak by zkusebni
-# spusteni klepalo na jiny port, nez na kterem aplikace posloucha.
-# Hledame v surovem textu: spustitelny_kod() vyhazuje obsah uvozovek,
-# takze by z prirazeni zbylo jen "PORT=".
-check(any('from_env PORT' in r for r in prikazove_radky),
-      "dalsi kroky beru port z .env, ne z promenne")
+# After writing, the real values must be read from .env - otherwise the trial
+# start would knock on another port than the one the app listens on.
+# We search the raw text: runnable_code() throws away the content of quotes,
+# so only "PORT=" would be left of the assignment.
+check(any('from_env PORT' in r for r in command_lines),
+      "the next steps take the port from .env, not from the variable")
 check("TEST_HOST" in install and "0.0.0.0" in install,
-      "na 0.0.0.0 se neklepe - pro zkousku se pouzije 127.0.0.1")
+      "0.0.0.0 is not knocked on - 127.0.0.1 is used for the trial")
 check("HOST=0.0.0.0" in install,
-      "vypis poradi, jak zpristupnit aplikaci z jineho pocitace")
-check("--upgrade pip" in spustitelny_kod(install),
-      "pip se aktualizuje (ten z Ubuntu 20.04 je 20.0.2)")
+      "the output advises how to make the app reachable from another computer")
+check("--upgrade pip" in runnable_code(install),
+      "pip is updated (the one from Ubuntu 20.04 is 20.0.2)")
 
-check("SKIP_FFMPEG" in install, "instalaci ffmpeg jde přeskočit (SKIP_FFMPEG=1)")
-check("apt-get install -y -qq ffmpeg" in install, "install.sh umí doinstalovat ffmpeg")
-check("ffmpeg-free" in install, "zná i název balíčku ve Fedoře")
+check("SKIP_FFMPEG" in install, "installing ffmpeg can be skipped (SKIP_FFMPEG=1)")
+check("apt-get install -y -qq ffmpeg" in install, "install.sh can install ffmpeg")
+check("ffmpeg-free" in install, "it knows the package's name in Fedora too")
 
-# Stejně jako u psycopg nesmí selhání shodit instalaci - aplikace bez
-# ffprobe funguje, jen bere technické údaje z Jellyfinu.
-ffmpeg_radky = [r.strip() for r in kod_install.splitlines()
+# Just as with psycopg, a failure must not bring the installation down - the app without
+# ffprobe works, it only takes the technical details from Jellyfin.
+ffmpeg_lines = [r.strip() for r in install_code.splitlines()
                 if "install" in r and "ffmpeg" in r]
-check(ffmpeg_radky and all(r.endswith("|| true") for r in ffmpeg_radky),
-      f"selhání ffmpeg neshodí instalaci {ffmpeg_radky}")
-check('chmod 600 "$APP_DIR/.env"' in install, "install.sh chrání .env právy 600")
+check(ffmpeg_lines and all(r.endswith("|| true") for r in ffmpeg_lines),
+      f"a failure of ffmpeg does not bring the installation down {ffmpeg_lines}")
+check('chmod 600 "$APP_DIR/.env"' in install, "install.sh protects .env with the rights 600")
 
-# Past, na kterou instalace na Ubuntu spadla: modul `venv` je v základní
-# instalaci vždycky, ale bez balíčku python3-venv v něm chybí ensurepip.
-# `python3 -m venv` pak stihne vyrobit bin/python a teprve pak selže -
-# a další běh skriptu skončil na "pip: command not found".
+# A trap the installation on Ubuntu fell into: the `venv` module is always in the base
+# installation, but without the python3-venv package ensurepip is missing in it.
+# `python3 -m venv` then manages to make bin/python and only then fails -
+# and the next run of the script ended at "pip: command not found".
 check('python3 -c "import ensurepip"' in install,
-      "install.sh testuje ensurepip, ne jen import venv")
+      "install.sh tests ensurepip, not just importing venv")
 check('python3 -c "import venv"' not in install,
-      "install.sh už nespoléhá na 'import venv' (ta kontrola lhala)")
+      "install.sh no longer relies on 'import venv' (that check lied)")
 
-# pip se volá jako `python -m pip`. Spouštěč .venv/bin/pip nemusí
-# existovat a nese v sobě pevnou cestu, která se po přesunu složky rozbije.
+# pip is called as `python -m pip`. The .venv/bin/pip launcher need not
+# exist and carries a fixed path inside it that breaks after the folder is moved.
 for name, text in (("install.sh", install),
                    ("update.sh", (PROJECT / "deploy" / "update.sh").read_text(encoding="utf-8"))):
-    kod = [radek for radek in text.splitlines() if not radek.strip().startswith("#")]
-    check(not any("bin/pip" in radek for radek in kod),
-          f"{name} nevolá .venv/bin/pip přímo")
+    code = [line for line in text.splitlines() if not line.strip().startswith("#")]
+    check(not any("bin/pip" in line for line in code),
+          f"{name} does not call .venv/bin/pip directly")
 
 check('-x "$VENV/bin/python"' in install,
-      "install.sh pozná nedodělané prostředí podle chybějícího pythonu")
+      "install.sh recognises an unfinished environment by the missing python")
 check("-m ensurepip --upgrade" in install,
-      "install.sh umí chybějící pip doplnit")
+      "install.sh can add a missing pip")
 check("apt install python3-venv" in install,
-      "install.sh poradí, který balíček doinstalovat")
+      "install.sh advises which package to install")
 
-# Rozdíl mezi "skript to udělá" a "skript to poradí" je v tom, jestli je
-# příkaz spuštěný, nebo jen vypsaný. Vypsané rady jsou uvnitř heredoců
-# odsazené a začínají "sudo " - skutečné volání by stálo na začátku řádku.
-spustene = [
-    radek.strip() for radek in kod_install.splitlines()
-    if radek.strip().startswith(("supervisorctl ", "systemctl "))
+# The difference between "the script does it" and "the script advises it" is whether
+# the command is run or only written out. Written-out advice is inside heredocs,
+# indented, and starts with "sudo " - a real call would stand at the start of the line.
+started = [
+    line.strip() for line in install_code.splitlines()
+    if line.strip().startswith(("supervisorctl ", "systemctl "))
 ]
-check(not spustene,
-      f"install.sh sám službu nespouští, jen poradí jak na to {spustene}")
+check(not started,
+      f"install.sh does not start the service itself, it only advises how {started}")
 
 for needle, why in [
-    ("merge --ff-only", "nepřepíše místní historii"),
-    ("diff --quiet", "odmítne aktualizaci s neuloženými změnami"),
-    ("reset --hard", "poradí návrat na předchozí verzi"),
-    ("pg_dump", "umí zazálohovat i PostgreSQL"),
-    ("sqlite3", "umí zazálohovat SQLite"),
-    ("PGPASSWORD=", "heslo předává prostředím, ne příkazovou řádkou"),
-    ("SKIP_BACKUP", "jde přeskočit zálohu, ale jen vědomě"),
-    ('DB_KIND="sqlite"', "bez konfigurace předpokládá SQLite"),
-    ("systemctl restart jellyscope", "umí restartovat službu pod systemd"),
-    ("supervisorctl restart jellyscope", "umí restartovat službu pod supervisord"),
-    ("systemctl cat jellyscope.service", "zjišťuje, kdo službu doopravdy drží"),
-    ("safe.directory", "poradí, co dělat s 'dubious ownership'"),
-    # Šablony se čtou ze souborů při každém požadavku, ale Python kód
-    # zůstává v paměti. Po `git pull` bez restartu tak běží nové šablony
-    # nad starým kódem a stránky padají na "Internal Server Error".
-    # Když update nedokáže restartovat sám, musí to říct nahlas.
-    ("RUNS THE OLD VERSION", "upozorní, když aplikaci nerestartoval"),
+    ("merge --ff-only", "does not overwrite the local history"),
+    ("diff --quiet", "refuses an update with unsaved changes"),
+    ("reset --hard", "advises the way back to the previous version"),
+    ("pg_dump", "can back up PostgreSQL too"),
+    ("sqlite3", "can back up SQLite"),
+    ("PGPASSWORD=", "passes the password through the environment, not the command line"),
+    ("SKIP_BACKUP", "the backup can be skipped, but only knowingly"),
+    ('DB_KIND="sqlite"', "without a configuration it assumes SQLite"),
+    ("systemctl restart jellyscope", "can restart the service under systemd"),
+    ("supervisorctl restart jellyscope", "can restart the service under supervisord"),
+    ("systemctl cat jellyscope.service", "finds out who really holds the service"),
+    ("safe.directory", "advises what to do with 'dubious ownership'"),
+    # The templates are read from the files on every request, but the Python code
+    # stays in memory. After `git pull` without a restart new templates thus run
+    # over old code and the pages fall over with "Internal Server Error".
+    # When update cannot restart by itself, it must say so loudly.
+    ("RUNS THE OLD VERSION", "warns when it did not restart the app"),
     ("/etc/supervisor/conf.d/jellyscope.conf",
-     "pozná supervisord i podle konfigurace (sudo -n selže, když chce heslo)"),
-    # Prostredi postavene na Pythonu 3.9 pip odmitne az u fastapi, hlaskou
-    # "Could not find a version that satisfies the requirement" - ta zni
-    # jako by balicek neexistoval, ne jako "mas stary Python". Update to
-    # musi poznat driv a poradit, co s tim.
-    ("sys.version_info >= (3, ${MIN_PY#3.})", "pozná prostředí na starém Pythonu"),
-    ("bash deploy/install.sh", "a poradí, čím ho postavit znovu"),
+     "recognises supervisord by the configuration too (sudo -n fails when it wants a password)"),
+    # An environment built on Python 3.9 is refused by pip only at fastapi, with the message
+    # "Could not find a version that satisfies the requirement" - that sounds
+    # as if the package did not exist, not as "you have an old Python". Update
+    # must recognise it earlier and advise what to do.
+    ("sys.version_info >= (3, ${MIN_PY#3.})", "recognises an environment on an old Python"),
+    ("bash deploy/install.sh", "and advises what to build it again with"),
 ]:
     check(needle in update, f"update.sh: {why}")
 
-# Git od 2.35.2 odmítne pracovat v repozitáři, který patří někomu jinému
-# ("detected dubious ownership"). Skript běží pod rootem, ale složka patří
-# uživateli aplikace - každé volání gitu proto musí jít přes něj.
+# Git from 2.35.2 on refuses to work in a repository that belongs to somebody else
+# ("detected dubious ownership"). The script runs as root, but the folder belongs
+# to the app's user - every call of git must therefore go through them.
 check('git_() { git -C "$APP_DIR" "$@"; }' in update,
-      "update.sh má pomocníka git_(), kterým jdou všechna volání gitu")
+      "update.sh has the helper git_(), through which all calls of git go")
 
-mimo_pomocnika = []
-for cislo, radek in enumerate(kod_update.splitlines(), 1):
-    holy = radek.strip()
-    if "git_()" in holy:
+outside_helper = []
+for number, line in enumerate(update_code.splitlines(), 1):
+    bare = line.strip()
+    if "git_()" in bare:
         continue
-    if re.search(r"(^|[^_\w])git ", holy):
-        mimo_pomocnika.append(f"{cislo}: {holy}")
-check(not mimo_pomocnika,
-      f"update.sh volá git jen přes git_() {mimo_pomocnika}")
+    if re.search(r"(^|[^_\w])git ", bare):
+        outside_helper.append(f"{number}: {bare}")
+check(not outside_helper,
+      f"update.sh calls git only through git_() {outside_helper}")
 
-print("--- příklady pro reverzní proxy ---")
+print("--- examples for a reverse proxy ---")
 for name in ("nginx.conf.example", "Caddyfile.example", "apache.conf.example"):
     path = PROJECT / "deploy" / name
-    check(path.is_file(), f"deploy/{name} existuje")
+    check(path.is_file(), f"deploy/{name} exists")
     if path.is_file():
         text = path.read_text(encoding="utf-8")
-        check("127.0.0.1:8097" in text, f"{name}: míří na správný port")
-        check("SECURE_COOKIES=1" in text, f"{name}: připomíná zapnutí bezpečné cookie")
+        check("127.0.0.1:8097" in text, f"{name}: points at the right port")
+        check("SECURE_COOKIES=1" in text, f"{name}: reminds to switch on the secure cookie")
 
-print("--- verzování statických souborů ---")
-# Bez ?v=číslo v adrese by si prohlížeč (a u nginxu i proxy) držel starý
-# styl a změna vzhledu by byla dny neviditelná. Přesně na tohle jsem
-# jednou naletěl při ladění přihlašovací stránky.
+print("--- versioning the static files ---")
+# Without ?v=number in the address the browser (and with nginx the proxy too) would keep the old
+# style and a change of the look would be invisible for days. Exactly this is what I
+# once fell for while debugging the sign-in page.
 templates_dir = PROJECT / "jellyscope" / "templates"
-# Přihlášení, první spuštění a chybová stránka mají hlavičku ze společného
-# makra `hlava()` - stačí, když verzi nese ono. base.html si <head> drží
-# vlastní, protože potřebuje {% block title %}.
+# Signing in, the first start and the error page have their head from the shared
+# macro `head()` - it is enough for that one to carry the version. base.html keeps its own
+# <head>, because it needs {% block title %}.
 for name in ("base.html", "_macros.html"):
     text = (templates_dir / name).read_text(encoding="utf-8")
     check("style.css?v={{ asset_version }}" in text,
-          f"{name}: styl má v adrese verzi")
+          f"{name}: the style has the version in its address")
 
 for name in ("base.html", "login.html", "setup.html", "error.html", "_macros.html"):
     text = (templates_dir / name).read_text(encoding="utf-8")
     check("/static/logo.svg\"" not in text,
-          f"{name}: žádný odkaz na logo bez verze")
+          f"{name}: no link to the logo without a version")
     check("style.css" not in text or "style.css?v={{ asset_version }}" in text,
-          f"{name}: žádný odkaz na styl bez verze")
+          f"{name}: no link to the style without a version")
 
 web = "\n".join(p.read_text(encoding="utf-8")
          for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")))
-check('globals["asset_version"]' in web, "web/__init__.py verzi počítá a předává šablonám")
+check('globals["asset_version"]' in web, "web/__init__.py counts the version and hands it to the templates")
 
-print("--- .gitignore a .gitattributes ---")
+print("--- .gitignore and .gitattributes ---")
 ignore = (PROJECT / ".gitignore").read_text(encoding="utf-8")
 for needle in (".env", "data/", ".venv"):
-    check(needle in ignore, f".gitignore vylučuje {needle}")
+    check(needle in ignore, f".gitignore leaves out {needle}")
 
 attributes = (PROJECT / ".gitattributes").read_text(encoding="utf-8")
-# Porovnáváme řádky se sraženými mezerami. Test nemá padat kvůli tomu,
-# že někdo srovnal sloupce - má hlídat pravidlo, ne odsazení.
-pravidla = {" ".join(radek.split()) for radek in attributes.splitlines()}
-for vzor in ("*.sh text eol=lf", "*.conf text eol=lf", "*.service text eol=lf"):
-    check(vzor in pravidla, f".gitattributes vynucuje LF: {vzor}")
+# We compare lines with the spaces squeezed. The test is not to fail because
+# somebody lined up the columns - it is to watch the rule, not the indentation.
+rules = {" ".join(line.split()) for line in attributes.splitlines()}
+for pattern in ("*.sh text eol=lf", "*.conf text eol=lf", "*.service text eol=lf"):
+    check(pattern in rules, f".gitattributes enforces LF: {pattern}")
 
-print("--- limit nahravaneho souboru sedi s proxy ---")
-# Reverzni proxy odmita driv nez aplikace. Kdyz ma nizsi strop, clovek
-# dostane hlasku od nginxu misto srozumitelne vety z Jellyscope - a diva
-# se do logu aplikace, kde nic neni.
+print("--- the upload limit matches the proxy ---")
+# A reverse proxy refuses before the app. When it has a lower ceiling, a person
+# gets a message from nginx instead of an understandable sentence from Jellyscope - and looks
+# into the app's log, where there is nothing.
 import re as _re
 
-web_kod = "\n".join(p.read_text(encoding="utf-8")
+web_code = "\n".join(p.read_text(encoding="utf-8")
          for p in sorted((PROJECT / "jellyscope" / "web").rglob("*.py")))
-strop = int(_re.search(r"MAX_UPLOAD_MB = (\d+)", web_kod).group(1))
-check(strop > 0, f"aplikace ma jeden strop pro nahravani ({strop} MB)")
-check(web_kod.count("* 1024 * 1024") == web_kod.count("MAX_UPLOAD_MB * 1024 * 1024"),
-      "a pouziva se u vsech nahravani, ne cislo napsane rucne")
+ceiling = int(_re.search(r"MAX_UPLOAD_MB = (\d+)", web_code).group(1))
+check(ceiling > 0, f"the app has one ceiling for uploads ({ceiling} MB)")
+check(web_code.count("* 1024 * 1024") == web_code.count("MAX_UPLOAD_MB * 1024 * 1024"),
+      "and it is used for all uploads, not a number written by hand")
 
 nginx = (PROJECT / "deploy" / "nginx.conf.example").read_text(encoding="utf-8")
-shoda = _re.search(r"client_max_body_size\s+(\d+)M", nginx)
-check(shoda and int(shoda.group(1)) >= strop,
-      f"nginx pusti aspon tolik ({shoda.group(1) if shoda else '?'}M >= {strop}M)")
+match = _re.search(r"client_max_body_size\s+(\d+)M", nginx)
+check(match and int(match.group(1)) >= ceiling,
+      f"nginx lets at least that much through ({match.group(1) if match else '?'}M >= {ceiling}M)")
 
 apache = (PROJECT / "deploy" / "apache.conf.example").read_text(encoding="utf-8")
-shoda = _re.search(r"LimitRequestBody\s+(\d+)", apache)
-check(shoda and int(shoda.group(1)) >= strop * 1024 * 1024,
-      f"apache taky ({int(shoda.group(1)) // 1024 // 1024 if shoda else '?'} MB)")
+match = _re.search(r"LimitRequestBody\s+(\d+)", apache)
+check(match and int(match.group(1)) >= ceiling * 1024 * 1024,
+      f"apache too ({int(match.group(1)) // 1024 // 1024 if match else '?'} MB)")
 
-instalator = (PROJECT / "deploy" / "install.sh").read_text(encoding="utf-8")
-check(f"{strop} MB" in instalator and f"{strop}M" in instalator,
-      f"a instalator radi tutez hodnotu ({strop} MB)")
+installer = (PROJECT / "deploy" / "install.sh").read_text(encoding="utf-8")
+check(f"{ceiling} MB" in installer and f"{ceiling}M" in installer,
+      f"and the installer advises the same value ({ceiling} MB)")
 
 
-print("--- spouštěč kontejneru ---")
-# Pripojena slozka s daty patri na hostiteli tomu, kdo ji vyrobil - pri
-# prvnim `docker compose up` rootovi. Aplikace bezi jako UID 10001, takze
-# by na ni nedosahla. Kontejner proto startuje jako root, srovna vlastnika
-# a prava hned zahodi. Kdyby to posledni vypadlo, bezela by cela aplikace
-# jako root a nikdo by si toho nevsiml.
-vstup = PROJECT / "deploy" / "docker-entrypoint.sh"
-check(vstup.is_file(), "deploy/docker-entrypoint.sh existuje")
-spoustec = vstup.read_text(encoding="utf-8")
+print("--- the container's launcher ---")
+# A mounted data folder belongs on the host to whoever made it - at the
+# first `docker compose up` to root. The app runs as UID 10001, so it
+# would not reach it. The container therefore starts as root, sets the owner right
+# and drops the rights at once. Were the last part to drop out, the whole app would run
+# as root and nobody would notice.
+entry = PROJECT / "deploy" / "docker-entrypoint.sh"
+check(entry.is_file(), "deploy/docker-entrypoint.sh exists")
+entry_text = entry.read_text(encoding="utf-8")
 dockerfile = (PROJECT / "Dockerfile").read_text(encoding="utf-8")
 
 check('ENTRYPOINT ["/bin/sh", "/app/deploy/docker-entrypoint.sh"]' in dockerfile,
-      "obraz ho spouští (a přes sh, ať nezáleží na právu ke spuštění)")
+      "the image runs it (and through sh, so the executable flag does not matter)")
 check("deploy/" not in (PROJECT / ".dockerignore").read_text(encoding="utf-8"),
-      "a nevynechává ho z obrazu")
+      "and does not leave it out of the image")
 check("command -v setpriv" in dockerfile,
-      "build si ověří, že nástroj na zahození práv v obrazu je")
+      "the build checks that the tool for dropping the rights is in the image")
 
-# Aplikace se nikdy nesmi spustit s rootovskymi pravy.
-check(re.search(r'id -u.*=.*"0"', spoustec) is not None,
-      "spouštěč pozná, že běží jako root")
-check(re.search(r'exec setpriv --reuid="?\$?\{?APP_UID', spoustec) is not None,
-      "a v té větvi předává řízení až po zahození práv")
-korenova_vetev = spoustec.split('if [ "$(id -u)" = "0" ]', 1)[1].split("fi", 1)[0]
-check('exec "$@"' not in korenova_vetev,
-      "z rootovské větve se aplikace nespustí přímo")
+# The app must never run with root's rights.
+check(re.search(r'id -u.*=.*"0"', entry_text) is not None,
+      "the launcher recognises that it runs as root")
+check(re.search(r'exec setpriv --reuid="?\$?\{?APP_UID', entry_text) is not None,
+      "and in that branch hands over control only after dropping the rights")
+root_branch = entry_text.split('if [ "$(id -u)" = "0" ]', 1)[1].split("fi", 1)[0]
+check('exec "$@"' not in root_branch,
+      "the app is not started directly from the root branch")
 
-# Konce radku CRLF ve spousteci znamenaji pri startu kontejneru hlasku
-# o nenalezenem prikazu - konec radku se stane soucasti nazvu. Repozitar
-# se vyviji na Windows, takze je to na dosah ruky.
-check(bytes([13, 10]) not in vstup.read_bytes(),
-      "skript má unixové konce řádků")
+# CRLF line ends in the launcher mean a message about a command not found when the
+# container starts - the line end becomes a part of the name. The repository
+# was developed on Windows, so it is within reach.
+check(bytes([13, 10]) not in entry.read_bytes(),
+      "the script has Unix line ends")
 
-check("stat -c" in spoustec, "vlastníka řeší jen tehdy, když nesedí")
+check("stat -c" in entry_text, "it deals with the owner only when it does not match")
 
-# A i tehdy jen u prazdne slozky - tu prave vyrobil Docker a neni v ni
-# nic, co by patrilo cloveku. Slozka s obsahem je necich data a prepsat
-# jim vlastnika za zady je vic, nez si spoustec smi dovolit.
-check("ls -A" in spoustec, "a jen u prázdné složky")
-check("chown -R" not in spoustec.split("else", 1)[0],
-      "prázdné složce stačí jedno chown, ne rekurze")
-rada = spoustec.split("else", 1)[1] if "else" in spoustec else ""
-check("chown -R" in rada,
-      "u neprázdné složky se rekurzivní chown jen poradí, nespustí")
+# And even then only for an empty folder - that one Docker just made and there is
+# nothing in it that would belong to a person. A folder with content is somebody's data, and
+# rewriting its owner behind their back is more than the launcher may allow itself.
+check("ls -A" in entry_text, "and only for an empty folder")
+check("chown -R" not in entry_text.split("else", 1)[0],
+      "an empty folder needs one chown, not a recursion")
+advice = entry_text.split("else", 1)[1] if "else" in entry_text else ""
+check("chown -R" in advice,
+      "for a non-empty folder the recursive chown is only advised, not run")
 
-print("--- databáze, kterou nejde otevřít ---")
-# V kontejneru je tohle nejcastejsi chyba prvniho startu: pripojena
-# slozka patri rootovi, uvnitr bezi UID 10001. SQLite k tomu umi jedinou
-# vetu - "unable to open database file" - bez cesty, duvodu i rady.
+print("--- a database that cannot be opened ---")
+# In a container this is the most frequent error of the first start: the mounted
+# folder belongs to root, inside runs UID 10001. SQLite has a single
+# sentence for it - "unable to open database file" - without the path, the reason or advice.
 import tempfile as _tempfile  # noqa: E402
 
 from jellyscope import config as _config  # noqa: E402
 from jellyscope import db as _db  # noqa: E402
 from jellyscope import dialect as _dialect  # noqa: E402
 
-_kam = Path(_tempfile.mkdtemp())
-_prekazka = _kam / "tohle-je-soubor"
-_prekazka.write_text("neni to slozka", encoding="utf-8")
-_nastaveni = _dialect.DatabaseConfig(path=str(_prekazka / "jellyscope.db"))
+_where = Path(_tempfile.mkdtemp())
+_obstacle = _where / "tohle-je-soubor"
+_obstacle.write_text("neni to slozka", encoding="utf-8")
+_settings = _dialect.DatabaseConfig(path=str(_obstacle / "jellyscope.db"))
 
-# Prvni pokus je "mimo kontejner". Test sam ale muze bezet v kontejneru
-# (vyvoj v code-serveru), proto se to predstira - stejne jako v test_kontejner.
-_skutecny_kontejner = _config._v_kontejneru
-_config._v_kontejneru = lambda: False
+# The first attempt is "outside a container". But the test itself can run in a container
+# (development in code-server), so it is pretended - just as in test_container.
+_real_container = _config._in_container
+_config._in_container = lambda: False
 try:
-    with _db.connect(_nastaveni):
+    with _db.connect(_settings):
         pass
-    hlaska = ""
-    check(False, "otevření nemožné databáze mělo skončit chybou")
-except _db.DatabaseNedostupna as chyba:
-    hlaska = str(chyba)
-    check(True, "nedostupná databáze má vlastní výjimku")
-except Exception as chyba:  # noqa: BLE001
-    hlaska = ""
-    check(False, f"vyletěla holá {type(chyba).__name__}: {chyba}")
+    message = ""
+    check(False, "opening an impossible database should have ended with an error")
+except _db.DatabaseUnavailable as error:
+    message = str(error)
+    message_cs = error.translated("cs")
+    check(True, "an unavailable database has an exception of its own")
+except Exception as error:  # noqa: BLE001
+    message = ""
+    check(False, f"a bare {type(error).__name__} flew out: {error}")
 finally:
-    _config._v_kontejneru = _skutecny_kontejner
+    _config._in_container = _real_container
 
-check(str(_prekazka) in hlaska, "hláška říká, o kterou cestu jde")
-check("nejde otevřít" in hlaska, "a co se stalo")
+check(str(_obstacle) in message, "the message says which path it is about")
+check("cannot be opened" in message, f"and what happened, in English for the console ({message[:60]!r})")
+check("nejde otevřít" in message_cs and str(_obstacle) in message_cs,
+      "and in Czech for a Czech browser (the interface language is in the database)")
 
-# V kontejneru navic to, co s tim - jinak clovek hleda v aplikaci chybu,
-# ktera je na hostiteli.
+# In a container, on top, what to do about it - otherwise a person looks for a fault in the app
+# that is on the host.
 os.environ["JELLYSCOPE_DOCKER"] = "1"
 try:
-    with _db.connect(_nastaveni):
+    with _db.connect(_settings):
         pass
-    v_dockeru = ""
-except _db.DatabaseNedostupna as chyba:
-    v_dockeru = str(chyba)
+    in_docker = ""
+except _db.DatabaseUnavailable as error:
+    in_docker = str(error)
 finally:
     os.environ.pop("JELLYSCOPE_DOCKER", None)
 
-check("chown -R 10001:10001" in v_dockeru,
-      "v kontejneru poradí, komu složku předat")
-_cesky, _anglicky = _db._proc_nejde_otevrit(_prekazka, OSError("x"))
-check("cannot be opened" in _anglicky,
-      "hláška z databáze existuje i anglicky")
-check(str(_prekazka) in _anglicky, "a nese tutéž cestu")
-check(_cesky != _anglicky, "a nejsou to dva stejné texty")
-check("10001" not in hlaska,
-      "a mimo kontejner tou radou neplete (tam žádné UID 10001 není)")
+check("chown -R 10001:10001" in in_docker,
+      "in a container it advises whom to hand the folder over to")
+_lines = _db._why_unopenable(_obstacle, OSError("x"))
+_english = _db.DatabaseUnavailable(_lines)
+check(str(_english).startswith("The database") and str(_obstacle) in str(_english),
+      "the message is made of keys and values: English with the path")
+check(_english.translated("cs") != str(_english) and str(_obstacle) in _english.translated("cs"),
+      "and the same path in another language")
+check("10001" not in message,
+      "and outside a container it does not confuse with that advice (there is no UID 10001 there)")
 
-# Druhy zpusob, jak se to stane: soubor s databazi existuje a otevrit se
-# da, ale psat do nej nejde. Spojeni tedy vznikne a spadne az prvni zapis
-# ("attempt to write a readonly database") - zvenku je to tataz porucha
-# a patri k ni tataz odpoved.
+# The second way it happens: the database file exists and can be opened,
+# but it cannot be written to. So the connection comes about and falls over only at the first write
+# ("attempt to write a readonly database") - from outside it is the same fault
+# and the same answer belongs to it.
 import os as _os  # noqa: E402
 import sqlite3 as _sqlite3  # noqa: E402
 import stat as _stat  # noqa: E402
 
-_kam2 = Path(_tempfile.mkdtemp())
-_soubor = _kam2 / "jenprocteni.db"
-_spojeni = _sqlite3.connect(_soubor)
-_spojeni.execute("CREATE TABLE zkouska (a INTEGER)")
-_spojeni.commit()
-_spojeni.close()
-_os.chmod(_soubor, _stat.S_IREAD)
+_where2 = Path(_tempfile.mkdtemp())
+_file = _where2 / "jenprocteni.db"
+_connection = _sqlite3.connect(_file)
+_connection.execute("CREATE TABLE zkouska (a INTEGER)")
+_connection.commit()
+_connection.close()
+_os.chmod(_file, _stat.S_IREAD)
 
 try:
-    with _db.connect(_dialect.DatabaseConfig(path=str(_soubor))):
+    with _db.connect(_dialect.DatabaseConfig(path=str(_file))):
         pass
-    check(False, "databáze jen pro čtení měla skončit chybou")
-    _hlaska2 = ""
-except _db.DatabaseNedostupna as chyba:
-    _hlaska2 = str(chyba)
-    check(True, "i databáze jen pro čtení má vlastní výjimku")
-except Exception as chyba:  # noqa: BLE001
-    _hlaska2 = ""
-    check(False, f"vyletěla holá {type(chyba).__name__}: {chyba}")
-check("jen pro čtení" in _hlaska2,
-      "a hláška říká, že je soubor jen pro čtení")
-_os.chmod(_soubor, _stat.S_IWRITE | _stat.S_IREAD)
+    check(False, "a read-only database should have ended with an error")
+    _message2 = ""
+except _db.DatabaseUnavailable as error:
+    _message2 = str(error)
+    check(True, "a read-only database has an exception of its own too")
+except Exception as error:  # noqa: BLE001
+    _message2 = ""
+    check(False, f"a bare {type(error).__name__} flew out: {error}")
+check("read-only" in _message2,
+      "and the message says the file is read-only")
+_os.chmod(_file, _stat.S_IWRITE | _stat.S_IREAD)
 
 print()
-print("--- náhradní stránka bez databáze ---")
-# Kontejner ma nabehnout i tak a rict, co se deje - jinak je v prohlizeci
-# jen "nelze se pripojit" a odpoved lezi v logu, kam nikdo neposlal.
+print("--- the stand-in page without a database ---")
+# The container is to come up even so and say what is going on - otherwise the browser
+# has only "unable to connect" and the answer lies in the log nobody sent.
 from starlette.testclient import TestClient as _TestClient  # noqa: E402
 
-from jellyscope import porucha  # noqa: E402
+from jellyscope import outage  # noqa: E402
 
-_hlaska = "Databázi /app/data/jellyscope.db nejde otevřít: do složky se nesmí zapisovat."
-_hlaska_en = "The database /app/data/jellyscope.db cannot be opened: the folder cannot be written to."
-with _TestClient(porucha.aplikace(_hlaska, _hlaska_en)) as _klient:
-    for _cesta in ("/", "/login", "/settings?section=data", "/cokoliv"):
-        _odpoved = _klient.get(_cesta)
-        check(_odpoved.status_code == 503,
-              f"{_cesta} odpoví 503 ({_odpoved.status_code})")
-    _telo = _klient.get("/").text
+_error = _db.DatabaseUnavailable([("The database {path} cannot be opened: the folder {folder} cannot be written to.",
+                                   {"path": "/app/data/jellyscope.db", "folder": "/app/data"})])
+_message_en = "The database /app/data/jellyscope.db cannot be opened: the folder /app/data cannot be written to."
+_message_cs = "Databázi /app/data/jellyscope.db nejde otevřít: do složky /app/data se nesmí zapisovat."
+with _TestClient(outage.app(_error)) as _client:
+    for _path in ("/", "/login", "/settings?section=data", "/cokoliv"):
+        _response = _client.get(_path)
+        check(_response.status_code == 503,
+              f"{_path} answers 503 ({_response.status_code})")
+    _body = _client.get("/").text
+    _body_cs = _client.get("/", headers={"Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.8"}).text
+    _body_es = _client.get("/", headers={"Accept-Language": "fr;q=1, es;q=0.7"}).text
+    _body_none = _client.get("/", headers={"Accept-Language": "fr, ja;q=0.5"}).text
 
-check(_hlaska in _telo, "stránka nese hlášku z databáze")
-# Vcetne te hlasky samotne: nadpis anglicky a text cesky by byl pulkrok.
-check(_hlaska_en in _telo, "a tutéž hlášku i anglicky")
-check("cannot open its database" in _telo,
-      "stránka kolem ní je dvojjazyčná taky (jazyk rozhraní je v databázi)")
-check("docker compose restart" in _telo, "říká i to, co udělat potom")
+check(_message_en in _body and "cannot open its database" in _body,
+      "without a browser language the page is English (the interface language is in the database)")
+check("Databázi" not in _body, "and only English")
+check(_message_cs in _body_cs and "nemůže otevřít databázi" in _body_cs and 'lang="cs"' in _body_cs,
+      "a Czech browser gets the page in Czech")
+check(_message_en in _body_cs and _body_cs.index(_message_cs) < _body_cs.index(_message_en),
+      "and English below it")
+check("no puede abrir su base de datos" in _body_es,
+      "the first wanted language with a translation is taken (French has none, Spanish has)")
+check(_body_none == _body, "a browser with no known language gets the English page")
+check("docker compose restart" in _body and "docker compose restart" in _body_cs, "it also says what to do afterwards")
+check(outage.browser_language("de;q=0, cs;q=0.5") == "cs" and outage.browser_language("") == "en"
+      and outage.browser_language("ES-es") == "es", "a weight of zero, an empty header and a region are understood")
 
-# Hlaska nese cesty ze systemu. Do stranky patri jako text - jinak by
-# nazev slozky mohl do stranky propasovat znacky.
-_utok = porucha.stranka('<script>alert(1)</script>')
-check("<script>alert(1)</script>" not in _utok, "text z hlášky se escapuje")
-check("&lt;script&gt;" in _utok, "a projde jako text")
+# The message carries paths from the system. They belong in the page as text - otherwise
+# a folder's name could smuggle tags into the page.
+_attack = outage.page('<script>alert(1)</script>')
+check("<script>alert(1)</script>" not in _attack, "the message's text is escaped")
+check("&lt;script&gt;" in _attack, "and passes as text")
 
 print("--- docker compose ---")
-# Compose predava kontejneru jen to, co je v souboru vypsane. Co tam
-# chybi, se do kontejneru nedostane - a pozna se to az na serveru, kde
-# se aplikace chova jinak nez doma.
+# Compose passes the container only what is listed in the file. What is
+# missing there does not get into the container - and it shows only on the server, where
+# the app behaves differently than at home.
 compose = (PROJECT / "docker-compose.yml").read_text(encoding="utf-8")
 for needle, why in [
-    ("SECRET_KEY: \"${SECRET_KEY:?", "bez podpisového klíče se kontejner nespustí"),
+    ("SECRET_KEY: \"${SECRET_KEY:?", "without a signing key the container does not start"),
     ("JELLYSCOPE_DEMO: \"${JELLYSCOPE_DEMO:-0}\"",
-     "ukázkový režim jde zapnout, ale sám se nezapne"),
-    ("HOST: \"0.0.0.0\"", "uvnitř kontejneru se poslouchá na všech adresách"),
-    (":/app/data", "data leží na hostiteli, ne v kontejneru"),
-    ("no-new-privileges:true", "kontejner si nepřidá práva"),
+     "the demo mode can be switched on, but does not switch on by itself"),
+    ("HOST: \"0.0.0.0\"", "inside the container it listens on all addresses"),
+    (":/app/data", "the data lies on the host, not in the container"),
+    ("no-new-privileges:true", "the container does not add rights to itself"),
 ]:
     check(needle in compose, f"compose: {why}")
 
-# Ukazkovy rezim se nesmi zapnout sam - verejna ukazka je jina vec nez
-# domaci instalace a zamenit je znamena bud nefunkcni nastaveni, nebo
-# verejne pristupnou konfiguraci.
+# The demo mode must not switch on by itself - a public demo is another thing than
+# a home installation, and mixing them up means either settings that do not work, or a
+# publicly reachable configuration.
 check(cfg.load_config(reload=True).demo_mode is False,
-      "bez proměnné je ukázkový režim vypnutý")
+      "without the variable the demo mode is off")
 os.environ["JELLYSCOPE_DEMO"] = "1"
 check(cfg.load_config(reload=True).demo_mode is True,
-      "a s JELLYSCOPE_DEMO=1 zapnutý")
+      "and with JELLYSCOPE_DEMO=1 on")
 os.environ.pop("JELLYSCOPE_DEMO", None)
 
 print("--- .env.example ---")
 example = (PROJECT / ".env.example").read_text(encoding="utf-8")
-check("SECURE_COOKIES=" in example, "SECURE_COOKIES je v příkladu zmíněné")
-check("FORWARDED_ALLOW_IPS=" in example, "FORWARDED_ALLOW_IPS je v příkladu zmíněné")
-# Kdyby bylo v příkladu zapnuté, člověk by ho zkopíroval, spustil na
-# http://localhost a marně by se pokoušel přihlásit.
+check("SECURE_COOKIES=" in example, "SECURE_COOKIES is mentioned in the example")
+check("FORWARDED_ALLOW_IPS=" in example, "FORWARDED_ALLOW_IPS is mentioned in the example")
+# Were it switched on in the example, a person would copy it, run it on
+# http://localhost and try in vain to sign in.
 check("SECURE_COOKIES=1" not in example,
-      "SECURE_COOKIES v příkladu NENÍ zapnuté")
+      "SECURE_COOKIES is NOT switched on in the example")
 check("JELLYSCOPE_PASSWORD" not in example,
-      "v příkladu už není staré heslo (přesunulo se do databáze)")
+      "the example no longer has the old password (it moved into the database)")
 
 print()
-print("HOTOVO - chyb:", failures)
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

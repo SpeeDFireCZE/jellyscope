@@ -1,0 +1,13 @@
+{# The Seerr card "Request numbers": how much was requested and what.
+
+   From the database (cards_seerr.py, `d` = stats.seerr_summary). A row of tiles without
+   a heading; in a dashboard it carries a small label with the name Seerr. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Requests#count"), d.count | number) }}
+    {{ tile(_("Movies"), d.movies | number) }}
+    {{ tile(_("TV shows"), d.series_list | number) }}
+    {{ tile(_("4K"), d.four_k | number) }}
+    {{ tile(_("Automatic (watchlist)"), d.automatic | number) }}
+</div>

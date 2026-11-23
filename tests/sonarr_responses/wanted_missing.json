@@ -1,0 +1,28 @@
+{
+ "page": 1,
+ "pageSize": 1,
+ "sortKey": "episodes.airDateUtc",
+ "sortDirection": "descending",
+ "totalRecords": 73,
+ "records": [
+  {
+   "seriesId": 2,
+   "tvdbId": 7116987,
+   "episodeFileId": 0,
+   "seasonNumber": 1,
+   "episodeNumber": 5,
+   "title": "Vichnaya Pamyat",
+   "airDate": "2019-06-03",
+   "airDateUtc": "2019-06-04T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:10:35Z",
+   "runtime": 72,
+   "finaleType": "series",
+   "overview": "Valery Legasov, Boris Shcherbina and Ulana Khomyuk risk their lives and reputations to expose the truth about Chernobyl.",
+   "hasFile": false,
+   "monitored": true,
+   "absoluteEpisodeNumber": 5,
+   "unverifiedSceneNumbering": false,
+   "id": 145
+  }
+ ]
+}

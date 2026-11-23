@@ -1,0 +1,26 @@
+{# The Prowlarr card "App warnings": what Prowlarr itself reports as a problem.
+
+   Live from Prowlarr (cards_prowlarr.py, `d.zdravi`: typ, zprava). Only the admin
+   gets the texts (cards_prowlarr.for_account) - they name indexers and often hold
+   addresses; others see only how many warnings there are. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("reported by the app itself") }}</p>
+    </div>
+    {% if not d.available %}
+        <p class="chart-empty">{{ _("The app is not responding.") }}</p>
+    {% elif d.warnings is none %}
+        <p class="chart-empty">{{ _("The warnings could not be loaded from the app.") }}</p>
+    {% elif d.health %}
+        <ul class="flash-list">
+        {% for z in d.health %}
+            <li class="break-anywhere"><span class="badge {{ 'critical' if z.type == 'error' else 'warning' }}">{{ z.type }}</span> {{ z.message }}</li>
+        {% endfor %}
+        </ul>
+    {% elif d.warnings %}
+        <p class="chart-empty">{{ _("The app reports warnings: {n}. Details are visible to the admin.").format(n=d.warnings | number) }}</p>
+    {% else %}
+        <p class="chart-empty">{{ _("The app reports no warnings.") }}</p>
+    {% endif %}
+</div>

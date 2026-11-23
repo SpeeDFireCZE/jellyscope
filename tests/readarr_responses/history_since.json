@@ -1,0 +1,858 @@
+[
+  {
+    "id": 101,
+    "bookId": 11,
+    "authorId": 1,
+    "sourceTitle": "Karel Čapek - Válka s mloky (1936) EPUB",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "EPUB"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T20:50:18Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "arr-test",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "releaseGroup": "WRE",
+      "age": "0",
+      "ageHours": "1",
+      "ageMinutes": "60",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "size": "4000000",
+      "downloadUrl": "http://127.0.0.1:8990/getnzb/x",
+      "guid": "http://127.0.0.1:8990/details/x",
+      "protocol": "1",
+      "downloadForced": "False",
+      "customFormatScore": "0",
+      "releaseSource": "Rss",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 11,
+      "title": "Válka s mloky",
+      "authorId": 1,
+      "foreignBookId": "200011",
+      "releaseDate": "1936-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 102,
+    "bookId": 11,
+    "authorId": 1,
+    "sourceTitle": "Karel Čapek - Válka s mloky (1936) EPUB",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "EPUB"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-12T21:00:05Z",
+    "downloadId": "SABnzbd_nzo_aaa111",
+    "eventType": "bookFileImported",
+    "data": {
+      "fileId": "1102",
+      "droppedPath": "/dl/x/1102.epub",
+      "importedPath": "/books/x/1102.epub",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "4000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 11,
+      "title": "Válka s mloky",
+      "authorId": 1,
+      "foreignBookId": "200011",
+      "releaseDate": "1936-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 103,
+    "bookId": 11,
+    "authorId": 1,
+    "sourceTitle": "Karel Čapek - Válka s mloky (1936) AZW3",
+    "quality": {
+      "quality": {
+        "id": 3,
+        "name": "AZW3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T08:10:00Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "arr-test",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "releaseGroup": "AZWGRP",
+      "age": "0",
+      "ageHours": "1",
+      "ageMinutes": "60",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "size": "6000000",
+      "downloadUrl": "http://127.0.0.1:8990/getnzb/x",
+      "guid": "http://127.0.0.1:8990/details/x",
+      "protocol": "1",
+      "downloadForced": "False",
+      "customFormatScore": "0",
+      "releaseSource": "InteractiveSearch",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 11,
+      "title": "Válka s mloky",
+      "authorId": 1,
+      "foreignBookId": "200011",
+      "releaseDate": "1936-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 104,
+    "bookId": 11,
+    "authorId": 1,
+    "sourceTitle": "/books/x/1102.epub",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "EPUB"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:00Z",
+    "downloadId": null,
+    "eventType": "bookFileDeleted",
+    "data": {
+      "reason": "Upgrade",
+      "releaseGroup": "WRE",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 11,
+      "title": "Válka s mloky",
+      "authorId": 1,
+      "foreignBookId": "200011",
+      "releaseDate": "1936-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 105,
+    "bookId": 11,
+    "authorId": 1,
+    "sourceTitle": "Karel Čapek - Válka s mloky (1936) AZW3",
+    "quality": {
+      "quality": {
+        "id": 3,
+        "name": "AZW3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-14T09:00:10Z",
+    "downloadId": "SABnzbd_nzo_bbb222",
+    "eventType": "bookFileImported",
+    "data": {
+      "fileId": "1108",
+      "droppedPath": "/dl/x/1108.azw3",
+      "importedPath": "/books/x/1108.azw3",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "releaseGroup": "AZWGRP",
+      "size": "6000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 11,
+      "title": "Válka s mloky",
+      "authorId": 1,
+      "foreignBookId": "200011",
+      "releaseDate": "1936-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 106,
+    "bookId": 12,
+    "authorId": 1,
+    "sourceTitle": "Bílá nemoc",
+    "quality": {
+      "quality": {
+        "id": 4,
+        "name": "PDF"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-15T10:00:00Z",
+    "downloadId": null,
+    "eventType": "bookFileImported",
+    "data": {
+      "fileId": "1114",
+      "droppedPath": "/manual/0.pdf",
+      "importedPath": "/books/x/b0.pdf",
+      "downloadClient": null,
+      "downloadClientName": null,
+      "releaseGroup": null,
+      "size": "1000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 12,
+      "title": "Bílá nemoc",
+      "authorId": 1,
+      "foreignBookId": "200012",
+      "releaseDate": "1937-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 107,
+    "bookId": 12,
+    "authorId": 1,
+    "sourceTitle": "Bílá nemoc",
+    "quality": {
+      "quality": {
+        "id": 4,
+        "name": "PDF"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-15T10:00:01Z",
+    "downloadId": null,
+    "eventType": "bookFileImported",
+    "data": {
+      "fileId": "1115",
+      "droppedPath": "/manual/1.pdf",
+      "importedPath": "/books/x/b1.pdf",
+      "downloadClient": null,
+      "downloadClientName": null,
+      "releaseGroup": null,
+      "size": "1000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 12,
+      "title": "Bílá nemoc",
+      "authorId": 1,
+      "foreignBookId": "200012",
+      "releaseDate": "1937-01-01T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 1,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 108,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-16T12:00:00Z",
+    "downloadId": "tor_hash_ccc333",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "tracker",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "releaseGroup": "TGRP",
+      "age": "0",
+      "ageHours": "1",
+      "ageMinutes": "60",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "downloadClient": "qBittorrent",
+      "downloadClientName": "qBittorrent main",
+      "size": "60000000",
+      "downloadUrl": "http://127.0.0.1:8990/getnzb/x",
+      "guid": "http://127.0.0.1:8990/details/x",
+      "protocol": "2",
+      "downloadForced": "False",
+      "customFormatScore": "0",
+      "releaseSource": "Search",
+      "indexerFlags": "0",
+      "torrentInfoHash": "ABCDEF0123456789"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 109,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-16T12:30:00Z",
+    "downloadId": "tor_hash_ccc333",
+    "eventType": "downloadFailed",
+    "data": {
+      "downloadClient": "qBittorrent",
+      "downloadClientName": "qBittorrent main",
+      "message": "Download client failed",
+      "releaseGroup": "TGRP",
+      "size": "60000000",
+      "indexer": "tracker"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 110,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T12:00:00Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "grabbed",
+    "data": {
+      "indexer": "arr-test",
+      "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
+      "releaseGroup": "WRE",
+      "age": "0",
+      "ageHours": "1",
+      "ageMinutes": "60",
+      "publishedDate": "2026-11-12T19:50:16Z",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "size": "98000000",
+      "downloadUrl": "http://127.0.0.1:8990/getnzb/x",
+      "guid": "http://127.0.0.1:8990/details/x",
+      "protocol": "1",
+      "downloadForced": "False",
+      "customFormatScore": "0",
+      "releaseSource": "UserInvokedSearch",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 111,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T12:40:00Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "bookImportIncomplete",
+    "data": {
+      "statusMessages": "[]",
+      "releaseGroup": "WRE",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 112,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T13:00:00Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "bookFileImported",
+    "data": {
+      "fileId": "1120",
+      "droppedPath": "/dl/x/1120.mp3",
+      "importedPath": "/books/x/1120.mp3",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "49000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 113,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T13:00:01Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "bookFileImported",
+    "data": {
+      "fileId": "1121",
+      "droppedPath": "/dl/x/1121.mp3",
+      "importedPath": "/books/x/1121.mp3",
+      "downloadClient": "SABnzbd",
+      "downloadClientName": "SABnzbd main",
+      "releaseGroup": "WRE",
+      "size": "49000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 114,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "Terry Pratchett - Stráže! Stráže! (1989) MP3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-17T13:00:30Z",
+    "downloadId": "SABnzbd_nzo_ddd444",
+    "eventType": "downloadImported",
+    "data": {},
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 115,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "/books/x/1120.mp3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T08:00:00Z",
+    "downloadId": null,
+    "eventType": "bookFileRenamed",
+    "data": {
+      "sourcePath": "/books/x/1120.mp3",
+      "path": "/books/x/01.mp3",
+      "releaseGroup": "WRE",
+      "size": "49000000",
+      "indexerFlags": "0"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 116,
+    "bookId": 22,
+    "authorId": 2,
+    "sourceTitle": "/books/x/01.mp3",
+    "quality": {
+      "quality": {
+        "id": 5,
+        "name": "MP3"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T08:05:00Z",
+    "downloadId": null,
+    "eventType": "bookFileRetagged",
+    "data": {
+      "tagsScrubbed": "False",
+      "diff": "[]"
+    },
+    "book": {
+      "id": 22,
+      "title": "Stráže! Stráže!",
+      "authorId": 2,
+      "foreignBookId": "200022",
+      "releaseDate": "1989-11-19T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 117,
+    "bookId": 21,
+    "authorId": 2,
+    "sourceTitle": "Terry.Pratchett.Mort.1987.EPUB",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "EPUB"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-18T07:00:00Z",
+    "downloadId": "SABnzbd_nzo_eee555",
+    "eventType": "downloadIgnored",
+    "data": {
+      "downloadClient": "SABnzbd main",
+      "message": "Ignored by hand",
+      "releaseGroup": "WRE",
+      "size": "3000000",
+      "indexer": "arr-test"
+    },
+    "book": {
+      "id": 21,
+      "title": "Mort",
+      "authorId": 2,
+      "foreignBookId": "200021",
+      "releaseDate": "1987-11-12T00:00:00Z",
+      "monitored": true
+    },
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  },
+  {
+    "id": 118,
+    "bookId": 21,
+    "authorId": 2,
+    "sourceTitle": "/books/x/mort.epub",
+    "quality": {
+      "quality": {
+        "id": 2,
+        "name": "EPUB"
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "customFormats": [],
+    "customFormatScore": 0,
+    "qualityCutoffNotMet": false,
+    "date": "2026-11-19T09:00:00Z",
+    "downloadId": null,
+    "eventType": "bookFileDeleted",
+    "data": {
+      "reason": "Manual",
+      "releaseGroup": "WRE",
+      "indexerFlags": "0"
+    },
+    "book": null,
+    "author": {
+      "id": 2,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "status": "ended"
+    }
+  }
+]

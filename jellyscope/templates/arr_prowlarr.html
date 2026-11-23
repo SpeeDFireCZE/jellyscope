@@ -1,0 +1,81 @@
+{# The *Arr page, the Prowlarr tab: indexers, the queries to them and the grabbed releases.
+
+   The cards are from the registry (jellyscope/cards_prowlarr.py) - the same ones that can
+   be added to a custom dashboard. Here they have a fixed layout by sections;
+   every place is {{ c("…") }} = a card of Prowlarr. Which cards the account sees was
+   decided by the route (web/arr.py, `cards`), not the template, and it computed only
+   their data. Card names and the order of sections: cards_prowlarr.SECTIONS - that they
+   match the template is checked by tests/test_prowlarr_web.py.
+
+   The route is shared by all apps of the *Arr page (web/arr.py), `app` is the one
+   shown; the *Arr submenu switches between apps (jellyscope/navigation.py).
+   A disconnected Prowlarr never gets here (404). #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}*Arr · {{ app_name }} · Jellyscope{% endblock %}
+
+{# A Prowlarr card by its name ("numbers" -> prowlarr_numbers). #}
+{% macro c(card_name) %}{{ show_card("prowlarr_" ~ card_name) }}{% endmacro %}
+
+{# A section heading - only when the account sees at least one of its cards (`sections_shown`). #}
+{% macro page_section(key_name, heading, subtitle) %}
+{% if key_name in sections_shown %}
+<div class="section-head">
+    <div>
+        <h2>{{ heading }}</h2>
+        <p class="subtitle">{{ subtitle }}</p>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        {# The tab bar is gone (the *Arr submenu took over), so the heading names the app. #}
+        <h1>{{ app_name }}</h1>
+        <p class="subtitle">
+            {{ _("Indexers in Prowlarr: which are not working right now, how many queries go to them, how fast they answer and what the apps grab from them.") }}
+        </p>
+    </div>
+    {{ period_filter(period, '/arr/' ~ app) }}
+</div>
+
+
+{# ------------------------------------------------------------------ #}
+{# At the top the state right now: which indexers do not work. The    #}
+{# period switch does not affect this section.                        #}
+{{ page_section("In the app right now", _("In the app right now"), _("The state at this moment. The selected period does not affect it.")) }}
+{{ c("live_numbers") }}
+<div class="grid-2 align-top">
+    {{ c("indexers_now") }}
+    {{ c("health") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Queries", _("Queries"), _("Searches and RSS queries the apps sent to the indexers through Prowlarr in the selected period.")) }}
+{{ c("numbers") }}
+{{ c("by_day") }}
+<div class="grid-2 align-top">
+    {{ c("when") }}
+    {{ c("who") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Indexer performance", _("Indexer performance"), _("How the indexers answer: how many queries failed, how fast the answer came and whether the searches found anything.")) }}
+{# All three at the full width (as in the registry): a chart by day at half the page shrinks with its font too. #}
+{{ c("indexers") }}
+{{ c("response_time") }}
+{{ c("failures") }}
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Grabbed releases", _("Grabbed releases"), _("Releases the apps grabbed from the indexers. Prowlarr knows how a download ended only for the ones it downloaded itself.")) }}
+{{ c("grabbed_numbers") }}
+<div class="grid-2 align-top">
+    {{ c("grabbed_indexers") }}
+    {{ c("grabbed_latest") }}
+</div>
+
+{# One window for the whole table of any card (whole_table_button). #}
+{{ table_window() }}
+{% endblock %}

@@ -1,0 +1,13 @@
+{# The Readarr card "Numbers for the period": how many books were imported into the library and how many downloads failed.
+
+   From the database (cards_readarr.py, `d` = the period's sums of additions and failures; `d.files` is
+   the files of those books, already worded). A row of tiles without a heading; in a dashboard it
+   carries a small label with the app. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Books imported into the library"), d.count | number, note=d.files ~ " · " ~ (d.size_bytes | bytes)) }}
+    {{ tile(_("New"), d.new_count | number) }}
+    {{ tile(_("Upgrades"), d.upgrade_count | number) }}
+    {{ tile(_("Failed downloads in the period"), d.failures | number) }}
+</div>

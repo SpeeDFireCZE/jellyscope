@@ -1,0 +1,43 @@
+{# One panel of a custom dashboard.
+
+   A template of its own because the panel's wrapper (width, the card's key) is
+   shared by all cards - were it copied in a loop on the page,
+   a change of the wrapper would have to be made in two places.
+
+   It is arranged in a window with a grid of tiles (see dashboard.html), so
+   there are no controls here - a panel is just a panel.
+
+   Expects `card` (an entry of the registry, see jellyscope/cards.py). #}
+{% from "_macros.html" import card_title with context %}
+{# A card of an app that is not connected (cards.is_available): the dashboard for
+   everyone does not draw it at all - only whoever builds it has its tile in the window
+   with the layout. In My dashboard it stays in place with a sentence why: the person
+   put it there themselves, so they should not have to guess where it went. #}
+{% if card.key not in unavailable or personal %}
+<div class="dash-card dash-{{ card.width }}" data-card="{{ card.key }}"
+     data-width="{{ card.width }}">
+    {% if card.key in unavailable %}
+        <div class="card dash-no-permission">
+            <div class="card-head"><h2>{{ card_title(card) }}</h2></div>
+            <p class="card-note">
+                {{ _("{app} is not connected. The card will show up once an administrator connects it.").format(app=_(card.group)) }}
+            </p>
+        </div>
+    {# A card outside the permissions (only My dashboard - the dashboard for everyone does
+       not send it at all): in its place and at its width, with the name and the reason. Its
+       data were not computed, so there is nothing to give away here. #}
+    {% elif card.key in without_permission %}
+        <div class="card dash-no-permission">
+            <div class="card-head"><h2>{{ card_title(card) }}</h2></div>
+            <p class="card-note">
+                {%- set parts = [] -%}
+                {%- for part in areas[without_permission[card.key]].heading %}{% set x = parts.append(_(part)) %}{% endfor -%}
+                {{ _('You have no permission for the "{area}" area. The card shows once the admin allows it.').format(area=parts | join(" · ")) }}
+            </p>
+        </div>
+    {% else %}
+        {# The same drawing as on the Overview, with the card's live wrapper too. #}
+        {% include "_card.html" %}
+    {% endif %}
+</div>
+{% endif %}

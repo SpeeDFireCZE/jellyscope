@@ -1,0 +1,182 @@
+{# The comparison of two periods - the macros /video/compare and /music/compare are drawn with, so both pages
+   look the same (Music laid out like Movies & series, the user, 22. 11. 2026). The data come from
+   stats.comparison() / stats.music_comparison() in one shape: groups of rows with the difference, the
+   charts of both periods. Imported `with context` (day_labels, the translations). #}
+{% from "_macros.html" import period_switch, link with context %}
+
+{# One number in the shape it belongs to. The shape is decided by stats.comparison(),
+   because that is where it is known what was counted - the template only draws. #}
+{% macro figure(form, val) -%}
+    {%- if form == 'hours' -%}{{ val | hours }}
+    {%- elif form == 'percent' -%}{{ val | percent(1) }}
+    {%- elif form == 'bytes' -%}{{ val | bytes }}
+    {%- elif form == 'mbit' -%}{{ val | round(1) }} Mbit/s
+    {%- else -%}{{ val | number }}
+    {%- endif -%}
+{%- endmacro %}
+
+{# The difference of A against B.
+
+   The absolute value is formatted and the sign added: `| hours`
+   and `| bytes` take a negative number as zero, so "-25 h" would be written
+   as "0 min" and the column would claim nothing changed.
+
+   For a figure that is a percentage itself no relative change is added:
+   "from 12 % to 18 %" is +6 percentage points, not +50 %. #}
+{% macro difference(line) %}
+    {% if line.difference > 0 %}
+        <span class="delta up">&#9650;
+            +{{ figure(line.form, line.difference | abs) }}{% if line.form == 'percent' %} {{ _("pp") }}{% endif %}
+            {% if line.relative is not none %}
+                <span class="muted">({{ line.relative | percent }})</span>
+            {% endif %}
+        </span>
+    {% elif line.difference < 0 %}
+        <span class="delta down">&#9660;
+            &minus;{{ figure(line.form, line.difference | abs) }}{% if line.form == 'percent' %} {{ _("pp") }}{% endif %}
+            {% if line.relative is not none %}
+                <span class="muted">({{ (line.relative | abs) | percent }})</span>
+            {% endif %}
+        </span>
+    {% else %}
+        <span class="delta flat">{{ _("no change") }}</span>
+    {% endif %}
+{% endmacro %}
+
+{# How the period is called in the column's heading. #}
+{% macro period_description(period) -%}
+    {%- if period.own -%}
+        {{ period.since_label }} &ndash; {{ period.until_label }}
+    {%- else -%}
+        {{ _(day_labels[period.days]) }}
+    {%- endif -%}
+{%- endmacro %}
+
+{# The two switches of the periods; the links of one keep the other (query_a / query_b). #}
+{% macro switches(url, period_a, period_b, query_a, query_b) %}
+<div class="card">
+    <div class="compare-options">
+        {{ period_switch(_("Period A"), period_a, url, 'a', query_b) }}
+        {{ period_switch(_("Period B"), period_b, url, 'b', query_a) }}
+    </div>
+</div>
+{% endmacro %}
+
+{# What the table would keep quiet otherwise: an overlap and periods of different length. #}
+{% macro notes(comparison) %}
+{% if comparison.overlap %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("The periods overlap: some playback is counted in both columns, so the difference between them does not measure a change.") }}
+    </span>
+</div>
+{% endif %}
+
+{% if not comparison.same_length %}
+<div class="flash info">
+    <span class="dot"></span>
+    <span>
+        {{ _("The periods are not the same length") }}
+        ({{ _n("{n} days", comparison.a.days | round(0) | int) }}
+        vs. {{ _n("{n} days", comparison.b.days | round(0) | int) }}) –
+        {{ _("in totals the longer period wins almost every time. Compare the daily average.") }}
+    </span>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Neither period has anything recorded - said instead of an empty table. #}
+{% macro nothing_to_compare(text) %}
+<div class="card">
+    <h2>{{ _("There is nothing to compare in either period") }}</h2>
+    <p class="card-note" style="margin-top:10px">
+        {{ text }}
+    </p>
+</div>
+{% endmacro %}
+
+{# The groups of rows: period A, period B and the difference; a group `with_share` has the share beside the hours. #}
+{% macro groups_table(comparison, period_a, period_b) %}
+{% for group in comparison.groups %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ group.heading }}</h2>
+    </div>
+    <div class="table-wrap">
+        <table class="compare">
+            <thead><tr>
+                <th></th>
+                <th class="num">{{ _("Period A") }}<br>
+                    <span class="muted">{{ period_description(period_a) }}</span></th>
+                <th class="num">{{ _("Period B") }}<br>
+                    <span class="muted">{{ period_description(period_b) }}</span></th>
+                <th class="num">{{ _("Difference") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for line in group.rows %}
+            <tr>
+                <td>{{ line.label }}</td>
+                {# For languages the share stands beside the hours. With periods of different
+                   length the share is the only honest number: in a year
+                   more hours of anything are watched than in August, but the ratio
+                   of Czech and English does not change by it. #}
+                {# `data-label` carries the column's name. On a phone the table
+                   becomes blocks (see `table.srovnani` in the style) and the heading
+                   disappears - without it four numbers would stand there without telling
+                   which belongs to which period. #}
+                <td class="num strong" data-label="{{ _("Period A") }}">{{ figure(line.form, line.a) }}
+                    {% if group.with_share %}
+                        <span class="muted">({{ line.share_a | percent }})</span>
+                    {% endif %}
+                </td>
+                <td class="num strong" data-label="{{ _("Period B") }}">{{ figure(line.form, line.b) }}
+                    {% if group.with_share %}
+                        <span class="muted">({{ line.share_b | percent }})</span>
+                    {% endif %}
+                </td>
+                <td class="num" data-label="{{ _("Difference") }}">{{ difference(line) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endmacro %}
+
+{# A chart of one period. Rankings are not added up, so they do not belong in the table of differences - they
+   belong side by side. Exactly there it shows what numbers do not tell: that in December
+   somebody else watched something else. #}
+{% macro chart_card(title, label, period, rows, people=False, unnamed="–") %}
+    <div class="card">
+        <div class="card-head">
+            <h2>{{ title }}</h2>
+            <p class="card-note">{{ label }}: {{ period_description(period) }}</p>
+        </div>
+        {% if rows %}
+        <div class="table-wrap">
+            <table>
+                <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="strong">{% call link(row.user_id and "/users/" ~ row.user_id if people else row.detail_url) %}{{ row.label or unnamed }}{% endcall %}</td>
+                    <td class="num">{{ row.hours | hours }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="chart-empty">{{ _("Nothing in this period.") }}</p>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{# The same chart of both periods side by side; `people` = the rows are viewers (a link to the person). #}
+{% macro chart_pair(title, comparison, period_a, period_b, key, people=False, unnamed="–") %}
+<div class="grid-2">
+{{ chart_card(title, _("Period A"), period_a, comparison.a[key], people, unnamed) }}
+{{ chart_card(title, _("Period B"), period_b, comparison.b[key], people, unnamed) }}
+</div>
+{% endmacro %}

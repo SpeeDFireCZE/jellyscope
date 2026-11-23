@@ -1,44 +1,60 @@
-"""Překlad rozhraní.
+"""Translating the interface.
 
-Aplikace je psaná česky a čeština je **zdrojový jazyk**: v šablonách jsou
-rovnou české věty, ne umělé klíče jako `dashboard.title`.
+The source language is English: the templates and the code hold English
+sentences directly, not artificial keys like `dashboard.title`.
 
 ```jinja
-{{ _("Přehled") }}
+{{ _("Overview") }}
+{{ _n("{n} records", total) }}
 ```
 
-Když je nastavený jiný jazyk, funkce `translate()` větu najde ve slovníku.
-Když je nastavená čeština, vrátí ji beze změny.
+When another language is set, `translate()` finds the sentence in that
+language's dictionary; in English it shows the template's own text.
 
-Proč takhle a ne přes klíče:
+Why sentences and not artificial keys:
 
-* **Šablona je čitelná i bez slovníku.** Vidíš, co se vypíše, ne kód.
-* **Chybějící překlad nic nerozbije** – jen se ukáže česky. U klíčů by se
-  na stránce objevilo `dashboard.title`, což je horší než správná věta
-  ve špatném jazyce. Právě proto smí být překlad hotový jen z poloviny,
-  což je u překladu od dobrovolníků běžný stav.
-* Nevýhoda: když opravíš překlep v češtině, přestane překlad sedět. Proto
-  je na to test, který hlídá, že všechny klíče slovníku někde v šablonách
-  opravdu existují.
+* **A template is readable without the dictionary.** You see what gets
+  printed, not a code.
+* **A missing translation breaks nothing** - it just shows in English. With
+  keys, `dashboard.title` would appear on the page, which is worse than the
+  right sentence in another language. A translation may therefore be only
+  half done, the usual state of a translation by volunteers.
+* The drawback: when you fix a typo in the English, the translations stop
+  matching. Tests guard it: every key of a dictionary exists as a literal in
+  the code, and every literal the code translates is in the template.
 
-Kde ty věty leží
-----------------
+Three shapes of a key
+---------------------
 
-V `jellyscope/translations/`, jeden soubor na jazyk:
+* a plain sentence - `"Overview"`;
+* a sentence with a note after '#' where one English text serves more
+  meanings in another language - `"Name#person"`, `"Name#title"`. The note
+  is never shown; the template (en.json) holds the text without it;
+* a text with a count - one key per plural form of the language, `"{n}
+  records_one"`, `"{n} records_other"` (Czech `_one`, `_few`, `_other`,
+  Spanish `_one`, `_many`, `_other`), the i18next v4 shape Weblate reads.
+  `_n()` in a template, `formatting.plural()` or `translate_plural()` in
+  Python pick the form; `translate_with()` does it for a message kept as a
+  key and its values (the error classes, `_flash`).
 
-    translations/cs.json        zdroj: klíč i hodnota je česká věta
-    translations/en.json        anglicky
-    translations/log/cs.json    hlášky do logu (zdroj)
-    translations/log/en.json    hlášky do logu anglicky
+Where the sentences lie
+-----------------------
 
-Dřív to byly dva slovníky přímo v tomhle souboru. Do Pythonu ale nevidí
-žádný překladatelský nástroj a nikdo, kdo neprogramuje, do něj nesáhne;
-JSON umí obojí. **Nový jazyk je jeden soubor navíc** - v seznamu se
-objeví sám, nic se kvůli němu neupravuje v kódu.
+In `jellyscope/translations/`, one file per language:
 
-Log má vlastní soubory schválně: jsou to technické věty pro toho, kdo
-řeší poruchu, a míchat je mezi popisky tlačítek by překladateli jen
-překáželo.
+    translations/en.json        the template (the source): key -> English text
+    translations/cs.json        Czech, a translation like the others
+    translations/es.json        Spanish
+    translations/log/en.json    messages for the log (the source)
+    translations/log/cs.json    messages for the log in Czech
+
+**A new language is one more file** - it appears in the list by itself,
+nothing changes in the code because of it (only its plural forms belong
+into PLURAL_TAGS, a test asks for them).
+
+The log has its own files on purpose: they are technical sentences for whoever
+deals with a failure, and mixing them in among the labels of buttons would
+only get in the translator's way.
 """
 
 from __future__ import annotations
@@ -51,16 +67,57 @@ from typing import Any
 
 log = logging.getLogger("jellyscope.i18n")
 
-SLOZKA = Path(__file__).resolve().parent / "translations"
-DEFAULT_LANGUAGE = "cs"
+TRANSLATIONS_DIR = Path(__file__).resolve().parent / "translations"
 
-# Jak se jazyk jmenuje ve svém jazyce. Kdo si vybírá jazyk, ten ještě
-# nerozumí tomu současnému - "Deutsch" pozná i ten, kdo česky neumí.
+# The language the keys in the code are written in: `_("...")` holds a sentence of
+# this language, and its file is the template a translation tool starts from.
+SOURCE_LANGUAGE = "en"
+# The language of a new installation - the choice of an account and of the server
+# both fall back to it.
+DEFAULT_LANGUAGE = "en"
+
+# The plural forms of a language - the CLDR categories Weblate asks a translator
+# for in the i18next v4 format (checked with translate-toolkit 3.20.6 and
+# Weblate's source, 21. 11. 2026). A text with a count is one key per form:
+# `{n} records_one`, `{n} records_few`, `{n} records_other`. Czech has no "many"
+# here: CLDR keeps it for fractions, and translate-toolkit drops it.
 #
-# Seznam je tu proto, aby nový překlad nepotřeboval úpravu kódu: kód, na
-# který se zapomnělo, se ukáže tak, jak je (třeba "PT-BR"). Doplnit jméno
-# je vítaná, ale ne nutná změna.
-JMENA_JAZYKU = {
+# The rule of a language (PLURAL_RULES) picks the form for a whole number. A language
+# missing here gets "one" and "other" - right for many languages, wrong for the Slavic
+# ones - so a test asks for a rule for every translation file and checks that each rule
+# picks exactly its language's forms. Rules for whole numbers only: counts are whole.
+
+
+def _one_other(count: int) -> str:
+    return "one" if count == 1 else "other"
+
+
+def _czech(count: int) -> str:
+    return "one" if count == 1 else "few" if 2 <= count <= 4 else "other"
+
+
+def _spanish(count: int) -> str:
+    if count == 1:
+        return "one"
+    return "many" if count and count % 1_000_000 == 0 else "other"
+
+
+PLURAL_RULES: dict[str, Any] = {"cs": _czech, "en": _one_other, "de": _one_other, "es": _spanish}
+PLURAL_TAGS: dict[str, tuple[str, ...]] = {
+    "cs": ("one", "few", "other"),
+    "en": ("one", "other"),
+    "de": ("one", "other"),
+    "es": ("one", "many", "other"),
+}
+
+# What a language is called in itself. Whoever is choosing a language does not
+# understand the current one yet - "Deutsch" is recognised even by someone who
+# cannot read Czech.
+#
+# The list is here so that a new translation needs no change of the code: a
+# code that was forgotten shows as it is (say "PT-BR"). Adding the name is a
+# welcome change, but not a necessary one.
+LANGUAGE_NAMES = {
     "cs": "Čeština",
     "en": "English",
     "sk": "Slovenčina",
@@ -92,175 +149,403 @@ JMENA_JAZYKU = {
 }
 
 
-def _nacti(cesta: Path) -> dict[str, str]:
-    """Jeden soubor s překladem. Rozbitý soubor nesmí položit aplikaci.
+def _load(path: Path) -> dict[str, str]:
+    """One file with a translation. A broken file must not bring the application down.
 
-    Překlady chodí zvenku - od překladatelů, z překladatelské služby,
-    z ručně upraveného souboru. Chyba v jednom jazyce proto znamená, že
-    se ten jazyk nepoužije; ne že se nespustí celá aplikace, protože
-    někdo zapomněl čárku.
+    Translations come from outside - from translators, from a translation
+    service, from a file edited by hand. So a mistake in one language means
+    that language is not used; not that the whole application does not start
+    because somebody forgot a comma.
     """
     try:
-        data = json.loads(cesta.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as chyba:
-        log.error("preklad %s nejde precist: %s", cesta.name, chyba)
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        log.error("translation %s cannot be read: %s", path.name, error)
         return {}
     if not isinstance(data, dict):
-        log.error("preklad %s neni slovnik", cesta.name)
+        log.error("translation %s is not a dictionary", path.name)
         return {}
-    # Do slovníku patří jen text za text. Cokoliv jiného (číslo, seznam,
-    # vnořený objekt) by se dřív nebo později dostalo do šablony.
+    # Only text for text belongs in the dictionary. Anything else (a number, a
+    # list, a nested object) would sooner or later get into a template.
     #
-    # Prázdný text není překlad, ale **chybějící překlad**: Weblate
-    # zapisuje nepřeložené klíče jako `"věta": ""`. Kdyby se prázdno
-    # vzalo jako platná hodnota, stránka by místo záložní angličtiny
-    # ukázala nic - a v logu by zůstal prázdný řádek.
-    return {klic: hodnota for klic, hodnota in data.items()
-            if isinstance(klic, str) and isinstance(hodnota, str)
-            and hodnota.strip()}
+    # An empty text is not a translation but a **missing translation**: Weblate
+    # writes untranslated keys as `"sentence": ""`. Were the emptiness taken as
+    # a valid value, the page would show nothing instead of the fallback
+    # English - and an empty line would stay in the log.
+    return {key: value for key, value in data.items()
+            if isinstance(key, str) and isinstance(value, str)
+            and value.strip()}
 
 
-def _nacti_slozku(slozka: Path) -> dict[str, dict[str, str]]:
-    """Všechny jazyky ze složky. Zdrojová čeština se nenačítá.
+def _load_folder(folder: Path) -> dict[str, dict[str, str]]:
+    """Every language of the folder except the source (SOURCE_LANGUAGE).
 
-    `cs.json` je jen šablona pro překladatelský nástroj: klíč i hodnota
-    jsou tatáž česká věta, takže překládat češtinu do češtiny nemá co
-    dělat v paměti.
+    The source's file is the template: it is loaded on its own as SOURCE,
+    the last step of every lookup.
     """
-    if not slozka.is_dir():
+    if not folder.is_dir():
         return {}
-    jazyky: dict[str, dict[str, str]] = {}
-    for cesta in sorted(slozka.glob("*.json")):
-        kod = cesta.stem.lower()
-        if kod == DEFAULT_LANGUAGE:
+    languages: dict[str, dict[str, str]] = {}
+    for path in sorted(folder.glob("*.json")):
+        code = path.stem.lower()
+        if code == SOURCE_LANGUAGE:
             continue
-        vety = _nacti(cesta)
-        if vety:
-            jazyky[kod] = vety
-    return jazyky
+        sentences = _load(path)
+        if sentences:
+            languages[code] = sentences
+    return languages
 
 
-TRANSLATIONS: dict[str, dict[str, str]] = _nacti_slozku(SLOZKA)
-LOG_TRANSLATIONS: dict[str, dict[str, str]] = _nacti_slozku(SLOZKA / "log")
+TRANSLATIONS: dict[str, dict[str, str]] = _load_folder(TRANSLATIONS_DIR)
+LOG_TRANSLATIONS: dict[str, dict[str, str]] = _load_folder(TRANSLATIONS_DIR / "log")
 
-# Pojmenované zkratky pro angličtinu. Používá je log a testy; ostatní
-# jazyky se berou přes TRANSLATIONS.
-EN: dict[str, str] = TRANSLATIONS.get("en", {})
-LOG_EN: dict[str, str] = LOG_TRANSLATIONS.get("en", {})
+# The template of the source language: key -> the text shown. Mostly the key
+# itself; it differs for a key with a note after '#' ("Name#person" -> "Name")
+# and holds the source forms of a text with a count. The last step of every
+# lookup, so a key never shows with its note or its form suffix.
+SOURCE: dict[str, str] = _load(TRANSLATIONS_DIR / f"{SOURCE_LANGUAGE}.json") \
+    if (TRANSLATIONS_DIR / f"{SOURCE_LANGUAGE}.json").is_file() else {}
 
-
-def _jmeno(kod: str) -> str:
-    return JMENA_JAZYKU.get(kod, kod.upper())
-
-
-# Jazyky, mezi kterými jde přepnout: čeština vždycky (je to zdroj, existuje
-# i bez souboru) a ke každému souboru jeden.
-LANGUAGES: dict[str, str] = {
-    DEFAULT_LANGUAGE: _jmeno(DEFAULT_LANGUAGE),
-    **{kod: _jmeno(kod) for kod in sorted(TRANSLATIONS)},
-}
+# Named shortcuts for English. Used by the log and the tests; the other
+# languages are taken through TRANSLATIONS.
+LOG_SOURCE: dict[str, str] = _load(TRANSLATIONS_DIR / "log" / f"{SOURCE_LANGUAGE}.json") \
+    if (TRANSLATIONS_DIR / "log" / f"{SOURCE_LANGUAGE}.json").is_file() else {}
+EN: dict[str, str] = SOURCE if SOURCE_LANGUAGE == "en" else TRANSLATIONS.get("en", {})
+LOG_EN: dict[str, str] = LOG_SOURCE if SOURCE_LANGUAGE == "en" else LOG_TRANSLATIONS.get("en", {})
 
 
-# Jazyk přihlášeného účtu pro právě vyřizovaný požadavek (Můj účet).
+def _name(code: str) -> str:
+    return LANGUAGE_NAMES.get(code, code.upper())
+
+
+# The languages one can switch between: the source always (it exists even
+# without a translation) and one for every file, in alphabetical order.
+LANGUAGES: dict[str, str] = {code: _name(code) for code in sorted({SOURCE_LANGUAGE, *TRANSLATIONS})}
+
+
+# The language of the signed-in account for the request being handled (My account).
 #
-# Nastavuje ho middleware ve web/__init__.py podle účtu z relace. ContextVar, ne
-# globální proměnná: požadavky běží souběžně a jazyk jednoho by jinak
-# přepsal jazyk druhého. Kde žádný účet není - přihlašovací stránka, úlohy
-# na pozadí, log, upozornění - zůstane prázdný a platí jazyk serveru.
-_JAZYK_UCTU: ContextVar[str | None] = ContextVar("jazyk_uctu", default=None)
+# Set by the middleware in web/__init__.py from the session's account. A ContextVar,
+# not a global variable: requests run concurrently, and the language of one would
+# otherwise overwrite the language of another. Where there is no account - the
+# sign-in page, background tasks, the log, notifications - it stays empty and
+# the server's language applies.
+_ACCOUNT_LANGUAGE: ContextVar[str | None] = ContextVar("jazyk_uctu", default=None)
 
 
-def nastav_jazyk_uctu(kod: str | None) -> Any:
-    """Jazyk účtu pro tenhle požadavek. Vrací token pro `vrat_jazyk_uctu`."""
-    return _JAZYK_UCTU.set(kod or None)
+def set_account_language(code: str | None) -> Any:
+    """The account's language for this request. Returns a token for `reset_account_language`."""
+    return _ACCOUNT_LANGUAGE.set(code or None)
 
 
-def vrat_jazyk_uctu(token: Any) -> None:
-    _JAZYK_UCTU.reset(token)
+def reset_account_language(token: Any) -> None:
+    _ACCOUNT_LANGUAGE.reset(token)
 
 
-async def bez_jazyka_uctu(coro: Any) -> Any:
-    """Spustí úlohu na pozadí v jazyce serveru, ne v jazyce účtu.
+async def without_account_language(coro: Any) -> Any:
+    """Runs a background task in the server's language, not in the account's.
 
-    `asyncio.create_task` uvnitř požadavku zkopíruje kontext i s jazykem
-    toho, kdo úlohu spustil. Zpráva v logu úloh a upozornění by pak vznikly
-    v jeho osobním jazyce - a vidí je všichni. Úloha má vlastní kopii
-    kontextu, takže vynulování tady nikoho jiného neovlivní.
+    `asyncio.create_task` inside a request copies the context, the language of
+    whoever started the task included. A message in the tasks' log and the
+    notifications would then come into being in their personal language - and
+    everybody sees them. The task has its own copy of the context, so clearing
+    it here affects nobody else.
 
-    Použití: `asyncio.create_task(i18n.bez_jazyka_uctu(uloha()))`.
-    (`create_task(..., context=...)` by bylo čistší, ale umí ho až Python
-    3.11 a aplikace běží i na 3.10.)
+    Use: `asyncio.create_task(i18n.without_account_language(task()))`.
+    (`create_task(..., context=...)` would be cleaner, but it needs Python
+    3.11, and this was written while the application still ran on 3.10.)
     """
-    _JAZYK_UCTU.set(None)
+    _ACCOUNT_LANGUAGE.set(None)
     return await coro
 
 
-def jazyk_serveru() -> str:
-    """Jazyk z Nastavení → Obecné - výchozí pro všechny bez vlastní volby."""
-    # Import až tady, aby se modul dal načíst i v testech bez databáze.
+def server_language() -> str:
+    """The language from Settings → General - the default for everybody without a choice of their own."""
+    # Imported only here, so the module can be loaded in tests without a database too.
     from . import db
 
-    value = db.get_setting("ui_language", DEFAULT_LANGUAGE)
+    # A message about a database that cannot be reached (a transfer's target, a failing start) asks for its
+    # language too: then it is the default, the message must not fall over on reading the setting.
+    try:
+        value = db.get_setting("ui_language", DEFAULT_LANGUAGE)
+    except Exception:  # noqa: BLE001 - any failure of the database means "no setting"
+        return DEFAULT_LANGUAGE
     return value if value in LANGUAGES else DEFAULT_LANGUAGE
 
 
 def current_language() -> str:
-    """Jazyk rozhraní: vlastní volba účtu, jinak jazyk serveru.
+    """The interface language: the account's own choice, otherwise the server's language.
 
-    Volba účtu, jejíž soubor mezitím zmizel (smazaný překlad), se tiše
-    ignoruje - jinak by člověk uvízl v jazyce, který už neexistuje.
+    An account's choice whose file has disappeared meanwhile (a deleted
+    translation) is quietly ignored - otherwise one would get stuck in a
+    language that no longer exists.
     """
-    vlastni = _JAZYK_UCTU.get()
-    if vlastni and vlastni in LANGUAGES:
-        return vlastni
-    return jazyk_serveru()
+    own = _ACCOUNT_LANGUAGE.get()
+    if own and own in LANGUAGES:
+        return own
+    return server_language()
 
 
-# Jazyk, na který se propadá, když překlad chybí.
-#
-# Ne čeština, i když je to zdroj: čeština je užitečná Čechům a nikomu
-# jinému. Kdo si zapne němčinu a překlad je hotový ze dvou třetin, má
-# u zbytku číst anglicky - to je jazyk, který u mediaserveru umí skoro
-# každý, kdo se dostal až sem. Česky se ukáže jen to, co nemá ani
-# anglický překlad, a na to je test.
-ZALOZNI_JAZYK = "en"
+# The language fallen back on when a translation is missing: English, the source.
+# Whoever switches German on while the translation is two thirds done reads the
+# rest in English - the language nearly everybody who got as far as a media server
+# can read.
+FALLBACK_LANGUAGE = "en"
 
 
 def translate(text: str, language: str | None = None) -> str:
-    """Přeloží větu.
+    """Translates a sentence.
 
-    Když překlad v cílovém jazyce chybí, zkusí se ještě angličtina
-    a teprve pak zůstane česká věta tak, jak je. Nedodělaný překlad
-    tak není napůl český, ale napůl anglický - viz ZALOZNI_JAZYK.
+    When the translation in the target language is missing, the English
+    template's text is shown (a key with a note without its note), and a text
+    that is no key comes back as it is. So an unfinished translation is half
+    English, never empty - see FALLBACK_LANGUAGE.
     """
     language = language or current_language()
-    if language == DEFAULT_LANGUAGE:
-        return text
-    slovnik = TRANSLATIONS.get(language, {})
-    if text in slovnik:
-        return slovnik[text]
-    if language != ZALOZNI_JAZYK:
-        return TRANSLATIONS.get(ZALOZNI_JAZYK, {}).get(text, text)
-    return text
+    if language != SOURCE_LANGUAGE:
+        table = TRANSLATIONS.get(language, {})
+        if text in table:
+            return table[text]
+    # The template of the source: the text of a key with a note, otherwise the
+    # key itself. A text that is no key (a stored error, a value from data)
+    # comes back whole, '#' and all.
+    return SOURCE.get(text, text)
 
 
-def prelozit_log(text: str, language: str) -> str:
-    """Totéž pro hlášky do logu - ty mají vlastní slovník i vlastní volbu.
+def plural_tag(language: str, n: Any) -> str:
+    """The plural form of a count in a language: "one", "few", "many" or "other".
 
-    Log se čte i cizíma očima (u poruchy se posílá dál), takže záložní
-    angličtina dává smysl o to víc.
+    Counts are whole numbers; None (missing data) counts as 0, 2.0 from SQL as 2
+    and a negative difference takes the form of its absolute value.
     """
-    if language == DEFAULT_LANGUAGE:
+    try:
+        count = abs(int(n or 0))
+    except (TypeError, ValueError):
+        count = 0
+    return PLURAL_RULES.get(language, _one_other)(count)
+
+
+def translate_plural(key: str, n: Any, language: str | None = None, /, **values: Any) -> str:
+    """A text with a count in the right form: "1 záznam", "3 záznamy", "5 záznamů".
+
+    `key` is the text without the form suffix ("{n} records"); `{n}` gets the
+    number written like the rest of the page (a space after the thousands),
+    `values` the other placeholders (whole numbers among them written the same way).
+
+    The lookup: the language's form, its "other" (a form a translator left out),
+    then the same in English and in the source template, then the key itself.
+    A translation whose placeholders do not fit is skipped instead of bringing
+    the page down - the next language shows the sentence.
+    """
+    from .formatting import number
+
+    language = language or current_language()
+    chain: list[tuple[dict[str, str], str]] = []
+    if language != SOURCE_LANGUAGE:
+        chain.append((TRANSLATIONS.get(language, {}), language))
+    chain.append((SOURCE, SOURCE_LANGUAGE))     # the source (English) is the fallback
+    shown = number(n)
+    # The other whole numbers of the sentence ("{total} checked") are written like the count.
+    values = {k: number(v) if isinstance(v, int) and not isinstance(v, bool) else v for k, v in values.items()}
+    for table, code in chain:
+        for form in (plural_tag(code, n), "other"):
+            pattern = table.get(f"{key}_{form}")
+            if pattern is None:
+                continue
+            try:
+                return pattern.format(n=shown, **values)
+            except (KeyError, IndexError, ValueError):
+                break
+    try:
+        return key.format(n=shown, **values)
+    except (KeyError, IndexError, ValueError):
+        return key
+
+
+def is_plural(key: str) -> bool:
+    """Whether a key is a text with a count (the source template has its forms)."""
+    return f"{key}_other" in SOURCE
+
+
+def translate_with(key: str, language: str | None = None, /, **values: Any) -> str:
+    """A message kept as a key and its values (an error class, _flash, a task's parts), in a language.
+
+    A text with a count gets the form its `n` needs (translate_plural); any other message is
+    translated and the values are filled in. Without values the template comes back unfilled.
+    A placeholder that does not fit raises, as `.format()` does - the callers have their own rescue.
+    The key and the language are positional only, so a placeholder may be called `language` too.
+    """
+    # A value that is itself a message (an error inside "Nothing is deleted without a backup: {reason}") is
+    # read in the same language as the whole.
+    values = {k: v.translated(language) if isinstance(v, (Message, TranslatableError)) else v
+              for k, v in values.items()}
+    if is_plural(key):
+        if "n" not in values:
+            return _plural_template(key, language)
+        count = values.pop("n")
+        return translate_plural(key, count, language, **values)
+    text = translate(key, language)
+    return text.format(**values) if values else text
+
+
+def _plural_template(key: str, language: str | None) -> str:
+    """The "other" form of a count, unfilled - for a message shown without its values."""
+    language = language or current_language()
+    for table in (TRANSLATIONS.get(language, {}), SOURCE):
+        if f"{key}_other" in table:
+            return table[f"{key}_other"]
+    return key
+
+
+class Message:
+    """A message kept as a key and its values - for something read later, in the reader's language.
+
+    The task log, the collector's error and an item's analysis error are written once and read by people
+    with different languages. `message_parts()` gives what to store, `stored_text()` reads it back.
+    `str()` is the English sentence (a log line, the tests).
+    """
+
+    __slots__ = ("template", "values")
+
+    def __init__(self, template: str, /, **values: Any) -> None:
+        self.template = template
+        self.values = values
+
+    def translated(self, language: str | None = None) -> str:
+        return _rescued(self.template, self.values, language)
+
+    def __str__(self) -> str:
+        return self.translated(SOURCE_LANGUAGE)
+
+    def __repr__(self) -> str:
+        return f"Message({self.template!r}, **{self.values!r})"
+
+
+class TranslatableError(RuntimeError):
+    """An error a person reads: a key of the English template and its values, apart.
+
+    Only the template can be translated - a finished sentence with a path or a number in it is in no
+    dictionary. `str(error)` is the English source with the values filled in (a log line, a traceback,
+    the tests); whoever shows the error asks for `error_text(error)`, whoever stores it (the task log)
+    for `message_parts(error)` and reads it back with `stored_text`. The errors of Jellyfin's client,
+    of ffprobe, of an import and of the other applications' clients (services.ServiceError) are of
+    this kind.
+    """
+
+    def __init__(self, template: str, /, **values: Any) -> None:
+        self.template = template
+        self.values = values
+        super().__init__(_rescued(template, values, SOURCE_LANGUAGE))
+
+    def translated(self, language: str | None = None) -> str:
+        """The text in a language (a count in its form); without a translation English."""
+        return _rescued(self.template, self.values, language)
+
+
+def error_text(error: BaseException, language: str | None = None) -> str:
+    """What a person reads of an error: a translatable one in their language, any other as it is."""
+    return error.translated(language) if isinstance(error, TranslatableError) else str(error)
+
+
+def _rescued(template: str, values: dict[str, Any], language: str | None) -> str:
+    """A key with its values in a language - never an exception.
+
+    A translation whose placeholders do not fit (a typo from Weblate) falls back to the English template
+    with the values; when not even that fits, the template itself is shown. A task's result or an error
+    message must not fail because of a translator's slip.
+    """
+    for code in (language, SOURCE_LANGUAGE):
+        try:
+            return translate_with(template, code, **values)
+        except (KeyError, IndexError, ValueError, TypeError, AttributeError):
+            continue
+    return template
+
+
+def join_messages(parts: list[Any], separator: str = " ") -> Message:
+    """Several messages as one (the results of the *Arr apps, a sentence and its additions).
+
+    Each part is translated on its own when the whole is read; a text part is a key (or a finished text,
+    which stays as it is).
+    """
+    template = separator.join(f"{{p{index}}}" for index in range(len(parts)))
+    return Message(template, **{f"p{index}": Message(part) if isinstance(part, str) else part
+                                for index, part in enumerate(parts)})
+
+
+# The longest text a stored value keeps - like the stored template (scan_log cuts it at 500): an error's
+# text with a whole answer of a server in it would otherwise fill the task log.
+MAX_VALUE_CHARS = 500
+
+
+def _to_json(value: Any) -> Any:
+    """A value as JSON holds it: numbers, a bool and None as they are, a message nested, the rest as text
+    of at most MAX_VALUE_CHARS characters."""
+    if isinstance(value, (Message, TranslatableError)):
+        return {"template": value.template, "values": {k: _to_json(v) for k, v in value.values.items()}}
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    return str(value)[:MAX_VALUE_CHARS]
+
+
+def _from_json(value: Any) -> Any:
+    if isinstance(value, dict) and isinstance(value.get("template"), str):
+        values = value.get("values") if isinstance(value.get("values"), dict) else {}
+        return Message(value["template"], **{k: _from_json(v) for k, v in values.items()})
+    return value
+
+
+def message_parts(message: str | Message | BaseException) -> tuple[str, str | None]:
+    """What to store of a message: (the template, its values as JSON or None).
+
+    A text is its own template; a message or a translatable error keeps its key and values; any other
+    error is its text. Read it back with `stored_text()`.
+    """
+    if isinstance(message, (Message, TranslatableError)):
+        values = {k: _to_json(v) for k, v in message.values.items()}
+        return message.template, (json.dumps(values, ensure_ascii=False) if values else None)
+    return str(message), None
+
+
+def stored_text(template: str | None, values: str | None, language: str | None = None) -> str:
+    """A stored message (`message_parts()`) in a language - the reader's when None.
+
+    Without values the template is translated: a key becomes the language's sentence, an old row (a
+    finished sentence) comes back as it was written. When the values do not fit the translation (a
+    translator dropped a placeholder), the English template is filled in; when not even that works, the
+    template is shown. Reading a message never fails the page.
+    """
+    if not template:
+        return ""
+    try:
+        decoded = json.loads(values) if values else None
+    except ValueError:
+        decoded = None
+    if not isinstance(decoded, dict) or not decoded:
+        return translate(template, language)
+    return _rescued(template, {k: _from_json(v) for k, v in decoded.items()}, language)
+
+
+class UiName(str):
+    """A name from the interface handed to the log as a value ("scheduled task: %s" with a task's
+    name): a log in another language translates it. Every other value of a log message is data -
+    a token's or a library's name, a status - and stays as it is, even when it equals a key."""
+
+
+def translate_log(text: str, language: str) -> str:
+    """The same for messages in the log - they have a dictionary and a choice of their own.
+
+    The log is read by foreign eyes too (it is passed on with a failure), so
+    a message without a translation stays in English, the source.
+    """
+    if language == SOURCE_LANGUAGE:
         return text
-    slovnik = LOG_TRANSLATIONS.get(language, {})
-    if text in slovnik:
-        return slovnik[text]
-    if language != ZALOZNI_JAZYK:
-        return LOG_TRANSLATIONS.get(ZALOZNI_JAZYK, {}).get(text, text)
-    return text
+    return LOG_TRANSLATIONS.get(language, {}).get(text, text)
 
 
 def register(env: Any) -> None:
-    """Zpřístupní překlad šablonám jako funkci `_`."""
+    """Makes the translation available to templates as the function `_`."""
     env.globals["_"] = translate
+    env.globals["_n"] = translate_plural
+    env.globals["stored_text"] = stored_text
     env.globals["ui_languages"] = LANGUAGES

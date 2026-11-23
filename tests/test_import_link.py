@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Dohledání položek k importované historii.
+"""Looking up items for imported history.
 
-Playback Reporting ani Jellystat neposílají tmdb ID — posílají ItemId
-z Jellyfinu, který se ale mění při každém překódování souboru. Import
-proto často odkazuje na položky, které v knihovně už pod tím id nejsou.
-Tenhle test hlídá, že se historie k titulům zase najde.
+Neither Playback Reporting nor Jellystat sends a tmdb ID - they send Jellyfin's ItemId, which changes with
+every transcoding of a file, though. The import therefore often refers to items that are no longer in the
+library under that id. This test guards that the history finds its titles again.
 """
 from __future__ import annotations
 
@@ -18,11 +17,11 @@ from typing import Any
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 sys.path.insert(0, str(PROJECT / "tests"))
-from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku importers
+from _package import substitute  # noqa: E402 - a substitute in every submodule of the package importers
 
 _tmp = tempfile.mkdtemp()
-# Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
-# databáze v data/database.json a test by běžel proti ostré databázi.
+# Its own home: without it DATABASE_PATH would override the database chosen in data/database.json and the
+# test would run against the live database.
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "link.db")
 
@@ -33,7 +32,7 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
@@ -41,8 +40,8 @@ def check(condition: bool, label: str) -> None:
 db.init_db()
 
 
-def polozka(item_id: str, name: str, tmdb: str | None = None,
-            series: str | None = None) -> None:
+def add_item(item_id: str, name: str, tmdb: str | None = None,
+             series: str | None = None) -> None:
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO items (id, name, type, tmdb_id, series_name, is_missing, synced_at)"
@@ -51,7 +50,7 @@ def polozka(item_id: str, name: str, tmdb: str | None = None,
         )
 
 
-def historie(key: str, item_id: str, name: str, series: str | None = None) -> None:
+def add_history(key: str, item_id: str, name: str, series: str | None = None) -> None:
     with db.connect() as conn:
         conn.execute(
             """INSERT INTO playback
@@ -62,7 +61,7 @@ def historie(key: str, item_id: str, name: str, series: str | None = None) -> No
         )
 
 
-def kde_je(key: str) -> str:
+def where_is(key: str) -> str:
     with db.connect() as conn:
         row = conn.execute(
             "SELECT item_id FROM playback WHERE session_key = ?", (key,)
@@ -70,95 +69,94 @@ def kde_je(key: str) -> str:
     return str(row["item_id"])
 
 
-print("--- osiřelé záznamy se najdou ---")
-polozka("v-knihovne", "Matrix", tmdb="603")
-historie("import:1", "stare-id", "Matrix")          # osiřelý
-historie("import:2", "v-knihovne", "Matrix")        # v pořádku
+print("--- orphan records are found ---")
+add_item("v-knihovne", "Matrix", tmdb="603")
+add_history("import:1", "stare-id", "Matrix")          # an orphan
+add_history("import:2", "v-knihovne", "Matrix")        # in order
 
 orphans = importers._orphan_item_ids()
-check(orphans == ["stare-id"], f"nalezen jen osiřelý záznam: {orphans}")
+check(orphans == ["stare-id"], f"only the orphan record was found: {orphans}")
 
 
 print()
-print("--- párování podle tmdb ID ---")
-# Tohle by normálně přišlo z Jellyfinu; tvar odpovědi je stejný.
-odpoved = [{"Id": "stare-id", "ProviderIds": {"Tmdb": "603"}}]
-polozek, radku = importers._link_by_tmdb(odpoved)
-check(polozek == 1, "spárovala se jedna položka")
-check(radku == 1, "přepsal se jeden záznam historie")
-check(kde_je("import:1") == "v-knihovne", "historie ukazuje na titul v knihovně")
-check(kde_je("import:2") == "v-knihovne", "původně správný záznam se nezměnil")
-check(importers._orphan_item_ids() == [], "žádný osiřelý záznam nezbyl")
+print("--- pairing by tmdb ID ---")
+# This would normally come from Jellyfin; the answer's shape is the same.
+answer = [{"Id": "stare-id", "ProviderIds": {"Tmdb": "603"}}]
+items, rows = importers._link_by_tmdb(answer)
+check(items == 1, "one item paired")
+check(rows == 1, "one history record was rewritten")
+check(where_is("import:1") == "v-knihovne", "the history points at the title in the library")
+check(where_is("import:2") == "v-knihovne", "the record that was right from the start did not change")
+check(importers._orphan_item_ids() == [], "no orphan record is left")
 
 
 print()
-print("--- neznámé tmdb nespáruje nic ---")
-historie("import:3", "cizi-id", "Neznámý film")
-polozek, _ = importers._link_by_tmdb([{"Id": "cizi-id", "ProviderIds": {"Tmdb": "9999"}}])
-check(polozek == 0, "tmdb, které v knihovně není, nespáruje nic")
-check(kde_je("import:3") == "cizi-id", "záznam zůstal, kde byl")
+print("--- an unknown tmdb pairs nothing ---")
+add_history("import:3", "cizi-id", "Neznámý film")
+items, _ = importers._link_by_tmdb([{"Id": "cizi-id", "ProviderIds": {"Tmdb": "9999"}}])
+check(items == 0, "a tmdb that is not in the library pairs nothing")
+check(where_is("import:3") == "cizi-id", "the record stayed where it was")
 
 
 print()
-print("--- párování podle názvu, když Jellyfin id nezná ---")
-polozek, radku = importers._link_by_name()
-check(polozek == 0, "název 'Neznámý film' nemá v knihovně protějšek")
+print("--- pairing by name when Jellyfin does not know the id ---")
+items, rows = importers._link_by_name()
+check(items == 0, "the name 'Neznámý film' has no counterpart in the library")
 
-historie("import:4", "davno-pryc", "Matrix")
-polozek, radku = importers._link_by_name()
-check(polozek == 1, "shoda názvu spárovala jednu položku")
-check(kde_je("import:4") == "v-knihovne", "historie našla titul podle názvu")
-
-
-print()
-print("--- nejednoznačná shoda se raději nespáruje ---")
-polozka("duna-1080", "Duna")
-polozka("duna-2160", "Duna")
-historie("import:5", "duna-stare", "Duna")
-polozek, _ = importers._link_by_name()
-check(polozek == 0, "dva stejně pojmenované tituly = nepárujeme")
-check(kde_je("import:5") == "duna-stare",
-      "raději nespárováno než špatně přiřazeno")
+add_history("import:4", "davno-pryc", "Matrix")
+items, rows = importers._link_by_name()
+check(items == 1, "a match of names paired one item")
+check(where_is("import:4") == "v-knihovne", "the history found the title by name")
 
 
 print()
-print("--- epizody se párují včetně seriálu ---")
-polozka("ep-nova", "1. díl", series="Kancelář")
-historie("import:6", "ep-stara", "1. díl", series="Kancelář")
-polozek, _ = importers._link_by_name()
-check(polozek == 1, "epizoda se spárovala")
-check(kde_je("import:6") == "ep-nova", "historie epizody ukazuje na správný díl")
+print("--- an ambiguous match is rather not paired ---")
+add_item("duna-1080", "Duna")
+add_item("duna-2160", "Duna")
+add_history("import:5", "duna-stare", "Duna")
+items, _ = importers._link_by_name()
+check(items == 0, "two equally named titles = we do not pair")
+check(where_is("import:5") == "duna-stare",
+      "rather unpaired than wrongly assigned")
 
 
 print()
-print("--- celý průchod nespadne, i když Jellyfin neodpovídá ---")
-# Jellyfin tu není nakonfigurovaný, takže první krok musí selhat
-# a funkce má tiše pokračovat na shodu podle názvu.
-vysledek = asyncio.run(importers.link_imported_history())
-check(vysledek["status"] != "error" if "status" in vysledek else True,
-      "funkce vrátila výsledek místo výjimky")
-check("by_tmdb" in vysledek and "by_name" in vysledek,
-      f"výsledek obsahuje oba způsoby: {vysledek}")
+print("--- episodes pair including the series ---")
+add_item("ep-nova", "1. díl", series="Kancelář")
+add_history("import:6", "ep-stara", "1. díl", series="Kancelář")
+items, _ = importers._link_by_name()
+check(items == 1, "the episode paired")
+check(where_is("import:6") == "ep-nova", "the episode's history points at the right episode")
 
-# Bez osiřelých záznamů se nemá dělat vůbec nic.
+
+print()
+print("--- the whole pass does not fail even when Jellyfin does not answer ---")
+# Jellyfin is not configured here, so the first step must fail and the function is to go on quietly to the
+# match by name.
+result = asyncio.run(importers.link_imported_history())
+check(result["status"] != "error" if "status" in result else True,
+      "the function returned a result instead of an exception")
+check("by_tmdb" in result and "by_name" in result,
+      f"the result holds both ways: {result}")
+
+# Without orphan records nothing at all is to be done.
 with db.connect() as conn:
     conn.execute("DELETE FROM playback WHERE item_id NOT IN (SELECT id FROM items)")
-vysledek = asyncio.run(importers.link_imported_history())
-check(vysledek["orphans"] == 0, "bez osiřelých záznamů se nic nedohledává")
+result = asyncio.run(importers.link_imported_history())
+check(result["orphans"] == 0, "without orphan records nothing is looked up")
 
 
 print()
-print("--- osiřelé se dohledají přímo v Jellyfinu ---")
-# Nejsilnější stopa, kterou převzatá historie nese, je samotné ItemId -
-# je pravé, jen k němu u nás nic nevede. Jellystat totiž ukládá jen název
-# dílu ("7. epizoda", "Pilot") a o seriálu neřekne nic, takže párování
-# podle jména takový záznam odmítá zařadit - a dělá dobře, ten název má
-# každý seriál. Jellyfin ale to id zná a seriál i číslo dílu řekne.
+print("--- orphans are looked up right in Jellyfin ---")
+# The strongest trace imported history carries is the ItemId itself - it is the real one, only nothing here
+# leads to it. Jellystat stores only the episode's name ("7. epizoda", "Pilot") and says nothing about the
+# series, so pairing by name refuses to file such a record - and rightly so, every series has that name.
+# Jellyfin knows the id, though, and tells the series and the episode's number.
 now = db.utcnow()
 with db.connect() as conn:
     conn.execute("DELETE FROM playback")
     conn.execute("DELETE FROM items")
-    # Díl v knihovně - pod JINÝM id, než jaké nese historie.
+    # An episode in the library - under ANOTHER id than the history carries.
     conn.execute(
         """INSERT INTO items (id, name, type, series_id, series_name, tmdb_id,
                               parent_index_number, index_number, is_missing, synced_at)
@@ -171,8 +169,8 @@ with db.connect() as conn:
                                      watched_seconds, is_active)
                VALUES (?,'u1','stare-id','7. epizoda','Episode',?,?,1800,0)""",
             (f"import:jst:u:{i}", now, now))
-    # A díl seriálu, který v knihovně už není. Jellyfin ho zná, takže
-    # aspoň doplní seriál - v přehledech se pak nezařadí jako film.
+    # And an episode of a series that is no longer in the library. Jellyfin knows it, so it at least fills in
+    # the series - the overviews then do not file it as a movie.
     conn.execute(
         """INSERT INTO playback (session_key, user_id, item_id, item_name,
                                  item_type, started_at, last_seen_at,
@@ -181,22 +179,22 @@ with db.connect() as conn:
         (now, now))
 
 
-class JellyfinSPameti:
-    """Jellyfin, který obě id zná - stejně jako ten skutečný."""
+class JellyfinWithMemory:
+    """A Jellyfin that knows both ids - just like the real one."""
 
-    dotazy: list[list[str]] = []
+    queries: list[list[str]] = []
 
     def __init__(self, *a: Any, **k: Any) -> None:
         pass
 
-    async def __aenter__(self) -> "JellyfinSPameti":
+    async def __aenter__(self) -> "JellyfinWithMemory":
         return self
 
     async def __aexit__(self, *a: Any) -> bool:
         return False
 
     async def items_by_ids(self, ids: list[str]) -> list[dict[str, Any]]:
-        JellyfinSPameti.dotazy.append(sorted(ids))
+        JellyfinWithMemory.queries.append(sorted(ids))
         return [
             {"Id": "stare-id", "Name": "7. epizoda", "Type": "Episode",
              "SeriesId": "ser-1", "SeriesName": "Kancelář",
@@ -209,124 +207,122 @@ class JellyfinSPameti:
         ]
 
 
-podvrhni(importers, "JellyfinClient", JellyfinSPameti)
+substitute(importers, "JellyfinClient", JellyfinWithMemory)
 
-check(importers.orphan_playback_count() == 4, "výchozí stav: čtyři osiřelé řádky")
-check(importers.orphan_items_count() == 2, "ale jen dva tituly")
+check(importers.orphan_playback_count() == 4, "the starting state: four orphan rows")
+check(importers.orphan_items_count() == 2, "but only two titles")
 
-vysledek = asyncio.run(importers.dohledej_osirele_v_jellyfinu())
-check(vysledek["nalezeno"] == 2, f"Jellyfin zná obě id ({vysledek})")
-check(vysledek["navazano"] == 1,
-      f"díl, který v knihovně je pod jiným id, se naváže ({vysledek['navazano']})")
-check(vysledek["zalozeno"] == 1,
-      f"a ten, který v knihovně chybí, se založí ({vysledek['zalozeno']})")
+result = asyncio.run(importers.look_up_orphans_in_jellyfin())
+check(result["found"] == 2, f"Jellyfin knows both ids ({result})")
+check(result["linked"] == 1,
+      f"the episode that is in the library under another id gets linked ({result['linked']})")
+check(result["created_count"] == 1,
+      f"and the one missing in the library is created ({result['created_count']})")
 
-# To podstatné: id v převzaté historii JE Jellyfin id, takže jakmile
-# položka existuje, záznamy na ni ukazují samy od sebe - a přijde s ní
-# tmdb_id, seriál i čísla dílu, takže funguje slučování i zařazení.
-zalozena = db.query_one("SELECT * FROM items WHERE id = 'smazane-id'")
-check(zalozena is not None, "položka se opravdu založila")
-check(zalozena["series_name"] == "Odpadlík" and zalozena["tmdb_id"] == "999",
-      f"i se seriálem a tmdb ({zalozena['series_name']}, {zalozena['tmdb_id']})")
-check(zalozena["parent_index_number"] == 1 and zalozena["index_number"] == 1,
-      "a s čísly řady a dílu")
+# The essential part: the id in imported history IS a Jellyfin id, so as soon as the item exists the records
+# point at it by themselves - and it comes with tmdb_id, the series and the episode's numbers, so merging and
+# filing work.
+created = db.query_one("SELECT * FROM items WHERE id = 'smazane-id'")
+check(created is not None, "the item really was created")
+check(created["series_name"] == "Odpadlík" and created["tmdb_id"] == "999",
+      f"with the series and tmdb too ({created['series_name']}, {created['tmdb_id']})")
+check(created["parent_index_number"] == 1 and created["index_number"] == 1,
+      "and with the season and episode numbers")
 check(importers.orphan_playback_count() == 0,
-      f"osiřelý nezůstal žádný ({importers.orphan_playback_count()})")
-check(JellyfinSPameti.dotazy == [["smazane-id", "stare-id"]],
-      f"ptáme se jedním dotazem na obě id ({JellyfinSPameti.dotazy})")
+      f"no orphan is left ({importers.orphan_playback_count()})")
+check(JellyfinWithMemory.queries == [["smazane-id", "stare-id"]],
+      f"we ask about both ids in one request ({JellyfinWithMemory.queries})")
 
-navazane = db.query_all("SELECT * FROM playback WHERE item_id = 'nove-id'")
-check(len(navazane) == 3, f"všechny tři řádky přešly na položku z knihovny ({len(navazane)})")
-check(navazane[0]["series_name"] == "Kancelář", "a vědí o seriálu")
+linked = db.query_all("SELECT * FROM playback WHERE item_id = 'nove-id'")
+check(len(linked) == 3, f"all three rows moved to the library's item ({len(linked)})")
+check(linked[0]["series_name"] == "Kancelář", "and know about the series")
 
-# Podruhé už není co dohledávat - a položka, kterou jsme právě založili,
-# se nesmí zakládat znovu.
-druhy = asyncio.run(importers.dohledej_osirele_v_jellyfinu())
-check(druhy["navazano"] == 0 and druhy["zalozeno"] == 0,
-      f"opakované spuštění už nic nemění ({druhy})")
+# The second time there is nothing to look up - and the item we have just created must not be created again.
+second = asyncio.run(importers.look_up_orphans_in_jellyfin())
+check(second["linked"] == 0 and second["created_count"] == 0,
+      f"a repeated run changes nothing any more ({second})")
 check(db.query_value("SELECT COUNT(*) FROM items WHERE id = 'smazane-id'") == 1,
-      "a položka je pořád jen jedna")
+      "and there is still only one item")
 
 
 print()
-print("--- co se nepovedlo zařadit: seznam i s důvodem ---")
-# Seznam se nikam neukládá a počítá se při každém otevření znovu.
-# Uložený by ukazoval stav po posledním úklidu - tedy něco, co už
-# nemusí platit.
+print("--- what could not be filed: a list with the reason ---")
+# The list is stored nowhere and is computed anew on every opening. A stored one would show the state after
+# the last clean-up - i.e. something that need not hold any more.
 with db.connect() as conn:
     conn.execute("DELETE FROM playback")
     conn.execute("DELETE FROM items")
     conn.execute("INSERT INTO libraries (id, name, synced_at) VALUES ('lb','Vše',?)",
                  (now,))
-    # Dva seriály a v obou "7. epizoda" - proto je název nejednoznačný.
-    for serial, jmeno in (("ser-1", "Kancelář"), ("ser-2", "Sherlock")):
+    # Two series, each with a "7. epizoda" - that is why the name is ambiguous.
+    for series, name in (("ser-1", "Kancelář"), ("ser-2", "Sherlock")):
         conn.execute(
             """INSERT INTO items (id, name, type, library_id, series_id, series_name,
                                   parent_index_number, index_number, is_missing, synced_at)
                VALUES (?,'7. epizoda','Episode','lb',?,?,2,7,0,?)""",
-            (f"{serial}-e7", serial, jmeno, now))
+            (f"{series}-e7", series, name, now))
     conn.execute(
         """INSERT INTO items (id, name, type, library_id, is_missing, synced_at)
            VALUES ('film-duna','Duna','Movie','lb',0,?)""", (now,))
 
-    for cislo, (nazev, serial, kolik) in enumerate([
-            ("7. epizoda", None, 25),                      # víc shod
-            ("Duna", None, 3),                             # jedna shoda
-            ("Sherlock - s02e09 - Velká hra", None, 4),    # seriál je, díl ne
-            ("Neznámý - s01e01 - Něco", None, 29),         # seriál není
-            ("Longlegs", None, 2)]):                       # nic
-        for n in range(kolik):
+    for number, (title, series, count) in enumerate([
+            ("7. epizoda", None, 25),                      # several matches
+            ("Duna", None, 3),                             # one match
+            ("Sherlock - s02e09 - Velká hra", None, 4),    # the series is there, the episode not
+            ("Neznámý - s01e01 - Něco", None, 29),         # the series is not there
+            ("Longlegs", None, 2)]):                       # nothing
+        for n in range(count):
             conn.execute(
                 """INSERT INTO playback (session_key, user_id, item_id, item_name,
                                          series_name, item_type, started_at,
                                          last_seen_at, watched_seconds, is_active)
                    VALUES (?,'u1',?,?,?,'Episode',?,?,1800,0)""",
-                (f"import:jst:{cislo}:{n}", f"osirele-{cislo}", nazev, serial, now, now))
+                (f"import:jst:{number}:{n}", f"osirele-{number}", title, series, now, now))
 
-podle_duvodu = {r["duvod"]: r for r in importers.rozbor_osirelych()}
-check(podle_duvodu[importers.DUVOD_VIC_SHOD]["item_name"] == "7. epizoda",
-      "díl jménem 7. epizoda spadne mezi nejednoznačné")
-check(podle_duvodu[importers.DUVOD_VIC_SHOD]["shod"] == 2,
-      f"a ví se, kolik shod to má ({podle_duvodu[importers.DUVOD_VIC_SHOD]['shod']})")
-check(podle_duvodu[importers.DUVOD_JEDNA_SHODA]["item_name"] == "Duna",
-      "titul s jedinou shodou se pozná")
-check(podle_duvodu[importers.DUVOD_SERIAL_JE]["serial_z_nazvu"] == "Sherlock",
-      "u složeného názvu se vyčte seriál")
-check(importers.DUVOD_SERIAL_NENI in podle_duvodu, "seriál mimo knihovnu má svůj důvod")
-check(importers.DUVOD_NIC in podle_duvodu, "a co nemá stopu vůbec, taky")
-check(all(d in importers.DUVODY_POPIS for d in podle_duvodu),
-      "každý důvod má svůj popis pro stránku")
+by_reason = {r["reason"]: r for r in importers.analyse_orphans()}
+check(by_reason[importers.REASON_SEVERAL_MATCHES]["item_name"] == "7. epizoda",
+      "an episode called 7. epizoda falls among the ambiguous")
+check(by_reason[importers.REASON_SEVERAL_MATCHES]["match_count"] == 2,
+      f"and it is known how many matches it has ({by_reason[importers.REASON_SEVERAL_MATCHES]['match_count']})")
+check(by_reason[importers.REASON_ONE_MATCH]["item_name"] == "Duna",
+      "a title with a single match is recognised")
+check(by_reason[importers.REASON_SERIES_EXISTS]["series_from_name"] == "Sherlock",
+      "the series is read out of a composed name")
+check(importers.REASON_NO_SERIES in by_reason, "a series outside the library has its reason")
+check(importers.REASON_NOTHING in by_reason, "and so has what has no trace at all")
+check(all(d in importers.REASON_LABELS for d in by_reason),
+      "every reason has its label for the page")
 
-# Jeden řádek na titul, ne na záznam - jinak by v seznamu, kde má člověk
-# něco poznat podle názvu, byla stokrát tatáž věta.
-check(podle_duvodu[importers.DUVOD_VIC_SHOD]["radku"] == 25,
-      "u titulu je vidět, kolika záznamů se to týká")
-check(len(importers.rozbor_osirelych()) == 5, "pět titulů, ne 63 záznamů")
+# One row per title, not per record - otherwise a list where one is to recognise something by name would hold
+# the same sentence a hundred times.
+check(by_reason[importers.REASON_SEVERAL_MATCHES]["row_count"] == 25,
+      "the title shows how many records it concerns")
+check(len(importers.analyse_orphans()) == 5, "five titles, not 63 records")
 
 
 print()
-print("--- ruční přiřazení ---")
-kandidati = importers.kandidati_pro_osireleho("Sherlock")
-check(len(kandidati) == 1 and kandidati[0]["id"] == "ser-2-e7",
-      f"hledání v knihovně najde díl podle seriálu ({kandidati})")
-check(importers.kandidati_pro_osireleho("S") == [],
-      "jedno písmeno se nehledá - vrátilo by celou knihovnu")
+print("--- manual assignment ---")
+candidates = importers.candidates_for_orphan("Sherlock")
+check(len(candidates) == 1 and candidates[0]["id"] == "ser-2-e7",
+      f"the search in the library finds the episode by its series ({candidates})")
+check(importers.candidates_for_orphan("S") == [],
+      "a single letter is not searched for - it would return the whole library")
 
-vysledek = importers.prirad_rucne("osirele-0", "ser-2-e7")
-check(vysledek["status"] == "ok" and vysledek["rows"] == 25,
-      f"přiřadí se všech 25 záznamů ({vysledek})")
+result = importers.assign_manually("osirele-0", "ser-2-e7")
+check(result["status"] == "ok" and result["rows"] == 25,
+      f"all 25 records are assigned ({result})")
 check(db.query_value("SELECT COUNT(*) FROM playback WHERE item_id = 'ser-2-e7'") == 25,
-      "a visí na vybraném dílu")
+      "and hang on the chosen episode")
 check(db.query_value("SELECT series_name FROM playback WHERE item_id = 'ser-2-e7'")
-      == "Sherlock", "včetně seriálu")
-check(len(importers.rozbor_osirelych()) == 4, "v seznamu o titul míň")
+      == "Sherlock", "including the series")
+check(len(importers.analyse_orphans()) == 4, "one title less in the list")
 
-check(importers.prirad_rucne("osirele-1", "neexistuje")["status"] == "error",
-      "cíl mimo knihovnu se odmítne")
-check(importers.prirad_rucne("uz-neni", "film-duna")["status"] == "error",
-      "a přiřazovat něco, co nikde není, taky nejde")
+check(importers.assign_manually("osirele-1", "neexistuje")["status"] == "error",
+      "a target outside the library is refused")
+check(importers.assign_manually("uz-neni", "film-duna")["status"] == "error",
+      "and assigning something that is nowhere does not work either")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

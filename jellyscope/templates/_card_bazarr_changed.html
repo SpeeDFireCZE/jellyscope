@@ -1,0 +1,32 @@
+{# The Bazarr card "Subtitles obtained repeatedly": episodes and films whose subtitles in one language were acquired more than once.
+
+   From the database (cards_bazarr.py, `d.radky`: title, episode, language as ready
+   text, count). A title Jellyscope knows from the library is a link to its
+   detail (`detail_url`, the link macro - only where the account may go); others are text.
+   A long table as on Insights: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("same episode or movie, same language") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table>
+        <thead><tr>
+            <th>{{ _("Title") }}</th>
+            <th>{{ _("Language") }}</th>
+            <th class="num">{{ _("Obtained") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong">{% call link(r.detail_url) %}{{ r.title }}{% endcall %}{% if r.episode %} <span class="muted">{{ r.episode }}</span>{% endif %}</td>
+                <td>{{ r.language_name }}</td>
+                <td class="num">{{ r.count | number }}×</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No subtitles were obtained repeatedly in this period.") }}</p>{% endif %}
+</div>

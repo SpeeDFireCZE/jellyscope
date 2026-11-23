@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""API klíč k Jellyfinu se nesmí dostat do prohlížeče.
+"""The API key to Jellyfin must not get into the browser.
 
-Kdo má ten klíč, může s cizím Jellyfinem dělat všechno, co jeho vlastník.
-Jellyscope si ho proto drží jen na serveru: obrázky se stahují přes něj,
-šablony ho nikdy nevypisují a do stránky se nesmí dostat ani nedopatřením.
+Whoever has that key can do everything with somebody else's Jellyfin that its owner can.
+Jellyscope therefore keeps it on the server only: images are downloaded through it,
+templates never write it out and it must not get into a page even by accident.
 
-Test to nekontroluje čtením kódu, ale **projde přihlášeně celou aplikaci
-a hledá ten klíč ve výstupu** — v HTML, v hlavičkách i v cookies.
+The test does not check it by reading the code, but **walks through the whole application signed in
+and looks for the key in the output** - in the HTML, in the headers and in the cookies.
 """
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 
 _tmp = tempfile.mkdtemp()
-# Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
-# databáze v data/database.json a test by běžel proti ostré databázi.
+# A home of its own: without it DATABASE_PATH would beat the stored choice
+# of the database in data/database.json and the test would run against the live database.
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "secrets.db")
 os.environ["SECRET_KEY"] = "testovaci-podpisovy-klic"
@@ -32,25 +32,25 @@ from jellyscope.web import app  # noqa: E402
 
 failures = 0
 
-# Klíč schválně nezvyklý, ať se nedá splést s ničím jiným na stránce.
-KLIC = "JELLYFIN-KLIC-NESMI-UNIKNOUT-9f3a7c2e"
-ADRESA = "http://jellyfin.doma.local:8096"
+# The key unusual on purpose, so it cannot be confused with anything else on the page.
+KEY = "JELLYFIN-KLIC-NESMI-UNIKNOUT-9f3a7c2e"
+ADDRESS = "http://jellyfin.doma.local:8096"
 
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
 db.init_db()
-accounts.create("spravce", "dlouheheslo", is_admin=True)
-db.set_setting("jellyfin_url", ADRESA)
-db.set_setting("jellyfin_api_key", KLIC)
+accounts.create("admin", "longpassword", is_admin=True)
+db.set_setting("jellyfin_url", ADDRESS)
+db.set_setting("jellyfin_api_key", KEY)
 
-# Aspoň jedna položka, aby se na Přehledu vůbec nějaký plakát vykreslil -
-# jinak by kontrola "obrázky jdou přes nás" testovala prázdnou stránku.
+# At least one item, so that some poster is drawn on the Overview at all -
+# otherwise the check "images go through us" would test an empty page.
 with db.connect() as conn:
     conn.execute("INSERT INTO libraries (id, name) VALUES ('lib', 'Filmy')")
     conn.execute(
@@ -61,81 +61,81 @@ with db.connect() as conn:
     )
 
 client = TestClient(app)
-client.post("/login", data={"username": "spravce", "password": "dlouheheslo"})
+client.post("/login", data={"username": "admin", "password": "longpassword"})
 
 
-print("--- klíč v uloženém nastavení opravdu je ---")
-check(db.get_setting("jellyfin_api_key") == KLIC, "klíč je v databázi")
-check(KLIC not in db.get_public_settings().values(),
-      "get_public_settings() ho neobsahuje")
-check(KLIC in db.get_settings().values(),
-      "get_settings() ho obsahuje (server ho potřebuje)")
+print("--- the key really is in the stored settings ---")
+check(db.get_setting("jellyfin_api_key") == KEY, "the key is in the database")
+check(KEY not in db.get_public_settings().values(),
+      "get_public_settings() does not contain it")
+check(KEY in db.get_settings().values(),
+      "get_settings() contains it (the server needs it)")
 
 
 print()
-print("--- žádná stránka ho nevypíše ---")
-STRANKY = [
-    "/", "/?kind=movies", "/partials/daily?kind=both",
-    "/insights", "/languages", "/library", "/users", "/history",
+print("--- no page writes it out ---")
+PAGES = [
+    "/", "/?kind=movies", "/video/partials/daily?kind=both",
+    "/video/insights", "/video/languages", "/library", "/users", "/history",
     "/settings", "/settings?section=jellyfin", "/settings?section=data",
     "/settings?section=tasks", "/settings?section=import",
     "/settings?section=database", "/settings?section=accounts",
     "/settings?section=general",
 ]
-for cesta in STRANKY:
-    response = client.get(cesta)
-    v_tele = KLIC in response.text
-    v_hlavickach = any(KLIC in str(h) for h in response.headers.values())
-    check(not v_tele and not v_hlavickach,
-          f"{response.status_code}  {cesta}")
+for path in PAGES:
+    response = client.get(path)
+    in_body = KEY in response.text
+    in_headers = any(KEY in str(h) for h in response.headers.values())
+    check(not in_body and not in_headers,
+          f"{response.status_code}  {path}")
 
 print()
-check(all(KLIC not in (c or "") for c in client.cookies.values()),
-      "klíč není ani v cookies")
-
-
-print()
-print("--- formulář ukazuje jen tečky, ne hodnotu ---")
-stranka = client.get("/settings?section=jellyfin").text
-check('type="password"' in stranka, "pole pro klíč je typu password")
-check('value="' + KLIC not in stranka, "pole nemá klíč ve value")
-check("••••" in stranka, "místo klíče jsou jen tečky")
-check(ADRESA in stranka, "adresa serveru se ukazuje (není tajná, musí jít měnit)")
+check(all(KEY not in (c or "") for c in client.cookies.values()),
+      "the key is not even in the cookies")
 
 
 print()
-print("--- obrázky jdou přes nás, ne přímo z Jellyfinu ---")
-# Kdyby stránka odkazovala rovnou na Jellyfin, prohlížeč by musel znát
-# jeho adresu i klíč. Proto se obrázky stahují přes /image/.
-prehled = client.get("/").text
-check("/image/" in prehled, "plakáty se načítají přes /image/")
-check(ADRESA not in prehled, "adresa Jellyfinu se do přehledu nedostane")
-check("api_key=" not in prehled and "ApiKey" not in prehled,
-      "v žádném odkazu není klíč jako parametr")
+print("--- the form shows only dots, not the value ---")
+page = client.get("/settings?section=jellyfin").text
+check('type="password"' in page, "the field for the key is of the password type")
+check('value="' + KEY not in page, "the field does not have the key in value")
+check("••••" in page, "there are only dots instead of the key")
+check(ADDRESS in page, "the server's address shows (it is not secret, it must be changeable)")
 
 
 print()
-print("--- klíč se nedá vytáhnout ani jako nepřihlášený ---")
-host = TestClient(app)   # bez přihlášení
-for cesta in ("/", "/settings", "/settings?section=jellyfin"):
-    odpoved = host.get(cesta, follow_redirects=False)
-    check(odpoved.status_code in (302, 303, 307) and KLIC not in odpoved.text,
-          f"nepřihlášený dostane přesměrování na /login ({cesta})")
+print("--- images go through us, not straight from Jellyfin ---")
+# If the page linked straight to Jellyfin, the browser would have to know
+# its address and the key. That is why images are downloaded through /image/.
+overview = client.get("/").text
+check("/image/" in overview, "posters load through /image/")
+check(ADDRESS not in overview, "Jellyfin's address does not get into the overview")
+check("api_key=" not in overview and "ApiKey" not in overview,
+      "no link has the key as a parameter")
 
 
 print()
-print("--- čtenář (ne správce) se k nastavení Jellyfinu nedostane ---")
-accounts.create("ctenar", "dlouheheslo2", is_admin=False)
-ctenar = TestClient(app)
-ctenar.post("/login", data={"username": "ctenar", "password": "dlouheheslo2"})
-odpoved = ctenar.get("/settings?section=jellyfin")
-check(KLIC not in odpoved.text, "čtenář klíč nevidí")
-odpoved = ctenar.post("/settings/connection",
-                      data={"jellyfin_url": "http://x", "action": "test"},
-                      follow_redirects=False)
-check(odpoved.status_code == 403, "čtenář nemůže ani zkoušet spojení")
+print("--- the key cannot be pulled out without signing in either ---")
+host = TestClient(app)   # without signing in
+for path in ("/", "/settings", "/settings?section=jellyfin"):
+    reply = host.get(path, follow_redirects=False)
+    check(reply.status_code in (302, 303, 307) and KEY not in reply.text,
+          f"whoever is not signed in gets a redirect to /login ({path})")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print("--- a reader (not the administrator) does not get to Jellyfin's settings ---")
+accounts.create("reader", "longpassword2", is_admin=False)
+reader = TestClient(app)
+reader.post("/login", data={"username": "reader", "password": "longpassword2"})
+reply = reader.get("/settings?section=jellyfin")
+check(KEY not in reply.text, "a reader does not see the key")
+reply = reader.post("/settings/connection",
+                    data={"jellyfin_url": "http://x", "action": "test"},
+                    follow_redirects=False)
+check(reply.status_code == 403, "a reader cannot even try the connection")
+
+
+print()
+print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

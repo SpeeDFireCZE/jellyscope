@@ -1,0 +1,38 @@
+[
+ {
+  "id": 51,
+  "title": "Další týden",
+  "authorId": 3,
+  "foreignBookId": "200051-0000-4000-8000-000000000000",
+  "monitored": true,
+  "releaseDate": "2099-01-01T00:00:00Z",
+  "author": {
+   "id": 3,
+   "authorName": "Ivan Olbracht",
+   "foreignAuthorId": "100003-0000-4000-8000-000000000000"
+  },
+  "statistics": {
+   "sizeOnDisk": 0,
+   "bookFileCount": 0,
+   "bookCount": 1
+  }
+ },
+ {
+  "id": 22,
+  "title": "Stráže! Stráže!",
+  "authorId": 2,
+  "foreignBookId": "200022-0000-4000-8000-000000000000",
+  "monitored": true,
+  "releaseDate": "2098-12-30T00:00:00Z",
+  "author": {
+   "id": 2,
+   "authorName": "Terry Pratchett",
+   "foreignAuthorId": "100002-0000-4000-8000-000000000000"
+  },
+  "statistics": {
+   "sizeOnDisk": 0,
+   "bookFileCount": 1,
+   "bookCount": 1
+  }
+ }
+]

@@ -1,0 +1,174 @@
+{
+ "page": 1,
+ "pageSize": 100,
+ "sortKey": "timeleft",
+ "sortDirection": "ascending",
+ "totalRecords": 3,
+ "records": [
+  {
+   "artistId": 3,
+   "albumId": 31,
+   "artist": {
+    "id": 3,
+    "artistName": "Paper Lanterns",
+    "foreignArtistId": "a0000003-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 31,
+    "title": "Dawn Chorus",
+    "artistId": 3,
+    "foreignAlbumId": "b0000031-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Paper Lanterns-Dawn Chorus-FLAC-2019",
+   "sizeleft": 805306368,
+   "timeleft": "00:12:30",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_101",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 10,
+   "trackHasFileCount": 0,
+   "id": 101
+  },
+  {
+   "artistId": 1,
+   "albumId": 11,
+   "artist": {
+    "id": 1,
+    "artistName": "Kryštof",
+    "foreignArtistId": "a0000001-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 11,
+    "title": "Hvězdy",
+    "artistId": 1,
+    "foreignAlbumId": "b0000011-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 536870912,
+   "title": "Kryštof-Hvězdy-FLAC-2019",
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importPending",
+   "statusMessages": [
+    {
+     "title": "Hvězdy",
+     "messages": [
+      "Has missing tracks"
+     ]
+    }
+   ],
+   "downloadId": "SABnzbd_nzo_105",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 3,
+   "trackHasFileCount": 2,
+   "id": 105
+  },
+  {
+   "artistId": 1,
+   "albumId": 12,
+   "artist": {
+    "id": 1,
+    "artistName": "Kryštof",
+    "foreignArtistId": "a0000001-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 12,
+    "title": "Šípková Růžena",
+    "artistId": 1,
+    "foreignAlbumId": "b0000012-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Kryštof-Šípková Růžena-FLAC-2019",
+   "sizeleft": 536870912,
+   "timeleft": "00:00:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "failed",
+   "trackedDownloadStatus": "error",
+   "trackedDownloadState": "failedPending",
+   "statusMessages": [
+    {
+     "title": "x",
+     "messages": [
+      "Disk full"
+     ]
+    }
+   ],
+   "downloadId": "SABnzbd_nzo_109",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 0,
+   "trackHasFileCount": 0,
+   "id": 109,
+   "errorMessage": "Download failed"
+  }
+ ]
+}

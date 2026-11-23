@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Import nesmí zdvojit záznamy — ani po opakování, ani mezi zdroji.
+"""The import must not double records - neither after a repetition, nor between sources.
 
-Tři situace, které v praxi nastanou snadno:
+Three situations that happen easily in practice:
 
-  1. Tentýž soubor se nahraje dvakrát (klik navíc, nejistota, jestli to
-     vyšlo).
-  2. Táž historie se přenese z Jellystatu **i** z Playback Reportingu —
-     obojí čte stejná data ze stejného Jellyfinu.
-  3. Naimportuje se období, které už Jellyscope sám nasbíral.
+  1. The same file is uploaded twice (an extra click, unsure whether it worked).
+  2. The same history is taken over from Jellystat **and** from Playback Reporting - both read the same
+     data from the same Jellyfin.
+  3. A period Jellyscope collected by itself is imported.
 
-Proti prvnímu stačí klíč záznamu (`import:jst:<id>:<položka>`). Druhý ani
-třetí ale klíčem nepokryjeme: jiný zdroj má jiný tvar klíče a vlastní sběr
-klíč z importu nemá vůbec. Proto se porovnává i obsah — stejný uživatel,
-stejná položka a **překrývající se čas**.
+Against the first one the record's key is enough (`import:jst:<id>:<item>`). The second and the third the
+key does not cover: another source has another shape of the key and its own collection has no import key
+at all. So the content is compared too - the same user, the same item and **an overlapping time**.
+
+Run:
+    .venv/bin/python tests/test_import_duplicates.py
 """
 from __future__ import annotations
 
@@ -27,11 +28,11 @@ from typing import Any
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 sys.path.insert(0, str(PROJECT / "tests"))
-from _balik import podvrhni  # noqa: E402 - podvrh ve všech podmodulech balíku importers
+from _package import substitute  # noqa: E402 - a substitute in every submodule of the package importers
 
 _tmp = tempfile.mkdtemp()
-# Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
-# databáze v data/database.json a test by běžel proti ostré databázi.
+# A home of its own: without it DATABASE_PATH would be overridden by the stored choice of database in
+# data/database.json and the test would run against the live database.
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "dup.db")
 
@@ -42,119 +43,118 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
 
-def pocet() -> int:
+def count() -> int:
     return int(db.query_value("SELECT COUNT(*) FROM playback"))
 
 
-UZIVATEL = "aa11bb22cc33dd44ee55ff6600112233"
-FILM = "0011223344556677889900aabbccddee"
+USER = "aa11bb22cc33dd44ee55ff6600112233"
+MOVIE = "0011223344556677889900aabbccddee"
 
-# Táž dvě přehrávání, jak je vidí každý ze zdrojů. Časy se schválně liší
-# o pár desítek sekund — každý nástroj si zapisuje trochu jiný okamžik
-# (začátek přehrávání vs. chvíli, kdy si to poznamenal).
+# The same two plays as each source sees them. The times differ by a few tens of seconds on purpose - every
+# tool writes a slightly different moment (the start of the play vs. the moment it noted it).
 JELLYSTAT = {
     "jf_playback_activity": [
         {"Id": 1, "ActivityDateInserted": "2026-07-01 20:00:00",
-         "PlaybackDuration": "3600", "UserId": UZIVATEL,
-         "NowPlayingItemId": FILM, "NowPlayingItemName": "Matrix"},
+         "PlaybackDuration": "3600", "UserId": USER,
+         "NowPlayingItemId": MOVIE, "NowPlayingItemName": "Matrix"},
         {"Id": 2, "ActivityDateInserted": "2026-07-03 18:00:00",
-         "PlaybackDuration": "1800", "UserId": UZIVATEL,
-         "NowPlayingItemId": FILM, "NowPlayingItemName": "Matrix"},
+         "PlaybackDuration": "1800", "UserId": USER,
+         "NowPlayingItemId": MOVIE, "NowPlayingItemName": "Matrix"},
     ]
 }
 
-PBR_SLOUPCE = ["rowid", "DateCreated", "UserId", "ItemId", "ItemType",
+PBR_COLUMNS = ["rowid", "DateCreated", "UserId", "ItemId", "ItemType",
                "ItemName", "PlaybackMethod", "ClientName", "DeviceName",
                "PlayDuration"]
-PBR_RADKY = [
-    [10, "2026-07-01 20:00:40", UZIVATEL, FILM, "Movie", "Matrix",
+PBR_ROWS = [
+    [10, "2026-07-01 20:00:40", USER, MOVIE, "Movie", "Matrix",
      "DirectPlay", "Web", "Chrome", 3600],
-    [11, "2026-07-03 18:00:25", UZIVATEL, FILM, "Movie", "Matrix",
+    [11, "2026-07-03 18:00:25", USER, MOVIE, "Movie", "Matrix",
      "DirectPlay", "Web", "Chrome", 1800],
 ]
 
 
-def naimportuj_pbr(min_seconds: int = 60) -> dict[str, Any]:
-    """Spustí import z Playback Reportingu s podvrženou odpovědí serveru."""
-    class FalesnaOdpoved:
+def import_pbr(min_seconds: int = 60) -> dict[str, Any]:
+    """Run the import from Playback Reporting with a substituted answer of the server."""
+    class FakeAnswer:
         status_code = 200
 
         def json(self) -> dict[str, Any]:
-            return {"colums": PBR_SLOUPCE, "results": PBR_RADKY}
+            return {"colums": PBR_COLUMNS, "results": PBR_ROWS}
 
-    class FalesneHttp:
-        """Nahrazuje httpx klienta uvnitř JellyfinClient."""
+    class FakeHttp:
+        """Stands in for the httpx client inside JellyfinClient."""
 
-        async def post(self, cesta: str, json: Any = None) -> FalesnaOdpoved:
-            # Kontrola u příležitosti: i tady musí jít dovnitř jen SELECT.
-            dotaz = (json or {}).get("CustomQueryString", "")
-            assert dotaz.upper().startswith("SELECT"), dotaz
-            return FalesnaOdpoved()
+        async def post(self, path: str, json: Any = None) -> FakeAnswer:
+            # A check on the occasion: only SELECT may go in here too.
+            query = (json or {}).get("CustomQueryString", "")
+            assert query.upper().startswith("SELECT"), query
+            return FakeAnswer()
 
-    class FalesnyKlient:
+    class FakeClient:
         def __init__(self, *a: Any, **k: Any) -> None:
-            self._client = FalesneHttp()
+            self._client = FakeHttp()
 
-        async def __aenter__(self) -> "FalesnyKlient":
+        async def __aenter__(self) -> "FakeClient":
             return self
 
         async def __aexit__(self, *a: Any) -> bool:
             return False
 
-    puvodni = importers.JellyfinClient
-    podvrhni(importers, "JellyfinClient", FalesnyKlient)
+    original = importers.JellyfinClient
+    substitute(importers, "JellyfinClient", FakeClient)
     try:
         return asyncio.run(importers.import_playback_reporting(min_seconds))
     finally:
-        podvrhni(importers, "JellyfinClient", puvodni)
+        substitute(importers, "JellyfinClient", original)
 
 
 db.init_db()
 
-print("--- 1) první import z Jellystatu ---")
+print("--- 1) the first import from Jellystat ---")
 v = asyncio.run(importers.import_jellystat_json(json.dumps(JELLYSTAT).encode()))
-check(v.get("imported") == 2, f"naimportovaly se 2 záznamy ({v.get('imported')})")
-check(pocet() == 2, f"v databázi jsou 2 řádky ({pocet()})")
+check(v.get("imported") == 2, f"2 records were imported ({v.get('imported')})")
+check(count() == 2, f"the database holds 2 rows ({count()})")
 
 
 print()
-print("--- 2) týž soubor podruhé ---")
+print("--- 2) the same file a second time ---")
 v = asyncio.run(importers.import_jellystat_json(json.dumps(JELLYSTAT).encode()))
-check(v.get("imported") == 0, "nic nového se nenaimportovalo")
-check(v.get("duplicate") == 2, f"oba záznamy poznal podle klíče ({v.get('duplicate')})")
-check(pocet() == 2, f"počet řádků se nezměnil ({pocet()})")
+check(v.get("imported") == 0, "nothing new was imported")
+check(v.get("duplicate") == 2, f"it recognised both records by the key ({v.get('duplicate')})")
+check(count() == 2, f"the count of rows did not change ({count()})")
 
 
 print()
-print("--- 3) táž data z Playback Reportingu ---")
-# Klíče mají jiný tvar (pbr vs jst), takže je klíč nezachytí. Musí je
-# poznat porovnání obsahu.
-v = naimportuj_pbr()
-check(v.get("status") == "ok", f"import proběhl: {v.get('status')}")
-check(v.get("imported") == 0, f"nic se nezdvojilo ({v.get('imported')} nových)")
+print("--- 3) the same data from Playback Reporting ---")
+# The keys have another shape (pbr vs jst), so the key does not catch them. The comparison of content must
+# recognise them.
+v = import_pbr()
+check(v.get("status") == "ok", f"the import went through: {v.get('status')}")
+check(v.get("imported") == 0, f"nothing doubled ({v.get('imported')} new)")
 check(v.get("known_elsewhere") == 2,
-      f"oba záznamy poznal jako už známé ({v.get('known_elsewhere')})")
-check(pocet() == 2, f"v databázi jsou pořád 2 řádky ({pocet()})")
+      f"it recognised both records as known already ({v.get('known_elsewhere')})")
+check(count() == 2, f"the database still holds 2 rows ({count()})")
 
 
 print()
-print("--- 4) skutečně nové přehrávání projde ---")
-PBR_RADKY.append(
-    [12, "2026-07-20 21:00:00", UZIVATEL, FILM, "Movie", "Matrix",
+print("--- 4) a really new play goes through ---")
+PBR_ROWS.append(
+    [12, "2026-07-20 21:00:00", USER, MOVIE, "Movie", "Matrix",
      "DirectPlay", "Web", "Chrome", 2400])
-v = naimportuj_pbr()
-check(v.get("imported") == 1, f"přibyl jeden nový záznam ({v.get('imported')})")
-check(pocet() == 3, f"v databázi jsou 3 řádky ({pocet()})")
+v = import_pbr()
+check(v.get("imported") == 1, f"one new record was added ({v.get('imported')})")
+check(count() == 3, f"the database holds 3 rows ({count()})")
 
 
 print()
-print("--- 5) záznam ze sběrače se taky nezdvojí ---")
-# Vlastní sběr nemá s importem společný klíč vůbec.
+print("--- 5) a record from the collector is not doubled either ---")
+# Its own collection has no key in common with the import at all.
 with db.connect() as conn:
     conn.execute(
         """INSERT INTO playback (session_key, user_id, item_id, item_name,
@@ -163,61 +163,81 @@ with db.connect() as conn:
            VALUES ('relace-abc:polozka', ?, ?, 'Matrix',
                    '2026-07-25 19:00:00', '2026-07-25 20:00:00',
                    '2026-07-25 20:00:00', 3600, 0)""",
-        (UZIVATEL, FILM),
+        (USER, MOVIE),
     )
-PBR_RADKY.append(
-    [13, "2026-07-25 19:00:50", UZIVATEL, FILM, "Movie", "Matrix",
+PBR_ROWS.append(
+    [13, "2026-07-25 19:00:50", USER, MOVIE, "Movie", "Matrix",
      "DirectPlay", "Web", "Chrome", 3600])
-v = naimportuj_pbr()
-check(v.get("imported") == 0, f"sběrem pokryté období se nenaimportovalo ({v.get('imported')})")
-# Tři: dva záznamy z Jellystatu (řádky 10 a 11, seznam je průběžný)
-# a nově i ten, který mezitím zachytil sběrač.
-check(v.get("known_elsewhere") == 3, f"poznal je jako už známé ({v.get('known_elsewhere')})")
-check(pocet() == 4, f"počet řádků se nezměnil ({pocet()})")
+v = import_pbr()
+check(v.get("imported") == 0, f"a period covered by the collection was not imported ({v.get('imported')})")
+# Three: two records from Jellystat (rows 10 and 11, the list runs on) and newly also the one the collector
+# caught meanwhile.
+check(v.get("known_elsewhere") == 3, f"it recognised them as known already ({v.get('known_elsewhere')})")
+check(count() == 4, f"the count of rows did not change ({count()})")
 
 
 print()
-print("--- 6) překryv se posuzuje na uživatele a položku, ne globálně ---")
-JINY_UZIVATEL = "bb22cc33dd44ee55ff6600112233aa11"
-JINY_FILM = "ffeeddccbbaa00998877665544332211"
-PBR_RADKY.append(
-    # Stejný čas jako existující záznam, ale jiný divák - musí projít.
-    [14, "2026-07-25 19:00:00", JINY_UZIVATEL, FILM, "Movie", "Matrix",
+print("--- 6) the overlap is judged per user and item, not globally ---")
+OTHER_USER = "bb22cc33dd44ee55ff6600112233aa11"
+OTHER_MOVIE = "ffeeddccbbaa00998877665544332211"
+PBR_ROWS.append(
+    # The same time as an existing record, but another viewer - it must go through.
+    [14, "2026-07-25 19:00:00", OTHER_USER, MOVIE, "Movie", "Matrix",
      "DirectPlay", "Web", "Chrome", 3600])
-PBR_RADKY.append(
-    # Stejný divák i čas, ale jiný film - taky musí projít.
-    [15, "2026-07-25 19:00:00", UZIVATEL, JINY_FILM, "Movie", "Duna",
+PBR_ROWS.append(
+    # The same viewer and time, but another movie - it must go through too.
+    [15, "2026-07-25 19:00:00", USER, OTHER_MOVIE, "Movie", "Duna",
      "DirectPlay", "Web", "Chrome", 3600])
-v = naimportuj_pbr()
-check(v.get("imported") == 2, f"obě odlišná přehrávání prošla ({v.get('imported')})")
-check(pocet() == 6, f"v databázi je 6 řádků ({pocet()})")
+v = import_pbr()
+check(v.get("imported") == 2, f"both different plays went through ({v.get('imported')})")
+check(count() == 6, f"the database holds 6 rows ({count()})")
 
 
 print()
-print("--- 7) navazující díly se nepovažují za duplicitu ---")
-# Konec jednoho a začátek druhého ve stejnou vteřinu není překryv:
-# divák si mohl pustit další díl hned, jak dokoukal předchozí.
-PBR_RADKY.append(
-    [16, "2026-07-25 20:00:00", UZIVATEL, FILM, "Movie", "Matrix",
+print("--- 7) consecutive episodes do not count as a duplicate ---")
+# The end of one and the start of the other in the same second is no overlap: the viewer may have started the
+# next episode right after finishing the previous one.
+PBR_ROWS.append(
+    [16, "2026-07-25 20:00:00", USER, MOVIE, "Movie", "Matrix",
      "DirectPlay", "Web", "Chrome", 1800])
-v = naimportuj_pbr()
-check(v.get("imported") == 1, f"navazující přehrávání prošlo ({v.get('imported')})")
+v = import_pbr()
+check(v.get("imported") == 1, f"the consecutive play went through ({v.get('imported')})")
 
 
 print()
-print("--- 8) identifikátor s pomlčkami je tentýž uživatel ---")
-S_POMLCKAMI = "aa11bb22-cc33-dd44-ee55-ff6600112233"
-pred = pocet()
+print("--- 8) an identifier with dashes is the same user ---")
+WITH_DASHES = "aa11bb22-cc33-dd44-ee55-ff6600112233"
+before = count()
 JELLYSTAT["jf_playback_activity"].append(
     {"Id": 99, "ActivityDateInserted": "2026-07-20 21:00:30",
-     "PlaybackDuration": "2400", "UserId": S_POMLCKAMI,
-     "NowPlayingItemId": FILM, "NowPlayingItemName": "Matrix"})
+     "PlaybackDuration": "2400", "UserId": WITH_DASHES,
+     "NowPlayingItemId": MOVIE, "NowPlayingItemName": "Matrix"})
 v = asyncio.run(importers.import_jellystat_json(json.dumps(JELLYSTAT).encode()))
 check(v.get("imported") == 0,
-      f"jiný zápis téhož id duplicitu neschová ({v.get('imported')} nových)")
-check(pocet() == pred, f"počet řádků se nezměnil ({pocet()})")
+      f"another notation of the same id does not hide a duplicate ({v.get('imported')} new)")
+check(count() == before, f"the count of rows did not change ({count()})")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print("--- 9) the library's name joins two sources that name the title their own way ---")
+# The collector wrote what Jellyfin named the episode, the import what Jellystat did: the item is the same, so
+# its name in the library is the same too (review of the database step 6: a renamed alias took the playback's
+# name instead - SQLite the first column of a name, PostgreSQL the last).
+from jellyscope import importers as _importers  # noqa: E402
+
+EPISODE = "0e1d2c3b4a5968778695a4b3c2d1e0f9"
+with db.connect() as conn:
+    conn.execute("INSERT INTO items (id, name, type, is_missing, synced_at) VALUES (?, 'Zvony', 'Episode', 0, ?)",
+                 (EPISODE, db.utcnow()))
+    for key, name, start in (("relace-xyz:polozka", "Zvony", "2026-08-01 20:00:00"),
+                             ("import:jellystat:99", "Hra o truny - s08e05 - Zvony", "2026-08-01 20:00:30")):
+        conn.execute("INSERT INTO playback (session_key, user_id, item_id, item_name, started_at, last_seen_at, ended_at,"
+                     " watched_seconds, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 3000, 0)",
+                     (key, USER, EPISODE, name, start, start, start))
+    conn.commit()
+pair = [g for g in _importers.import_duplicate_groups() if {r["item_id"] for r in g} == {EPISODE}]
+check(len(pair) == 1 and {r["session_key"] for r in pair[0]} == {"relace-xyz:polozka", "import:jellystat:99"},
+      f"the collected and the imported record of one episode are one viewing ({[len(g) for g in pair]})")
+print()
+print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

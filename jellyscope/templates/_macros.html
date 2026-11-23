@@ -1,162 +1,224 @@
 {#
-  Makra = kousky šablony, které se používají na víc stránkách.
-  Napíše se jednou, volá se všude. Přesně jako funkce v Pythonu.
+  Macros = pieces of a template used on several pages.
+  Written once, called everywhere. Exactly like functions in Python.
 #}
 
-{# Dlouhé tabulky (Zjištění). Řádek nad stropem se schová všude, nad
-   mobilním stropem jen na úzké obrazovce. Stropy jsou v Nastavení →
-   Rozhraní → Dlouhé seznamy; celou tabulku otevře tlačítko níž v okně
-   #okno-tabulka (static/js/app.js). Řádky jsou seřazené od nejdůležitějšího,
-   takže to podstatné zůstává vidět. #}
-{# Karta z registru na pevném místě stránky (Přehled, dashboard.html):
-   vykreslí se jen tehdy, když ji účet smí - o tom rozhodla routa podle
-   registru (`karty` = povolené karty, sekce.povolene), ne šablona. Kreslí
-   ji _karta.html, stejně jako vlastní přehled. Neznámý klíč (překlep) je
-   chyba (sekce.over_kartu), ne tiše chybějící karta. Import `with context`. #}
-{% macro karta(klic) -%}
-    {{ over_kartu(klic) }}
-    {%- if klic in karty %}{% set sekce = karty[klic] %}{% include "_karta.html" %}{% endif -%}
+{# Long tables (Insights, *Arr, Seerr). A row above the limit is hidden everywhere,
+   above the mobile limit only on a narrow screen. The limits are in Settings →
+   Interface → Long lists; the whole table opens with the button below in the window
+   #table-window (static/js/app.js). Rows are sorted from the most important,
+   so what matters stays visible.
+
+   `where` says whose limit applies: without it Insights, "arr" the tables of *Arr, "seerr"
+   the tables of Seerr - each has its own count in the settings. The pairs (everywhere,
+   on a phone) are in `table_limits` (web/base.py). #}
+{# A card of the registry in a fixed place of a page (the Overview, video/overview.html):
+   it is drawn only when the account may see it - the route decided that by
+   the registry (`cards` = the allowed cards, cards.allowed), not the template. It is
+   drawn by _card.html, the same as in a custom dashboard. An unknown key (a typo) is
+   an error (cards.check_card), not a silently missing card. Import `with context`.
+   A page with cards of its own (*Arr, Seerr) hands the template `page_card_keys`
+   - the keys its route computes data for; without them the Overview's cards apply. #}
+{% macro show_card(key_name) -%}
+    {{ check_card(key_name, page_card_keys if page_card_keys is defined else none) }}
+    {%- if key_name in cards %}{% set card = cards[key_name] %}{% include "_card.html" %}{% endif -%}
 {%- endmacro %}
 
-{# Odkaz jen tam, kam účet smí - podle smi(), tedy stejného pravidla, jakým
-   stránky pouští middleware. Kam nesmí, dostane obsah bez odkazu, se
-   stejnými atributy (plakát vypadá stejně, jen nikam nevede). Odkaz, za
-   kterým čeká „sem nemáš přístup", je horší než žádný. Volá se přes call:
-   {% call odkaz("/item/" ~ row.id) %}…{% endcall %}. Šablona ho musí
-   importovat `with context`, jinak by smi() neviděla. Prázdná adresa =
-   bez odkazu: `odkaz(row.user_id and "/users/" ~ row.user_id)` u řádku
-   bez diváka (import bez UserId) nevyrobí /users/None. #}
-{% macro odkaz(adresa, atributy={}) -%}
-    {%- if adresa and smi(adresa) %}<a href="{{ adresa }}"{{ atributy|xmlattr }}>{{ caller() }}</a>
-    {%- elif atributy %}<span{{ atributy|xmlattr }}>{{ caller() }}</span>
+{# The card's name with its group ("Sonarr · Indexery") - in the cards menu, on
+   the layout tile and in the dashboard's messages, where cards of several apps stand
+   side by side. The group is the app's name, not translated. #}
+{% macro card_title(card) -%}
+    {%- if card.group %}{{ _(card.group) }} · {% endif %}{{ _(card.name) }}
+{%- endmacro %}
+
+{# A link only where the account may go - by may_open(), that is the rule the
+   middleware lets pages through by. Where it may not, it gets the content without the link, with
+   the same attributes (a poster looks the same, it just leads nowhere). A link
+   with "no access here" behind it is worse than none. Called through call:
+   {% call link("/item/" ~ row.id) %}…{% endcall %}. The template has to
+   import it `with context`, otherwise may_open() would not be seen. An empty address =
+   no link: `link(row.user_id and "/users/" ~ row.user_id)` for a row
+   without a viewer (an import without UserId) does not make /users/None. #}
+{% macro link(href, attributes={}) -%}
+    {%- if href and may_open(href) %}<a href="{{ href }}"{{ attributes|xmlattr }}>{{ caller() }}</a>
+    {%- elif attributes %}<span{{ attributes|xmlattr }}>{{ caller() }}</span>
     {%- else %}{{ caller() }}{% endif -%}
 {%- endmacro %}
 
-{% macro trida_radku(poradi) -%}
-    {%- if poradi > strop_radku %}radek-navic{% elif poradi > strop_radku_mobil %}jen-desktop{% endif -%}
+{# A requester from Seerr (Seerr's cards, cards_seerr.py). Whoever was paired
+   with a Jellyscope viewer has `user_id` and is a link to their page - only
+   for whoever may open it. Without the area "...including who requested" the row has
+   no name at all (`user_name` is missing) and the macro writes nothing. #}
+{% macro requester(line) -%}
+    {%- if line.user_name is defined -%}
+        {%- if line.user_id and may_open("/users/" ~ line.user_id) -%}
+            <a href="/users/{{ line.user_id }}">{{ line.user_name }}</a>
+        {%- else -%}{{ line.user_name or "–" }}{%- endif -%}
+    {%- endif -%}
 {%- endmacro %}
 
-{# Tlačítko je všude, kde je něco schované: nad stropem pro širokou
-   obrazovku vždycky, mezi oběma stropy jen na mobilu. Stropy si každý
-   nastavuje sám a mobilní nemusí být menší - podmínka jen „nad mobilním"
-   by pak schovala řádky bez tlačítka, kterým by šly zobrazit. #}
-{% macro tlacitko_cela_tabulka(pocet) %}
-{% if pocet > strop_radku or pocet > strop_radku_mobil %}
-<div class="btn-row{{ '' if pocet > strop_radku else ' jen-mobil' }}" style="margin-top:12px">
-    <button class="btn" type="button" data-okno-tabulka>
-        {{ _("zobrazit celou tabulku ({n})").format(n=pocet) }}
+{# A poster frame with a placeholder for when the image is missing.
+
+   `css_class` is the frame by place: `poster-frame` in a strip of posters,
+   `session-poster` in the block of a pending request. Without an address the placeholder
+   is drawn at once (`no-image`: a sign and "No poster"). With an address the
+   placeholder is ready in the frame and hidden: when the image does not load, a script
+   (static/js/base.js, data-on-error="fallback") hides the image and gives the frame
+   the class `no-image`. While the image loads, only the coloured
+   area of the frame shows - as with the other posters.
+
+   `badge` is a short text over the poster's corner (the request's state), `badge_label`
+   its full wording for `title`.
+
+   `detail` is the address of the title's detail: with it the frame is a link (only where
+   the account may go - may_open(), like the macro link). As with "Recently added" it is not
+   in the tab order and a screen reader skips it: the name right beside it is the same
+   link, otherwise Tab would be pressed twice at every poster. #}
+{# `placeholder`: the label instead of a missing image ("No cover" for an album), otherwise "No poster". #}
+{% macro poster(image_url, css_class="poster-frame", badge="", badge_label="", detail="", placeholder="") -%}
+{%- set with_link = detail and may_open(detail) -%}
+<{{ 'a' if with_link else 'span' }} class="{{ css_class }}{{ '' if image_url else ' no-image' }}"
+    {%- if with_link %} href="{{ detail }}" tabindex="-1" aria-hidden="true"{% endif %}>
+    {%- if image_url %}<img src="{{ image_url }}" alt="" loading="lazy" data-on-error="fallback">{% endif -%}
+    <span class="poster-missing">
+        <svg class="poster-missing-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
+             stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="9.5" r="1.4"/>
+            <path d="M3.5 16l4.5-4 4 3.5 3-2.5 5.5 4.5"/><path d="M4 3l16 18"/>
+        </svg>
+        <span>{{ placeholder or _("No poster") }}</span>
+    </span>
+    {%- if badge %}<span class="poster-badge"{% if badge_label %} title="{{ badge_label }}"{% endif %}>{{ badge }}</span>{% endif -%}
+</{{ 'a' if with_link else 'span' }}>
+{%- endmacro %}
+
+{% macro row_class(position, where="insights") -%}
+    {%- set row_limit, row_limit_mobile = table_limits[where] -%}
+    {%- if position > row_limit %}extra-row{% elif position > row_limit_mobile %}desktop-only{% endif -%}
+{%- endmacro %}
+
+{# The button is wherever something is hidden: above the limit for the wide
+   screen always, between the two limits only on a phone. Everyone sets the
+   limits themselves and the mobile one need not be smaller - a condition of only
+   "above the mobile limit" would then hide rows without a button to show them. #}
+{% macro whole_table_button(row_count, where="insights") %}
+{% set row_limit, row_limit_mobile = table_limits[where] %}
+{% if row_count > row_limit or row_count > row_limit_mobile %}
+<div class="btn-row{{ '' if row_count > row_limit else ' mobile-only' }}" style="margin-top:12px">
+    <button class="btn" type="button" data-table-window>
+        {{ _("show the whole table ({n})").format(n=row_count) }}
     </button>
 </div>
 {% endif %}
 {% endmacro %}
 
-{% macro okno_tabulka() %}
-<dialog class="okno okno-siroke" id="okno-tabulka">
-    <form method="dialog" class="okno-hlava">
+{% macro table_window() %}
+<dialog class="modal modal-wide" id="table-window">
+    <form method="dialog" class="modal-head">
         <h2></h2>
-        <button class="btn okno-zavrit" type="submit"
-                aria-label="{{ _("Zavřít") }}">&times;</button>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
     </form>
-    <div class="okno-obsah table-wrap"></div>
+    <div class="modal-body table-wrap"></div>
 </dialog>
 {% endmacro %}
 
-{# Přepínač období. Patří nad všechny grafy, které ovlivňuje - nikdy
-   dovnitř jednotlivých karet. Zvolená hodnota platí i po přechodu na
-   jinou záložku, takže okno je napříč aplikací synchronní. #}
-{# Změna období překreslí celou stránku - jiné období znamená jiná čísla
-   ve všech grafech i v souhrnu, ne jen v jedné kartě. Načtení stránky ale
-   vždycky skočí na začátek, což je u filtru dole na stránce otravné.
-   `data-keep-scroll` řekne skriptu (static/js/app.js), ať si pozici zapamatuje
-   a po načtení ji vrátí. #}
-{# Přepínač období nad statistikami.
+{# The period switch. It belongs above all the charts it affects - never
+   inside single cards. The chosen value holds after moving to
+   another tab too, so the window is in step across the app. #}
+{# A change of the period redraws the whole page - another period means other numbers
+   in all charts and in the summary, not just in one card. Loading a page
+   always jumps to the top though, which is annoying with a filter low on the page.
+   `data-keep-scroll` tells the script (static/js/app.js) to remember the position
+   and restore it after loading. #}
+{# The period switch above statistics.
 
-   `obdobi` připravuje web._obdobi_do_sablony(): buď zvolený počet dnů,
-   nebo vlastní rozmezí. Poslední volba otevře okno se dvěma daty - do
-   pevné nabídky se „loňský prosinec" vejít nemůže, a přitom je to přesně
-   ta otázka, kvůli které se člověk dívá na statistiky nejčastěji.
+   `period` is prepared by web.base._period_for_template(): either the chosen number of
+   days, or a custom range. The last choice opens a window with two dates - a fixed
+   menu cannot hold "last December", and yet that is exactly
+   the question a person looks at statistics for most often.
 
-   `zachovat` jsou parametry adresy, které se při přepnutí období nesmí
-   ztratit - třeba záložka knihovny. Bez nich by klik na „rok" v Aktivitě
-   skončil na Přehledu knihovny. #}
-{% macro period_filter(obdobi, base_url, zachovat=None) %}
-{%- set navic = (zachovat | urlencode ~ '&') if zachovat else '' -%}
+   `keep` are the address parameters that must not get lost when the period switches -
+   the library's tab, for one. Without them a click on "rok" in Activity
+   would end on the library's Overview. #}
+{% macro period_filter(period, base_url, keep=None) %}
+{%- set kept_query = (keep | urlencode ~ '&') if keep else '' -%}
 <div class="filters">
     {% for days in allowed_days %}
-        <a class="chip {{ 'active' if not obdobi.vlastni and days == obdobi.days }}"
-           data-keep-scroll href="{{ base_url }}?{{ navic }}days={{ days }}">{{ _(day_labels[days]) }}</a>
+        <a class="chip {{ 'active' if not period.own and days == period.days }}"
+           data-keep-scroll href="{{ base_url }}?{{ kept_query }}days={{ days }}">{{ _(day_labels[days]) }}</a>
     {% endfor %}
-    <button class="chip {{ 'active' if obdobi.vlastni }}" type="button"
-            data-okno="okno-obdobi">
-        {% if obdobi.cela_historie %}
-            {{ _("Celá historie") }}
-        {% elif obdobi.vlastni %}
-            {# Po česku, stejně jako v polích - ať to je jedno datum,
-               ne dva různé zápisy téhož. #}
-            {{ obdobi.od_popis }} – {{ obdobi.do_popis }}
+    <button class="chip {{ 'active' if period.own }}" type="button"
+            data-modal="modal-period">
+        {% if period.whole_history %}
+            {{ _("All time") }}
+        {% elif period.own %}
+            {# Written the Czech way, the same as in the fields - so it is one date,
+               not two different notations of the same. #}
+            {{ period.since_label }} – {{ period.until_label }}
         {% else %}
-            {{ _("Vlastní") }}
+            {{ _("Custom") }}
         {% endif %}
     </button>
 </div>
 
-<dialog class="okno" id="okno-obdobi">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ _("Vlastní období") }}</h2>
-        <button class="btn okno-zavrit" type="submit"
-                aria-label="{{ _("Zavřít") }}">&times;</button>
+<dialog class="modal" id="modal-period">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Custom period") }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
     </form>
 
     <p class="card-note">
-        {{ _("Statistiky se spočítají za zvolené rozmezí včetně obou dnů.") }}
+        {{ _("The statistics are counted for the chosen range, both days included.") }}
     </p>
 
-    {# Formulář jde na tutéž stránku, takže se vlastní období drží i při
-       přechodu na jinou záložku - stejně jako počet dnů.
+    {# The form goes to the same page, so a custom period holds when
+       moving to another tab too - the same as the number of days.
 
-       Datum je obyčejné textové pole, ne <input type="date">. Ten totiž
-       vypadá v každém prohlížeči jinak (na Windows je z něj „dd.mm.rrrr"
-       ve vlastním rámečku) a uprostřed jinak sladěného okna trčí -
-       stejná lekce jako u filtru v historii. #}
-    <form method="get" action="{{ base_url }}" class="obdobi-form">
-        {% for klic, hodnota in (zachovat or {}).items() %}
-        <input type="hidden" name="{{ klic }}" value="{{ hodnota }}">
+       The date is a plain text field, not <input type="date">. That one
+       looks different in every browser (on Windows it becomes "dd.mm.rrrr"
+       in a frame of its own) and sticks out in the middle of an otherwise matching window -
+       the same lesson as with the filter in the history. #}
+    <form method="get" action="{{ base_url }}" class="period-form">
+        {% for key_name, val in (keep or {}).items() %}
+        <input type="hidden" name="{{ key_name }}" value="{{ val }}">
         {% endfor %}
-        <div class="obdobi-pole">
+        <div class="period-fields">
             <div class="field">
-                <label for="obdobi-od">{{ _("Od") }}</label>
-                <input type="text" id="obdobi-od" name="od" required data-kalendar
-                       data-pole="od"
-                       value="{{ obdobi.od_text }}" placeholder="1.8.2026"
+                <label for="period-since">{{ _("From") }}</label>
+                <input type="text" id="period-since" name="since" required data-calendar
+                       data-field="since"
+                       value="{{ period.since_text }}" placeholder="1.8.2026"
                        inputmode="numeric" autocomplete="off">
             </div>
             <div class="field">
-                <label for="obdobi-do">{{ _("Do") }}</label>
-                <input type="text" id="obdobi-do" name="do" required data-kalendar
-                       data-pole="do"
-                       value="{{ obdobi.do_text }}" placeholder="{{ dnes_text }}"
+                <label for="period-until">{{ _("To") }}</label>
+                <input type="text" id="period-until" name="until" required data-calendar
+                       data-field="until"
+                       value="{{ period.until_text }}" placeholder="{{ today_text }}"
                        inputmode="numeric" autocomplete="off">
             </div>
         </div>
 
-        {# Tři nejčastější odpovědi na „jaké období". Vyplní pole, neodešlou
-           formulář - ať je vidět, co se vybralo, než se na to klikne. #}
-        <div class="btn-row obdobi-rychle">
-            {% for popis, od_h, do_h in rychla_obdobi %}
+        {# The three most common answers to "which period". They fill the fields and do not send
+           the form - so what was chosen shows before it is clicked. #}
+        <div class="btn-row period-quick">
+            {% for description, since, until in quick_periods %}
                 <button class="chip" type="button"
-                        data-obdobi-od="{{ od_h }}" data-obdobi-do="{{ do_h }}">{{ _(popis) }}</button>
+                        data-period-since="{{ since }}" data-period-until="{{ until }}">{{ _(description) }}</button>
             {% endfor %}
         </div>
 
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn primary" type="submit">{{ _("Použít") }}</button>
-            {# Celá historie se nevyplňuje do polí: má sahat až do teď
-               i zítra, kdy by pevné datum skončilo dnešním dnem. #}
+            <button class="btn primary" type="submit">{{ _("Apply") }}</button>
+            {# The whole history is not filled into the fields: it has to reach until now
+               tomorrow too, when a fixed date would end with today. #}
             <a class="btn" data-keep-scroll
-               href="{{ base_url }}?{{ navic }}days=0">{{ _("Celá historie") }}</a>
-            {% if obdobi.vlastni %}
+               href="{{ base_url }}?{{ kept_query }}days=0">{{ _("All time") }}</a>
+            {% if period.own %}
                 <a class="btn" data-keep-scroll
-                   href="{{ base_url }}?{{ navic }}days=30">{{ _("Zpět na 30 dnů") }}</a>
+                   href="{{ base_url }}?{{ kept_query }}days=30">{{ _("Back to 30 days") }}</a>
             {% endif %}
         </div>
     </form>
@@ -164,106 +226,106 @@
 {% endmacro %}
 
 
-{# Přepínač období na Srovnání.
+{# The period switch of the Comparison.
 
-   Proč vlastní makro a ne to nahoře: tam je jedno období na stránku,
-   a tak se jeho hodnota jmenuje prostě `days`. Tady jsou dvě a musí se
-   v adrese rozeznat, takže nesou předponu (`a_days`, `b_od`, `b_do`).
+   Why a macro of its own and not the one above: there is one period per page,
+   so its value is simply called `days`. Here are two and they have to be
+   told apart in the address, so they carry a prefix (`a_days`, `b_since`, `b_until`).
 
-   `druhy` je to druhé období jako dvojice do adresy. Bez něj by se při
-   přepnutí jednoho období to druhé vrátilo na zapamatovanou hodnotu
-   a skákalo by pod rukama. #}
-{% macro obdobi_prepinac(popisek, obdobi, base_url, predpona, druhy) %}
-<div class="srovnani-volba">
-    <p class="tile-label">{{ popisek }}</p>
+   `other_period` is the other period's part of the address (`query_a` / `query_b`). Without it switching
+   one period would put the other one back to the remembered value
+   and it would jump under the hand. #}
+{% macro period_switch(switch_label, period, base_url, prefix, other_period) %}
+<div class="compare-option">
+    <p class="tile-label">{{ switch_label }}</p>
     <div class="filters">
         {% for days in allowed_days %}
-            <a class="chip {{ 'active' if not obdobi.vlastni and days == obdobi.days }}"
-               href="{{ base_url }}?{{ druhy | urlencode }}&{{ predpona }}_days={{ days }}">{{ _(day_labels[days]) }}</a>
+            <a class="chip {{ 'active' if not period.own and days == period.days }}"
+               href="{{ base_url }}?{{ other_period | urlencode }}&{{ prefix }}_days={{ days }}">{{ _(day_labels[days]) }}</a>
         {% endfor %}
-        <button class="chip {{ 'active' if obdobi.vlastni }}" type="button"
-                data-okno="okno-obdobi-{{ predpona }}">
-            {% if obdobi.vlastni %}
-                {{ obdobi.od_popis }} – {{ obdobi.do_popis }}
+        <button class="chip {{ 'active' if period.own }}" type="button"
+                data-modal="modal-period-{{ prefix }}">
+            {% if period.own %}
+                {{ period.since_label }} – {{ period.until_label }}
             {% else %}
-                {{ _("Vlastní") }}
+                {{ _("Custom") }}
             {% endif %}
         </button>
     </div>
 </div>
 
-<dialog class="okno" id="okno-obdobi-{{ predpona }}">
-    <form method="dialog" class="okno-hlava">
-        <h2>{{ popisek }}</h2>
-        <button class="btn okno-zavrit" type="submit"
-                aria-label="{{ _("Zavřít") }}">&times;</button>
+<dialog class="modal" id="modal-period-{{ prefix }}">
+    <form method="dialog" class="modal-head">
+        <h2>{{ switch_label }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
     </form>
 
     <p class="card-note">
-        {{ _("Statistiky se spočítají za zvolené rozmezí včetně obou dnů.") }}
+        {{ _("The statistics are counted for the chosen range, both days included.") }}
     </p>
 
-    <form method="get" action="{{ base_url }}" class="obdobi-form">
-        {# Druhé období musí projít i formulářem, jinak by se po odeslání
-           vrátilo na zapamatovanou hodnotu. #}
-        {% for jmeno, hodnota in druhy.items() %}
-            <input type="hidden" name="{{ jmeno }}" value="{{ hodnota }}">
+    <form method="get" action="{{ base_url }}" class="period-form">
+        {# The other period has to go through the form too, otherwise after sending it
+           would go back to the remembered value. #}
+        {% for param_name, val in other_period.items() %}
+            <input type="hidden" name="{{ param_name }}" value="{{ val }}">
         {% endfor %}
 
-        <div class="obdobi-pole">
+        <div class="period-fields">
             <div class="field">
-                <label for="obdobi-{{ predpona }}-od">{{ _("Od") }}</label>
-                <input type="text" id="obdobi-{{ predpona }}-od"
-                       name="{{ predpona }}_od" required data-kalendar data-pole="od"
-                       value="{{ obdobi.od_text }}" placeholder="1.8.2026"
+                <label for="period-{{ prefix }}-since">{{ _("From") }}</label>
+                <input type="text" id="period-{{ prefix }}-since"
+                       name="{{ prefix }}_since" required data-calendar data-field="since"
+                       value="{{ period.since_text }}" placeholder="1.8.2026"
                        inputmode="numeric" autocomplete="off">
             </div>
             <div class="field">
-                <label for="obdobi-{{ predpona }}-do">{{ _("Do") }}</label>
-                <input type="text" id="obdobi-{{ predpona }}-do"
-                       name="{{ predpona }}_do" required data-kalendar data-pole="do"
-                       value="{{ obdobi.do_text }}" placeholder="{{ dnes_text }}"
+                <label for="period-{{ prefix }}-until">{{ _("To") }}</label>
+                <input type="text" id="period-{{ prefix }}-until"
+                       name="{{ prefix }}_until" required data-calendar data-field="until"
+                       value="{{ period.until_text }}" placeholder="{{ today_text }}"
                        inputmode="numeric" autocomplete="off">
             </div>
         </div>
 
-        <div class="btn-row obdobi-rychle">
-            {% for popis, od_h, do_h in rychla_obdobi %}
+        <div class="btn-row period-quick">
+            {% for description, since, until in quick_periods %}
                 <button class="chip" type="button"
-                        data-obdobi-od="{{ od_h }}" data-obdobi-do="{{ do_h }}">{{ _(popis) }}</button>
+                        data-period-since="{{ since }}" data-period-until="{{ until }}">{{ _(description) }}</button>
             {% endfor %}
         </div>
 
         <div class="btn-row" style="margin-top:14px">
-            <button class="btn primary" type="submit">{{ _("Použít") }}</button>
+            <button class="btn primary" type="submit">{{ _("Apply") }}</button>
         </div>
     </form>
 </dialog>
 {% endmacro %}
 
 
-{# Běžící úloha a tlačítko na její zastavení.
+{# A running task and the button to stop it.
 
-   Je na třech místech v Nastavení (Jellyfin, Data, Úlohy), proto makro -
-   jinak by se stejný kus musel udržovat třikrát.
+   It is in three places in Settings (Jellyfin, Data, Tasks), hence a macro -
+   otherwise the same piece would have to be kept three times.
 
-   `back` říká, do které sekce se po kliknutí vrátit. #}
+   `back` says which section to return to after the click. #}
 {% macro running_task(scan_running, stop_pending, back) %}
 {% if scan_running %}
 <div class="flash info" style="margin-top:14px">
     <span class="dot"></span>
     <span>
         {% if stop_pending %}
-            {{ _("Zastavuji. Úloha dokončí rozpracovanou položku a skončí.") }}
+            {{ _("Stopping. The task will finish the item it is working on and then end.") }}
         {% else %}
-            {{ _("Úloha právě běží.") }}
+            {{ _("A task is running.") }}
         {% endif %}
     </span>
 </div>
 
-{# Ukazatel průběhu. Čísla doplňuje JavaScript z /health, protože se mění
-   za běhu - stránka je jen připravená. Bez JavaScriptu zůstane skrytý,
-   takže se neukáže prázdný pruh, který se nikdy nepohne. #}
+{# A progress indicator. JavaScript fills the numbers from /health, because they change
+   while running - the page is only prepared. Without JavaScript it stays hidden,
+   so no empty bar that never moves shows. #}
 <div class="task-progress" id="task-progress" hidden>
     <div class="task-progress-bar"><i id="task-progress-fill" style="width:0%"></i></div>
     <div class="task-progress-note">
@@ -271,13 +333,13 @@
     </div>
 </div>
 {% if not stop_pending %}
-{# Červená: je to jediná akce na stránce, která do běžícího děje zasahuje,
-   a hledá se ve chvíli, kdy je člověk nervózní. Musí být vidět hned. #}
+{# Red: it is the only action on the page that steps into what is running,
+   and it is looked for at a moment a person is nervous. It has to be seen at once. #}
 <form method="post" action="/settings/stop" style="margin-top:12px">
     <input type="hidden" name="back" value="{{ back }}">
-    <button class="btn danger" type="submit">&#9632; {{ _("Zastavit úlohu") }}</button>
+    <button class="btn danger" type="submit">&#9632; {{ _("Stop task") }}</button>
     <p class="card-note" style="margin-top:8px">
-        {{ _("Nepřeruší se uprostřed práce: dokončí položku, kterou má rozdělanou, a teprve pak skončí. Co se stihlo, zůstane uložené.") }}
+        {{ _("It is not interrupted mid-work: it finishes the item it has in progress and only then ends. Whatever was done stays saved.") }}
     </p>
 </form>
 {% endif %}
@@ -285,46 +347,46 @@
 {% endmacro %}
 
 
-{# Stránkování pod dlouhou tabulkou. #}
+{# Pages under a long table. #}
 {% macro pager(page, pages, total, base_url, extra='') %}
 {% if pages > 1 %}
 <div class="pager">
     {% if page > 1 %}
-        <a class="btn" href="{{ base_url }}?page={{ page - 1 }}{{ extra }}">{{ _("Předchozí") }}</a>
+        <a class="btn" href="{{ base_url }}?page={{ page - 1 }}{{ extra }}">{{ _("Previous") }}</a>
     {% endif %}
-    <span>{{ _("Strana") }} {{ page }} {{ _("z") }} {{ pages }} &middot;
-        {{ _("celkem") }} {{ total | number }}</span>
+    <span>{{ _("Page") }} {{ page }} {{ _("of") }} {{ pages }} &middot;
+        {{ _("total") }} {{ total | number }}</span>
     {% if page < pages %}
-        <a class="btn" href="{{ base_url }}?page={{ page + 1 }}{{ extra }}">{{ _("Další") }}</a>
+        <a class="btn" href="{{ base_url }}?page={{ page + 1 }}{{ extra }}">{{ _("Next") }}</a>
     {% endif %}
 </div>
 {% else %}
-<div class="pager"><span>{{ _("Celkem") }} {{ total | number }} {{ _("záznamů") }}</span></div>
+<div class="pager"><span>{{ _("Total") }} {{ _n("{n} records", total) }}</span></div>
 {% endif %}
 {% endmacro %}
 
 
-{# Dlaždice s jedním číslem. Když je hodnota jedno číslo, dlaždice je
-   správný tvar - sloupcový graf o jednom sloupci by byl chyba. #}
-{# Změna oproti minulému období, ve tvaru, který se dá přečíst.
+{# A tile with one number. When the value is one number, a tile is
+   the right shape - a bar chart of one bar would be a mistake. #}
+{# The change against the previous period, in a shape that can be read.
 
-   Procenta přestanou informovat, jakmile je základ maličký:
-   „+1 619 572 %" neříká nic o dnešku, jen to, že minule skoro nic
-   nebylo. Proto tři pásma:
+   Percentages stop telling anything once the base is tiny:
+   "+1 619 572 %" says nothing about today, only that there was
+   almost nothing last time. Hence three bands:
 
-     do 1000 %    procenta, jak je člověk čeká,
-     do 100×      násobek - kratší a čitelnější než pětimístné procento,
-     nad 100×     rovnou slovy, protože číslo už je jen ozdoba.
+     up to 1000 %   percentages, as people expect them,
+     up to 100×     a multiple - shorter and more readable than a five-digit percentage,
+     above 100×     words at once, because the number is mere decoration.
 
-   Dolů to takhle utéct nemůže: pod -100 % se spadnout nedá. #}
-{% macro zmena(delta) %}
-{%- set kladna = delta if delta > 0 else -delta -%}
-{%- if kladna >= 10000 -%}
-    {{ _("minule skoro nic") }}
-{%- elif kladna >= 1000 -%}
-    {{ _("×") }}{{ ((kladna / 100) + 1) | round(0) | int | number }}
+   It cannot run away downwards like this: below -100 % nothing can fall. #}
+{% macro change(delta) %}
+{%- set magnitude = delta if delta > 0 else -delta -%}
+{%- if magnitude >= 10000 -%}
+    {{ _("almost nothing last time") }}
+{%- elif magnitude >= 1000 -%}
+    {{ _("×") }}{{ ((magnitude / 100) + 1) | round(0) | int | number }}
 {%- else -%}
-    {{ kladna | percent }}
+    {{ magnitude | percent }}
 {%- endif -%}
 {% endmacro %}
 
@@ -335,11 +397,11 @@
     <div class="tile-value">{{ value }}</div>
     {% if delta is not none %}
         {% if delta > 1 %}
-            <div class="delta up">&#9650; {{ zmena(delta) }} {{ _("oproti minulému období") }}</div>
+            <div class="delta up">&#9650; {{ change(delta) }} {{ _("vs previous period") }}</div>
         {% elif delta < -1 %}
-            <div class="delta down">&#9660; {{ zmena(delta) }} {{ _("oproti minulému období") }}</div>
+            <div class="delta down">&#9660; {{ change(delta) }} {{ _("vs previous period") }}</div>
         {% else %}
-            <div class="delta flat">{{ _("beze změny") }}</div>
+            <div class="delta flat">{{ _("no change") }}</div>
         {% endif %}
     {% elif note %}
         <div class="delta flat">{{ note }}</div>
@@ -348,196 +410,207 @@
 {% endmacro %}
 
 
-{# Obsah <head>, který má každá stránka stejný.
+{# The content of <head> every page has the same.
 
-   Přihlášení, první spuštění a chybová stránka nestojí na base.html -
-   nemají postranní panel a mají vypadat jako samostatná obrazovka.
-   Hlavičku ale potřebují tutéž, a než se to vyčistilo, byla opsaná
-   čtyřikrát: kdo přidal meta značku, musel si vzpomenout na všechny. #}
-{% macro hlava(titulek) -%}
+   The sign-in, the first run and the error page do not stand on base.html -
+   they have no side panel and are to look like a screen of their own.
+   They need the same head though, and before this was cleaned up it was copied
+   four times: whoever added a meta tag had to remember all of them. #}
+{% macro head(page_title) -%}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ titulek }} &middot; Jellyscope</title>
+    <title>{{ page_title }} &middot; Jellyscope</title>
     <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
-    {# SVG ikona zůstane ostrá v každé velikosti - od 16px v panelu
-       prohlížeče po velké dlaždice na mobilu. #}
+    {# An SVG icon stays sharp at every size - from 16px in the browser's
+       panel to big tiles on a phone. #}
     <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
-    {# Bez defer: motiv se nastaví před vykreslením (jinak problikne). #}
-    <script src="/static/js/zaklad.js?v={{ asset_version }}"></script>
+    {# Without defer: the theme is set before rendering (otherwise it flickers). #}
+    <script src="/static/js/base.js?v={{ asset_version }}"></script>
 {% endmacro %}
 
 
-{# Výběr souboru.
+{# File picker.
 
-   Vlastní tlačítko místo holého `type="file"`: text uvnitř nativního pole
-   ("Vybrat soubor", "Soubor nevybrán") si kreslí prohlížeč a řídí se jeho
-   jazykem, ne naším - v anglickém rozhraní tak svítily dva české popisky.
-   Pole zůstává, jen je schované; formulář se tím nemění. #}
+   A button of our own instead of a bare `type="file"`: the text inside the native field
+   ("Choose file", "No file chosen") is drawn by the browser and follows its
+   language, not ours - in the English interface two Czech labels showed.
+   The field stays, only hidden; the form does not change by it. #}
 {% macro file_picker(name, accept) %}
 <label class="file-picker">
     <input type="file" name="{{ name }}" accept="{{ accept }}" required
-           data-nazev-souboru="{{ _("Soubor nevybrán") }}">
-    <span class="btn">{{ _("Vybrat soubor") }}</span>
-    <span class="file-name card-note">{{ _("Soubor nevybrán") }}</span>
+           data-file-name="{{ _("No file chosen") }}">
+    <span class="btn">{{ _("Choose file") }}</span>
+    <span class="file-name card-note">{{ _("No file chosen") }}</span>
 </label>
 {% endmacro %}
 
 
-{# Výběr cílového titulu pro přiřazení z archivu.
+{# Picking the target title for an assignment from the archive.
 
-   Hledá jen v živé knihovně (/archiv/hledat) - podle názvu, seriálu
-   i jména souboru. Vybrané id jde ve skrytém poli `nazev`; prázdné
-   pole = nic nevybráno. Hledá se po slovech v libovolném pořadí a S06E07
-   (nebo S06) najde řadu a díl. Výsledky se do stránky skládají přes
-   textContent, takže název titulu se značkou nic nerozbije. Obsluha je
-   ve static/js/app.js (data-vyber-cile). #}
-{# Malý plakát vedle názvu v nabídkách přiřazení. Když obrázek není
-   (archivovaný titul, který Jellyfin už nemá a v mezipaměti nebyl),
-   zůstane šedé políčko stejné velikosti - řádky se nerozjedou. #}
-{% macro plakatek(adresa) -%}
-<span class="plakatek"><img src="{{ adresa }}" alt="" loading="lazy" data-pri-chybe="odebrat"></span>
-{%- endmacro %}
-
-
-{% macro vyber_cile(nazev) %}
-<div class="vyber-cile" data-vyber-cile data-prazdno="{{ _('Nic nenalezeno.') }}"
-     data-dalsi="{{ _('Výsledků je víc, než se vejde. Upřesni hledání, třeba řadou a dílem: Zelenáč S06E07.') }}">
+   Searches only the live library (/archive/search) - by name, series
+   and file name. The chosen id goes in the hidden field named `input_name`; an empty
+   field = nothing chosen. The search goes by words in any order and S06E07
+   (or S06) finds the season and the episode. Results are put into the page through
+   textContent, so a title's name with a tag breaks nothing. Handled
+   in static/js/app.js (data-target-picker). #}
+{% macro target_picker(input_name) %}
+<div class="target-picker" data-target-picker data-empty="{{ _('Nothing found.') }}"
+     data-next="{{ _('There are more results than fit. Narrow the search, for example by season and episode: The Rookie S06E07.') }}">
     <input type="search" autocomplete="off"
-           placeholder="{{ _('Hledat titul, seriál nebo soubor…') }}"
-           aria-label="{{ _('Hledat titul, seriál nebo soubor…') }}">
-    <input type="hidden" name="{{ nazev }}" value="">
-    <div class="vyber-cile-vybrano" hidden>
-        <span class="plakatek"></span>
-        <span class="vyber-cile-text"><strong></strong><small></small></span>
-        <button class="btn" type="button" aria-label="{{ _('Zrušit výběr') }}">&times;</button>
+           placeholder="{{ _('Search a title, series or file…') }}"
+           aria-label="{{ _('Search a title, series or file…') }}">
+    <input type="hidden" name="{{ input_name }}" value="">
+    <div class="target-picker-chosen" hidden>
+        <span class="poster-small"></span>
+        <span class="target-picker-text"><strong></strong><small></small></span>
+        <button class="btn" type="button" aria-label="{{ _('Clear the choice') }}">&times;</button>
     </div>
-    <ul class="vyber-cile-nalezy" hidden></ul>
+    <ul class="target-picker-matches" hidden></ul>
 </div>
 {% endmacro %}
 
 
-{# Značka zdroje technických dat. Uživatel má vidět, jak spolehlivý údaj je. #}
+{# The badge of the source of technical data. A person is to see how reliable a figure is. #}
 {% macro tech_badge(source) %}
 {% if source == 'ffprobe' %}
-    <span class="badge ffprobe"><span class="dot"></span>{{ _("čteno ze souboru") }} (ffprobe)</span>
+    <span class="badge ffprobe"><span class="dot"></span>{{ _("read from file") }} (ffprobe)</span>
 {% elif source == 'jellyfin' %}
-    <span class="badge jellyfin"><span class="dot"></span>{{ _("hlásí Jellyfin") }}</span>
+    <span class="badge jellyfin"><span class="dot"></span>{{ _("reported by Jellyfin") }}</span>
 {% else %}
-    <span class="badge warning"><span class="dot"></span>{{ _("chybí") }}</span>
+    <span class="badge warning"><span class="dot"></span>{{ _("missing") }}</span>
 {% endif %}
 {% endmacro %}
 
 
-{# Věta "co přesně se přepočítává" do bubliny u značky transcode.
+{# The sentence "what exactly is transcoded" for the tooltip at the transcode badge.
 
-   Fakta připravuje stats.popis_prepoctu(); tady se z nich skládá text,
-   protože jazyk přihlášeného člověka zná jedině šablona. Samotné
-   "transcode" totiž neřekne, jestli server přepočítává obraz (drahé),
-   jen zvuk (levné), nebo vypaluje titulky. #}
-{% macro transcode_popis(fakta) %}
-{%- set casti = [] -%}
-{%- for fakt in fakta or [] -%}
-    {%- if fakt.co in ('Obraz', 'Zvuk') -%}
-        {%- if fakt.primo -%}
-            {%- set _ = casti.append(
-                _(fakt.co) ~ ": " ~ (fakt.z or fakt.na or "?") | upper
-                ~ " – " ~ _("beze změny, jen se přebaluje")) -%}
+   The facts are prepared by stats.transcode_description(); the text is put together here,
+   because only the template knows the signed-in person's language. A bare
+   "transcode" does not say whether the server converts the picture (expensive),
+   only the sound (cheap), or burns in subtitles. #}
+{% macro transcode_description(facts) %}
+{%- set pieces = [] -%}
+{%- for fact in facts or [] -%}
+    {%- if fact.what in ('Video#picture', 'Audio') -%}
+        {%- if fact.direct -%}
+            {%- set _ = pieces.append(
+                _(fact.what) ~ ": " ~ (fact.z or fact.to or "?") | upper
+                ~ " – " ~ _("unchanged, only repackaged")) -%}
         {%- else -%}
-            {%- set _ = casti.append(
-                _(fakt.co) ~ ": " ~ (fakt.z | upper ~ " → " if fakt.z else "")
-                ~ (fakt.na or "?") | upper ~ " – " ~ _("přepočítává se")) -%}
+            {%- set _ = pieces.append(
+                _(fact.what) ~ ": " ~ (fact.z | upper ~ " → " if fact.z else "")
+                ~ (fact.to or "?") | upper ~ " – " ~ _("being re-encoded")) -%}
         {%- endif -%}
-    {%- elif fakt.fps -%}
-        {#- Rychlost převodu. U historie průměr za celé přehrávání, u běžícího
-            stav teď. Vedle snímkování videa, protože samotné číslo nic
-            neříká: 30 fps je u filmu (24) dost, u sportu (50) málo. -#}
-        {%- set radek = _("Převod") ~ ": " ~ (_("v průměru") ~ " " if fakt.prumer else "")
-                        ~ fakt.fps ~ " fps" -%}
-        {%- if fakt.video_fps -%}
-            {%- set radek = radek ~ " (" ~ _("video má") ~ " " ~ fakt.video_fps ~ ")" -%}
+    {%- elif fact.fps -%}
+        {#- Transcode speed. For the history the average of the whole playback, for a running
+            one the state now. Beside the video's frame rate, because the number alone says
+            nothing: 30 fps is enough for a film (24), too little for sport (50). -#}
+        {%- set line = _("Conversion") ~ ": " ~ (_("on average") ~ " " if fact.average else "")
+                        ~ fact.fps ~ " fps" -%}
+        {%- if fact.video_fps -%}
+            {%- set line = line ~ " (" ~ _("the video has") ~ " " ~ fact.video_fps ~ ")" -%}
         {%- endif -%}
-        {%- if fakt.nestiha -%}
-            {%- set radek = radek ~ " – " ~ _("nestíhá, obraz může sekat") -%}
+        {%- if fact.too_slow -%}
+            {%- set line = line ~ " – " ~ _("falling behind, the picture may stutter") -%}
         {%- endif -%}
-        {%- set _ = casti.append(radek) -%}
-    {%- elif fakt.vypaluji -%}
-        {%- set _ = casti.append(_("Titulky se vypalují do obrazu")) -%}
-    {%- elif fakt.text -%}
-        {%- set _ = casti.append(_("Hardwarově") ~ ": " ~ fakt.text | upper) -%}
+        {%- set _ = pieces.append(line) -%}
+    {%- elif fact.burn_in -%}
+        {%- set _ = pieces.append(_("Subtitles are burned into the picture")) -%}
+    {%- elif fact.text -%}
+        {%- set _ = pieces.append(_("Hardware accelerated") ~ ": " ~ fact.text | upper) -%}
     {%- endif -%}
 {%- endfor -%}
-{{- casti | join(" · ") -}}
+{{- pieces | join(" · ") -}}
 {% endmacro %}
 
 
-{# Značka způsobu doručení. Barva nikdy nestojí sama - vedle je vždy text.
+{# The badge of the delivery method. A colour never stands alone - there is always text beside it.
 
-   `tip` je nepovinný popis toho, co se přepočítává. Když je prázdný,
-   bublina se nepřidá vůbec - prázdná bublina po najetí myší mate víc,
-   než kdyby tam nebyla. #}
+   `tip` is an optional description of what is transcoded. When it is empty,
+   no tooltip is added at all - an empty tooltip on hover confuses more
+   than none. #}
 {% macro method_badge(method, tip='') %}
 {% if method == 'Transcode' %}
     <span class="badge serious"{% if tip %} data-tip="{{ tip }}"{% endif %}><span class="dot"></span>{{ _("transcode") }}</span>
 {% elif method == 'DirectStream' %}
-    <span class="badge info"><span class="dot"></span>{{ _("přebalení") }}</span>
+    <span class="badge info"><span class="dot"></span>{{ _("remux") }}</span>
 {% else %}
-    <span class="badge good"><span class="dot"></span>{{ _("přímé") }}</span>
+    <span class="badge good"><span class="dot"></span>{{ _("direct") }}</span>
 {% endif %}
 {% endmacro %}
 
 
-{# Buňka „Klíč" v tabulce API klíčů (Nastavení → API i Můj účet).
+{# The cell "Key" in the table of API keys (Settings → API and My account).
 
-   Čerstvě vyrobený klíč se ukáže celý - ale jen při prvním zobrazení po
-   vyrobení: server ho drží v relaci a při vykreslení hned zahodí. I s
-   tlačítkem Kopírovat. Po obnovení stránky z klíče zbyde začátek
-   a hvězdičky - a tlačítko zmizí s ním, protože kopírovat už není co.
-   Celý klíč je ve stránce jen jednou (žádný data-atribut navíc);
-   tlačítko si ho bere z <code> podle id. Viz [data-kopirovat] ve static/js/app.js.
+   A freshly made key shows whole - but only on the first view after
+   it is made: the server keeps it in the session and drops it while rendering. With
+   the Copy button. After a refresh only the start of the key and asterisks
+   are left - and the button goes with it, as there is nothing to copy.
+   The whole key is in the page only once (no extra data attribute);
+   the button takes it from <code> by id. See [data-copy] in static/js/app.js.
 
-   `novy` = {"id": ..., "token": ...} z relace, nebo nic. #}
-{% macro bunka_klice(klic, novy, hvezdicek=24) %}
-{% if novy and novy.id == klic.id %}
-<td class="novy-klic">
-    <code class="novy-klic-text" id="novy-klic-{{ klic.id }}">{{ novy.token }}</code>
-    <div class="novy-klic-akce">
-        <button class="btn" type="button" data-kopirovat="novy-klic-{{ klic.id }}"
-                data-hotovo="{{ _('Klíč zkopírován.') }}"
-                data-oznaceno="{{ _('Klíč je označený, zkopíruj ho Ctrl+C.') }}">{{ _("Kopírovat") }}</button>
+   `new_key` = {"id": ..., "token": ...} from the session, or nothing. #}
+{% macro key_cell(key_name, new_key, stars=24) %}
+{% if new_key and new_key.id == key_name.id %}
+<td class="new-key">
+    <code class="new-key-text" id="new-key-{{ key_name.id }}">{{ new_key.token }}</code>
+    <div class="new-key-actions">
+        <button class="btn" type="button" data-copy="new-key-{{ key_name.id }}"
+                data-done="{{ _('Key copied.') }}"
+                data-marked="{{ _('The key is selected, copy it with Ctrl+C.') }}">{{ _("Copy") }}</button>
         <span class="hint" role="status" aria-atomic="true"></span>
     </div>
-    <p class="hint">{{ _("Ulož si ho teď. Po obnovení stránky z něj zůstane jen začátek.") }}</p>
+    <p class="hint">{{ _("Save it now. After the page reloads only its beginning is left.") }}</p>
 </td>
 {% else %}
-<td class="muted nowrap"><code>{{ klic.ukazka }}{{ '*' * hvezdicek }}</code></td>
+<td class="muted nowrap"><code>{{ key_name.preview }}{{ '*' * stars }}</code></td>
 {% endif %}
 {% endmacro %}
 
 
-{# Název oblasti ve stromu práv (účty, skupina čtenářů, diváci z Jellyfinu).
-   U přehledu pro všechny i se jménem od správce - jinak by nebylo poznat,
-   kterou stránku zaškrtnutí povoluje. #}
-{% macro nazev_oblasti(oblast, nazev_prehledu) -%}
-{{ _(oblast.nazev) }}{% if oblast.klic == 'dashboard' and nazev_prehledu %} („{{ nazev_prehledu }}“){% endif %}
+{# The name of an area in the permission tree (accounts, the reader group, Jellyfin viewers).
+   For the dashboard for everyone with the name from the admin too - otherwise one could not
+   tell which page the tick allows. #}
+{# The parts of a heading (access.Area.heading, a group of the dashboard builder) translated
+   and joined: "Filmy a seriály · Přehled". Plain text for .format() is joined in _dashboard_card. #}
+{% macro heading_text(parts) -%}
+{% for part in parts %}{{ _(part) }}{% if not loop.last %} · {% endif %}{% endfor %}
+{%- endmacro %}
+
+{# `with_section`: outside the tree, where no heading says it - Area.heading, "Library" or
+   "Filmy a seriály · Přehled" (only for access.Area, not for a row of the tree).
+   Without it `area` must be a row of the tree (access.tree(), the key `name`): an access.Area has
+   no `name` and would draw an empty name. #}
+{% macro area_name(area, with_section=false) -%}
+{% if with_section %}{{ heading_text(area.heading) }}{% else %}{{ _(area.name) }}{% endif %}
 {%- endmacro %}
 
 
-{# Strom práv - zaškrtávátko `vidi_<oblast>` za každou oblast. Jeden pro
-   všechna místa (okno Práva účtu, skupina čtenářů, diváci z Jellyfinu,
-   root klíč), ať se nová oblast nezapomene v jednom z nich.
-   `formular` = id formuláře, když strom stojí mimo něj (atribut form=);
-   `trida` = třída navíc, podle které strom najde skript stránky. #}
-{% macro strom_prav(strom, nazev_prehledu, formular="", trida="") %}
-<div class="strom{{ ' ' ~ trida if trida }}">
-    {% for oblast in strom %}
-    <label class="prepinac{{ ' strom-pod' if oblast.pod }}">
-        <input type="checkbox" name="vidi_{{ oblast.klic }}"{% if formular %} form="{{ formular }}"{% endif %}
-               {{ 'checked' if oblast.zapnuto }}>
+{# The permission tree - a checkbox `sees_<area>` for every area. One for
+   all places (the Account permissions window, the reader group, Jellyfin viewers,
+   the root key), so a new area is not forgotten in one of them.
+   `form` = the form's id when the tree stands outside it (the attribute form=);
+   `css_class` = an extra class by which the page's script finds the tree. #}
+{% macro permissions_tree(tree, dashboard_name, form="", css_class="") %}
+<div class="tree{{ ' ' ~ css_class if css_class }}">
+    {# Every section of the menu is a heading over its areas, and its areas are one group -
+       a screen reader says whose "Overview" it is. #}
+    {% for area in tree %}
+    {% if area.section and (loop.first or loop.previtem.section != area.section) %}
+    {# The custom dashboard's section is called in the menu by the name it was given. #}
+    {% set title = dashboard_name if area.key == 'dashboard' and dashboard_name else _(area.section) %}
+    <div class="tree-group" role="group" aria-label="{{ title }}">
+    <p class="tree-section" aria-hidden="true">{{ title }}</p>
+    {% endif %}
+    <label class="switch{{ ' tree-in-section' if area.section }}{{ ' tree-child' if area.parent }}">
+        <input type="checkbox" name="sees_{{ area.key }}"{% if form %} form="{{ form }}"{% endif %}
+               {{ 'checked' if area.enabled }}>
         <span>
-            {{ nazev_oblasti(oblast, nazev_prehledu) }}
-            <span class="hint">{{ _(oblast.popis) }}</span>
+            {{ area_name(area) }}
+            <span class="hint">{{ _(area.description) }}</span>
         </span>
     </label>
+    {% if area.section and (loop.last or loop.nextitem.section != area.section) %}</div>{% endif %}
     {% endfor %}
 </div>
 {% endmacro %}

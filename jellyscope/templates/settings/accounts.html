@@ -1,0 +1,389 @@
+{# A Settings section: accounts of Jellyscope, passwords and roles
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker, permissions_tree %}
+
+{# ================================================================== #}
+{# Actions on accounts. The forms used to be always open one under another and the page
+   was endless because of them - while each of them is used once in
+   half a year. Now they are in windows (<dialog>) that handle Esc and a click outside. #}
+<div class="btn-row" style="margin-bottom:16px">
+    {# One's own password is changed on the My account page - that one wants the current
+       password. The window here did not, so whoever sat down at somebody else's
+       signed-in browser could overwrite the admin's password and lock them
+       out. #}
+    <a class="btn primary" href="/account">{{ _("Change your password") }}</a>
+    {% if account.is_admin %}
+    <button class="btn" type="button" data-modal="modal-add">
+        {{ _("Add user") }}
+    </button>
+    <button class="btn" type="button" data-modal="modal-other-password">
+        {{ _("Change another account's password") }}
+    </button>
+    {% endif %}
+</div>
+
+{% if account.is_admin %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jellyscope accounts") }}</h2>
+        <p class="card-note">{{ _("total") }} {{ all_accounts | length }}</p>
+    </div>
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("These are not Jellyfin users but accounts for signing in here. Creating an account here gives nobody access to Jellyfin.") }}
+    </p>
+    {% if local_admin_count == 0 %}
+    {# One local administrator must always stay (accounts.local_admin_count): an older installation may have none. #}
+    <div class="flash error" style="margin-bottom:16px"><span class="dot"></span>
+        <span>{{ _("There is no local administrator. Create one - an account of Jellyscope, not from Jellyfin - so that Settings can be reached even when Jellyfin is not.") }}</span>
+    </div>
+    {% endif %}
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Name#person") }}</th><th>{{ _("Permissions") }}</th>
+                <th class="num">{{ _("Created") }}</th>
+                <th class="num">{{ _("Last sign-in") }}</th><th>{{ _("Actions") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in all_accounts %}
+            <tr>
+                <td class="strong">
+                    {{ row.username }}
+                    {% if row.id == account.id %}<span class="muted">({{ _("you") }})</span>{% endif %}
+                </td>
+                <td>
+                    {% if row.is_admin %}
+                        <span class="badge role"><span class="dot"></span>{{ _("administrator") }}</span>
+                    {% elif row.jellyfin_user_id %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("Jellyfin viewer") }}</span>
+                    {% else %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("reader") }}</span>
+                    {% endif %}
+                    {# An account with permissions of its own is recognised at first sight -
+                       otherwise the admin would look for why a change of the group does not
+                       concern it. #}
+                    {% if row.id in account_permissions and account_permissions[row.id].own %}
+                        <span class="badge good"><span class="dot"></span>{{ _("own rights") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num muted">{{ row.created_at | datetime }}</td>
+                <td class="num muted">{{ row.last_login | relative }}</td>
+                <td>
+                    <div class="btn-row">
+                    {# One's own account is not touched: neither the role nor deleting. Were the
+                       last admin to take away their rights or delete themselves, nobody
+                       would get into Jellyscope any more.
+
+                       Instead of an empty cell we say why though - otherwise it
+                       looks like a missing button. #}
+                    {% if row.id == account.id %}
+                        {% if row.is_admin and not row.jellyfin_user_id and local_admin_count <= 1 %}
+                            <span class="card-note">
+                                {{ _("last local administrator: cannot be deleted or demoted") }}
+                            </span>
+                        {% elif admin_count <= 1 %}
+                            <span class="card-note">
+                                {{ _("last administrator: cannot be deleted or demoted") }}
+                            </span>
+                        {% else %}
+                            <span class="card-note">{{ _("your own account") }}</span>
+                        {% endif %}
+                    {% elif row.is_admin and not row.jellyfin_user_id and local_admin_count <= 1 %}
+                        {# One local administrator always stays (accounts.local_admin_count). #}
+                        <span class="card-note">
+                            {{ _("last local administrator: cannot be deleted or demoted") }}
+                        </span>
+                    {% else %}
+                        {# Only an account without admin rights has permissions of its own:
+                           an admin sees everything and the tree would confuse there. #}
+                        {% if row.id in account_permissions %}
+                        <button class="btn" type="button" data-modal="modal-permissions-{{ row.id }}">
+                            {{ _("Rights") }}
+                        </button>
+                        {% endif %}
+                        {% if row.jellyfin_user_id %}
+                        {# The rights of an account from Jellyfin follow Jellyfin at every users' sync. #}
+                        <span class="card-note">{{ _("rights from Jellyfin") }}</span>
+                        {% else %}
+                        <form method="post" action="/settings/accounts/role">
+                            <input type="hidden" name="account_id" value="{{ row.id }}">
+                            {% if not row.is_admin %}
+                                <input type="hidden" name="is_admin" value="1">
+                                <button data-keep-scroll class="btn" type="submit">{{ _("Make administrator") }}</button>
+                            {% else %}
+                                <button data-keep-scroll class="btn" type="submit">{{ _("Revoke privileges") }}</button>
+                            {% endif %}
+                        </form>
+                        {% endif %}
+                        {# Deleting cannot be undone, hence red and with a proper
+                           question - "jmeno?" tells nobody what will happen.
+                           The real safeguard stays accounts.delete(). #}
+                        <form method="post" action="/settings/accounts/delete"
+                              data-confirm="{{ (_("Really delete the account") ~ " " ~ row.username ~ "? " ~ _("This cannot be undone. The collected data stays; only the Jellyscope login goes away.")) }}">
+                            <input type="hidden" name="account_id" value="{{ row.id }}">
+                            <button data-keep-scroll class="btn danger" type="submit">{{ _("Delete") }}</button>
+                        </form>
+                    {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% if account.is_admin %}
+<dialog class="modal" id="modal-add">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Add user") }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/create">
+        <div class="field">
+            <label for="new_username">{{ _("Username") }}</label>
+            <input type="text" id="new_username" name="username" required autocomplete="off">
+            <p class="hint">{{ _("3 to 32 characters: plain letters, digits, dot, hyphen, underscore.") }}</p>
+        </div>
+        <div class="field">
+            <label for="new_password">{{ _("Password") }}</label>
+            <input type="password" id="new_password" name="password"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label for="new_password_again">{{ _("Password again") }}</label>
+            <input type="password" id="new_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label class="radio-card" style="cursor:pointer">
+                <input type="checkbox" name="is_admin" value="1">
+                <span>
+                    <span class="title">{{ _("Administrator") }}</span>
+                    <span class="desc">
+                        {{ _("May change settings, run analyses and manage accounts. Without it they only see statistics, which is enough for most people.") }}
+                    </span>
+                </span>
+            </label>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Create account") }}</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="modal" id="modal-other-password">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Change another account's password") }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/password">
+        <div class="field">
+            <label for="target_account">{{ _("Account") }}</label>
+            <select id="target_account" name="account_id">
+                {# Without one's own account - that is changed on the My account page. #}
+                {% for row in all_accounts if row.id != account.id %}
+                    <option value="{{ row.id }}">{{ row.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="other_password">{{ _("New password") }}</label>
+            <input type="password" id="other_password" name="password"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="field">
+            <label for="other_password_again">{{ _("New password again") }}</label>
+            <input type="password" id="other_password_again" name="password_again"
+                   autocomplete="new-password" required>
+        </div>
+        <div class="btn-row">
+            <button data-keep-scroll class="btn" type="submit">{{ _("Set password") }}</button>
+        </div>
+    </form>
+</dialog>
+
+{# ------------------------------------------------------------------ #}
+{# One account's permissions                                          #}
+{#                                                                    #}
+{# The group (readers / Jellyfin viewers) is the default; one account #}
+{# can override it here. The tree is the same as for the group, only  #}
+{# saved with the account. After switching to "vlastní" the group's   #}
+{# settings stop applying - and going back drops the own tree.        #}
+{# ------------------------------------------------------------------ #}
+{% for row in all_accounts if row.id in account_permissions %}
+{% set permissions = account_permissions[row.id] %}
+{# The tree with its labels is taller than a laptop's screen: only the content
+   scrolls (.modal-body), the header with the cross and the Save button stay
+   visible. See .modal-scrolling in style.css. #}
+<dialog class="modal modal-scrolling" id="modal-permissions-{{ row.id }}">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Rights of account") }} {{ row.username }}</h2>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <form method="post" action="/settings/accounts/permissions" class="account-permissions">
+        <input type="hidden" name="account_id" value="{{ row.id }}">
+
+        <div class="modal-body">
+        <div class="field">
+            <label class="switch">
+                <input type="radio" name="mode" value="group"
+                       {{ 'checked' if not permissions.own }}>
+                <span>
+                    {% if permissions.group == 'viewer' %}
+                        {{ _('As the group "Jellyfin viewers"') }}
+                    {% else %}
+                        {{ _('As the group "reader accounts"') }}
+                    {% endif %}
+                    <span class="hint">{{ _("Whatever changes for the group changes for this account too.") }}</span>
+                </span>
+            </label>
+            {# The link only after the <label>: inside it would be a part of the option's name
+               (a screen reader reads it with it) and a click on it would close the window without
+               saving anything - while here it shows where it leads. #}
+            {% if permissions.group == 'viewer' %}
+            <p class="hint" style="margin:-6px 0 0 21px">
+                <a href="/settings?section=jellyfin#viewers">{{ _("The viewers' group is set in the Jellyfin section.") }}</a>
+            </p>
+            {% endif %}
+            <label class="switch" style="margin-top:8px">
+                <input type="radio" name="mode" value="custom"
+                       {{ 'checked' if permissions.own }}>
+                <span>
+                    {{ _("Custom") }}
+                    <span class="hint">{{ _("Only what is ticked here applies. The group is no longer read for this account.") }}</span>
+                </span>
+            </label>
+        </div>
+
+        {# The tree is always visible - with "podle skupiny" too it shows what
+           applies to the account right now. The ticks are saved only in the mode "vlastní";
+           the script unlocks it after the switch, without the script it is unlocked always
+           and the switch at the top decides. #}
+        {{ permissions_tree(permissions.tree, dashboard_name, css_class="permissions-tree") }}
+
+        <label class="switch" style="margin-top:14px">
+            <input type="checkbox" name="anonymise" {{ 'checked' if permissions.anonymizace }}>
+            <span>{{ _("Hide viewers' names and addresses") }}</span>
+        </label>
+
+        {# An API key of one's own is another question than the tree of pages, hence it
+           is saved in both modes - the script does not lock it. The key may then exactly
+           what the account may by the tree above. #}
+        <div class="field" style="margin-top:14px">
+            <label for="may-key-{{ row.id }}">{{ _("Own API keys") }}</label>
+            <select id="may-key-{{ row.id }}" name="may_have_key">
+                <option value="group" {{ 'selected' if permissions.may_have_key == 'group' }}>
+                    {{ _("As the group (allowed now)") if permissions.may_have_key_group else _("As the group (not allowed now)") }}
+                </option>
+                <option value="yes" {{ 'selected' if permissions.may_have_key == 'yes' }}>{{ _("May make keys") }}</option>
+                <option value="no" {{ 'selected' if permissions.may_have_key == 'no' }}>{{ _("May not") }}</option>
+            </select>
+            <span class="hint">{{ _("Applies in both modes above. A key the account already has stops working when the permission is taken away, but it is not deleted.") }}</span>
+        </div>
+        </div>
+
+        <div class="modal-foot">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save rights") }}</button>
+        </div>
+    </form>
+</dialog>
+{% endfor %}
+
+<script src="/static/js/settings-accounts.js?v={{ asset_version }}" defer></script>
+
+{% endif %}
+
+
+{# ================================================================== #}
+
+
+{# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# What reader accounts see                                           #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="readers">
+    <div class="card-head">
+        <h2>{{ _("What reader accounts see") }}</h2>
+        <p class="card-note">{{ _("applies to the accounts without administrator rights you create above") }}</p>
+    </div>
+
+    <form method="post" action="/settings/readers" id="readers-form"></form>
+
+    <p class="hint" style="margin-top:0">
+        {{ _("By default a reader sees the whole statistics, which is what these accounts have always been for. Untick whatever you would rather not show.") }}
+        {{ _("One account can have rights of its own (the Rights button next to the account above). The group then no longer applies to it.") }}
+    </p>
+    {# Jellyfin viewers are the second group, only not set here:
+       what they see is at Jellyfin beside switching their sign-in on, because
+       one makes no sense without the other. An info box with a button, not a sentence
+       in the text - in the text it got lost, and yet it is looked for here first. #}
+    <div class="flash info" style="margin:0 0 14px; flex-wrap:wrap; align-items:center">
+        <span class="dot" style="margin-top:0"></span>
+        <span style="flex:1; min-width:200px">
+            {{ _("Jellyfin viewers are a group of their own. What they see is set in the Jellyfin section, next to their sign-in.") }}
+        </span>
+        <a class="btn" href="/settings?section=jellyfin#viewers">{{ _("Set up Jellyfin viewers") }}</a>
+    </div>
+
+    {{ permissions_tree(reader_tree, dashboard_name, form="readers-form") }}
+
+    <label class="switch" style="margin-top:14px">
+        <input type="checkbox" name="anonymise" form="readers-form"
+               {{ 'checked' if reader_anonymise }}>
+        <span>{{ _("Hide viewers' names and addresses") }}</span>
+    </label>
+    <p class="hint">
+        {{ _('Names read "Viewer 3" and IP addresses a dash. A reader account belongs to no viewer, so every name is hidden.') }}
+    </p>
+
+    <div class="btn-row" style="margin-top:16px">
+        <button data-keep-scroll class="btn primary" type="submit" form="readers-form">
+            {{ _("Save reader access") }}
+        </button>
+    </div>
+</div>
+
+{% if account.is_admin %}
+{# ------------------------------------------------------------------ #}
+{# Who may make an API key of their own (on My account). An admin     #}
+{# always may. A key has exactly its owner's permissions, so this     #}
+{# only decides whether a tool may take the numbers too, not what     #}
+{# it sees. An exception for one account: the Permissions window.     #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="keys">
+    <div class="card-head">
+        <h2>{{ _("Own API keys") }}</h2>
+        <p class="card-note">{{ _("the default for groups, an admin always may") }}</p>
+    </div>
+    <form method="post" action="/settings/accounts/keys">
+        <label class="switch">
+            <input type="checkbox" name="reader_may_have_key" {{ 'checked' if reader_may_have_key }}>
+            <span>{{ _("Reader accounts") }}</span>
+        </label>
+        <label class="switch" style="margin-top:8px">
+            <input type="checkbox" name="viewer_may_have_key" {{ 'checked' if viewer_may_have_key }}>
+            <span>{{ _("Jellyfin viewers") }}</span>
+        </label>
+        <p class="hint">
+            {{ _("They then make the key on the My account page, and it may do exactly what they may: the same parts of the statistics and the same hiding of names. You see it in Settings → API, where you can disable or revoke it.") }}
+        </p>
+        <div class="btn-row" style="margin-top:16px">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+    </form>
+</div>
+{% endif %}

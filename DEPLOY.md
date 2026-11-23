@@ -102,6 +102,13 @@ It pulls the new version, reinstalls the dependencies from
 packages, and `.env` and `data/` are untouched. Back the database up first;
 see [Backups](#backups).
 
+**Updating from 1.8.x to 1.9.0** renames the tables, columns and settings of
+the database to English at the first start. A backup named
+`…-before-conversion` is written first and kept for 30 days, and 1.8.x then
+refuses the converted database - going back means restoring that backup. See
+[Updating to 1.9.0](README.md#updating-to-190-english-names-in-the-database)
+in the README.
+
 The **Update and restart** button in the new-version dialog does the same
 from the browser. Before it downloads anything it tries the new version's
 packages in a dry run (`pip install --dry-run`). When they cannot be
@@ -234,7 +241,9 @@ leaves it out and the app falls back to its own export, which works;
 `pg_dump` is just better at it. SQLite backs itself up and needs nothing.
 
 **Updates.** `git pull && docker compose up -d --build`. Missing database
-columns are added at startup, the same as anywhere else. The **Update and
+columns are added at startup, the same as anywhere else (and so is the
+renaming of the database to English names on the first start of 1.9.0, with
+its backup). The **Update and
 restart** button in the app is for installations from git. In a container
 it would update the code inside a layer that disappears with the next
 build, so it stays off.
@@ -335,7 +344,7 @@ sudo supervisorctl status jellyscope && sudo tail -n 50 /var/log/supervisor/jell
 ```
 
 The app's own log is `data/logs/jellyscope.log`, readable from
-**Settings → Application log** with secrets masked.
+**Settings → Log** with secrets masked.
 
 | Symptom | Cause |
 |---|---|

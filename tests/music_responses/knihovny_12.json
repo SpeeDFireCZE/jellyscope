@@ -1,0 +1,51 @@
+[
+ {
+  "Name": "arr-test seriály",
+  "Locations": [
+   "/home/coder/projects/arr-test/media/tv"
+  ],
+  "CollectionType": "tvshows",
+  "ItemId": "97d8bf2fe042c6559ca739513ea33060",
+  "PrimaryImageItemId": "97d8bf2fe042c6559ca739513ea33060",
+  "RefreshStatus": "Idle"
+ },
+ {
+  "Name": "arr-test filmy",
+  "Locations": [
+   "/home/coder/projects/arr-test/media/movies"
+  ],
+  "CollectionType": "movies",
+  "ItemId": "66ba0d4bc76a36513f07b5893907dfa3",
+  "PrimaryImageItemId": "66ba0d4bc76a36513f07b5893907dfa3",
+  "RefreshStatus": "Idle"
+ },
+ {
+  "Name": "Shows",
+  "Locations": [
+   "/home/coder/projects/jellycanvas-dev/test/media/Shows"
+  ],
+  "CollectionType": "tvshows",
+  "ItemId": "a656b907eb3a73532e40e44b968d0225",
+  "PrimaryImageItemId": "a656b907eb3a73532e40e44b968d0225",
+  "RefreshStatus": "Idle"
+ },
+ {
+  "Name": "Music",
+  "Locations": [
+   "/home/coder/projects/jellycanvas-dev/test/media/Music"
+  ],
+  "CollectionType": "music",
+  "ItemId": "7e64e319657a9516ec78490da03edccb",
+  "RefreshStatus": "Idle"
+ },
+ {
+  "Name": "Movies",
+  "Locations": [
+   "/home/coder/projects/jellycanvas-dev/test/media/Movies"
+  ],
+  "CollectionType": "movies",
+  "ItemId": "f137a2dd21bbc1b99aa5c0f6bf02a805",
+  "PrimaryImageItemId": "f137a2dd21bbc1b99aa5c0f6bf02a805",
+  "RefreshStatus": "Idle"
+ }
+]

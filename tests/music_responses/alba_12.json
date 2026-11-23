@@ -1,0 +1,183 @@
+{
+ "Items": [
+  {
+   "Name": "Synth Tide",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "f25398e02894768bfe77b0fa64ac8ed5",
+   "DateCreated": "2026-10-29T14:33:42.721991Z",
+   "SortName": "synth tide",
+   "PremiereDate": "2023-01-01T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Genres": [
+    "Synthwave"
+   ],
+   "RunTimeTicks": 1601828556,
+   "ProductionYear": 2023,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "5edbf9f21d1332f81110de015a768c16",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Synthwave",
+     "Id": "9b55bc3eb759bd59313ad00aa6b5894f"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Pixel Harbor-Synth Tide",
+    "ItemId": "f25398e02894768bfe77b0fa64ac8ed5"
+   },
+   "Artists": [
+    "Pixel Harbor"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "AlbumArtist": "Pixel Harbor",
+   "AlbumArtists": [
+    {
+     "Name": "Pixel Harbor",
+     "Id": "5edbf9f21d1332f81110de015a768c16"
+    }
+   ],
+   "ImageTags": {
+    "Primary": "0b10a31f1bbf336c27963c25d4c90828"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "0b10a31f1bbf336c27963c25d4c90828": "ezK$GkWYayoMbH1$a}j[WWf6oLo1f6jtfQj]a|f6fkfkS3j@fkayf6"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Midnight Radio",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "23af0acbd8a1e47c5c14e8ba079832de",
+   "DateCreated": "2026-10-29T14:33:42.7128666Z",
+   "SortName": "midnight radio",
+   "PremiereDate": "2019-01-01T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Genres": [
+    "Lo-fi"
+   ],
+   "RunTimeTicks": 1601828556,
+   "ProductionYear": 2019,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "bba7e73588c8bb21a724faf2e048e742",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Lo-fi",
+     "Id": "ccfe0de86d262ce6c34edca530e14790"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Velvet Static-Midnight Radio",
+    "ItemId": "23af0acbd8a1e47c5c14e8ba079832de"
+   },
+   "Artists": [
+    "Velvet Static"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "AlbumArtist": "Velvet Static",
+   "AlbumArtists": [
+    {
+     "Name": "Velvet Static",
+     "Id": "bba7e73588c8bb21a724faf2e048e742"
+    }
+   ],
+   "ImageTags": {
+    "Primary": "49de342790af2fd13f9935ab17c462ff"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "49de342790af2fd13f9935ab17c462ff": "ejH,|noeWBoefP0haykCWVfQs.jtayfQfkbIfQayfRayRjaykCfPj["
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  },
+  {
+   "Name": "Aurora Sessions",
+   "ServerId": "1e896a3a257d475193572c718f7fea16",
+   "Id": "9a39b820cb58f6465633dcb706941592",
+   "DateCreated": "2026-10-29T14:33:42.699003Z",
+   "SortName": "aurora sessions",
+   "PremiereDate": "2021-01-01T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Genres": [
+    "Ambient"
+   ],
+   "RunTimeTicks": 2000000000,
+   "ProductionYear": 2021,
+   "ProviderIds": {},
+   "IsFolder": true,
+   "ParentId": "df1aea59da02abe87d493a0f7fdd6a0c",
+   "Type": "MusicAlbum",
+   "GenreItems": [
+    {
+     "Name": "Ambient",
+     "Id": "7566ee57563df93ee76cce4f2c4349a7"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "Key": "Northern Lights Ensemble-Aurora Sessions",
+    "ItemId": "9a39b820cb58f6465633dcb706941592"
+   },
+   "Artists": [
+    "Northern Lights Ensemble"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "AlbumArtist": "Northern Lights Ensemble",
+   "AlbumArtists": [
+    {
+     "Name": "Northern Lights Ensemble",
+     "Id": "df1aea59da02abe87d493a0f7fdd6a0c"
+    }
+   ],
+   "ImageTags": {
+    "Primary": "474bda9d336059f062f96b5cb9c92369"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "474bda9d336059f062f96b5cb9c92369": "eE570fj]RjkBWBHbafoff7ofoyj[aefPayt7jbayjtayM{ayofa|of"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown"
+  }
+ ],
+ "TotalRecordCount": 3,
+ "StartIndex": 0
+}

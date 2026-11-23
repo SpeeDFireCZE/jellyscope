@@ -1,0 +1,20 @@
+{# The card with the key `peaks_by_day`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Peak by day") }}</h2>
+        {# Over a month it makes no sense to draw every minute - there would be more points
+           than pixels. One day = one number, the highest one: a line is sized by
+           the peak, an average would smooth it away. #}
+        <p class="card-note">{{ _("the highest concurrent throughput of each day") }}</p>
+    </div>
+    {# unit='' on purpose: the series' name carries the unit already, otherwise the tooltip
+       would say "Mbit/s: 12,4 h" - hours make no sense for a data rate. #}
+    {{ charts.area_chart_multi(daily_peaks, 'label',
+           [{'key': 'mbit', 'label': _('Mbit/s'), 'color': 'var(--data-color)'}],
+           unit='', selectable=True) | safe }}
+</div>

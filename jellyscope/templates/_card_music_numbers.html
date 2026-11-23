@@ -1,0 +1,14 @@
+{# The music card "Listening numbers": how much was listened in the period.
+
+   From the database (cards_music.py, `d` = stats.music_numbers). A play is listening
+   for at least 30 seconds, or at least half the track. A row of tiles without a heading;
+   in a dashboard it carries a small label "Hudba · …". #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Listening"), d.seconds | seconds) }}
+    {{ tile(_("Plays"), d.plays | number) }}
+    {{ tile(_("Listeners"), d.listener_count | number) }}
+    {{ tile(_("Artists"), d.artist_count | number) }}
+    {{ tile(_("Tracks#count"), d.track_count | number) }}
+</div>

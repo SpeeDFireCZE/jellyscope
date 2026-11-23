@@ -1,0 +1,11 @@
+{# The Bazarr card "When subtitles arrive": a grid of weekdays and hours.
+
+   From the database (cards_bazarr.py, `d.heatmapa` = 7 × 24, row 0 = Monday),
+   times in the app's zone. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("local time") }}</p>
+    </div>
+    {{ charts.heatmap(d.heatmap_data, unit='') | safe }}
+</div>

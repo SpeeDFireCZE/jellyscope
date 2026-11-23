@@ -1,0 +1,63 @@
+{# The Seerr page: requests for films and series.
+
+   The cards are from the registry (jellyscope/cards_seerr.py) - the same ones that can be
+   added to a custom dashboard. Here they have a fixed layout; every place is
+   {{ c("…") }}. Which cards the account sees was decided by the route (web/seerr.py,
+   `cards`), not the template: without the area "...including who requested" the card "Who requests"
+   is not here and the other cards carry no requesters' names even in the data. Card names
+   and the order of sections: cards_seerr.SECTIONS (tests/test_seerr_cards.py). #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}Seerr · Jellyscope{% endblock %}
+
+{# A Seerr card by its name ("latest" -> seerr_latest). #}
+{% macro c(card_name) %}{{ show_card("seerr_" ~ card_name) }}{% endmacro %}
+
+{# A section heading - only when the account sees at least one of its cards (`sections_shown`). #}
+{% macro page_section(key_name, heading, subtitle) %}
+{% if key_name in sections_shown %}
+<div class="section-head">
+    <div>
+        <h2>{{ heading }}</h2>
+        <p class="subtitle">{{ subtitle }}</p>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Seerr</h1>
+        <p class="subtitle">
+            {{ _("Requests for movies and shows: when and how many, how fast they are handled and whether the requested titles are then watched.") }}
+        </p>
+    </div>
+    {{ period_filter(period, '/seerr') }}
+</div>
+
+{# At the top what needs handling and what was requested last - with posters. #}
+{{ c("pending") }}
+{{ c("latest") }}
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Requests in the period", _("Requests in the period"), _("How much was requested, what and when.")) }}
+{{ c("numbers") }}
+{{ c("by_day") }}
+<div class="grid-2 align-top">
+    {{ c("when") }}
+    {{ c("states") }}
+</div>
+<div class="grid-2 align-top">
+    {{ c("who") }}
+    {{ c("speed") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Requested and watched?", _("Requested and watched?"), _("Playbacks in Jellyscope after the request date count, for the title in the library: the movie, or any episode of the show.")) }}
+{{ c("watching") }}
+{{ c("nobody") }}
+
+{# One window for the whole table of any card (whole_table_button, data-table-window). #}
+{{ table_window() }}
+{% endblock %}

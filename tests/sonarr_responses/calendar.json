@@ -1,0 +1,1197 @@
+[
+ {
+  "seriesId": 1,
+  "tvdbId": 3254641,
+  "episodeFileId": 6,
+  "seasonNumber": 1,
+  "episodeNumber": 1,
+  "title": "Winter Is Coming",
+  "airDate": "2011-04-17",
+  "airDateUtc": "2011-04-18T01:00:00Z",
+  "lastSearchTime": "2026-11-12T22:16:38Z",
+  "runtime": 61,
+  "overview": "Lord Ned Stark is troubled by disturbing reports form a Night's Watch deserter; King Robert arrives at Winterfell.",
+  "hasFile": true,
+  "monitored": true,
+  "absoluteEpisodeNumber": 1,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 56
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3436411,
+  "episodeFileId": 0,
+  "seasonNumber": 1,
+  "episodeNumber": 2,
+  "title": "The Kingsroad",
+  "airDate": "2011-04-24",
+  "airDateUtc": "2011-04-25T01:00:00Z",
+  "lastSearchTime": "2026-11-12T22:18:10Z",
+  "runtime": 55,
+  "overview": "The Lannisters plot to ensure Bran's silence; Jon and Tyrion head to the Wall; Ned faces a family crisis en route to King's Landing.",
+  "hasFile": false,
+  "monitored": true,
+  "absoluteEpisodeNumber": 2,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 57
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3436421,
+  "episodeFileId": 3,
+  "seasonNumber": 1,
+  "episodeNumber": 3,
+  "title": "Lord Snow",
+  "airDate": "2011-05-01",
+  "airDateUtc": "2011-05-02T01:00:00Z",
+  "lastSearchTime": "2026-11-12T22:12:10Z",
+  "runtime": 57,
+  "overview": "Jon impresses Tyrion at Castle Black; Ned confronts his past and future at King's Landing; Daenerys finds herself at odds with Viserys.",
+  "hasFile": true,
+  "monitored": true,
+  "absoluteEpisodeNumber": 3,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 58
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3436431,
+  "episodeFileId": 4,
+  "seasonNumber": 1,
+  "episodeNumber": 4,
+  "title": "Cripples, Bastards, and Broken Things",
+  "airDate": "2011-05-08",
+  "airDateUtc": "2011-05-09T01:00:00Z",
+  "lastSearchTime": "2026-11-12T22:13:40Z",
+  "runtime": 55,
+  "overview": "Ned probes Arryn's death; Jon takes measures to protect Sam; Tyrion is caught in the wrong place.",
+  "hasFile": true,
+  "monitored": true,
+  "absoluteEpisodeNumber": 4,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 59
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3436441,
+  "episodeFileId": 5,
+  "seasonNumber": 1,
+  "episodeNumber": 5,
+  "title": "The Wolf and the Lion",
+  "airDate": "2011-05-15",
+  "airDateUtc": "2011-05-16T01:00:00Z",
+  "runtime": 54,
+  "overview": "Ned refuses an order from the King; Tyrion escapes one perilous encounter, only to find himself in another.",
+  "hasFile": true,
+  "monitored": true,
+  "absoluteEpisodeNumber": 5,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 60
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3436451,
+  "episodeFileId": 0,
+  "seasonNumber": 1,
+  "episodeNumber": 6,
+  "title": "A Golden Crown",
+  "airDate": "2011-05-22",
+  "airDateUtc": "2011-05-23T01:00:00Z",
+  "runtime": 52,
+  "overview": "Ned makes a controversial decree; Tyrion confesses to his 'crimes'; Viserys receives final payment for Daenerys.",
+  "hasFile": false,
+  "monitored": true,
+  "absoluteEpisodeNumber": 6,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 61
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3436461,
+  "episodeFileId": 0,
+  "seasonNumber": 1,
+  "episodeNumber": 7,
+  "title": "You Win or You Die",
+  "airDate": "2011-05-29",
+  "airDateUtc": "2011-05-30T01:00:00Z",
+  "runtime": 57,
+  "overview": "Ned confronts Cersei about her secrets; Jon takes his Night's Watch vows; Drogo promises to lead the Dothraki to King's Landing.",
+  "hasFile": false,
+  "monitored": true,
+  "absoluteEpisodeNumber": 7,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 62
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 3360391,
+  "episodeFileId": 0,
+  "seasonNumber": 1,
+  "episodeNumber": 8,
+  "title": "The Pointy End",
+  "airDate": "2011-06-05",
+  "airDateUtc": "2011-06-06T01:00:00Z",
+  "runtime": 58,
+  "overview": "The Lannisters press their advantage over the Starks; Robb rallies his father's northern allies and heads south to war.",
+  "hasFile": false,
+  "monitored": true,
+  "absoluteEpisodeNumber": 8,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 63
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 4063481,
+  "episodeFileId": 0,
+  "seasonNumber": 1,
+  "episodeNumber": 9,
+  "title": "Baelor",
+  "airDate": "2011-06-12",
+  "airDateUtc": "2011-06-13T01:00:00Z",
+  "runtime": 56,
+  "overview": "Ned makes a fateful decision; Robb takes a prized prisoner; Dany finds her reign imperiled.",
+  "hasFile": false,
+  "monitored": true,
+  "absoluteEpisodeNumber": 9,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 64
+ },
+ {
+  "seriesId": 1,
+  "tvdbId": 4063491,
+  "episodeFileId": 0,
+  "seasonNumber": 1,
+  "episodeNumber": 10,
+  "title": "Fire and Blood",
+  "airDate": "2011-06-19",
+  "airDateUtc": "2011-06-20T01:00:00Z",
+  "runtime": 52,
+  "finaleType": "season",
+  "overview": "A new king rises in the North; a Khaleesi finds new hope.",
+  "hasFile": false,
+  "monitored": true,
+  "absoluteEpisodeNumber": 10,
+  "unverifiedSceneNumbering": false,
+  "series": {
+   "title": "Game of Thrones",
+   "sortTitle": "game of thrones",
+   "status": "ended",
+   "ended": true,
+   "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+   "network": "HBO",
+   "airTime": "21:00",
+   "images": [
+    {
+     "coverType": "banner",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+    },
+    {
+     "coverType": "poster",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+    },
+    {
+     "coverType": "fanart",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+    },
+    {
+     "coverType": "clearlogo",
+     "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+    }
+   ],
+   "originalLanguage": {
+    "id": 1,
+    "name": "English"
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0,
+     "monitored": false
+    },
+    {
+     "seasonNumber": 1,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 2,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 3,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 4,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 5,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 6,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 7,
+     "monitored": true
+    },
+    {
+     "seasonNumber": 8,
+     "monitored": true
+    }
+   ],
+   "year": 2011,
+   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "qualityProfileId": 1,
+   "seasonFolder": true,
+   "monitored": true,
+   "monitorNewItems": "all",
+   "useSceneNumbering": false,
+   "runtime": 57,
+   "tvdbId": 121361,
+   "tvRageId": 24493,
+   "tvMazeId": 82,
+   "tmdbId": 1399,
+   "firstAired": "2011-04-17T00:00:00Z",
+   "lastAired": "2019-05-19T00:00:00Z",
+   "seriesType": "standard",
+   "cleanTitle": "gamethrones",
+   "imdbId": "tt0944947",
+   "titleSlug": "game-of-thrones",
+   "certification": "TV-MA",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama",
+    "Fantasy"
+   ],
+   "tags": [],
+   "added": "2026-11-12T20:50:07Z",
+   "ratings": {
+    "votes": 2683620,
+    "value": 9.2
+   },
+   "languageProfileId": 1,
+   "id": 1
+  },
+  "id": 65
+ }
+]

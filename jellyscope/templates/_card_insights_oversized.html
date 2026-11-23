@@ -1,0 +1,40 @@
+{# The card "Takes a lot of space, barely watched" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_large`) - one template, so the two places do not drift apart.
+   Expects `oversized (insights.oversized_rarely_watched)`. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Takes a lot of space, barely watched") }}</h2>
+        <p class="card-note">{{ _("gigabytes per watched hour") }}</p>
+    </div>
+    {% if oversized %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr><th>{{ _("Title") }}</th><th class="num">{{ _("Size") }}</th>
+                <th class="num">GB / h</th><th class="num">{{ _("Plays") }}</th></tr>
+            </thead>
+            <tbody>
+            {% for row in oversized %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="truncate" title="{{ row.label }}">
+                    {% call link("/item/" ~ row.id) %}{{ row.label }}{% endcall %}
+                </td>
+                <td class="num strong">{{ row.size_bytes | bytes }}</td>
+                <td class="num">{{ '%.1f' | format(row.gb_per_hour or 0) | replace('.', ',') }}</td>
+                <td class="num muted">{{ row.plays | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ whole_table_button(oversized | length) }}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Candidates for re-encoding to a more efficient format (e.g. HEVC).") }}
+    </p>
+    {% else %}
+    <p class="chart-empty">{{ _("No disproportionately large files.") }}</p>
+    {% endif %}
+</div>

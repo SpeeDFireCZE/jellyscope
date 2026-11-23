@@ -1,0 +1,414 @@
+{
+ "Items": [
+  {
+   "Name": "Kapitola 3",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "6207f4bac550ef7d899a39240731e6c8",
+   "DateCreated": "2026-11-19T12:00:00.0000000Z",
+   "Container": "mp3",
+   "SortName": "kapitola 3",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "6207f4bac550ef7d899a39240731e6c8",
+     "Path": "/media/audiobooks/Cesta na jih/03.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 28800000,
+     "Name": "03",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "Type": "Audio",
+       "Index": 0,
+       "BitRate": 64000,
+       "Channels": 2,
+       "SampleRate": 44100
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {},
+     "RunTimeTicks": 36000000000,
+     "Bitrate": 64000
+    }
+   ],
+   "Genres": [
+    "Dobrodružství"
+   ],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9dd852dbdf9616d445d1e1d7aee774c7",
+   "Type": "AudioBook",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "6207f4bac550ef7d899a39240731e6c8"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Audio",
+   "Album": "Cesta na jih",
+   "AlbumId": "9b783ae779f896c577b5b331bc87c3b6",
+   "AlbumArtist": "Karel Vypravěč",
+   "AlbumArtists": [
+    {
+     "Name": "Karel Vypravěč",
+     "Id": "d85af8d4825973fb5b810b0d57a2f166"
+    }
+   ],
+   "Artists": [
+    "Karel Vypravěč"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Karel Vypravěč",
+     "Id": "d85af8d4825973fb5b810b0d57a2f166"
+    }
+   ],
+   "RunTimeTicks": 36000000000,
+   "ProductionYear": 2020
+  },
+  {
+   "Name": "Kapitola 2",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "01aebdc7ccb6a28a615f8c97f3287f94",
+   "DateCreated": "2026-11-19T11:00:00.0000000Z",
+   "Container": "mp3",
+   "SortName": "kapitola 2",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "01aebdc7ccb6a28a615f8c97f3287f94",
+     "Path": "/media/audiobooks/Cesta na jih/02.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 24000000,
+     "Name": "02",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "Type": "Audio",
+       "Index": 0,
+       "BitRate": 64000,
+       "Channels": 2,
+       "SampleRate": 44100
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {},
+     "RunTimeTicks": 30000000000,
+     "Bitrate": 64000
+    }
+   ],
+   "Genres": [
+    "Dobrodružství"
+   ],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9dd852dbdf9616d445d1e1d7aee774c7",
+   "Type": "AudioBook",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "01aebdc7ccb6a28a615f8c97f3287f94"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Audio",
+   "Album": "Cesta na jih",
+   "AlbumId": "9b783ae779f896c577b5b331bc87c3b6",
+   "AlbumArtist": "Karel Vypravěč",
+   "AlbumArtists": [
+    {
+     "Name": "Karel Vypravěč",
+     "Id": "d85af8d4825973fb5b810b0d57a2f166"
+    }
+   ],
+   "Artists": [
+    "Karel Vypravěč"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Karel Vypravěč",
+     "Id": "d85af8d4825973fb5b810b0d57a2f166"
+    }
+   ],
+   "RunTimeTicks": 30000000000,
+   "ProductionYear": 2020
+  },
+  {
+   "Name": "Kapitola 1",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "1b55b7664a27d48e847813e86c2c2085",
+   "DateCreated": "2026-11-19T10:00:00.0000000Z",
+   "Container": "mp3",
+   "SortName": "kapitola 1",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "1b55b7664a27d48e847813e86c2c2085",
+     "Path": "/media/audiobooks/Cesta na jih/01.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 19200000,
+     "Name": "01",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "Type": "Audio",
+       "Index": 0,
+       "BitRate": 64000,
+       "Channels": 2,
+       "SampleRate": 44100
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {},
+     "RunTimeTicks": 24000000000,
+     "Bitrate": 64000
+    }
+   ],
+   "Genres": [
+    "Dobrodružství"
+   ],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "9dd852dbdf9616d445d1e1d7aee774c7",
+   "Type": "AudioBook",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "1b55b7664a27d48e847813e86c2c2085"
+   },
+   "ImageTags": {
+    "Primary": "cover-cesta"
+   },
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Audio",
+   "Album": "Cesta na jih",
+   "AlbumId": "9b783ae779f896c577b5b331bc87c3b6",
+   "AlbumArtist": "Karel Vypravěč",
+   "AlbumArtists": [
+    {
+     "Name": "Karel Vypravěč",
+     "Id": "d85af8d4825973fb5b810b0d57a2f166"
+    }
+   ],
+   "Artists": [
+    "Karel Vypravěč"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Karel Vypravěč",
+     "Id": "d85af8d4825973fb5b810b0d57a2f166"
+    }
+   ],
+   "RunTimeTicks": 24000000000,
+   "ProductionYear": 2020
+  },
+  {
+   "Name": "Hobit",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "d7b41ec0073f71895082db536cd4e5a7",
+   "DateCreated": "2026-11-05T08:00:00.0000000Z",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "SortName": "hobit",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "d7b41ec0073f71895082db536cd4e5a7",
+     "Path": "/media/audiobooks/Tolkien/Hobit.m4b",
+     "Type": "Default",
+     "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+     "Size": 410000000,
+     "Name": "Hobit",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [
+      {
+       "Codec": "mov,mp4,m4a,3gp,3g2,mj2",
+       "Type": "Audio",
+       "Index": 0,
+       "BitRate": 64000,
+       "Channels": 2,
+       "SampleRate": 44100
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {},
+     "RunTimeTicks": 396000000000,
+     "Bitrate": 64000
+    }
+   ],
+   "Genres": [
+    "Fantasy"
+   ],
+   "ProviderIds": {
+    "OpenLibrary": "OL123M"
+   },
+   "IsFolder": false,
+   "ParentId": "c7f78113aab7633290d483d510c5030d",
+   "Type": "AudioBook",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "d7b41ec0073f71895082db536cd4e5a7"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Audio",
+   "AlbumArtist": "J. R. R. Tolkien",
+   "Artists": [
+    "Jiný Čtenář"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Jiný Čtenář",
+     "Id": "494712db2d3c855cb31e4fbaeede716b"
+    }
+   ],
+   "RunTimeTicks": 396000000000,
+   "ProductionYear": 1937,
+   "SeriesName": "Středozem"
+  },
+  {
+   "Name": "Kniha bez autora",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "fdb7f43ead5fc98fd96f1aacb3113c41",
+   "DateCreated": "2026-10-15T08:00:00.0000000Z",
+   "Container": "mp3",
+   "SortName": "kniha bez autora",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "fdb7f43ead5fc98fd96f1aacb3113c41",
+     "Path": "/media/audiobooks/Ruzne/Bez-autora.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 5000000,
+     "Name": "Bez-autora",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "Type": "Audio",
+       "Index": 0,
+       "BitRate": 64000,
+       "Channels": 2,
+       "SampleRate": 44100
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {},
+     "RunTimeTicks": 6000000000,
+     "Bitrate": 64000
+    }
+   ],
+   "Genres": [],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "2eca6e1b768e53b811f316b0f3b6d839",
+   "Type": "AudioBook",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "fdb7f43ead5fc98fd96f1aacb3113c41"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Audio",
+   "Artists": [
+    "Jen Interpret"
+   ],
+   "ArtistItems": [
+    {
+     "Name": "Jen Interpret",
+     "Id": "b6b8952aa9f7f47862458b6832c0b3e1"
+    }
+   ],
+   "RunTimeTicks": 6000000000
+  },
+  {
+   "Name": "Anonymní nahrávka",
+   "ServerId": "e3e8b4d7a26c40d089d77e17f49f6c46",
+   "Id": "11e38e507189a45b96a6f91b14a697e8",
+   "DateCreated": "2026-09-15T08:00:00.0000000Z",
+   "Container": "mp3",
+   "SortName": "anonymní nahrávka",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "11e38e507189a45b96a6f91b14a697e8",
+     "Path": "/media/audiobooks/Ruzne/Anonym.mp3",
+     "Type": "Default",
+     "Container": "mp3",
+     "Size": 3000000,
+     "Name": "Anonym",
+     "IsRemote": false,
+     "SupportsDirectPlay": true,
+     "MediaStreams": [
+      {
+       "Codec": "mp3",
+       "Type": "Audio",
+       "Index": 0,
+       "BitRate": 64000,
+       "Channels": 2,
+       "SampleRate": 44100
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "RequiredHttpHeaders": {},
+     "RunTimeTicks": 3000000000,
+     "Bitrate": 64000
+    }
+   ],
+   "Genres": [],
+   "ProviderIds": {},
+   "IsFolder": false,
+   "ParentId": "2eca6e1b768e53b811f316b0f3b6d839",
+   "Type": "AudioBook",
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": false,
+    "Played": false,
+    "ItemId": "11e38e507189a45b96a6f91b14a697e8"
+   },
+   "ImageTags": {},
+   "BackdropImageTags": [],
+   "LocationType": "FileSystem",
+   "MediaType": "Audio",
+   "RunTimeTicks": 3000000000
+  }
+ ],
+ "TotalRecordCount": 6,
+ "StartIndex": 0
+}

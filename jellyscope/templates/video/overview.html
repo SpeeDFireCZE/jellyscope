@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, tile, method_badge, change, show_card with context %}
+{% block title %}{{ _("Overview") }} &middot; Jellyscope{% endblock %}
+
+{% block content %}
+{# The cards come from the registry (jellyscope/cards.py, cards.OVERVIEW): the route
+   sends only those the account may see, with their data, and show_card() draws them
+   with the live wrapper (_card.html) - the same as a custom dashboard. Here is only
+   the layout: the order, the pairs and the heading Statistics. No sees() by hand. #}
+
+{# ================================================================== #}
+{# 1. Now playing                                                     #}
+{#                                                                    #}
+{# At the top: it is the only part of the page that changes every few #}
+{# seconds and that a person comes back here for during the day.      #}
+{# ================================================================== #}
+{{ show_card("now_playing") }}
+
+{# ================================================================== #}
+{# 2. Recently added (refreshed after a sync - see _card.html)        #}
+{# ================================================================== #}
+{{ show_card("recently_added") }}
+
+{# ================================================================== #}
+{# 3. The summary of statistics                                       #}
+{# ================================================================== #}
+<div class="section-head" style="margin-top:34px">
+    <div>
+        <h2>{{ _("Statistics") }}</h2>
+        <p class="card-note">
+            {# For a custom period `days` says nothing - without this branch
+               the sentence "Co se na serveru dělo za posledních ." would be left. #}
+            {# The year has a sentence of its own, otherwise it would come out as "za posledních rok" -
+               the same as for the library (library_detail.html). #}
+            {% if period.own %}{{ _("Server activity in the selected period.") }}
+            {% elif days == 365 %}{{ _("Server activity over the last year.") }}
+            {% else %}{{ _("Server activity over the last {period}.").format(period=_(day_labels[days])) }}
+            {% endif %}
+        </p>
+    </div>
+    {{ period_filter(period, '/video/overview') }}
+</div>
+
+{# The number on the left, the curve on the right. Both used to be under each other and
+   the card then took a third of the screen, though it carries one figure and its trend.
+   Side by side it reads at one glance: how much and how it went. In a narrow
+   window it goes back under each other - see .hero-card in style.css. #}
+{{ show_card("summary") }}
+
+{{ show_card("tiles") }}
+
+{# The card is drawn from a template of its own - /video/partials/daily returns the same piece
+   when the filter switches without loading the page. #}
+{{ show_card("watching_by_day") }}
+
+<div class="grid-2">
+    {{ show_card("most_active_users") }}
+
+    {{ show_card("most_watched") }}
+</div>
+
+<div class="grid-2">
+    {{ show_card("delivery") }}
+
+    {{ show_card("players") }}
+</div>
+
+{{ show_card("when_watched") }}
+{% endblock %}

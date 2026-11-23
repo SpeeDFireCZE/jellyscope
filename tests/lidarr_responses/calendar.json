@@ -1,0 +1,38 @@
+[
+ {
+  "id": 51,
+  "title": "Next Week",
+  "artistId": 3,
+  "foreignAlbumId": "b0000051-0000-4000-8000-000000000000",
+  "monitored": true,
+  "releaseDate": "2099-01-01T00:00:00Z",
+  "artist": {
+   "id": 3,
+   "artistName": "Paper Lanterns",
+   "foreignArtistId": "a0000003-0000-4000-8000-000000000000"
+  },
+  "statistics": {
+   "trackFileCount": 0,
+   "trackCount": 10,
+   "sizeOnDisk": 0
+  }
+ },
+ {
+  "id": 22,
+  "title": "Blue Hour",
+  "artistId": 2,
+  "foreignAlbumId": "b0000022-0000-4000-8000-000000000000",
+  "monitored": true,
+  "releaseDate": "2098-12-30T00:00:00Z",
+  "artist": {
+   "id": 2,
+   "artistName": "Nightingale Quartet",
+   "foreignArtistId": "a0000002-0000-4000-8000-000000000000"
+  },
+  "statistics": {
+   "trackFileCount": 8,
+   "trackCount": 10,
+   "sizeOnDisk": 0
+  }
+ }
+]

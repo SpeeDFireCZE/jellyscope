@@ -1,0 +1,48 @@
+{# The books card "Newly added books": a strip of covers from the last added.
+
+   From the database (cards_books.py, `d.rows` = stats.books_newest, at most cards_books.RECENT_BOOKS works). Shaped
+   like "Recently added" for films; the same books as a table in the window (a button in the card's head). #}
+{% from "_macros.html" import poster, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for b in d.rows %}
+        <div class="poster-card">
+            {{ poster(b.cover, "poster-frame", detail=b.link, placeholder=_("No cover")) }}
+            {% call link(b.link, {"class": "poster-name", "title": b.title}) %}{{ b.title or "–" }}{% endcall %}
+            <div class="poster-meta">{{ b.author or "–" }} &middot; {{ b.added_at | relative }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="modal-only">
+        <table>
+            <thead><tr>
+                <th>{{ _("Book") }}</th>
+                <th>{{ _("Author") }}</th>
+                <th>{{ _("Type") }}</th>
+                <th class="num">{{ _("Year") }}</th>
+                <th>{{ _("Added") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for b in d.rows %}
+                <tr>
+                    <td class="strong">{% call link(b.link) %}{{ b.title or "–" }}{% endcall %}</td>
+                    <td>{{ b.author or "–" }}</td>
+                    <td>{{ _("Audiobook") if b.kind == "audiobook" else _("E-book") }}</td>
+                    <td class="num">{{ b.year or "–" }}</td>
+                    <td class="muted">{{ b.added_at | datetime }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="chart-empty">{{ _("The books library is empty so far.") }}</p>
+    {% endif %}
+</div>

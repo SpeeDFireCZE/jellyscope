@@ -1,0 +1,252 @@
+{# A Settings section: the app's log, the API log and where to find it
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# The rotated backups of one log - to download until the rotation deletes them. #}
+{% macro older_logs(log_backups) %}
+{% if log_backups %}
+<h3 class="group" style="margin-top:20px">{{ _("Older logs") }}</h3>
+<p class="group-description">{{ _("put aside by the Log rotation task; the oldest goes with the next rotation") }}</p>
+<div class="table-wrap">
+    <table>
+        <thead><tr>
+            <th>{{ _("File") }}</th><th class="num">{{ _("Size") }}</th>
+            <th>{{ _("Saved") }}</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for backup in log_backups %}
+        <tr>
+            <td class="nowrap"><code>{{ backup.name }}</code></td>
+            <td class="num">{{ backup.size_bytes | bytes }}</td>
+            <td class="nowrap muted">{{ backup.changed }}</td>
+            <td><a class="btn" href="/settings/log/download?file={{ backup.name | urlencode }}">{{ _("Download") }}</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Which log. Links, not a form: it is a view, not a server setting. #}
+<div class="filters" style="margin-bottom:16px">
+    <a class="chip {{ 'active' if log_kind == 'app' }}" href="/settings?section=log">{{ _("Application log") }}</a>
+    <a class="chip {{ 'active' if log_kind == 'api' }}" href="/settings?section=log&amp;log_kind=api">{{ _("API log") }}</a>
+</div>
+
+{% if log_kind == 'api' %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("API log") }}</h2>
+        <p class="card-note" style="overflow-wrap:anywhere">{{ api_log.path }}</p>
+    </div>
+
+    <form method="get" action="/settings" class="log-controls">
+        <input type="hidden" name="section" value="log">
+        <input type="hidden" name="log_kind" value="api">
+
+        <label>
+            {{ _("User") }}
+            <select name="log_account" data-submit-on-change>
+                <option value="">{{ _("everyone") }}</option>
+                {% for owner in api_log_owners %}
+                <option value="{{ owner }}" {% if owner == log_account %}selected{% endif %}>
+                    {{ _("root keys") if owner == "-" else owner }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Key") }}
+            <select name="log_key" data-submit-on-change>
+                <option value="">{{ _("all#plural") }}</option>
+                {% for key_name in api_log_keys %}
+                <option value="{{ key_name.id }}" {% if key_name.id == log_key %}selected{% endif %}>
+                    {{ key_name.display_name }} ({{ key_name.owner or _("root key") }})
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("IP address") }}
+            <input type="text" name="log_ip" value="{{ log_ip }}" maxlength="64"
+                   placeholder="192.168." style="max-width:170px">
+        </label>
+
+        <label>
+            {{ _("Lines") }}
+            <select name="log_lines" data-submit-on-change>
+                {% for line_count in [100, 200, 500, 1000, 2000] %}
+                <option value="{{ line_count }}" {% if line_count == log_lines %}selected{% endif %}>{{ line_count }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <button data-keep-scroll class="btn" type="submit">{{ _("Filter#verb") }}</button>
+    </form>
+
+    {% if not api_log.exists %}
+        <p class="chart-empty" style="margin-top:14px">{{ _("No request with an API key yet.") }}</p>
+    {% elif not api_log.rows %}
+        <p class="chart-empty" style="margin-top:14px">{{ _("Nothing in the latest entries matches the filter.") }}</p>
+    {% else %}
+    <div class="table-wrap" style="margin-top:14px">
+        <table>
+            <thead><tr>
+                <th>{{ _("When") }}</th>
+                <th>{{ _("Result") }}</th>
+                <th>{{ _("IP") }}</th>
+                <th>{{ _("Key") }}</th>
+                <th>{{ _("Owner") }}</th>
+                <th>{{ _("Address") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for z in api_log.rows %}
+            <tr>
+                <td class="nowrap muted">{{ z.at }}</td>
+                <td class="nowrap">
+                    {# The number is always visible - the dot's colour only hints. #}
+                    <span class="badge {{ 'good' if z.result < 400 else 'warning' }}"><span class="dot"></span>{{ z.result }}</span>
+                </td>
+                <td class="nowrap muted">{{ z.ip or "—" }}</td>
+                <td class="nowrap">{{ z.key }}</td>
+                <td class="nowrap">
+                    {% if z.owner %}{{ z.owner }}
+                    {% else %}<span class="muted">{{ _("root key") }}</span>{% endif %}
+                </td>
+                {# A long address wraps anywhere, but not narrower than this:
+                   on a phone the column would otherwise fall to a few characters. #}
+                <td style="min-width:240px"><code style="overflow-wrap:anywhere">{{ z.path }}</code></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if api_log.exists %}
+    <div class="btn-row" style="margin-top:14px">
+        <a class="btn" href="/settings/log/download?file={{ api_log.name | urlencode }}">{{ _("Download the whole log") }}</a>
+    </div>
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Newest request on top. Every request with an existing key is written, refused ones too; an invalid key is not. How long the log is kept is up to the Log rotation task in Tasks.") }}
+    </p>
+
+    {{ older_logs(log_backups_list) }}
+</div>
+
+{% else %}
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Application log") }}</h2>
+        <p class="card-note" style="overflow-wrap:anywhere">{{ log.path }}</p>
+    </div>
+
+    {% if not log.files %}
+        <p class="chart-empty">
+            {{ _("The log folder is still empty. The file appears when the application starts. Try restarting it.") }}
+        </p>
+    {% else %}
+
+    {# The choices are in the address, not in the settings: it is a view, not a server option.
+       Two admins can thus each look at something else. #}
+    <form method="get" action="/settings" class="log-controls">
+        <input type="hidden" name="section" value="log">
+
+        <label>
+            {{ _("File") }}
+            <select name="log_file" data-submit-on-change>
+                {% for log_file in log.files %}
+                <option value="{{ log_file.name }}"
+                        {% if log_file.name == log.name %}selected{% endif %}>
+                    {{ log_file.name }}{% if log_file.label %} – {{ _(log_file.label) }}{% endif %}
+                    ({{ log_file.size_bytes | bytes }})
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Lines") }}
+            <select name="log_lines" data-submit-on-change>
+                {% for line_count in [100, 200, 500, 1000, 2000] %}
+                <option value="{{ line_count }}" {% if line_count == log_lines %}selected{% endif %}>
+                    {{ line_count }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            {{ _("Level") }}
+            <select name="log_level" data-submit-on-change>
+                <option value="">{{ _("all") }}</option>
+                {% for level_name in log_levels %}
+                <option value="{{ level_name }}" {% if level_name == log_level %}selected{% endif %}>
+                    {{ level_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <button data-keep-scroll class="btn" type="submit">{{ _("Reload") }}</button>
+    </form>
+
+    {% if not log.lines %}
+        <p class="chart-empty" style="margin-top:14px">
+            {% if log_level %}
+                {{ _("Nothing at this level in the last lines.") }}
+            {% else %}
+                {{ _("The file is still empty.") }}
+            {% endif %}
+        </p>
+    {% else %}
+    {# The newest line is at the bottom, as in every log. After loading the window
+       scrolls to the end - see the script below. #}
+    <div class="log-view" id="log-view">
+        {% for line in log.lines %}
+        <div class="log-line {{ line.level | lower }}">{{ line.text }}</div>
+        {% endfor %}
+    </div>
+    <script src="/static/js/settings-log.js?v={{ asset_version }}" defer></script>
+    {% endif %}
+
+    {% if log.exists %}
+    <div class="btn-row" style="margin-top:14px">
+        <a class="btn" href="/settings/log/download?file={{ log.name | urlencode }}">{{ _("Download the whole log") }}</a>
+    </div>
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Showing the end of the file. The API key and passwords are replaced with asterisks, even if an error message put them in the log.") }}
+    </p>
+
+    {{ older_logs(log_backups_list) }}
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Where else to find the log") }}</h2>
+    </div>
+    <p class="card-note">
+        {{ _("When systemd runs the application, it sends the output to the journal and writes nothing to the folder above. The full output, including server startup:") }}
+    </p>
+    <pre class="code-block">journalctl -u jellyscope -n 200 --no-pager</pre>
+    <p class="card-note">
+        {{ _("With supervisord the same lives in the out.log and err.log files offered above.") }}
+    </p>
+</div>
+{% endif %}
+
+{# ================================================================== #}

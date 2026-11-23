@@ -1,115 +1,121 @@
-"""Jazykove statistiky.
+"""Language statistics.
 
-Odpovida na otazky, ktere si u vicejazycne knihovny clovek klade sam:
+It answers the questions a person asks themselves about a multilingual library:
 
-    "V jakem jazyce se u nas doma vlastne diva?"
-    "Kolik procent je cesky a kolik anglicky?"
-    "Kdo z rodiny sleduje v originale a kdo dabovane?"
-    "Kolik titulu vubec nema ceskou stopu?"
-    "Jak casto se pouzivaji titulky?"
+    "What language do we actually watch in at home?"
+    "How many percent is Czech and how many English?"
+    "Who in the family watches in the original and who dubbed?"
+    "How many titles have no Czech track at all?"
+    "How often are subtitles used?"
 
-Rozlisujeme dve ruzne veci, ktere se snadno pletou:
+We tell apart two different things that are easily mixed up:
 
-  * **co se sleduje**  - jazyk stopy, kterou si divak pustil (tabulka playback)
-  * **co je k dispozici** - jazyky, ktere soubor obsahuje (tabulka items)
+  * **what is watched**  - the language of the track the viewer played (the playback table)
+  * **what is available** - the languages the file contains (the items table)
 
-Prvni rika, jak se u vas mluvi. Druhe, co vam v knihovne chybi.
+The first says how you speak. The second, what your library lacks.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from . import charts, db, formatting, languages, stats
 from .i18n import translate as _t
 
-# Kratsi prehravani se do jazykovych statistik nepocita.
+# A shorter playback does not count in the language statistics.
 #
-# Hranice je svazana s tim, jak se jazyk urcuje: collector prvni ctyri
-# minuty ignoruje (loga, znelky) a pak jeste minutu ceka, jestli u stopy
-# divak zustane. Drive nez po peti minutach tedy jazyk potvrdit nejde.
+# The boundary is tied to how the language is determined: the collector
+# ignores the first four minutes (logos, jingles) and then waits another
+# minute for whether the viewer stays with the track. So the language cannot
+# be confirmed earlier than after five minutes.
 #
-# Kdyby tu zustalo dve minuty, prehravani dlouhe tri minuty by do statistik
-# vstoupilo BEZ jazyka - a pribylo by "Neuvedeno" tam, kde jsme se odpoved
-# jen jeste nestihli dozvedet. Viz collector.LANGUAGE_GRACE_SECONDS.
+# Were two minutes left here, a playback three minutes long would enter the
+# statistics WITHOUT a language - and "Not specified" would grow where we only did
+# not manage to learn the answer yet. See collector.LANGUAGE_GRACE_SECONDS.
 MIN_PLAY_SECONDS = 300
 
 # ---------------------------------------------------------------------------
-# Prevzata historie se do jazykovych statistik nepocita
+# Imported history does not count in the language statistics
 # ---------------------------------------------------------------------------
 #
-# Ani Jellystat, ani plugin Playback Reporting jazyk prehravane stopy
-# nezaznamenavaji - proste ten udaj nemaji. Prevzate zaznamy by tedy do
-# statistik pridaly jen hromadu "Neuvedeno", ktera by prehlusila skutecna
-# data ze sberace.
+# Neither Jellystat nor the Playback Reporting plugin records the language of
+# the played track - they simply do not have that detail. Imported records
+# would thus add only a heap of "Not specified" to the statistics, which would
+# drown out the real data from the collector.
 #
-# A nebyl by to jen kosmeticky problem: "60 % cesky" spocitane vcetne
-# zaznamu, u kterych jazyk nikdo nezna, je proste **spatne cislo**. Radeji
-# mensi vzorek, o kterem neco vime, nez velky, ktery lze.
+# And it would not be just a cosmetic problem: "60 % Czech" computed including
+# records whose language nobody knows is simply **a wrong number**. Better a
+# smaller sample we know something about than a big one that lies.
 #
-# Odfiltrujeme je podle `session_key`: prevzate radky maji predponu
-# "import:", vlastni sber ma klic z relace Jellyfinu. Viz balik importers/.
+# We filter them out by `session_key`: imported rows have the prefix
+# "import:", our own collection has a key from Jellyfin's session. See the
+# importers/ package.
 #
-# Tyka se to jen statistik postavenych na tabulce `playback` ("co se
-# sleduje"). Prehled toho, co je v knihovne k dispozici, cte tabulku
-# `items` a s importem nema nic spolecneho.
-BEZ_IMPORTU = "AND session_key NOT LIKE 'import:%'"
+# It concerns only the statistics built on the `playback` table ("what is
+# watched"). The overview of what is available in the library reads the
+# `items` table and has nothing to do with the import.
+WITHOUT_IMPORTS = "AND session_key NOT LIKE 'import:%'"
 
-# ...ale kdyz prevzaty zaznam jazyk PRESTO ma, zahazovat ho by byla skoda.
+# ...but when an imported record DOES have a language, throwing it away would be a pity.
 #
-# Duvod pro filtr vys je "nezname jazyk", ne "je to import" - to druhe byla
-# jen zkratka za to prvni. Nektere verze pluginu Playback Reporting jazyk
-# stopy ukladaji a Jellyscope si ho pri importu prevezme; takovy radek je
-# stejne dobry jako z vlastniho sberu a do statistik patri.
+# The reason for the filter above is "we do not know the language", not "it is
+# an import" - the second was only a shortcut for the first. Some versions of
+# the Playback Reporting plugin store the track's language and Jellyscope takes
+# it over at import; such a row is as good as one from our own collection and
+# belongs in the statistics.
 #
-# Pouziva se jen u dotazu na ZVUKOVOU stopu. U titulku ne: ani zaznam
-# s jazykem zvuku nerika, jestli byly zapnute titulky, takze by se tvaril
-# jako "bez titulku" a cislo by posunul dolu.
-SE_ZNAMYM_JAZYKEM = (
+# It is used only for queries on the AUDIO track. Not for subtitles: even a
+# record with an audio language does not say whether subtitles were on, so it
+# would look like "without subtitles" and push the number down.
+WITH_KNOWN_LANGUAGE = (
     "AND (session_key NOT LIKE 'import:%'"
     "     OR (audio_language IS NOT NULL AND audio_language != ''))"
 )
-SE_ZNAMYM_JAZYKEM_P = (
+WITH_KNOWN_LANGUAGE_P = (
     "AND (p.session_key NOT LIKE 'import:%'"
     "     OR (p.audio_language IS NOT NULL AND p.audio_language != ''))"
 )
 
 
 def imported_plays(days: int | None = None) -> int:
-    """Kolik prehravani z importu do cisel opravdu nevstoupilo.
+    """How many plays from the import really did not enter the numbers.
 
-    Nepocitaji se vsechny prevzate zaznamy, ale jen ty **bez jazyka**.
-    Import, ktery jazyk stopy nese (nektere verze Playback Reportingu ho
-    ukladaji), je stejne dobry jako vlastni sber a do statistik patri -
-    viz `SE_ZNAMYM_JAZYKEM` vys. Kdyby se sem pocital taky, hlaska nad
-    grafy by tvrdila, ze chybi neco, co v cislech ve skutecnosti je.
+    Not all imported records are counted, only those **without a language**.
+    An import that carries the track's language (some versions of Playback
+    Reporting store it) is as good as our own collection and belongs in the
+    statistics - see `WITH_KNOWN_LANGUAGE` above. Were it counted here too,
+    the message above the charts would claim something is missing that is in
+    fact in the numbers.
 
-    Vraci se, aby se na strance dalo poctive rici, co do cisel nevstoupilo.
-    Skryta data, o kterych ctenar nevi, jsou horsi nez zadna.
+    It is returned so the page can say honestly what did not enter the
+    numbers. Hidden data the reader does not know about are worse than none.
     """
-    bez_jazyka = ("AND session_key LIKE 'import:%'"
-                  "  AND (audio_language IS NULL OR audio_language = '')")
+    without_language = ("AND session_key LIKE 'import:%'"
+                        "  AND (audio_language IS NULL OR audio_language = '')")
     if days is None:
         return int(db.query_value(
             f"SELECT COUNT(*) FROM playback"
-            f" WHERE watched_seconds >= ? {bez_jazyka}",
+            f" WHERE watched_seconds >= ? {without_language}{stats.watching_only()}",
             (MIN_PLAY_SECONDS,),
         ))
     return int(db.query_value(
         f"SELECT COUNT(*) FROM playback"
         f" WHERE started_at >= ? AND started_at < ? AND watched_seconds >= ?"
-        f"   {bez_jazyka}",
-        (*_meze(days), MIN_PLAY_SECONDS),
+        f"   {without_language}{stats.watching_only()}",
+        (*_bounds(days), MIN_PLAY_SECONDS),
     ))
 
 
 def short_plays(days: int) -> int:
-    """Vlastni prehravani, ktera jsou na statistiku prilis kratka.
+    """Our own plays that are too short for the statistics.
 
-    Vraci se kvuli hlasce u prazdne stranky. Bez toho tam stalo "nech to
-    par dni sbirat", i kdyz Jellyscope uz nekolik prehravani zaznamenal -
-    jen zadne neprekrocilo hranici. To je matouci: clovek ceka dny na
-    neco, co se nestane, misto aby se podival na delsi film.
+    It is returned for the message on an empty page. Without it there stood
+    "let it collect for a few days", even when Jellyscope had already recorded
+    several plays - only none crossed the boundary. That is confusing: a person
+    waits days for something that will not happen, instead of watching a
+    longer movie.
     """
     return int(db.query_value(
         f"""
@@ -117,39 +123,41 @@ def short_plays(days: int) -> int:
          WHERE started_at >= ? AND started_at < ?
            AND watched_seconds > 0
            AND watched_seconds < ?
-           {BEZ_IMPORTU}
+           {WITHOUT_IMPORTS}
+           {stats.watching_only()}
         """,
-        (*_meze(days), MIN_PLAY_SECONDS),
+        (*_bounds(days), MIN_PLAY_SECONDS),
     ))
 
 
-def _meze(zadani: Any) -> tuple[str, str]:
-    """Meze zvoleneho obdobi - (od, do). Pocita je stats, at je to na
-    jednom miste; jazykove statistiky se ptaji na tytez dny jako zbytek."""
-    from .stats import _meze as spolecne
+def _bounds(period: Any) -> tuple[str, str]:
+    """The bounds of the chosen period - (start, end). stats computes them, so it is in
+    one place; the language statistics ask for the same days as the rest."""
+    from .stats import _bounds as shared
 
-    return spolecne(zadani)
+    return shared(period)
 
 
 # ---------------------------------------------------------------------------
-# Prirazeni barev - jednou pro celou stranku
+# Assigning colours - once for the whole page
 # ---------------------------------------------------------------------------
 
 def colour_map() -> dict[str, int]:
-    """Prirazeni barevneho slotu kazdemu jazyku.
+    """Assigning a colour slot to every language.
 
-    Poradi urcuje **celkovy** odsledovany cas za celou dobu - zamerne bez
-    ohledu na zvolene obdobi. Kdyby se barvy pocitaly z vybraneho obdobi,
-    zmena filtru ze "30 dnu" na "rok" by prebarvila vsechny grafy: cestina
-    by z modre skocila na oranzovou. Ctenar, ktery si zapamatoval "modra
-    je cestina", by byl uveden v omyl.
+    The order is set by the **total** watched time over the whole time - on
+    purpose regardless of the chosen period. Were the colours computed from the
+    chosen period, changing the filter from "30 days" to "a year" would recolour
+    all charts: Czech would jump from blue to orange. A reader who remembered
+    "blue is Czech" would be misled.
 
-    Tomuhle se rika prebarveni pri filtrovani a je to klasicka chyba
-    v dashboardech. Barva patri **veci**, ne jejimu poradi v aktualnim
-    vyberu.
+    This is called recolouring on filtering and it is a classic mistake in
+    dashboards. A colour belongs to **the thing**, not to its order in the
+    current selection.
 
-    Devaty a dalsi jazyk uz vlastni barvu nedostane. Osm je strop, za kterym
-    se barvy zacnou plest i cloveku bez poruchy barvocitu.
+    The ninth and further language no longer gets its own colour. Eight is the
+    ceiling beyond which colours start to blend even for a person without a
+    colour vision deficiency.
     """
     rows = db.query_all(
         f"""
@@ -157,7 +165,8 @@ def colour_map() -> dict[str, int]:
                SUM(watched_seconds) AS total
         FROM playback
         WHERE watched_seconds >= ?
-          {SE_ZNAMYM_JAZYKEM}
+          {WITH_KNOWN_LANGUAGE}
+          {stats.watching_only()}
         GROUP BY code
         ORDER BY total DESC
         """,
@@ -166,8 +175,8 @@ def colour_map() -> dict[str, int]:
     colours = {row["code"]: index + 1
                for index, row in enumerate(rows[:charts.SERIES_SLOTS])}
 
-    # Jazyky, ktere jsou v knihovne, ale nikdo je jeste neposlouchal,
-    # by jinak zustaly bez barvy. Doplnime je za ty sledovane.
+    # Languages that are in the library but nobody listened to yet would stay
+    # without a colour otherwise. We add them after the watched ones.
     if len(colours) < charts.SERIES_SLOTS:
         extra = db.query_all(
             "SELECT audio_languages FROM items"
@@ -188,7 +197,7 @@ def colour_map() -> dict[str, int]:
 
 def _decorate(rows: list[dict[str, Any]], colours: dict[str, int],
               total: float) -> list[dict[str, Any]]:
-    """Doplni radkum lidsky nazev, procenta a barevny slot."""
+    """Adds a human name, percentages and a colour slot to the rows."""
     for row in rows:
         code = row.get("code") or languages.UNKNOWN
         row["code"] = code
@@ -200,11 +209,11 @@ def _decorate(rows: list[dict[str, Any]], colours: dict[str, int],
 
 
 # ---------------------------------------------------------------------------
-# Co se sleduje
+# What is watched
 # ---------------------------------------------------------------------------
 
 def watched_languages(days: int, colours: dict[str, int]) -> dict[str, Any]:
-    """Podil jazyku na odsledovanem case."""
+    """The languages' share of the watched time."""
     rows = db.query_all(
         f"""
         SELECT COALESCE(audio_language, 'und')   AS code,
@@ -215,31 +224,37 @@ def watched_languages(days: int, colours: dict[str, int]) -> dict[str, Any]:
         FROM playback
         WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
-          {SE_ZNAMYM_JAZYKEM}
+          {WITH_KNOWN_LANGUAGE}
+          {stats.watching_only()}
         GROUP BY code
         ORDER BY hours DESC
         """,
-        (*_meze(days), MIN_PLAY_SECONDS),
+        (*_bounds(days), MIN_PLAY_SECONDS),
     )
+    # "Titles": a movie twice in one library is one title (stats.extra_copies), the same filter as above.
+    extra = stats.extra_copies(_bounds(days), "p.watched_seconds >= ? " + WITH_KNOWN_LANGUAGE_P, (MIN_PLAY_SECONDS,),
+                               group_by="COALESCE(p.audio_language, 'und')")
+    for row in rows:
+        row["item_count"] = (row.get("item_count") or 0) - extra.get(row["code"], 0)
     total = sum(float(row["hours"] or 0) for row in rows)
     _decorate(rows, colours, total)
 
-    zvoleny = preferred_language()
-    hlavni = next((row for row in rows if row["code"] == zvoleny), None)
-    # Druhe cislo pro srovnani. Kdyz uz je preferovanym jazykem anglictina,
-    # nema smysl ji ukazovat dvakrat - vezmeme dalsi nejsilnejsi jazyk.
-    druhy = next((row for row in rows
-                  if row["code"] != zvoleny and row["code"] != languages.UNKNOWN), None)
+    chosen = preferred_language()
+    main = next((row for row in rows if row["code"] == chosen), None)
+    # A second number for comparison. When English already is the preferred
+    # language, showing it twice makes no sense - we take the next strongest language.
+    second = next((row for row in rows
+                   if row["code"] != chosen and row["code"] != languages.UNKNOWN), None)
 
     return {
         "rows": rows,
         "total_hours": total,
-        # Dve cisla, ktera uzivatele zajimaji nejvic.
-        "preferred_code": zvoleny,
-        "preferred_name": languages.display(zvoleny),
-        "preferred_percent": hlavni["percent"] if hlavni else 0.0,
-        "second_name": languages.display(druhy["code"]) if druhy else "",
-        "second_percent": druhy["percent"] if druhy else 0.0,
+        # The two numbers users care about most.
+        "preferred_code": chosen,
+        "preferred_name": languages.display(chosen),
+        "preferred_percent": main["percent"] if main else 0.0,
+        "second_name": languages.display(second["code"]) if second else "",
+        "second_percent": second["percent"] if second else 0.0,
         "known_share": sum(
             row["percent"] for row in rows if row["code"] != languages.UNKNOWN
         ),
@@ -247,18 +262,18 @@ def watched_languages(days: int, colours: dict[str, int]) -> dict[str, Any]:
 
 
 def languages_by_user(days: int, colours: dict[str, int]) -> list[dict[str, Any]]:
-    """Rozpad jazyku pro kazdeho uzivatele zvlast.
+    """The breakdown of languages for every user apart.
 
-    SQL vrati "dlouhou" tabulku (uzivatel, jazyk, hodiny). Pro zobrazeni
-    ji potrebujeme "sirokou" - jeden radek na uzivatele. Tomuhle prevodu
-    se rika **pivot** a v Pythonu je citelnejsi nez v SQL.
+    SQL returns a "long" table (user, language, hours). For display we need it
+    "wide" - one row per user. This conversion is called a **pivot** and in
+    Python it is more readable than in SQL.
     """
-    # Jeden divák jednou, se současným jménem (viz stats.DIVAK_JMENO) -
-    # přejmenovaný by jinak měl každý jazyk dvakrát.
+    # One viewer once, with the current name (see stats.VIEWER_NAME) - a
+    # renamed one would otherwise have every language twice.
     rows = db.query_all(
         f"""
         SELECT p.user_id,
-               {stats.DIVAK_JMENO}               AS user_name,
+               {stats.VIEWER_NAME}               AS user_name,
                COALESCE(p.audio_language, 'und') AS code,
                SUM(p.watched_seconds) / 3600.0   AS hours
         FROM playback p
@@ -266,17 +281,18 @@ def languages_by_user(days: int, colours: dict[str, int]) -> list[dict[str, Any]
         WHERE p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
           AND p.user_name IS NOT NULL
-          {SE_ZNAMYM_JAZYKEM_P}
-        GROUP BY {stats.DIVAK_SKUPINA}, COALESCE(p.audio_language, 'und')
+          {WITH_KNOWN_LANGUAGE_P}
+          {stats.watching_only("p.")}
+        GROUP BY {stats.VIEWER_GROUP}, COALESCE(p.audio_language, 'und')
         """,
-        (*_meze(days), MIN_PLAY_SECONDS),
+        (*_bounds(days), MIN_PLAY_SECONDS),
     )
 
     people: dict[str, dict[str, Any]] = {}
     for row in rows:
-        # Bez user_id (import) je divák jen jméno - dva různé nesmí splynout.
-        klic = row["user_id"] or "jmeno:" + str(row["user_name"])
-        person = people.setdefault(klic, {
+        # Without user_id (an import) a viewer is just a name - two different ones must not merge.
+        key = row["user_id"] or "name:" + str(row["user_name"])
+        person = people.setdefault(key, {
             "user_id": row["user_id"],
             "name": row["user_name"],
             "total": 0.0,
@@ -294,18 +310,26 @@ def languages_by_user(days: int, colours: dict[str, int]) -> list[dict[str, Any]
 
     result = list(people.values())
     for person in result:
-        person["segments"].sort(key=lambda seg: -seg["value"])
+        # On a tie of hours the language code decides: the order of rows from the
+        # database is different every time on PostgreSQL (GROUP BY orders nothing)
+        # and the page would reshuffle between two loads. On SQLite it is the same order as before.
+        person["segments"].sort(key=lambda seg: (-seg["value"], seg["code"]))
+        # A sum independent of the order of rows: adding in the order from the database gave a
+        # different last bit (decimal numbers) every time on PostgreSQL, and with it other percentages.
+        person["total"] = math.fsum(seg["value"] for seg in person["segments"])
         for segment in person["segments"]:
             segment["percent"] = (segment["value"] / person["total"] * 100) if person["total"] else 0
-        # Nejcastejsi jazyk uzivatele - hodi se jako shrnuti do tabulky.
+        # The user's most frequent language - handy as a summary in the table.
         person["main"] = person["segments"][0] if person["segments"] else None
 
-    result.sort(key=lambda person: -person["total"])
+    # A tie of hours: in the group's order (a viewer without an id first, then by id) as before on SQLite.
+    result.sort(key=lambda person: (-person["total"], person["user_id"] is not None,
+                                    str(person["user_id"] or ""), str(person["name"] or "")))
     return result
 
 
 def subtitle_usage(days: int) -> dict[str, Any]:
-    """Jak casto se pouzivaji titulky a v jakem jazyce."""
+    """How often subtitles are used and in what language."""
     summary = db.query_one(
         f"""
         SELECT SUM(CASE WHEN subtitle_language IS NOT NULL
@@ -315,9 +339,10 @@ def subtitle_usage(days: int) -> dict[str, Any]:
         FROM playback
         WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
-          {BEZ_IMPORTU}
+          {WITHOUT_IMPORTS}
+          {stats.watching_only()}
         """,
-        (*_meze(days), MIN_PLAY_SECONDS),
+        (*_bounds(days), MIN_PLAY_SECONDS),
     ) or {}
 
     with_subs = float(summary.get("with_subtitles") or 0)
@@ -333,11 +358,12 @@ def subtitle_usage(days: int) -> dict[str, Any]:
         WHERE started_at >= ? AND started_at < ?
           AND watched_seconds >= ?
           AND subtitle_language IS NOT NULL
-          {BEZ_IMPORTU}
+          {WITHOUT_IMPORTS}
+          {stats.watching_only()}
         GROUP BY code
         ORDER BY hours DESC
         """,
-        (*_meze(days), MIN_PLAY_SECONDS),
+        (*_bounds(days), MIN_PLAY_SECONDS),
     )
     for row in rows:
         row["label"] = languages.display(row["code"])
@@ -351,13 +377,13 @@ def subtitle_usage(days: int) -> dict[str, Any]:
 
 
 def dubbed_vs_original(days: int, code: str | None = None) -> list[dict[str, Any]]:
-    """Sledoval divak v preferovanem jazyce, i kdyz mel na vyber jiny?
+    """Did the viewer watch in the preferred language, even when they had another to choose?
 
-    Spoji jazyk, ktery si pustil, s jazyky, ktere byly v souboru
-    k dispozici - a rozdeli prehravani do tri prehlednych skupin.
+    It joins the language they played with the languages that were available
+    in the file - and splits the plays into three clear groups.
     """
     code = code or preferred_language()
-    nazev = languages.display(code)
+    name = languages.display(code)
     rows = db.query_all(
         f"""
         SELECT p.audio_language        AS chosen,
@@ -369,22 +395,23 @@ def dubbed_vs_original(days: int, code: str | None = None) -> list[dict[str, Any
           AND p.watched_seconds >= ?
           AND p.audio_language IS NOT NULL
           AND i.audio_languages IS NOT NULL AND i.audio_languages != ''
-          {SE_ZNAMYM_JAZYKEM_P}
+          {WITH_KNOWN_LANGUAGE_P}
+          {stats.watching_only("p.")}
         GROUP BY chosen, available
         """,
-        (*_meze(days), MIN_PLAY_SECONDS),
+        (*_bounds(days), MIN_PLAY_SECONDS),
     )
 
     buckets = {
-        "with_choice": 0.0,   # pustil zvoleny jazyk, i kdyz mel i jiny
-        "only": 0.0,          # zvoleny jazyk, jina moznost nebyla
-        "other": 0.0,         # pustil jiny jazyk
+        "with_choice": 0.0,   # played the chosen language, though another was there too
+        "only": 0.0,          # the chosen language, there was no other option
+        "other": 0.0,         # played another language
     }
 
     for row in rows:
         available = languages.unpack(row["available"])
         hours = float(row["hours"] or 0)
-        real_options = [kod for kod in available if kod != languages.UNKNOWN]
+        real_options = [option for option in available if option != languages.UNKNOWN]
 
         if row["chosen"] == code:
             if len(real_options) > 1:
@@ -395,16 +422,17 @@ def dubbed_vs_original(days: int, code: str | None = None) -> list[dict[str, Any
             buckets["other"] += hours
 
     total = sum(buckets.values())
-    # Popisky se skladaji az tady, protoze v nich je nazev zvoleneho jazyka.
-    # Prekladaji se pres i18n uz slozene - viz _t() volani v i18n.py.
+    # The labels are put together only here, because they hold the chosen
+    # language's name. They are translated through i18n already put together -
+    # see the _t() calls in i18n.py.
     #
-    # Skladaji se z prelozitelnych kousku, ne jako cela veta: cela veta
-    # obsahuje nazev jazyka, takze by se ve slovniku prekladu nikdy
-    # nenasla - a popisek zustal cesky i v anglickem rozhrani.
+    # They are made of translatable pieces, not as a whole sentence: a whole
+    # sentence holds the language's name, so it would never be found in the
+    # dictionary of translations - and the label stayed Czech even in the English interface.
     labels = [
-        ("with_choice", f"{nazev} – {_t('i když byl na výběr jiný jazyk')}", 1),
-        ("only", f"{nazev} – {_t('jiná možnost nebyla')}", 3),
-        ("other", f"{_t('Jiný jazyk než')} {nazev.lower()}", 2),
+        ("with_choice", f"{name} – {_t('even though another language was available')}", 1),
+        ("only", f"{name} – {_t('no other option')}", 3),
+        ("other", f"{_t('A language other than')} {name.lower()}", 2),
     ]
     return [
         {
@@ -420,16 +448,16 @@ def dubbed_vs_original(days: int, code: str | None = None) -> list[dict[str, Any
 
 
 # ---------------------------------------------------------------------------
-# Co je v knihovne k dispozici
+# What is available in the library
 # ---------------------------------------------------------------------------
 
 def library_languages(colours: dict[str, int],
                       library_id: str | None = None) -> list[dict[str, Any]]:
-    """Kolik titulu obsahuje kterou zvukovou stopu.
+    """How many titles contain which audio track.
 
-    Jeden titul se muze zapocitat vickrat - film s ceskou i anglickou
-    stopou patri do obou skupin. Proto se procenta nesecitaji na sto
-    a v UI je u toho poznamka.
+    One title can count more times - a movie with a Czech and an English track
+    belongs to both groups. So the percentages do not add up to a hundred and
+    the UI has a note about it.
     """
     where = ("WHERE is_missing = 0 AND audio_languages IS NOT NULL"
              " AND audio_languages != ''")
@@ -460,12 +488,12 @@ def library_languages(colours: dict[str, int],
     return result
 
 
-def _kombinace_radky() -> list[dict[str, Any]]:
-    """Kombinace stop tak, jak jsou v knihovne - od nejcastejsi.
+def _combination_rows() -> list[dict[str, Any]]:
+    """Track combinations as they are in the library - from the most frequent.
 
-    Jeden dotaz pro kartu i pro okno se vsemi kombinacemi. Dve kopie
-    tehoz SELECTu by se driv nebo pozdeji rozesly a v okne by pak stala
-    jina cisla nez na karte, ze ktere se otevrelo.
+    One query for the card and for the window with all combinations. Two copies
+    of the same SELECT would drift apart sooner or later and the window would
+    then show other numbers than the card it was opened from.
     """
     return db.query_all(
         """
@@ -476,48 +504,49 @@ def _kombinace_radky() -> list[dict[str, Any]]:
         WHERE is_missing = 0
           AND audio_languages IS NOT NULL
           AND audio_languages != ''
-          AND audio_languages != 'und'      -- tituly bez urceneho jazyka sem nepatri
+          AND audio_languages != 'und'      -- titles without a determined language do not belong here
         GROUP BY audio_languages
         ORDER BY item_count DESC
         """
     )
 
 
-def vsechny_kombinace() -> list[dict[str, Any]]:
-    """Uplny seznam kombinaci - podklad pro okno za radkem "Ostatni".
+def all_combinations() -> list[dict[str, Any]]:
+    """The full list of combinations - the base for the window behind the row "Ostatní".
 
-    Karta ukazuje ctyri nejcastejsi a zbytek shrne, protoze dlouhy seznam
-    nikdo necte. Kdo ale chce vedet, co se v tom "Ostatni" skryva, ma na
-    to mit kam kliknout - jinak je to slepy radek.
+    The card shows the four most frequent and sums up the rest, because nobody
+    reads a long list. But whoever wants to know what hides in that "Ostatní"
+    is to have somewhere to click - otherwise it is a dead row.
 
-    Procenta se pocitaji ze stejneho celku jako na karte, aby "56 %"
-    znamenalo totez na obou mistech.
+    The percentages are computed from the same whole as on the card, so that
+    "56 %" means the same in both places.
     """
-    radky = _kombinace_radky()
-    celkem = sum(int(radek["item_count"] or 0) for radek in radky)
-    for radek in radky:
-        radek["label"] = languages.combination_label(radek["packed"])
-        radek["value"] = radek["item_count"]
-        radek["percent"] = (int(radek["item_count"] or 0) / celkem * 100) \
-            if celkem else 0.0
-    return radky
+    rows = _combination_rows()
+    total = sum(int(row["item_count"] or 0) for row in rows)
+    for row in rows:
+        row["label"] = languages.combination_label(row["packed"])
+        row["value"] = row["item_count"]
+        row["percent"] = (int(row["item_count"] or 0) / total * 100) \
+            if total else 0.0
+    return rows
 
 
 def language_combinations(limit: int = 4) -> list[dict[str, Any]]:
-    """Nejcastejsi kombinace stop - "CS + EN", "jen EN", ...
+    """The most frequent track combinations - "CS + EN", "jen EN", ...
 
-    Presne to, na co se u domaci knihovny clovek pta: mam u filmu obe
-    stopy, nebo jen jednu?
+    Exactly what a person asks about a home library: do I have both tracks for
+    the movies, or just one?
 
-    Vypiseme `limit` nejcastejsich kombinaci a zbytek shrneme do jedineho
-    radku "Ostatni". Dlouhy seznam kombinaci, z nichz kazda ma dva tituly,
-    nikdo necte - a prehled o tom hlavnim v nem zanikne.
+    We list the `limit` most frequent combinations and sum up the rest into a
+    single row "Ostatní". A long list of combinations, each of which has two
+    titles, nobody reads - and the overview of the main thing gets lost in it.
 
-    Tituly, u kterych jazyk nikdo nevyplnil, do prehledu nepatri: nerikaji
-    nic o tom, jak je knihovna sestavena, jen o tom, ze chybi metadata.
-    Jejich pocet vracime zvlast, aby bylo poctive videt, kolik jich je.
+    Titles whose language nobody filled in do not belong in the overview: they
+    say nothing about how the library is put together, only that metadata are
+    missing. We return their count apart, so it is honestly visible how many
+    there are.
     """
-    rows = _kombinace_radky()
+    rows = _combination_rows()
 
     top = rows[:limit]
     rest = rows[limit:]
@@ -529,34 +558,34 @@ def language_combinations(limit: int = 4) -> list[dict[str, Any]]:
     if rest:
         top.append({
             "packed": None,
-            "label": _t("Ostatní"),
+            "label": _t("Other"),
             "item_count": sum(row["item_count"] for row in rest),
             "size_bytes": sum(row["size_bytes"] or 0 for row in rest),
             "value": sum(row["item_count"] for row in rest),
             "combinations": len(rest),
         })
 
-    # Procenta pocitame ze VSECH kombinaci, ne jen z tech vypsanych - jinak
-    # by "56 %" znamenalo "z toho, co zrovna vidis", coz je jine cislo.
-    celkem = sum(int(row["item_count"] or 0) for row in top)
+    # We compute the percentages from ALL combinations, not only the listed ones -
+    # otherwise "56 %" would mean "of what you see right now", which is another number.
+    total = sum(int(row["item_count"] or 0) for row in top)
     for row in top:
-        row["percent"] = (int(row["item_count"] or 0) / celkem * 100) if celkem else 0.0
+        row["percent"] = (int(row["item_count"] or 0) / total * 100) if total else 0.0
 
     return top
 
 
 def undefined_language_files(limit: int, offset: int,
                             search: str | None = None) -> list[dict[str, Any]]:
-    """Soubory, u kterych jazyk zvukove stopy nikdo nevyplnil.
+    """Files whose audio track's language nobody filled in.
 
-    Zamerne po JEDNOTLIVYCH souborech, ne po titulech: jazyk se opravuje
-    u konkretniho souboru, takze clovek potrebuje cestu k nemu. U serialu
-    to znamena kazdy dil zvlast - presne ty, ktere jsou spatne.
+    On purpose by SINGLE files, not by titles: the language is fixed for a
+    concrete file, so a person needs the path to it. For a series that means
+    every episode apart - exactly those that are wrong.
 
-    Cesta je tu to hlavni; bez ni by seznam rekl "neco je spatne" a nechal
-    hledani na uzivateli.
+    The path is the main thing here; without it the list would say "something
+    is wrong" and leave the searching to the user.
     """
-    where, params = _filtr_bez_jazyka(search)
+    where, params = _without_language_filter(search)
     params.extend([limit, offset])
     return db.query_all(
         f"""
@@ -576,21 +605,21 @@ def undefined_language_files(limit: int, offset: int,
 
 
 def undefined_language_count(search: str | None = None) -> int:
-    where, params = _filtr_bez_jazyka(search)
+    where, params = _without_language_filter(search)
     return int(db.query_value(
         f"SELECT COUNT(*) FROM items i WHERE {' AND '.join(where)}", tuple(params)))
 
 
-def _filtr_bez_jazyka(search: str | None) -> tuple[list[str], list[Any]]:
-    """Podminka "titul nema urceny jazyk" - pro seznam i pro jeho pocet.
+def _without_language_filter(search: str | None) -> tuple[list[str], list[Any]]:
+    """The condition "the title has no determined language" - for the list and for its count.
 
-    Obe funkce se musi ptat na tutez mnozinu; kdyz se filtr opisoval
-    dvakrat, stacilo upravit jeden a strankovani zacalo lhat.
+    Both functions must ask for the same set; when the filter was copied
+    twice, it was enough to change one and the paging started to lie.
 
-    Sloupce jsou psane s prefixem `i.`, protoze seznam pripojuje knihovny
-    a ty maji taky sloupec `name`. Bez prefixu byl dotaz nejednoznacny -
-    jenze jen s vyplnenym hledanim, takze stranka fungovala az do chvile,
-    kdy nekdo neco napsal do vyhledavaciho pole.
+    The columns are written with the prefix `i.`, because the list joins the
+    libraries and they have a `name` column too. Without the prefix the query
+    was ambiguous - but only with a search filled in, so the page worked until
+    the moment somebody typed something into the search field.
     """
     where = ["i.is_missing = 0",
              "(i.audio_languages IS NULL OR i.audio_languages = '' "
@@ -603,10 +632,10 @@ def _filtr_bez_jazyka(search: str | None) -> tuple[list[str], list[Any]]:
 
 
 def undefined_language_items() -> int:
-    """Kolik titulu nema u zadne stopy uvedeny jazyk.
+    """How many titles have no language given for any track.
 
-    Vraci se zvlast, aby slo v UI rict "a k tomu 12 titulu bez metadat"
-    misto aby se tvarily jako dalsi jazykova kombinace.
+    It is returned apart, so the UI can say "and 12 titles without metadata on
+    top" instead of them looking like another language combination.
     """
     return int(db.query_value(
         """
@@ -622,38 +651,38 @@ PREFERRED_DEFAULT = "cs"
 
 
 def preferred_language() -> str:
-    """Jazyk, ktery si tenhle server preje mit u titulu.
+    """The language this server wants to have for its titles.
 
-    Cela stranka Jazyky driv predpokladala cestinu - byla natvrdo v SQL,
-    v nazvech funkci i v nadpisech. Pro cesky server to sedelo, pro
-    kohokoli jineho to byla stranka o nicem: Portugalec se nepotrebuje
-    dozvidat, kolik procent sleduje cesky.
+    The whole Languages page used to assume Czech - it was hard-coded in SQL,
+    in the names of functions and in headings. For a Czech server it fitted,
+    for anybody else it was a page about nothing: a Portuguese does not need to
+    learn how many percent they watch in Czech.
 
-    Ulozeny kod se overuje proti seznamu jazyku, ktere v knihovne opravdu
-    jsou. Kdyby zustal nastaveny jazyk, ktery mezitim z knihovny zmizel,
-    stranka by ukazovala same nuly a nebylo by poznat proc.
+    The stored code is checked against the list of languages that really are in
+    the library. Were a set language left that vanished from the library
+    meanwhile, the page would show only zeros and there would be no telling why.
     """
-    ulozeny = languages.normalize(db.get_setting(PREFERRED_SETTING, "") or "")
-    v_knihovne = [row["code"] for row in library_language_options()]
+    stored = languages.normalize(db.get_setting(PREFERRED_SETTING, "") or "")
+    in_library = [row["code"] for row in library_language_options()]
 
-    if ulozeny and ulozeny != languages.UNKNOWN and ulozeny in v_knihovne:
-        return ulozeny
-    if PREFERRED_DEFAULT in v_knihovne:
+    if stored and stored != languages.UNKNOWN and stored in in_library:
+        return stored
+    if PREFERRED_DEFAULT in in_library:
         return PREFERRED_DEFAULT
-    # Prazdna knihovna nebo jazyk, ktery v ni neni: drz se ulozene volby,
-    # at se vyber po synchronizaci sam neprepne na neco jineho.
-    return ulozeny or PREFERRED_DEFAULT
+    # An empty library or a language that is not in it: hold on to the stored
+    # choice, so the selection does not switch to something else by itself after a sync.
+    return stored or PREFERRED_DEFAULT
 
 
 def library_language_options() -> list[dict[str, Any]]:
-    """Jazyky, ktere se v knihovne opravdu vyskytuji - podklad pro vyber.
+    """Languages that really occur in the library - the base for the selection.
 
-    Nabizet vsech osm set jazyku sveta by byl nepouzitelny seznam. Ten
-    jeden, ktery clovek hleda, ma pritom jistotu v knihovne - kvuli nemu
-    si ji prece staví.
+    Offering all eight hundred languages of the world would be an unusable
+    list. The one a person looks for is certain to be in the library - that is
+    why they build it after all.
 
-    Radi se podle poctu titulu: nejcastejsi jazyk je nahore, kde ho clovek
-    ceka.
+    It is ordered by the number of titles: the most frequent language is at the
+    top, where a person expects it.
     """
     rows = db.query_all(
         """
@@ -663,137 +692,138 @@ def library_language_options() -> list[dict[str, Any]]:
         """
     )
 
-    pocty: dict[str, int] = {}
+    counts: dict[str, int] = {}
     for row in rows:
-        # Rozpad delame v Pythonu, ne v SQL. Rozdelit retezec na seznam umi
-        # kazda databaze jinak a tohle je jednou za nacteni stranky.
+        # We do the breakdown in Python, not in SQL. Splitting a string into a list
+        # every database does differently and this is once per page load.
         for code in languages.unpack(row["audio_languages"]):
             if code and code != languages.UNKNOWN:
-                pocty[code] = pocty.get(code, 0) + 1
+                counts[code] = counts.get(code, 0) + 1
 
-    # Klic se schvalne nejmenuje "items". V sablone by `option.items`
-    # nesahlo na hodnotu, ale na metodu `dict.items` - Jinja hleda nejdriv
-    # atribut a teprve pak polozku. Cislo by se pak vypsalo jako pomlcka.
+    # The key is on purpose not called "items". In the template `option.items`
+    # would not reach the value, but the method `dict.items` - Jinja looks for an
+    # attribute first and only then an item. The number would then print as a dash.
     return [
-        {"code": code, "name": languages.display(code), "title_count": pocet}
-        for code, pocet in sorted(pocty.items(), key=lambda dvojice: (-dvojice[1], dvojice[0]))
+        {"code": code, "name": languages.display(code), "title_count": count}
+        for code, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
     ]
 
 
-def _serialy_bez_stopy(vzor: str) -> set[str]:
-    """ID serialu, kterym stopa chybi u VSECH dilu v knihovne.
+def _series_without_stream(pattern: str) -> set[str]:
+    """The ids of series that miss the track for ALL their episodes in the library.
 
-    Tohle je jadro opravy jedne konkretni chyby. Puvodne se filtr na jazyk
-    uplatnil na jednotlive dily uz v databazi a teprve pak se vysledek
-    seskupil podle serialu. Jenze tim z kazde skupiny vypadly prave ty
-    dily, ktere stopu MAJI - a zbytek se pak tvaril jako "cely serial
-    stopu nema", i kdyz ji nemel treba jediny dil z dvaceti.
+    This is the core of a fix of one concrete bug. Originally the language
+    filter was applied to single episodes already in the database and only
+    then was the result grouped by series. But that dropped exactly the
+    episodes that HAVE the track out of every group - and the rest then looked
+    like "the whole series lacks the track", even when only a single episode of
+    twenty lacked it.
 
-    Rozhodovat se proto musi z celeho serialu najednou: kolik dilu ma
-    a kolika z nich stopa chybi. Ptame se na knihovnu, ne jen na
-    sledovane dily - jinak by serial, z nehoz clovek videl jediny
-    (spatne otitulkovany) dil, vysel jako "cely bez stopy".
+    So it has to be decided from the whole series at once: how many episodes it
+    has and for how many of them the track is missing. We ask the library, not
+    only the watched episodes - otherwise a series of which a person saw a
+    single (badly subtitled) episode would come out "whole without the track".
     """
     rows = db.query_all(
         """
         SELECT series_id,
-               COUNT(*) AS celkem,
+               COUNT(*) AS total,
                SUM(CASE WHEN (',' || audio_languages || ',') NOT LIKE ?
-                        THEN 1 ELSE 0 END) AS chybi
+                        THEN 1 ELSE 0 END) AS missing_count
         FROM items
         WHERE is_missing = 0
           AND series_id IS NOT NULL
           AND audio_languages IS NOT NULL AND audio_languages != ''
         GROUP BY series_id
         """,
-        (vzor,),
+        (pattern,),
     )
     return {str(r["series_id"]) for r in rows
-            if int(r["celkem"] or 0) > 0 and int(r["chybi"] or 0) == int(r["celkem"])}
+            if int(r["total"] or 0) > 0 and int(r["missing_count"] or 0) == int(r["total"])}
 
 
-def _oznaceni_dilu(row: dict[str, Any]) -> str:
-    """"S01E03" - aby slo poznat, o ktery dil jde (radek ma season/episode)."""
-    return formatting.kod_dilu({"parent_index_number": row.get("season"),
-                                "index_number": row.get("episode")})
+def _episode_label(row: dict[str, Any]) -> str:
+    """"S01E03" - so it can be told which episode it is (the row has season/episode)."""
+    return formatting.episode_code({"parent_index_number": row.get("season"),
+                                    "index_number": row.get("episode")})
 
 
-def _slouc_do_radku(soubory: list[dict[str, Any]], cele_serialy: set[str],
-                    code: str, limit: int) -> list[dict[str, Any]]:
-    """Ze souboru bez stopy poskladá řádky tabulky.
+def _merge_into_rows(files: list[dict[str, Any]], whole_series: set[str],
+                     code: str, limit: int) -> list[dict[str, Any]]:
+    """Puts the table's rows together from the files without the track.
 
-    Serial, kteremu stopa chybi cely, je jeden radek. Kdyz chybi jen
-    nekterym dilum, jsou to radky po dilech i s oznacenim - jinak by
-    clovek hledal, ktery dil ma vlastne shanet.
+    A series that lacks the track whole is one row. When only some episodes
+    lack it, there are rows by episodes with their marks - otherwise a person
+    would look for which episode they should actually get.
     """
-    skupiny: dict[str, dict[str, Any]] = {}
+    groups: dict[str, dict[str, Any]] = {}
 
-    for soubor in soubory:
-        serial = str(soubor["series_id"]) if soubor["series_id"] else None
-        cely_serial = serial is not None and serial in cele_serialy
+    for file in files:
+        series = str(file["series_id"]) if file["series_id"] else None
+        whole = series is not None and series in whole_series
 
-        if cely_serial:
-            klic = f"serial:{serial}"
-            popisek = soubor["series_name"] or soubor["name"]
-            odkaz = f"/series/{serial}"
+        if whole:
+            key = f"serial:{series}"
+            label = file["series_name"] or file["name"]
+            link = f"/series/{series}"
         else:
-            # Film, nebo jednotlivy dil serialu, ktery stopu jinak ma.
-            klic = f"soubor:{soubor['item_id']}"
-            oznaceni = _oznaceni_dilu(soubor)
-            if soubor["series_name"]:
-                popisek = f"{soubor['series_name']} – {oznaceni or soubor['name']}"
+            # A movie, or a single episode of a series that otherwise has the track.
+            key = f"soubor:{file['item_id']}"
+            episode_mark = _episode_label(file)
+            if file["series_name"]:
+                label = f"{file['series_name']} – {episode_mark or file['name']}"
             else:
-                popisek = soubor["name"]
-            odkaz = f"/item/{soubor['item_id']}"
+                label = file["name"]
+            link = f"/item/{file['item_id']}"
 
-        skupina = skupiny.setdefault(klic, {
-            "label": popisek,
-            "series_id": serial if cely_serial else None,
-            "item_id": soubor["item_id"],
-            "detail_url": odkaz,
-            "is_series": cely_serial,
-            # Nazev dilu se vypisuje pod popiskem, ale jen u serialu.
-            # U filmu je totozny s popiskem a stal by tam dvakrat.
-            "episode_name": (soubor["name"]
-                             if not cely_serial and soubor["series_name"] else None),
+        group = groups.setdefault(key, {
+            "label": label,
+            "series_id": series if whole else None,
+            "item_id": file["item_id"],
+            "detail_url": link,
+            "is_series": whole,
+            # The episode's name is written under the label, but only for series.
+            # For a movie it is the same as the label and would stand there twice.
+            "episode_name": (file["name"]
+                             if not whole and file["series_name"] else None),
             "hours": 0.0,
             "plays": 0,
             "audio": [],
             "subtitles": [],
         })
-        skupina["hours"] += float(soubor["hours"] or 0)
-        skupina["plays"] += int(soubor["plays"] or 0)
-        skupina["audio"].extend(languages.unpack(soubor["audio_languages"]))
-        skupina["subtitles"].extend(languages.unpack(soubor["subtitle_languages"]))
+        group["hours"] += float(file["hours"] or 0)
+        group["plays"] += int(file["plays"] or 0)
+        group["audio"].extend(languages.unpack(file["audio_languages"]))
+        group["subtitles"].extend(languages.unpack(file["subtitle_languages"]))
 
-    radky = sorted(skupiny.values(), key=lambda r: r["hours"], reverse=True)[:limit]
-    for radek in radky:
-        # pack() srovna posbirane kody do jednoho tvaru: setridene,
-        # bez duplicit, "neuvedeno" az na konec.
-        radek["audio_languages"] = languages.pack(radek.pop("audio"))
-        radek["audio_label"] = languages.combination_label(radek["audio_languages"])
-        radek["has_preferred_subtitles"] = code in radek.pop("subtitles")
-    return radky
+    rows = sorted(groups.values(), key=lambda r: r["hours"], reverse=True)[:limit]
+    for row in rows:
+        # pack() evens the collected codes out into one shape: sorted, without
+        # duplicates, "neuvedeno" at the end.
+        row["audio_languages"] = languages.pack(row.pop("audio"))
+        row["audio_label"] = languages.combination_label(row["audio_languages"])
+        row["has_preferred_subtitles"] = code in row.pop("subtitles")
+    return rows
 
 
 def missing_preferred(days: int, code: str, limit: int = 15) -> dict[str, Any]:
-    """Sledovane tituly, ktere nemaji zvukovou stopu v preferovanem jazyce.
+    """Watched titles that have no audio track in the preferred language.
 
-    Uzitecny seznam: tohle jsou tituly, u kterych by se vyplatilo
-    poohlednout se po jine verzi - protoze se na ne opravdu divate.
+    A useful list: these are titles for which it would pay to look around for
+    another version - because you really watch them.
     """
-    # Hledany kod se do LIKE vklada jako parametr, ne do textu dotazu -
-    # jde o hodnotu z nastaveni a ta do SQL nikdy nepatri primo.
+    # The searched code goes into LIKE as a parameter, not into the query's
+    # text - it is a value from the settings and that never belongs in SQL directly.
     #
-    # Obalujeme carkami z obou stran: ulozeny tvar je "cs,en,de", takze
-    # hledat holy '%cs%' by naslo i kod, ktery cestinu jen obsahuje jako
-    # cast. S carkami je porovnani presne.
-    vzor = f"%,{code},%"
+    # We wrap it in commas from both sides: the stored shape is "cs,en,de", so
+    # searching a bare '%cs%' would find a code that only contains Czech as a
+    # part too. With the commas the comparison is exact.
+    pattern = f"%,{code},%"
 
-    # Jeden radek na SOUBOR, ne na serial. Seskupovat az v Pythonu je tu
-    # nutnost, ne pohodlnost - viz `_serialy_bez_stopy()` nize.
-    soubory = db.query_all(
-        """
+    # One row per FILE, not per series. Grouping only in Python is a necessity
+    # here, not a convenience - see `_series_without_stream()` below.
+    files = db.query_all(
+        f"""
         SELECT i.id                            AS item_id,
                i.name                          AS name,
                i.series_id                     AS series_id,
@@ -809,17 +839,18 @@ def missing_preferred(days: int, code: str, limit: int = 15) -> dict[str, Any]:
         WHERE p.started_at >= ? AND p.started_at < ?
           AND p.watched_seconds >= ?
           AND i.is_missing = 0
+          {stats.watching_only("p.")}
           AND i.audio_languages IS NOT NULL AND i.audio_languages != ''
           AND (',' || i.audio_languages || ',') NOT LIKE ?
         GROUP BY i.id, i.name, i.series_id, i.series_name,
                  i.parent_index_number, i.index_number,
                  i.audio_languages, i.subtitle_languages
         """,
-        (*_meze(days), MIN_PLAY_SECONDS, vzor),
+        (*_bounds(days), MIN_PLAY_SECONDS, pattern),
     )
 
-    cele_serialy = _serialy_bez_stopy(vzor)
-    rows = _slouc_do_radku(soubory, cele_serialy, code, limit)
+    whole_series = _series_without_stream(pattern)
+    rows = _merge_into_rows(files, whole_series, code, limit)
 
     total = db.query_value(
         """
@@ -828,18 +859,18 @@ def missing_preferred(days: int, code: str, limit: int = 15) -> dict[str, Any]:
           AND audio_languages IS NOT NULL AND audio_languages != ''
           AND (',' || audio_languages || ',') NOT LIKE ?
         """,
-        (vzor,),
+        (pattern,),
     )
     return {"rows": rows, "total": total, "code": code,
             "name": languages.display(code)}
 
 
 def coverage() -> dict[str, Any]:
-    """Kolik dat o jazycich vlastne mame.
+    """How much data about languages we actually have.
 
-    Bez tohohle cisla by se cela stranka dala precist spatne: kdyz ma
-    jazyk vyplneny jen ctvrtina souboru, "60 % cesky" znamena neco
-    uplne jineho, nez kdyz ho ma vyplneny vsechno.
+    Without this number the whole page could be read wrongly: when only a
+    quarter of the files have the language filled in, "60 % Czech" means
+    something wholly different than when all of them have it.
     """
     items = db.query_one(
         """
@@ -855,7 +886,8 @@ def coverage() -> dict[str, Any]:
         SELECT COUNT(*) AS total,
                SUM(CASE WHEN audio_language IS NOT NULL THEN 1 ELSE 0 END) AS with_language
         FROM playback WHERE watched_seconds >= ?
-          {BEZ_IMPORTU}
+          {WITHOUT_IMPORTS}
+          {stats.watching_only()}
         """,
         (MIN_PLAY_SECONDS,),
     ) or {}

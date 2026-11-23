@@ -1,0 +1,16 @@
+{# A hint under a Seerr card with posters: why some are missing.
+
+   Included by the cards "Waiting for approval", "Latest requests" and "Nobody started".
+   Drawn only for the admin and only when Seerr does not hand out images
+   (`d.obrazky_vypnute`, see cards_seerr._poster_hint) - to others the sentence
+   would say nothing and Seerr's address is not theirs. The link leads to Seerr's
+   settings. A card the default sentence does not fit sets its own
+   before including it (`hint_sentence`). #}
+{% if d.images_off %}
+<p class="card-note posters-hint">
+    {{ hint_sentence if hint_sentence is defined else _("Only Seerr can provide the poster of a pending or declined request. Turn on Enable Image Caching in Seerr (Settings → General) and the posters will fill in by themselves.") }}
+    {% if d.seerr_settings %}
+        <a href="{{ d.seerr_settings }}" target="_blank" rel="noopener noreferrer">{{ _("Open Seerr settings") }}</a>
+    {% endif %}
+</p>
+{% endif %}

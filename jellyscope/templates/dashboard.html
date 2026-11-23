@@ -1,69 +1,151 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, tile, method_badge, zmena, karta with context %}
-{% block title %}{{ _("Přehled") }} &middot; Jellyscope{% endblock %}
+{% from "_macros.html" import period_filter, table_window, card_title, heading_text with context %}
+{% block title %}{{ heading }}{% endblock %}
 
 {% block content %}
-{# Karty přicházejí z registru (jellyscope/sekce.py, sekce.PREHLED): routa
-   pošle jen ty, které účet smí, s jejich daty, a karta() je nakreslí
-   i s živým obalem (_karta.html) - stejně jako vlastní přehled. Tady je jen
-   rozvržení: pořadí, dvojice a nadpis Statistiky. Žádné ruční vidi(). #}
-
-{# ================================================================== #}
-{# 1. Právě se hraje                                                   #}
-{#                                                                     #}
-{# Nahoře, protože to je jediná část stránky, která se mění po vteřinách #}
-{# a kvůli které se sem člověk vrací během dne.                        #}
-{# ================================================================== #}
-{{ karta("prave_se_hraje") }}
-
-{# ================================================================== #}
-{# 2. Nedávno přidané (obnova po synchronizaci - viz _karta.html)      #}
-{# ================================================================== #}
-{{ karta("nedavno_pridane") }}
-
-{# ================================================================== #}
-{# 3. Souhrn statistik                                                 #}
-{# ================================================================== #}
-<div class="section-head" style="margin-top:34px">
+<div class="page-head">
     <div>
-        <h2>{{ _("Statistiky") }}</h2>
-        <p class="card-note">
-            {# U vlastního období `days` nic neříká - bez téhle větve tu
-               zbyla věta "Co se na serveru dělo za posledních ." #}
-            {# Rok má vlastní větu, jinak by vyšlo „za posledních rok" -
-               stejně jako u knihovny (library_detail.html). #}
-            {% if obdobi.vlastni %}{{ _("Co se na serveru dělo ve vybraném období.") }}
-            {% elif days == 365 %}{{ _("Co se na serveru dělo za poslední rok.") }}
-            {% else %}{{ _("Co se na serveru dělo za posledních {obdobi}.").format(obdobi=_(day_labels[days])) }}
+        <h1>{{ heading }}</h1>
+        <p class="page-note">
+            {% if personal %}
+                {{ _("Your overview from the statistics you picked. Only you see it.") }}
+            {% elif drawn %}
+                {{ _("Built from the statistics that already exist. Only what is here gets computed.") }}
+            {% else %}
+                {{ _("Empty so far. Add the sections you want to see after signing in.") }}
             {% endif %}
         </p>
     </div>
-    {{ period_filter(obdobi, '/') }}
+
+    {# The button and the period filter under it - on the right, as on the other
+       tabs. The filter is here only when at least one card
+       uses it: for a dashboard made of states only (now playing,
+       the library) the switch would do nothing and would confuse. #}
+    <div class="dash-controls">
+        {% if may_edit %}
+        <div class="btn-row">
+            <button class="btn" type="button" data-modal="modal-layout">
+                {{ _("Edit the overview") }}
+            </button>
+        </div>
+        {% endif %}
+        {% if needs_period %}
+            {{ period_filter(period, page_url) }}
+        {% endif %}
+    </div>
 </div>
 
-{# Číslo vlevo, křivka vpravo. Dřív bylo obojí pod sebou a karta pak
-   zabírala třetinu obrazovky, přestože nese jediný údaj a jeho vývoj.
-   Vedle sebe se to čte jedním pohledem: kolik a jak to šlo. Na úzkém
-   okně se to vrátí pod sebe - viz .hero-card ve style.css. #}
-{{ karta("souhrn") }}
+<div class="dash-board">
+    {% for card in layout %}
+    {% include "_dashboard_card.html" %}
+    {% endfor %}
 
-{{ karta("dlazdice") }}
-
-{# Karta se vykresluje ze samostatné šablony - stejný kus vrací
-   i /partials/daily při přepnutí filtru bez načtení stránky. #}
-{{ karta("sledovanost_po_dnech") }}
-
-<div class="grid-2">
-    {{ karta("nejaktivnejsi_uzivatele") }}
-
-    {{ karta("nejsledovanejsi") }}
+    {# A dashboard where only the cards of a disconnected app are left is empty now too. #}
+    {% if not drawn %}
+    <div class="card dash-prompt">
+        {% if personal %}
+        <p>{{ _("My overview is empty so far.") }}</p>
+        {% else %}
+        <p>{{ _("The custom overview is on, but there is nothing in it yet.") }}</p>
+        {% endif %}
+        {# Only whoever builds it sees it empty: My dashboard its owner, the
+           dashboard for everyone the admin (the route sends others back to the Overview). #}
+        <p class="card-note">{{ _('Click "Edit the overview" and pick your sections.') }}</p>
+    </div>
+    {% endif %}
 </div>
 
-<div class="grid-2">
-    {{ karta("doruceni") }}
+{% if may_edit %}
+{# ====================================================================== #}
+{# The layout window                                                      #}
+{#                                                                        #}
+{# It is arranged in a grid of tiles, not by dragging the real panels.    #}
+{# A panel with a chart is taller than half the screen, so one could      #}
+{# not see where it was going while dragging it - and the whole layout    #}
+{# did not fit on one screen. Here it is visible at once.                 #}
+{# ====================================================================== #}
+<dialog class="modal modal-layout" id="modal-layout">
+    {# The cross does the same as Cancel: it closes the window and drops the changes
+       in progress. Two different ways of closing one window would be a trap - a person
+       would expect something to be saved, and it would not be (or the other way round). #}
+    <div class="modal-head">
+        <h2>{{ _("Overview layout") }}</h2>
+        <button class="btn modal-close dash-close" type="button"
+                aria-label="{{ _("Close") }}">&times;</button>
+    </div>
 
-    {{ karta("prehravace") }}
-</div>
+    {# Two columns: the layout on the left, what can be added on the right. The menu
+       used to be under the grid - but with ten cards the grid stretched
+       across the whole screen and the menu and the buttons ended below its
+       bottom edge, out of reach. Each column now
+       scrolls apart and the buttons are in a footer that stays in place. #}
+    <div class="modal-columns">
+        <div class="dash-column">
+            <p class="card-note">
+                {{ _("The tiles match the panels on the page. Drag to reorder, use the button to change the width.") }}
+            </p>
+            {# The width marks go from the registry into JavaScript too - so that
+               they are not there twice and one of them does not drift away in time. #}
+            <div class="dash-grid" id="dash-grid"
+                 {# Apostrophes on purpose: `tojson` escapes `'`, but not `"`,
+                    so in an attribute with double quotes the JSON would end the tag
+                    in the middle. #}
+                 data-widths='{{ widths | tojson }}'
+                 data-empty="{{ _('Nothing yet. Pick from the list on the right.') }}">
+                {# The tile of a disconnected app's card stays (greyed out):
+                   saving takes the order from the tiles, and without it the first
+                   other change would throw the card out of the layout. #}
+                {% for card in layout %}
+                <div class="dash-tile dash-{{ card.width }}{{ ' dash-unavailable' if card.key in unavailable }}"
+                     data-card="{{ card.key }}" data-width="{{ card.width }}"
+                     {%- if card.key in unavailable %} title="{{ _('{app} is not connected. The card will show up once an administrator connects it.').format(app=_(card.group)) }}"{% endif %}>
+                    <span class="dash-tile-name">{{ card_title(card) }}</span>
+                    <span class="dash-tile-tools">
+                        {# The width switches round: a third -> a half -> the whole. #}
+                        <button class="btn dash-width" type="button"
+                                title="{{ _('Change the panel width') }}">
+                            {{ widths[card.width] }}
+                        </button>
+                        <button class="btn dash-removed" type="button"
+                                title="{{ _('Remove from the overview') }}">&times;</button>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
 
-{{ karta("kdy_se_sleduje") }}
+        <div class="dash-column dash-column-menu">
+            <p class="card-note">{{ _("Sections to add") }}</p>
+            <div class="dash-menu-list" id="dash-menu">
+                {# By groups with a heading: the page area the cards come
+                   from, or the app (Sonarr, Radarr, Seerr). There are almost a hundred
+                   cards and in one list one could not find one's way. The item's
+                   name carries the group itself - JavaScript copies it onto
+                   the tile (static/js/app.js). #}
+                {% for heading, group_cards in choices %}
+                <p class="dash-menu-heading">{{ heading_text(heading) }}</p>
+                {% for card in group_cards %}
+                <button class="dash-item" type="button" data-add="{{ card.key }}"
+                        data-width="{{ card.width }}"
+                        {{ 'disabled' if card.key in used }}>
+                    <span class="dash-item-name">{{ card_title(card) }}</span>
+                    <span class="dash-item-description">{{ _(card.description) }}</span>
+                </button>
+                {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="{{ save_action }}" id="dash-form" class="modal-foot">
+        <input type="hidden" name="order" id="dash-order" value="">
+        <button class="btn dash-close" type="button" id="dash-cancel">{{ _("Cancel") }}</button>
+        <button class="btn primary" type="submit" id="dash-save">{{ _("Save") }}</button>
+    </form>
+</dialog>
+{% endif %}
+
+{# One window for the whole table of any Insights card - the same as on
+   the Insights page (see whole_table_button in _macros.html). #}
+{% if needs_table_window %}{{ table_window() }}{% endif %}
 {% endblock %}

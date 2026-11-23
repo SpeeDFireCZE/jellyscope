@@ -1,0 +1,44 @@
+{# The Bazarr card "Subtitle languages": the languages subtitles were acquired in.
+
+   From the database (cards_bazarr.py, `d.radky`: the language's name, count, share,
+   how many for the hearing impaired and forced, the average match as ready text).
+   A long table as on Insights: the first rows in the card, the whole one in the window.
+
+   Six columns do not fit in a card at half width even on a common monitor
+   (a 1280 px window = a 450 px card). So the table follows the card's width, not the
+   window's (wrapper-by-width, see style.css): on a narrow card "Share",
+   "Hearing impaired" and "Forced" hide and the same numbers are under the language's
+   name. The window with the whole table copies only the table without the wrapper, so
+   it has all the columns. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Language") }}</th>
+            <th class="num">{{ _("Subtitles#count") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Share") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Hearing impaired") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Forced") }}</th>
+            <th class="num">{{ _("Average match") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong">{{ r.name }}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Share") }} {{ r.share | percent }} &middot; {{ _("Hearing impaired") }} {{ r.hi | number }} &middot; {{ _("Forced") }} {{ r.forced | number }}</div></td>
+                <td class="num">{{ r.count | number }}</td>
+                <td class="num wide-wrapper-only">{{ r.share | percent }}</td>
+                <td class="num muted wide-wrapper-only">{{ r.hi | number }}</td>
+                <td class="num muted wide-wrapper-only">{{ r.forced | number }}</td>
+                <td class="num">{{ r.score }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

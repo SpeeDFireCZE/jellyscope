@@ -1,0 +1,106 @@
+/* ---------------------------------------------------------------------------
+   Seasonal decoration: Easter (the Sunday before it until Easter Monday)
+
+   Loaded only during the holiday (see seasonal.py and _event_head.html), after
+   style.css. Only the app's colour changes (--accent, --accent-2 and the text on
+   it); chart colours stay. Contrast is guarded by tests/test_contrast.py.
+   The dark values are there twice, as in style.css: by the system and after a
+   manual switch.
+   --------------------------------------------------------------------------- */
+:root[data-event="easter"] {
+    --accent:     #2f7d22;
+    --accent-2:   #8c6b00;
+    --accent-ink: #ffffff;
+    --event-bunny: #efe7dc;
+    --event-bunny-outline: #b9ab98;
+}
+@media (prefers-color-scheme: dark) {
+    :root[data-event="easter"]:not([data-theme="light"]) {
+        --accent:     #7fd16a;
+        --accent-2:   #f2d04b;
+        --accent-ink: #0b0b0b;
+        --event-bunny: #efe7dc;
+        --event-bunny-outline: #efe7dc;
+    }
+}
+:root[data-event="easter"][data-theme="dark"] {
+    --accent:     #7fd16a;
+    --accent-2:   #f2d04b;
+    --accent-ink: #0b0b0b;
+    --event-bunny: #efe7dc;
+    --event-bunny-outline: #efe7dc;
+}
+
+/* Bunny ears behind the logo (the right one twitches now and then) and a painted egg. */
+.orn-ears { width: 24px; top: -15px; left: 2px; z-index: 0; }
+.orn-ears .ear { transform-box: fill-box; transform-origin: 50% 100%; }
+.orn-ears .ear.l { transform: rotate(-14deg); }
+.orn-ears .ear.p { transform: rotate(12deg); animation: event-twitch 4s ease-in-out infinite; }
+/* The egg behind the name is the game's button (crack it). */
+.side-egg { width: 15px; transform: rotate(14deg); }
+@keyframes event-twitch {
+    0%, 78%, 100% { transform: rotate(12deg); }
+    82% { transform: rotate(32deg); } 86% { transform: rotate(6deg); }
+    90% { transform: rotate(24deg); } 94% { transform: rotate(12deg); }
+}
+
+/* The bunny hops along the bottom edge and leaves eggs behind (events.js). */
+.event-effect .bunny {
+    bottom: 4px;
+    left: 0;
+    width: var(--s);
+    animation: event-run 10s linear both;
+}
+.event-effect .bunny > i {
+    display: block;
+    transform-origin: 50% 100%;
+    animation: event-hop .62s ease-in-out infinite;
+}
+.event-effect .bunny svg,
+.event-effect .bunny-static svg,
+.event-effect .egg svg,
+.event-effect .egg-static svg { display: block; width: 100%; }
+.event-effect .bunny-static,
+.event-effect .egg,
+.event-effect .egg-static { bottom: 4px; }
+.event-effect .egg,
+.event-effect .egg-static { width: 13px; }
+@keyframes event-run { from { transform: translateX(-90px); } to { transform: translateX(var(--w)); } }
+@keyframes event-hop {
+    0%, 100% { transform: translateY(0) scaleY(.9); }
+    35% { transform: translateY(-24px) scaleY(1.05); }
+    60% { transform: translateY(-24px) scaleY(1); }
+    85% { transform: translateY(0) scaleY(1); }
+}
+
+/* Without motion: the system says "reduce motion", or the account switched it off. */
+@media (prefers-reduced-motion: reduce) {
+    :root[data-event="easter"] .brand-logo *,
+    :root[data-event="easter"] .brand-ornaments * { animation: none !important; }
+}
+:root[data-event="easter"][data-event-motion="0"] .brand-logo *,
+:root[data-event="easter"][data-event-motion="0"] .brand-ornaments * { animation: none !important; }
+
+/* The game: an egg (games/easter.js). Cracks grow with each click. */
+.event-scene .eggs { cursor: pointer; }
+.event-scene .eggs:focus { outline: none; }
+.event-scene .eggs:focus-visible { outline: 2px dashed #fff; outline-offset: 6px; }
+.event-scene .cracks path {
+    fill: none;
+    stroke: #5a3d1a;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+}
+.event-scene .cracks path.shown { opacity: 1; }
+.event-scene .pip {
+    position: absolute;
+    padding: 4px 10px;
+    border-radius: 14px;
+    background: #fff;
+    color: #222;
+    font-size: 18px;
+    font-weight: 800;
+    opacity: 0;
+}

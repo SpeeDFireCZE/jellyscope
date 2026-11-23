@@ -1,0 +1,15 @@
+{# A card of the Users page (users.html).
+
+   Included by that page and by dashboards (cards.py, key `users_chart`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `rows (stats.user_table)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Watch time by user") }}</h2>
+        <p class="card-note">{{ _("in hours") }}</p>
+    </div>
+    {# The label is a link to the viewer's detail - only for whoever may open it (may_open). #}
+    {{ charts.hbar_chart(rows | selectattr('hours') | list, 'name', 'hours',
+                 link_prefix='/users/', link_key='id', may_open=may_open) | safe }}
+</div>

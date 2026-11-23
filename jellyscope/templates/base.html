@@ -1,212 +1,172 @@
 {#
-  Základní kostra každé stránky.
+  The skeleton of every page.
 
-  Jinja2 funguje takhle: tenhle soubor definuje "díry" pomocí {% block %},
-  a jednotlivé stránky (dashboard.html, library_index.html, ...) pak řeknou
-  {% extends "base.html" %} a ty díry vyplní. Díky tomu se navigace,
-  hlavička a patička píšou jednou, ne desetkrát.
+  Jinja2 works like this: this file defines "holes" with {% block %},
+  and the pages (video/overview.html, library_index.html, ...) say
+  {% extends "base.html" %} and fill the holes. Thanks to that the navigation,
+  the header and the footer are written once, not ten times.
 
-  Texty procházejí funkcí `_()`. Když je nastavená angličtina, najde se
-  anglické znění; jinak se vrátí česká věta beze změny. Viz i18n.py.
+  Texts go through the function `_()` (a count through `_n()`). The keys are
+  English sentences; another language finds its wording in its file. See i18n.py.
 #}
-{# Sezónní výzdoba: klíč svátku, nebo "" (viz udalosti.py). #}
-{%- set svatek = udalost() %}
+{# Seasonal decoration: the holiday's key, or "" (see seasonal.py). #}
+{%- set holiday = seasonal_event() %}
 <!doctype html>
 <html lang="{{ ui_language }}" data-skin="{{ ui_skin }}"
-      {%- if svatek %} data-udalost="{{ svatek }}" data-udalost-pohyb="{{ '1' if udalost_pohyb(account) else '0' }}"{% endif %}>
+      {%- if holiday %} data-event="{{ holiday }}" data-event-motion="{{ '1' if seasonal_motion(account) else '0' }}"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Jellyscope{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
-    {# SVG ikona zůstane ostrá v každé velikosti - od 16px v panelu
-       prohlížeče po velké dlaždice na mobilu. #}
+    {# An SVG icon stays sharp at every size - from 16px in the browser's
+       panel to big tiles on a phone. #}
     <link rel="icon" href="/static/logo.svg?v={{ asset_version }}" type="image/svg+xml">
-    {# Bez defer: motiv se nastaví před vykreslením (jinak problikne). #}
-    <script src="/static/js/zaklad.js?v={{ asset_version }}"></script>
-    {% include "_udalost_hlava.html" %}
+    {# Without defer: the theme is set before rendering (otherwise it flickers). #}
+    <script src="/static/js/base.js?v={{ asset_version }}"></script>
+    {% include "_event_head.html" %}
 </head>
-{# `wait_for` nastaví routa, po které se má počkat a stránku obnovit samo:
-   "restart" = čeká na nový proces, "task" = čeká, až doběhne zastavovaná
-   úloha. Obsluha je ve static/js/app.js. #}
-<body{% if wait_for %} data-wait-for="{{ wait_for }}" data-beh-od="{{ beh_od }}"{% endif %}{% if reload_on_task %} data-reload-on-task="1"{% endif %} data-tasks-version="{{ tasks_version }}"{% if demo_mode %} data-demo="1"{% endif %}>
+{# `wait_for` is set by a route after which the page is to wait and refresh by itself:
+   "restart" = waits for the new process, "task" = waits until the task being stopped
+   finishes. Handled in static/js/app.js. #}
+<body{% if wait_for %} data-wait-for="{{ wait_for }}" data-run-since="{{ running_since }}"{% endif %}{% if reload_on_task %} data-reload-on-task="1"{% endif %} data-tasks-version="{{ tasks_version }}"{% if demo_mode %} data-demo="1"{% endif %}>
 <div class="layout">
 
     <aside class="sidebar">
-        {#- V dobe svatku je za odkazem tlacitko hry - v radku s nim, ne v nem. #}
-        {%- if svatek %}<div class="brand-radek">{% endif %}
+        {#- During a holiday a game button follows the link - in a row with it, not inside it. #}
+        {%- if holiday %}<div class="brand-row">{% endif %}
         <a class="brand" href="/">
-            {% include "_znacka.html" %}
+            {% include "_brand.html" %}
         </a>
-        {%- if svatek %}{% include "_udalost_hra.html" %}</div>{% endif %}
+        {%- if holiday %}{% include "_event_game.html" %}</div>{% endif %}
 
-        {# Položky menu na jednom místě: kreslí se z nich jak seznam, tak
-           název aktuální stránky na tlačítku burgeru. Dvě kopie by se
-           rozešly a tlačítko by hlásilo jinou stránku, než která je
-           otevřená.
+        {# The menu is data (jellyscope/navigation.py): the personal entries, then the
+           sections in their order, each with its pages - only what this account may
+           open (the same rule the permission guard uses) and only sections Jellyfin
+           has content for. The list and the title on the burger button come from the
+           same entries, so they cannot disagree about the open page. Only the section
+           of the open page is expanded; the others are one row with an arrow. #}
+        {% set menu_entries = menu() if menu is defined else [] %}
 
-           Třetí hodnota je n-tice předpon, které se počítají za tutéž
-           sekci - detail položky patří ke Knihovně, i když je na /item.
-           Prázdná n-tice znamená „jen přesná shoda" (Přehled na „/",
-           jinak by svítil pořád). #}
-        {% set path = request.url.path %}
-        {% set polozky = [] %}
-        {# V menu je jen to, co člověk smí otevřít - `smi()` klade tutéž
-           otázku jako `rozsah_divaka` ve web/__init__.py, i s vlastními právy
-           účtu. Správci odpoví ano na všechno. Nabízet odkaz, za kterým
-           čeká „sem nemáš přístup", by bylo laciné.
+        {# Burger. A checkbox with a label, not a button with JavaScript:
+           the menu has to open even when the script does not run. On
+           the desktop the label hides and the list is always visible, so
+           nothing changes there.
 
-           Divák přihlášený svým jellyfinovým účtem má navíc vlastní
-           stránku jako první - je to jeho přehled - a Přehled serveru
-           až za ní. #}
-        {% if muj_divak %}
-            {% set zahod = polozky.append(("/users/" ~ muj_divak, _("Moje statistiky"), ("/users",))) %}
-            {% set zahod = polozky.append(("/history", _("Moje historie"), ("/history",))) %}
-        {% endif %}
-        {# Vlastní přehled stojí nad Přehledem - je to první, co člověk
-           po přihlášení uvidí. V menu je jen tehdy, když je zapnutý
-           A něco v něm je: zapnutá prázdná záložka by byla horší než
-           žádná. #}
-        {% if vlastni_prehled is defined and vlastni_prehled() %}
-            {# Pod názvem, který mu dal správce; prázdný jen do restartu
-               po aktualizaci (pak ho doplní sekce.doplnit_nazev). #}
-            {% set zahod = polozky.append(("/dashboard", nazev_prehledu or _("Vlastní přehled"), ("/dashboard",))) %}
-        {% endif %}
-        {# Můj přehled - až v něm je aspoň jedna karta. Prázdný se skládá
-           z karty na stránce Můj účet. #}
-        {% if account and ma_muj_prehled is defined and ma_muj_prehled() %}
-            {% set zahod = polozky.append(("/account/prehled", _("Můj přehled"), ("/account/prehled",))) %}
-        {% endif %}
-        {% if smi("/") %}{% set zahod = polozky.append(("/", _("Přehled"), ())) %}{% endif %}
-        {# Hned za Přehledem: je to tentýž pohled, jen za dvě období. #}
-        {% if smi("/srovnani") %}{% set zahod = polozky.append(("/srovnani", _("Srovnání"), ("/srovnani",))) %}{% endif %}
-        {% if smi("/insights") %}{% set zahod = polozky.append(("/insights", _("Zjištění"), ("/insights",))) %}{% endif %}
-        {% if smi("/languages") %}{% set zahod = polozky.append(("/languages", _("Jazyky"), ("/languages",))) %}{% endif %}
-        {% if smi("/network") %}{% set zahod = polozky.append(("/network", _("Síť"), ("/network",))) %}{% endif %}
-        {% if smi("/library") %}{% set zahod = polozky.append(("/library", _("Knihovna"), ("/library", "/item", "/series"))) %}{% endif %}
-        {% if smi("/users") %}{% set zahod = polozky.append(("/users", _("Uživatelé"), ("/users",))) %}{% endif %}
-        {# Divák má svou historii v Mých statistikách; čtenář jen s právem (vidi_historii). #}
-        {% if not muj_divak and smi("/history") %}
-            {% set zahod = polozky.append(("/history", _("Historie"), ("/history",))) %}
-        {% endif %}
-        {% if smi("/settings") %}{% set zahod = polozky.append(("/settings", _("Nastavení"), ("/settings",))) %}{% endif %}
-
-        {% set otevrena = namespace(nazev=_("Menu")) %}
-        {% for adresa, nazev, predpony in polozky %}
-            {% if (path.startswith(predpony) if predpony else path == adresa) %}
-                {% set otevrena.nazev = nazev %}
-            {% endif %}
-        {% endfor %}
-
-        {# Burger. Zaškrtávátko se štítkem, ne tlačítko s JavaScriptem:
-           menu musí jít otevřít i tehdy, když skript neproběhne. Na
-           desktopu se štítek schová a seznam je vidět pořád, takže se
-           tam nic nemění.
-
-           Na tlačítku stojí jméno otevřené stránky - jinak by z menu
-           schovaného pod ikonou nešlo poznat, kde člověk je. #}
-        <input type="checkbox" id="menu-prepinac" class="menu-prepinac" hidden>
-        <label class="menu-tlacitko" for="menu-prepinac">
-            <span class="menu-carky" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span>{{ otevrena.nazev }}</span>
+           The button shows "Section · Page" of the open page - otherwise
+           the menu hidden under an icon would not tell where a person is. #}
+        <input type="checkbox" id="menu-toggle" class="menu-toggle" hidden>
+        <label class="menu-button" for="menu-toggle">
+            <span class="menu-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>{{ menu_title(menu_entries) if menu_title is defined else _("Menu") }}</span>
         </label>
 
         <nav class="nav">
-            {% for adresa, nazev, predpony in polozky %}
-                <a href="{{ adresa }}"
-                   class="{{ 'active' if (path.startswith(predpony) if predpony else path == adresa) }}">{{ nazev }}</a>
+            {% for entry in menu_entries %}
+                {% if entry.submenu %}
+                    <a href="{{ entry.url }}" class="nav-section{{ ' expanded' if entry.expanded }}">{{ entry.label }}<span class="nav-arrow" aria-hidden="true"></span></a>
+                    {% if entry.expanded %}
+                        <div class="nav-sub">
+                            {% for menu_page in entry.pages %}
+                                <a href="{{ menu_page.url }}" class="{{ 'active' if menu_page.active }}"{% if menu_page.active %} aria-current="page"{% endif %}>{{ menu_page.label }}</a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <a href="{{ entry.url }}" class="{{ 'active' if entry.active }}"{% if entry.active %} aria-current="page"{% endif %}>{{ entry.label }}</a>
+                {% endif %}
             {% endfor %}
         </nav>
 
         <div class="sidebar-foot">
-            {# Stav sběrače. Barva sama o sobě nic neznamená - vedle ní je vždy text. #}
+            {# The collector's state. The colour alone means nothing - there is always text beside it. #}
             {% if collector_status == 'demo' %}
-                <span class="badge neutral"><span class="dot"></span>{{ _("Ukázkový režim") }}</span>
-                <div style="margin-top:8px">{{ _("Data jsou vymyšlená.") }}</div>
+                <span class="badge neutral"><span class="dot"></span>{{ _("Demo mode") }}</span>
+                <div style="margin-top:8px">{{ _("The data is made up.") }}</div>
             {% elif collector_status == 'ok' %}
-                <span class="badge good"><span class="dot"></span>{{ _("Collector běží") }}</span>
+                <span class="badge good"><span class="dot"></span>{{ _("Collector running") }}</span>
                 {% if active_count %}
-                    <div style="margin-top:8px">{{ active_count }} {{ _("aktivních přehrávání") }}</div>
+                    <div style="margin-top:8px">{{ active_count }} {{ _("active playbacks") }}</div>
                 {% endif %}
                 {% if last_poll %}
-                    <div style="margin-top:6px">{{ _("Naposledy běželo") }} {{ last_poll | relative }}</div>
+                    <div style="margin-top:6px">{{ _("Last run") }} {{ last_poll | relative }}</div>
                 {% endif %}
             {% elif collector_status == 'error' %}
-                <span class="badge critical"><span class="dot"></span>{{ _("Collector hlásí chybu") }}</span>
+                <span class="badge critical"><span class="dot"></span>{{ _("Collector error") }}</span>
                 <div style="margin-top:8px">{{ collector_error | truncate(90) }}</div>
             {% else %}
-                <span class="badge neutral"><span class="dot"></span>{{ _("Collector startuje") }}</span>
+                <span class="badge neutral"><span class="dot"></span>{{ _("Collector starting") }}</span>
             {% endif %}
 
             <div class="btn-row" style="margin-top:14px">
-                <button class="btn" type="button" data-prepnout-motiv>{{ _("Světlý / tmavý") }}</button>
+                <button class="btn" type="button" data-toggle-theme>{{ _("Light / dark") }}</button>
             </div>
 
             {% if account %}
-                {# Můj účet (jazyk, heslo, API klíče) - stránku otevře každý
-                   přihlášený, i čtenář a divák z Jellyfinu. Je to tlačítko
-                   přes celou šířku: jméno a pod ním role. Dřív tu byl malý
-                   odkaz „Přihlášen: jméno" a odznak role byl větší než
-                   samo jméno, takže že jde kliknout, skoro nešlo poznat. #}
-                <a class="ucet-odkaz" href="/account" title="{{ _("Můj účet") }}: {{ account.username }}"{% if path == "/account" %} aria-current="page"{% endif %}>
-                    {# Profilový obrázek z Jellyfinu leží přes písmeno: když
-                       se nenačte (Jellyfin neběží), sám se odstraní a
-                       písmeno zůstane. Místní účet obrázek nemá. #}
-                    {% set obrazek = obrazek_uctu() if obrazek_uctu is defined else "" %}
-                    <span class="ucet-avatar" aria-hidden="true">{{ account.username[:1] | upper }}
-                        {%- if obrazek %}<img src="{{ obrazek }}" alt="" data-pri-chybe="odebrat">{% endif -%}
+                {# My account (language, password, API keys) - every signed-in person
+                   opens the page, a reader and a Jellyfin viewer too. It is a button
+                   across the whole width: the name and the role under it. There used to be a small
+                   link "Přihlášen: jméno" and the role badge was bigger than
+                   the name itself, so it was hard to tell it could be clicked. #}
+                <a class="account-link" href="/account" title="{{ _("My account") }}: {{ account.username }}"{% if request.url.path == "/account" %} aria-current="page"{% endif %}>
+                    {# The profile image from Jellyfin lies over the letter: when
+                       it does not load (Jellyfin is down), it removes itself and
+                       the letter stays. A local account has no image. #}
+                    {% set image = account_image() if account_image is defined else "" %}
+                    <span class="account-avatar" aria-hidden="true">{{ account.username[:1] | upper }}
+                        {%- if image %}<img src="{{ image }}" alt="" data-on-error="remove">{% endif -%}
                     </span>
-                    <span class="ucet-text">
+                    <span class="account-text">
                         <strong>{{ account.username }}</strong>
-                        {# Role a „Můj účet" jsou každé v celku: když se
-                           nevejdou na řádek, zalomí se u tečky, ne v půlce. #}
-                        <span class="ucet-role">
+                        {# The role and "My account" are each one piece: when they
+                           do not fit on a line, they wrap at the dot, not in the middle. #}
+                        <span class="account-role">
                             <span>
-                            {%- if account.is_admin %}{{ _("správce") }}
-                            {%- elif account.jellyfin_user_id %}{{ _("divák z Jellyfinu") }}
-                            {%- else %}{{ _("čtenář") }}{% endif %} &middot;</span>
-                            <span>{{ _("Můj účet") }}</span>
+                            {%- if account.is_admin %}{{ _("administrator") }}
+                            {%- elif account.jellyfin_user_id %}{{ _("Jellyfin viewer") }}
+                            {%- else %}{{ _("reader") }}{% endif %} &middot;</span>
+                            <span>{{ _("My account") }}</span>
                         </span>
                     </span>
-                    <span class="ucet-sipka" aria-hidden="true">&rsaquo;</span>
+                    <span class="account-arrow" aria-hidden="true">&rsaquo;</span>
                 </a>
                 <form method="post" action="/logout" style="margin-top:8px">
-                    <button class="btn" type="submit">{{ _("Odhlásit") }}</button>
+                    <button class="btn" type="submit">{{ _("Sign out") }}</button>
                 </form>
 
-                {# Verze patří na obrazovku, ne jen do commitu: při hlášení
-                   chyby je první otázka vždycky „a jakou máš verzi". #}
-                <div class="verze">
-                    {% if verze.je_novejsi %}
-                        {# Nová verze není poznámka pod čarou - je to jediná
-                           věc v patičce, kvůli které tam má člověk kouknout.
-                           Proto tlačítko přes celou šířku, ne odznáček. #}
-                        <button class="verze-nova" type="button" data-okno="okno-aktualizace">
+                {# The version belongs on the screen, not only in a commit: when a bug
+                   is reported, the first question is always "and which version do you have". #}
+                <div class="version">
+                    {% if version_info.is_newer %}
+                        {# A new version is not a footnote - it is the only
+                           thing in the footer a person should look there for.
+                           Hence a button across the whole width, not a small badge. #}
+                        <button class="version-new" type="button" data-modal="modal-update">
                             <span class="dot"></span>
                             <span>
-                                <strong>{{ _("Nová verze") }} {{ verze.nalezena }}{% if verze.nove_preklady %} {{ _("a nové překlady") }}{% endif %}</strong><br>
-                                <span class="verze-nova-note">{{ _("máš") }} v{{ verze.verze }} &middot; {{ _("co je nového") }}</span>
+                                <strong>{{ _("New version") }} {{ version_info.found_one }}{% if version_info.new_translations %} {{ _("and new translations") }}{% endif %}</strong><br>
+                                <span class="version-new-note">{{ _("you have") }} v{{ version_info.version }} &middot; {{ _("what is new") }}</span>
                             </span>
                         </button>
-                    {% elif verze.nove_preklady %}
-                        {# Překlady přicházejí slučováním, ne vydáním, takže
-                           je kontrola verze sama nezachytí - hlídají se
-                           zvlášť. Tišší než nová verze: nic se nerozbilo,
-                           jen se dá mít víc jazyků. #}
-                        <button class="verze-nova verze-preklady" type="button" data-okno="okno-aktualizace">
+                    {% elif version_info.new_translations %}
+                        {# Translations come by merging, not by a release, so
+                           the version check alone does not catch them - they are watched
+                           apart. Quieter than a new version: nothing broke,
+                           more languages are just available. #}
+                        <button class="version-new version-translations" type="button" data-modal="modal-update">
                             <span class="dot"></span>
                             <span>
-                                <strong>{{ _("Nové překlady") }}</strong><br>
-                                <span class="verze-nova-note">{{ verze.nove_preklady }} {{ _("souborů na GitHubu") }} &middot; {{ _("stáhnout") }}</span>
+                                <strong>{{ _("New translations") }}</strong><br>
+                                <span class="version-new-note">{{ version_info.new_translations }} {{ _("files on GitHub") }} &middot; {{ _("download") }}</span>
                             </span>
                         </button>
                     {% else %}
-                        v{{ verze.verze }}
+                        v{{ version_info.version }}
                     {% endif %}
-                    {# Licence patří k verzi: u svobodného programu má být
-                       vidět, pod čím běží, aniž by se člověk musel prokousat
-                       na GitHub. AGPL to u interaktivního programu i čeká. #}
-                    <div class="verze-licence">
+                    {# The licence goes with the version: a free program should show
+                       what it runs under without a person having to dig through
+                       to GitHub. The AGPL expects it of an interactive program, too. #}
+                    <div class="version-license">
                         <a href="https://github.com/SpeeDFireCZE/jellyscope/blob/main/LICENSE"
                            target="_blank" rel="noopener">AGPL-3.0</a>
                     </div>
@@ -216,36 +176,48 @@
     </aside>
 
     <main class="main">
-        {# Čekání na restart nebo na dokončení zastavované úlohy. Stránka
-           se obnoví sama; tenhle proužek říká, na co se čeká, ať člověk
-           nekouká na zdánlivě zamrzlou stránku. #}
+        {# Waiting for a restart or for a stopped task to finish. The page
+           refreshes by itself; this strip says what is being waited for, so a person
+           does not stare at a seemingly frozen page. #}
         {% if wait_for %}
             <div class="flash info">
                 <span class="dot"></span>
                 <span id="wait-note">
                     {% if wait_for == 'restart' %}
-                        {{ _("Čekám, až se aplikace zvedne. Stránka se pak obnoví sama.") }}
+                        {{ _("Waiting for the app to come back up. The page will reload itself.") }}
                     {% else %}
-                        {{ _("Čekám, až úloha doběhne. Stránka se pak obnoví sama.") }}
+                        {{ _("Waiting for the task to finish. The page will reload itself.") }}
                     {% endif %}
                 </span>
             </div>
         {% endif %}
 
-        {# Hláška o výsledku se drží u horní hrany okna, ne v toku stránky.
-           Důvod: většina akcí se spouští tlačítkem dole (úklid historie,
-           import, zálohy) a po přesměrování se stránka vrací tam, kde
-           člověk byl - hláška nahoře by mu tím pádem utekla. Takhle ji
-           vidí, ať je kdekoliv, a po chvíli sama zmizí. #}
+        {# The result message sticks to the top edge of the window, not in the flow of the page.
+           Why: most actions start with a button at the bottom (history cleanup,
+           import, backups) and after the redirect the page returns where
+           the person was - a message at the top would escape them. This way they
+           see it wherever they are, and it disappears by itself after a while. #}
         {% if flash %}
             <div class="flash-toast" id="flash-toast">
                 <div class="flash {{ flash.level }}">
                     <span class="dot"></span>
                     <span>{{ flash.message }}</span>
                     <button type="button" class="flash-close"
-                            aria-label="{{ _("Zavřít") }}"
-                            data-zavrit-hlasku>&times;</button>
+                            aria-label="{{ _("Close") }}"
+                            data-close-flash>&times;</button>
                 </div>
+            </div>
+        {% endif %}
+
+        {# The backup before the conversion to English names (jellyscope.conversion): which file it is and
+           until when it is kept - the way back to 1.8.x. For the administrator, until closed or the file is gone. #}
+        {% if conversion_notice %}
+            <div class="flash info" data-conversion-notice>
+                <span class="dot"></span>
+                <span>{{ _("The database was converted to English names. The backup of the previous state is {file} and is kept until {date}. To go back to 1.8.x, restore it.").format(file=conversion_notice.file, date=conversion_notice.until | czech_date) }}</span>
+                <form method="post" action="/settings/conversion-notice/close">
+                    <button type="submit" class="flash-close" aria-label="{{ _("Close") }}">&times;</button>
+                </form>
             </div>
         {% endif %}
 
@@ -254,58 +226,67 @@
 
 </div>
 
-{# Jediná bublina pro celou stránku - vytváří se jednou, ne u každého prvku. #}
-{% if verze.je_novejsi or verze.nove_preklady %}
-{# Okno s popisem změn. Otevírá ho ukazatel verze v patičce panelu.
-   Poznámky přišly z GitHubu a prošly escapováním v updates.py, takže se
-   do stránky nemůže dostat cizí značka. #}
-<dialog class="okno" id="okno-aktualizace">
-    <form method="dialog" class="okno-hlava">
-        {% if verze.je_novejsi %}
-            <h2>{{ _("Nová verze") }} {{ verze.nalezena }}{% if verze.nove_preklady %} {{ _("a nové překlady") }}{% endif %}</h2>
+{# One tooltip for the whole page - created once, not for every element. #}
+{% if version_info.is_newer or version_info.new_translations %}
+{# The window with the release notes. The version indicator in the panel's footer opens it.
+   The notes came from GitHub and were escaped in release_notes.py, so
+   no foreign tag can get into the page. #}
+<dialog class="modal" id="modal-update">
+    <form method="dialog" class="modal-head">
+        {% if version_info.is_newer %}
+            <h2>{{ _("New version") }} {{ version_info.found_one }}{% if version_info.new_translations %} {{ _("and new translations") }}{% endif %}</h2>
         {% else %}
-            <h2>{{ _("Nové překlady") }}</h2>
+            <h2>{{ _("New translations") }}</h2>
         {% endif %}
-        <button class="btn okno-zavrit" type="submit"
-                aria-label="{{ _("Zavřít") }}">&times;</button>
+        <button class="btn modal-close" type="submit"
+                aria-label="{{ _("Close") }}">&times;</button>
     </form>
 
     <p class="card-note">
-        {{ _("Běží") }} v{{ verze.verze }} &middot;
-        <a href="{{ verze.adresa }}" target="_blank" rel="noopener">{{ _("stránka vydání") }}</a>
+        {{ _("Running#version") }} v{{ version_info.version }} &middot;
+        <a href="{{ version_info.url }}" target="_blank" rel="noopener">{{ _("release page") }}</a>
     </p>
 
-    <div class="okno-obsah poznamky">
-        {% if not verze.je_novejsi %}
-            {# Jen překlady: nic se nerozbilo a nic nového neumí, jen se
-               na GitHubu sloučila práce překladatelů. Číslo verze zůstane. #}
-            <p>{{ _("Od verze, která běží, se na GitHubu změnilo") }}
-               <strong>{{ verze.nove_preklady }}</strong>
-               {{ _("souborů s překlady, překladatelé sloučili svou práci.") }}
-               {{ _("Číslo verze se tím nemění; stáhne se jen to, co přibylo.") }}</p>
-        {% elif verze.poznamky %}
-            {{ verze.poznamky | safe }}
+    <div class="modal-body notes">
+        {% if not version_info.is_newer %}
+            {# Translations only: nothing broke and nothing new can be done, only
+               the translators' work was merged on GitHub. The version number stays. #}
+            <p>{{ _("Since the version that is running, GitHub has changed") }}
+               <strong>{{ version_info.new_translations }}</strong>
+               {{ _("translation files: translators have merged their work.") }}
+               {{ _("The version number does not change; only what was added is fetched.") }}</p>
+        {% elif version_info.releases %}
+            {# Every release since the running one, newest first, each with its page and notes. #}
+            {% for release in version_info.releases %}
+                {% if not loop.first %}<hr>{% endif %}
+                <h4 class="notes-release">v{{ release.version }}{% if release.date %} &middot; {{ release.date | czech_date }}{% endif %}</h4>
+                <p class="card-note"><a href="{{ release.url }}" target="_blank" rel="noopener">{{ _("release page") }}</a></p>
+                {{ release.html | safe }}
+            {% endfor %}
+            {% if version_info.more_releases %}
+                <p class="card-note"><a href="{{ version_info.releases_page }}" target="_blank" rel="noopener">{{ _("More releases are on the release page.") }}</a></p>
+            {% endif %}
         {% else %}
-            <p class="card-note">{{ _("Popis změn se nepodařilo stáhnout. Najdeš ho na stránce vydání.") }}</p>
+            <p class="card-note">{{ _("The list of changes could not be downloaded. It is on the release page.") }}</p>
         {% endif %}
     </div>
 
     {% if account and account.is_admin %}
-        {% if verze.lze_aktualizovat %}
-        {# Aktualizace je stažení a restart v jednom. Restartuje se ten
-           samý proces jako tlačítkem v Nastavení - správce služby k tomu
-           potřeba není. #}
+        {% if version_info.can_update %}
+        {# An update is a download and a restart in one. The same process
+           restarts as with the button in Settings - no service manager
+           is needed for it. #}
         <form method="post" action="/settings/update" class="btn-row" style="margin-top:16px">
-            <button class="btn primary" type="submit">{{ _("Aktualizovat a restartovat") }}</button>
+            <button class="btn primary" type="submit">{{ _("Update and restart") }}</button>
             <span class="card-note" style="align-self:center">
-                {{ _("stáhne novou verzi, doinstaluje závislosti a restartuje aplikaci") }}
+                {{ _("pulls the new version, installs any new dependencies and restarts the app") }}
             </span>
         </form>
         {% else %}
-        {# Ne "tlačítko tu není", ale proč: každý z těch případů má jinou
-           správnou odpověď a ta se má říct rovnou. #}
+        {# Not "the button is not here" but why: each of these cases has a different
+           right answer and it should be said at once. #}
         <p class="card-note" style="margin-top:16px">
-            {{ _(verze.duvod_bez_aktualizace) }}
+            {{ _(version_info.no_update_reason) }}
         </p>
         {% endif %}
     {% endif %}
@@ -313,31 +294,31 @@
 {% endif %}
 
 {% if demo_mode %}
-{# Ukázka: formuláře se neodesílají vůbec.
+{# Demo: forms are not sent at all.
 
-   Server je stejně odmítne (middleware `ukazkovy_rezim`), jenže odpověď
-   je přesměrování - a to znamená, že se stránka načte znovu. Kdo zkoumal
-   Nastavení, přišel o rozepsané pole a někdy i o místo, kde byl. Tady se
-   klik zastaví ještě v prohlížeči: nic se nikam neposílá a hláška se
-   objeví na místě.
+   The server refuses them anyway (the middleware `demo_mode_middleware`), but the answer
+   is a redirect - and that means the page loads again. Whoever explored
+   Settings lost the field they were filling in, and sometimes the place they were at. Here
+   the click stops in the browser already: nothing is sent anywhere and the message
+   appears in place.
 
-   Server tím nepřestává být tou skutečnou pojistkou - JavaScript se dá
-   vypnout, middleware ne. #}
-<div class="hlaska-na-miste" id="hlaska-ukazky" role="status" aria-live="polite"></div>
+   The server stays the real safeguard all the same - JavaScript can be
+   switched off, the middleware cannot. #}
+<div class="flash-in-place" id="demo-flash" role="status" aria-live="polite"></div>
 {% endif %}
 
 <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
 
-{# Texty, které ukazují skripty (static/js/app.js) - přeložené tady,
-   ať je přeloží šablona jako všechno ostatní. Datový blok se nespouští,
-   takže ho CSP pustí; tojson escapuje i „<", text blok neukončí. #}
-<script type="application/json" id="texty-js">{{ {
-    "ukazka": _("Tohle je ukázka, data se v ní nemění. Na vlastní instalaci tlačítko funguje."),
-    "hotovo": _("hotovo"),
-    "trva_dlouho": _("Trvá to déle, než je zdrávo. Zkus stránku obnovit ručně."),
+{# Texts shown by scripts (static/js/app.js) - translated here,
+   so the template translates them like everything else. A data block does not run,
+   so CSP lets it through; tojson escapes "<" too, so the text cannot end the block. #}
+<script type="application/json" id="texts-js">{{ {
+    "demo": _("This is a demo, so nothing here changes. On your own install the button works."),
+    "done": _("done"),
+    "takingLong": _("This is taking longer than it should. Try reloading the page manually."),
 } | tojson }}</script>
 <script src="/static/js/app.js?v={{ asset_version }}" defer></script>
-{# Mapa na stránce Síť a na kartě přehledu - vlastní soubor, je toho dost. #}
-<script src="/static/mapa.js?v={{ asset_version }}" defer></script>
+{# The map on the Network page and on the overview card - a file of its own, there is a lot of it. #}
+<script src="/static/map.js?v={{ asset_version }}" defer></script>
 </body>
 </html>

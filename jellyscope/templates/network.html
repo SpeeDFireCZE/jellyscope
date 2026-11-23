@@ -1,41 +1,41 @@
 {% extends "base.html" %}
 {% from "_macros.html" import period_filter with context %}
-{% block title %}{{ _("Síť") }} · Jellyscope{% endblock %}
+{% block title %}{{ _("Network") }} · Jellyscope{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div>
-        <h1>{{ _("Síť") }}</h1>
+        <h1>{{ _("Network") }}</h1>
         <p class="subtitle">
-            {{ _("Kolik dat teklo ze serveru k přehrávačům a kdy to bylo nejvíc.") }}
+            {{ _("How much data left the server for the players, and when it peaked.") }}
         </p>
     </div>
-    {{ period_filter(obdobi, '/network') }}
+    {{ period_filter(period, '/network') }}
 </div>
 
-{# Poctivost napřed. Číslo vypadá jako měření, ale měřením není - a kdo
-   podle něj bude dimenzovat linku, má vědět, jak vzniklo. #}
+{# Honesty first. The number looks like a measurement, but it is not one - and whoever
+   sizes a line by it is to know how it came about. #}
 <div class="flash info" style="margin-bottom:18px">
     <span class="dot"></span>
-    <span>{{ _("Počítá se z bitrate, který Jellyfin hlásí u každého přehrávání: při překódování z výsledného toku, jinak ze zdrojového souboru. Pozastavené přehrávání se nepočítá, protože při pauze nic neteče. Je to tedy poctivý odhad, ne měření drátu: přeskakování a buffer skutečná čísla posouvají. Přesně to umí změřit jen reverzní proxy nebo počítadla systému.") }}</span>
+    <span>{{ _("Calculated from the bitrate Jellyfin reports for each playback: the resulting stream when transcoding, the source file otherwise. Paused playback is left out, because nothing flows during a pause. It is an honest estimate, not a measurement of the wire: seeking and buffering move the real numbers. Only a reverse proxy or the system's own counters can measure it exactly.") }}</span>
 </div>
 
-{% include "_sekce_sit_cisla.html" %}
+{% include "_card_network_numbers.html" %}
 
-{# Živý tok. `data-refresh` a `data-partial` obsluhuje base.html -
-   stejný mechanismus, jakým se obnovuje "právě se hraje" na Přehledu. #}
-<div id="sit-zive" data-refresh="{{ poll_interval }}" data-partial="/partials/network-live">
-    {% include "_sit_zive.html" %}
+{# The live flow. `data-refresh` and `data-partial` are handled by base.html -
+   the same mechanism that refreshes "now playing" on the Overview. #}
+<div id="network-live" data-refresh="{{ poll_interval }}" data-partial="/partials/network-live">
+    {% include "_network_live.html" %}
 </div>
 
-{% include "_sekce_spicky.html" %}
+{% include "_card_peaks_by_day.html" %}
 
 <div class="grid-2">
-    {% include "_sekce_kdo_streamoval.html" %}
-    {% include "_sekce_podle_prehravace.html" %}
+    {% include "_card_who_streamed.html" %}
+    {% include "_card_by_player.html" %}
 </div>
 
-{% include "_sekce_odkud.html" %}
+{% include "_card_where_from.html" %}
 
-{% include "_sekce_mapa.html" %}
+{% include "_card_map.html" %}
 {% endblock %}

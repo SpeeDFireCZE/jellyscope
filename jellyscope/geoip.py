@@ -1,27 +1,28 @@
-"""Zeměpisné umístění veřejných adres podle databáze GeoLite2.
+"""The geographic location of public addresses from the GeoLite2 database.
 
-K čemu to je: na stránce Síť ukázat, odkud se lidé dívají, když se
-nedívají z domácí sítě. Adresa z domácí sítě žádné místo neoznačuje -
-`192.168.1.5` je stejná v Praze i v Sydney -, takže se hledá jen
-u veřejných adres.
+What it is for: showing on the Network page where people watch from when they
+are not watching from the home network. An address from the home network
+marks no place - `192.168.1.5` is the same in Prague and in Sydney -, so only
+public addresses are looked up.
 
-Tři věci, které stojí za vysvětlení:
+Three things worth explaining:
 
-**Databáze je soubor, ne služba.** Ptát se za běhu nějakého webu na
-každou adresu by znamenalo posílat adresy diváků na cizí server - a to
-je přesně to, co tahle aplikace nedělá. GeoLite2 je jeden soubor
-(`.mmdb`), který leží v `data/` a odpovídá offline.
+**The database is a file, not a service.** Asking some web service about
+every address at run time would mean sending the viewers' addresses to
+someone else's server - and that is exactly what this application does not
+do. GeoLite2 is one file (`.mmdb`) that lies in `data/` and answers offline.
 
-**Knihovna je nepovinná.** `maxminddb` není v requirements.txt: kdo mapu
-nechce, nemá důvod ji instalovat. Bez ní se sekce prostě neukáže.
+**The library is optional.** `maxminddb` is not in requirements.txt: whoever
+does not want the map has no reason to install it. Without it the section
+simply does not show.
 
-**Přesnost.** GeoLite2 je zdarma a tomu odpovídá: město sedí spíš
-u pevných linek, u mobilních sítí ukazuje klidně na střed země.
-Pro otázku "dívá se někdo z ciziny?" to stačí, na hledání osob ne -
-a tak to má i zůstat.
+**Precision.** GeoLite2 is free and it shows: the city fits rather for fixed
+lines, for mobile networks it points even to the middle of the country. For
+the question "does somebody watch from abroad?" that is enough, for finding
+people it is not - and so it should stay.
 
-Data © MaxMind, GeoLite2 (CC BY-SA 4.0). Aplikace je nestahuje sama
-od sebe; soubor si stáhne správce tlačítkem v Nastavení.
+Data © MaxMind, GeoLite2 (CC BY-SA 4.0). The application does not download it
+by itself; the admin downloads the file with a button in Settings.
 """
 from __future__ import annotations
 
@@ -29,33 +30,33 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from . import config, db
+from . import config, db, i18n
 from datetime import UTC
 
 log = logging.getLogger("jellyscope.geoip")
 
-# Jméno souboru je pevné. Nastavovat cestu by znamenalo další políčko
-# v Nastavení kvůli něčemu, co si stejně stahuje sama aplikace.
-SOUBOR = "GeoLite2-City.mmdb"
+# The file name is fixed. Setting a path would mean another field in
+# Settings for something the application downloads itself anyway.
+FILE_NAME = "GeoLite2-City.mmdb"
 
-# Odkud se stahuje. Je to zrcadlo, které vydává MaxMind databáze jako
-# release na GitHubu - u MaxMinda samotného je potřeba účet a klíč, což
-# by z jednoho tlačítka udělalo formulář na tři pole.
-ZDROJ = ("https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/"
-         + SOUBOR)
-
-
-def cesta_k_databazi() -> Path:
-    """Kde soubor leží. Vedle databáze aplikace, tedy v data/."""
-    return config.load_config().database_path.parent / SOUBOR
+# Where it is downloaded from. It is a mirror that publishes the MaxMind
+# databases as a release on GitHub - MaxMind itself needs an account and a
+# key, which would turn one button into a form with three fields.
+SOURCE_URL = ("https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/"
+              + FILE_NAME)
 
 
-def je_k_dispozici() -> bool:
-    """Dá se vůbec hledat? Musí být obojí - knihovna i soubor."""
-    return knihovna_je() and cesta_k_databazi().is_file()
+def database_path() -> Path:
+    """Where the file lies. Next to the application's database, that is in data/."""
+    return config.load_config().database_path.parent / FILE_NAME
 
 
-def knihovna_je() -> bool:
+def is_available() -> bool:
+    """Can anything be looked up at all? Both have to be there - the library and the file."""
+    return library_installed() and database_path().is_file()
+
+
+def library_installed() -> bool:
     try:
         import maxminddb  # noqa: F401
     except ImportError:
@@ -63,116 +64,117 @@ def knihovna_je() -> bool:
     return True
 
 
-def velikost_databaze() -> int:
-    soubor = cesta_k_databazi()
-    return soubor.stat().st_size if soubor.is_file() else 0
+def database_size() -> int:
+    path = database_path()
+    return path.stat().st_size if path.is_file() else 0
 
 
-def stari_databaze() -> str:
-    """Kdy se soubor naposledy stáhl. Prázdné, když tu není."""
-    soubor = cesta_k_databazi()
-    if not soubor.is_file():
+def database_age() -> str:
+    """When the file was last downloaded. Empty when it is not here."""
+    path = database_path()
+    if not path.is_file():
         return ""
     from datetime import datetime
-    cas = datetime.fromtimestamp(soubor.stat().st_mtime, UTC)
-    return cas.strftime(db.TIME_FORMAT)
+    time = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    return time.strftime(db.TIME_FORMAT)
 
 
-_citac: Any = None
+_reader: Any = None
 
 
-def _otevri() -> Any:
-    """Otevřený soubor databáze. Drží se otevřený - je to čtení z disku
-    přes mmap, takže opakované otevírání by bylo zbytečné.
+def _open() -> Any:
+    """The open database file. It is kept open - it is reading from the disk
+    through mmap, so opening it again and again would be pointless.
     """
-    global _citac
-    if _citac is None:
+    global _reader
+    if _reader is None:
         import maxminddb
-        _citac = maxminddb.open_database(str(cesta_k_databazi()))
-    return _citac
+        _reader = maxminddb.open_database(str(database_path()))
+    return _reader
 
 
-def zapomen() -> None:
-    """Zavře soubor. Volá se po stažení nové verze."""
-    global _citac
-    if _citac is not None:
+def forget() -> None:
+    """Closes the file. Called after a new version is downloaded."""
+    global _reader
+    if _reader is not None:
         try:
-            _citac.close()
-        except Exception:  # noqa: BLE001 - zavírání nesmí nic shodit
+            _reader.close()
+        except Exception:  # noqa: BLE001 - closing must not bring anything down
             pass
-        _citac = None
+        _reader = None
 
 
-def _text(hodnota: Any, jazyk: str = "en") -> str:
-    """Z názvu, který přijde jako slovník jazyků, vybere jeden."""
-    if isinstance(hodnota, dict):
-        return str(hodnota.get(jazyk) or hodnota.get("en") or "")
-    return str(hodnota or "")
+def _text(value: Any, language: str = "en") -> str:
+    """Picks one name out of a name that comes as a dictionary of languages."""
+    if isinstance(value, dict):
+        return str(value.get(language) or value.get("en") or "")
+    return str(value or "")
 
 
-def najdi(adresa: str) -> dict[str, Any] | None:
-    """Kde ta adresa je. None, když se nedá zjistit.
+def lookup(address: str) -> dict[str, Any] | None:
+    """Where the address is. None when it cannot be found out.
 
-    Vrací zeměpisné souřadnice, město, zemi a její dvoupísmenný kód.
-    Když databáze adresu nezná (nová sada, VPN, satelit), vrátí None -
-    to není chyba, jen to o té adrese nikdo neví.
+    Returns the geographic coordinates, the city, the country and its
+    two-letter code. When the database does not know the address (a new
+    range, a VPN, a satellite), it returns None - that is no error, nobody
+    just knows it about that address.
     """
-    if not je_k_dispozici():
+    if not is_available():
         return None
     try:
-        zaznam = _otevri().get(adresa)
-    except (ValueError, OSError) as chyba:
-        # Neplatná adresa nebo poškozený soubor. Mapa je doplněk,
-        # takže se kvůli ní nic neshodí.
-        log.debug("adresu %s se nepodařilo umístit: %s", adresa, chyba)
+        record = _open().get(address)
+    except (ValueError, OSError) as error:
+        # An invalid address or a damaged file. The map is an extra, so
+        # nothing is brought down because of it.
+        log.debug("address %s could not be located: %s", address, error)
         return None
 
-    if not isinstance(zaznam, dict):
+    if not isinstance(record, dict):
         return None
 
-    misto = zaznam.get("location") or {}
-    if misto.get("latitude") is None or misto.get("longitude") is None:
+    location = record.get("location") or {}
+    if location.get("latitude") is None or location.get("longitude") is None:
         return None
 
-    zeme = zaznam.get("country") or zaznam.get("registered_country") or {}
-    mesto = zaznam.get("city") or {}
+    country = record.get("country") or record.get("registered_country") or {}
+    city = record.get("city") or {}
     return {
-        "lat": float(misto["latitude"]),
-        "lon": float(misto["longitude"]),
-        "mesto": _text(mesto.get("names")),
-        "zeme": _text(zeme.get("names")),
-        "kod": str(zeme.get("iso_code") or ""),
+        "lat": float(location["latitude"]),
+        "lon": float(location["longitude"]),
+        "city": _text(city.get("names")),
+        "country": _text(country.get("names")),
+        "code": str(country.get("iso_code") or ""),
     }
 
 
-async def stahni() -> dict[str, Any]:
-    """Stáhne databázi ze ZDROJ do data/.
+async def download() -> dict[str, Any]:
+    """Downloads the database from SOURCE_URL to data/.
 
-    Je to jediné místo, kde aplikace sahá jinam než na Jellyfin, a děje
-    se to **jen na kliknutí**, nikdy samo. Soubor má přes 60 MB, proto
-    se zapisuje po kusech - ne celý do paměti.
+    It is the only place where the application reaches elsewhere than to
+    Jellyfin, and it happens **only on a click**, never by itself. The file
+    has over 60 MB, so it is written in pieces - not whole into memory.
     """
     import httpx
 
-    cil = cesta_k_databazi()
-    rozdelane = cil.with_suffix(".stahuje")
-    cil.parent.mkdir(parents=True, exist_ok=True)
+    target = database_path()
+    partial = target.with_suffix(".stahuje")
+    target.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            async with client.stream("GET", ZDROJ) as odpoved:
-                odpoved.raise_for_status()
-                with rozdelane.open("wb") as soubor:
-                    async for kus in odpoved.aiter_bytes(1 << 20):
-                        soubor.write(kus)
-    except Exception as chyba:  # noqa: BLE001 - síť selhává mnoha způsoby
-        rozdelane.unlink(missing_ok=True)
-        log.warning("databazi GeoLite2 se nepodarilo stahnout: %s", chyba)
-        return {"status": "error", "message": str(chyba)}
+            async with client.stream("GET", SOURCE_URL) as response:
+                response.raise_for_status()
+                with partial.open("wb") as file:
+                    async for chunk in response.aiter_bytes(1 << 20):
+                        file.write(chunk)
+    except Exception as error:  # noqa: BLE001 - the network fails in many ways
+        partial.unlink(missing_ok=True)
+        log.warning("the GeoLite2 database could not be downloaded: %s", error)
+        return {"status": "error", "message": i18n.error_text(error)}
 
-    # Přejmenování až na konec: kdyby se stahování přerušilo, zůstane
-    # v platnosti ta stará databáze místo poloviny nové.
-    zapomen()
-    rozdelane.replace(cil)
-    log.info("databaze GeoLite2 stazena (%s MB)", round(velikost_databaze() / 1e6, 1))
-    return {"status": "ok", "bajtu": velikost_databaze()}
+    # Renaming only at the end: were the download interrupted, the old
+    # database stays valid instead of half of the new one.
+    forget()
+    partial.replace(target)
+    log.info("the GeoLite2 database has been downloaded (%s MB)", round(database_size() / 1e6, 1))
+    return {"status": "ok", "byte_count": database_size()}

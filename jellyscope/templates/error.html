@@ -1,16 +1,16 @@
-{%- from "_macros.html" import hlava -%}
+{%- from "_macros.html" import head -%}
 <!doctype html>
 <html lang="{{ ui_language | default('cs') }}">
 <head>
-    {{ hlava(code) }}
+    {{ head(code) }}
 </head>
 <body>
 <div class="login-page">
     <div class="login-box" style="max-width:420px; text-align:center">
         <div class="hero" style="font-size:44px">{{ code }}</div>
-        <p class="subtitle" style="margin:10px 0 20px">{{ message }}</p>
+        <p class="subtitle" style="margin:10px 0 20px">{{ _(message) }}</p>
         <a class="btn primary" href="/" style="width:100%; justify-content:center">
-            {{ _("Zpět na přehled") }}
+            {{ _("Back to overview") }}
         </a>
     </div>
 </div>

@@ -1,0 +1,25 @@
+{# The music card "Most played" on Music's overview - like "Most watched titles" of Movies & series: the five albums
+   with the most hours of listening in the period, with their cover (cards_music.py, `d.rows` = the first rows of
+   "Most played albums"); the whole charts are on Insights - the link only for whoever may open them. #}
+{% from "_macros.html" import poster, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for a in d.rows %}
+        <div class="poster-card">
+            {{ poster(a.cover, "poster-frame album-cover", detail=a.link, placeholder=_("No cover")) }}
+            {% call link(a.link, {"class": "poster-name", "title": a.name}) %}{{ a.name or _("unknown album") }}{% endcall %}
+            <div class="poster-meta">{% call link(a.artist_link) %}{{ a.artist or "–" }}{% endcall %} &middot; {{ a.seconds | seconds }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% if may_open("/music/insights") %}
+    <p class="card-note" style="margin-top:10px"><a href="/music/insights">{{ _("The whole ranking") }} &rarr;</a></p>
+    {% endif %}
+    {% else %}
+    <p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>
+    {% endif %}
+</div>

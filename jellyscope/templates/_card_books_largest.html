@@ -1,0 +1,30 @@
+{# The books card "Largest books": the books that take the most space.
+
+   From the database (cards_books.py, `d.rows` = stats.books_largest). A long table: the first rows in the card, the
+   whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Book") }}</th>
+            <th class="wide-wrapper-only">{{ _("Type") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for b in d.rows %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{% call link(b.link) %}{{ b.title or "–" }}{% endcall %}
+                    <div class="cell-sub">{{ b.author or "–" }}</div></td>
+                <td class="wide-wrapper-only">{{ _("Audiobook") if b.kind == "audiobook" else _("E-book") }}</td>
+                <td class="num strong">{{ b.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length) }}
+    {% else %}<p class="chart-empty">{{ _("The books library is empty so far.") }}</p>{% endif %}
+</div>

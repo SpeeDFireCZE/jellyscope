@@ -1,0 +1,73 @@
+{# A card of the Languages page (video/languages.html).
+
+   Included by that page and by dashboards (cards.py, key `missing_track`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `missing_preferred (langstats.missing_preferred)`. #}
+{% from "_macros.html" import link with context %}
+<div class="card">
+    <div class="card-head">
+        {# The language's name is in the nominative ("English"), so the sentence has to be
+           built around it. "Sledujete to, ale angličtina to není" makes
+           no sense in Czech and a language's name cannot be declined in general - every
+           interface language differs. A colon solves it for us. #}
+        <h2>
+            {{ _("You watch it, but the track is missing") }}: {{ missing_preferred.name }}
+        </h2>
+        <p class="card-note">
+            {{ _("total") }} {{ _n("{n} titles", missing_preferred.total) }}
+        </p>
+    </div>
+    {# The Languages page does not include the card without rows at all; in a dashboard it stands
+       always, so without rows it says everything is fine. #}
+    {% if missing_preferred.rows %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("Title") }}</th><th>{{ _("Available tracks") }}</th>
+                <th>{{ _("Subtitles") }} ({{ missing_preferred.name }})</th>
+                <th class="num">{{ _("Watched") }}</th><th class="num">{{ _("Plays#starts") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in missing_preferred.rows %}
+            <tr>
+                {# A link to the detail: for a series to the series, for an episode and a film
+                   to the file. Without it the list was a dead end - a person
+                   learnt the name and had to search on their own.
+
+                   A row is either a whole series (the stream is missing in all its episodes),
+                   or one episode - then the series' name is followed by the episode's code
+                   and its name is under it, so it is clear what to look for. #}
+                <td class="truncate strong" title="{{ row.label }}">
+                    {% call link(row.detail_url) %}{{ row.label }}{% endcall %}
+                    {% if row.is_series %}
+                        <span class="badge neutral"><span class="dot"></span>{{ _("whole series") }}</span>
+                    {% elif row.episode_name %}
+                        <div class="card-note">{{ row.episode_name }}</div>
+                    {% endif %}
+                </td>
+                <td class="muted">{{ row.audio_label }}</td>
+                <td>
+                    {% if row.has_preferred_subtitles %}
+                        <span class="badge good"><span class="dot"></span>{{ _("yes") }}</span>
+                    {% else %}
+                        <span class="badge warning"><span class="dot"></span>{{ _("no") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.hours | hours }}</td>
+                <td class="num muted">{{ row.plays | number }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Candidates for another version. You watch them, but Jellyfin has no audio in this language to offer:") }}
+        {{ missing_preferred.name }}.
+    </p>
+    {% else %}
+    <p class="card-note">{{ _("Everything that is watched has that track.") }}</p>
+    {% endif %}
+</div>

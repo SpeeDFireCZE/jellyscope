@@ -1,0 +1,17 @@
+{# The card with the key `tiles`.
+
+   A template of its own, because it is drawn in two places: on the Overview
+   and in a custom dashboard, where a person can rearrange it.
+   One copy, so the two places do not drift apart - see cards.py.
+
+   The template imports the macro `tile` itself: in a custom dashboard
+   it is drawn on its own, so it must not rely on the import of the page
+   around it. #}
+{% from "_macros.html" import tile with context %}
+<div class="kpi-row">
+    {{ tile(_("Plays#starts"), overview.plays | number, delta=deltas.plays) }}
+    {{ tile(_("Active users"), overview.users | number) }}
+    {{ tile(_("Distinct titles"), overview.item_count | number) }}
+    {{ tile(_("Transcode share"), overview.transcode_share | percent,
+            note=_("lower is better for the server")) }}
+</div>

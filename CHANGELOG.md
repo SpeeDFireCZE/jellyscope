@@ -10,6 +10,71 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.9.0
+
+Music, books and audiobooks get their own sections, the *Arr page arrives with Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr, Seerr gets a page, and the whole app speaks English inside - code, database and translation keys.
+
+**Before you upgrade:** the first start renames the database to English names by itself. A backup (`…-before-conversion`) is written first and kept for 30 days; 1.8.x refuses the converted database, so going back means restoring that backup. Log filters by logger name need the new English names (`jellyscope.music`…). Python 3.11 or newer, as before.
+
+### ✨ Features
+
+- Add a menu in sections by the kind of content
+- Add short English page addresses; old addresses redirect
+- Add a choice of the page that opens first
+- Add a Music section with artists and albums
+- Add Music comparison and insights, like Movies & series
+- Add a Books section for e-books and audiobooks
+- Add the *Arr page with Sonarr and Radarr tabs
+- Add Lidarr to the *Arr page, with albums as the unit
+- Add Readarr, Chaptarr and Bookshelf to the *Arr page
+- Name the connected Readarr fork in the menu and Settings
+- Add Bazarr subtitles and Prowlarr indexers to the *Arr page
+- Show what is downloading right now, with its progress
+- Add a Seerr page for requests and what gets watched
+- Add a Disks card with free space and days left
+- Count music and books in the library's size and growth
+- Group permissions by menu section, with rights per section
+- Show release notes of every skipped release in the update window
+
+### 🐛 Fixes
+
+- Fix audiobooks being counted as watching
+- Fix the last local administrator being deletable or demotable
+- Security: Sign out people disabled in Jellyfin and revoke their API keys
+- Security: Follow rights taken away in Jellyfin at the next users' sync
+- Security: Stop serving `/openapi.json` to anyone signed out
+- Fix carriage returns lost in PostgreSQL backups without `pg_dump`
+- Fix a Playback Reporting import splitting titles with U+2028
+- Fix Czech texts on error pages in every language
+- Fix "Elapsed" shown before the running version in the update window
+
+### 🔧 Changes
+
+- Rename the database, code, settings and logs to English
+- Keep sign-ins and chosen periods across the update
+- Write the log file in English; show it in the reader's language
+- Start a new installation in English; existing ones keep theirs
+- Use English commands in `manage.py`; Czech ones still work
+- Rename backups to `…-before-delete` and `…-before-restore`
+- Update `fastapi` to 0.162.7 and `python-multipart` to 0.0.33
+
+### 📚 Documentation
+
+- Describe the new sections, the *Arr apps and the database conversion
+- Update `DEPLOY.md` for the 1.9.0 database conversion
+
+### 🌍 Translations
+
+- Make English the source language; translations use i18next v4 plurals
+- Add German (#23 by @MarcBucher)
+- Show numbers with the right word form in every language
+
+### New Contributors
+
+- @MarcBucher made their first contribution in #23
+
+**Full Changelog**: https://github.com/SpeeDFireCZE/jellyscope/compare/1.8.4...1.9.0
+
 ## 1.8.4
 
 ### What is new

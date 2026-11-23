@@ -1,0 +1,19 @@
+{# The Bazarr card "Subtitle match": how well the acquired subtitles fit the file.
+
+   From the database (cards_bazarr.py). The match is the score in percent Bazarr
+   gave the subtitles when searching. Only subtitles it stated one for count
+   (`d.pocet`) - deleting and translating have no score. #}
+{% from "_macros.html" import tile with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("the score Bazarr gave the subtitles") }}</p>
+    </div>
+    <div class="kpi-row">
+        {{ tile(_("Median match"), d.median) }}
+        {{ tile(_("Subtitles with a known match"), d.count | number) }}
+    </div>
+    {% if d.count %}
+        {{ charts.hbar_chart(d.buckets, 'label', 'count', unit='', limit=4) | safe }}
+    {% endif %}
+</div>

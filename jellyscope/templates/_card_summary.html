@@ -1,0 +1,35 @@
+{# The card with the key `summary`.
+
+   A template of its own, because it is drawn in two places: on the Overview
+   and in a custom dashboard, where a person can rearrange it.
+   One copy, so the two places do not drift apart - see cards.py. #}
+{# The template imports the macro itself: in a custom dashboard it is drawn
+   on its own, so it must not rely on the import of the page around it. #}
+{% from "_macros.html" import change with context %}
+<div class="card hero-card">
+    <div class="hero-number">
+    {# For a custom period `day_labels` has nothing to say - we write the range. #}
+    <p class="tile-label">
+        {{ _("Total watched over") }}
+        {% if period.own %}{{ period.since_label }} – {{ period.until_label }}
+        {% else %}{{ _(day_labels[period.days]) }}{% endif %}
+    </p>
+    <div class="hero">{{ (overview.watched_seconds / 3600) | hours }}</div>
+    {% if deltas.watched is not none %}
+        {% if deltas.watched > 1 %}
+            <div class="delta up">&#9650; {{ change(deltas.watched) }} {{ _("vs previous period#alt") }}</div>
+        {% elif deltas.watched < -1 %}
+            <div class="delta down">&#9660; {{ change(deltas.watched) }} {{ _("vs previous period#alt") }}</div>
+        {% else %}
+            <div class="delta flat">{{ _("no change") }}</div>
+        {% endif %}
+    {% elif comparison_note %}
+        {# When a comparison is impossible, we say why. A silently missing arrow looks
+           like a mistake and a person looks for it on their side. #}
+        <div class="delta flat">{{ comparison_note }}</div>
+    {% endif %}
+    </div>
+    {# The same data as the big chart below, only without axes - and on hover
+       it shows the day's value, the same as the chart. #}
+    <div class="hero-chart">{{ charts.sparkline(daily, 'day', 'hours') | safe }}</div>
+</div>

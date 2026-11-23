@@ -1,0 +1,46 @@
+{# The Seerr card "Who requests": the ranking of requesters.
+
+   All about people, hence it has an area of its own "...including who requested" (seerr_who):
+   whoever does not have it does not get the card and the data are not computed. A requester paired
+   with a Jellyscope viewer is a link to their page (the requester macro). A long table as on Insights: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, requester with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    {# Six columns in a card at half width: the headings may wrap and the cells
+       have smaller gaps (table-dense). Even so they do not fit into a narrow
+       card - and a card at half width is narrow even on a common monitor (a 1280 px
+       window = a 450 px card). So the table follows the card's width, not the window's
+       (wrapper-by-width, see style.css): on a narrow card "Approved"
+       and "Declined" hide and the same numbers are under the requester's name.
+       The window with the whole table (a button under the card when there are more requesters than
+       the card shows) copies only the table without the wrapper, so it has all
+       the columns. #}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Requester") }}</th>
+            <th class="num">{{ _("Requests#count") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Approved") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Declined") }}</th>
+            <th class="num">{{ _("In library") }}</th>
+            <th class="num">{{ _("Watched it themselves") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for z in d.rows %}
+            <tr class="{{ row_class(loop.index, "seerr") }}">
+                <td class="strong">{{ requester(z) }}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Approved") }} {{ z.approved | number }} &middot; {{ _("Declined") }} {{ z.declined | number }}</div></td>
+                <td class="num strong">{{ z.count | number }}</td>
+                <td class="num wide-wrapper-only">{{ z.approved | number }}</td>
+                <td class="num wide-wrapper-only">{{ z.declined | number }}</td>
+                <td class="num">{{ z.available | number }}</td>
+                <td class="num">{{ z.watched_it_self | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "seerr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

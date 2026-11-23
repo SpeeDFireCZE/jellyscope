@@ -1,0 +1,133 @@
+{# A Settings section: Seerr (requests for films and series)
+
+   Included from `settings.html` through `{% include %}`. The context is built by
+   `_section_seerr()` in web/settings/page.py (`seerr`).
+
+   The key is never written into the page - it only shows whether there is one
+   (`has_key`). An empty field on saving therefore means "keep the saved one". #}
+
+<div class="card" id="seerr">
+    <div class="card-head">
+        <h2>Seerr</h2>
+        {% if seerr.connected %}
+            <span class="badge good">{{ _("connected") }}</span>
+        {% elif seerr.enabled %}
+            <span class="badge warning">{{ _("enabled, not connected") }}</span>
+        {% else %}
+            <span class="badge neutral">{{ _("off") }}</span>
+        {% endif %}
+    </div>
+    <p class="hint" style="margin:0 0 16px">
+        {{ _("Viewers' requests for movies and shows: when and how many, who requests, how fast requests are handled and whether the requested titles are then watched. A connected Seerr has its own page in the menu.") }}
+    </p>
+
+    {# Both buttons are in this form: the test works with what is filled in,
+       not with what is saved (the same as the connection to Jellyfin). #}
+    <form method="post" action="/settings/seerr">
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="enabled" value="1" {{ 'checked' if seerr.enabled }}>
+            <span>{{ _("on") }}</span>
+        </label>
+
+        <div class="field">
+            <label for="seerr_url">{{ _("App address") }}</label>
+            <input type="text" id="seerr_url" name="url" value="{{ seerr.url }}" placeholder="http://localhost:5055">
+            <p class="hint">{{ _("Behind a reverse proxy, include the path, e.g. http://server/seerr.") }}</p>
+        </div>
+
+        <div class="field">
+            <label for="seerr_api_key">{{ _("API key") }}</label>
+            <input type="password" id="seerr_api_key" name="api_key" autocomplete="off"
+                   placeholder="{{ _('the saved key is not shown') if seerr.has_key else '' }}">
+            <p class="hint">
+                {{ _("In Seerr: Settings → General → API Key.") }}
+                {% if seerr.has_key %}<br>{{ _("Leave empty to keep the current key.") }}{% endif %}
+            </p>
+        </div>
+
+        {% if seerr.draft %}
+            <p class="hint">{{ _("The form shows the details you tested; they are not saved yet.") }}</p>
+        {% endif %}
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit" name="action" value="save">
+                {{ _("Save") }}
+            </button>
+            <button data-keep-scroll class="btn" type="submit" name="action" value="test">
+                {{ _("Test connection") }}
+            </button>
+        </div>
+    </form>
+    {# A sync works with the saved settings, not with the form - hence it is apart. #}
+    <div class="btn-row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+        <form method="post" action="/settings/seerr/sync">
+            <button data-keep-scroll class="btn" type="submit" {{ 'disabled' if not seerr.connected }}>
+                {{ _("Sync now") }}
+            </button>
+        </form>
+        {% if seerr.count %}
+            <button class="btn danger" type="button" data-modal="modal-seerr-delete">
+                {{ _("Delete downloaded data") }}
+            </button>
+        {% endif %}
+    </div>
+
+    <p class="card-note" style="margin-top:12px">
+        {{ _("Stored requests") }}: {{ seerr.count | number }}
+        {% if seerr.state.at %}
+            &middot; {{ _("Last synchronisation") }}: {{ seerr.state.at | relative }}
+            {% if seerr.state.result == 'ok' %}
+                &middot; {{ _("{n} added").format(n=seerr.state.new_count | number) }}
+            {% else %}
+                <br><span class="badge critical">{{ _("error") }}</span> {{ seerr.state.error }}
+            {% endif %}
+        {% endif %}
+    </p>
+
+    {# Request posters: a title that is not in the library takes its poster from Radarr
+       or Sonarr; pending and declined requests are not there and only Seerr can give them
+       a poster - with "Enable Image Caching" on. Whether it is
+       on, Jellyscope finds out by itself (seerr.check_images: sync,
+       connection test, saving). Only with Seerr connected - otherwise there is nobody to ask. #}
+    {% if seerr.connected %}
+    <div class="settings-row">
+        <p class="card-note">
+            <strong>{{ _("Request posters") }}:</strong>
+            {% if seerr.images == '1' %}
+                <span class="badge good">{{ _("on") }}</span><br>
+                {{ _('Seerr serves images ("Enable Image Caching" is on): pending and declined requests have a poster too.') }}
+            {% elif seerr.images == '0' %}
+                <span class="badge warning">{{ _("off") }}</span><br>
+                {{ _('For a title that is not in the library yet, Jellyscope takes the poster from Radarr or Sonarr. Pending and declined requests are not there: only Seerr can provide their poster, and only with "Enable Image Caching" turned on (in Seerr: Settings → General). Until then they show a placeholder. Once it is on, the posters fill in by themselves, also for requests Jellyscope already knows.') }}
+                {% if seerr.settings_url %}
+                    <br><a href="{{ seerr.settings_url }}" target="_blank" rel="noopener noreferrer">{{ _("Open Seerr settings") }}</a>
+                    {% if not seerr.public_url %}
+                        <br>{{ _("The link uses the address Jellyscope knows. If that is an address from the server's internal network, it may not open in your browser - open Seerr's settings the way you usually do.") }}
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                <span class="badge neutral">{{ _("unknown#phrase") }}</span><br>
+                {{ _('Whether Seerr serves images ("Enable Image Caching" in Settings → General) will be found out at the next sync or after "Test connection". Without it, pending and declined requests have no poster.') }}
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    {% if seerr.count %}
+    {# Confirming the delete: it says what is deleted and what is not; Cancel has the focus. #}
+    <form method="post" action="/settings/seerr/delete" id="seerr-delete"></form>
+    <dialog id="modal-seerr-delete" class="dialog">
+        <h2>{{ _("Delete stored requests") }}</h2>
+        <p>
+            {{ _n("Deletes {n} requests stored from Seerr. They stay in Seerr and the next sync downloads them again - except those already deleted in Seerr.", seerr.count) }}
+        </p>
+        <p class="card-note">{{ _("A database backup is made right before.") }}</p>
+        <div class="btn-row">
+            <form method="dialog">
+                <button class="btn" type="submit" autofocus>{{ _("Cancel") }}</button>
+            </form>
+            <button data-keep-scroll class="btn danger" type="submit" form="seerr-delete">{{ _("Yes, delete") }}</button>
+        </div>
+    </dialog>
+    {% endif %}
+</div>

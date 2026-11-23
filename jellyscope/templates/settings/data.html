@@ -1,0 +1,177 @@
+{# A Settings section: where technical data come from and how often to ask
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+{# The form wraps all cards of the section - they are saved with one
+   submit, only split by what they concern. #}
+<form method="post" action="/settings">
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Technical data source") }}</h2>
+        <p class="card-note">{{ _("where codecs, bitrates and sizes come from") }}</p>
+    </div>
+
+    {# This is not a switch "Jellyfin or ffprobe" for the whole app -
+       it concerns only the technical data of files. Playback statistics
+       always come from Jellyfin, they have no other option. That used not to show
+       from the options' names and it looked as if switching to ffprobe would lose
+       you the statistics. #}
+    <div class="flash info" style="margin-bottom:14px">
+        <span class="dot"></span>
+        <span>{{ _("This choice only affects file details (codec, resolution, size). Who watches what is always read from Jellyfin, and this setting does not change that.") }}</span>
+    </div>
+
+    <div class="radio-set">
+        <label class="radio-card">
+            <input type="radio" name="tech_source" value="jellyfin"
+                   {{ 'checked' if settings.tech_source == 'jellyfin' }}>
+            <span>
+                <span class="title">{{ _("Jellyfin API only") }}</span>
+                <span class="desc">
+                    {{ _("File details come from Jellyfin. Always works immediately, needs no file access or ffmpeg. But Jellyfin does not report some values at all, or only approximately.") }}
+                </span>
+            </span>
+        </label>
+
+        <label class="radio-card">
+            <input type="radio" name="tech_source" value="ffprobe"
+                   {{ 'checked' if settings.tech_source == 'ffprobe' }}>
+            <span>
+                <span class="title">{{ _("ffprobe + Jellyfin") }}</span>
+                <span class="desc">
+                    {{ _("Files are read directly from disk via ffprobe, which gives precise values including real size, HDR and channel counts. The title list, users and playback statistics still come from Jellyfin. Requires ffmpeg and access to the files.") }}
+                    {% if ffprobe_found %}
+                        <br><span class="badge good"><span class="dot"></span>{{ _("ffprobe found") }}</span>
+                        <code style="font-size:12px">{{ ffprobe_found }}</code>
+                    {% else %}
+                        <br><span class="badge critical"><span class="dot"></span>{{ _("ffprobe not found") }}</span>
+                    {% endif %}
+                </span>
+            </span>
+        </label>
+    </div>
+
+    <div class="btn-row">
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("File analysis") }}</h2>
+        <p class="card-note">{{ _("when to touch the files, and how many at once") }}</p>
+    </div>
+    <div class="field" style="margin-top:18px">
+        <label for="ffprobe_path">{{ _("Path to ffprobe") }}</label>
+        <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ settings.ffprobe_path }}"
+               placeholder="/usr/bin/ffprobe">
+        <p class="hint">{{ _("Leave empty if ffprobe is on the system PATH.") }}</p>
+    </div>
+
+    <div class="field">
+        <label for="ffprobe_concurrency">{{ _("How many files to analyse at once") }}</label>
+        <input type="number" id="ffprobe_concurrency" name="ffprobe_concurrency"
+               value="{{ settings.ffprobe_concurrency }}" min="1" max="16">
+        <p class="hint">
+            {{ _("Higher = faster scan but heavier disk load. Keep it low (2-3) for network storage.") }}
+        </p>
+    </div>
+
+    <div class="field">
+        <label for="path_mappings">{{ _("Path mapping") }}</label>
+        <textarea id="path_mappings" name="path_mappings">{{ settings.path_mappings }}</textarea>
+        <p class="hint">
+            {{ _("Only needed when Jellyfin sees the files at a different path than Jellyscope (typically when running in Docker). JSON format, for example:") }}<br>
+            <code>[{"from": "/media", "to": "/mnt/media"}]</code><br>
+            {{ _("When both run on the same machine, leave") }} <code>[]</code>.
+        </p>
+    </div>
+
+    {# The storage capacity.
+
+       `shutil.disk_usage` measures the disk JELLYSCOPE runs on - but the
+       data often lie elsewhere (a NAS, another machine, another container) and then a
+       foreign disk is measured. Hence we ask Jellyfin first, which sits at those files.
+       And when the library lies in a cloud, not even Jellyfin knows the size -
+       then this number applies. #}
+    <div class="btn-row">
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Library storage") }}</h2>
+        <p class="card-note">{{ _("where the free space for the growth estimate comes from") }}</p>
+    </div>
+    {% if disk_breakdown %}
+    {# Jellyfin split the libraries' disks: the capacity is set for every
+       disk apart (and a virtual disk for the cloud), on the Library page. #}
+    <p class="card-note">
+        {{ _("Jellyfin reports which disk each library is on. Set the capacity for each disk separately there, and add a virtual disk for a cloud mount:") }}
+        <a href="/library#disks">{{ _("Library → Disks") }}</a>
+    </p>
+    {% else %}
+    <div class="field">
+        <label for="library_capacity_gb">{{ _("Library storage capacity") }}</label>
+        {# A number and a unit side by side: for a twenty-terabyte array
+           "30000 GB" is a needlessly long number, for a half-terabyte disk
+           "0,5 TB" an awkward one. Let a person choose. #}
+        <div class="field-with-unit">
+            <input type="number" id="library_capacity_gb" name="library_capacity_gb"
+                   value="{{ capacity_amount }}" min="0" step="1">
+            <select name="library_capacity_unit" aria-label="{{ _('Unit') }}">
+                <option value="GB" {{ 'selected' if capacity_unit_name == 'GB' }}>GB</option>
+                <option value="TB" {{ 'selected' if capacity_unit_name == 'TB' }}>TB</option>
+            </select>
+        </div>
+        <p class="hint">
+            {{ _("The number you enter overrides everything else. Free space is worked out from it as capacity minus the size of the library, so it assumes nothing else lives on that storage. Leave 0 and it is worked out automatically.") }}
+            {% if space_source %}
+                <br><span class="badge {{ 'good' if space_source != 'manual' else 'info' }}">
+                    <span class="dot"></span>{{ source_label }}</span>
+            {% else %}
+                <br><span class="badge warning"><span class="dot"></span>{{ _("free space could not be determined yet") }}</span>
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="btn-row">
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+    </div>
+</div>
+
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Collecting playback") }}</h2>
+        <p class="card-note">{{ _("how often the collector asks what is playing") }}</p>
+    </div>
+    <div class="field">
+        <label for="poll_interval">{{ _("How often to ask what is playing (seconds)") }}</label>
+        <input type="number" id="poll_interval" name="poll_interval"
+               value="{{ settings.poll_interval }}" min="2" max="300">
+        <p class="hint">
+            {{ _("Lower = more accurate playback length, more requests to the server. Ten seconds is a good compromise.") }}
+        </p>
+    </div>
+
+    <div class="btn-row">
+        <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+    </div>
+</div>
+</form>
+
+
+
+{# ================================================================== #}

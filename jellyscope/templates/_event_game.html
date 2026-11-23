@@ -1,0 +1,84 @@
+{#
+  The decoration after the name as a button - a click opens the holiday's game (only
+  during a holiday, see seasonal.py). It is OUTSIDE the link to the Overview, otherwise a
+  click on the tree would open the Overview. The game downloads only after a click
+  (static/events/games/<holiday>.js), its texts are here in JSON - only
+  for the current holiday, in the account's language.
+#}
+{%- set games_texts = {
+    "christmas": {"ornament": _("Unwrap the present"), "hint": _("Click the present"),
+               "wish": _("Merry Christmas!"), "gift": _("Present")},
+    "halloween": {"ornament": _("Carve a pumpkin"),
+                  "hint": _("Trace a shape (an eye, a nose, a mouth) – it is cut out when you let go"),
+                  "lightUp": _("Light it"), "blowOut": _("Blow it out"), "again": _("Start over"),
+                  "pumpkin": _("Pumpkin")},
+    "newyear": {"ornament": _("Launch a rocket"), "hint": _("Drag the lighter to the fuse"),
+                 "lighter": _("Lighter"), "burning": _("It's lit!"), "wish": _("Happy New Year!")},
+    "easter": {"ornament": _("Crack an egg"), "hint": _("Keep clicking the egg"),
+                   "egg": _("Egg"), "pip": _("peep!"), "wish": _("Happy Easter!")},
+} %}
+{%- set game_texts = dict(games_texts[holiday], close=_("Close")) %}
+{#- The year for the New Year's Eve finale - only then, so it is not computed elsewhere for nothing. #}
+{%- if holiday == "newyear" %}{% set game_texts = dict(game_texts, year=seasonal_year()) %}{% endif %}
+<button type="button" class="event-game brand-ornaments" data-game="{{ holiday }}" aria-label="{{ game_texts.ornament }}">
+    {%- if holiday == "christmas" %}
+    <svg class="side-tree" viewBox="-1 -5 22 32" aria-hidden="true">
+        <path d="M10 1 L16 9 H13 L18 16 H14.5 L19.5 23 H.5 L5.5 16 H2 L7 9 H4 Z" fill="#1f8a4c"/>
+        <path d="M10 1 L16 9 H13 L18 16 H14.5 L19.5 23 H10 Z" fill="#17703c"/>
+        <rect x="8.5" y="22.5" width="3" height="4" rx=".5" fill="#7a4a1f"/>
+        <path class="star" d="M10-4.5 l1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.2-2.3 1.2.5-2.5-1.8-1.7 2.5-.3z" fill="#ffd34d"/>
+        <circle class="light s1" cx="8" cy="8" r="1.2" fill="#ff5252"/>
+        <circle class="light s2" cx="12.5" cy="12.5" r="1.2" fill="#ffd34d"/>
+        <circle class="light s3" cx="6.5" cy="15" r="1.2" fill="#4fc3f7"/>
+        <circle class="light s1" cx="13.5" cy="19.5" r="1.2" fill="#ff5252"/>
+        <circle class="light s2" cx="9" cy="20" r="1.2" fill="#b388ff"/>
+        <circle class="light s3" cx="4.5" cy="21" r="1.2" fill="#ffd34d"/>
+    </svg>
+    {%- elif holiday == "halloween" %}
+    <svg class="side-coffin" viewBox="-1 -2 26 39" aria-hidden="true">
+        <defs><clipPath id="event-coffin"><path d="M8 2 H16 L21.5 8.5 L17.5 32 H6.5 L2.5 8.5 Z"/></clipPath></defs>
+        <path d="M7 0 H17 L24 8 L19 34 H5 L0 8 Z" fill="#2a160c"/>
+        <path d="M8 2 H16 L21.5 8.5 L17.5 32 H6.5 L2.5 8.5 Z" fill="#6e0f1d"/>
+        <g clip-path="url(#event-coffin)"><g class="vampire">
+            <path d="M3 36 L5 17 Q12 12 19 17 L21 36 Z" fill="#0d0d0d"/>
+            <path d="M5.5 17 L3.6 10.8 L9.2 14.6 Z M18.5 17 L20.4 10.8 L14.8 14.6 Z" fill="#b31b2c"/>
+            <ellipse cx="12" cy="11.5" rx="4.2" ry="5" fill="#e9e6f2"/>
+            <path d="M7.8 10 Q8 5.8 12 5.9 Q16 5.8 16.2 10 L14.5 8.4 L12 10.6 L9.5 8.4 Z" fill="#0d0d0d"/>
+            <circle class="eyes" cx="10.4" cy="11.6" r=".85" fill="#ff2a2a"/>
+            <circle class="eyes" cx="13.6" cy="11.6" r=".85" fill="#ff2a2a"/>
+            <path d="M10.4 14.2 Q12 15.2 13.6 14.2" stroke="#5a0b14" stroke-width=".6" fill="none"/>
+            <path d="M10.8 14.45 l.45 1.3 .45-1.2 Z M12.3 14.5 l.45 1.2 .45-1.3 Z" fill="#fff"/>
+        </g></g>
+        <g class="lids">
+            <path d="M7 0 H17 L24 8 L19 34 H5 L0 8 Z" fill="#5c3418" stroke="#3a1f0d" stroke-width="1"/>
+            <path d="M12 9 V23 M8.3 13.2 H15.7" stroke="#c9a14a" stroke-width="1.7" stroke-linecap="round"/>
+        </g>
+    </svg>
+    {%- elif holiday == "newyear" %}
+    <svg class="side-champagne" viewBox="0 -24 32 66" aria-hidden="true">
+        <g transform="rotate(18 8 38)"><g class="bottle">
+            <path d="M1.5 36 V18 Q1.5 11.5 5.8 9.2 V0 H10.2 V9.2 Q14.5 11.5 14.5 18 V36 Q14.5 38.3 12.2 38.3 H3.8 Q1.5 38.3 1.5 36 Z" fill="#1f5a33"/>
+            <path d="M5.4-1 H10.6 V7.4 Q8 8.6 5.4 7.4 Z" fill="#d9b34a"/>
+            <rect x="3" y="21" width="10" height="9.5" rx="1.2" fill="#f3e6c4"/>
+            <path d="M5 24.5 H11 M6 27 H10" stroke="#b08a3e" stroke-width=".8"/>
+            <path d="M3.6 15.5 V34" stroke="#fff" stroke-opacity=".25" stroke-width="1.3" stroke-linecap="round"/>
+            <circle class="foam" style="--dx:-5px;--dy:-13px" cx="8" cy="-2" r="1.6" fill="#fff6d5"/>
+            <circle class="foam" style="--dx:1px;--dy:-18px" cx="8" cy="-2" r="1.3" fill="#ffe9a8"/>
+            <circle class="foam" style="--dx:6px;--dy:-12px" cx="8" cy="-2" r="1.7" fill="#fff6d5"/>
+            <circle class="foam" style="--dx:-1px;--dy:-10px" cx="8" cy="-2" r="1.1" fill="#ffffff"/>
+            <circle class="foam" style="--dx:4px;--dy:-16px" cx="8" cy="-2" r="1" fill="#ffe9a8"/>
+            <rect class="cork" x="6.4" y="-4.6" width="3.2" height="3.8" rx=".9" fill="#c9a26b"/>
+        </g></g>
+    </svg>
+    {%- elif holiday == "easter" %}
+    <svg class="side-egg" viewBox="0 0 14 18" aria-hidden="true">
+        <defs><clipPath id="event-egg"><ellipse cx="7" cy="9.5" rx="6" ry="8"/></clipPath></defs>
+        <ellipse cx="7" cy="9.5" rx="6" ry="8" fill="#f2c94c"/>
+        <g clip-path="url(#event-egg)" fill="none" stroke-width="1.7">
+            <path d="M0 8 l2-2 l2 2 l2-2 l2 2 l2-2 l2 2 l2-2" stroke="#e05a8a"/>
+            <path d="M0 12.5 h14" stroke="#3f7fd4"/>
+        </g>
+    </svg>
+    {%- endif %}
+</button>
+<script type="application/json" id="event-texts">{{ game_texts | tojson }}</script>

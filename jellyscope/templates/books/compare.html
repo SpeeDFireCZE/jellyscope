@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_compare.html" import switches, notes, nothing_to_compare, groups_table, chart_pair with context %}
+{% block title %}{{ _("Period comparison") }} &middot; {{ _("Books") }} &middot; Jellyscope{% endblock %}
+
+{# Books' comparison of two periods - laid out like the one of Music (music/compare.html), with the same macros
+   (_compare.html); the numbers from stats.books_comparison(). The readers' chart only with "...including who read
+   and listened" (`shows_readers`, the route hands no reader otherwise). #}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Period comparison") }}</h1>
+        <p class="subtitle">
+            {{ _("Any two periods of reading and listening side by side, with the same statistics under each other.") }}
+        </p>
+    </div>
+</div>
+
+{{ switches('/books/compare', period_a, period_b, query_a, query_b) }}
+{{ notes(comparison) }}
+
+{% if not comparison.has_data %}
+{{ nothing_to_compare(_("Neither of the chosen periods has any recorded reading or listening. Try other periods. History is collected from the moment Jellyscope runs.")) }}
+{% else %}
+
+{{ groups_table(comparison, period_a, period_b) }}
+
+{# A book the books sync does not know yet has no title: "unknown book", like the cards of Books. #}
+{{ chart_pair(_("Most read books"), comparison, period_a, period_b, "top", unnamed=_("unknown book")) }}
+{% if shows_readers %}
+{{ chart_pair(_("Most active readers"), comparison, period_a, period_b, "users", people=True) }}
+{% endif %}
+
+{% endif %}
+{% endblock %}

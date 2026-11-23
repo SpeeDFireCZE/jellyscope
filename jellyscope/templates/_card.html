@@ -1,0 +1,45 @@
+{# One card of the registry (jellyscope/cards.py) with its wrapper.
+
+   Drawn by the Overview (the macro show_card() in video/overview.html) and by a custom
+   dashboard (_dashboard_card.html) - one template, so the two places do not drift apart.
+   The Overview used to have its wrappers by hand and the custom dashboard none, so
+   "Now playing" stood still there and the Movies/Series switch loaded the whole page.
+
+   Expects `card` (an entry of the registry) and the card's data in the context (cards.data_for).
+
+   The live wrapper (see cards_base.Card):
+   * `refresh_partial` - the slice is fetched again in the collector's rhythm (data-refresh,
+     data-partial; handled in static/js/app.js). It changes every few seconds,
+     that is why a person comes back here during the day.
+   * `after_sync` - the content redraws itself: when a sync finishes and
+     something was added, this one piece is replaced without reloading the whole
+     page. `data-version` is the library's state at loading - by it a change since
+     then is recognised.
+   * `wrapper_id` - by it the Movies/Series switch finds the card (replaces only
+     it, not the page).
+
+   Cards of the apps (cards_<app>.py):
+   * `d` - the card's data. They come under the card's key, so cards of several apps
+     in one dashboard do not overwrite each other's variables. The card's template reads only `d.…`.
+   * `prefix` - "Sonarr · " before the card's heading in a dashboard, where cards
+     of several apps can stand side by side. On the app's own page
+     (`in_dashboard` is not set) it is empty - it is clear there whose card it is.
+   Older cards read neither.
+
+   The comment with the key before the card: a test tells the order of cards by it without
+   adding an element that would break the grid (.grid-2 > .card). #}
+<!-- card: {{ card.key }} -->
+{%- set d = card_data(card.key) %}
+{%- set prefix = (_(card.group) ~ " · ") if (in_dashboard and card.group) else "" %}
+{%- set wrapper_attrs %}{% if card.wrapper_id %} id="{{ card.wrapper_id }}"{% endif %}
+    {%- if card.refresh_partial %} data-refresh="{{ poll_interval }}" data-partial="{{ card.refresh_partial }}"{% endif %}
+    {%- if card.after_sync %} data-version="{{ library_version }}"{% endif %}{% endset %}
+{% if card.wrap_in_card %}
+<div class="card"{{ wrapper_attrs }}>{% include card.template %}</div>
+{% elif card.wrapper_id or card.refresh_partial or card.after_sync %}
+{#- A class for the custom dashboard: a cell there zeroes the bottom margin of its
+    last element, and that is the wrapper now, not the card (see .card-wrapper). #}
+<div class="card-wrapper"{{ wrapper_attrs }}>{% include card.template %}</div>
+{% else %}
+{% include card.template %}
+{% endif %}

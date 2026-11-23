@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Most watched titles") }} &middot; Jellyscope{% endblock %}
+{% block content %}
+{# A page for the case without JavaScript - otherwise this list opens
+   in a window over the Overview. The content is the same slice. #}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Most watched titles") }}</h1>
+        <p class="subtitle">{{ _("the whole ranking over the chosen period") }}</p>
+    </div>
+    <div class="btn-row">
+        {# Back to the overview of watching - not to / (the default page may be Music or the
+           dashboard). An account without the overview came here from Insights. #}
+        {% if may_open("/video/overview") %}
+            <a class="btn" href="/video/overview">&larr; {{ _("Overview") }}</a>
+        {% else %}
+            <a class="btn" href="/video/insights">&larr; {{ _("Insights") }}</a>
+        {% endif %}
+    </div>
+</div>
+<div class="card">
+    {% include "video/_top_items_all.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{# The music card "Data over the network": how much data flowed while listening.
+
+   From the database (cards_music.py, `d` = stats.music_network). An estimate: the listening time
+   × the playback's bitrate, and when Jellyfin does not report it (direct play), the file's
+   bitrate. Listening without any bitrate is not counted - the note
+   says how much of it there is. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Over the network (estimate)"), d.byte_count | bytes,
+            note=_("Listens without a bitrate (not counted): {n}").format(n=d.without_bitrate | number) if d.without_bitrate else None) }}
+</div>

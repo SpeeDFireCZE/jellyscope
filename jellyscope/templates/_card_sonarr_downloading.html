@@ -1,0 +1,16 @@
+{# The Sonarr card "Downloading": live, what the app downloads (cards_sonarr.py).
+
+   The heading stays, only the body refreshes: the wrapper carries `data-refresh` (in how
+   many seconds to ask again - 5 while downloading, 60 otherwise) and `data-partial`
+   (the slice's address). The slice thus need not know whether the card is on the
+   app's page or in a dashboard beside cards of other apps. After every
+   answer the rhythm follows the slice's header (static/js/app.js). #}
+<div class="section-head">
+    <div>
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="subtitle">{{ _("What the app is downloading right now and how far it is. It refreshes by itself.") }}</p>
+    </div>
+</div>
+<div class="downloading" data-refresh="{{ d.refresh }}" data-partial="/partials/arr/sonarr/downloading">
+    {% include "_sonarr_downloading_body.html" %}
+</div>

@@ -1,0 +1,714 @@
+[
+ {
+  "title": "Elephants Dream",
+  "originalTitle": "Elephants Dream",
+  "originalLanguage": {
+   "id": 1,
+   "name": "English"
+  },
+  "alternateTitles": [
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 4,
+    "title": "Orange",
+    "id": 17
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 4,
+    "title": "Machina",
+    "id": 18
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 4,
+    "title": "Orange Open Movie Project",
+    "id": 19
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 4,
+    "title": "Мечта слонов",
+    "id": 20
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 4,
+    "title": "رویای فیل ها",
+    "id": 21
+   }
+  ],
+  "secondaryYearSourceId": 0,
+  "sortTitle": "elephants dream",
+  "sizeOnDisk": 203381,
+  "status": "released",
+  "overview": "Elephants Dream is the story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo. As their journey unfolds we discover signs that the machine is not all Proog thinks it is, and his guiding takes on a more desperate aspect.  Elephants Dream is a story about communication and fiction, made purposefully open-ended as the world’s first 3D animated “Open movie”. The film itself is released under the Creative Commons license, along with the entirety of the production files used to make it (roughly 7 Gigabytes of data). The software used to make the movie is the free/open source animation suite Blender along with other open source software, thus allowing the movie to be remade, remixed and re-purposed with only a computer and the data on the DVD or download.",
+  "digitalRelease": "2006-03-24T00:00:00Z",
+  "releaseDate": "2006-03-24T00:00:00Z",
+  "images": [
+   {
+    "coverType": "poster",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/9zROtU9TkpZQrOuEaMAp68FOWLK.jpg"
+   },
+   {
+    "coverType": "fanart",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/9bJDwuhza19HQcYA99FeslLYmUm.jpg"
+   }
+  ],
+  "website": "http://www.elephantsdream.org/",
+  "year": 2006,
+  "youTubeTrailerId": "_0wxP7EWsOc",
+  "studio": "Blender Foundation",
+  "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+  "qualityProfileId": 1,
+  "hasFile": true,
+  "movieFileId": 2,
+  "monitored": true,
+  "minimumAvailability": "released",
+  "isAvailable": true,
+  "folderName": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+  "runtime": 11,
+  "cleanTitle": "elephantsdream",
+  "imdbId": "tt0807840",
+  "tmdbId": 9761,
+  "titleSlug": "9761",
+  "certification": "NR",
+  "genres": [
+   "Animation",
+   "Science Fiction"
+  ],
+  "keywords": [
+   "blender",
+   "dreams",
+   "future"
+  ],
+  "tags": [],
+  "added": "2026-11-12T22:23:08Z",
+  "ratings": {
+   "imdb": {
+    "votes": 1397,
+    "value": 5.6,
+    "type": "user"
+   },
+   "tmdb": {
+    "votes": 71,
+    "value": 5.8,
+    "type": "user"
+   },
+   "trakt": {
+    "votes": 86,
+    "value": 5.98837,
+    "type": "user"
+   }
+  },
+  "movieFile": {
+   "movieId": 4,
+   "relativePath": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "size": 203381,
+   "dateAdded": "2026-11-12T22:26:06Z",
+   "sceneName": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb",
+   "releaseGroup": "NTb",
+   "edition": "",
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "webdl",
+     "resolution": 720,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "indexerFlags": 0,
+   "mediaInfo": {
+    "audioBitrate": 0,
+    "audioChannels": 1,
+    "audioCodec": "AAC",
+    "audioLanguages": "",
+    "audioStreamCount": 1,
+    "videoBitDepth": 8,
+    "videoBitrate": 0,
+    "videoCodec": "x264",
+    "videoFps": 1,
+    "videoDynamicRange": "",
+    "videoDynamicRangeType": "",
+    "resolution": "1280x720",
+    "runTime": "30:00",
+    "scanType": "Progressive",
+    "subtitles": ""
+   },
+   "originalFilePath": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "qualityCutoffNotMet": true,
+   "id": 2
+  },
+  "popularity": 1.8026,
+  "lastSearchTime": "2026-11-12T22:23:08Z",
+  "statistics": {
+   "movieFileCount": 1,
+   "sizeOnDisk": 203381,
+   "releaseGroups": [
+    "NTb"
+   ],
+   "movieFileQualities": [
+    {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "webdl",
+     "resolution": 720,
+     "modifier": "none"
+    }
+   ]
+  },
+  "id": 4
+ },
+ {
+  "title": "Big Buck Bunny",
+  "originalTitle": "Big Buck Bunny",
+  "originalLanguage": {
+   "id": 1,
+   "name": "English"
+  },
+  "alternateTitles": [
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "El gran conejo",
+    "id": 1
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "Peach Open Movie Project",
+    "id": 2
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "Big Buck Bunny (Short 2008)",
+    "id": 3
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "Большой кролик",
+    "id": 4
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "Большой кролик Бак",
+    "id": 5
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "Великий Бак",
+    "id": 6
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 1,
+    "title": "Zeka veliki bak",
+    "id": 7
+   }
+  ],
+  "secondaryYearSourceId": 0,
+  "sortTitle": "big buck bunny",
+  "sizeOnDisk": 230822,
+  "status": "released",
+  "overview": "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them. After the deaths of two of Bunny's favorite butterflies, and an offensive attack on Bunny himself, Bunny sets aside his gentle nature and orchestrates a complex plan for revenge.",
+  "inCinemas": "2008-04-10T00:00:00Z",
+  "digitalRelease": "2008-04-10T00:00:00Z",
+  "releaseDate": "2008-04-10T00:00:00Z",
+  "images": [
+   {
+    "coverType": "poster",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/i9jJzvoXET4D9pOkoEwncSdNNER.jpg"
+   },
+   {
+    "coverType": "fanart",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/xtdybjRRZ15mCrPOvEld305myys.jpg"
+   }
+  ],
+  "website": "https://peach.blender.org/",
+  "year": 2008,
+  "youTubeTrailerId": "yUQM7H4Swgw",
+  "studio": "Blender Foundation",
+  "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+  "qualityProfileId": 1,
+  "hasFile": true,
+  "movieFileId": 5,
+  "monitored": true,
+  "minimumAvailability": "released",
+  "isAvailable": true,
+  "folderName": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)",
+  "runtime": 8,
+  "cleanTitle": "bigbuckbunny",
+  "imdbId": "tt1254207",
+  "tmdbId": 10378,
+  "titleSlug": "10378",
+  "certification": "G",
+  "genres": [
+   "Animation",
+   "Comedy",
+   "Family"
+  ],
+  "keywords": [
+   "blender",
+   "bunny",
+   "conejo",
+   "hilarious",
+   "mobbing",
+   "open source",
+   "repayment",
+   "revenge",
+   "short film",
+   "squirrel"
+  ],
+  "tags": [],
+  "added": "2026-11-12T20:50:09Z",
+  "ratings": {
+   "imdb": {
+    "votes": 2268,
+    "value": 6.4,
+    "type": "user"
+   },
+   "tmdb": {
+    "votes": 201,
+    "value": 6.473,
+    "type": "user"
+   },
+   "trakt": {
+    "votes": 329,
+    "value": 7.04863,
+    "type": "user"
+   }
+  },
+  "movieFile": {
+   "movieId": 1,
+   "relativePath": "Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "path": "/home/coder/projects/arr-test/media/movies/Big Buck Bunny (2008)/Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "size": 230822,
+   "dateAdded": "2026-11-12T22:32:06Z",
+   "sceneName": "Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX",
+   "releaseGroup": "FLUX",
+   "edition": "",
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "webdl",
+     "resolution": 1080,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "indexerFlags": 0,
+   "mediaInfo": {
+    "audioBitrate": 0,
+    "audioChannels": 1,
+    "audioCodec": "AAC",
+    "audioLanguages": "",
+    "audioStreamCount": 1,
+    "videoBitDepth": 8,
+    "videoBitrate": 0,
+    "videoCodec": "x264",
+    "videoFps": 1,
+    "videoDynamicRange": "",
+    "videoDynamicRangeType": "",
+    "resolution": "1920x1080",
+    "runTime": "30:00",
+    "scanType": "Progressive",
+    "subtitles": ""
+   },
+   "originalFilePath": "Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX/Big.Buck.Bunny.2008.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "qualityCutoffNotMet": true,
+   "id": 5
+  },
+  "popularity": 2.8155,
+  "lastSearchTime": "2026-11-12T22:30:38Z",
+  "statistics": {
+   "movieFileCount": 1,
+   "sizeOnDisk": 230822,
+   "releaseGroups": [
+    "FLUX"
+   ],
+   "movieFileQualities": [
+    {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "webdl",
+     "resolution": 1080,
+     "modifier": "none"
+    }
+   ]
+  },
+  "id": 1
+ },
+ {
+  "title": "Sintel",
+  "originalTitle": "Sintel",
+  "originalLanguage": {
+   "id": 1,
+   "name": "English"
+  },
+  "alternateTitles": [
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 2,
+    "title": "Sintel - Hiillos",
+    "id": 8
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 2,
+    "title": "Durian Open Movie Project",
+    "id": 9
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 2,
+    "title": "辛特尔",
+    "id": 10
+   }
+  ],
+  "secondaryYearSourceId": 0,
+  "sortTitle": "sintel",
+  "sizeOnDisk": 203381,
+  "status": "released",
+  "overview": "A wandering warrior finds an unlikely friend in the form of a young dragon. The two develop a close bond, until one day the dragon is snatched away. She then sets out on a relentless quest to reclaim her friend, finding in the end that her quest exacts a far greater price than she had ever imagined.",
+  "inCinemas": "2010-09-30T00:00:00Z",
+  "releaseDate": "2010-12-29T00:00:00Z",
+  "images": [
+   {
+    "coverType": "poster",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/l98Zns4oQe1BSvbF4hJ8oL6VSf0.jpg"
+   },
+   {
+    "coverType": "fanart",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"
+   }
+  ],
+  "website": "http://durian.blender.org/",
+  "year": 2010,
+  "youTubeTrailerId": "HOfdboHvshg",
+  "studio": "Blender Foundation",
+  "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+  "qualityProfileId": 1,
+  "hasFile": true,
+  "movieFileId": 3,
+  "monitored": true,
+  "minimumAvailability": "released",
+  "isAvailable": true,
+  "folderName": "/home/coder/projects/arr-test/media/movies/Sintel (2010)",
+  "runtime": 14,
+  "cleanTitle": "sintel",
+  "imdbId": "tt1727587",
+  "tmdbId": 45745,
+  "titleSlug": "45745",
+  "certification": "PG",
+  "genres": [
+   "Animation",
+   "Fantasy",
+   "Adventure"
+  ],
+  "keywords": [
+   "blender",
+   "dragon",
+   "pet",
+   "short film"
+  ],
+  "tags": [],
+  "added": "2026-11-12T20:50:09Z",
+  "ratings": {
+   "imdb": {
+    "votes": 3803,
+    "value": 7.4,
+    "type": "user"
+   },
+   "tmdb": {
+    "votes": 180,
+    "value": 7.3,
+    "type": "user"
+   },
+   "trakt": {
+    "votes": 280,
+    "value": 7.47857,
+    "type": "user"
+   }
+  },
+  "movieFile": {
+   "movieId": 2,
+   "relativePath": "Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "path": "/home/coder/projects/arr-test/media/movies/Sintel (2010)/Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "size": 203381,
+   "dateAdded": "2026-11-12T22:29:06Z",
+   "sceneName": "Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX",
+   "releaseGroup": "FLUX",
+   "edition": "",
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "webdl",
+     "resolution": 720,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "indexerFlags": 0,
+   "mediaInfo": {
+    "audioBitrate": 0,
+    "audioChannels": 1,
+    "audioCodec": "AAC",
+    "audioLanguages": "",
+    "audioStreamCount": 1,
+    "videoBitDepth": 8,
+    "videoBitrate": 0,
+    "videoCodec": "x264",
+    "videoFps": 1,
+    "videoDynamicRange": "",
+    "videoDynamicRangeType": "",
+    "resolution": "1280x720",
+    "runTime": "30:00",
+    "scanType": "Progressive",
+    "subtitles": ""
+   },
+   "originalFilePath": "Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX/Sintel.2010.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "qualityCutoffNotMet": true,
+   "id": 3
+  },
+  "popularity": 2.9502,
+  "lastSearchTime": "2026-11-12T22:32:11Z",
+  "statistics": {
+   "movieFileCount": 1,
+   "sizeOnDisk": 203381,
+   "releaseGroups": [
+    "FLUX"
+   ],
+   "movieFileQualities": [
+    {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "webdl",
+     "resolution": 720,
+     "modifier": "none"
+    }
+   ]
+  },
+  "id": 2
+ },
+ {
+  "title": "Tears of Steel",
+  "originalTitle": "Tears of Steel",
+  "originalLanguage": {
+   "id": 1,
+   "name": "English"
+  },
+  "alternateTitles": [
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 3,
+    "title": "mango open movie project",
+    "id": 11
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 3,
+    "title": "Larmes d'acier",
+    "id": 12
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 3,
+    "title": "티어 오브 스틸",
+    "id": 13
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 3,
+    "title": "Lágrimas de Aço",
+    "id": 14
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 3,
+    "title": "Сльози сталi",
+    "id": 15
+   },
+   {
+    "sourceType": "tmdb",
+    "movieMetadataId": 3,
+    "title": "钢铁的眼泪",
+    "id": 16
+   }
+  ],
+  "secondaryYearSourceId": 0,
+  "sortTitle": "tears of steel",
+  "sizeOnDisk": 203381,
+  "status": "released",
+  "overview": "The film’s premise is about a group of warriors and scientists, who gathered at the “Oude Kerk” in Amsterdam to stage a crucial event from the past, in a desperate attempt to rescue the world from destructive robots.",
+  "inCinemas": "2012-09-25T00:00:00Z",
+  "releaseDate": "2012-12-24T00:00:00Z",
+  "images": [
+   {
+    "coverType": "poster",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/8qy3jRmaHR7f8VZh3iXCqCWfFsH.jpg"
+   },
+   {
+    "coverType": "fanart",
+    "remoteUrl": "https://image.tmdb.org/t/p/original/fOy6SL5Zs2PFcNXwqEPIDPrLB1q.jpg"
+   }
+  ],
+  "website": "http://www.tearsofsteel.org/",
+  "year": 2012,
+  "youTubeTrailerId": "",
+  "studio": "Blender Foundation",
+  "path": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+  "qualityProfileId": 1,
+  "hasFile": true,
+  "movieFileId": 4,
+  "monitored": true,
+  "minimumAvailability": "released",
+  "isAvailable": true,
+  "folderName": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)",
+  "runtime": 12,
+  "cleanTitle": "tearssteel",
+  "imdbId": "tt2285752",
+  "tmdbId": 133701,
+  "titleSlug": "133701",
+  "genres": [
+   "Science Fiction",
+   "Animation"
+  ],
+  "keywords": [
+   "amsterdam, netherlands",
+   "fictional war",
+   "killer robot",
+   "man vs machine",
+   "saving the world"
+  ],
+  "tags": [],
+  "added": "2026-11-12T22:10:34Z",
+  "ratings": {
+   "imdb": {
+    "votes": 1572,
+    "value": 5.5,
+    "type": "user"
+   },
+   "tmdb": {
+    "votes": 63,
+    "value": 5.659,
+    "type": "user"
+   }
+  },
+  "movieFile": {
+   "movieId": 3,
+   "relativePath": "Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "path": "/home/coder/projects/arr-test/media/movies/Tears of Steel (2012)/Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "size": 203381,
+   "dateAdded": "2026-11-12T22:30:36Z",
+   "sceneName": "Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES",
+   "releaseGroup": "CAKES",
+   "edition": "",
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "webdl",
+     "resolution": 720,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "indexerFlags": 0,
+   "mediaInfo": {
+    "audioBitrate": 0,
+    "audioChannels": 1,
+    "audioCodec": "AAC",
+    "audioLanguages": "",
+    "audioStreamCount": 1,
+    "videoBitDepth": 8,
+    "videoBitrate": 0,
+    "videoCodec": "x264",
+    "videoFps": 1,
+    "videoDynamicRange": "",
+    "videoDynamicRangeType": "",
+    "resolution": "1280x720",
+    "runTime": "30:00",
+    "scanType": "Progressive",
+    "subtitles": ""
+   },
+   "originalFilePath": "Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES/Tears.of.Steel.2012.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "qualityCutoffNotMet": true,
+   "id": 4
+  },
+  "popularity": 1.9987,
+  "statistics": {
+   "movieFileCount": 1,
+   "sizeOnDisk": 203381,
+   "releaseGroups": [
+    "CAKES"
+   ],
+   "movieFileQualities": [
+    {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "webdl",
+     "resolution": 720,
+     "modifier": "none"
+    }
+   ]
+  },
+  "id": 3
+ }
+]

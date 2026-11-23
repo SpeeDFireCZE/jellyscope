@@ -1,0 +1,85 @@
+{# A card of the Library page (library_index.html).
+
+   Included by that page and by dashboards (cards.py, key `libraries`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `libraries (stats.library_cards)`. #}
+{% if libraries %}
+<div class="lib-grid">
+    {% for row in libraries %}
+    {# Every library Jellyfin has (stats.library_cards): music with its albums and
+       tracks, books with their works, a type Jellyscope does not collect yet as a tile without a link. #}
+    {% if row.kind == "music" %}
+    <a class="lib-card" href="/library/{{ row.id }}">
+        <div class="lib-cover">
+            {% if row.cover_id %}
+                <img src="/image/{{ row.cover_id }}?kind=Primary&w=600&tag={{ row.cover_tag }}"
+                     alt="" loading="lazy" data-on-error="remove">
+            {% endif %}
+            <span class="lib-cover-name">{{ row.name }}</span>
+        </div>
+        <div class="lib-facts">
+            <div><span class="muted">{{ _("Library") }}</span><span class="strong">{{ row.name }}</span></div>
+            <div><span class="muted">{{ _("Type") }}</span><span>{{ _(row.type_label) }}</span></div>
+            <div><span class="muted">{{ _("Albums#count") }}</span><span>{{ row.albums | number }}</span></div>
+            <div><span class="muted">{{ _("Tracks#count") }}</span><span>{{ row.tracks | number }}</span></div>
+            <div><span class="muted">{{ _("Size") }}</span><span class="strong">{{ row.size_bytes | bytes }}</span></div>
+            <div><span class="muted">{{ _("Content length") }}</span><span>{{ (row.seconds / 3600) | hours }}</span></div>
+        </div>
+    </a>
+    {% elif row.kind == "books" %}
+    <a class="lib-card" href="/library/{{ row.id }}">
+        <div class="lib-cover">
+            {% if row.cover_id %}
+                <img src="/image/{{ row.cover_id }}?kind=Primary&w=600&tag={{ row.cover_tag }}"
+                     alt="" loading="lazy" data-on-error="remove">
+            {% endif %}
+            <span class="lib-cover-name">{{ row.name }}</span>
+        </div>
+        <div class="lib-facts">
+            <div><span class="muted">{{ _("Library") }}</span><span class="strong">{{ row.name }}</span></div>
+            <div><span class="muted">{{ _("Type") }}</span><span>{{ _(row.type_label) }}</span></div>
+            <div><span class="muted">{{ _("E-books") }}</span><span>{{ row.ebooks | number }}</span></div>
+            <div><span class="muted">{{ _("Audiobooks") }}</span><span>{{ row.audiobooks | number }}</span></div>
+            <div><span class="muted">{{ _("Size") }}</span><span class="strong">{{ row.size_bytes | bytes }}</span></div>
+            {% if row.seconds %}<div><span class="muted">{{ _("Audiobook length") }}</span><span>{{ (row.seconds / 3600) | hours }}</span></div>{% endif %}
+        </div>
+    </a>
+    {% elif row.kind == "unsupported" %}
+    <div class="lib-card lib-card-not-collected">
+        <div class="lib-cover">
+            <span class="lib-cover-name">{{ row.name }}</span>
+        </div>
+        <div class="lib-facts">
+            <div><span class="muted">{{ _("Library") }}</span><span class="strong">{{ row.name }}</span></div>
+            <div><span class="muted">{{ _("Type") }}</span><span>{{ _(row.type_label) }}</span></div>
+            <p class="hint">{{ _("Jellyscope does not collect content of this type yet.") }}</p>
+        </div>
+    </div>
+    {% else %}
+    <a class="lib-card" href="/library/{{ row.id }}">
+        <div class="lib-cover">
+            {% if row.poster_id %}
+                {# loading="lazy" - images off the screen are downloaded only
+                   at the moment the user scrolls to them. #}
+                <img src="/image/{{ row.poster_id }}?kind=Backdrop&w=600"
+                     alt="" loading="lazy" data-on-error="remove">
+            {% endif %}
+            <span class="lib-cover-name">{{ row.name }}</span>
+        </div>
+        <div class="lib-facts">
+            <div><span class="muted">{{ _("Library") }}</span><span class="strong">{{ row.name }}</span></div>
+            <div><span class="muted">{{ _("Type") }}</span><span>{{ _(row.type_label) }}</span></div>
+            <div><span class="muted">{{ _("Files") }}</span><span>{{ row.item_count | number }}</span></div>
+            <div><span class="muted">{{ _("Size") }}</span><span class="strong">{{ row.size_bytes | bytes }}</span></div>
+            <div><span class="muted">{{ _("Content length") }}</span><span>{{ row.hours | hours }}</span></div>
+        </div>
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p class="chart-empty">{{ _("No libraries. Run a synchronisation in Settings.") }}</p>
+</div>
+{% endif %}

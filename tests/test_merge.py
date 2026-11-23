@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Slučování položek podle tmdb_id a archiv.
+"""Merging items by tmdb_id, and the archive.
 
-Situace, kterou to řeší: překóduješ film a nahradíš původní soubor.
-Jellyfin to nepozná jako změnu — založí novou položku s novým ItemId.
-Bez slučování by se historie přehrávání rozpadla na dva tituly.
+The situation it solves: you transcode a movie and replace the original file. Jellyfin does not see it as a
+change - it creates a new item with a new ItemId. Without merging the play history would fall apart into two
+titles.
 """
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 
-# Databáze musí být dočasná, ať test nesahá na skutečná data.
+# The database must be temporary, so that the test does not touch real data.
 _tmp = tempfile.mkdtemp()
-# Vlastní domeček: bez něj by DATABASE_PATH přebil uložený výběr
-# databáze v data/database.json a test by běžel proti ostré databázi.
+# Its own home: without it DATABASE_PATH would override the database chosen in data/database.json and the test
+# would run against the live database.
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "merge.db")
 
@@ -29,7 +29,7 @@ failures = 0
 
 def check(condition: bool, label: str) -> None:
     global failures
-    print(f"{'OK    ' if condition else 'CHYBA '} {label}")
+    print(f"{'OK    ' if condition else 'FAIL  '} {label}")
     if not condition:
         failures += 1
 
@@ -37,7 +37,7 @@ def check(condition: bool, label: str) -> None:
 db.init_db()
 
 
-def vloz_polozku(item_id: str, tmdb: str | None, name: str = "Film") -> None:
+def add_item(item_id: str, tmdb: str | None, name: str = "Film") -> None:
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO items (id, name, type, tmdb_id, is_missing, synced_at)"
@@ -46,7 +46,7 @@ def vloz_polozku(item_id: str, tmdb: str | None, name: str = "Film") -> None:
         )
 
 
-def vloz_prehravani(item_id: str, seconds: int) -> None:
+def add_play(item_id: str, seconds: int) -> None:
     with db.connect() as conn:
         conn.execute(
             """INSERT INTO playback
@@ -58,7 +58,7 @@ def vloz_prehravani(item_id: str, seconds: int) -> None:
         )
 
 
-def odsledovano(item_id: str) -> int:
+def watched(item_id: str) -> int:
     with db.connect() as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(watched_seconds), 0) AS s"
@@ -68,170 +68,167 @@ def odsledovano(item_id: str) -> int:
     return int(row["s"])
 
 
-def polozka(item_id: str):
+def item(item_id: str):
     with db.connect() as conn:
         return conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
 
 
-print("--- tmdb_id z odpovědi Jellyfinu ---")
+print("--- tmdb_id from Jellyfin's answer ---")
 check(scanner.tmdb_id_of({"ProviderIds": {"Tmdb": "603"}}) == "603",
-      "přečte klíč Tmdb")
+      "reads the key Tmdb")
 check(scanner.tmdb_id_of({"ProviderIds": {"TmdbId": "603"}}) == "603",
-      "přečte i klíč TmdbId")
+      "reads the key TmdbId too")
 check(scanner.tmdb_id_of({"ProviderIds": {"tmdb": "603"}}) == "603",
-      "na velikosti písmen nezáleží")
+      "the case of letters does not matter")
 check(scanner.tmdb_id_of({"ProviderIds": {"Imdb": "tt0133093"}}) is None,
-      "jiný poskytovatel se nepoplete s TMDB")
+      "another provider is not mistaken for TMDB")
 check(scanner.tmdb_id_of({"SeriesProviderIds": {"Tmdb": "1396"}}) == "1396",
-      "u epizody vezme id seriálu")
-# A právě proto se tmdb_id samo o sobě nesmí použít jako identita položky:
-# všechny díly seriálu ho mají stejné. Podrobně v test_serialy_a_historie.py.
-check(scanner.identita_polozky({"Type": "Episode", "ParentIndexNumber": 1,
-                                "IndexNumber": 3,
-                                "SeriesProviderIds": {"Tmdb": "1396"}})
+      "for an episode it takes the series' id")
+# And exactly that is why tmdb_id alone must not be used as an item's identity: all episodes of a series have
+# the same one. In detail in test_series_and_history.py.
+check(scanner.item_identity({"Type": "Episode", "ParentIndexNumber": 1,
+                             "IndexNumber": 3,
+                             "SeriesProviderIds": {"Tmdb": "1396"}})
       == ("1396", 1, 3),
-      "identita epizody je tmdb + řada + díl")
-check(scanner.tmdb_id_of({}) is None, "bez ProviderIds vrátí None")
+      "an episode's identity is tmdb + season + episode")
+check(scanner.tmdb_id_of({}) is None, "without ProviderIds it returns None")
 check(scanner.tmdb_id_of({"ProviderIds": {"Tmdb": ""}}) is None,
-      "prázdná hodnota se nepočítá")
+      "an empty value does not count")
 check(scanner.tmdb_id_of({"ProviderIds": "nesmysl"}) is None,
-      "poškozená odpověď nespadne")
+      "a broken answer does not fail")
 
 
 print()
-print("--- překódovaný soubor: nové ItemId, stejné tmdb ---")
-vloz_polozku("stare-id", "603", "Matrix")
-vloz_prehravani("stare-id", 5400)
-check(odsledovano("stare-id") == 5400, "výchozí stav: 5400 s na starém id")
+print("--- a transcoded file: a new ItemId, the same tmdb ---")
+add_item("stare-id", "603", "Matrix")
+add_play("stare-id", 5400)
+check(watched("stare-id") == 5400, "the starting state: 5400 s on the old id")
 
 merged = scanner._merge_by_tmdb([(("603", -1, -1), "nove-id")])
-check(merged == 1, "proběhlo jedno sloučení")
-check(polozka("stare-id") is None, "stará položka zmizela")
-check(polozka("nove-id") is not None, "položka je pod novým id")
-check(odsledovano("nove-id") == 5400, "historie se přenesla beze ztráty")
-check(odsledovano("stare-id") == 0, "na starém id už nic nezůstalo")
-check(polozka("nove-id")["name"] == "Matrix", "název a ostatní data zůstala")
+check(merged == 1, "one merge ran")
+check(item("stare-id") is None, "the old item disappeared")
+check(item("nove-id") is not None, "the item is under the new id")
+check(watched("nove-id") == 5400, "the history moved over without loss")
+check(watched("stare-id") == 0, "nothing is left on the old id")
+check(item("nove-id")["name"] == "Matrix", "the name and the other data stayed")
 
 
 print()
-print("--- nové id už v databázi je (sync předběhl slučování) ---")
-vloz_polozku("stara-2", "550", "Klub rváčů")
-vloz_prehravani("stara-2", 1200)
-vloz_polozku("nova-2", "550", "Klub rváčů")
-vloz_prehravani("nova-2", 300)
+print("--- the new id is in the database already (the sync came before the merging) ---")
+add_item("stara-2", "550", "Klub rváčů")
+add_play("stara-2", 1200)
+add_item("nova-2", "550", "Klub rváčů")
+add_play("nova-2", 300)
 
 merged = scanner._merge_by_tmdb([(("550", -1, -1), "nova-2")])
-check(merged == 1, "proběhlo sloučení")
-check(polozka("stara-2") is None, "duplicitní položka je pryč")
-check(odsledovano("nova-2") == 1500, "historie obou se sečetla (1200 + 300)")
+check(merged == 1, "a merge ran")
+check(item("stara-2") is None, "the duplicate item is gone")
+check(watched("nova-2") == 1500, "the history of both added up (1200 + 300)")
 
 
 print()
-print("--- co se slučovat nesmí ---")
-vloz_polozku("jiny-film", "999", "Jiný film")
-vloz_prehravani("jiny-film", 600)
+print("--- what must not be merged ---")
+add_item("jiny-film", "999", "Jiný film")
+add_play("jiny-film", 600)
 merged = scanner._merge_by_tmdb([(("111", -1, -1), "neexistuje")])
-check(merged == 0, "neznámé tmdb nic nesloučí")
-check(odsledovano("jiny-film") == 600, "cizí položky se nedotkne")
+check(merged == 0, "an unknown tmdb merges nothing")
+check(watched("jiny-film") == 600, "a foreign item is not touched")
 
 merged = scanner._merge_by_tmdb([(("999", -1, -1), "jiny-film")])
-check(merged == 0, "stejné id na obou stranách se neslučuje samo se sebou")
-check(polozka("jiny-film") is not None, "položka nezmizela")
+check(merged == 0, "the same id on both sides is not merged with itself")
+check(item("jiny-film") is not None, "the item did not disappear")
 
-check(scanner._merge_by_tmdb([]) == 0, "prázdný seznam projde bez chyby")
+check(scanner._merge_by_tmdb([]) == 0, "an empty list passes without an error")
 
 
 print()
-print("--- víc kandidátů: vyhraje ten s největší historií ---")
-vloz_polozku("maly", "777", "Duna")
-vloz_prehravani("maly", 100)
-vloz_polozku("velky", "777", "Duna")
-vloz_prehravani("velky", 9000)
+print("--- several candidates: the one with the most history wins ---")
+add_item("maly", "777", "Duna")
+add_play("maly", 100)
+add_item("velky", "777", "Duna")
+add_play("velky", 9000)
 
 scanner._merge_by_tmdb([(("777", -1, -1), "duna-nova")])
-check(odsledovano("duna-nova") == 9000,
-      "přenesla se historie té položky, kde bylo odsledováno nejvíc")
-check(polozka("velky") is None, "vybraná položka se přejmenovala")
-check(polozka("maly") is not None, "druhá zůstala nedotčená")
+check(watched("duna-nova") == 9000,
+      "the history of the item with the most watched moved over")
+check(item("velky") is None, "the chosen item was renamed")
+check(item("maly") is not None, "the other stayed untouched")
 
 
 print()
-print("--- archiv místo mazání ---")
+print("--- the archive instead of deleting ---")
 with db.connect() as conn:
     conn.execute("UPDATE items SET is_missing = 1 WHERE id = ?", ("jiny-film",))
-check(polozka("jiny-film")["is_missing"] == 1, "položka jde označit jako archivovaná")
-check(odsledovano("jiny-film") == 600, "archivace historii nemaže")
+check(item("jiny-film")["is_missing"] == 1, "an item can be marked as archived")
+check(watched("jiny-film") == 600, "archiving does not delete the history")
 
-# Sloučení musí archivovanou položku zase probudit - soubor se vrátil.
+# Merging must wake an archived item up again - the file came back.
 scanner._merge_by_tmdb([(("999", -1, -1), "jiny-film-nove")])
-check(polozka("jiny-film-nove")["is_missing"] == 0,
-      "sloučení vrátí položku z archivu zpátky mezi živé")
+check(item("jiny-film-nove")["is_missing"] == 0,
+      "merging returns the item from the archive among the live ones")
 
 
 print()
-print("--- druhá kopie téhož dílu se slučovat nesmí ---")
-# Rozdíl mezi "vyměněný soubor" a "dvě kopie": u výměny stará položka
-# z Jellyfinu zmizela, u dvou kopií tam obě dál jsou. Slučování to samo
-# nepozná - obě mají stejné tmdb + řadu + díl -, takže by jednu smazalo.
-# Příští scan by ji vrátil a smazal tu druhou; položky by se střídaly
-# a odkaz na tu právě sežranou házel 404.
+print("--- a second copy of the same episode must not be merged ---")
+# The difference between "a replaced file" and "two copies": with a replacement the old item disappeared from
+# Jellyfin, with two copies both are still there. The merging cannot tell by itself - both have the same tmdb +
+# season + episode -, so it would delete one. The next scan would bring it back and delete the other; the items
+# would take turns and a link to the one just eaten would give 404.
 
 
-def vloz_epizodu(item_id: str, tmdb: str, rada: int, dil: int,
-                 synced_at: str | None = None) -> None:
+def add_episode(item_id: str, tmdb: str, season: int, episode: int,
+                synced_at: str | None = None) -> None:
     with db.connect() as conn:
         conn.execute(
             """INSERT INTO items (id, name, type, tmdb_id, parent_index_number,
                                   index_number, is_missing, synced_at)
                VALUES (?,?,'Episode',?,?,?,0,?)""",
-            (item_id, f"S{rada:02d}E{dil:02d}", tmdb, rada, dil,
+            (item_id, f"S{season:02d}E{episode:02d}", tmdb, season, episode,
              synced_at or db.utcnow()),
         )
 
 
-vloz_epizodu("kopie-A", "1396", 3, 3)
-vloz_prehravani("kopie-A", 900)
+add_episode("kopie-A", "1396", 3, 3)
+add_play("kopie-A", 900)
 
 merged = scanner._merge_by_tmdb([(("1396", 3, 3), "kopie-B")],
-                                chranena={"kopie-A"})
-check(merged == 0, "položka, o které víme, že v Jellyfinu je, se nesloučí")
-check(polozka("kopie-A") is not None, "a nezmizela")
-check(odsledovano("kopie-A") == 900, "historie zůstala u ní")
+                                protected={"kopie-A"})
+check(merged == 0, "an item we know is in Jellyfin is not merged")
+check(item("kopie-A") is not None, "and did not disappear")
+check(watched("kopie-A") == 900, "the history stayed with it")
 
-# Druhý způsob, jak se to pozná: razítko `synced_at`. Co Jellyfin poslal
-# v tomhle běhu, existuje - a existující položka se neslučuje. Plná
-# synchronizace jiné ochranu nepotřebuje.
-beh = db.utcnow()
-vloz_epizodu("kopie-C", "1396", 4, 1, synced_at=beh)
-merged = scanner._merge_by_tmdb([(("1396", 4, 1), "kopie-D")], videno_od=beh)
-check(merged == 0, "položka viděná v tomhle běhu se nesloučí")
-check(polozka("kopie-C") is not None, "zůstala")
+# The second way it is told: the stamp `synced_at`. What Jellyfin sent in this run exists - and an existing item
+# is not merged. The full sync needs no other protection.
+run_start = db.utcnow()
+add_episode("kopie-C", "1396", 4, 1, synced_at=run_start)
+merged = scanner._merge_by_tmdb([(("1396", 4, 1), "kopie-D")], seen_since=run_start)
+check(merged == 0, "an item seen in this run is not merged")
+check(item("kopie-C") is not None, "it stayed")
 
-# A protipól: opravdu vyměněný soubor. Stará položka má razítko z minula,
-# protože ji Jellyfin už neposlal - tam sloučit musíme, jinak se historie
-# rozpadne na dva tituly.
-vloz_epizodu("vymeneny-stary", "1396", 5, 2, synced_at="2020-01-01 00:00:00")
-vloz_prehravani("vymeneny-stary", 1800)
+# And the counterpart: a really replaced file. The old item has a stamp from last time, because Jellyfin did not
+# send it any more - there we must merge, otherwise the history falls apart into two titles.
+add_episode("vymeneny-stary", "1396", 5, 2, synced_at="2020-01-01 00:00:00")
+add_play("vymeneny-stary", 1800)
 merged = scanner._merge_by_tmdb([(("1396", 5, 2), "vymeneny-novy")],
-                                videno_od=beh)
-check(merged == 1, "vyměněný soubor se sloučí dál")
-check(odsledovano("vymeneny-novy") == 1800, "a historie se přenesla")
+                                seen_since=run_start)
+check(merged == 1, "a replaced file is still merged")
+check(watched("vymeneny-novy") == 1800, "and the history moved over")
 
-# Dávka, která se zrovna zapisuje, je živá z definice - ochrana se z ní
-# vezme sama, aniž by ji volající musel vypisovat.
-vloz_epizodu("davka-A", "1396", 6, 6)
-vloz_prehravani("davka-A", 300)
-radek = scanner._radek_polozky(
+# The batch being written is live by definition - the protection is taken from it by itself, without the caller
+# having to list it.
+add_episode("davka-A", "1396", 6, 6)
+add_play("davka-A", 300)
+row = scanner._item_row(
     {"Id": "davka-A", "Name": "S06E06", "Type": "Episode",
      "ParentIndexNumber": 6, "IndexNumber": 6,
      "SeriesProviderIds": {"Tmdb": "1396"}},
     "lib", {}, db.utcnow())
-scanner._write_batch([radek], [], [(("1396", 6, 6), "davka-B")], True)
-check(polozka("davka-A") is not None,
-      "položku z právě zapisované dávky slučování nesebere")
-check(odsledovano("davka-A") == 300, "a historie zůstala u ní")
+scanner._write_batch([row], [], [(("1396", 6, 6), "davka-B")], True)
+check(item("davka-A") is not None,
+      "the merging does not take an item of the batch being written")
+check(watched("davka-A") == 300, "and the history stayed with it")
 
 
 print()
-print("HOTOVO - chyb:", failures)
+print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

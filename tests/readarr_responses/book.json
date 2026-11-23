@@ -1,0 +1,342 @@
+[
+  {
+    "id": 11,
+    "title": "Válka s mloky",
+    "authorTitle": "Karel Čapek Válka s mloky",
+    "seriesTitle": "",
+    "disambiguation": "",
+    "overview": "",
+    "authorId": 1,
+    "foreignBookId": "200011",
+    "foreignEditionId": "5000110",
+    "titleSlug": "200011",
+    "monitored": true,
+    "anyEditionOk": true,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0,
+      "popularity": 0.0
+    },
+    "releaseDate": "1936-01-01T00:00:00Z",
+    "pageCount": 300,
+    "genres": [
+      "Fiction"
+    ],
+    "author": {
+      "id": 1,
+      "authorMetadataId": 1,
+      "status": "ended",
+      "ended": true,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "genres": [],
+      "images": [],
+      "path": "/books/Karel Čapek",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:50:07Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Books/11/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://images.example/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "bookFileCount": 1,
+      "bookCount": 1,
+      "totalBookCount": 1,
+      "sizeOnDisk": 4000000,
+      "percentOfBooks": 100.0
+    },
+    "added": "2026-11-12T20:50:10Z",
+    "editions": [
+      {
+        "id": 110,
+        "bookId": 11,
+        "foreignEditionId": "5000110",
+        "titleSlug": "5000110",
+        "isbn13": "9788074322556",
+        "asin": "B00A000001",
+        "title": "Válka s mloky",
+        "language": "cze",
+        "overview": "",
+        "format": "EPUB",
+        "isEbook": true,
+        "disambiguation": "",
+        "publisher": "Nakladatel",
+        "pageCount": 300,
+        "releaseDate": "2019-05-17T00:00:00Z",
+        "images": [],
+        "links": [],
+        "ratings": {
+          "votes": 0,
+          "value": 0.0,
+          "popularity": 0.0
+        },
+        "monitored": true,
+        "manualAdd": false
+      }
+    ],
+    "grabbed": false
+  },
+  {
+    "id": 12,
+    "title": "Bílá nemoc",
+    "authorTitle": "Karel Čapek Bílá nemoc",
+    "seriesTitle": "",
+    "disambiguation": "",
+    "overview": "",
+    "authorId": 1,
+    "foreignBookId": "200012",
+    "foreignEditionId": "5000120",
+    "titleSlug": "200012",
+    "monitored": true,
+    "anyEditionOk": true,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0,
+      "popularity": 0.0
+    },
+    "releaseDate": "1937-01-01T00:00:00Z",
+    "pageCount": 300,
+    "genres": [
+      "Fiction"
+    ],
+    "author": {
+      "id": 1,
+      "authorMetadataId": 1,
+      "status": "ended",
+      "ended": true,
+      "authorName": "Karel Čapek",
+      "foreignAuthorId": "100001",
+      "monitored": true,
+      "genres": [],
+      "images": [],
+      "path": "/books/Karel Čapek",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:50:07Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Books/12/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://images.example/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "bookFileCount": 2,
+      "bookCount": 1,
+      "totalBookCount": 1,
+      "sizeOnDisk": 2000000,
+      "percentOfBooks": 100.0
+    },
+    "added": "2026-11-12T20:50:11Z",
+    "editions": [
+      {
+        "id": 120,
+        "bookId": 12,
+        "foreignEditionId": "5000120",
+        "titleSlug": "5000120",
+        "isbn13": null,
+        "asin": "",
+        "title": "Bílá nemoc",
+        "language": "cze",
+        "overview": "",
+        "format": "EPUB",
+        "isEbook": true,
+        "disambiguation": "",
+        "publisher": "Nakladatel",
+        "pageCount": 300,
+        "releaseDate": "2019-05-17T00:00:00Z",
+        "images": [],
+        "links": [],
+        "ratings": {
+          "votes": 0,
+          "value": 0.0,
+          "popularity": 0.0
+        },
+        "monitored": true,
+        "manualAdd": false
+      }
+    ],
+    "grabbed": false
+  },
+  {
+    "id": 21,
+    "title": "Mort",
+    "authorTitle": "Terry Pratchett Mort",
+    "seriesTitle": "",
+    "disambiguation": "",
+    "overview": "",
+    "authorId": 2,
+    "foreignBookId": "200021",
+    "foreignEditionId": "5000210",
+    "titleSlug": "200021",
+    "monitored": true,
+    "anyEditionOk": true,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0,
+      "popularity": 0.0
+    },
+    "releaseDate": "1987-11-12T00:00:00Z",
+    "pageCount": 300,
+    "genres": [
+      "Fiction"
+    ],
+    "author": {
+      "id": 2,
+      "authorMetadataId": 2,
+      "status": "ended",
+      "ended": true,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "genres": [],
+      "images": [],
+      "path": "/books/Terry Pratchett",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:51:30Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Books/21/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://images.example/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "bookFileCount": 0,
+      "bookCount": 1,
+      "totalBookCount": 1,
+      "sizeOnDisk": 0,
+      "percentOfBooks": 0.0
+    },
+    "added": "2026-11-12T20:51:31Z",
+    "editions": [
+      {
+        "id": 210,
+        "bookId": 21,
+        "foreignEditionId": "5000210",
+        "titleSlug": "5000210",
+        "isbn13": "9780552131063",
+        "asin": "",
+        "title": "Mort",
+        "language": "cze",
+        "overview": "",
+        "format": "Paperback",
+        "isEbook": false,
+        "disambiguation": "",
+        "publisher": "Nakladatel",
+        "pageCount": 300,
+        "releaseDate": "2019-05-17T00:00:00Z",
+        "images": [],
+        "links": [],
+        "ratings": {
+          "votes": 0,
+          "value": 0.0,
+          "popularity": 0.0
+        },
+        "monitored": true,
+        "manualAdd": false
+      }
+    ],
+    "grabbed": false
+  },
+  {
+    "id": 22,
+    "title": "Stráže! Stráže!",
+    "authorTitle": "Terry Pratchett Stráže! Stráže!",
+    "seriesTitle": "",
+    "disambiguation": "",
+    "overview": "",
+    "authorId": 2,
+    "foreignBookId": "200022",
+    "foreignEditionId": "5000220",
+    "titleSlug": "200022",
+    "monitored": true,
+    "anyEditionOk": true,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0,
+      "popularity": 0.0
+    },
+    "releaseDate": "1989-11-19T00:00:00Z",
+    "pageCount": 300,
+    "genres": [
+      "Fiction"
+    ],
+    "author": {
+      "id": 2,
+      "authorMetadataId": 2,
+      "status": "ended",
+      "ended": true,
+      "authorName": "Terry Pratchett",
+      "foreignAuthorId": "100002",
+      "monitored": true,
+      "genres": [],
+      "images": [],
+      "path": "/books/Terry Pratchett",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:51:30Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Books/22/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://images.example/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "bookFileCount": 2,
+      "bookCount": 1,
+      "totalBookCount": 1,
+      "sizeOnDisk": 98000000,
+      "percentOfBooks": 100.0
+    },
+    "added": "2026-11-12T20:51:32Z",
+    "editions": [
+      {
+        "id": 220,
+        "bookId": 22,
+        "foreignEditionId": "5000220",
+        "titleSlug": "5000220",
+        "isbn13": "9788073062996",
+        "asin": "B00A000022",
+        "title": "Stráže! Stráže!",
+        "language": "cze",
+        "overview": "",
+        "format": "Audio CD",
+        "isEbook": false,
+        "disambiguation": "",
+        "publisher": "Nakladatel",
+        "pageCount": 300,
+        "releaseDate": "2019-05-17T00:00:00Z",
+        "images": [],
+        "links": [],
+        "ratings": {
+          "votes": 0,
+          "value": 0.0,
+          "popularity": 0.0
+        },
+        "monitored": true,
+        "manualAdd": false
+      }
+    ],
+    "grabbed": false
+  }
+]

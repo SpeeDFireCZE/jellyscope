@@ -1,0 +1,31 @@
+{# Insights of Books: the full charts of books, authors and genres, and what nobody reads - laid out like the insights
+   of Music and of Movies & series.
+
+   The cards are from the registry (jellyscope/cards_books.py, PAGES["insights"]); which of them the account sees was
+   decided by the route (web/books/insights.py, `cards`). #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}{{ _("Insights") }} &middot; {{ _("Books") }} &middot; Jellyscope{% endblock %}
+
+{# A books card by its name ("works" -> books_works). #}
+{% macro c(card_name) %}{{ show_card("books_" ~ card_name) }}{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>{{ _("Insights") }}</h1>
+        <p class="subtitle">{{ _("Books, authors and genres with the most hours of reading and listening in the period - and what nobody reads.") }}</p>
+    </div>
+    {{ period_filter(period, '/books/insights') }}
+</div>
+
+{{ c("works") }}
+<div class="grid-2 align-top">
+    {{ c("authors") }}
+    {{ c("genres") }}
+</div>
+{{ c("unread") }}
+
+{# One window for the whole table of any card (whole_table_button, data-table-window). #}
+{{ table_window() }}
+{% endblock %}

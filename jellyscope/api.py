@@ -1,45 +1,47 @@
-"""Čtecí API pro nástroje jako Grafana nebo Homepage.
+"""A read-only API for tools like Grafana or Homepage.
 
-Je to **zdroj čísel, ne druhá cesta do dat**. Proto:
+It is **a source of numbers, not a second way into the data**. Therefore:
 
-* **Jen čtení.** Pod `/api/` nevede žádná routa, která by něco měnila -
-  ne jako pravidlo v hlavě, ale doslova: jsou tu samá `GET`. Cokoliv
-  jiného vrátí 405.
-* **Hotové přehledy, ne dotazovací jazyk.** Pár adres, které odpovídají
-  na otázky, kvůli kterým si člověk dashboard staví. Obecné API nad
-  statistikami by znamenalo držet navěky tvar každého vnitřního dotazu.
-* **Token v hlavičce, nikdy v adrese.** Adresa se objeví v logu proxy,
-  v historii prohlížeče a v odkazu, který někdo pošle dál. Hlavička ne.
+* **Read only.** No route under `/api/` changes anything - not as a rule kept
+  in mind, but literally: there are only `GET`s here. Anything else returns
+  405.
+* **Ready-made overviews, not a query language.** A few addresses that answer
+  the questions a person builds a dashboard for. A general API over the
+  statistics would mean keeping the shape of every inner query forever.
+* **The token in a header, never in the address.** An address shows up in the
+  proxy's log, in the browser's history and in a link somebody passes on. A
+  header does not.
 
-Tokeny
+Tokens
 ------
 
-Ukládá se **otisk**, ne token - stejně jako u hesel. Kdo si přečte
-databázi, nedostane přístup; komu token unikne, ten ho v Nastavení
-zneplatní a vyrobí nový, aniž by se to dotklo ostatních.
+A **fingerprint** is stored, not the token - just like with passwords. Whoever
+reads the database gets no access; whoever leaks a token revokes it in
+Settings and makes a new one, without touching the others.
 
-Otisk je SHA-256, ne PBKDF2 jako u hesel, a je to schválně: token si
-nikdo nevymýšlí, vyrábí ho `secrets.token_urlsafe(32)` - 256 bitů
-náhody. Pomalý otisk chrání před hádáním slabého hesla; tady není co
-hádat a každý požadavek by se o to zpomalil.
+The fingerprint is SHA-256, not PBKDF2 as with passwords, and on purpose:
+nobody makes a token up, `secrets.token_urlsafe(32)` makes it - 256 bits of
+randomness. A slow fingerprint protects against guessing a weak password;
+here there is nothing to guess and every request would be slower for it.
 
-Vlastník a stav
+Owner and state
 ---------------
 
-Uživatelský klíč (Můj účet) patří účtu a smí **přesně to, co jeho
-vlastník** - ne víc. Root klíč (Nastavení → API, `account_id` je NULL)
-nepatří nikomu a smí jen to, co mu nastavil správce (`api_tokens.prava`);
-bez nastavených práv smí všechno - to jsou i klíče z doby před vlastníky,
-aby se po aktualizaci nerozbila Grafana ani Homepage.
+A user key (My account) belongs to an account and may **exactly what its
+owner may** - no more. A root key (Settings → API, `account_id` is NULL)
+belongs to nobody and may only what the administrator set for it
+(`api_tokens.permissions`); without rights set it may everything - those are also
+keys from before owners, so Grafana and Homepage do not break after an update.
 
-Správce může klíč vypnout a zase zapnout - třeba když má podezření, že
-unikl, a chce to nejdřív prověřit. Vypnutý klíč nic nevrátí, ale v
-seznamu zůstane. Každý požadavek s existujícím klíčem se zapíše do
-logu API (`data/logs/api.log`): kdy, kam, odkud a jak dopadl. Viz
-zapis_pouziti().
+The administrator can disable a key and enable it again - say when they
+suspect it leaked and want to look into it first. A disabled key returns
+nothing, but stays in the list. Every request with an existing key is written
+to the API log (`data/logs/api.log`): when, where, from where and how it
+ended. See record_use().
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import logging
@@ -49,471 +51,531 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from . import (accounts, api_dotaz, applog, db, dialect, formatting, insights, pristup,
+from . import (access, accounts, api_query, applog, db, dialect, formatting, i18n, insights,
                scanner, stats)
-from .api_dotaz import ChybaApi
+from .api_query import ApiError
 
 log = logging.getLogger("jellyscope.api")
 
-# Predpona, at je na prvni pohled videt, co to je - v logu, v konfiguraci
-# dashboardu i v cizim repozitari, kam se omylem dostane.
-PREDPONA = "js_"
+# A prefix, so it is plain at first sight what this is - in a log, in a
+# dashboard's configuration and in someone else's repository it gets into by mistake.
+PREFIX = "js_"
 
-# Kolik znaku tokenu se ukazuje v Nastaveni - vcetne predpony. Zbytek
-# je za hvezdickami a nikde ho uz neni odkud vzit: ulozeny je jen otisk.
-# Pet znaku je z nahodne casti dvojice; rozeznat tokeny od sebe se ma
-# podle jmena, ne podle zacatku klice.
-UKAZKA_ZNAKU = 5
+# How many characters of a token Settings show - the prefix included. The rest
+# is behind asterisks and there is nowhere to take it from any more: only the
+# fingerprint is stored. Five characters are two of the random part; tokens
+# are told apart by their name, not by the start of the key.
+PREVIEW_CHARS = 5
 
-# Jak casto se prepisuje "naposledy pouzit". Grafana se pta kazdych par
-# vterin a zapis pri kazdem dotazu je zbytecny; na otazku "zije tenhle
-# token jeste?" staci minuta.
-ZAPIS_POUZITI_PO = timedelta(minutes=1)
+# How often "last used" is rewritten. Grafana asks every few seconds and a
+# write at every request is needless; for the question "is this token still
+# alive?" a minute is enough.
+USAGE_WRITE_AFTER = timedelta(minutes=1)
 
-# Stavy klice. Zneplatneni stav nema - to je smazani radku.
-AKTIVNI = "aktivni"
-VYPNUTY = "vypnuty"
+# The key's states. Revoking has no state - that is deleting the row.
+ACTIVE = "active"
+DISABLED = "disabled"
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
 
-# Kterou cast stromu "co kdo vidi" (pristup.OBLASTI) ktera adresa ukazuje.
-# Klic je cesta routy tak, jak ji zna FastAPI - i se `{item_id}`. None =
-# smi kazdy, kdo prosel over_token: rozcestnik neukazuje data a historie
-# si filtr na vlastniho divaka vnuti sama, jako stranka Historie.
+# Which part of the tree "who sees what" (access.AREAS) each address shows.
+# The key is the route's path as FastAPI knows it - with `{item_id}` too. None
+# = anyone who passed verify_token may: the index shows no data and the
+# history forces the filter on its own viewer itself, like the History page.
 #
-# Adresa, ktera tu chybi, je zavrena pro kazdeho krome spravce - nova
-# routa bez oblasti se tak neotevre omylem. Test hlida, ze tu je kazda.
-OBLASTI_ADRES: dict[str, str | None] = {
+# An address missing here is closed to everyone but the administrator - so a
+# new route without an area does not open by mistake. A test guards that every
+# one is here.
+ADDRESS_AREAS: dict[str, str | None] = {
     "/api/v1": None,
     "/api/v1/": None,
-    "/api/v1/libraries": "knihovna",
-    "/api/v1/library": "knihovna",
-    "/api/v1/recently-added": "knihovna",
-    "/api/v1/item/{item_id}": "knihovna",
-    "/api/v1/top-items": "zebricky",
-    "/api/v1/least-played": "zebricky",
-    "/api/v1/unwatched": "zebricky",
-    "/api/v1/insights": "zebricky",
-    "/api/v1/summary": "prehled",
-    "/api/v1/play-methods": "prehled",
-    "/api/v1/now-playing": "prave_hraje",
-    "/api/v1/users": "uzivatele",
+    "/api/v1/libraries": "library",
+    "/api/v1/library": "library",
+    "/api/v1/recently-added": "library",
+    "/api/v1/item/{item_id}": "library",
+    "/api/v1/top-items": "charts",
+    "/api/v1/least-played": "charts",
+    "/api/v1/unwatched": "charts",
+    "/api/v1/insights": "charts",
+    "/api/v1/summary": "overview",
+    "/api/v1/play-methods": "overview",
+    "/api/v1/now-playing": "now_playing",
+    "/api/v1/users": "users",
     "/api/v1/history": None,
-    "/api/v1/bandwidth": "sit",
+    "/api/v1/bandwidth": "network",
 }
 
 
-def _otisk(token: str) -> str:
+@functools.cache
+def key_areas() -> frozenset[str]:
+    """Areas a root key can use: those with an address above and the "...who" names under them.
+
+    The one rule for the key's tree in Settings, for saving its rights and for reading them back
+    (the table of keys, the Rights window). Music, *Arr, languages or the custom dashboard open
+    nothing in the API: a key with them would hold a right that does nothing. A key saved with
+    them before 16. 11. 2026 loses them once at start (drop_unusable_key_areas). Fixed for the
+    life of the process, so computed once.
+    """
+    with_address = {area for area in ADDRESS_AREAS.values() if area}
+    return frozenset(with_address | {area.key for area in access.AREAS
+                                     if not area.paths and area.parent in with_address})
+
+
+# Done once: the setting says the conversion below ran (any non-empty value).
+CONVERSION_KEY_AREAS = "conversion_key_areas"
+
+
+def drop_unusable_key_areas() -> bool:
+    """One-off at start: stored rights of root keys keep only areas a key can use.
+
+    Until 16. 11. 2026 the tree of a root key offered every area. Reading drops the rest
+    (key_permissions), but stored they would wait: should a later version give one of them an
+    address in the API (languages, say), an old key would get it without the administrator
+    ever seeing the box ticked. So they go from the database too, once. True = it ran now.
+    """
+    if db.get_setting(CONVERSION_KEY_AREAS, ""):
+        return False
+    rows = db.query_all("SELECT id, permissions FROM api_tokens WHERE account_id IS NULL AND permissions IS NOT NULL")
+    with db.connect() as conn:
+        for row in rows:
+            rights = key_permissions(row["permissions"])
+            if rights is None:
+                continue
+            packed = pack_key_permissions(rights["areas"], rights["anonymise"], rights["history"])
+            if packed != row["permissions"]:
+                conn.execute("UPDATE api_tokens SET permissions = ? WHERE id = ?", (packed, row["id"]))
+        conn.commit()
+    db.set_setting(CONVERSION_KEY_AREAS, "1")
+    return True
+
+
+def _fingerprint(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def vytvor(jmeno: str, account_id: int | None = None,
-           prava: str | None = None) -> dict[str, Any]:
-    """Vyrobí token. Vrátí ho v čitelné podobě - naposledy.
+def create_token(name: str, account_id: int | None = None,
+                 permissions: str | None = None) -> dict[str, Any]:
+    """Makes a token. Returns it in readable form - for the last time.
 
-    Ukládá se jen otisk, takže tuhle hodnotu už podruhé nikdo nezjistí.
-    Stránka to říká nahlas; token, který jde přečíst kdykoliv, je jen
-    delší heslo v databázi.
+    Only the fingerprint is stored, so nobody learns this value a second time.
+    The page says so out loud; a token that can be read at any time is only a
+    longer password in the database.
 
-    `account_id` je vlastník - uživatelský klíč (Můj účet). Bez něj vznikne
-    root klíč (Nastavení → API) s právy `prava` (`zabal_prava_klice`);
-    bez práv má všechno, jako klíče z doby před vlastníky.
+    `account_id` is the owner - a user key (My account). Without it a root key
+    is made (Settings → API) with the rights `permissions` (`pack_key_permissions`);
+    without rights it has everything, like the keys from before owners.
     """
-    jmeno = (jmeno or "").strip()[:60] or "bez názvu"
-    token = PREDPONA + secrets.token_urlsafe(32)
+    # Without a name it is stored without one: the listing shows "unnamed" in the reader's language
+    # (display_name), the data carries no language.
+    name = (name or "").strip()[:60]
+    token = PREFIX + secrets.token_urlsafe(32)
     with db.connect() as conn:
         token_id = conn.insert_returning_id(
-            "INSERT INTO api_tokens (name, token_hash, ukazka, created_at, account_id, prava)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (jmeno, _otisk(token), token[:UKAZKA_ZNAKU], db.utcnow(), account_id,
-             prava if account_id is None else None),
+            # The state written out: a database converted from 1.8.x keeps the old default of the column.
+            "INSERT INTO api_tokens (name, token_hash, preview, created_at, account_id, permissions, status)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (name, _fingerprint(token), token[:PREVIEW_CHARS], db.utcnow(), account_id,
+             permissions if account_id is None else None, ACTIVE),
         )
         conn.commit()
-    log.info("Vyroben API token %s", jmeno)
-    return {"token": token, "jmeno": jmeno, "id": token_id}
+    log.info("API token %s created", name or "-")
+    # "display_name" for people (the reader's language), "name" as stored (for the English log).
+    return {"token": token, "display_name": display_name(name), "name": name, "id": token_id}
 
 
-def seznam(account_id: int | None = None) -> list[dict[str, Any]]:
-    """Tokeny pro výpis. Bez otisků - ty tam nemají co dělat.
+def list_tokens(account_id: int | None = None) -> list[dict[str, Any]]:
+    """Tokens for the listing. Without fingerprints - they have no business there.
 
-    Bez parametru všechny i se jménem vlastníka (pro správce), s ním jen
-    klíče toho účtu (Můj účet). `vlastnik` je None u root klíče.
+    Without the parameter all of them with the owner's name (for the
+    administrator), with it only that account's keys (My account). `owner`
+    is None for a root key.
     """
-    sql = ("SELECT t.id, t.name, t.ukazka, t.created_at, t.last_used_at,"
-           "       t.stav, t.account_id, t.prava, a.username AS vlastnik"
+    sql = ("SELECT t.id, t.name, t.preview, t.created_at, t.last_used_at,"
+           "       t.status, t.account_id, t.permissions, a.username AS owner"
            "  FROM api_tokens t LEFT JOIN accounts a ON a.id = t.account_id")
     if account_id is None:
-        return db.query_all(sql + " ORDER BY t.id DESC")
-    return db.query_all(sql + " WHERE t.account_id = ? ORDER BY t.id DESC",
-                        (account_id,))
+        rows = db.query_all(sql + " ORDER BY t.id DESC")
+    else:
+        rows = db.query_all(sql + " WHERE t.account_id = ? ORDER BY t.id DESC", (account_id,))
+    return [{**dict(row), "display_name": display_name(row["name"])} for row in rows]
 
 
-def zabal_prava_klice(oblasti: Any, anonymizace: bool, historie: bool) -> str:
-    """Práva root klíče do podoby, v jaké se ukládají (`api_tokens.prava`).
+def display_name(name: str | None) -> str:
+    """A key's name for people: its own, or "unnamed" in the reader's language."""
+    return str(name or "") or i18n.translate("unnamed")
 
-    Stejný tvar jako vlastní práva účtu (`pristup.zabal_prava`) a navíc
-    historie: u účtu ji řídí pristup.vidi_historii (čtenář jen s „…včetně
-    kdo to sledoval"), root klíč pro widget knihovny ji dostat nemá, dokud
-    ji správce nezaškrtne.
+
+def pack_key_permissions(areas: Any, anonymise: bool, history: bool) -> str:
+    """A root key's rights in the form they are stored in (`api_tokens.permissions`).
+
+    The same shape as an account's own rights (`access.pack_permissions`) plus
+    the history: for an account access.sees_history governs it (a reader only
+    with "...including who watched"), a root key for a library widget must not
+    get it until the administrator ticks it. Only areas a key can use are kept (key_areas).
     """
+    usable = key_areas()
     return json.dumps({
-        "oblasti": sorted({str(k) for k in oblasti if str(k) in pristup.PODLE_KLICE}),
-        "anonymizace": bool(anonymizace),
-        "historie": bool(historie),
+        "areas": sorted({str(k) for k in areas if str(k) in usable}),
+        "anonymise": bool(anonymise),
+        "history": bool(history),
     })
 
 
-def prava_klice(prava: Any) -> dict[str, Any] | None:
-    """Uložená práva root klíče. None = všechno.
+def key_permissions(stored: Any) -> dict[str, Any] | None:
+    """A root key's stored rights. None = everything.
 
-    Rozbitý JSON (ruční zásah do databáze) NIKDY neznamená všechno: bere se
-    jako „nic" - žádná oblast, žádná historie, jména schovaná. U účtu je
-    to naopak skupina (`pristup.vlastni_prava`); klíč skupinu nemá a plná
-    práva by byla přesně ta díra, kterou nikdo nečeká.
+    Broken JSON (a manual change in the database) NEVER means everything: it is
+    taken as "nothing" - no area, no history, names hidden. For an account it
+    is the group instead (`access.own_permissions`); a key has no group and full
+    rights would be exactly the hole nobody expects.
     """
-    if prava is None:
+    if stored is None:
         return None
     try:
-        data = json.loads(prava) if isinstance(prava, str) else prava
+        data = json.loads(stored) if isinstance(stored, str) else stored
     except (TypeError, ValueError):
         data = None
     if not isinstance(data, dict):
-        return {"oblasti": set(), "anonymizace": True, "historie": False}
-    oblasti = data.get("oblasti")
-    # Jen skutecne true/false: bool("false") je True, a ruka v databazi
-    # (text misto hodnoty, chybejici klic) nesmi otevrit historii ani
-    # odkryt jmena. Pochybnost = historie ne, jmena schovana.
+        return {"areas": set(), "anonymise": True, "history": False}
+    areas = data.get("areas")
+    usable = key_areas()
+    # Only real true/false: bool("false") is True, and a hand in the database
+    # (text instead of a value, a missing key) must not open the history nor
+    # reveal names. A doubt = no history, names hidden.
     return {
-        "oblasti": ({str(k) for k in oblasti if str(k) in pristup.PODLE_KLICE}
-                    if isinstance(oblasti, list) else set()),
-        "anonymizace": data.get("anonymizace") is not False,
-        "historie": data.get("historie") is True,
+        "areas": ({str(k) for k in areas if str(k) in usable}
+                    if isinstance(areas, list) else set()),
+        "anonymise": data.get("anonymise") is not False,
+        "history": data.get("history") is True,
     }
 
 
-def uloz_prava_klice(token_id: int, prava: str | None) -> dict[str, Any] | None:
-    """Změní práva ROOT klíče. Vrací jméno a předchozí práva, jinak None.
+def save_key_permissions(token_id: int, permissions: str | None) -> dict[str, Any] | None:
+    """Changes the rights of a ROOT key. Returns the name and the previous rights, otherwise None.
 
-    Uživatelský klíč se tudy nezmění - ten se řídí právy svého účtu.
-    Platí od dalšího požadavku: over_token čte práva při každém z nich.
+    A user key is not changed this way - that one follows its account's rights.
+    It holds from the next request: verify_token reads the rights at each of them.
     """
-    radek = db.query_one("SELECT name, account_id, prava FROM api_tokens WHERE id = ?",
-                         (token_id,))
-    if not radek or radek["account_id"] is not None:
+    row = db.query_one("SELECT name, account_id, permissions FROM api_tokens WHERE id = ?",
+                       (token_id,))
+    if not row or row["account_id"] is not None:
         return None
     with db.connect() as conn:
-        conn.execute("UPDATE api_tokens SET prava = ? WHERE id = ?", (prava, token_id))
+        conn.execute("UPDATE api_tokens SET permissions = ? WHERE id = ?", (permissions, token_id))
         conn.commit()
-    return {"jmeno": radek["name"], "pred": radek["prava"]}
+    return {"display_name": display_name(row["name"]), "name": row["name"], "before": row["permissions"]}
 
 
-def popis_prav_do_logu(prava: str | None) -> str:
-    """Práva root klíče jedním řádkem pro aplikační log."""
-    rozbalena = prava_klice(prava)
-    if rozbalena is None:
+def permissions_for_log(permissions: str | None) -> str:
+    """A root key's rights in one line for the application log."""
+    unpacked = key_permissions(permissions)
+    if unpacked is None:
         return "all"
-    return (f"areas={','.join(sorted(rozbalena['oblasti'])) or '-'}"
-            f" history={'yes' if rozbalena['historie'] else 'no'}"
-            f" hide_names={'yes' if rozbalena['anonymizace'] else 'no'}")
+    return (f"areas={','.join(sorted(unpacked['areas'])) or '-'}"
+            f" history={'yes' if unpacked['history'] else 'no'}"
+            f" hide_names={'yes' if unpacked['anonymise'] else 'no'}")
 
 
-def _nastav_stav(token_id: int, stav: str) -> str:
-    radek = db.query_one("SELECT name FROM api_tokens WHERE id = ?", (token_id,))
-    if not radek:
+def _set_state(token_id: int, state: str) -> str:
+    row = db.query_one("SELECT name FROM api_tokens WHERE id = ?", (token_id,))
+    if not row:
         return ""
     with db.connect() as conn:
-        conn.execute("UPDATE api_tokens SET stav = ? WHERE id = ?", (stav, token_id))
+        conn.execute("UPDATE api_tokens SET status = ? WHERE id = ?", (state, token_id))
         conn.commit()
-    if stav == VYPNUTY:
-        log.info("Vypnut API token %s", radek["name"])
+    if state == DISABLED:
+        log.info("API token %s disabled", row["name"] or "-")
     else:
-        log.info("Zapnut API token %s", radek["name"])
-    return str(radek["name"])
+        log.info("API token %s enabled", row["name"] or "-")
+    return display_name(row["name"])
 
 
-def vypni(token_id: int) -> str:
-    """Vypne klíč, ale nesmaže ho. Vrátí jeho jméno (prázdné = není)."""
-    return _nastav_stav(token_id, VYPNUTY)
+def disable_token(token_id: int) -> str:
+    """Disables a key, but does not delete it. Returns its name (empty = there is none)."""
+    return _set_state(token_id, DISABLED)
 
 
-def zapni(token_id: int) -> str:
-    """Vypnutý klíč zase pustí dovnitř. Vrátí jeho jméno."""
-    return _nastav_stav(token_id, AKTIVNI)
+def enable_token(token_id: int) -> str:
+    """Lets a disabled key in again. Returns its name."""
+    return _set_state(token_id, ACTIVE)
 
 
-def zrus(token_id: int) -> str:
-    """Zneplatní token. Vrátí jeho jméno, ať má hláška co říct."""
-    radek = db.query_one("SELECT name FROM api_tokens WHERE id = ?", (token_id,))
-    if not radek:
+def revoke_token(token_id: int) -> str:
+    """Revokes a token. Returns its name, so the message has something to say."""
+    row = db.query_one("SELECT name FROM api_tokens WHERE id = ?", (token_id,))
+    if not row:
         return ""
     with db.connect() as conn:
         conn.execute("DELETE FROM api_tokens WHERE id = ?", (token_id,))
         conn.commit()
-    log.info("Zrusen API token %s", radek["name"])
-    return str(radek["name"])
+    log.info("API token %s revoked", row["name"] or "-")
+    return display_name(row["name"])
 
 
-def _oznac_pouziti(radek: dict[str, Any]) -> None:
-    """Zapíše „naposledy použit" - ale ne při každém dotazu."""
-    naposledy = radek.get("last_used_at")
-    if naposledy:
+def _mark_use(row: dict[str, Any]) -> None:
+    """Writes "last used" - but not at every request."""
+    last_used = row.get("last_used_at")
+    if last_used:
         try:
-            kdy = datetime.strptime(str(naposledy), db.TIME_FORMAT).replace(
+            when = datetime.strptime(str(last_used), db.TIME_FORMAT).replace(
                 tzinfo=UTC)
-            if datetime.now(UTC) - kdy < ZAPIS_POUZITI_PO:
+            if datetime.now(UTC) - when < USAGE_WRITE_AFTER:
                 return
         except ValueError:
             pass
     with db.connect() as conn:
         conn.execute("UPDATE api_tokens SET last_used_at = ? WHERE id = ?",
-                     (db.utcnow(), radek["id"]))
+                     (db.utcnow(), row["id"]))
         conn.commit()
 
 
-def token_z_hlavicky(request: Request) -> str:
-    """Token z `Authorization: Bearer ...`, nebo prázdno.
+def token_from_header(request: Request) -> str:
+    """The token from `Authorization: Bearer ...`, or empty.
 
-    Podporuje se jedna hlavička, ne tři způsoby. Víc cest dovnitř
-    znamená víc míst, kde se dá udělat chyba - a `Bearer` je to, co
-    každý nástroj umí sám od sebe.
+    One header is supported, not three ways. More ways in means more places
+    where a mistake can be made - and `Bearer` is what every tool can do on
+    its own.
     """
-    hlavicka = request.headers.get("authorization", "")
-    if hlavicka.lower().startswith("bearer "):
-        return hlavicka[7:].strip()
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
     return ""
 
 
-def over_token(request: Request) -> dict[str, Any]:
-    """Závora před každou adresou API.
+def verify_token(request: Request) -> dict[str, Any]:
+    """The barrier before every address of the API.
 
-    Pořadí kontrol: klíč existuje (jinak 401) → je zapnutý → vlastník smí.
-    Jakmile se klíč najde, zapíše se jeho id do `request.state`, aby
-    požadavek šel do záznamu použití - i když skončí zamítnutím.
+    The order of the checks: the key exists (otherwise 401) → it is enabled →
+    the owner may. As soon as the key is found, its id is written into
+    `request.state`, so the request goes into the usage record - even when it
+    ends in a refusal.
 
-    Vrátí řádek klíče a navíc `account` (účet, podle kterého se řídí
-    práva: vlastník; u root klíče s vybranými právy náhradní účet, u root
-    klíče se vším None), `role` (skupina) a `historie` (smí na historii).
+    Returns the key's row plus `account` (the account the rights follow: the
+    owner; for a root key with chosen rights a substitute account, for a root
+    key with everything None), `role` (the group) and `history` (may see the history).
     """
-    token = token_z_hlavicky(request)
+    token = token_from_header(request)
     if not token:
-        raise ChybaApi(401, "missing_token",
+        raise ApiError(401, "missing_token",
                        "Missing token. Send the header: Authorization: Bearer <token>",
-                       hlavicky={"WWW-Authenticate": "Bearer"})
+                       headers={"WWW-Authenticate": "Bearer"})
 
-    radek = db.query_one(
-        "SELECT id, name, last_used_at, stav, account_id, prava"
+    row = db.query_one(
+        "SELECT id, name, last_used_at, status, account_id, permissions"
         "  FROM api_tokens WHERE token_hash = ?",
-        (_otisk(token),),
+        (_fingerprint(token),),
     )
-    # Ucet smazany bez kaskady (rucni zasah do databaze) = klic, ktery
-    # nikomu nepatri. Tvari se jako neexistujici, ne jako root klic.
-    ucet = accounts.get(radek["account_id"]) if radek and radek["account_id"] else None
-    if not radek or (radek["account_id"] and not ucet):
-        # Zamerne tataz veta jako u chybejiciho tokenu, jen jina prvni
-        # pulka: co presne je spatne, se utocnik dozvedet nema.
-        raise ChybaApi(401, "invalid_token", "Invalid token.",
-                       hlavicky={"WWW-Authenticate": "Bearer"})
+    # An account deleted without a cascade (a manual change in the database) =
+    # a key that belongs to nobody. It acts as one that does not exist, not as a root key.
+    account = accounts.get(row["account_id"]) if row and row["account_id"] else None
+    if not row or (row["account_id"] and not account):
+        # On purpose the same sentence as for a missing token, only a different
+        # first half: what exactly is wrong the attacker must not learn.
+        raise ApiError(401, "invalid_token", "Invalid token.",
+                       headers={"WWW-Authenticate": "Bearer"})
 
-    # Pro log API (web.ZaznamPouzitiApi): zapíše se i zamítnutý požadavek
-    # - právě ten je při podezření na únik zajímavý.
-    request.state.api_klic_do_logu = {
-        "id": radek["id"], "jmeno": radek["name"],
-        "vlastnik": (ucet or {}).get("username") or ""}
-    if radek["stav"] != AKTIVNI:
-        raise ChybaApi(403, "key_disabled", "The key is disabled.")
+    # For the API log (web.ApiUsageLog): a refused request is written too
+    # - exactly that one is interesting when a leak is suspected.
+    request.state.api_key_in_log = {
+        "id": row["id"], "name": row["name"],
+        "owner": (account or {}).get("username") or ""}
+    if row["status"] != ACTIVE:
+        raise ApiError(403, "key_disabled", "The key is disabled.")
 
-    # Uzivatelsky klic: prava vlastnika. Klic spravce ma vsechno - ale jen
-    # dokud je spravcem: kdo o roli prijde, ma prava ctenare (divaka) a jeho
-    # klic se zacne ridit povolenim stejne jako kazdy jiny.
+    # A user key: the owner's rights. An administrator's key has everything -
+    # but only while they are an administrator: whoever loses the role has a
+    # reader's (viewer's) rights and their key starts to follow the permission
+    # like any other.
     #
-    # Root klic (bez vlastnika): bez prav vsechno (i klice z doby
-    # pred vlastniky), s pravy se pocita jako ctenarsky ucet s vlastnimi
-    # pravy - pristup.vidi a anonymizuj_pro pak plati beze zmeny. Na zadny
-    # skutecny ucet nesaha, takze ho zmena spravce neovlivni.
-    ucet_prav = ucet
-    historie = True
-    if ucet:
-        kdo = pristup.role(ucet)
-        # Historie klíče = historie účtu (čtenář jen s „…včetně kdo to
-        # sledoval"). Root klíč má vlastní zaškrtávátko, viz níž.
-        historie = pristup.vidi_historii(ucet)
+    # A root key (without an owner): without rights everything (keys from
+    # before owners too), with rights it counts as a reader's account with its
+    # own rights - access.sees and anonymise_for then hold unchanged. It touches
+    # no real account, so a change of the administrator does not affect it.
+    rights_account = account
+    history = True
+    if account:
+        role = access.role(account)
+        # The key's history = the account's history (a reader only with
+        # "...including who watched"). A root key has its own tick box, see below.
+        history = access.sees_history(account)
     else:
-        prava = prava_klice(radek["prava"])
-        if prava is None:
-            kdo = pristup.SPRAVCE
+        rights = key_permissions(row["permissions"])
+        if rights is None:
+            role = access.ADMIN
         else:
-            kdo = pristup.CTENAR
-            historie = prava["historie"]
-            ucet_prav = _nahradni_ucet(prava)
-    if ucet and not pristup.smi_klic(ucet):
-        raise ChybaApi(403, "key_not_allowed",
+            role = access.READER
+            history = rights["history"]
+            rights_account = _substitute_account(rights)
+    if account and not access.may_have_key(account):
+        raise ApiError(403, "key_not_allowed",
                        "The key's account is not allowed a key of its own.")
-    # Divak z Jellyfinu smi dovnitr jen tim, ze ho pusti Jellyfin. Kdyz
-    # spravce prihlasovani pres Jellyfin vypne (nebo divaka v Jellyfinu
-    # zakaze), ma prestat i jeho klic - jinak by si nastroj bral data dal,
-    # zatimco spravce je presvedceny, ze divaci jsou venku.
-    if kdo == pristup.DIVAK:
-        if not pristup.login_zapnuty():
-            raise ChybaApi(403, "jellyfin_login_off", "Sign-in through Jellyfin is off.")
-        divak = db.query_one("SELECT is_disabled FROM users WHERE id = ?",
-                             (str(ucet.get("jellyfin_user_id") or ""),))
-        if divak and divak["is_disabled"]:
-            raise ChybaApi(403, "viewer_disabled", "The account is disabled in Jellyfin.")
+    # A person from Jellyfin may come in only by Jellyfin letting them. When the
+    # administrator disables them in Jellyfin, their key stops - an administrator's
+    # from Jellyfin too (it used to go on: only a viewer's was checked, and by the id
+    # exactly, so an id with dashes slipped by). When sign-in through Jellyfin is
+    # turned off, a viewer's key stops too - otherwise a tool would go on taking
+    # data, while the administrator is sure the viewers are out.
+    if account and accounts.disabled_in_jellyfin(account):
+        raise ApiError(403, "viewer_disabled" if role == access.VIEWER else "account_disabled",
+                       "The account is disabled in Jellyfin.")
+    if role == access.VIEWER and not access.login_enabled():
+        raise ApiError(403, "jellyfin_login_off", "Sign-in through Jellyfin is off.")
 
-    _oznac_pouziti(radek)
-    return {**radek, "account": ucet_prav, "role": kdo, "historie": historie}
+    _mark_use(row)
+    return {**row, "account": rights_account, "role": role, "history": history}
 
 
-def _smi(token: dict[str, Any], cesta: str) -> bool:
-    """Smí vlastník klíče na adresu s touhle cestou routy?"""
-    # Historie nemá vlastní oblast: u účtu platí pristup.vidi_historii
-    # (spočítané v over_token), root klíč s právy ji má jen se zaškrtnutím.
-    if cesta == "/api/v1/history" and not token.get("historie", True):
+def _may(token: dict[str, Any], path: str) -> bool:
+    """May the key's owner open an address with this route path?"""
+    # The history has no area of its own: for an account access.sees_history
+    # holds (computed in verify_token), a root key with rights has it only when ticked.
+    if path == "/api/v1/history" and not token.get("history", True):
         return False
-    if token["role"] == pristup.SPRAVCE:
+    if token["role"] == access.ADMIN:
         return True
-    if cesta not in OBLASTI_ADRES:
+    if path not in ADDRESS_AREAS:
         return False
-    oblast = OBLASTI_ADRES[cesta]
-    return oblast is None or pristup.vidi(token["role"], oblast, token["account"])
+    area = ADDRESS_AREAS[path]
+    return area is None or access.sees(token["role"], area, token["account"])
 
 
-def _nahradni_ucet(prava: dict[str, Any]) -> dict[str, Any]:
-    """Čtenářský účet, který existuje jen pro kontrolu práv root klíče.
+def _substitute_account(rights: dict[str, Any]) -> dict[str, Any]:
+    """A reader's account that exists only for checking a root key's rights.
 
-    pristup.vidi a anonymizuj_pro pak platí beze změny. Na žádný skutečný
-    účet nesahá, takže ho změna správce neovlivní.
+    access.sees and anonymise_for then hold unchanged. It touches no real
+    account, so a change of the administrator does not affect it.
     """
     return {"id": None, "username": "", "is_admin": False,
-            pristup.PRISTUP: zabal_prava_klice(
-                prava["oblasti"], prava["anonymizace"], prava["historie"])}
+            access.ACCESS_COLUMN: pack_key_permissions(
+                rights["areas"], rights["anonymise"], rights["history"])}
 
 
-def adresy_root_klice(prava: str | None) -> list[str]:
-    """Adresy API, které root klíč s těmihle právy opravdu otevře.
+def root_key_paths(permissions: str | None) -> list[str]:
+    """API addresses a root key with these rights really opens.
 
-    Bez rozcestníku (`/api/v1/` smí každý klíč). Prázdný seznam = klíč by
-    nesměl nic - třeba jen s Jazyky nebo Srovnáním, které v API adresu
-    nemají; formulář takový klíč nevyrobí.
+    Without the index (any key may open `/api/v1/`). An empty list = the key could open nothing -
+    e.g. only "...who watched" without the Library, or a form from an older page with only
+    areas that have no address in the API (key_areas drops them); the form makes no such key.
     """
-    rozbalena = prava_klice(prava)
-    if rozbalena is None:
-        token = {"role": pristup.SPRAVCE, "account": None}
+    unpacked = key_permissions(permissions)
+    if unpacked is None:
+        token = {"role": access.ADMIN, "account": None}
     else:
-        token = {"role": pristup.CTENAR, "account": _nahradni_ucet(rozbalena),
-                 "historie": rozbalena["historie"]}
-    return [cesta.replace("{item_id}", "{id}") for cesta in OBLASTI_ADRES
-            if cesta not in ("/api/v1", "/api/v1/") and _smi(token, cesta)]
+        token = {"role": access.READER, "account": _substitute_account(unpacked),
+                 "history": unpacked["history"]}
+    return [path.replace("{item_id}", "{id}") for path in ADDRESS_AREAS
+            if path not in ("/api/v1", "/api/v1/") and _may(token, path)]
 
 
-def povolene_adresy(account: dict[str, Any] | None) -> list[str]:
-    """Adresy, na které smí klíč tohohle účtu - pro návod na Můj účet.
+def allowed_paths(account: dict[str, Any] | None) -> list[str]:
+    """Addresses a key of this account may open - for the guide on My account.
 
-    Tytéž podmínky jako smi_adresu(), jen bez klíče v ruce. Rozcestník
-    (`/api/v1/`) je tu jednou, i když na něj vedou dvě cesty.
+    The same conditions as may_open_path(), only without a key in hand. The
+    index (`/api/v1/`) is here once, even though two paths lead to it.
     """
-    token = {"role": pristup.role(account), "account": account}
-    return [cesta.replace("{item_id}", "{id}") for cesta in OBLASTI_ADRES
-            if cesta != "/api/v1" and _smi(token, cesta)]
+    token = {"role": access.role(account), "account": account}
+    return [path.replace("{item_id}", "{id}") for path in ADDRESS_AREAS
+            if path != "/api/v1" and _may(token, path)]
 
 
-def smi_adresu(request: Request,
-               token: dict[str, Any] = Depends(over_token)) -> dict[str, Any]:
-    """Závora za over_token: klíč vidí přesně to, co jeho vlastník.
+def may_open_path(request: Request,
+                  token: dict[str, Any] = Depends(verify_token)) -> dict[str, Any]:
+    """The barrier behind verify_token: a key sees exactly what its owner does.
 
-    Jedna závislost pro všechny adresy, ne kontrola v každé zvlášť -
-    adresa, na kterou by se zapomnělo, je přesně ta, kterou někdo najde.
+    One dependency for all addresses, not a check in each of them - an address
+    somebody would forget is exactly the one somebody finds.
     """
-    cesta = getattr(request.scope.get("route"), "path", "")
-    if not _smi(token, cesta):
-        raise ChybaApi(403, "area_not_allowed",
+    path = getattr(request.scope.get("route"), "path", "")
+    if not _may(token, path):
+        raise ApiError(403, "area_not_allowed",
                        "The key's owner cannot see this part of the statistics.")
     return token
 
 
-def dotaz_adresy(request: Request,
-                 token: dict[str, Any] = Depends(smi_adresu)) -> api_dotaz.Dotaz:
-    """Přečtený a zkontrolovaný dotaz adresy (filtry, sort, parametry).
+def request_query(request: Request,
+                  token: dict[str, Any] = Depends(may_open_path)) -> api_query.Query:
+    """The address's query, read and checked (filters, sort, parameters).
 
-    Stojí za `smi_adresu`, takže FastAPI ji spustí až po závoře: kdo nemá
-    platný klíč, dostane 401/403 a nedozví se ani to, jaké parametry nebo
-    pole adresa zná.
+    It stands behind `may_open_path`, so FastAPI runs it only after the barrier:
+    whoever has no valid key gets 401/403 and does not even learn which
+    parameters or fields the address knows.
     """
-    cesta = getattr(request.scope.get("route"), "path", "")
-    return api_dotaz.nacti(list(request.query_params.multi_items()),
-                           ZNAME_PARAMETRY.get(cesta, set()), SEZNAMY.get(cesta, {}))
+    path = getattr(request.scope.get("route"), "path", "")
+    return api_query.parse(list(request.query_params.multi_items()),
+                           KNOWN_PARAMS.get(path, set()), LISTS.get(path, {}))
 
 
-def _dny_dotazu(dotaz: api_dotaz.Dotaz, vychozi: int = 30) -> int:
-    return api_dotaz.cele_cislo(dotaz, "days", vychozi, 1, 3650)
+def _query_days(query: api_query.Query, default: int = 30) -> int:
+    return api_query.integer(query, "days", default, 1, 3650)
 
 
-def _limit_dotazu(dotaz: api_dotaz.Dotaz, vychozi: int | None, strop: int) -> int | None:
-    """Kolik řádků. Přes strop nebo nesmysl je 400, ne tiché oříznutí.
+def _query_limit(query: api_query.Query, default: int | None, cap: int) -> int | None:
+    """How many rows. Over the cap or nonsense is a 400, not a quiet cut.
 
-    Strop je kvůli serveru, ne kvůli datům: „dej mi všechno" nad
-    knihovnou se čtyřiceti tisíci tituly je odpověď o desítkách MB a
-    dashboard, který se ptá každých pár vteřin, by tím server zaměstnal
-    naplno.
+    The cap is there for the server, not for the data: "give me everything"
+    over a library with forty thousand titles is an answer of tens of MB and a
+    dashboard asking every few seconds would keep the server busy to the full.
     """
-    return api_dotaz.cele_cislo(dotaz, "limit", vychozi, 1, strop)
+    return api_query.integer(query, "limit", default, 1, cap)
 
 
-def _nacist(dotaz: api_dotaz.Dotaz, seznam: str, limit: int | None) -> int:
-    """Kolik řádků si říct funkci, která má limit v SQL.
+def _parse_query(query: api_query.Query, list_name: str, limit: int | None) -> int:
+    """How many rows to ask of a function that has the limit in SQL.
 
-    S filtrem nebo řazením celý seznam - filtr musí vidět všechno, jinak
-    by hledané řádky hlouběji v pořadí vypadly. Bez nich stačí `limit`
-    jako dřív: celý seznam je na velké knihovně drahý (historie za rok
-    ze 150 000 přehrání trvá sekundy) a výsledek by byl stejný.
+    With a filter or a sort the whole list - the filter must see everything,
+    otherwise the rows looked for deeper in the order would drop out. Without
+    them `limit` is enough as before: the whole list is expensive on a big
+    library (the history of a year from 150 000 plays takes seconds) and the
+    result would be the same.
     """
-    if limit is None or any(dotaz.pro(seznam)):
-        return stats.BEZ_LIMITU
+    if limit is None or any(query.for_list(list_name)):
+        return stats.NO_LIMIT
     return limit
 
 
-def _druh_dotazu(dotaz: api_dotaz.Dotaz) -> str:
-    return api_dotaz.volba(dotaz, "kind", stats.KIND_BOTH,
-                           (stats.KIND_BOTH, stats.KIND_MOVIE, stats.KIND_SERIES))
+def _query_kind(query: api_query.Query) -> str:
+    return api_query.choice(query, "kind", stats.KIND_BOTH,
+                            (stats.KIND_BOTH, stats.KIND_MOVIE, stats.KIND_SERIES))
 
 
-def _pro_vlastnika(token: dict[str, Any], data: Any) -> Any:
-    """Schová cizí jména, id a adresy, když je má vlastník klíče skryté.
+def _for_owner(token: dict[str, Any], data: Any) -> Any:
+    """Hides other people's names, ids and addresses when the key's owner has them hidden.
 
-    Stejné pravidlo jako na stránkách (pristup.anonymizuj_pro). Projdou
-    tudy **zdrojové řádky** ze `stats`, ne hotová odpověď: tam se jméno
-    jmenuje `user` a pristup.anonymizuj() ho podle klíče nepozná.
+    The same rule as on the pages (access.anonymise_for). What goes through
+    here are **the source rows** from `stats`, not the finished answer: there
+    the name is called `user` and access.anonymise() would not recognise it by the key.
     """
-    return pristup.anonymizuj_pro(data, token.get("account"))
+    return access.anonymise_for(data, token.get("account"))
 
 
-def zapis_pouziti(klic: dict[str, Any], cesta: str, ip: str, vysledek: int) -> None:
-    """Zapíše jeden požadavek do logu API (applog.zapis_api).
+def record_use(key: dict[str, Any], path: str, ip: str, status: int) -> None:
+    """Writes one request into the API log (applog.write_api).
 
-    Volá ho middleware ve web/__init__.py až po odpovědi - jen tehdy je známý
-    výsledek. `klic` je to, co nechal v požadavku over_token(): id, jméno
-    a vlastník (prázdný = root klíč). Jak dlouho se záznam drží, řídí
-    úloha Rotace logů.
+    The middleware in web/__init__.py calls it only after the answer - only
+    then the result is known. `key` is what verify_token() left in the request:
+    the id, the name and the owner (empty = a root key). How long the record
+    is kept is governed by the Log rotation task.
     """
-    applog.zapis_api(klic["id"], klic.get("jmeno") or "", klic.get("vlastnik") or "",
-                     cesta, ip, vysledek)
+    applog.write_api(key["id"], key.get("name") or "", key.get("owner") or "",
+                     path, ip, status)
 
 
 @router.get("")
 @router.get("/")
-def rozcestnik(token: dict[str, Any] = Depends(smi_adresu),
-               dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Co API umí. Aby se to nemuselo hledat v dokumentaci.
+def index(token: dict[str, Any] = Depends(may_open_path),
+          query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """What the API can do. So it does not have to be looked up in the documentation.
 
-    Jen adresy, které tenhle klíč smí - co by vrátilo 403, tu nemá co
-    dělat. U adres se seznamem i jejich pole a typy (`lists`) a jak se
-    filtruje (`filtering`), takže program zjistí, co smí poslat, sám.
+    Only the addresses this key may open - what would return 403 has no
+    business here. For addresses with a list their fields and types (`lists`)
+    and how to filter (`filtering`) too, so a program finds out by itself what
+    it may send.
     """
     from . import __version__
 
     return {
         "jellyscope": __version__,
-        "endpoints": {adresa: popis for adresa, popis in {
+        "endpoints": {address: description for address, description in {
             "/api/v1/summary": "watching over a period (?days=30)",
             "/api/v1/now-playing": "what is playing right now",
             "/api/v1/library": "size of the library, growth and free space",
@@ -528,13 +590,13 @@ def rozcestnik(token: dict[str, Any] = Depends(smi_adresu),
             "/api/v1/insights": "transcode offenders, upgrade candidates, oversized and never finished titles, conversion speed in fps (?days=30&limit=15)",
             "/api/v1/bandwidth": "how much data went out and where to (?days=30)",
             "/api/v1/item/{id}": "one title: file, versions and who watched it",
-        }.items() if _smi(token, adresa.replace("{id}", "{item_id}"))},
+        }.items() if _may(token, address.replace("{id}", "{item_id}"))},
         "note": "Read-only. Authenticate with: Authorization: Bearer <token>. "
                 "Every list takes filters, sort and limit (see filtering and lists); "
                 "a malformed request is a 400 with an error code, never default data.",
-        "filtering": api_dotaz.napoveda(),
-        "lists": {adresa: seznamy for adresa, seznamy in SEZNAMY.items()
-                  if _smi(token, adresa)},
+        "filtering": api_query.help_text(),
+        "lists": {address: lists for address, lists in LISTS.items()
+                  if _may(token, address)},
         "item_fields": "every item that is one file (least-played, unwatched, recently-added, "
                        "item, insights.oversized_rarely_watched) has path, tmdb_id, season and "
                        "episode; for an episode tmdb_id is the series' TMDB id and season + "
@@ -543,30 +605,31 @@ def rozcestnik(token: dict[str, Any] = Depends(smi_adresu),
     }
 
 
-def _soubor(row: dict[str, Any]) -> dict[str, Any]:
-    """Cesta a tmdb id - u každé položky (souboru), kterou API vrací.
+def _file(row: dict[str, Any]) -> dict[str, Any]:
+    """The path and the tmdb id - for every item (file) the API returns.
 
-    U dílu je `tmdb_id` id **seriálu**: díl sám v TMDB vlastní id
-    obvykle nemá a Jellyscope si ukládá to seriálové. Který díl to je,
-    říká řada a číslo dílu vedle - teprve dohromady je to adresa dílu
-    v TMDB. U všeho ostatního jsou obě None: hudební stopa má v
-    `index_number` číslo stopy a za díl by se vydávala.
+    For an episode `tmdb_id` is the id of the **series**: an episode itself
+    usually has no id of its own in TMDB and Jellyscope stores the series' one.
+    Which episode it is, the season and the episode number beside it say -
+    only together they are the episode's address in TMDB. For everything else
+    both are None: a music track has the track number in `index_number` and
+    would pass for an episode.
 
-    Cesta je celá, jak ji vidí server - stejně jako v detailu titulu.
-    Klíč ji dostane, jen když vlastník smí na adresu, která ji vrací
-    (viz OBLASTI_ADRES).
+    The path is whole, as the server sees it - just like in the title's
+    detail. A key gets it only when its owner may open the address that
+    returns it (see ADDRESS_AREAS).
     """
-    dil = row.get("type") == "Episode"
+    is_episode = row.get("type") == "Episode"
     return {
         "path": row.get("path"),
         "tmdb_id": row.get("tmdb_id"),
-        "season": row.get("parent_index_number") if dil else None,
-        "episode": row.get("index_number") if dil else None,
+        "season": row.get("parent_index_number") if is_episode else None,
+        "episode": row.get("index_number") if is_episode else None,
     }
 
 
-def _titul(row: dict[str, Any]) -> dict[str, Any]:
-    """Jeden titul z knihovny tak, jak ho API vrací - všude stejně."""
+def _title(row: dict[str, Any]) -> dict[str, Any]:
+    """One title from the library the way the API returns it - the same everywhere."""
     return {
         "id": row.get("id"),
         "name": row.get("name"),
@@ -574,7 +637,7 @@ def _titul(row: dict[str, Any]) -> dict[str, Any]:
         "series": row.get("series_name"),
         "year": row.get("production_year"),
         "library": row.get("library_name"),
-        **_soubor(row),
+        **_file(row),
         "size_bytes": row.get("size_bytes"),
         "size_human": formatting.bytes_human(row.get("size_bytes") or 0),
         "resolution": (f"{row.get('width')}x{row.get('height')}"
@@ -584,66 +647,67 @@ def _titul(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# Co jednotlivé adresy vracejí - podle toho se kontroluje filtr i řazení
-# a z toho se skládá nápověda. Test hlídá, že klíče řádku odpovědi jsou
-# přesně tahle pole: nápověda tak nemůže slíbit pole, které neexistuje.
-_T, _C, _CAS, _AN = api_dotaz.TEXT, api_dotaz.CISLO, api_dotaz.CAS, api_dotaz.ANO_NE
-POLE_TITULU: dict[str, str] = {
-    "id": _T, "name": _T, "type": _T, "series": _T, "year": _C, "library": _T,
-    "path": _T, "tmdb_id": _T, "season": _C, "episode": _C, "size_bytes": _C,
-    "size_human": _T, "resolution": _T, "video_codec": _T, "added_at": _CAS,
+# What the single addresses return - by this the filter and the sort are
+# checked and the help is put together from it. A test guards that the keys of
+# an answer's row are exactly these fields: so the help cannot promise a field
+# that does not exist.
+_T, _N, _TM, _YN = api_query.TEXT, api_query.NUMBER, api_query.TIME, api_query.YES_NO
+TITLE_FIELDS: dict[str, str] = {
+    "id": _T, "name": _T, "type": _T, "series": _T, "year": _N, "library": _T,
+    "path": _T, "tmdb_id": _T, "season": _N, "episode": _N, "size_bytes": _N,
+    "size_human": _T, "resolution": _T, "video_codec": _T, "added_at": _TM,
 }
-SEZNAMY: dict[str, dict[str, dict[str, str]]] = {
-    "/api/v1/least-played": {"items": {**POLE_TITULU, "plays": _C,
-                                       "watched_seconds": _C, "last_played": _CAS}},
-    "/api/v1/unwatched": {"items": POLE_TITULU},
-    "/api/v1/recently-added": {"items": POLE_TITULU},
-    "/api/v1/top-items": {"items": {"title": _T, "is_series": _AN, "plays": _C,
-                                    "watched_seconds": _C, "watched_hours": _C,
+LISTS: dict[str, dict[str, dict[str, str]]] = {
+    "/api/v1/least-played": {"items": {**TITLE_FIELDS, "plays": _N,
+                                       "watched_seconds": _N, "last_played": _TM}},
+    "/api/v1/unwatched": {"items": TITLE_FIELDS},
+    "/api/v1/recently-added": {"items": TITLE_FIELDS},
+    "/api/v1/top-items": {"items": {"title": _T, "is_series": _YN, "plays": _N,
+                                    "watched_seconds": _N, "watched_hours": _N,
                                     "url": _T}},
-    "/api/v1/users": {"users": {"id": _T, "name": _T, "is_administrator": _AN,
-                                "plays": _C, "titles": _C, "watched_hours": _C,
-                                "transcoded_hours": _C, "last_seen": _CAS}},
+    "/api/v1/users": {"users": {"id": _T, "name": _T, "is_administrator": _YN,
+                                "plays": _N, "titles": _N, "watched_hours": _N,
+                                "transcoded_hours": _N, "last_seen": _TM}},
     "/api/v1/history": {"playbacks": {
         "user": _T, "user_id": _T, "title": _T, "series": _T, "type": _T,
-        "item_id": _T, "started_at": _CAS, "watched_seconds": _C,
-        "play_method": _T, "is_transcode": _AN, "client": _T, "device": _T,
+        "item_id": _T, "started_at": _TM, "watched_seconds": _N,
+        "play_method": _T, "is_transcode": _YN, "client": _T, "device": _T,
         "audio_language": _T, "subtitle_language": _T}},
     "/api/v1/now-playing": {"sessions": {
         "user": _T, "title": _T, "series": _T, "library": _T, "client": _T,
-        "device": _T, "play_method": _T, "is_transcode": _AN, "is_paused": _AN,
-        "audio_language": _T, "bitrate": _C, "position_seconds": _C,
-        "runtime_seconds": _C, "started_at": _CAS}},
-    "/api/v1/libraries": {"libraries": {"id": _T, "name": _T, "type": _T, "items": _C,
-                                        "size_bytes": _C, "size_human": _T,
-                                        "runtime_hours": _C}},
-    "/api/v1/bandwidth": {"countries": {"country": _T, "code": _T, "plays": _C,
-                                        "watched_seconds": _C, "bytes": _C}},
-    # Víc seznamů na jedné adrese: pole v dotazu nese předponu seznamu
-    # (`never_finished.title[contains]=x`). Bez filtru se volají jako dřív.
+        "device": _T, "play_method": _T, "is_transcode": _YN, "is_paused": _YN,
+        "audio_language": _T, "bitrate": _N, "position_seconds": _N,
+        "runtime_seconds": _N, "started_at": _TM}},
+    "/api/v1/libraries": {"libraries": {"id": _T, "name": _T, "type": _T, "items": _N,
+                                        "size_bytes": _N, "size_human": _T,
+                                        "runtime_hours": _N}},
+    "/api/v1/bandwidth": {"countries": {"country": _T, "code": _T, "plays": _N,
+                                        "watched_seconds": _N, "bytes": _N}},
+    # More lists at one address: a field in the query carries the list's prefix
+    # (`never_finished.title[contains]=x`). Without a filter they are called as before.
     "/api/v1/insights": {
-        "transcode_offenders": {"title": _T, "transcodes": _C, "reasons": _T,
+        "transcode_offenders": {"title": _T, "transcodes": _N, "reasons": _T,
                                 "video_codec": _T, "audio_codec": _T,
                                 "resolution": _T, "url": _T},
-        "upgrade_candidates": {"title": _T, "plays": _C, "watched_hours": _C,
-                               "resolution": _T, "bitrate": _C, "video_codec": _T,
+        "upgrade_candidates": {"title": _T, "plays": _N, "watched_hours": _N,
+                               "resolution": _T, "bitrate": _N, "video_codec": _T,
                                "url": _T},
         "oversized_rarely_watched": {"id": _T, "title": _T, "type": _T, "path": _T,
-                                     "tmdb_id": _T, "season": _C, "episode": _C,
-                                     "plays": _C, "watched_hours": _C,
-                                     "size_bytes": _C, "size_human": _T,
-                                     "gb_per_hour": _C, "resolution": _T},
-        "never_finished": {"title": _T, "attempts": _C, "best_percent": _C,
-                           "runtime_minutes": _C},
+                                     "tmdb_id": _T, "season": _N, "episode": _N,
+                                     "plays": _N, "watched_hours": _N,
+                                     "size_bytes": _N, "size_human": _T,
+                                     "gb_per_hour": _N, "resolution": _T},
+        "never_finished": {"title": _T, "attempts": _N, "best_percent": _N,
+                           "runtime_minutes": _N},
     },
     "/api/v1/play-methods": {
-        "methods": {"method": _T, "hours": _C},
-        "clients": {"client": _T, "hours": _C, "plays": _C},
+        "methods": {"method": _T, "hours": _N},
+        "clients": {"client": _T, "hours": _N, "plays": _N},
     },
 }
-# Obyčejné parametry adresy - co tu není (a není to filtr ani `sort`), je
-# 400 unknown_parameter.
-ZNAME_PARAMETRY: dict[str, set[str]] = {
+# An address's plain parameters - what is not here (and is not a filter nor
+# `sort`) is a 400 unknown_parameter.
+KNOWN_PARAMS: dict[str, set[str]] = {
     "/api/v1/least-played": {"days", "limit", "min_size_mb", "order"},
     "/api/v1/unwatched": {"days", "limit"},
     "/api/v1/recently-added": {"limit"},
@@ -663,16 +727,16 @@ ZNAME_PARAMETRY: dict[str, set[str]] = {
 }
 
 
-def pole_adres(adresy: list[str]) -> dict[str, dict[str, dict[str, str]]]:
-    """Pole seznamů u adres, které klíč smí - pro okno „Jak se to používá"."""
-    return {adresa: SEZNAMY[adresa] for adresa in adresy if adresa in SEZNAMY}
+def path_fields(paths: list[str]) -> dict[str, dict[str, dict[str, str]]]:
+    """The lists' fields of the addresses a key may open - for the "How it is used" window."""
+    return {path: LISTS[path] for path in paths if path in LISTS}
 
 
 @router.get("/libraries")
-def knihovny(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Každá knihovna zvlášť - to, co jsou karty na stránce Knihovna."""
-    limit = _limit_dotazu(dotaz, None, 500)
-    karty = [{
+def libraries(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """Every library on its own - what the cards on the Library page are."""
+    limit = _query_limit(query, None, 500)
+    cards = [{
         "id": k["id"],
         "name": k["name"],
         "type": k.get("collection_type"),
@@ -680,128 +744,128 @@ def knihovny(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
         "size_bytes": int(k.get("size_bytes") or 0),
         "size_human": formatting.bytes_human(int(k.get("size_bytes") or 0)),
         "runtime_hours": round(float(k.get("hours") or 0), 1),
-    } for k in stats.library_cards()]
-    karty = api_dotaz.pouzij(karty, *dotaz.pro("libraries"), limit)
-    return {"count": len(karty), "libraries": karty}
+    } for k in stats.library_cards() if k["kind"] == "video"]     # video libraries, as the API always listed
+    cards = api_query.apply(cards, *query.for_list("libraries"), limit)
+    return {"count": len(cards), "libraries": cards}
 
 
 @router.get("/top-items")
-def nejsledovanejsi(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Nejsledovanější tituly za období. Díly seriálu se sčítají."""
-    dny = _dny_dotazu(dotaz)
-    limit = _limit_dotazu(dotaz, 10, 200)
-    druh = _druh_dotazu(dotaz)
-    polozky = [{
+def most_watched(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The most watched titles over a period. A series' episodes add up."""
+    days = _query_days(query)
+    limit = _query_limit(query, 10, 200)
+    kind = _query_kind(query)
+    items = [{
         "title": r.get("label"),
         "is_series": bool(r.get("is_series")),
         "plays": int(r.get("plays") or 0),
         "watched_seconds": int(r.get("seconds") or 0),
         "watched_hours": round(float(r.get("hours") or 0), 2),
         "url": r.get("detail_url"),
-    } for r in stats.top_items(dny, _nacist(dotaz, "items", limit), druh)]
+    } for r in stats.top_items(days, _parse_query(query, "items", limit), kind)]
     return {
-        "days": dny,
-        "kind": druh,
-        "items": api_dotaz.pouzij(polozky, *dotaz.pro("items"), limit),
+        "days": days,
+        "kind": kind,
+        "items": api_query.apply(items, *query.for_list("items"), limit),
     }
 
 
 @router.get("/least-played")
-def nejmene_hrane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Soubory od nejméně hraných: nuly napřed, v nich největší první.
+def least_played(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """Files from the least played: zeros first, among them the biggest first.
 
-    Počet spuštění je za období, poslední přehrání za celou historii -
-    u nuly v období je právě to ta informace, kterou člověk chce.
+    The play count is over the period, the last play over the whole history -
+    with a zero in the period that is exactly the information a person wants.
 
-    `order` je nepovinné a mění jen pořadí titulů se stejným počtem
-    spuštění: `oldest` / `newest` podle data přidání místo velikosti.
-    Bez něj se řadí jako dřív - dashboard postavený na staré odpovědi se
-    nezmění. Neznámá hodnota je 400. `order` a `sort` naráz taky: řekly
-    by si každé o jiné pořadí.
+    `order` is optional and changes only the order of titles with the same
+    play count: `oldest` / `newest` by the date added instead of the size.
+    Without it the order is as before - a dashboard built on the old answer
+    does not change. An unknown value is a 400. `order` and `sort` at once too:
+    each would ask for a different order.
     """
-    dny = _dny_dotazu(dotaz, 365)
-    limit = _limit_dotazu(dotaz, 25, 500)
-    # Desetinná MB se neořezávají (1,5 MB je 1,5 MB, ne 1); strop 10 TB, ať
-    # se obří číslo vejde do databáze.
-    min_bajtu = round(api_dotaz.cislo(dotaz, "min_size_mb", 0, 0, 10_000_000) * 1_048_576)
-    if "order" in dotaz.hodnoty and dotaz.razeni:
-        raise api_dotaz.chyba("conflicting_parameters",
-                              "Use either 'order' or 'sort', not both.", "order")
-    poradi = api_dotaz.volba(dotaz, "order", "size",
-                             tuple(insights.PORADI_NEJMENE_HRANYCH))
-    polozky = [{
-        **_titul(r),
+    days = _query_days(query, 365)
+    limit = _query_limit(query, 25, 500)
+    # Decimal MB are not cut (1.5 MB is 1.5 MB, not 1); a cap of 10 TB, so a
+    # huge number fits into the database.
+    min_bytes = round(api_query.number(query, "min_size_mb", 0, 0, 10_000_000) * 1_048_576)
+    if "order" in query.values and query.sorts:
+        raise api_query.bad_request("conflicting_parameters",
+                                    "Use either 'order' or 'sort', not both.", "order")
+    order = api_query.choice(query, "order", "size",
+                             tuple(insights.LEAST_PLAYED_ORDERS))
+    items = [{
+        **_title(r),
         "plays": int(r.get("plays") or 0),
         "watched_seconds": int(r.get("watched_seconds") or 0),
         "last_played": r.get("last_played"),
-    } for r in insights.least_played(dny, _nacist(dotaz, "items", limit),
-                                     min_bajtu, poradi)]
+    } for r in insights.least_played(days, _parse_query(query, "items", limit),
+                                     min_bytes, order)]
     return {
-        "days": dny,
-        # Se `sort` řadí sort, ne order - hlásit „size" by lhalo.
-        "order": None if dotaz.razeni else poradi,
-        "items": api_dotaz.pouzij(polozky, *dotaz.pro("items"), limit),
+        "days": days,
+        # With `sort` the sort orders, not order - reporting "size" would lie.
+        "order": None if query.sorts else order,
+        "items": api_query.apply(items, *query.for_list("items"), limit),
     }
 
 
 @router.get("/unwatched")
-def nesledovane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Co se za období vůbec nehrálo - a kolik místa to zabírá.
+def unwatched(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """What was not played at all over the period - and how much space it takes.
 
-    Nejcennější číslo, které Jellyscope umí: podíl knihovny, který nikoho
-    nezajímá. Tituly přidané v posledních dnech se nepočítají, ty ještě
-    šanci nedostaly.
+    The most valuable number Jellyscope has: the share of the library nobody
+    cares about. Titles added in the last days do not count, they have not had
+    a chance yet.
 
-    S filtrem se počet, velikost a podíl počítají jen z vybraných řádků
-    (před limitem) - „kolik místa zabírá nesledované v téhle složce".
+    With a filter the count, the size and the share are computed only from the
+    chosen rows (before the limit) - "how much space the unwatched takes in this folder".
     """
-    dny = _dny_dotazu(dotaz, 365)
-    limit = _limit_dotazu(dotaz, 25, 500)
-    mrtve = insights.dead_storage(_nacist(dotaz, "items", limit), dny)
-    knihovna = int(mrtve.get("library_bytes") or 0)
-    vybrane = api_dotaz.pouzij([_titul(r) for r in mrtve.get("rows") or []],
-                               *dotaz.pro("items"), None)
-    if dotaz.ma_filtr("items"):
-        souhrn = _souhrn_nevyuzitych(vybrane, knihovna)
+    days = _query_days(query, 365)
+    limit = _query_limit(query, 25, 500)
+    dead = insights.dead_storage(_parse_query(query, "items", limit), days)
+    library_size = int(dead.get("library_bytes") or 0)
+    selected = api_query.apply([_title(r) for r in dead.get("rows") or []],
+                               *query.for_list("items"), None)
+    if query.has_filter("items"):
+        totals = _unused_summary(selected, library_size)
     else:
-        velikost = int(mrtve.get("size_bytes") or 0)
-        souhrn = {"count": int(mrtve.get("item_count") or 0), "size_bytes": velikost,
-                  "size_human": formatting.bytes_human(velikost),
-                  "share_percent": round(float(mrtve.get("share") or 0), 1)}
+        size = int(dead.get("size_bytes") or 0)
+        totals = {"count": int(dead.get("item_count") or 0), "size_bytes": size,
+                  "size_human": formatting.bytes_human(size),
+                  "share_percent": round(float(dead.get("share") or 0), 1)}
     return {
-        "days": dny,
-        "count": souhrn["count"],
-        "size_bytes": souhrn["size_bytes"],
-        "size_human": souhrn["size_human"],
-        "library_bytes": knihovna,
-        "share_percent": souhrn["share_percent"],
-        "items": vybrane if limit is None else vybrane[:limit],
+        "days": days,
+        "count": totals["count"],
+        "size_bytes": totals["size_bytes"],
+        "size_human": totals["size_human"],
+        "library_bytes": library_size,
+        "share_percent": totals["share_percent"],
+        "items": selected if limit is None else selected[:limit],
     }
 
 
-def _souhrn_nevyuzitych(radky: list[dict[str, Any]], library_bytes: int) -> dict[str, Any]:
-    """Počet, velikost a podíl na knihovně z (vyfiltrovaných) řádků."""
-    velikost = sum(int(r.get("size_bytes") or 0) for r in radky)
+def _unused_summary(rows: list[dict[str, Any]], library_bytes: int) -> dict[str, Any]:
+    """The count, the size and the share of the library from (filtered) rows."""
+    size = sum(int(r.get("size_bytes") or 0) for r in rows)
     return {
-        "count": len(radky),
-        "size_bytes": velikost,
-        "size_human": formatting.bytes_human(velikost),
-        "share_percent": round(velikost / library_bytes * 100, 1) if library_bytes else 0.0,
+        "count": len(rows),
+        "size_bytes": size,
+        "size_human": formatting.bytes_human(size),
+        "share_percent": round(size / library_bytes * 100, 1) if library_bytes else 0.0,
     }
 
 
 @router.get("/users")
-def divaci(token: dict[str, Any] = Depends(smi_adresu),
-           dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Diváci a kolik toho za období odsledovali.
+def viewers(token: dict[str, Any] = Depends(may_open_path),
+            query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The viewers and how much they watched over the period.
 
-    Jsou tu jména - stejně jako na stránce Uživatelé, a stejně jako tam
-    je klíč diváka nebo čtenáře s anonymizací dostane schovaná. Filtr
-    běží až nad schovanými jmény, takže skutečné jméno jím najít nejde.
+    The names are here - just like on the Users page, and just like there a
+    viewer's key or a reader's key with anonymising gets them hidden. The
+    filter runs only over the hidden names, so the real name cannot be found with it.
     """
-    dny = _dny_dotazu(dotaz)
-    limit = _limit_dotazu(dotaz, None, 500)
-    divaci = [{
+    days = _query_days(query)
+    limit = _query_limit(query, None, 500)
+    rows = [{
             "id": r.get("id"),
             "name": r.get("name"),
             "is_administrator": bool(r.get("is_administrator")),
@@ -810,138 +874,144 @@ def divaci(token: dict[str, Any] = Depends(smi_adresu),
             "watched_hours": round(float(r.get("hours") or 0), 2),
             "transcoded_hours": round(float(r.get("transcoded_hours") or 0), 2),
             "last_seen": r.get("last_seen"),
-        } for r in _pro_vlastnika(token, stats.user_table(dny))]
-    return {"days": dny, "users": api_dotaz.pouzij(divaci, *dotaz.pro("users"), limit)}
+        } for r in _for_owner(token, stats.user_table(days))]
+    return {"days": days, "users": api_query.apply(rows, *query.for_list("users"), limit)}
 
 
 @router.get("/history")
-def historie(token: dict[str, Any] = Depends(smi_adresu),
-             dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Poslední přehrávání - nejnovější první.
+def history(token: dict[str, Any] = Depends(may_open_path),
+            query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The last plays - the newest first.
 
-    Pole jsou vyjmenovaná, ne `p.*`: řádek historie nese i adresu,
-    ze které se člověk díval, a ta do souhrnu pro dashboard nepatří.
-    Pro provoz po síti je `/api/v1/bandwidth`, a to bez adres.
+    The fields are listed, not `p.*`: a history row carries the address the
+    person watched from too, and that does not belong into a summary for a
+    dashboard. For the traffic over the network there is `/api/v1/bandwidth`,
+    and that one without addresses.
 
-    Divácký klíč vidí jen svou historii. Cizí `user` je 403 - dřív se
-    potichu přepsal na vlastního diváka a nástroj si myslel, že má cizí
-    data.
+    A viewer's key sees only its own history. Another `user` is a 403 - it
+    used to be quietly rewritten to the own viewer and the tool believed it
+    had someone else's data.
     """
-    dny = _dny_dotazu(dotaz)
-    limit = _limit_dotazu(dotaz, 50, 500)
-    druh = _druh_dotazu(dotaz)
-    # Historie filtruje po DNECH v místním čase (tak, jak to má stránka
-    # Historie), ne po okamžicích - proto datum, ne časová značka.
-    od = (date.today() - timedelta(days=dny - 1)).isoformat()
-    # Prázdné `user=` ukazoval návod jako „všichni" - bere se jako bez něj.
-    kdo = None if dotaz.hodnoty.get("user") == "" else api_dotaz.identifikator(dotaz, "user")
-    # Se skrytými jmény jen náhradní id, jaké API samo vrací (`skryto-2`);
-    # skutečné id cizího diváka nenajde nic - jinak by podle něj šlo
-    # poznat, kdo je „Divák 2".
-    kdo = pristup.divak_z_adresy(kdo, token.get("account"))
-    muj = pristup.muj_divak(token.get("account"))
-    if muj and kdo and accounts.hole_id(kdo) != accounts.hole_id(muj):
-        raise ChybaApi(403, "own_history_only",
+    days = _query_days(query)
+    limit = _query_limit(query, 50, 500)
+    # The history listing shows everything, music listening too (like the
+    # History page without a choice); "both" therefore means everything here,
+    # not only watching.
+    kind = _query_kind(query)
+    kind = stats.KIND_ALL if kind == stats.KIND_BOTH else kind
+    # The history filters by DAYS in the local time (the way the History page
+    # does), not by moments - hence a date, not a timestamp.
+    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    # An empty `user=` the guide showed as "everyone" - it is taken as without it.
+    who = None if query.values.get("user") == "" else api_query.identifier(query, "user")
+    # With hidden names only a substitute id, as the API itself returns
+    # (`skryto-2`); the real id of another viewer finds nothing - otherwise it
+    # would tell who "Divák 2" is.
+    who = access.viewer_from_address(who, token.get("account"))
+    own = access.own_viewer(token.get("account"))
+    if own and who and accounts.bare_id(who) != accounts.bare_id(own):
+        raise ApiError(403, "own_history_only",
                        "This key sees only the history of its own account.", "user")
-    filtry, razeni = dotaz.pro("playbacks")
-    if not (filtry or razeni):
-        radky = _pro_vlastnika(token, stats.history(limit=limit, user_id=muj or kdo,
-                                                    kind=druh, od=od))
-        prehrani = [_prehrani(r) for r in radky]
+    filters, sorts = query.for_list("playbacks")
+    if not (filters or sorts):
+        rows = _for_owner(token, stats.history(limit=limit, user_id=own or who,
+                                               kind=kind, since=since))
+        plays = [_plays(r) for r in rows]
     else:
-        # Celá historie období po dávkách: v paměti jen to, co filtr pustí.
-        # Bez řazení stačí prvních `limit` shod - pořadí je dané dotazem.
-        prehrani = []
-        for davka in stats.historie_pro_api(user_id=muj or kdo, kind=druh, od=od,
-                                            podminky=_predfiltr_historie(filtry)):
-            prehrani += api_dotaz.pouzij([_prehrani(r) for r in _pro_vlastnika(token, davka)],
-                                         filtry, [], None)
-            if not razeni and len(prehrani) >= limit:
+        # The whole history of the period in batches: in memory only what the
+        # filter lets through. Without a sort the first `limit` matches are
+        # enough - the order is given by the query.
+        plays = []
+        for batch in stats.history_for_api(user_id=own or who, kind=kind, since=since,
+                                           conditions=_history_prefilter(filters)):
+            plays += api_query.apply([_plays(r) for r in _for_owner(token, batch)],
+                                     filters, [], None)
+            if not sorts and len(plays) >= limit:
                 break
-        prehrani = api_dotaz.pouzij(prehrani, [], razeni, limit)
-    return {"days": dny, "count": len(prehrani), "playbacks": prehrani}
+        plays = api_query.apply(plays, [], sorts, limit)
+    return {"days": days, "count": len(plays), "playbacks": plays}
 
 
-# Pole historie, která jde předfiltrovat v SQL, a jejich sloupce. Jméno a id
-# diváka ani zařízení tu NEJSOU: schovávají se až v Pythonu
-# (`_pro_vlastnika`), takže filtr nad nimi v SQL by běžel nad skutečným
-# názvem a prozradil by ho.
-_SLOUPCE_HISTORIE = {
+# History fields that can be pre-filtered in SQL, and their columns. The
+# viewer's name and id and the device are NOT here: they are hidden only in
+# Python (`_for_owner`), so a filter over them in SQL would run over the real
+# name and give it away.
+_HISTORY_COLUMNS = {
     "title": "p.item_name", "series": "p.series_name", "type": "p.item_type",
     "item_id": "p.item_id", "play_method": "p.play_method", "client": "p.client",
     "audio_language": "p.audio_language",
     "subtitle_language": "p.subtitle_language", "watched_seconds": "p.watched_seconds",
 }
-_POROVNANI = {"equals": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+_COMPARISONS = {"equals": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 
 
-def _predfiltr_historie(filtry: list[api_dotaz.Filtr]) -> list[tuple[str, list[Any]]]:
-    """Filtry historie přeložené do SQL jako předfiltr. Jen nadmnožina!
+def _history_prefilter(filters: list[api_query.Filter]) -> list[tuple[str, list[Any]]]:
+    """The history's filters translated into SQL as a pre-filter. Only a superset!
 
-    Celá historie období znamená na velkém serveru přenést z databáze
-    statisíce řádků jen proto, aby je Python zahodil. Jednoduchá pole se
-    proto zúží už v SQL. Přesně rozhoduje dál Python (`api_dotaz.pouzij`),
-    takže SQL smí pustit víc, nikdy míň:
+    The whole history of a period means on a big server moving hundreds of
+    thousands of rows from the database only for Python to throw them away.
+    Simple fields are therefore narrowed already in SQL. Python still decides
+    exactly (`api_query.apply`), so SQL may let more through, never less:
 
-    * text jen pro hodnoty v ASCII a jen `equals`, `in`, `contains`,
-      `starts_with`, `ends_with`; porovnává se malými písmeny jen v ASCII
-      (`dialect.male_pismena`) a řádky s jiným než ASCII textem jdou vždycky
-      dál (`dialect.mimo_ascii`) - `casefold` v Pythonu umí víc než LOWER
-      v databázi (`Straße` najde `strasse`);
-    * `%`, `_` i `!` v hodnotě jsou v LIKE obyčejné znaky (ESCAPE '!' -
-      zpětné lomítko by na PostgreSQL se standard_conforming_strings=off
-      rozbilo literál);
-    * negace (`not`, `not_contains`) a `empty` zůstávají jen Pythonu.
+    * text only for values in ASCII and only `equals`, `in`, `contains`,
+      `starts_with`, `ends_with`; compared in lower case only in ASCII
+      (`dialect.lower_ascii`) and rows with other than ASCII text always go
+      through (`dialect.non_ascii`) - `casefold` in Python can do more than
+      LOWER in the database (`Straße` finds `strasse`);
+    * `%`, `_` and `!` in a value are ordinary characters in LIKE (ESCAPE '!' -
+      a backslash would break the literal on PostgreSQL with
+      standard_conforming_strings=off);
+    * negations (`not`, `not_contains`) and `empty` stay with Python only.
 
-    `is_transcode` kopíruje pravidlo z `_prehrani` (začátek „transcode"
-    bez ohledu na velikost písmen), ne `stats.je_transcode`: nadmnožinou
-    musí být vůči tomu, co rozhoduje Python.
+    `is_transcode` copies the rule from `_plays` (starts with "transcode"
+    whatever the case), not `stats.transcode_condition`: it must be a superset
+    of what Python decides.
     """
     kind = db.current_dialect()
 
-    def mimo_ascii(sloupec: str) -> str:
-        return dialect.mimo_ascii(kind, sloupec)
+    def outside_ascii(column: str) -> str:
+        return dialect.non_ascii(kind, column)
 
-    podminky: list[tuple[str, list[Any]]] = []
-    for filtr in filtry:
-        if filtr.pole == "is_transcode":
-            chce = filtr.hodnota if filtr.operator == "equals" else not filtr.hodnota
-            vyraz = (dialect.male_pismena(kind, "COALESCE(p.play_method, '')")
-                     + (" LIKE ?" if chce else " NOT LIKE ?"))
-            podminky.append((f"({vyraz} OR {mimo_ascii('p.play_method')})",
-                             ["transcode%"]))
+    conditions: list[tuple[str, list[Any]]] = []
+    for flt in filters:
+        if flt.field == "is_transcode":
+            wants = flt.value if flt.operator == "equals" else not flt.value
+            expr = (dialect.lower_ascii(kind, "COALESCE(p.play_method, '')")
+                    + (" LIKE ?" if wants else " NOT LIKE ?"))
+            conditions.append((f"({expr} OR {outside_ascii('p.play_method')})",
+                               ["transcode%"]))
             continue
-        sloupec = _SLOUPCE_HISTORIE.get(filtr.pole)
-        if not sloupec:
+        column = _HISTORY_COLUMNS.get(flt.field)
+        if not column:
             continue
-        if filtr.typ == api_dotaz.CISLO:
-            if filtr.operator == "in":
-                podminky.append((f"{sloupec} IN ({','.join('?' for _ in filtr.hodnota)})",
-                                 list(filtr.hodnota)))
-            elif filtr.operator in _POROVNANI:
-                podminky.append((f"{sloupec} {_POROVNANI[filtr.operator]} ?", [filtr.hodnota]))
+        if flt.kind == api_query.NUMBER:
+            if flt.operator == "in":
+                conditions.append((f"{column} IN ({','.join('?' for _ in flt.value)})",
+                                   list(flt.value)))
+            elif flt.operator in _COMPARISONS:
+                conditions.append((f"{column} {_COMPARISONS[flt.operator]} ?", [flt.value]))
             continue
-        hodnoty = filtr.hodnota if filtr.operator == "in" else (filtr.hodnota,)
-        if (filtr.operator not in ("equals", "in", "contains", "starts_with", "ends_with")
-                or not all(str(h).isascii() for h in hodnoty)):
+        values = flt.value if flt.operator == "in" else (flt.value,)
+        if (flt.operator not in ("equals", "in", "contains", "starts_with", "ends_with")
+                or not all(str(h).isascii() for h in values)):
             continue
-        male = [str(h).lower() for h in hodnoty]
-        male_sloupec = dialect.male_pismena(kind, sloupec)
-        if filtr.operator in ("equals", "in"):
-            vyraz = f"{male_sloupec} IN ({','.join('?' for _ in male)})"
-            parametry = male
+        lowered = [str(h).lower() for h in values]
+        lowered_column = dialect.lower_ascii(kind, column)
+        if flt.operator in ("equals", "in"):
+            expr = f"{lowered_column} IN ({','.join('?' for _ in lowered)})"
+            params = lowered
         else:
-            holy = male[0].replace("!", "!!").replace("%", "!%").replace("_", "!_")
-            vzor = {"contains": f"%{holy}%", "starts_with": f"{holy}%",
-                    "ends_with": f"%{holy}"}[filtr.operator]
-            vyraz = f"{male_sloupec} LIKE ? ESCAPE '!'"
-            parametry = [vzor]
-        podminky.append((f"({vyraz} OR {mimo_ascii(sloupec)})", parametry))
-    return podminky
+            bare = lowered[0].replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            pattern = {"contains": f"%{bare}%", "starts_with": f"{bare}%",
+                       "ends_with": f"%{bare}"}[flt.operator]
+            expr = f"{lowered_column} LIKE ? ESCAPE '!'"
+            params = [pattern]
+        conditions.append((f"({expr} OR {outside_ascii(column)})", params))
+    return conditions
 
 
-def _prehrani(r: dict[str, Any]) -> dict[str, Any]:
-    """Jedno přehrání tak, jak ho API vrací."""
+def _plays(r: dict[str, Any]) -> dict[str, Any]:
+    """One play the way the API returns it."""
     return {
         "user": r.get("user_name"),
         "user_id": r.get("user_id"),
@@ -961,244 +1031,245 @@ def _prehrani(r: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/recently-added")
-def nedavno_pridane(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Co do knihovny přišlo naposledy. Díly jedné dávky jsou u sebe.
+def recently_added(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """What came into the library last. The episodes of one batch are together.
 
-    Seriál, kterému přibylo víc dílů naráz, je tu jednou - položkou je
-    nejnovější díl té dávky, takže id, cesta, řada a díl patří jemu.
+    A series that got more episodes at once is here once - the item is the
+    newest episode of the batch, so the id, path, season and episode belong to it.
     """
-    limit = _limit_dotazu(dotaz, 18, 200)
-    polozky = api_dotaz.pouzij(
-        [_titul(r) for r in stats.recently_added(_nacist(dotaz, "items", limit))],
-        *dotaz.pro("items"), limit)
-    return {"count": len(polozky), "items": polozky}
+    limit = _query_limit(query, 18, 200)
+    items = api_query.apply(
+        [_title(r) for r in stats.recently_added(_parse_query(query, "items", limit))],
+        *query.for_list("items"), limit)
+    return {"count": len(items), "items": items}
 
 
 @router.get("/play-methods")
-def zpusoby_prehrani(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Přímé přehrávání proti překódování - a čím se lidé dívají.
+def play_methods(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """Direct play against transcoding - and what people watch with.
 
-    `limit` platí pro oba seznamy; bez něj jsou způsoby celé a klientů
-    25 jako dřív. Klienti se počítají všichni a filtr jde přes ně celé.
+    `limit` holds for both lists; without it the methods are whole and the
+    clients 25 as before. All clients are counted and the filter goes over all of them.
     """
-    dny = _dny_dotazu(dotaz)
-    limit = _limit_dotazu(dotaz, None, 500)
-    kolik_klientu = 25 if limit is None else limit
-    zpusoby = [{
+    days = _query_days(query)
+    limit = _query_limit(query, None, 500)
+    client_limit = 25 if limit is None else limit
+    methods = [{
         "method": r.get("method"),
         "hours": round(float(r.get("hours") or 0), 2),
-    } for r in stats.play_method_breakdown(dny)]
-    klienti = [{
+    } for r in stats.play_method_breakdown(days)]
+    clients = [{
         "client": r.get("label"),
         "hours": round(float(r.get("hours") or 0), 2),
         "plays": int(r.get("plays") or 0),
-    } for r in stats.client_breakdown(dny, _nacist(dotaz, "clients", kolik_klientu))]
+    } for r in stats.client_breakdown(days, _parse_query(query, "clients", client_limit))]
     return {
-        "days": dny,
-        "methods": api_dotaz.pouzij(zpusoby, *dotaz.pro("methods"), limit),
-        "clients": api_dotaz.pouzij(klienti, *dotaz.pro("clients"), kolik_klientu),
+        "days": days,
+        "methods": api_query.apply(methods, *query.for_list("methods"), limit),
+        "clients": api_query.apply(clients, *query.for_list("clients"), client_limit),
     }
 
 
 @router.get("/insights")
-def zjisteni(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Stránka Zjištění v číslech - tituly, které stojí za pozornost.
+def insights_report(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The Insights page in numbers - titles worth attention.
 
-    Každý seznam se spočítá celý a filtr s jeho předponou jde přes něj
-    celý; `limit` je až nakonec a platí pro všechny čtyři.
+    Each list is computed whole and the filter with its prefix goes over all of
+    it; `limit` comes only at the end and holds for all four.
     """
-    dny = _dny_dotazu(dotaz)
-    kolik = _limit_dotazu(dotaz, 15, 100)
+    days = _query_days(query)
+    count = _query_limit(query, 15, 100)
 
-    def nacist(jmeno: str) -> int:
-        return _nacist(dotaz, jmeno, kolik)
+    def fetch(name: str) -> int:
+        return _parse_query(query, name, count)
 
-    def seznam(jmeno: str, polozky: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return api_dotaz.pouzij(polozky, *dotaz.pro(jmeno), kolik)
+    def listed(name: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return api_query.apply(items, *query.for_list(name), count)
 
     return {
-        "days": dny,
-        "transcode_offenders": seznam("transcode_offenders", [{
+        "days": days,
+        "transcode_offenders": listed("transcode_offenders", [{
             "title": r.get("label"),
             "transcodes": int(r.get("transcodes") or 0),
             "reasons": r.get("reasons"),
             "video_codec": r.get("video_codec"),
             "audio_codec": r.get("audio_codec"),
-            "resolution": _rozliseni(r),
+            "resolution": _resolution(r),
             "url": r.get("detail_url"),
-        } for r in insights.transcode_offenders(dny, nacist("transcode_offenders"))]),
-        "upgrade_candidates": seznam("upgrade_candidates", [{
+        } for r in insights.transcode_offenders(days, fetch("transcode_offenders"))]),
+        "upgrade_candidates": listed("upgrade_candidates", [{
             "title": r.get("label"),
             "plays": int(r.get("plays") or 0),
             "watched_hours": round(float(r.get("hours") or 0), 2),
-            "resolution": _rozliseni(r),
+            "resolution": _resolution(r),
             "bitrate": r.get("bitrate"),
             "video_codec": r.get("video_codec"),
             "url": r.get("detail_url"),
-        } for r in insights.upgrade_candidates(dny, nacist("upgrade_candidates"))]),
-        "oversized_rarely_watched": seznam("oversized_rarely_watched", [{
+        } for r in insights.upgrade_candidates(days, fetch("upgrade_candidates"))]),
+        "oversized_rarely_watched": listed("oversized_rarely_watched", [{
             "id": r.get("id"),
             "title": r.get("label"),
             "type": r.get("type"),
-            **_soubor(r),
+            **_file(r),
             "plays": int(r.get("plays") or 0),
             "watched_hours": round(float(r.get("hours") or 0), 2),
             "size_bytes": r.get("size_bytes"),
             "size_human": formatting.bytes_human(r.get("size_bytes") or 0),
             "gb_per_hour": round(float(r.get("gb_per_hour") or 0), 2),
-            "resolution": _rozliseni(r),
+            "resolution": _resolution(r),
         } for r in insights.oversized_rarely_watched(
-            dny, nacist("oversized_rarely_watched"))]),
-        "never_finished": seznam("never_finished", [{
+            days, fetch("oversized_rarely_watched"))]),
+        "never_finished": listed("never_finished", [{
             "title": r.get("label"),
             "attempts": int(r.get("attempts") or 0),
             "best_percent": round(float(r.get("best_percent") or 0), 1),
             "runtime_minutes": round(float(r.get("runtime_minutes") or 0)),
-        } for r in insights.never_finished(dny, nacist("never_finished"))]),
-        "transcode_speed": _rychlost(insights.rychlost_prevodu(dny)),
+        } for r in insights.never_finished(days, fetch("never_finished"))]),
+        "transcode_speed": _speed(insights.transcode_speeds(days)),
     }
 
 
-def _rychlost(r: dict[str, Any]) -> dict[str, Any]:
-    """Rychlost převodu do API - stejná čísla jako karta na Zjištění."""
-    def souhrn(s: dict[str, Any]) -> dict[str, Any]:
+def _speed(r: dict[str, Any]) -> dict[str, Any]:
+    """The conversion speed for the API - the same numbers as the card on Insights."""
+    def totals(s: dict[str, Any]) -> dict[str, Any]:
         return {
-            "playbacks": s["prehravani"],
-            "average_fps": s["prumer"],
-            "slowest_fps": s["nejmin"]["fps"],
-            "slowest_title": s["nejmin"]["label"],
-            "fastest_fps": s["nejvic"]["fps"],
-            "fastest_title": s["nejvic"]["label"],
-            "fell_behind": s["nestiha"],
+            "playbacks": s["playbacks"],
+            "average_fps": s["average"],
+            "slowest_fps": s["least"]["fps"],
+            "slowest_title": s["least"]["label"],
+            "fastest_fps": s["most"]["fps"],
+            "fastest_title": s["most"]["label"],
+            "fell_behind": s["too_slow"],
         }
-    if not r.get("prehravani"):
+    if not r.get("playbacks"):
         return {"playbacks": 0, "by_hardware": []}
-    return {**souhrn(r),
-            "by_hardware": [{"hardware": s["hw"] or "cpu", **souhrn(s)}
-                            for s in r["podle_hw"]]}
+    return {**totals(r),
+            "by_hardware": [{"hardware": s["hw"] or "cpu", **totals(s)}
+                            for s in r["by_hw"]]}
 
 
-def _rozliseni(row: dict[str, Any]) -> str | None:
-    """"1920x1080", nebo None, když soubor rozměry nemá."""
+def _resolution(row: dict[str, Any]) -> str | None:
+    """"1920x1080", or None when the file has no dimensions."""
     if row.get("width") and row.get("height"):
         return f"{row['width']}x{row['height']}"
     return None
 
 
 @router.get("/bandwidth")
-def provoz(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Kolik dat odešlo a kam - souhrn, bez adres jednotlivých lidí.
+def traffic(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """How much data went out and where to - a summary, without single people's addresses.
 
-    Filtr zúží jen seznam zemí; souhrnná čísla jsou ze všech přehrání.
+    The filter narrows only the list of countries; the summary numbers are from all plays.
     """
-    dny = _dny_dotazu(dotaz)
-    limit = _limit_dotazu(dotaz, None, 500)
-    prehled = stats.bandwidth_prehled(dny)
-    odkud = stats.odkud_se_divaji(dny)["skupiny"]
+    days = _query_days(query)
+    limit = _query_limit(query, None, 500)
+    overview = stats.bandwidth_summary(days)
+    origins = stats.watching_locations(days)["groups"]
     return {
-        "days": dny,
-        "total_bytes": int(prehled.get("bajtu") or 0),
-        "total_human": formatting.bytes_human(int(prehled.get("bajtu") or 0)),
-        "transcode_bytes": int(prehled.get("bajtu_transcode") or 0),
-        "transcode_share_percent": float(prehled.get("podil_transcode") or 0),
-        "peak_mbit": round(float(prehled.get("spicka_mbit") or 0), 2),
-        "peak_at": prehled.get("spicka_kdy"),
-        "average_mbit": float(prehled.get("prumer_mbit") or 0),
-        "playbacks": int(prehled.get("prehravani") or 0),
-        # Doma / z internetu / neznamo odkud - souhrn, zadne adresy.
+        "days": days,
+        "total_bytes": int(overview.get("byte_count") or 0),
+        "total_human": formatting.bytes_human(int(overview.get("byte_count") or 0)),
+        "transcode_bytes": int(overview.get("byte_count_transcode") or 0),
+        "transcode_share_percent": float(overview.get("transcode_share") or 0),
+        "peak_mbit": round(float(overview.get("peak_mbit") or 0), 2),
+        "peak_at": overview.get("peak_at"),
+        "average_mbit": float(overview.get("average_mbit") or 0),
+        "playbacks": int(overview.get("playbacks") or 0),
+        # Home / from the internet / unknown from where - a summary, no addresses.
         "origin": {
-            "home": _puvod(odkud["doma"]),
-            "internet": _puvod(odkud["internet"]),
-            "unknown": _puvod(odkud["neznamo"]),
+            "home": _origin(origins["at_home"]),
+            "internet": _origin(origins["internet"]),
+            "unknown": _origin(origins["unknown_origin"]),
         },
-        "countries": api_dotaz.pouzij([{
+        "countries": api_query.apply([{
             "country": z.get("label"),
-            "code": z.get("kod"),
+            "code": z.get("code"),
             "plays": int(z.get("plays") or 0),
-            "watched_seconds": int(z.get("sekund") or 0),
-            "bytes": int(z.get("bajtu") or 0),
-        } for z in stats.zeme_divaku(dny)], *dotaz.pro("countries"), limit),
+            "watched_seconds": int(z.get("seconds") or 0),
+            "bytes": int(z.get("byte_count") or 0),
+        } for z in stats.viewer_countries(days)], *query.for_list("countries"), limit),
     }
 
 
-def _puvod(skupina: dict[str, Any]) -> dict[str, Any]:
+def _origin(group: dict[str, Any]) -> dict[str, Any]:
     return {
-        "plays": int(skupina.get("plays") or 0),
-        "watched_seconds": int(skupina.get("sekund") or 0),
-        "bytes": int(skupina.get("bajtu") or 0),
+        "plays": int(group.get("plays") or 0),
+        "watched_seconds": int(group.get("seconds") or 0),
+        "bytes": int(group.get("byte_count") or 0),
     }
 
 
 @router.get("/item/{item_id}")
-def titul(item_id: str,
-          dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Jeden titul: soubor, jeho verze a kdo se na něj díval."""
-    # Id z Jellyfinu je hex, v ukazce "demo-ep-0-1" - pismena, cislice,
-    # pomlcka, podtrzitko. Cokoliv jineho je preklep nebo pokus a odpoved
-    # je stejna jako u neexistujiciho: co presne je spatne, se nerika.
-    # Do dotazu jde id jako parametr, takze tohle neni obrana pred SQL,
-    # ale pred tim, aby se s nesmyslem vubec pracovalo.
+def title(item_id: str,
+          query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """One title: the file, its versions and who watched it."""
+    # An id from Jellyfin is hex, in the demo "demo-ep-0-1" - letters, digits,
+    # a dash, an underscore. Anything else is a typo or an attempt and the
+    # answer is the same as for one that does not exist: what exactly is wrong
+    # is not said. The id goes into the query as a parameter, so this is not a
+    # defence against SQL, but against working with nonsense at all.
     if not item_id or len(item_id) > 64 or not all(
             c.isalnum() or c in "-_" for c in item_id):
-        raise ChybaApi(404, "not_found", "Item not found.")
-    polozka = stats.item(item_id)
-    if polozka is None:
-        raise ChybaApi(404, "not_found", "Item not found.")
-    souhrn = stats.item_playback_summary(item_id)
+        raise ApiError(404, "not_found", "Item not found.")
+    item = stats.item(item_id)
+    if item is None:
+        raise ApiError(404, "not_found", "Item not found.")
+    totals = stats.item_playback_summary(item_id)
     return {
-        **_titul(polozka),
-        "is_missing": bool(polozka.get("is_missing")),
-        "container": polozka.get("container"),
-        "bitrate": polozka.get("bitrate"),
-        "runtime_seconds": int((polozka.get("runtime_ticks") or 0) / 10_000_000),
+        **_title(item),
+        "is_missing": bool(item.get("is_missing")),
+        "container": item.get("container"),
+        "bitrate": item.get("bitrate"),
+        "runtime_seconds": int((item.get("runtime_ticks") or 0) / 10_000_000),
         "versions": [{
             "source_id": v.get("source_id"),
-            "name": v.get("nazev"),
+            "name": v.get("name"),
             "path": v.get("path"),
             "size_bytes": v.get("size_bytes"),
             "resolution": (f"{v.get('width')}x{v.get('height')}"
                            if v.get("width") and v.get("height") else None),
             "video_codec": v.get("video_codec"),
-        } for v in stats.verze_polozky(item_id)],
-        "plays": int(souhrn.get("plays") or 0),
-        "watched_hours": round(float(souhrn.get("hours") or 0), 2),
-        "viewers": int(souhrn.get("users") or 0),
-        "last_played": souhrn.get("last_played"),
+        } for v in stats.item_versions(item_id)],
+        "plays": int(totals.get("plays") or 0),
+        "watched_hours": round(float(totals.get("hours") or 0), 2),
+        "viewers": int(totals.get("users") or 0),
+        "last_played": totals.get("last_played"),
     }
 
 
 @router.get("/summary")
-def souhrn(token: dict[str, Any] = Depends(smi_adresu),
-           dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Sledovanost za období - to, co je na Přehledu nahoře.
+def summary(token: dict[str, Any] = Depends(may_open_path),
+            query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The watching over a period - what is at the top of the Overview.
 
-    `active_now` (kolik se sleduje teď) patří „Právě se hraje" - bez něj
-    v odpovědi chybí, stejně jako v /health a v panelu stránek.
+    `active_now` (how much is being watched now) belongs to "Právě se hraje" -
+    without it it is missing from the answer, just like in /health and in the
+    pages' panel.
     """
-    dny = _dny_dotazu(dotaz)
-    prehled = stats.overview(dny)
-    watched = int(prehled.get("watched_seconds") or 0)
+    days = _query_days(query)
+    overview = stats.overview(days)
+    watched = int(overview.get("watched_seconds") or 0)
     return {
-        "days": dny,
+        "days": days,
         "watched_seconds": watched,
         "watched_hours": round(watched / 3600, 2),
-        "plays": int(prehled.get("plays") or 0),
-        "users": int(prehled.get("users") or 0),
-        "titles": int(prehled.get("item_count") or 0),
-        "transcode_share_percent": round(float(prehled.get("transcode_share") or 0), 1),
+        "plays": int(overview.get("plays") or 0),
+        "users": int(overview.get("users") or 0),
+        "titles": int(overview.get("item_count") or 0),
+        "transcode_share_percent": round(float(overview.get("transcode_share") or 0), 1),
         **({"active_now": stats.active_session_count()}
-           if _smi(token, "/api/v1/now-playing") else {}),
+           if _may(token, "/api/v1/now-playing") else {}),
     }
 
 
 @router.get("/now-playing")
-def prave_hraje(token: dict[str, Any] = Depends(smi_adresu),
-                dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Právě běžící přehrávání. Prázdný seznam je taky odpověď."""
-    limit = _limit_dotazu(dotaz, None, 500)
-    relace = []
-    for row in _pro_vlastnika(token, stats.active_sessions()):
-        relace.append({
+def now_playing(token: dict[str, Any] = Depends(may_open_path),
+                query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The plays running right now. An empty list is an answer too."""
+    limit = _query_limit(query, None, 500)
+    sessions = []
+    for row in _for_owner(token, stats.active_sessions()):
+        sessions.append({
             "user": row.get("user_name"),
             "title": row.get("item_name"),
             "series": row.get("series_name"),
@@ -1214,35 +1285,34 @@ def prave_hraje(token: dict[str, Any] = Depends(smi_adresu),
             "runtime_seconds": int(row.get("runtime_seconds") or 0),
             "started_at": row.get("started_at"),
         })
-    relace = api_dotaz.pouzij(relace, *dotaz.pro("sessions"), limit)
-    return {"count": len(relace), "sessions": relace}
+    sessions = api_query.apply(sessions, *query.for_list("sessions"), limit)
+    return {"count": len(sessions), "sessions": sessions}
 
 
 @router.get("/library")
-def knihovna(dotaz: api_dotaz.Dotaz = Depends(dotaz_adresy)) -> dict[str, Any]:
-    """Velikost knihovny, růst za období a volné místo.
+def library(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+    """The library's size, the growth over the period and the free space.
 
-    Tatáž čísla, jaká stojí na stránce Knihovna - počítaná týmiž
-    funkcemi, ne vlastním dotazem. Dvě místa, která se ptají jinak, se
-    dřív nebo později rozejdou.
+    The same numbers as on the Library page - computed by the same functions,
+    not by an own query. Two places that ask differently part ways sooner or later.
     """
-    dny = _dny_dotazu(dotaz)
-    stav = stats.stav_knihovny()
-    rust = stats.rust_knihovny(dny)
-    volne = scanner._volne_misto_knihovny()
+    days = _query_days(query)
+    state = stats.library_state()
+    growth = stats.library_growth(days)
+    free = scanner.free_space_now()
     return {
-        "items": stav["polozek"],
-        "movies": stav["filmu"],
-        "episodes": stav["epizod"],
-        "size_bytes": stav["velikost"],
-        "size_human": formatting.bytes_human(stav["velikost"]),
-        "items_without_size": int(stats.tech_coverage().get("bez_velikosti") or 0),
-        "free_bytes": volne,
+        "items": state["item_count"],
+        "movies": state["movie_count"],
+        "episodes": state["episode_count"],
+        "size_bytes": state["size_bytes"],
+        "size_human": formatting.bytes_human(state["size_bytes"]),
+        "items_without_size": int(stats.tech_coverage().get("without_size") or 0),
+        "free_bytes": free,
         "growth": {
-            "days": dny,
-            "enough_data": bool(rust.get("dost_dat")),
-            "added_bytes": int(rust.get("prirustek") or 0),
-            "per_day_bytes": int(rust.get("denne") or 0),
-            "days_until_full": rust.get("dnu_do_konce"),
+            "days": days,
+            "enough_data": bool(growth.get("enough_data")),
+            "added_bytes": int(growth.get("increase") or 0),
+            "per_day_bytes": int(growth.get("daily") or 0),
+            "days_until_full": growth.get("days_left"),
         },
     }

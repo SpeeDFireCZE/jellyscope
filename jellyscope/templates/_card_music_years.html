@@ -1,0 +1,18 @@
+{# The music card "Release years": albums by decade.
+
+   From the database (cards_music.py, `d.radky` = stats.music_decades, from the oldest
+   decade; albums without a year at the end). #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("number of albums") }}</p>
+    </div>
+    {% if d.rows %}
+        {% set decade_rows = [] %}
+        {% for r in d.rows %}
+            {% set ignored = decade_rows.append({'label': (r.decades ~ '–' ~ (r.decades + 9)) if r.decades is not none else _('no year'),
+                                          'album_count': r.album_count}) %}
+        {% endfor %}
+        {{ charts.hbar_chart(decade_rows, 'label', 'album_count', unit='', limit=20) | safe }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

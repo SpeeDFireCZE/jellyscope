@@ -1,0 +1,391 @@
+{
+ "page": 1,
+ "pageSize": 200,
+ "sortKey": "timeleft",
+ "sortDirection": "descending",
+ "totalRecords": 8,
+ "records": [
+  {
+   "artistId": 3,
+   "albumId": 31,
+   "artist": {
+    "id": 3,
+    "artistName": "Paper Lanterns",
+    "foreignArtistId": "a0000003-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 31,
+    "title": "Dawn Chorus",
+    "artistId": 3,
+    "foreignAlbumId": "b0000031-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Paper Lanterns-Dawn Chorus-FLAC-2019",
+   "sizeleft": 805306368,
+   "timeleft": "00:12:30",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_101",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 10,
+   "trackHasFileCount": 0,
+   "id": 101
+  },
+  {
+   "artistId": 2,
+   "albumId": 22,
+   "artist": {
+    "id": 2,
+    "artistName": "Nightingale Quartet",
+    "foreignArtistId": "a0000002-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 22,
+    "title": "Blue Hour",
+    "artistId": 2,
+    "foreignAlbumId": "b0000022-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 2147483648,
+   "title": "Nightingale Quartet-Blue Hour-FLAC-2019",
+   "sizeleft": 1073741824,
+   "timeleft": "00:04:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_102",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 8,
+   "trackHasFileCount": 0,
+   "id": 102
+  },
+  {
+   "artistId": 1,
+   "albumId": 12,
+   "artist": {
+    "id": 1,
+    "artistName": "Kryštof",
+    "foreignArtistId": "a0000001-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 12,
+    "title": "Šípková Růžena",
+    "artistId": 1,
+    "foreignAlbumId": "b0000012-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 536870912,
+   "title": "Kryštof-Šípková Růžena-FLAC-2019",
+   "sizeleft": 536870912,
+   "timeleft": null,
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "paused",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_103",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 12,
+   "trackHasFileCount": 0,
+   "id": 103
+  },
+  {
+   "artistId": 4,
+   "albumId": 41,
+   "artist": {
+    "id": 4,
+    "artistName": "Marlow",
+    "foreignArtistId": "a0000004-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 41,
+    "title": "Lost Tapes",
+    "artistId": 4,
+    "foreignAlbumId": "b0000041-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 268435456,
+   "title": "Marlow-Lost Tapes-FLAC-2019",
+   "sizeleft": 268435456,
+   "timeleft": null,
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "queued",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_104",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 9,
+   "trackHasFileCount": 0,
+   "id": 104
+  },
+  {
+   "artistId": 1,
+   "albumId": 11,
+   "artist": {
+    "id": 1,
+    "artistName": "Kryštof",
+    "foreignArtistId": "a0000001-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 11,
+    "title": "Hvězdy",
+    "artistId": 1,
+    "foreignAlbumId": "b0000011-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 536870912,
+   "title": "Kryštof-Hvězdy-FLAC-2019",
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importPending",
+   "statusMessages": [
+    {
+     "title": "Hvězdy",
+     "messages": [
+      "Has missing tracks"
+     ]
+    }
+   ],
+   "downloadId": "SABnzbd_nzo_105",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 3,
+   "trackHasFileCount": 2,
+   "id": 105
+  },
+  {
+   "artistId": 2,
+   "albumId": 21,
+   "artist": {
+    "id": 2,
+    "artistName": "Nightingale Quartet",
+    "foreignArtistId": "a0000002-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 21,
+    "title": "Silver Lining",
+    "artistId": 2,
+    "foreignAlbumId": "b0000021-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Nightingale Quartet-Silver Lining-FLAC-2019",
+   "sizeleft": 536870912,
+   "timeleft": "00:06:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_pack",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 10,
+   "trackHasFileCount": 0,
+   "id": 106
+  },
+  {
+   "artistId": 2,
+   "albumId": 22,
+   "artist": {
+    "id": 2,
+    "artistName": "Nightingale Quartet",
+    "foreignArtistId": "a0000002-0000-4000-8000-000000000000",
+    "monitored": true,
+    "images": []
+   },
+   "album": {
+    "id": 22,
+    "title": "Blue Hour",
+    "artistId": 2,
+    "foreignAlbumId": "b0000022-0000-4000-8000-000000000000",
+    "monitored": true,
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "images": []
+   },
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "size": 1073741824,
+   "title": "Nightingale Quartet-Blue Hour-FLAC-2019",
+   "sizeleft": 536870912,
+   "timeleft": "00:06:00",
+   "estimatedCompletionTime": null,
+   "added": "2026-11-20T10:00:00Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_pack",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "indexer": "Test (Prowlarr)",
+   "outputPath": "/downloads/x",
+   "downloadForced": false,
+   "trackFileCount": 8,
+   "trackHasFileCount": 0,
+   "id": 107
+  },
+  {
+   "artistId": null,
+   "albumId": null,
+   "quality": {
+    "quality": {
+     "id": 6,
+     "name": "FLAC"
+    }
+   },
+   "size": 134217728,
+   "title": "Unknown.Artist-Mystery-FLAC-2020",
+   "sizeleft": 67108864,
+   "timeleft": "00:01:00",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_unknown",
+   "protocol": "torrent",
+   "downloadClient": "Torrent klient",
+   "indexer": "T",
+   "trackFileCount": 0,
+   "trackHasFileCount": 0,
+   "id": 108
+  }
+ ]
+}

@@ -1,0 +1,290 @@
+{
+ "page": 1,
+ "pageSize": 15,
+ "sortKey": "date",
+ "sortDirection": "ascending",
+ "totalRecords": 23,
+ "records": [
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:32:46Z",
+   "successful": true,
+   "eventType": "indexerRss",
+   "data": {
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "1",
+    "query": "",
+    "queryType": "search",
+    "categories": "2000,2040",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "1",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 1
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:32:48Z",
+   "successful": true,
+   "eventType": "indexerRss",
+   "data": {
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "0",
+    "query": "",
+    "queryType": "search",
+    "categories": "5000,5040",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "1",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 2
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:32:50Z",
+   "successful": true,
+   "eventType": "indexerRss",
+   "data": {
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "1",
+    "query": "",
+    "queryType": "search",
+    "categories": "2000,2040",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "1",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 3
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:00Z",
+   "successful": true,
+   "eventType": "indexerRss",
+   "data": {
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "1",
+    "query": "",
+    "queryType": "search",
+    "categories": "5000,5040",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "1",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 4
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:02Z",
+   "successful": true,
+   "eventType": "indexerRss",
+   "data": {
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "1",
+    "query": "",
+    "queryType": "search",
+    "categories": "2000,2040",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "1",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 5
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:04Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "2",
+    "query": "big buck bunny",
+    "queryType": "search",
+    "categories": "",
+    "source": "Prowlarr",
+    "host": "localhost",
+    "queryResults": "10",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 6
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:06Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "tvdbId": "121361",
+    "season": "1",
+    "episode": "2",
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "1",
+    "query": "",
+    "queryType": "tvsearch",
+    "categories": "5000,5040",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "6",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 7
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:08Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "imdbId": "tt1254207",
+    "tmdbId": "10378",
+    "limit": "100",
+    "offset": "0",
+    "elapsedTime": "1",
+    "query": "",
+    "queryType": "movie",
+    "categories": "2000,2040",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "4",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 8
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:10Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "1",
+    "query": "game of thrones",
+    "queryType": "search",
+    "categories": "",
+    "source": "Prowlarr",
+    "host": "localhost",
+    "queryResults": "10",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 9
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:20Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "4",
+    "query": "Game of Thrones",
+    "queryType": "search",
+    "categories": "",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "10",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 10
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:20Z",
+   "successful": true,
+   "eventType": "releaseGrabbed",
+   "data": {
+    "source": "Sonarr",
+    "host": "localhost",
+    "grabMethod": "Redirect",
+    "grabTitle": "Arr.Test.Placeholder.S01E01.720p.WEB-DL.DD5.1.H.264-TEST",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU"
+   },
+   "id": 11
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:22Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "1",
+    "query": "Big Buck Bunny",
+    "queryType": "search",
+    "categories": "",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "10",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 12
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:33:22Z",
+   "successful": true,
+   "eventType": "releaseGrabbed",
+   "data": {
+    "source": "Radarr",
+    "host": "localhost",
+    "grabMethod": "Redirect",
+    "grabTitle": "Arr.Test.Placeholder.S01E01.720p.WEB-DL.DD5.1.H.264-TEST",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU"
+   },
+   "id": 13
+  },
+  {
+   "indexerId": 2,
+   "date": "2026-11-15T06:34:11Z",
+   "successful": false,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "2",
+    "query": "dark",
+    "queryType": "search",
+    "categories": "",
+    "source": "Sonarr",
+    "host": "localhost",
+    "queryResults": "0",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 14
+  },
+  {
+   "indexerId": 1,
+   "date": "2026-11-15T06:34:11Z",
+   "successful": true,
+   "eventType": "indexerQuery",
+   "data": {
+    "elapsedTime": "1",
+    "query": "Prowlarr Test Zmizele",
+    "queryType": "search",
+    "categories": "",
+    "source": "Radarr",
+    "host": "localhost",
+    "queryResults": "11",
+    "url": "http://indexer.test/api?t=search&apikey=TAJNY-KLIC-INDEXERU",
+    "cached": "0"
+   },
+   "id": 15
+  }
+ ]
+}

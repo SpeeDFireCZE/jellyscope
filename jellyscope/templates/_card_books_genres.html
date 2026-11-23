@@ -1,0 +1,33 @@
+{# The books card "Genres by reading": hours by genre.
+
+   From the database (cards_books.py: `d.rows` = stats.books_genres in hours for the chart, `d.table` the same genres
+   for the window). A book with several genres counts towards each, so the sum is more than the time - the note says
+   so. The chart shows twelve genres, the table in the window all of them. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+        <p class="card-note">{{ _("a book with several genres counts towards each") }}</p>
+        {{ charts.hbar_chart(d.rows, 'label', 'hours', limit=12) | safe }}
+        <div class="modal-only">
+            <table>
+                <thead><tr>
+                    <th>{{ _("Genre") }}</th>
+                    <th class="num">{{ _("Time") }}</th>
+                </tr></thead>
+                <tbody>
+                {% for z in d.table %}
+                    <tr>
+                        <td class="strong">{{ z.genre }}</td>
+                        <td class="num">{{ z.seconds | seconds }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}<p class="chart-empty">{{ _("Nothing was read or listened to in this period.") }}</p>{% endif %}
+</div>

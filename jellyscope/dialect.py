@@ -1,35 +1,35 @@
-"""Podpora dvou databází: SQLite a PostgreSQL.
+"""Support for two databases: SQLite and PostgreSQL.
 
-Aplikace je psaná v **SQLite dialektu** – to je zdrojový tvar, stejně jako
-je čeština zdrojový jazyk rozhraní. Když běží nad PostgreSQL, projde každý
-dotaz cestou přes `translate()` a přeloží se.
+The application is written in the **SQLite dialect** - that is the source form,
+just as Czech is the source language of the interface. When it runs on
+PostgreSQL, every query goes through `translate()` and is translated.
 
-## Proč překlad a ne psát oba dialekty ručně
+## Why translate instead of writing both dialects by hand
 
-V projektu je přes sto SQL dotazů. Psát je dvakrát znamená dvakrát tolik
-míst, kde může vzniknout chyba, a jistotu, že se jednou opraví jen jedna
-verze. Překlad drží **jeden zdroj pravdy**.
+The project has over a hundred SQL queries. Writing them twice means twice as
+many places for a mistake, and the certainty that one day only one version gets
+fixed. Translating keeps **one source of truth**.
 
-Aby to bylo bezpečné, musí platit jedno: překládá se **uzavřená množina**
-vzorů, které sami píšeme. Není to obecný převodník SQL a nikdy nebude –
-je to slovník pro několik konkrétních konstrukcí, o kterých víme, že je
-používáme.
+For that to be safe, one thing has to hold: what is translated is a **closed
+set** of patterns we write ourselves. It is not a general SQL converter and
+never will be - it is a dictionary for a few specific constructs we know we
+use.
 
-Konstrukce, které se v projektu **nepoužívají**, protože přenositelné
-nejsou: `GROUP_CONCAT` (voláme přes `group_concat()` níže), `MAX(a, b)`
-jako běžná funkce (přes `greatest()`), alias sloupce v `HAVING`
-a `INSERT OR REPLACE` (píšeme `ON CONFLICT`, kterému rozumí obojí).
+Constructs the project does **not use**, because they are not portable:
+`GROUP_CONCAT` (called through `group_concat()` below), `MAX(a, b)` as a scalar
+function (through `greatest()`), a column alias in `HAVING` and
+`INSERT OR REPLACE` (we write `ON CONFLICT`, which both understand).
 
-## Co se překládá
+## What is translated
 
 | SQLite                              | PostgreSQL                          |
 |-------------------------------------|-------------------------------------|
 | `?`                                 | `%s`                                |
 | `datetime('now', ?)`                | `now() + interval`                  |
-| `date(x, 'localtime')`              | převod časové zóny + `::date`       |
+| `date(x, 'localtime')`              | time zone conversion + `::date`     |
 | `strftime('%H', x, 'localtime')`    | `EXTRACT(HOUR FROM …)`              |
 | `julianday(a) - julianday(b)`       | `EXTRACT(EPOCH FROM …)`             |
-| `LIKE`                              | `ILIKE` (SQLite hledá bez ohledu na velikost písmen) |
+| `LIKE`                              | `ILIKE` (SQLite searches case-insensitively) |
 | `char(10)`                          | `chr(10)`                           |
 """
 
@@ -50,11 +50,11 @@ POSTGRES = "postgres"
 
 
 # ---------------------------------------------------------------------------
-# Nastavení databáze
+# Database settings
 #
-# Tohle jediné nastavení nemůže být v databázi - potřebujeme ho, abychom
-# se k ní vůbec připojili. Klasický problém slepice a vejce. Řeší se
-# malým souborem vedle databáze, který zapisuje formulář v Nastavení.
+# This one setting cannot live in the database - we need it to connect to
+# the database in the first place. The classic chicken and egg. It is solved
+# with a small file next to the database, written by the form in Settings.
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -68,9 +68,10 @@ class DatabaseConfig:
     database: str = "jellyscope"
     user: str = "jellyscope"
     password: str = field(default="", repr=False)
-    # Zásobník spojení. Zapnutý je rychlejší, ale potřebuje navíc knihovnu
-    # psycopg_pool - a ta se ne vždycky dá doinstalovat. Kdo ji nemá,
-    # tohle vypne a aplikace si spojení navazuje po jednom jako dřív.
+    # Connection pool. Switched on it is faster, but it needs the extra
+    # library psycopg_pool - and that cannot always be installed. Whoever
+    # lacks it switches this off and the application opens connections one
+    # at a time as before.
     use_pool: bool = True
 
     @property
@@ -78,7 +79,7 @@ class DatabaseConfig:
         return self.kind == POSTGRES
 
     def describe(self) -> str:
-        """Popis pro uživatele - nikdy neobsahuje heslo."""
+        """A description for the user - never holds the password."""
         if self.is_postgres:
             return f"PostgreSQL {self.user}@{self.host}:{self.port}/{self.database}"
         return f"SQLite {self.path}"
@@ -108,9 +109,10 @@ class DatabaseConfig:
             database=str(data.get("database") or "jellyscope"),
             user=str(data.get("user") or "jellyscope"),
             password=str(data.get("password") or ""),
-            # Starý soubor tenhle klíč nemá - tam platí zapnuto. Kdyby
-            # knihovna chyběla, aplikace stejně spadne zpátky na spojení
-            # po jednom, takže výchozí "zapnuto" nikomu nic nerozbije.
+            # An old file does not have this key - there it means on. Were
+            # the library missing, the application falls back to one
+            # connection at a time anyway, so the default "on" breaks
+            # nothing for anyone.
             use_pool=bool(data.get("use_pool", True)),
         )
 
@@ -120,35 +122,36 @@ def config_path(base_dir: Path) -> Path:
 
 
 def load_config(base_dir: Path, fallback_sqlite_path: str) -> DatabaseConfig:
-    """Načte nastavení databáze ze souboru; když není, použije SQLite."""
+    """Reads the database settings from the file; without one, SQLite."""
     path = config_path(base_dir)
     if path.exists():
         try:
             return DatabaseConfig.from_dict(json.loads(path.read_text(encoding="utf-8")))
         except (ValueError, OSError):
-            # Poškozený soubor nesmí znamenat, že aplikace nenastartuje.
-            # Spadneme zpátky na SQLite, kde data skoro jistě jsou.
+            # A damaged file must not mean the application does not start.
+            # We fall back to SQLite, where the data almost certainly are.
             pass
     return DatabaseConfig(kind=SQLITE, path=fallback_sqlite_path)
 
 
 def save_config(base_dir: Path, config: DatabaseConfig) -> None:
-    """Uloží výběr databáze do `data/database.json`.
+    """Saves the choice of database to `data/database.json`.
 
-    Soubor dostane práva 600, protože u PostgreSQL je v něm **heslo
-    k databázi**, a to čitelně - jinak by se s ním aplikace nepřihlásila.
-    Stejná úvaha jako u `data/secret_key` v config.py: co je citlivé, ať
-    si přečte jen vlastník. Na Windows to `chmod` neumí, tam soubor chrání
-    přístup ke složce.
+    The file gets permissions 600, because for PostgreSQL it holds the
+    **database password**, readable - otherwise the application could not
+    sign in with it. The same reasoning as for `data/secret_key` in
+    config.py: what is sensitive is readable by its owner only. On Windows
+    `chmod` cannot do that; there the file is protected by access to the
+    folder.
     """
     path = config_path(base_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    # Heslo v logu pochopitelne neni - jen to, na kterou databazi se
-    # aplikace po restartu prepne.
-    log.info("vybrana databaze %s (%s)", config.kind,
+    # The password is not in the log, of course - only which database the
+    # application switches to after a restart.
+    log.info("database selected: %s (%s)", config.kind,
              f"{config.host}:{config.port}/{config.database}"
              if config.is_postgres else config.path)
     try:
@@ -158,16 +161,17 @@ def save_config(base_dir: Path, config: DatabaseConfig) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pomocníky pro psaní přenositelného SQL
+# Helpers for writing portable SQL
 # ---------------------------------------------------------------------------
 
 def group_concat(dialect: str, expression: str, separator: str = "','") -> str:
-    """Spojení hodnot ve skupině do jednoho řetězce.
+    """Values of a group joined into one string.
 
-    SQLite tomu říká GROUP_CONCAT, PostgreSQL string_agg a liší se
-    i v pořadí argumentů. Nechceme to překládat regulárním výrazem –
-    výraz uvnitř může obsahovat další závorky a to se hlídá špatně.
-    Proto se tahle funkce volá při skládání dotazu.
+    SQLite calls it GROUP_CONCAT, PostgreSQL string_agg, and they differ in
+    the order of the arguments too. We do not want to translate it with a
+    regular expression - the expression inside can hold more brackets, and
+    that is hard to keep track of. So this function is called while the
+    query is being built.
     """
     if dialect == POSTGRES:
         return f"string_agg({expression}, {separator})"
@@ -181,11 +185,11 @@ def group_concat_distinct(dialect: str, expression: str) -> str:
 
 
 def greatest(dialect: str, first: str, second: str) -> str:
-    """Větší ze dvou hodnot.
+    """The greater of two values.
 
-    SQLite používá dvouargumentové MAX(), PostgreSQL GREATEST().
-    Překládat to nejde: `MAX` je v obou zároveň agregační funkce
-    a rozlišit je podle počtu argumentů by šlo jen s parserem.
+    SQLite uses the two-argument MAX(), PostgreSQL GREATEST(). Translating
+    it is not possible: `MAX` is an aggregate function in both as well, and
+    telling them apart by the number of arguments would take a parser.
     """
     if dialect == POSTGRES:
         return f"GREATEST({first}, {second})"
@@ -193,36 +197,37 @@ def greatest(dialect: str, first: str, second: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Překlad SQL
+# Translating SQL
 # ---------------------------------------------------------------------------
 
-# Převod textového sloupce na místní čas. Časy ukládáme jako text v UTC,
-# takže se musí nejdřív přetypovat a pak posunout do zóny serveru.
-def male_pismena(dialect: str, sloupec: str) -> str:
-    """Sloupec malými písmeny - ale jen v ASCII, v obou databázích stejně.
+def lower_ascii(dialect: str, column: str) -> str:
+    """The column in lower case - but in ASCII only, the same in both databases.
 
-    SQLite mění v LOWER jen ASCII. PostgreSQL skládá podle locale databáze
-    a v turecké z „I" udělá „ı" - předfiltr v API (api._predfiltr_historie)
-    by pak zahodil řádek „INFUSE", který Python pustí. Collation "C" mění
-    jen ASCII; platí i pro ILIKE, na které se LIKE v PostgreSQL překládá.
+    SQLite's LOWER changes ASCII only. PostgreSQL follows the database's
+    locale, and a Turkish one turns "I" into "ı" - the API's prefilter
+    (api._history_prefilter) would then drop the row "INFUSE" that Python
+    lets through. Collation "C" changes ASCII only; that holds for ILIKE as
+    well, which LIKE is translated to in PostgreSQL.
     """
     if dialect == POSTGRES:
-        return f'LOWER({sloupec} COLLATE "C")'
-    return f"LOWER({sloupec})"
+        return f'LOWER({column} COLLATE "C")'
+    return f"LOWER({column})"
 
 
-def mimo_ascii(dialect: str, sloupec: str) -> str:
-    """Podmínka „v textu je něco jiného než tisknutelné ASCII".
+def non_ascii(dialect: str, column: str) -> str:
+    """The condition "the text holds something other than printable ASCII".
 
-    Takové řádky pouští předfiltr vždycky dál: `casefold` v Pythonu umí
-    víc než LOWER v databázi (`Straße` -> `strasse`), takže o nich musí
-    rozhodnout Python.
+    The prefilter always lets such rows through: Python's `casefold` does
+    more than the database's LOWER (`Straße` -> `strasse`), so Python has to
+    decide about them.
     """
     if dialect == POSTGRES:
-        return f"{sloupec} ~ '[^ -~]'"
-    return f"{sloupec} GLOB '*[^ -~]*'"
+        return f"{column} ~ '[^ -~]'"
+    return f"{column} GLOB '*[^ -~]*'"
 
 
+# A text column converted to local time. Times are stored as text in UTC,
+# so the column has to be cast first and then shifted into the server's zone.
 def _local(column: str) -> str:
     return (f"(({column})::timestamp AT TIME ZONE 'UTC' "
             f"AT TIME ZONE current_setting('TIMEZONE'))")
@@ -230,58 +235,59 @@ def _local(column: str) -> str:
 
 _COLUMN = r"([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"
 
-# Formát, ve kterém ukládáme čas. Výsledek převodu musí být zase **text**,
-# protože sloupce jsou textové. Kdyby překlad vrátil `timestamp`, PostgreSQL
-# by porovnání `text >= timestamp` odmítl - na rozdíl od SQLite, které si
-# typy domýšlí.
+# The format times are stored in. The result of a conversion has to be
+# **text** again, because the columns are text. Were the translation to
+# return a `timestamp`, PostgreSQL would refuse the comparison
+# `text >= timestamp` - unlike SQLite, which guesses the types.
 _TS = "'YYYY-MM-DD HH24:MI:SS'"
 
-# Tato pravidla se aplikují na CELÝ dotaz, ne jen mimo řetězcové literály.
-# Musí to tak být: vzor `datetime('now', ?)` sám obsahuje literál `'now'`,
-# takže by ho hledání "jen mimo literály" nikdy nenašlo. Je to bezpečné,
-# protože tyhle konkrétní tvary uvnitř dat nikdy nepíšeme.
+# These rules apply to the WHOLE query, not only outside string literals.
+# It has to be so: the pattern `datetime('now', ?)` holds the literal
+# `'now'` itself, so a search "outside literals only" would never find it.
+# It is safe because we never write these particular shapes inside data.
 _FUNCTION_RULES: list[tuple[re.Pattern[str], Any]] = [
-    # datetime('now', ?) -> aktuální UTC čas posunutý o interval, jako text
+    # datetime('now', ?) -> the current UTC time shifted by an interval, as text
     (re.compile(r"datetime\(\s*'now'\s*,\s*\?\s*\)"),
      lambda m: f"to_char((now() AT TIME ZONE 'UTC') + (?)::interval, {_TS})"),
 
-    # date('now', '-60 days') -> totéž, ale jen datum a s pevným intervalem
+    # date('now', '-60 days') -> the same, but the date only and with a fixed interval
     (re.compile(r"\bdate\(\s*'now'\s*,\s*'([^']*)'\s*\)"),
      lambda m: ("to_char((now() AT TIME ZONE 'UTC') + interval "
                 f"'{m.group(1)}', 'YYYY-MM-DD')")),
 
-    # (julianday('now') - julianday(?)) * 24 * 60  -> minuty
+    # (julianday('now') - julianday(?)) * 24 * 60  -> minutes
     (re.compile(r"\(\s*julianday\(\s*'now'\s*\)\s*-\s*julianday\(\s*\?\s*\)\s*\)"
                 r"\s*\*\s*24\s*\*\s*60"),
      lambda m: "(EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'UTC') - (?)::timestamp)) / 60)"),
 
-    # strftime('%w' / '%H', sloupec, 'localtime')
+    # strftime('%w' / '%H', column, 'localtime')
     (re.compile(r"strftime\(\s*'%w'\s*,\s*" + _COLUMN + r"\s*,\s*'localtime'\s*\)"),
      lambda m: f"EXTRACT(DOW FROM {_local(m.group(1))})"),
     (re.compile(r"strftime\(\s*'%H'\s*,\s*" + _COLUMN + r"\s*,\s*'localtime'\s*\)"),
      lambda m: f"EXTRACT(HOUR FROM {_local(m.group(1))})"),
 
-    # date(sloupec, 'localtime')
+    # date(column, 'localtime')
     (re.compile(r"\bdate\(\s*" + _COLUMN + r"\s*,\s*'localtime'\s*\)"),
      lambda m: f"{_local(m.group(1))}::date"),
 
     (re.compile(r"\bchar\(\s*10\s*\)"), lambda m: "chr(10)"),
 ]
 
-# Tohle je naopak jediné slovo bez uvozovek, takže se hledá jen mimo
-# literály - aby se nepřepsalo uvnitř textu, kdyby tam někdy bylo.
+# This one, on the other hand, is a single word without quotes, so it is
+# looked for outside literals only - not to be rewritten inside text, should
+# there ever be some.
 #
-# Proč vůbec: SQLite hledá přes LIKE bez ohledu na velikost písmen,
-# PostgreSQL ne. Aby se vyhledávání chovalo stejně, používáme tam ILIKE.
+# Why at all: SQLite's LIKE ignores case, PostgreSQL's does not. For
+# searching to behave the same, we use ILIKE there.
 _LIKE = re.compile(r"\bLIKE\b")
 
 
 def _split_literals(sql: str) -> Iterator[tuple[bool, str]]:
-    """Rozdělí SQL na části mimo a uvnitř textových literálů.
+    """Splits SQL into the parts outside and inside text literals.
 
-    Bez tohohle rozdělení by se nahrazování dotklo i textu uvnitř
-    uvozovek – a z `'%cs%'` by se stal nesmysl. Zdvojená uvozovka
-    uvnitř literálu (`''`) je v SQL escape, takže se přeskočí.
+    Without this split, the replacing would touch the text inside quotes
+    too - and `'%cs%'` would turn into nonsense. A doubled quote inside a
+    literal (`''`) is an escape in SQL, so it is skipped.
     """
     index = 0
     length = len(sql)
@@ -307,32 +313,32 @@ def _split_literals(sql: str) -> Iterator[tuple[bool, str]]:
 
 
 def translate(sql: str, dialect: str) -> str:
-    """Přeloží dotaz z našeho SQLite dialektu do cílové databáze.
+    """Translates a query from our SQLite dialect into the target database.
 
-    Pořadí kroků není libovolné a stojí za to ho číst pozorně – dvakrát
-    se tu dá udělat chyba, která se projeví až za běhu.
+    The order of the steps is not arbitrary and is worth reading carefully -
+    twice here a mistake can be made that shows only at run time.
     """
     if dialect != POSTGRES:
         return sql
 
-    # 1. Funkce. Na celý dotaz, protože vzory samy obsahují uvozovky.
+    # 1. Functions. On the whole query, because the patterns themselves hold quotes.
     for pattern, replacement in _FUNCTION_RULES:
         sql = pattern.sub(replacement, sql)
 
-    # 2. LIKE -> ILIKE, ale jen mimo řetězcové literály.
+    # 2. LIKE -> ILIKE, but outside string literals only.
     sql = "".join(
         chunk if is_literal else _LIKE.sub("ILIKE", chunk)
         for is_literal, chunk in _split_literals(sql)
     )
 
-    # 3. Procenta. psycopg čte `%` jako začátek zástupného znaku, takže
-    #    každé skutečné procento (třeba v `LIKE '%cs%'`) musí být zdvojené.
-    #    MUSÍ se to udělat dřív, než z otazníků vyrobíme `%s` - jinak
-    #    bychom zdvojili i ta nová.
+    # 3. Percent signs. psycopg reads `%` as the start of a placeholder, so
+    #    every real percent sign (say in `LIKE '%cs%'`) has to be doubled.
+    #    It MUST happen before the question marks become `%s` - otherwise
+    #    we would double the new ones too.
     sql = sql.replace("%", "%%")
 
-    # 4. Otazníky na %s - zase jen mimo literály, aby se nepřepsal
-    #    otazník uvnitř textu.
+    # 4. Question marks to %s - again outside literals only, so a question
+    #    mark inside text is not rewritten.
     return "".join(
         chunk if is_literal else chunk.replace("?", "%s")
         for is_literal, chunk in _split_literals(sql)

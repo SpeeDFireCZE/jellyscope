@@ -1,0 +1,16 @@
+{# The card "Why it transcodes" of the Insights page.
+
+   Included by the Insights page (video/insights.html) and by dashboards (cards.py,
+   key `insight_reasons`) - one template, so the two places do not drift apart.
+   Expects `reasons (insights.transcode_reasons)`. #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Why it transcodes") }}</h2>
+        <p class="card-note">{{ _("the reason comes from Jellyfin itself") }}</p>
+    </div>
+    {% if reasons %}
+        {{ charts.hbar_chart(reasons, 'name', 'plays', unit='x', labels_above=True) | safe }}
+    {% else %}
+        <p class="chart-empty">{{ _("No transcodes to analyse yet.") }}</p>
+    {% endif %}
+</div>

@@ -1,26 +1,27 @@
-"""Přenos dat mezi SQLite a PostgreSQL.
+"""Moving data between SQLite and PostgreSQL.
 
-Když v Nastavení přepneš databázi, nová je prázdná. Tenhle modul umí data
-z té staré do ní překopírovat, aby ses o historii nepřipravil.
+When you switch the database in Settings, the new one is empty. This module
+can copy the data from the old one into it, so you do not lose the history.
 
-## Jak to funguje
+## How it works
 
-Obě databáze mají **stejné názvy tabulek i sloupců** (viz `schema.sql`
-a `schema_postgres.sql`). Kopírování je proto přímočaré: přečti řádky
-odsud, zapiš je tam. Žádný převod typů není potřeba, protože i časy
-ukládáme v obou jako text.
+Both databases have **the same names of tables and columns** (see
+`schema.sql` and `schema_postgres.sql`). So copying is straightforward:
+read the rows from here, write them there. No conversion of types is
+needed, because times are stored as text in both as well.
 
-## Na co si dát pozor
+## What to watch out for
 
-* Kopíruje se **po dávkách**, ne všechno najednou. U statisíců řádků
-  by jinak došla paměť.
-* Tabulky se plní **v pořadí podle závislostí** – `items` musí být dřív
-  než `item_streams`, jinak by cizí klíč zápis odmítl.
-* Cíl se nejdřív **vyprázdní**. Kdyby se jen přidávalo, druhý běh by
-  skončil na porušení jedinečnosti.
-* U PostgreSQL se po kopírování musí **posunout čítače** sloupců
-  `BIGSERIAL`. Bez toho by první nový záznam dostal id 1 – které už tam
-  je – a zápis by spadl.
+* It copies **in batches**, not everything at once. With hundreds of
+  thousands of rows the memory would run out otherwise.
+* The tables are filled **in the order of their dependencies** - `items`
+  has to come before `item_streams`, otherwise a foreign key would refuse
+  the write.
+* The target is **emptied** first. Were rows only added, a second run
+  would end on a uniqueness violation.
+* On PostgreSQL the counters of the `BIGSERIAL` columns have to be
+  **moved on** after copying. Without it the first new record would get
+  id 1 - which is already there - and the write would fail.
 """
 
 from __future__ import annotations
@@ -28,14 +29,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from . import db, dialect
+from . import db, dialect, i18n
 
 log = logging.getLogger("jellyscope.dbmigrate")
 
-# Všechny tabulky ze schématu, v pořadí podle cizích klíčů - tentýž seznam
-# jako u zálohy (db.TABULKY). Dřív tu byl vlastní, ručně psaný seznam a
-# převod s ním tiše vynechával API klíče, přehledy, verze souborů...
-TABLES: list[str] = list(db.TABULKY)
+# Every table of the schema, in the order of the foreign keys - the same list
+# as the backup's (db.TABLES). There used to be an own, hand-written list
+# here, and the conversion silently left out API keys, dashboards, file
+# versions...
+TABLES: list[str] = list(db.TABLES)
 
 BATCH_SIZE = 500
 
@@ -46,55 +48,53 @@ def _columns(conn: db.Connection, table: str) -> list[str]:
 
 def copy_all(source: dialect.DatabaseConfig,
              target: dialect.DatabaseConfig) -> dict[str, Any]:
-    """Překopíruje všechna data ze zdrojové databáze do cílové."""
+    """Copies all the data from the source database to the target one."""
     if source.kind == target.kind and source.to_dict() == target.to_dict():
-        return {"status": "error", "message": "Zdroj a cíl jsou tatáž databáze."}
+        return {"status": "error", "message": "The source and the target are the same database."}
 
     copied: dict[str, int] = {}
-    # U ktere tabulky se zrovna pracuje - at hlaska rekne, kde hledat.
-    # Samotne "FOREIGN KEY constraint failed" to nerekne.
-    tabulka: str | None = None
+    # The table being worked on - so the message says where to look.
+    # A bare "FOREIGN KEY constraint failed" does not say it.
+    current_table: str | None = None
 
-    # Cíl musí mít schéma, jinak není kam zapisovat.
+    # The target has to have the schema, otherwise there is nowhere to write.
     #
-    # Tohle bylo dřív **mimo** try a byla to nepříjemná chyba: když
-    # zakládání tabulek selhalo, výjimka prošla až do webu a uživatel
-    # dostal holé "Internal Server Error" bez jediného vodítka.
-    # Nejčastější příčina je přitom snadno opravitelná - viz hláška níže.
+    # This used to be **outside** the try, and it was a nasty bug: when
+    # creating the tables failed, the exception went all the way to the web
+    # and the user got a bare "Internal Server Error" without a single clue.
+    # The most common cause is easy to fix, though - see the message below.
     try:
         db.init_db(target)
-    except Exception as exc:  # noqa: BLE001 - hlášku ukazujeme uživateli
-        log.exception("zalozeni schematu v cilove databazi selhalo")
-        rada = ""
-        if "permission denied" in str(exc).lower():
-            rada = (" Účet nemá právo zakládat tabulky. Na PostgreSQL 15+"
-                    " je potřeba i:  GRANT CREATE ON SCHEMA public TO"
-                    f" {target.user};")
-        return {
-            "status": "error",
-            "message": f"Schéma v cílové databázi se nepodařilo založit."
-                       f"{rada} ({type(exc).__name__}: {exc})",
-        }
+    except Exception as exc:  # noqa: BLE001 - the message is shown to the user
+        log.exception("creating the schema in the target database failed")
+        template = ("The schema could not be created in the target database. The account may not create "
+                    "tables. On PostgreSQL 15+ it also needs:  GRANT CREATE ON SCHEMA public TO {user}; ({kind}: {error})"
+                    if "permission denied" in str(exc).lower() else
+                    "The schema could not be created in the target database. ({kind}: {error})")
+        return {"status": "error",
+                "message": i18n.translate_with(template, None, user=target.user, kind=type(exc).__name__,
+                                               error=i18n.error_text(exc))}
 
     try:
         with db.connect(source) as src, db.connect(target) as dst:
-            # Koš zapomenutých diváků (db.KOS) není ve schématu - vzniká,
-            # až je ho potřeba. Když ve zdroji je, přenese se taky: jinak
-            # by po převodu nešlo zapomenutého diváka vrátit.
-            tabulky = list(TABLES)
-            if db.sloupce(src, db.KOS):
-                db._zajisti_kos(dst)
-                tabulky.append(db.KOS)
+            # The bin of forgotten viewers (db.PLAYBACK_BIN) is not in the schema - it
+            # is created when it is needed. When the source has it, it is
+            # moved too: otherwise a forgotten viewer could not be brought
+            # back after the conversion.
+            tables = list(TABLES)
+            if db.columns_of(src, db.PLAYBACK_BIN):
+                db._ensure_playback_bin(dst)
+                tables.append(db.PLAYBACK_BIN)
 
-            # Mažeme v opačném pořadí než plníme - ze stejného důvodu,
-            # z jakého se plní odshora: cizí klíče.
-            for table in reversed(tabulky):
-                tabulka = table
-                if db.sloupce(dst, table):
+            # We delete in the opposite order to filling - for the same reason
+            # we fill from the top: the foreign keys.
+            for table in reversed(tables):
+                current_table = table
+                if db.columns_of(dst, table):
                     dst.execute(f"DELETE FROM {table}")
 
-            for table in tabulky:
-                tabulka = table
+            for table in tables:
+                current_table = table
                 shared = [c for c in _columns(src, table) if c in dst.table_columns(table)]
                 if not shared:
                     continue
@@ -116,43 +116,44 @@ def copy_all(source: dialect.DatabaseConfig,
 
                 copied[table] = total
 
-            tabulka = None
+            current_table = None
             if dst.is_postgres:
-                _fix_sequences(dst, tabulky)
+                _fix_sequences(dst, tables)
 
-    except Exception as exc:  # noqa: BLE001 - hlášku ukazujeme uživateli
-        log.exception("prenos dat selhal (tabulka %s)", tabulka)
-        chyba = f"{type(exc).__name__}: {exc}"
-        if tabulka is None:
-            return {"status": "error", "message": chyba}
-        return {"status": "error", "message": f"{tabulka}: {chyba}",
-                "tabulka": tabulka, "chyba": chyba}
+    except Exception as exc:  # noqa: BLE001 - the message is shown to the user
+        log.exception("the data transfer failed (table %s)", current_table)
+        error = f"{type(exc).__name__}: {exc}"
+        if current_table is None:
+            return {"status": "error", "message": error}
+        return {"status": "error", "message": f"{current_table}: {error}",
+                "table": current_table, "error": error}
 
     return {"status": "ok", "copied": copied, "total": sum(copied.values())}
 
 
-def _fix_sequences(conn: db.Connection, tabulky: list[str]) -> None:
-    """Posune čítače id za nejvyšší zkopírovanou hodnotu.
+def _fix_sequences(conn: db.Connection, tables: list[str]) -> None:
+    """Moves the id counters past the highest copied value.
 
-    PostgreSQL přiděluje id z posloupnosti, která o vložených hodnotách
-    neví. Bez tohohle kroku by první nově vložený řádek dostal id 1
-    a narazil na už existující záznam.
+    PostgreSQL hands out ids from a sequence that knows nothing about the
+    inserted values. Without this step the first newly inserted row would
+    get id 1 and run into a record that already exists.
 
-    Které tabulky čítač mají, se zjistí z databáze (`pg_get_serial_sequence`),
-    ne z ručního seznamu - ten by se s novou tabulkou zase zapomněl.
+    Which tables have a counter is found out from the database
+    (`pg_get_serial_sequence`), not from a hand-written list - that one
+    would forget a new table again.
     """
-    for table in tabulky:
-        if "id" not in db.sloupce(conn, table):
+    for table in tables:
+        if "id" not in db.columns_of(conn, table):
             continue
-        posloupnost = dict(conn.execute(
+        sequence = dict(conn.execute(
             "SELECT pg_get_serial_sequence(?, 'id') AS s", (table,)).fetchone())["s"]
-        if posloupnost:
+        if sequence:
             conn.execute(
-                f"SELECT setval('{posloupnost}', COALESCE((SELECT MAX(id) FROM {table}), 1))")
+                f"SELECT setval('{sequence}', COALESCE((SELECT MAX(id) FROM {table}), 1))")
 
 
 def summarise(config: dialect.DatabaseConfig) -> dict[str, int]:
-    """Kolik řádků je v které tabulce - pro kontrolu před i po přenosu."""
+    """How many rows each table has - for a check before and after the move."""
     counts: dict[str, int] = {}
     try:
         with db.connect(config) as conn:
@@ -161,6 +162,6 @@ def summarise(config: dialect.DatabaseConfig) -> dict[str, int]:
                     continue
                 row = conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
                 counts[table] = int(dict(row)["n"]) if row else 0
-    except Exception:  # noqa: BLE001 - nedostupná databáze není chyba programu
+    except Exception:  # noqa: BLE001 - an unreachable database is not a bug of the program
         return {}
     return counts

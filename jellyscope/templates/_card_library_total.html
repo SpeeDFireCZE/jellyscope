@@ -1,0 +1,32 @@
+{# The card with the key `library_total`.
+
+   A template of its own, because it is drawn in two places: on its
+   original page and in a custom dashboard, where a person can
+   rearrange it. One copy, so the two places do not drift apart -
+   see jellyscope/cards.py. #}
+{% from "_macros.html" import tile with context %}
+{# ------------------------------------------------------------------ #}
+<h2 style="margin:30px 0 4px">{{ _("Across all libraries") }}</h2>
+<p class="subtitle" style="margin-bottom:16px">{{ _("Current state, independent of period.") }}</p>
+
+<div class="kpi-row">
+    {{ tile(_("Items in total"), coverage.total | number) }}
+    {# The sum knows only the sizes we have. An item without technical data
+       enters it as zero, so while there is such an item, the number
+       is a lower estimate - and it should say so, not look like the whole truth. #}
+    {# Other content (music) counts in too; the note says how much of it is which
+       ("z toho hudba 120 GB") - content_kinds.py. #}
+    {%- set shares = [] -%}
+    {%- for kind in coverage.kind_shares or [] %}{% set x = shares.append(_(kind.share).format(size=kind.size | bytes)) %}{% endfor -%}
+    {{ tile(_("Total size"), coverage.size_bytes | bytes,
+            note=(_("{count} items without a size are not counted in").format(
+                      count=coverage.without_size | number)
+                  if coverage.without_size
+                  else (shares | join(" · ") if shares else _("all libraries together")))) }}
+    {{ tile(_("Measured with ffprobe"), coverage.from_ffprobe | number,
+            note=_("precise data from the files")) }}
+    {{ tile(_("Taken from Jellyfin"), coverage.from_jellyfin | number,
+            note=_("fast, less detail")) }}
+    {{ tile(_("Without technical data"), coverage.missing | number,
+            note=_("run the analysis in Settings")) }}
+</div>

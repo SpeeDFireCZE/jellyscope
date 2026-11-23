@@ -1,17 +1,20 @@
-"""Sprava uctu z prikazove radky.
+"""Managing accounts from the command line.
 
-K cemu to je: kdyz zapomenes heslo, z prohlizece uz se dovnitr nedostanes.
-Tenhle skript pracuje primo s databazi, takze prihlaseni nepotrebuje.
+What it is for: when you forget your password, you no longer get in from the
+browser. This script works with the database directly, so it needs no sign-in.
 
-    python manage.py ucty                      vypise vsechny ucty
-    python manage.py pridat jana               zalozi ucet (heslo zada interaktivne)
-    python manage.py pridat petr --spravce     zalozi ucet se spravcovskymi pravy
-    python manage.py heslo petr                zmeni heslo
-    python manage.py smazat jana               smaze ucet
+    python manage.py accounts                  lists all accounts
+    python manage.py add jana                  creates an account (the password is typed interactively)
+    python manage.py add petr --admin          creates an account with administrator rights
+    python manage.py password petr             changes the password
+    python manage.py delete jana               deletes the account
 
-Prave proto, ze tenhle skript obchazi prihlaseni, ho muze spustit jen ten,
-kdo ma pristup k souborum na serveru. To je v poradku - kdo ma pristup
-k databazi, muze s ni delat cokoliv tak jako tak.
+The old Czech commands (ucty, pridat, heslo, smazat, --spravce) still work for
+a while as aliases - TODO.md item 0 removes them with the old page addresses.
+
+Exactly because this script goes around the sign-in, only whoever has access
+to the files on the server can run it. That is fine - whoever has access to
+the database can do anything with it anyway.
 """
 
 from __future__ import annotations
@@ -27,103 +30,108 @@ from jellyscope.formatting import datetime_human
 def cmd_list(_: argparse.Namespace) -> int:
     rows = accounts.all_accounts()
     if not rows:
-        print("Zadne ucty. Zaloz prvni pres  python manage.py pridat <jmeno> --spravce")
+        print("No accounts. Create the first one with  python manage.py add <name> --admin")
         return 0
 
-    print(f"{'JMENO':<24} {'ROLE':<10} {'VYTVOREN':<18} POSLEDNI PRIHLASENI")
+    print(f"{'NAME':<24} {'ROLE':<10} {'CREATED':<18} LAST SIGN-IN")
     print("-" * 78)
     for row in rows:
-        role = "spravce" if row["is_admin"] else "ctenar"
+        role = "admin" if row["is_admin"] else "reader"
         print(f"{row['username']:<24} {role:<10} "
               f"{datetime_human(row['created_at']):<18} "
               f"{datetime_human(row['last_login'])}")
     return 0
 
 
-def _ask_password(prompt: str = "Heslo: ") -> str:
-    """Nacte heslo, aniz by se pri psani zobrazovalo na obrazovce.
+def _ask_password(prompt: str = "Password: ") -> str:
+    """Reads a password without showing it on the screen while typing.
 
-    Proto getpass a ne input(). Heslo napsane v terminalu by zustalo
-    v historii prikazu a videl by ho kazdy, kdo se podiva pres rameno.
+    Hence getpass and not input(). A password typed in the terminal would stay
+    in the command history and anybody looking over the shoulder would see it.
     """
     first = getpass.getpass(prompt)
-    second = getpass.getpass("Heslo znovu: ")
+    second = getpass.getpass("Password again: ")
     if first != second:
-        print("Hesla se neshoduji.", file=sys.stderr)
+        print("The passwords do not match.", file=sys.stderr)
         raise SystemExit(1)
     return first
 
 
 def cmd_add(args: argparse.Namespace) -> int:
     try:
-        accounts.create(args.username, _ask_password(), is_admin=args.spravce)
+        accounts.create(args.username, _ask_password(), is_admin=args.admin)
     except accounts.AccountError as exc:
-        print(f"Chyba: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    role = "spravce" if args.spravce else "ctenar"
-    print(f"Ucet '{args.username}' vytvoren ({role}).")
+    role = "admin" if args.admin else "reader"
+    print(f"Account '{args.username}' created ({role}).")
     return 0
 
 
-def _s_uctem(username: str, akce, hotovo: str) -> int:
-    """Najdi ucet, proved s nim akci, ohlas vysledek.
+def _with_account(username: str, action, done_message: str) -> int:
+    """Finds the account, does the action with it, reports the result.
 
-    Prikazy "heslo" a "smaz" se lisi jednim radkem uprostred; okolo je
-    stejne hledani uctu a stejne hlaseni chyby. Dokud to bylo opsane
-    dvakrat, znamenala kazda zmena hlaseni dve upravy - a jednou se na
-    druhou zapomnelo.
+    The commands "password" and "delete" differ in one line in the middle; around
+    it is the same looking up of the account and the same error report. While
+    it was copied twice, every change of the report meant two edits - and once
+    the second was forgotten.
     """
     account = accounts.get_by_name(username)
     if account is None:
-        print(f"Ucet '{username}' neexistuje.", file=sys.stderr)
+        print(f"Account '{username}' does not exist.", file=sys.stderr)
         return 1
 
     try:
-        akce(account)
+        action(account)
     except accounts.AccountError as exc:
-        print(f"Chyba: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    print(hotovo)
+    print(done_message)
     return 0
 
 
 def cmd_password(args: argparse.Namespace) -> int:
-    return _s_uctem(
+    return _with_account(
         args.username,
-        lambda ucet: accounts.set_password(ucet["id"], _ask_password("Nove heslo: ")),
-        f"Heslo uctu '{args.username}' zmeneno.")
+        lambda account: accounts.set_password(account["id"], _ask_password("New password: ")),
+        f"The password of account '{args.username}' was changed.")
 
 
 def cmd_delete(args: argparse.Namespace) -> int:
-    return _s_uctem(args.username,
-                    lambda ucet: accounts.delete(ucet["id"]),
-                    f"Ucet '{args.username}' smazan.")
+    return _with_account(args.username,
+                         lambda account: accounts.delete(account["id"]),
+                         f"Account '{args.username}' deleted.")
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The commands. The aliases are the old Czech commands (TODO.md item 0)."""
     parser = argparse.ArgumentParser(
-        description="Sprava uctu do Jellyscope",
+        description="Managing the accounts of Jellyscope",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("ucty", help="vypsat vsechny ucty").set_defaults(func=cmd_list)
+    subparsers.add_parser("accounts", aliases=["ucty"], help="list all accounts").set_defaults(func=cmd_list)
 
-    add = subparsers.add_parser("pridat", help="zalozit novy ucet")
-    add.add_argument("username", help="uzivatelske jmeno")
-    add.add_argument("--spravce", action="store_true", help="dat uctu spravcovska prava")
+    add = subparsers.add_parser("add", aliases=["pridat"], help="create a new account")
+    add.add_argument("username", help="the user name")
+    add.add_argument("--admin", "--spravce", dest="admin", action="store_true", help="give the account administrator rights")
     add.set_defaults(func=cmd_add)
 
-    password = subparsers.add_parser("heslo", help="zmenit heslo")
+    password = subparsers.add_parser("password", aliases=["heslo"], help="change a password")
     password.add_argument("username")
     password.set_defaults(func=cmd_password)
 
-    delete = subparsers.add_parser("smazat", help="smazat ucet")
+    delete = subparsers.add_parser("delete", aliases=["smazat"], help="delete an account")
     delete.add_argument("username")
     delete.set_defaults(func=cmd_delete)
+    return parser
 
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
     if not getattr(args, "func", None):
         parser.print_help()

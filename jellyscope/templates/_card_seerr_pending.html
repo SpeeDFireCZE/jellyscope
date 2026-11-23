@@ -1,0 +1,55 @@
+{# The Seerr card "Waiting for approval": requests waiting for approval now.
+
+   Live from Seerr (cards_seerr.py, a one-minute cache), the longest waiting first.
+   Shaped like "Now playing": a heading with the count and blocks with a poster. A title
+   that is in the library already has a poster (a 4K version, another season of a series); the others
+   have a placeholder (the poster macro).
+
+   The requester's name is in the row only with the area "...including who requested" - without it
+   cards_seerr.py removes it from the data, so there is nothing to write here. Only the admin gets
+   the error's detail (`d.chyba`). #}
+{% from "_macros.html" import poster, requester, link with context %}
+<div class="section-head">
+    <div>
+        <h2>{{ prefix }}{{ _(card.name) }}{% if d.available %} ({{ d.count | number }}){% endif %}</h2>
+        <p class="subtitle">{{ _("Requests waiting for approval in Seerr right now. Longest waiting first.") }}</p>
+    </div>
+</div>
+{% if not d.available %}
+<div class="flash warning">
+    <span class="dot"></span>
+    <span>
+        {{ _("Seerr is not answering, pending requests cannot be loaded now. The statistics on this page come from the database and still hold.") }}
+        {% if d.error %}<br><span class="muted">{{ d.error }}</span>{% endif %}
+    </span>
+</div>
+{% elif d.requests %}
+<div class="sessions">
+    {% for z in d.requests %}
+    <div class="session">
+        {# A pending title is usually not in the library (then it has no link); if it is
+           (a request for 4K, another season of a series), the poster and the name lead to its detail. #}
+        {{ poster(z.poster, "session-poster", detail=z.detail_url) }}
+        <div class="session-body">
+            <div class="session-title">{% call link(z.detail_url) %}{{ z.title }}{% endcall %}</div>
+            <div class="session-facts">
+                {% if z.user_name is defined %}<span class="session-who">{{ requester(z) }}</span>{% endif %}
+                <span class="muted">{{ _("series") if z.media_type == 'tv' else _("movie") }}</span>
+            </div>
+            <div class="session-tags">
+                <span class="badge warning"><span class="dot"></span>
+                    {{- _("waiting {time}").format(time=z.waiting) if z.waiting_seconds is not none else _("waiting") -}}
+                </span>
+                {% if z.is_4k %}<span class="badge neutral">4K</span>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% if d.more_count %}
+<p class="card-note">{{ _n("And {n} more. All pending requests are in Seerr.", d.more_count) }}</p>
+{% endif %}
+{% include "_seerr_poster_hint.html" %}
+{% else %}
+<p class="card-note">{{ _("Nothing is waiting.") }}</p>
+{% endif %}

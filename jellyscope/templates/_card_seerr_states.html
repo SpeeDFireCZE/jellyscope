@@ -1,0 +1,14 @@
+{# The Seerr card "How requests ended": columns by state.
+
+   From the database (cards_seerr.py, `d.radky` with translated labels, only
+   non-empty groups). It is the state now, not at the time of the request: a request from last
+   month that is in the library today counts as "in the library". #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("status now") }}</p>
+    </div>
+    {% if d.rows %}
+        {{ charts.hbar_chart(d.rows, 'label', 'count', unit='', limit=7, labels_above=True) | safe }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

@@ -1,0 +1,20 @@
+{# The Prowlarr card "Failed queries per day".
+
+   From the database (cards_prowlarr.py, `d.body` = stats.chart_days, `d.celkem`).
+   Searches and RSS queries an indexer answered with an error are counted.
+   An indexer that does not answer at all writes nothing into the history - Prowlarr
+   switches it off for a while and it shows on the card "Indexers now". #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("queries the indexer answered with an error") }}</p>
+    </div>
+    {% if d.total %}
+        {{ charts.area_chart_multi(d.body, 'day', [{'key': 'failed_count', 'label': _('failed queries'), 'slot': 4}], unit='', whole_ticks=True) | safe }}
+    {% elif d.body %}
+        <p class="chart-empty">{{ _("No query failed in this period.") }}</p>
+    {% else %}
+        <p class="chart-empty">{{ _("No query went through Prowlarr in this period.") }}</p>
+    {% endif %}
+    <p class="card-note" style="margin-top:12px">{{ _("An indexer that does not answer at all is temporarily disabled by Prowlarr - see the card Indexers now.") }}</p>
+</div>

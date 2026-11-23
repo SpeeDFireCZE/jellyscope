@@ -1,0 +1,181 @@
+{
+ "page": 1,
+ "pageSize": 50,
+ "sortKey": "timeleft",
+ "sortDirection": "descending",
+ "totalRecords": 1,
+ "records": [
+  {
+   "seriesId": 1,
+   "episodeId": 62,
+   "seasonNumber": 1,
+   "series": {
+    "title": "Game of Thrones",
+    "sortTitle": "game of thrones",
+    "status": "ended",
+    "ended": true,
+    "overview": "Seven noble families fight for control of the mythical land of Westeros. Friction between the houses leads to full-scale war. All while a very ancient evil awakens in the farthest north. Amidst the war, a neglected military order of misfits, the Night's Watch, is all that stands between the realms of men and the icy horrors beyond.",
+    "network": "HBO",
+    "airTime": "21:00",
+    "images": [
+     {
+      "coverType": "banner",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/graphical/121361-g19.jpg"
+     },
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/posters/121361-4.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/fanart/original/121361-19.jpg"
+     },
+     {
+      "coverType": "clearlogo",
+      "remoteUrl": "https://artworks.thetvdb.com/banners/v4/series/121361/clearlogo/611b47b766d38.png"
+     }
+    ],
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "seasons": [
+     {
+      "seasonNumber": 0,
+      "monitored": false
+     },
+     {
+      "seasonNumber": 1,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 2,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 3,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 4,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 5,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 6,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 7,
+      "monitored": true
+     },
+     {
+      "seasonNumber": 8,
+      "monitored": true
+     }
+    ],
+    "year": 2011,
+    "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+    "qualityProfileId": 1,
+    "seasonFolder": true,
+    "monitored": true,
+    "monitorNewItems": "all",
+    "useSceneNumbering": false,
+    "runtime": 57,
+    "tvdbId": 121361,
+    "tvRageId": 24493,
+    "tvMazeId": 82,
+    "tmdbId": 1399,
+    "firstAired": "2011-04-17T00:00:00Z",
+    "lastAired": "2019-05-19T00:00:00Z",
+    "seriesType": "standard",
+    "cleanTitle": "gamethrones",
+    "imdbId": "tt0944947",
+    "titleSlug": "game-of-thrones",
+    "certification": "TV-MA",
+    "genres": [
+     "Action",
+     "Adventure",
+     "Drama",
+     "Fantasy"
+    ],
+    "tags": [],
+    "added": "2026-11-12T20:50:07Z",
+    "ratings": {
+     "votes": 2683620,
+     "value": 9.2
+    },
+    "languageProfileId": 1,
+    "id": 1
+   },
+   "episode": {
+    "seriesId": 1,
+    "tvdbId": 3436461,
+    "episodeFileId": 0,
+    "seasonNumber": 1,
+    "episodeNumber": 7,
+    "title": "You Win or You Die",
+    "airDate": "2011-05-29",
+    "airDateUtc": "2011-05-30T01:00:00Z",
+    "runtime": 57,
+    "overview": "Ned confronts Cersei about her secrets; Jon takes his Night's Watch vows; Drogo promises to lead the Dothraki to King's Landing.",
+    "hasFile": false,
+    "monitored": true,
+    "absoluteEpisodeNumber": 7,
+    "unverifiedSceneNumbering": false,
+    "id": 62
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 5,
+     "name": "WEBDL-720p",
+     "source": "web",
+     "resolution": 720
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 60306,
+   "title": "Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+   "estimatedCompletionTime": "2026-11-12T22:36:37Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importBlocked",
+   "statusMessages": [
+    {
+     "title": "One or more episodes expected in this release were not imported or missing from the release",
+     "messages": []
+    },
+    {
+     "title": "Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO.mkv",
+     "messages": [
+      "No audio tracks detected"
+     ]
+    }
+   ],
+   "downloadId": "Blackhole_Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO_639301195559464090",
+   "protocol": "usenet",
+   "downloadClient": "Blackhole",
+   "downloadClientHasPostImportCategory": false,
+   "outputPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+   "episodeHasFile": false,
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "id": 170869779
+  }
+ ]
+}

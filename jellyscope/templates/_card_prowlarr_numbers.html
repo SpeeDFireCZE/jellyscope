@@ -1,0 +1,16 @@
+{# The Prowlarr card "Query numbers": how many queries to indexers went through in the period.
+
+   From the database (cards_prowlarr.py, `d` = stats.prowlarr_numbers; `share`
+   and `response` are ready text, "–" = nothing to compute from). A search is
+   a query for a particular title, RSS a regular query "what is new". Failures
+   and the response are of both together; only successful queries that did not come
+   from Prowlarr's cache count into the response. A row of tiles without a heading;
+   in a dashboard it carries a small label with the app. #}
+{% from "_macros.html" import tile with context %}
+{% if prefix %}<p class="card-group">{{ prefix }}{{ _(card.name) }}</p>{% endif %}
+<div class="kpi-row">
+    {{ tile(_("Searches"), d.searches | number) }}
+    {{ tile(_("RSS queries"), d.rss | number) }}
+    {{ tile(_("Failed queries"), d.share) }}
+    {{ tile(_("Average response"), d.response) }}
+</div>

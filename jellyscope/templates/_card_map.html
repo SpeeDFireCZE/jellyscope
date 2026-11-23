@@ -1,0 +1,163 @@
+{# A card of the Network page (network.html).
+
+   Included by that page and by dashboards (cards.py, key `map`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `hotspots, countries (stats), geo (cards.geoip_state)`. #}
+<div class="card" id="map">
+    <div class="card-head">
+        <h2>{{ _("Map") }}</h2>
+        <p class="card-note">{{ _("the size of a dot follows the time watched") }}</p>
+    </div>
+
+    {% if hotspots %}
+        {# The controls are in HTML above the map, not inside the SVG: a button
+           can be styled like any other and does not grow with the zoom.
+           Clicks and the wheel control the same - which way is on
+           is chosen in Settings → Interface. #}
+        <div class="map-wrapper">
+            {# A frame around the SVG itself: the OSM credit sits in its corner, not under
+               the hint. The credit is a condition of using the OSM tiles. #}
+            <div class="map-frame">
+                {{ charts.world_map(hotspots, map_zoom, map_basemap, detailed_map, detailed_map_tag) | safe }}
+                {% if map_basemap == 'osm' %}
+                <a class="map-caption" href="https://www.openstreetmap.org/copyright"
+                   target="_blank" rel="noopener noreferrer">&copy; OpenStreetMap</a>
+                {% endif %}
+            </div>
+            <div class="map-controls">
+                <button class="btn map-button" type="button" data-map="closer"
+                        data-tip="{{ _("Zoom in") }}" aria-label="{{ _("Zoom in") }}">+</button>
+                <button class="btn map-button" type="button" data-map="farther"
+                        data-tip="{{ _("Zoom out") }}" aria-label="{{ _("Zoom out") }}">&minus;</button>
+                <button class="btn map-button" type="button" data-map="back"
+                        data-tip="{{ _("The whole world") }}" aria-label="{{ _("The whole world") }}">&#8634;</button>
+            </div>
+            <p class="card-note map-hint">
+                {% if map_zoom == 'wheel' %}
+                    {{ _("Scroll to zoom, drag to pan, double-click for the whole world.") }}
+                {% else %}
+                    {{ _("Click to zoom, drag to pan, double-click for the whole world.") }}
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <thead>
+                <tr>
+                    <th>{{ _("Country") }}</th>
+                    <th class="num">{{ _("Places") }}</th>
+                    <th class="num">{{ _("Plays#starts") }}</th>
+                    <th class="num">{{ _("Time") }}</th>
+                    <th class="num">{{ _("Transferred") }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for line in countries %}
+                <tr>
+                    <td class="strong">{{ line.label }}</td>
+                    <td class="num">{{ line.places | number }}</td>
+                    <td class="num">{{ line.plays | number }}</td>
+                    <td class="num">{{ line.seconds | seconds }}</td>
+                    <td class="num">{{ line.byte_count | bytes }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Only public addresses are placed; one from the home network marks no place at all. The accuracy is GeoLite2's: on fixed lines the city is right, on mobile networks it may point at the middle of the country. Enough for \"is anyone watching from abroad?\", not for finding people.") }}
+        </p>
+    {% elif not geo.library %}
+        <p class="card-note">
+            {{ _("The map needs the maxminddb library, which is not a required part of the app. Install it into the same environment Jellyscope runs in:") }}
+        </p>
+        <pre class="fallback" style="margin-top:8px"><code>{{ geo.python }} -m pip install maxminddb</code></pre>
+    {% elif not geo.database %}
+        <p class="card-note">
+            {{ _("The map needs the GeoLite2 database: a single file that sits in data/ and answers without the internet. One click downloads it (about 65 MB). Apart from Jellyfin, the app only reaches out for downloads like this one that you start with a click, and for the optional OpenStreetMap background.") }}
+        </p>
+        {# Only the admin may download the database, and on the Network page; a dashboard
+           only links to it - the admin's buttons do not belong in an arranged
+           page. Others learn who can do it. #}
+        {% if not is_admin %}
+        <p class="card-note" style="margin-top:12px">{{ _("The server administrator can download it.") }}</p>
+        {% else %}
+        <div class="btn-row" style="margin-top:12px">
+            {% if in_dashboard %}
+            <a class="btn" href="/network#map">{{ _("Open the Network page") }}</a>
+            {% else %}
+            <form method="post" action="/network/geoip">
+                <button class="btn primary" type="submit">{{ _("Download the GeoLite2 database") }}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        <p class="card-note" style="margin-top:10px">
+            {{ _("Data © MaxMind, GeoLite2 (CC BY-SA 4.0). It comes from a GitHub mirror, because MaxMind itself asks for an account and a key.") }}
+        </p>
+    {% else %}
+        <p class="card-note">
+            {{ _("The database is ready, but there is no playback from a public address yet; everything came from the home network.") }}
+        </p>
+    {% endif %}
+
+    {% if geo.database %}
+        <p class="card-note" style="margin-top:12px">
+            {{ _("Database") }}: {{ geo.byte_count | bytes }},
+            {{ _("downloaded") }} {{ geo.age | relative }}.
+            {% if is_admin and not in_dashboard %}
+            <form method="post" action="/network/geoip" style="display:inline">
+                <button class="btn" type="submit" style="margin-left:8px">{{ _("Update") }}</button>
+            </form>
+            {% endif %}
+        </p>
+
+        {# The detailed map (Natural Earth 1:10M, detailed_map.py): when
+           zooming in, coasts, lakes, rivers, regions and city outlines. It is downloaded
+           on a click and stored in the database, so it is in the backups too.
+           Only the admin may download and delete it, and on the Network page. #}
+        {% if detailed and (detailed.version or (is_admin and not in_dashboard)) %}
+        <p class="card-note" style="margin-top:12px">
+            {% if detailed.version %}
+                {{ _("Detailed map") }}: {{ detailed.byte_count | bytes }},
+                {{ _("downloaded") }} {{ detailed.at | relative }}.
+            {% else %}
+                {{ _("The detailed map shows coastlines, lakes, rivers, regions and city outlines when you zoom in. It is downloaded on a click and stored in the database, where it takes about 52 MB - so it is in every backup too.") }}
+            {% endif %}
+        </p>
+        {% if is_admin and not in_dashboard %}
+        {% if detailed.outdated %}
+        <div class="flash warning" style="margin:10px 0 0">
+            <span class="dot"></span>
+            <span>{{ _("The detailed map was downloaded in an older form than this version of the app uses, so it is not shown. Download it again.") }}</span>
+        </div>
+        {% endif %}
+        {% if detailed_error %}
+        <div class="flash warning" style="margin:10px 0 0">
+            <span class="dot"></span>
+            <span>
+                {{ _("The last download of the detailed map failed") }}
+                ({{ detailed_error.at | relative }}): {{ detailed_error.reason }}
+            </span>
+        </div>
+        {% endif %}
+        <div class="btn-row" style="margin-top:8px">
+            <form method="post" action="/network/detailed-map">
+                <button class="btn{{ '' if detailed.version else ' primary' }}" type="submit">
+                    {{ _("Download again") if detailed.version else _("Download the detailed map (about 75 MB)") }}
+                </button>
+            </form>
+            {% if detailed.version %}
+            <form method="post" action="/network/detailed-map/delete"
+                  data-confirm="{{ _("Delete the detailed map? The map goes back to the rough outline; you can download it again any time.") }}">
+                <button class="btn danger" type="submit">{{ _("Delete") }}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endif %}
+    {% endif %}
+</div>

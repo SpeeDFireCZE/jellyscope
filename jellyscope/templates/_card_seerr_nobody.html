@@ -1,0 +1,56 @@
+{# The Seerr card "Nobody started": requested titles that are in the library
+   but nobody has played since the request.
+
+   A strip of posters like "Recently added" (cards_seerr.py, `d.radky`); the titles
+   are usually in the library here, so the poster is from Jellyfin. The exception: a title
+   Seerr reports as available, but Jellyscope does not have in the library (it vanished,
+   or it is not scanned yet) - that one has a provisional poster and the admin gets a sentence
+   under the card why it may be missing. The same titles are here as a table too,
+   for the shared window (see "Latest requests"). #}
+{% from "_macros.html" import poster, requester, link with context %}
+<div class="card recent-card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        {% if d.rows %}
+        <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
+        {% else %}
+        <p class="card-note">{{ _("in the library, nobody has started them since the request") }}</p>
+        {% endif %}
+    </div>
+    {% if d.rows %}
+    <div class="poster-strip">
+        {% for z in d.rows %}
+        <div class="poster-card">
+            {{ poster(z.poster, "poster-frame", detail=z.detail_url) }}
+            {% call link(z.detail_url, {"class": "poster-name", "title": z.title}) %}{{ z.title or "–" }}{% endcall %}
+            <div class="poster-meta">
+                {%- if z.user_name is defined %}{{ requester(z) }}{% endif -%}
+                {%- if z.available_at %}{% if z.user_name is defined %} &middot; {% endif %}{{ _("in the library since") }} {{ z.available_at | czech_date }}{% endif -%}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% set hint_sentence = _("A title Jellyscope did not find in the library can only get its poster from Radarr, Sonarr or Seerr. Turn on Enable Image Caching in Seerr (Settings → General) and the posters will fill in by themselves.") %}
+    {% include "_seerr_poster_hint.html" %}
+    <div class="modal-only">
+        <table>
+            <thead><tr>
+                <th>{{ _("Title") }}</th>
+                <th>{{ _("In the library since") }}</th>
+                {% if d.rows[0].user_name is defined %}<th>{{ _("Requester") }}</th>{% endif %}
+            </tr></thead>
+            <tbody>
+            {% for z in d.rows %}
+                <tr>
+                    <td class="strong">{% call link(z.detail_url) %}{{ z.title or "–" }}{% endcall %}</td>
+                    <td class="muted">{{ z.available_at | datetime if z.available_at else "–" }}</td>
+                    {% if z.user_name is defined %}<td>{{ requester(z) }}</td>{% endif %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="chart-empty">{{ _("Somebody has watched everything that was requested.") }}</p>
+    {% endif %}
+</div>

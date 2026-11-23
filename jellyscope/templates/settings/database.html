@@ -1,0 +1,182 @@
+{# A Settings section: SQLite or PostgreSQL and moving data between them
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Database") }}</h2>
+        <p class="card-note">{{ _("currently in use") }}: {{ running_database.describe() }}</p>
+    </div>
+
+    {# The saved and the running configuration differ until a restart. Without this
+       warning it looks as if saving failed - the form shows
+       PostgreSQL, but the heading still SQLite. #}
+    {% if draft_pending %}
+    <div class="flash info" style="margin-bottom:16px">
+        <span class="dot"></span>
+        <span>{{ _("The form holds values that are not saved yet. The password is remembered, so you do not have to type it again; just click Save.") }}</span>
+    </div>
+    {% endif %}
+
+    {% if restart_pending %}
+    <div class="flash warning" style="margin-bottom:16px">
+        <span class="dot"></span>
+        <span>
+            {{ _("Saved is") }} <strong>{{ database.describe() }}</strong>,
+            {{ _("but the application is still running on") }} <strong>{{ running_database.describe() }}</strong>.
+            {{ _("It switches over after a restart (the button is at the top right).") }}
+        </span>
+    </div>
+    {% endif %}
+
+    <p class="card-note" style="margin-bottom:16px">
+        {{ _("SQLite is the default and needs no installation: the whole database is one file. PostgreSQL makes sense if you already run one. The change takes effect after restarting the application.") }}
+    </p>
+
+    {# The form knows its state from the server already (the class is-sqlite / is-postgres),
+       so nothing flickers on loading. JavaScript only switches the class
+       when you click another kind of database - see app.js. Without
+       JavaScript the part that really applies stays visible. #}
+    <form method="post" action="/settings/database"
+          class="db-form {{ 'is-postgres' if database.kind == 'postgres' else 'is-sqlite' }}"
+          data-db-form>
+        <div class="radio-set">
+            <label class="radio-card">
+                <input type="radio" name="kind" value="sqlite"
+                       {{ 'checked' if database.kind == 'sqlite' }}>
+                <span>
+                    <span class="title">SQLite</span>
+                    <span class="desc">{{ _("One file on disk. Nothing to install, nothing running in the background. Plenty for a single household.") }}</span>
+                </span>
+            </label>
+            <label class="radio-card">
+                <input type="radio" name="kind" value="postgres"
+                       {{ 'checked' if database.kind == 'postgres' }}>
+                <span>
+                    <span class="title">PostgreSQL</span>
+                    <span class="desc">
+                        {{ _("A standalone database server. Worth it if you already run one. For a household SQLite is plenty.") }}
+                        {% if not psycopg_available %}
+                            {# The guide shows only when the driver
+                               is really missing. install.sh usually
+                               installs it by itself, so most people
+                               never see this paragraph. #}
+                            <br><span class="badge critical"><span class="dot"></span>{{ _("the psycopg driver is missing") }}</span>
+                            <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code>
+                            <br>{{ _("Then restart the application.") }}
+                        {% endif %}
+                    </span>
+                </span>
+            </label>
+        </div>
+
+        {# --- SQLite only ------------------------------------------------ #}
+        <div class="db-part" data-for="sqlite">
+            <div class="field">
+                <label for="sqlite_path">{{ _("SQLite file") }}</label>
+                <input type="text" id="sqlite_path" name="sqlite_path" value="{{ database.path }}">
+                <p class="hint">{{ _("A relative path is resolved from the project folder.") }}</p>
+            </div>
+        </div>
+
+        {# --- PostgreSQL only -------------------------------------------- #}
+        <div class="db-part" data-for="postgres">
+            <div class="grid-2" style="gap:0 18px; margin-bottom:0">
+                <div class="field">
+                    <label for="pg_host">{{ _("Host") }}</label>
+                    <input type="text" id="pg_host" name="pg_host" value="{{ database.host }}">
+                </div>
+                <div class="field">
+                    <label for="pg_port">{{ _("Port") }}</label>
+                    <input type="number" id="pg_port" name="pg_port" value="{{ database.port }}"
+                           min="1" max="65535">
+                </div>
+                <div class="field">
+                    <label for="pg_database">{{ _("Database name") }}</label>
+                    <input type="text" id="pg_database" name="pg_database" value="{{ database.database }}">
+                </div>
+                <div class="field">
+                    <label for="pg_user">{{ _("User") }}</label>
+                    <input type="text" id="pg_user" name="pg_user" value="{{ database.user }}">
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="pg_password">{{ _("Password") }}</label>
+                <input type="password" id="pg_password" name="pg_password" autocomplete="off"
+                       placeholder="{{ '••••••••' if database.password else '' }}">
+                <p class="hint">{{ _("Leave empty to keep the current password.") }}</p>
+            </div>
+
+            {# The connection pool can be switched off. It is not only a performance switch:
+               it needs an extra library, and that cannot be installed everywhere. #}
+            <div class="radio-set">
+                <label class="radio-card">
+                    <input type="checkbox" name="pg_use_pool" value="1"
+                           {{ 'checked' if database.use_pool }}>
+                    <span>
+                        <span class="title">{{ _("Use a connection pool") }}</span>
+                        <span class="desc">
+                            {{ _("Keeps a few connections open and lends them out instead of opening a new one for every query. A single page asks for data about a dozen times. Over a network the difference shows; on the same machine it is small.") }}
+                            {% if not pool_available %}
+                                <br><span class="badge critical"><span class="dot"></span>{{ _("the psycopg_pool library is missing") }}</span>
+                                <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code><br>
+                            {% endif %}
+                            {{ _("If you cannot install it, leave this off. The application keeps working; it just opens connections one at a time.") }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            {# Three buttons, one form: they differ by the value of "action",
+               so all the fields need not be copied three times. #}
+            <button data-keep-scroll class="btn" type="submit" name="action" value="test">
+                {{ _("Test connection") }}
+            </button>
+            <button data-keep-scroll class="btn primary" type="submit" name="action" value="save">
+                {{ _("Save and use after restart") }}
+            </button>
+            <button data-keep-scroll class="btn" type="submit" name="action" value="migrate">
+                {{ _("Copy data into the selected database") }}
+            </button>
+        </div>
+
+        <div class="flash warning" style="margin-top:16px">
+            <span class="dot"></span>
+            <span>{{ _("The copy empties the target database first and only then writes the data. Save the settings only after the copy has finished.") }}</span>
+        </div>
+
+        {# The most common misunderstanding: a person just wants to connect to a database
+           they have already, and presses Move data - which wipes it. #}
+        <div class="flash info" style="margin-top:10px">
+            <span class="dot"></span>
+            <span>{{ _("Connecting to a database that already holds data (after reinstalling the app, say)? Then do NOT run the transfer; just Save the settings and restart. The app connects to it and the data stays where it is.") }}</span>
+        </div>
+    </form>
+
+    {% if database_counts %}
+    <div class="table-wrap" style="margin-top:18px">
+        <table>
+            <thead><tr><th>{{ _("Table") }}</th><th class="num">{{ _("Records") }}</th></tr></thead>
+            <tbody>
+            {% for table, count in database_counts.items() %}
+                <tr><td><code style="font-size:12px">{{ table }}</code></td>
+                    <td class="num">{{ count | number }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+
+{# ================================================================== #}

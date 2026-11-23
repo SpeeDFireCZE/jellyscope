@@ -1,0 +1,426 @@
+[
+  {
+    "id": 11,
+    "title": "Hvězdy",
+    "disambiguation": "",
+    "overview": "",
+    "artistId": 1,
+    "foreignAlbumId": "b1111111-0000-4000-8000-000000000011",
+    "monitored": true,
+    "anyReleaseOk": true,
+    "profileId": 1,
+    "duration": 2400000,
+    "albumType": "Album",
+    "secondaryTypes": [],
+    "mediumCount": 1,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0
+    },
+    "releaseDate": "2019-05-17T00:00:00Z",
+    "releases": [
+      {
+        "id": 110,
+        "albumId": 11,
+        "foreignReleaseId": "c1111111-0000-4000-8000-000000000111",
+        "title": "Hvězdy",
+        "status": "Official",
+        "duration": 2400000,
+        "trackCount": 3,
+        "media": [
+          {
+            "mediumNumber": 1,
+            "mediumName": "",
+            "mediumFormat": "CD"
+          }
+        ],
+        "mediumCount": 1,
+        "disambiguation": "",
+        "country": [
+          "Czech Republic"
+        ],
+        "label": [
+          "Label"
+        ],
+        "format": "CD",
+        "monitored": true
+      },
+      {
+        "id": 111,
+        "albumId": 11,
+        "foreignReleaseId": "c1111111-0000-4000-8000-000000000112",
+        "title": "Hvězdy",
+        "status": "Official",
+        "duration": 2400000,
+        "trackCount": 3,
+        "media": [
+          {
+            "mediumNumber": 1,
+            "mediumName": "",
+            "mediumFormat": "CD"
+          }
+        ],
+        "mediumCount": 1,
+        "disambiguation": "",
+        "country": [
+          "Czech Republic"
+        ],
+        "label": [
+          "Label"
+        ],
+        "format": "CD",
+        "monitored": false
+      }
+    ],
+    "genres": [
+      "Rock"
+    ],
+    "media": [
+      {
+        "mediumNumber": 1,
+        "mediumName": "",
+        "mediumFormat": "CD"
+      }
+    ],
+    "artist": {
+      "id": 1,
+      "artistMetadataId": 1,
+      "status": "continuing",
+      "ended": false,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "genres": [
+        "Rock"
+      ],
+      "images": [],
+      "path": "/music/Kryštof",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:50:07Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Albums/11/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://coverartarchive.org/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "trackFileCount": 3,
+      "trackCount": 3,
+      "totalTrackCount": 3,
+      "sizeOnDisk": 123456789,
+      "percentOfTracks": 100.0
+    },
+    "lastSearchTime": "2026-11-12T22:16:38Z",
+    "added": "2026-11-12T20:50:10Z"
+  },
+  {
+    "id": 12,
+    "title": "Šípková Růžena",
+    "disambiguation": "",
+    "overview": "",
+    "artistId": 1,
+    "foreignAlbumId": "b1111111-0000-4000-8000-000000000012",
+    "monitored": true,
+    "anyReleaseOk": true,
+    "profileId": 1,
+    "duration": 2400000,
+    "albumType": "Album",
+    "secondaryTypes": [],
+    "mediumCount": 1,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0
+    },
+    "releaseDate": "2021-02-26T00:00:00Z",
+    "releases": [
+      {
+        "id": 120,
+        "albumId": 12,
+        "foreignReleaseId": "c1111111-0000-4000-8000-000000000121",
+        "title": "Šípková Růžena",
+        "status": "Official",
+        "duration": 2400000,
+        "trackCount": 2,
+        "media": [
+          {
+            "mediumNumber": 1,
+            "mediumName": "",
+            "mediumFormat": "CD"
+          }
+        ],
+        "mediumCount": 1,
+        "disambiguation": "",
+        "country": [
+          "Czech Republic"
+        ],
+        "label": [
+          "Label"
+        ],
+        "format": "CD",
+        "monitored": true
+      }
+    ],
+    "genres": [
+      "Rock"
+    ],
+    "media": [
+      {
+        "mediumNumber": 1,
+        "mediumName": "",
+        "mediumFormat": "CD"
+      }
+    ],
+    "artist": {
+      "id": 1,
+      "artistMetadataId": 1,
+      "status": "continuing",
+      "ended": false,
+      "artistName": "Kryštof",
+      "foreignArtistId": "a1111111-1111-4111-8111-111111111111",
+      "monitored": true,
+      "genres": [
+        "Rock"
+      ],
+      "images": [],
+      "path": "/music/Kryštof",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:50:07Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Albums/12/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://coverartarchive.org/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "trackFileCount": 2,
+      "trackCount": 2,
+      "totalTrackCount": 2,
+      "sizeOnDisk": 55555555,
+      "percentOfTracks": 100.0
+    },
+    "lastSearchTime": "2026-11-12T22:16:38Z",
+    "added": "2026-11-12T20:50:10Z"
+  },
+  {
+    "id": 21,
+    "title": "Silver Lining",
+    "disambiguation": "",
+    "overview": "",
+    "artistId": 2,
+    "foreignAlbumId": "b2222222-0000-4000-8000-000000000021",
+    "monitored": true,
+    "anyReleaseOk": true,
+    "profileId": 1,
+    "duration": 2400000,
+    "albumType": "Album",
+    "secondaryTypes": [],
+    "mediumCount": 1,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0
+    },
+    "releaseDate": "2023-09-01T00:00:00Z",
+    "releases": [
+      {
+        "id": 210,
+        "albumId": 21,
+        "foreignReleaseId": "c2222222-0000-4000-8000-000000000211",
+        "title": "Silver Lining",
+        "status": "Official",
+        "duration": 2400000,
+        "trackCount": 4,
+        "media": [
+          {
+            "mediumNumber": 1,
+            "mediumName": "",
+            "mediumFormat": "CD"
+          }
+        ],
+        "mediumCount": 1,
+        "disambiguation": "",
+        "country": [
+          "Czech Republic"
+        ],
+        "label": [
+          "Label"
+        ],
+        "format": "CD",
+        "monitored": true
+      }
+    ],
+    "genres": [
+      "Rock"
+    ],
+    "media": [
+      {
+        "mediumNumber": 1,
+        "mediumName": "",
+        "mediumFormat": "CD"
+      }
+    ],
+    "artist": {
+      "id": 2,
+      "artistMetadataId": 2,
+      "status": "continuing",
+      "ended": false,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "genres": [
+        "Rock"
+      ],
+      "images": [],
+      "path": "/music/Nightingale Quartet",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:51:30Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Albums/21/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://coverartarchive.org/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "trackFileCount": 0,
+      "trackCount": 4,
+      "totalTrackCount": 4,
+      "sizeOnDisk": 0,
+      "percentOfTracks": 0.0
+    },
+    "lastSearchTime": "2026-11-12T22:16:38Z",
+    "added": "2026-11-12T20:50:10Z"
+  },
+  {
+    "id": 22,
+    "title": "Blue Hour",
+    "disambiguation": "",
+    "overview": "",
+    "artistId": 2,
+    "foreignAlbumId": "b2222222-0000-4000-8000-000000000022",
+    "monitored": true,
+    "anyReleaseOk": true,
+    "profileId": 1,
+    "duration": 2400000,
+    "albumType": "Album",
+    "secondaryTypes": [],
+    "mediumCount": 1,
+    "ratings": {
+      "votes": 0,
+      "value": 0.0
+    },
+    "releaseDate": "2024-03-08T00:00:00Z",
+    "releases": [
+      {
+        "id": 220,
+        "albumId": 22,
+        "foreignReleaseId": "c2222222-0000-4000-8000-000000000221",
+        "title": "Blue Hour",
+        "status": "Official",
+        "duration": 2400000,
+        "trackCount": 5,
+        "media": [
+          {
+            "mediumNumber": 1,
+            "mediumName": "",
+            "mediumFormat": "CD"
+          }
+        ],
+        "mediumCount": 1,
+        "disambiguation": "",
+        "country": [
+          "Czech Republic"
+        ],
+        "label": [
+          "Label"
+        ],
+        "format": "CD",
+        "monitored": true
+      },
+      {
+        "id": 221,
+        "albumId": 22,
+        "foreignReleaseId": "c2222222-0000-4000-8000-000000000222",
+        "title": "Blue Hour",
+        "status": "Official",
+        "duration": 2400000,
+        "trackCount": 5,
+        "media": [
+          {
+            "mediumNumber": 1,
+            "mediumName": "",
+            "mediumFormat": "CD"
+          }
+        ],
+        "mediumCount": 1,
+        "disambiguation": "",
+        "country": [
+          "Czech Republic"
+        ],
+        "label": [
+          "Label"
+        ],
+        "format": "CD",
+        "monitored": false
+      }
+    ],
+    "genres": [
+      "Rock"
+    ],
+    "media": [
+      {
+        "mediumNumber": 1,
+        "mediumName": "",
+        "mediumFormat": "CD"
+      }
+    ],
+    "artist": {
+      "id": 2,
+      "artistMetadataId": 2,
+      "status": "continuing",
+      "ended": false,
+      "artistName": "Nightingale Quartet",
+      "foreignArtistId": "a2222222-2222-4222-8222-222222222222",
+      "monitored": true,
+      "genres": [
+        "Rock"
+      ],
+      "images": [],
+      "path": "/music/Nightingale Quartet",
+      "qualityProfileId": 1,
+      "metadataProfileId": 1,
+      "added": "2026-11-12T20:51:30Z"
+    },
+    "images": [
+      {
+        "url": "/MediaCover/Albums/22/cover.jpg",
+        "coverType": "cover",
+        "extension": ".jpg",
+        "remoteUrl": "https://coverartarchive.org/x.jpg"
+      }
+    ],
+    "links": [],
+    "statistics": {
+      "trackFileCount": 5,
+      "trackCount": 5,
+      "totalTrackCount": 5,
+      "sizeOnDisk": 98765432,
+      "percentOfTracks": 100.0
+    },
+    "lastSearchTime": "2026-11-12T22:16:38Z",
+    "added": "2026-11-12T20:50:10Z"
+  }
+]

@@ -1,0 +1,60 @@
+{# The card "Most watched titles".
+
+   A template of its own, because it is drawn from two places: when the Overview loads
+   and again when the filter switches (see /video/partials/top-items). Were it
+   there twice, one copy would drift from the other in time. #}
+
+<div class="card-head">
+    <div>
+        <h2>{{ _("Most watched titles") }}</h2>
+        <p class="card-note">{{ _("episodes are summed per series") }}</p>
+    </div>
+    {# A filter of its own, independent of the one at watching by day - otherwise
+       switching one card would silently redraw the other too.
+
+       They stay plain links: without JavaScript the whole page loads
+       and `data-keep-scroll` puts the scroll back where it was. With JavaScript
+       only this card is replaced and the page does not move at all. #}
+    <div class="filters">
+        <a class="chip {{ 'active' if top_kind == 'both' }}"
+           data-kind="both" data-keep-scroll href="?top_kind=both">{{ _("Both") }}</a>
+        <a class="chip {{ 'active' if top_kind == 'movies' }}"
+           data-kind="movies" data-keep-scroll href="?top_kind=movies">{{ _("Movies") }}</a>
+        <a class="chip {{ 'active' if top_kind == 'series' }}"
+           data-kind="series" data-keep-scroll href="?top_kind=series">{{ _("TV shows") }}</a>
+    </div>
+</div>
+
+{# An empty prefix: a series leads to /series/, a film to /item/, so
+   every row carries the whole address itself. Rows without it (a title that is
+   no longer in the library) stay text - a link to a 404 is worse than none. #}
+{{ charts.hbar_chart(top_items, 'label', 'hours',
+             link_prefix='', link_key='detail_url', may_open=may_open) | safe }}
+
+{# The chart shows ten. The whole ranking is behind a link: with JavaScript it
+   loads into a window, without it it opens as a page - the route can do both. #}
+{# The whole ranking belongs to Insights - whoever may not open them gets no link. #}
+{% if top_items and may_open("/video/insights/top") %}
+<p class="card-note" style="margin-top:10px">
+    <a href="/video/insights/top?kind={{ top_kind }}" data-modal-load="modal-top-all">
+        {{ _("The whole ranking") }} &rarr;
+    </a>
+</p>
+<dialog class="modal modal-wide" id="modal-top-all">
+    <form method="dialog" class="modal-head">
+        <h2>{{ _("Most watched titles") }} &ndash; {{ _("the whole ranking") }}</h2>
+        <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
+    </form>
+    <div class="modal-body"></div>
+</dialog>
+{% endif %}
+
+{# Hiding never happens silently. The watched time is not lost anywhere,
+   the History keeps showing it - only here a row that cannot be clicked
+   and pretends to be a film that does not exist would say nothing. #}
+{% if top_items and top_items[0]._skryto %}
+<p class="card-note" style="margin-top:12px">
+    {{ _n("Not shown: {n} titles with no counterpart in the library or the archive. The record does not say what they were.", top_items[0]._skryto) }}
+    <a href="/settings?section=import">{{ _("Try to match them") }}</a>
+</p>
+{% endif %}

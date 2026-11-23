@@ -1,0 +1,176 @@
+{# A Settings section: the connection to the server and the generation
+
+   Included from `settings.html` through `{% include %}`, so it has the same
+   context - variables are not passed, they are simply available.
+
+   Macros are imported here, not in the parent: relying on a
+   `{% from %}` leaking in from somewhere means a dependency that is not
+   visible and works only by chance. #}
+{% from "_macros.html" import running_task, file_picker, permissions_tree %}
+
+{# ================================================================== #}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Jellyfin connection") }}</h2>
+    </div>
+
+    <form method="post" action="/settings/connection">
+        <div class="field">
+            <label for="jellyfin_url">{{ _("Server address") }}</label>
+            <input type="text" id="jellyfin_url" name="jellyfin_url"
+                   value="{{ jellyfin_url }}" placeholder="http://localhost:8096">
+        </div>
+
+        <div class="field">
+            <label for="jellyfin_api_key">{{ _("API key") }}</label>
+            {# The key is never written into the page - it only shows whether there
+               is one. An empty field means "keep the current one". #}
+            <input type="password" id="jellyfin_api_key" name="jellyfin_api_key"
+                   autocomplete="off"
+                   placeholder="{{ '••••••••••••' if has_api_key else '' }}">
+            <p class="hint">
+                {{ _('Jellyfin → Dashboard → Advanced → API Keys → "+"') }}<br>
+                {% if has_api_key %}{{ _("Leave empty to keep the current key.") }}{% endif %}
+            </p>
+        </div>
+
+        {# The server's generation. Jellyfin 12 stopped accepting the old
+           sign-in headers and dropped a few paths; Jellyscope can do both
+           and by this choice knows what to send. The default "zjistit"
+           reads the version from /System/Info at the connection test
+           and the sync - the manual choice is for a server that
+           reports something else than it behaves like (behind a proxy, an own build). #}
+        <div class="field">
+            <label for="jellyfin_generation">{{ _("Server generation") }}</label>
+            <select id="jellyfin_generation" name="jellyfin_generation"
+                    style="width:auto">
+                <option value="auto" {{ 'selected' if generation == 'auto' }}>
+                    {{ _("Detect from the server") }}
+                </option>
+                <option value="12" {{ 'selected' if generation == '12' }}>
+                    {{ _("Jellyfin 12 and newer") }}
+                </option>
+                <option value="10" {{ 'selected' if generation == '10' }}>
+                    {{ _("Jellyfin 10.x") }}
+                </option>
+            </select>
+            <p class="hint">
+                {{ _("Version 12 no longer accepts the old authentication headers and has no /emby/ paths. The address and the key stay the same; only the way requests are sent differs.") }}
+                {{ _("After switching, the version is detected again, right when you save or at a connection test.") }}
+                {% if detected_version %}<br>{{ _("The server last reported version") }}
+                    <strong>{{ detected_version }}</strong>.{% endif %}
+            </p>
+            {% if generation_mismatch %}
+            <p class="hint">
+                <span class="badge warning"><span class="dot"></span>{{ _("the server reports a different generation than the one selected") }}</span>
+                <br>{{ _('The manual choice wins, which is what it is for. If that was not the intention, switch back to "Detect from the server".') }}
+            </p>
+            {% endif %}
+        </div>
+
+        {# Both buttons belong to THIS form, so they work with what
+           is filled in. The test used to be a separate form beside it - it sent
+           nothing, so it tested the saved settings instead of the filled-in ones
+           and the submit dropped what you had written on top. #}
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit" name="action" value="save">
+                {{ _("Save connection") }}
+            </button>
+            <button data-keep-scroll class="btn" type="submit" name="action" value="test">
+                {{ _("Test connection") }}
+            </button>
+        </div>
+    </form>
+
+    <div class="btn-row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+        {# A sync works with the saved settings, not with the form -
+           hence it stays apart. #}
+        <form method="post" action="/settings/sync">
+            <button data-keep-scroll class="btn" type="submit" {{ 'disabled' if scan_running }}>
+                {{ _("Synchronise library") }}
+            </button>
+        </form>
+    </div>
+
+    {% if jellyfin_draft %}
+    <div class="flash info" style="margin-top:14px">
+        <span class="dot"></span>
+        <span>{{ _("The values you entered are not saved yet. The API key is remembered, so just click Save connection.") }}</span>
+    </div>
+    {% endif %}
+
+    {% if last_library_scan %}
+    <p class="card-note" style="margin-top:14px">
+        {{ _("Last synchronisation") }}: {{ last_library_scan.started_at | relative }}
+        &middot; {{ _("status") }}: {{ last_library_scan.status }}
+        {% if last_library_scan.message %}<br>{{ stored_text(last_library_scan.message, last_library_scan.message_values) }}{% endif %}
+    </p>
+    {% endif %}
+
+    {{ running_task(scan_running, stop_pending, 'jellyfin') }}
+</div>
+
+
+{# ================================================================== #}
+{# ------------------------------------------------------------------ #}
+{# Viewers signing in with their Jellyfin password                    #}
+{# ------------------------------------------------------------------ #}
+<div class="card" id="viewers">
+    <div class="card-head">
+        <h2>{{ _("Viewer sign-in") }}</h2>
+        <p class="card-note">{{ _("who from Jellyfin may come in, and what they see") }}</p>
+    </div>
+
+    <form method="post" action="/settings/viewers" id="viewers-form"></form>
+
+    {% if unencrypted %}
+    {# A viewer's password goes to Jellyfin in the request's body and the key in a header -
+       both readable, because that is how Jellyfin takes them. On the network only
+       https protects them. On localhost nothing goes over the network, so
+       this does not show there. #}
+    <div class="flash warning" style="margin-bottom:14px">
+        <span class="dot"></span>
+        <span>
+            {{ _("The Jellyfin address starts with http://, so the connection is not encrypted. The API key and any password a viewer types here travel in the clear, and anybody on the way (a router, Wi-Fi, a proxy) can read them. With https:// they cannot.") }}
+        </span>
+    </div>
+    {% endif %}
+
+    <label class="switch">
+        <input type="checkbox" name="jellyfin_login" form="viewers-form"
+               {{ 'checked' if viewer_login }}>
+        <span>{{ _("Enable Jellyfin sign-in") }}</span>
+    </label>
+    <p class="hint">
+        {{ _("Anybody with a Jellyfin account signs in here with the same username and password. The password is not stored here; it is only passed to Jellyfin to check. A Jellyfin administrator is an administrator here too; everybody else sees what is ticked below.") }}
+    </p>
+
+    {# The tree: what is indented applies only with its parent. That is why
+       a sub-area cannot be switched on alone - the library off means
+       "kdo to sledoval" off too. #}
+    <div class="field" style="margin-top:18px">
+        <label>{{ _("What a viewer sees") }}</label>
+        <p class="hint" style="margin-top:0">
+            {{ _("Their own statistics and their own history are always visible; without those, signing in would be pointless.") }}
+        </p>
+        {{ permissions_tree(viewer_tree, dashboard_name, form="viewers-form") }}
+    </div>
+
+    <label class="switch" style="margin-top:14px">
+        <input type="checkbox" name="anonymise" form="viewers-form"
+               {{ 'checked' if viewer_anonymise }}>
+        <span>{{ _("Hide other viewers' names and addresses") }}</span>
+    </label>
+    <p class="hint">
+        {{ _("On the pages you let viewers into, somebody else's name shows as \"Viewer 3\" and an IP address as a dash. The number is stable, so it can be compared; it just cannot be traced to a person. Viewers see themselves under their own name.") }}
+    </p>
+
+    <div class="btn-row" style="margin-top:16px">
+        <button data-keep-scroll class="btn primary" type="submit" form="viewers-form">
+            {{ _("Save viewer access") }}
+        </button>
+    </div>
+</div>
+
+
+{# ================================================================== #}

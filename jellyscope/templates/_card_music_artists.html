@@ -1,0 +1,33 @@
+{# The music card "Most played artists".
+
+   From the database (cards_music.py, `d.radky` = stats.music_artists). An artist
+   is a link to their page; listening to a track the sync does not know
+   yet is under an unknown artist (without a link). A long table: the first rows in the card, the whole one in the window. #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Artist") }}</th>
+            <th class="num">{{ _("Listening") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Plays") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Listeners#count") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for i in d.rows %}
+            <tr class="{{ row_class(loop.index, "music") }}">
+                <td class="strong break-anywhere">{% call link(i.link) %}{{ i.name or _("unknown artist") }}{% endcall %}
+                    <div class="narrow-wrapper-only cell-sub">{{ i.plays | number }}× &middot; {{ _("Listeners#count") }} {{ i.listener_count | number }}</div></td>
+                <td class="num strong">{{ i.seconds | seconds }}</td>
+                <td class="num wide-wrapper-only">{{ i.plays | number }}</td>
+                <td class="num wide-wrapper-only">{{ i.listener_count | number }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "music") }}
+    {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+</div>

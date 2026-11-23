@@ -1,0 +1,41 @@
+{# A card of the Users page (users.html).
+
+   Included by that page and by dashboards (cards.py, key `users_table`) - one
+   template, so the two places do not drift apart. In a dashboard there is also
+   `in_dashboard` (True).
+   Expects `rows (stats.user_table)`. #}
+{% from "_macros.html" import link with context %}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Users") if in_dashboard else _("Overview") }}</h2></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>{{ _("User") }}</th><th class="num">{{ _("Watched") }}</th>
+                <th class="num">{{ _("Plays#starts") }}</th><th class="num">{{ _("Titles") }}</th>
+                <th class="num">{{ _("Of that transcoded") }}</th><th class="num">{{ _("Last seen") }}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="strong">
+                    {% call link("/users/" ~ row.id) %}{{ row.name }}{% endcall %}
+                    {% if row.is_administrator %}
+                        <span class="badge role"><span class="dot"></span>{{ _("administrator") }}</span>
+                    {% endif %}
+                </td>
+                <td class="num strong">{{ row.hours | hours }}</td>
+                <td class="num">{{ row.plays | number }}</td>
+                <td class="num">{{ row.item_count | number }}</td>
+                <td class="num muted">{{ row.transcoded_hours | hours }}</td>
+                <td class="num muted">{{ row.last_seen | relative }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not rows %}
+        <p class="chart-empty">{{ _("No users. Run a library synchronisation in Settings.") }}</p>
+    {% endif %}
+</div>

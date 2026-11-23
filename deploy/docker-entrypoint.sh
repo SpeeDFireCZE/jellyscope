@@ -25,7 +25,7 @@
 # wrong. Those are somebody's files, put there for reasons this script
 # cannot see - a rewrite behind their back is not ours to make. The
 # application then starts anyway and says on its own page which folder it
-# cannot write to and what to run; see jellyscope/porucha.py.
+# cannot write to and what to run; see jellyscope/outage.py.
 #
 # Anyone who sets their own `user:` in docker-compose.yml skips all of
 # this - then their own ownership applies from the start.
@@ -39,17 +39,17 @@ DATA=/app/data
 if [ "$(id -u)" = "0" ]; then
     mkdir -p "$DATA"
 
-    vlastnik="$(stat -c '%u' "$DATA")"
-    if [ "$vlastnik" != "$APP_UID" ]; then
+    owner="$(stat -c '%u' "$DATA")"
+    if [ "$owner" != "$APP_UID" ]; then
         if [ -z "$(ls -A "$DATA" 2>/dev/null)" ]; then
             # Empty: Docker made it seconds ago and there is nothing in it
             # that could be somebody's. One directory, not -R.
-            echo "Jellyscope: $DATA is empty and belongs to UID $vlastnik - it is now the application's ($APP_UID)."
+            echo "Jellyscope: $DATA is empty and belongs to UID $owner - it is now the application's ($APP_UID)."
             chown "$APP_UID:$APP_GID" "$DATA" || echo "Jellyscope: the owner could not be changed." >&2
         else
             # Not empty: somebody's files. We do not touch them - the
             # application will say what to run, on its own page.
-            echo "Jellyscope: $DATA belongs to UID $vlastnik, the application runs as $APP_UID." >&2
+            echo "Jellyscope: $DATA belongs to UID $owner, the application runs as $APP_UID." >&2
             echo "Jellyscope: not touching a folder that has something in it." >&2
             echo "Jellyscope: if it cannot be written to, on the host run:" >&2
             echo "Jellyscope:     sudo chown -R $APP_UID:$APP_GID ./data" >&2

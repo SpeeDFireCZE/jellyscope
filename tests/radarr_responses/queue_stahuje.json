@@ -1,0 +1,624 @@
+{
+ "page": 1,
+ "pageSize": 200,
+ "sortKey": "timeleft",
+ "sortDirection": "descending",
+ "totalRecords": 4,
+ "records": [
+  {
+   "movieId": 8,
+   "movie": {
+    "title": "Arrival",
+    "originalTitle": "Arrival",
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "alternateTitles": [],
+    "secondaryYearSourceId": 0,
+    "sortTitle": "arrival",
+    "status": "released",
+    "overview": "Taking place after alien crafts land around the world, an expert linguist is recruited by the military to determine whether they come in peace or are a threat.",
+    "inCinemas": "2016-11-10T00:00:00Z",
+    "physicalRelease": "2017-02-14T00:00:00Z",
+    "digitalRelease": "2017-04-07T00:00:00Z",
+    "releaseDate": "2017-02-14T00:00:00Z",
+    "images": [
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/pEzNVQfdzYDzVK0XqxERIw2x2se.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/8MUZz7oPXQftFTslZpRP3CVMOoq.jpg"
+     }
+    ],
+    "website": "http://www.arrivalmovie.com/",
+    "year": 2016,
+    "youTubeTrailerId": "7W1m5ER3I1Y",
+    "studio": "FilmNation Entertainment",
+    "path": "/home/coder/projects/arr-test/media/movies/Arrival (2016)",
+    "qualityProfileId": 1,
+    "movieFileId": 0,
+    "monitored": true,
+    "minimumAvailability": "released",
+    "isAvailable": true,
+    "folderName": "/home/coder/projects/arr-test/media/movies/Arrival (2016)",
+    "runtime": 116,
+    "cleanTitle": "arrival",
+    "imdbId": "tt2543164",
+    "tmdbId": 329865,
+    "titleSlug": "329865",
+    "certification": "PG-13",
+    "genres": [
+     "Drama",
+     "Science Fiction",
+     "Mystery"
+    ],
+    "keywords": [
+     "alien",
+     "alien contact",
+     "alien language",
+     "based on short story",
+     "communication",
+     "complex",
+     "determinism",
+     "extraterrestrial technology",
+     "female protagonist",
+     "first contact",
+     "heartbreak",
+     "hopeful",
+     "incredulous",
+     "language",
+     "linguist",
+     "linguistics",
+     "loss",
+     "military",
+     "science fiction",
+     "scientist",
+     "spacecraft",
+     "time",
+     "time-manipulation",
+     "wistful"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:49Z",
+    "ratings": {
+     "imdb": {
+      "votes": 886169,
+      "value": 7.9,
+      "type": "user"
+     },
+     "tmdb": {
+      "votes": 20171,
+      "value": 7.638,
+      "type": "user"
+     },
+     "metacritic": {
+      "votes": 0,
+      "value": 81,
+      "type": "user"
+     },
+     "rottenTomatoes": {
+      "votes": 0,
+      "value": 94,
+      "type": "user"
+     },
+     "trakt": {
+      "votes": 45615,
+      "value": 7.98097,
+      "type": "user"
+     }
+    },
+    "popularity": 19.0705,
+    "lastSearchTime": "2026-11-14T07:53:03Z",
+    "id": 8
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "webdl",
+     "resolution": 1080,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 8589934592,
+   "title": "Arrival.2016.1080p.WEB-DL.DD5.1.H.264-GROUP",
+   "added": "2026-11-14T07:53:05Z",
+   "status": "paused",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_2731a222",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "sizeleft": 8589934592,
+   "id": 1193091360
+  },
+  {
+   "movieId": 6,
+   "movie": {
+    "title": "Inception",
+    "originalTitle": "Inception",
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "alternateTitles": [],
+    "secondaryYearSourceId": 0,
+    "sortTitle": "inception",
+    "status": "released",
+    "overview": "Cobb, a skilled thief who commits corporate espionage by infiltrating the subconscious of his targets is offered a chance to regain his old life as payment for a task considered to be impossible: \"inception\", the implantation of another person's idea into a target's subconscious.",
+    "inCinemas": "2010-07-15T00:00:00Z",
+    "physicalRelease": "2010-12-03T00:00:00Z",
+    "digitalRelease": "2013-03-04T00:00:00Z",
+    "releaseDate": "2010-12-03T00:00:00Z",
+    "images": [
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/xlaY2zyzMfkhk0HSC5VUwzoZPU1.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg"
+     }
+    ],
+    "website": "https://www.warnerbros.com/movies/inception",
+    "year": 2010,
+    "youTubeTrailerId": "cdx31ak4KbQ",
+    "studio": "Warner Bros. Pictures",
+    "path": "/home/coder/projects/arr-test/media/movies/Inception (2010)",
+    "qualityProfileId": 1,
+    "movieFileId": 0,
+    "monitored": true,
+    "minimumAvailability": "released",
+    "isAvailable": true,
+    "folderName": "/home/coder/projects/arr-test/media/movies/Inception (2010)",
+    "runtime": 148,
+    "cleanTitle": "inception",
+    "imdbId": "tt1375666",
+    "tmdbId": 27205,
+    "titleSlug": "27205",
+    "certification": "PG-13",
+    "genres": [
+     "Action",
+     "Science Fiction",
+     "Crime"
+    ],
+    "keywords": [
+     "allegory",
+     "dream",
+     "dream world",
+     "dreams",
+     "heist",
+     "high concept",
+     "incredulous",
+     "intellectual",
+     "kidnapping",
+     "manipulation",
+     "memory",
+     "mission",
+     "spy",
+     "subconscious"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:48Z",
+    "ratings": {
+     "imdb": {
+      "votes": 2887894,
+      "value": 8.8,
+      "type": "user"
+     },
+     "tmdb": {
+      "votes": 40712,
+      "value": 8.373,
+      "type": "user"
+     },
+     "metacritic": {
+      "votes": 0,
+      "value": 74,
+      "type": "user"
+     },
+     "rottenTomatoes": {
+      "votes": 0,
+      "value": 86,
+      "type": "user"
+     },
+     "trakt": {
+      "votes": 62213,
+      "value": 8.73541,
+      "type": "user"
+     }
+    },
+    "popularity": 44.0181,
+    "lastSearchTime": "2026-11-14T07:53:01Z",
+    "id": 6
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 7,
+     "name": "Bluray-1080p",
+     "source": "bluray",
+     "resolution": 1080,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 12884901888,
+   "title": "Inception.2010.1080p.BluRay.DD5.1.x264-GROUP",
+   "estimatedCompletionTime": "2026-11-14T11:13:08Z",
+   "added": "2026-11-14T07:53:03Z",
+   "status": "downloading",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_63034ba5",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "sizeleft": 12514754560,
+   "timeleft": "03:18:55",
+   "id": 1751138536
+  },
+  {
+   "movieId": 4,
+   "movie": {
+    "title": "Elephants Dream",
+    "originalTitle": "Elephants Dream",
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "alternateTitles": [],
+    "secondaryYearSourceId": 0,
+    "sortTitle": "elephants dream",
+    "status": "released",
+    "overview": "Elephants Dream is the story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo. As their journey unfolds we discover signs that the machine is not all Proog thinks it is, and his guiding takes on a more desperate aspect.  Elephants Dream is a story about communication and fiction, made purposefully open-ended as the world’s first 3D animated “Open movie”. The film itself is released under the Creative Commons license, along with the entirety of the production files used to make it (roughly 7 Gigabytes of data). The software used to make the movie is the free/open source animation suite Blender along with other open source software, thus allowing the movie to be remade, remixed and re-purposed with only a computer and the data on the DVD or download.",
+    "digitalRelease": "2006-03-24T00:00:00Z",
+    "releaseDate": "2006-03-24T00:00:00Z",
+    "images": [
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/9zROtU9TkpZQrOuEaMAp68FOWLK.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/9bJDwuhza19HQcYA99FeslLYmUm.jpg"
+     }
+    ],
+    "website": "http://www.elephantsdream.org/",
+    "year": 2006,
+    "youTubeTrailerId": "_0wxP7EWsOc",
+    "studio": "Blender Foundation",
+    "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+    "qualityProfileId": 1,
+    "movieFileId": 2,
+    "monitored": true,
+    "minimumAvailability": "released",
+    "isAvailable": true,
+    "folderName": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)",
+    "runtime": 11,
+    "cleanTitle": "elephantsdream",
+    "imdbId": "tt0807840",
+    "tmdbId": 9761,
+    "titleSlug": "9761",
+    "certification": "NR",
+    "genres": [
+     "Animation",
+     "Science Fiction"
+    ],
+    "keywords": [
+     "blender",
+     "dreams",
+     "future"
+    ],
+    "tags": [],
+    "added": "2026-11-12T22:23:08Z",
+    "ratings": {
+     "imdb": {
+      "votes": 1397,
+      "value": 5.6,
+      "type": "user"
+     },
+     "tmdb": {
+      "votes": 71,
+      "value": 5.8,
+      "type": "user"
+     },
+     "trakt": {
+      "votes": 86,
+      "value": 5.98837,
+      "type": "user"
+     }
+    },
+    "movieFile": {
+     "movieId": 4,
+     "relativePath": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+     "path": "/home/coder/projects/arr-test/media/movies/Elephants Dream (2006)/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+     "size": 203381,
+     "dateAdded": "2026-11-12T22:26:06Z",
+     "sceneName": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb",
+     "releaseGroup": "NTb",
+     "edition": "",
+     "languages": [
+      {
+       "id": 1,
+       "name": "English"
+      }
+     ],
+     "quality": {
+      "quality": {
+       "id": 5,
+       "name": "WEBDL-720p",
+       "source": "webdl",
+       "resolution": 720,
+       "modifier": "none"
+      },
+      "revision": {
+       "version": 1,
+       "real": 0,
+       "isRepack": false
+      }
+     },
+     "indexerFlags": 0,
+     "mediaInfo": {
+      "audioBitrate": 0,
+      "audioChannels": 1,
+      "audioCodec": "AAC",
+      "audioLanguages": "",
+      "audioStreamCount": 1,
+      "videoBitDepth": 8,
+      "videoBitrate": 0,
+      "videoCodec": "x264",
+      "videoFps": 1,
+      "videoDynamicRange": "",
+      "videoDynamicRangeType": "",
+      "resolution": "1280x720",
+      "runTime": "30:00",
+      "scanType": "Progressive",
+      "subtitles": ""
+     },
+     "originalFilePath": "Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb/Elephants.Dream.2006.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+     "qualityCutoffNotMet": false,
+     "id": 2
+    },
+    "popularity": 1.8026,
+    "lastSearchTime": "2026-11-12T22:23:08Z",
+    "id": 4
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "webdl",
+     "resolution": 1080,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 60306,
+   "title": "Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING",
+   "estimatedCompletionTime": "2026-11-14T07:54:13Z",
+   "status": "completed",
+   "trackedDownloadStatus": "warning",
+   "trackedDownloadState": "importBlocked",
+   "statusMessages": [
+    {
+     "title": "One or more movies expected in this release were not imported or missing",
+     "messages": []
+    },
+    {
+     "title": "Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING.mkv",
+     "messages": [
+      "No audio tracks detected"
+     ]
+    }
+   ],
+   "downloadId": "Blackhole_Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING_639301196637781394",
+   "protocol": "usenet",
+   "downloadClient": "Blackhole",
+   "downloadClientHasPostImportCategory": false,
+   "outputPath": "/home/coder/projects/arr-test/blackhole/radarr/watch/Elephants.Dream.2006.1080p.WEB-DL.DD5.1.H.264-PENDING",
+   "sizeleft": 0,
+   "timeleft": "00:00:00",
+   "id": 220815722
+  },
+  {
+   "movieId": 9,
+   "movie": {
+    "title": "Dune",
+    "originalTitle": "Dune",
+    "originalLanguage": {
+     "id": 1,
+     "name": "English"
+    },
+    "alternateTitles": [],
+    "secondaryYearSourceId": 0,
+    "sortTitle": "dune",
+    "status": "released",
+    "overview": "Paul Atreides, a brilliant and gifted young man born into a great destiny beyond his understanding, must travel to the most dangerous planet in the universe to ensure the future of his family and his people. As malevolent forces explode into conflict over the planet's exclusive supply of the most precious resource in existence - a commodity capable of unlocking humanity's greatest potential - only those who can conquer their fear will survive.",
+    "inCinemas": "2021-09-15T00:00:00Z",
+    "physicalRelease": "2021-12-22T00:00:00Z",
+    "digitalRelease": "2021-10-21T00:00:00Z",
+    "releaseDate": "2021-10-21T00:00:00Z",
+    "images": [
+     {
+      "coverType": "poster",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/v1tRXZ4JtD2Iv6fjkPvT4GiwslV.jpg"
+     },
+     {
+      "coverType": "fanart",
+      "remoteUrl": "https://image.tmdb.org/t/p/original/jYEW5xZkZk2WTrdbMGAPFuBqbDc.jpg"
+     }
+    ],
+    "website": "https://www.warnerbros.com/movies/dune",
+    "year": 2021,
+    "youTubeTrailerId": "w0HgHet0sxg",
+    "studio": "Legendary Pictures",
+    "path": "/home/coder/projects/arr-test/media/movies/Dune (2021)",
+    "qualityProfileId": 1,
+    "movieFileId": 0,
+    "monitored": true,
+    "minimumAvailability": "released",
+    "isAvailable": true,
+    "folderName": "/home/coder/projects/arr-test/media/movies/Dune (2021)",
+    "runtime": 155,
+    "cleanTitle": "dune",
+    "imdbId": "tt1160419",
+    "tmdbId": 438631,
+    "titleSlug": "438631",
+    "certification": "PG-13",
+    "genres": [
+     "Science Fiction",
+     "Adventure"
+    ],
+    "keywords": [
+     "army",
+     "baron",
+     "based on novel or book",
+     "betrayal",
+     "chosen one",
+     "complex",
+     "creature",
+     "desert",
+     "destiny",
+     "dystopia",
+     "emperor",
+     "empire",
+     "future",
+     "giant creature",
+     "giant worm",
+     "hallucinogen",
+     "knife fight",
+     "messiah",
+     "mother son relationship",
+     "premonition",
+     "prophecy",
+     "revenge",
+     "sand",
+     "sand dune",
+     "space",
+     "space opera",
+     "spice",
+     "treason",
+     "water shortage"
+    ],
+    "tags": [],
+    "added": "2026-11-13T06:28:49Z",
+    "ratings": {
+     "imdb": {
+      "votes": 1098044,
+      "value": 8,
+      "type": "user"
+     },
+     "tmdb": {
+      "votes": 15858,
+      "value": 7.786,
+      "type": "user"
+     },
+     "metacritic": {
+      "votes": 0,
+      "value": 74,
+      "type": "user"
+     },
+     "rottenTomatoes": {
+      "votes": 0,
+      "value": 83,
+      "type": "user"
+     },
+     "trakt": {
+      "votes": 57693,
+      "value": 8.14492,
+      "type": "user"
+     }
+    },
+    "collection": {
+     "title": "Dune Collection",
+     "tmdbId": 726871
+    },
+    "popularity": 48.6944,
+    "lastSearchTime": "2026-11-14T07:53:05Z",
+    "id": 9
+   },
+   "languages": [
+    {
+     "id": 1,
+     "name": "English"
+    }
+   ],
+   "quality": {
+    "quality": {
+     "id": 3,
+     "name": "WEBDL-1080p",
+     "source": "webdl",
+     "resolution": 1080,
+     "modifier": "none"
+    },
+    "revision": {
+     "version": 1,
+     "real": 0,
+     "isRepack": false
+    }
+   },
+   "customFormats": [],
+   "customFormatScore": 0,
+   "size": 10737418240,
+   "title": "Dune.2021.1080p.WEB-DL.DD5.1.H.264-GROUP",
+   "estimatedCompletionTime": "2026-11-14T07:54:13Z",
+   "added": "2026-11-14T07:53:07Z",
+   "status": "queued",
+   "trackedDownloadStatus": "ok",
+   "trackedDownloadState": "downloading",
+   "statusMessages": [],
+   "downloadId": "SABnzbd_nzo_ecec69af",
+   "protocol": "usenet",
+   "downloadClient": "Klient s průběhem",
+   "downloadClientHasPostImportCategory": false,
+   "indexer": "arr-test",
+   "sizeleft": 10737418240,
+   "timeleft": "00:00:00",
+   "id": 1296659543
+  }
+ ]
+}

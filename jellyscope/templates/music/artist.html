@@ -1,0 +1,81 @@
+{# The artist's page: numbers for the period, albums, the most played tracks, who listens.
+
+   Data: stats.music_artist (web/music/artist.py adds the cover addresses and links).
+   The block "Who listened" only with the area "...including who listened" - without it
+   the route does not send the names at all (`d.posluchaci` is None). A track without an album
+   is just text: a track has no page of its own. #}
+{% extends "base.html" %}
+{% from "_macros.html" import tile, poster, link, period_filter, row_class, whole_table_button, table_window with context %}
+{% block title %}{{ d.artist.name }} · Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="music-head">
+        {{ poster(image, "poster-frame album-cover music-cover", placeholder=_("No image")) }}
+        <div>
+            <p class="subtitle" style="margin-bottom:2px">{% call link("/music/overview") %}&larr; {{ _("Music") }}{% endcall %}</p>
+            <h1>{{ d.artist.name }}</h1>
+            <p class="subtitle">{{ _("Artist") }}{% if genre_list %} &middot; {{ genre_list | join(", ") }}{% endif %}</p>
+        </div>
+    </div>
+    {{ period_filter(period, '/music/artist/' ~ d.artist.id) }}
+</div>
+
+{% if d.artist.missing %}
+<div class="flash warning"><span class="dot"></span>
+    <span>{{ _("No longer in Jellyfin. The listening stays in the history and in the statistics.") }}</span></div>
+{% endif %}
+
+<div class="kpi-row">
+    {{ tile(_("Listening"), d.numbers.seconds | seconds) }}
+    {{ tile(_("Plays"), d.numbers.plays | number) }}
+    {{ tile(_("Listeners#count"), d.numbers.listener_count | number) }}
+</div>
+
+<div class="card recent-card">
+    <div class="card-head"><h2>{{ _("Albums") }}</h2></div>
+    {% if d.albums %}
+    <div class="poster-strip">
+        {% for a in d.albums %}
+        <div class="poster-card">
+            {{ poster(a.cover, "poster-frame album-cover", detail=a.link, placeholder=_("No cover")) }}
+            {% call link(a.link, {"class": "poster-name", "title": a.name}) %}{{ a.name or "–" }}{% endcall %}
+            <div class="poster-meta">{{ a.year or "–" }} &middot; {{ _("Tracks#count") }} {{ a.track_count | number }} &middot; {{ a.seconds | seconds }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}<p class="chart-empty">{{ _("No album in the library.") }}</p>{% endif %}
+</div>
+
+<div class="grid-2 align-top">
+    <div class="card">
+        <div class="card-head"><h2>{{ _("Most played tracks") }}</h2></div>
+        {% if d.tracks %}
+        <div class="table-wrap wrapper-by-width"><table class="table-dense">
+            <thead><tr>
+                <th>{{ _("Track") }}</th>
+                <th class="num">{{ _("Listening") }}</th>
+                <th class="num wide-wrapper-only">{{ _("Plays") }}</th>
+            </tr></thead>
+            <tbody>
+            {% for s in d.tracks %}
+                <tr class="{{ row_class(loop.index, "music") }}">
+                    <td class="strong break-anywhere">{% call link(s.link) %}{{ s.name or "–" }}{% endcall %}
+                        <div class="cell-sub">{% call link(s.album_link) %}{{ s.album or _("no album") }}{% endcall %}<span class="narrow-wrapper-only"> &middot; {{ s.plays | number }}×</span></div></td>
+                    <td class="num strong">{{ s.seconds | seconds }}</td>
+                    <td class="num wide-wrapper-only">{{ s.plays | number }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        {{ whole_table_button(d.tracks | length, "music") }}
+        {% else %}<p class="chart-empty">{{ _("Nothing was listened to in this period.") }}</p>{% endif %}
+    </div>
+
+    {% if d.listeners is not none %}
+    {% include "music/_listeners.html" %}
+    {% endif %}
+</div>
+
+{{ table_window() }}
+{% endblock %}

@@ -1,0 +1,32 @@
+{# The Radarr card "Largest imported files" for the chosen period.
+
+   From the database (cards_radarr.py, `d.radky`, at most insights.INSIGHT_ROWS).
+   A long table: how many rows show at once is set in Settings → Interface
+   → Long lists; the rest opens with a button in the shared window (the macros
+   row_class and whole_table_button, as on Insights). #}
+{% from "_macros.html" import row_class, whole_table_button, link with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("in the selected period") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap"><table>
+        <thead><tr>
+            <th>{{ _("Title") }}</th>
+            <th>{{ _("Quality") }}</th>
+            <th class="num">{{ _("Size") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong">{% call link(r.detail_url) %}{{ r.title }}{% endcall %}</td>
+                <td class="muted">{{ r.quality or "–" }}</td>
+                <td class="num">{{ r.size_bytes | bytes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

@@ -1,0 +1,119 @@
+{# A book in the Library (web/book.py), built like an album: cover and author, tiles, "About the book" next to the
+   cover, then the files. Numbers are over the whole history - the page is about the book, not a period.
+
+   Data: stats.books_library.book_detail. The several files of an audiobook are one book; a file that vanished from
+   Jellyfin stays in the list with a note, size and length count only the present ones. #}
+{% extends "base.html" %}
+{% from "_macros.html" import tile, poster, link, table_window, row_class, whole_table_button with context %}
+{% block title %}{{ d.work.title }} · Jellyscope{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="subtitle" style="margin-bottom:2px">
+            {% if library %}{% call link("/library/" ~ library.id ~ "?tab=books") %}&larr; {{ library.name }}{% endcall %}
+            {% else %}{% call link("/library") %}&larr; {{ _("Library") }}{% endcall %}{% endif %}
+        </p>
+        <h1>{{ d.work.title or "–" }}</h1>
+        <p class="subtitle">
+            {{ d.work.author or _("unknown author") }}{% if d.work.year %} &middot; {{ d.work.year }}{% endif %}
+            &middot; {{ _("Audiobook") if d.work.kind == "audiobook" else _("E-book") }}
+        </p>
+    </div>
+</div>
+
+{% if d.work.missing %}
+<div class="flash warning"><span class="dot"></span>
+    <span>{{ _("No longer in Jellyfin. The reading and listening stay in the history and in the statistics.") }}</span></div>
+{% endif %}
+
+<div class="kpi-row">
+    {# Only files that are in Jellyfin - like length and size; a vanished one stays in the list with a note. #}
+    {{ tile(_("Files"), d.files | rejectattr("missing") | list | length | number) }}
+    {% if d.work.kind == "audiobook" %}{{ tile(_("Duration"), d.seconds | seconds) }}{% endif %}
+    {{ tile(_("Size"), d.size | bytes) }}
+    {% if d.work.kind == "audiobook" %}{{ tile(_("Audiobook listening"), d.listening | seconds) }}
+    {% elif reading_reported %}{{ tile(_("Reading time"), d.reading | seconds) }}
+    {% else %}{{ tile(_("Reading time"), "–", note=_("Jellyfin does not report reading e-books.")) }}{% endif %}
+</div>
+
+<div class="item-layout" style="margin-bottom:18px">
+    <div>
+        {{ poster(cover, "poster-frame detail-cover", placeholder=_("No cover")) }}
+    </div>
+    <div class="card" style="margin-bottom:0">
+        <div class="card-head"><h2>{{ _("About the book") }}</h2></div>
+        {# break-anywhere: a name without spaces (an author, a library, a genre) breaks anywhere instead of pushing the card wider than the screen. #}
+        <div class="table-wrap">
+            <table class="facts break-anywhere">
+                <tbody>
+                <tr><th>{{ _("Library") }}</th>
+                    <td>{% if library %}{% call link("/library/" ~ library.id ~ "?tab=books") %}{{ library.name }}{% endcall %}{% else %}{{ d.library_name or "–" }}{% endif %}</td></tr>
+                <tr><th>{{ _("Author") }}</th><td>{{ d.work.author or "–" }}</td></tr>
+                <tr><th>{{ _("Series") }}</th><td>{{ d.work.series or "–" }}</td></tr>
+                <tr><th>{{ _("Year") }}</th><td>{{ d.work.year or "–" }}</td></tr>
+                <tr><th>{{ _("Genres") }}</th><td>{{ genre_list | join(", ") if genre_list else "–" }}</td></tr>
+                <tr><th>{{ _("Formats") }}</th><td>{{ formats | join(", ") if formats else "–" }}</td></tr>
+                <tr><th>{{ _("Added") }}</th><td>{{ d.work.added_at | datetime if d.work.added_at else "–" }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <h2>{{ _("Files") }}</h2>
+        <p class="card-note">{{ _("time over the whole history") }}</p>
+    </div>
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("File") }}</th>
+            <th class="wide-wrapper-only">{{ _("Format") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Duration") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Size") }}</th>
+            <th class="num">{{ _("Time") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for f in d.files %}
+            <tr id="file-{{ f.id }}"{% if f.missing %} class="muted"{% endif %}>
+                <td class="break-anywhere"><span class="strong">{{ f.name or "–" }}</span>
+                    {% if f.missing %}<div class="cell-sub">{{ _("no longer in Jellyfin") }}</div>{% endif %}
+                    <div class="narrow-wrapper-only cell-sub">{{ (f.format or "–") | upper }} &middot; {{ f.size_bytes | bytes }}</div></td>
+                <td class="wide-wrapper-only">{{ (f.format or "–") | upper }}</td>
+                <td class="num wide-wrapper-only">{{ f.runtime_ticks | ticks | timecode if f.runtime_ticks else "–" }}</td>
+                <td class="num wide-wrapper-only">{{ f.size_bytes | bytes }}</td>
+                <td class="num strong">{{ f.seconds | seconds }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+
+{# Who read and listened, over the whole history - only with "...including who read and listened" (the route sends no
+   names otherwise). Names are guarded by anonymisation; a reader is a link only for whoever may open their page. #}
+{% if d.readers is not none %}
+<div class="card">
+    <div class="card-head"><h2>{{ _("Who read and listened") }}</h2><p class="card-note">{{ _("over the whole history") }}</p></div>
+    {% if d.readers %}
+    <div class="table-wrap"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Reader") }}</th>
+            <th class="num">{{ _("Time") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for p in d.readers %}
+            <tr class="{{ row_class(loop.index) }}">
+                <td class="strong break-anywhere">{% call link("/users/" ~ p.user_id if p.user_id else "") %}{{ p.user_name or "–" }}{% endcall %}</td>
+                <td class="num strong">{{ p.seconds | seconds }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.readers | length) }}
+    {% else %}<p class="chart-empty">{{ _("Nobody has read or listened to it yet.") }}</p>{% endif %}
+</div>
+{% endif %}
+
+{{ table_window() }}
+{% endblock %}

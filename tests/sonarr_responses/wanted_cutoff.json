@@ -1,0 +1,27 @@
+{
+ "page": 1,
+ "pageSize": 1,
+ "sortKey": "episodes.airDateUtc",
+ "sortDirection": "descending",
+ "totalRecords": 5,
+ "records": [
+  {
+   "seriesId": 2,
+   "tvdbId": 7082952,
+   "episodeFileId": 2,
+   "seasonNumber": 1,
+   "episodeNumber": 1,
+   "title": "1:23:45",
+   "airDate": "2019-05-06",
+   "airDateUtc": "2019-05-07T01:00:00Z",
+   "lastSearchTime": "2026-11-12T22:10:35Z",
+   "runtime": 59,
+   "overview": "Plant workers and firefighters put their lives on the line to control a catastrophic 1986 explosion at a Soviet nuclear power plant.",
+   "hasFile": true,
+   "monitored": true,
+   "absoluteEpisodeNumber": 1,
+   "unverifiedSceneNumbering": false,
+   "id": 141
+  }
+ ]
+}

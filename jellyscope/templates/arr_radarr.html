@@ -1,0 +1,103 @@
+{# The *Arr page, the Radarr tab: the statistics of Radarr.
+
+   The cards are from the registry (jellyscope/cards_radarr.py) - the same ones that can
+   be added to a custom dashboard. Here they have a fixed layout by sections;
+   every place is {{ c("…") }} = a card of Radarr. Which cards the account sees was
+   decided by the route (web/arr.py, `cards`), not the template, and it computed only
+   their data. Card names and the order of sections: cards_radarr.SECTIONS - that they
+   match the template is checked by tests/test_radarr_cards.py.
+
+   `app` is the app shown (here always "radarr"); the *Arr submenu switches
+   between apps (jellyscope/navigation.py). A disconnected app never
+   gets here (404). #}
+{% extends "base.html" %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
+{% block title %}*Arr · {{ app_name }} · Jellyscope{% endblock %}
+
+{# A Radarr card by its name ("queue" -> arr_radarr_queue). #}
+{% macro c(card_name) %}{{ show_card("arr_radarr_" ~ card_name) }}{% endmacro %}
+
+{# A section heading - only when the account sees at least one of its cards (`sections_shown`). #}
+{% macro page_section(key_name, heading, subtitle) %}
+{% if key_name in sections_shown %}
+<div class="section-head">
+    <div>
+        <h2>{{ heading }}</h2>
+        <p class="subtitle">{{ subtitle }}</p>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        {# The tab bar is gone (the *Arr submenu took over), so the heading names the app. #}
+        <h1>{{ app_name }}</h1>
+        <p class="subtitle">
+            {{ _("What was added to the library through Radarr and when, where from and how fast.") }}
+        </p>
+    </div>
+    {{ period_filter(period, '/arr/' ~ app) }}
+</div>
+
+
+{# ------------------------------------------------------------------ #}
+{# At the top what the admin wants to see first: what got stuck.      #}
+{# A state, not a period - the period switch does not affect it.      #}
+{{ page_section("In the app right now", _("In the app right now"), _("The state at this moment. The selected period does not affect it.")) }}
+{{ c("live_numbers") }}
+{{ c("downloading") }}
+<div class="grid-2 align-top">
+    {{ c("queue") }}
+    {{ c("calendar") }}
+</div>
+{{ c("health") }}
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("What was added", _("What was added"), _("Files imported into the library in the selected period.")) }}
+{{ c("numbers") }}
+{{ c("by_day") }}
+<div class="grid-2 align-top">
+    {{ c("when") }}
+    {{ c("best_days") }}
+</div>
+{{ c("largest") }}
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Speed", _("Speed"), _("How long it takes until a file is in the library.")) }}
+<div class="grid-2 align-top">
+    {{ c("downloads") }}
+    {{ c("after_release") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Six small tables, three side by side (two and then one on a        #}
+{# narrower screen - the grid wraps by itself).                       #}
+{{ page_section("Sources and quality", _("Sources and quality"), _("Where the imported files came from. The share is of the number of imported files, the size is their total.")) }}
+<div class="grid-2 align-top">
+    {{ c("indexers") }}
+    {{ c("groups") }}
+    {{ c("clients") }}
+</div>
+<div class="grid-2 align-top">
+    {{ c("protocols") }}
+    {{ c("qualities") }}
+    {{ c("resolutions") }}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{{ page_section("Upgrades", _("Upgrades"), _("An upgrade is an import of a better version in place of a file that was already in the library.")) }}
+{{ c("upgrades") }}
+<div class="grid-2 align-top">
+    {{ c("how_all") }}
+    {{ c("how_upgrades") }}
+</div>
+<div class="grid-2 align-top">
+    {{ c("transitions") }}
+    {{ c("upgraded") }}
+</div>
+
+{# One window for the whole table of any card (whole_table_button). #}
+{{ table_window() }}
+{% endblock %}

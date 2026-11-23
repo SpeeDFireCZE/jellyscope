@@ -1,51 +1,51 @@
-{%- from "_macros.html" import hlava -%}
+{%- from "_macros.html" import head -%}
 <!doctype html>
-{# Přihlášení kódem (Quick Connect).
+{# Sign-in by a code (Quick Connect).
 
-   Na stránce je jen kód. Tajemství, kterým se přihlášení dokončí, leží
-   v relaci na serveru - do prohlížeče se nedostane, takže se nedá ukrást
-   ani z otevřené stránky. Kód sám o sobě nikoho nikam nepustí: dokud ho
-   člověk nepotvrdí ve svém Jellyfinu, je to šest číslic.
+   The page holds only the code. The secret that finishes the sign-in lies
+   in the session on the server - it never reaches the browser, so it cannot be stolen
+   even from an open page. The code alone lets nobody in: until
+   the person confirms it in their Jellyfin, it is six digits.
 
-   Stránka se sama ptá, jestli už potvrzení přišlo. Když skript
-   neproběhne, je tu tlačítko „Zkusit hned" - jen se musí kliknout. #}
-{#- Sezónní výzdoba (viz udalosti.py); bez účtu se vždy hýbe. -#}
-{%- set svatek = udalost() %}
+   The page asks by itself whether the confirmation came. When the script
+   does not run, there is the button "Check now" - it just has to be clicked. #}
+{#- Seasonal decoration (see seasonal.py); without an account it always moves. -#}
+{%- set holiday = seasonal_event() %}
 <html lang="{{ ui_language | default('cs') }}"
-      {%- if svatek %} data-udalost="{{ svatek }}" data-udalost-pohyb="1"{% endif %}>
+      {%- if holiday %} data-event="{{ holiday }}" data-event-motion="1"{% endif %}>
 <head>
-    {{ hlava(_("Přihlášení kódem")) }}
-    {% include "_udalost_hlava.html" %}
+    {{ head(_("Signing in with a code")) }}
+    {% include "_event_head.html" %}
 </head>
 <body>
 <div class="login-page">
     <div class="login-box">
         <div class="brand" style="margin-bottom:20px; padding:0">
-            {% include "_znacka.html" %}
-            {%- if svatek %}{% include "_udalost_hra.html" %}{% endif %}
+            {% include "_brand.html" %}
+            {%- if holiday %}{% include "_event_game.html" %}{% endif %}
         </div>
 
-        <h2 style="margin:0 0 6px; font-size:17px">{{ _("Přihlášení kódem") }}</h2>
+        <h2 style="margin:0 0 6px; font-size:17px">{{ _("Signing in with a code") }}</h2>
         <p class="hint" style="margin-top:0">
-            {{ _("Otevři si Jellyfin, kde už jsi přihlášený, a v nastavení účtu zadej tenhle kód (v Jellyfinu se tomu říká Quick Connect).") }}
+            {{ _("Open a Jellyfin you are already signed in to and enter this code in your account settings (Jellyfin calls it Quick Connect).") }}
         </p>
 
-        <div class="quick-kod">{{ kod }}</div>
+        <div class="quick-code">{{ code_value }}</div>
 
-        <p class="hint" id="quick-stav" style="text-align:center">
-            {{ _("Čekám na potvrzení…") }}
+        <p class="hint" id="quick-state" style="text-align:center">
+            {{ _("Waiting for approval…") }}
         </p>
 
         <div class="btn-row" style="margin-top:12px">
-            <a class="btn" href="/login">{{ _("Zpátky na přihlášení") }}</a>
-            <button class="btn primary" type="button" id="quick-ted">
-                {{ _("Zkusit hned") }}
+            <a class="btn" href="/login">{{ _("Back to sign-in") }}</a>
+            <button class="btn primary" type="button" id="quick-now">
+                {{ _("Check now") }}
             </button>
         </div>
     </div>
 </div>
 
-<script type="application/json" id="texty-js">{{ {"kod_neplati": _("Kód už neplatí. Zkus to znovu.")} | tojson }}</script>
-<script src="/static/js/rychle-prihlaseni.js?v={{ asset_version }}" defer></script>
+<script type="application/json" id="texts-js">{{ {"codeExpired": _("The code is no longer valid. Try again.")} | tojson }}</script>
+<script src="/static/js/quick-login.js?v={{ asset_version }}" defer></script>
 </body>
 </html>
