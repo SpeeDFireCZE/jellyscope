@@ -16,6 +16,8 @@ Disks get their own names and a forecast each, the *Arr pages load fast and keep
 
 **Before you upgrade:** `free_bytes` in `GET /api/v1/library` is now the free space of all the library's disks together, not of one disk - a widget that shows it gets a bigger number. The *Arr missing and cutoff counts show "not counted yet" until the *Arr sync task first runs (within an hour, or Run now in Tasks).
 
+**Coming from 1.8.x:** the first start converts the database to English names; a backup is kept for 30 days and 1.8.x cannot open the converted database. Read the 1.9.0 notes first: https://github.com/SpeeDFireCZE/jellyscope/releases/tag/1.9.0
+
 ### ✨ Features
 
 - Rename a physical disk in its window on the Disks card
