@@ -6,7 +6,7 @@
 # Needs Python 3.11 or newer - Starlette's floor since 1.8 (FastAPI's own
 # is 3.10), and Python 3.10 gets no security fixes after October 2026.
 
-fastapi==0.162.7           # web framework - routing, validation, async
+fastapi==0.165.0           # web framework - routing, validation, async
 starlette==1.10.0          # what FastAPI is built on: routing, sessions,
                            # static files, multipart. Pinned explicitly even
                            # though FastAPI pulls it in, because the security
@@ -19,7 +19,7 @@ jinja2==3.1.6              # templating - turns HTML templates into pages
                            # (3.1.6 fixes CVE-2025-27516; Jellyscope does not
                            #  run templates in a sandbox, so it was a formality)
 itsdangerous==2.2.0        # signs the login cookie
-python-multipart==0.0.33   # reads HTML form data (POST)
+python-multipart==0.0.34   # reads HTML form data (POST)
 tzdata==2026.6             # time-zone database for the "Time zone" setting.
                            # Linux has one of its own and Python uses that
                            # first; Windows and minimal container images
@@ -27,7 +27,7 @@ tzdata==2026.6             # time-zone database for the "Time zone" setting.
                            # is "unknown": Settings refuses a valid name and
                            # the charts silently fall back to the system
                            # clock. Small, pure Python, no build step.
-maxminddb==3.2.0           # reads the GeoLite2 file for the map on the
+maxminddb==3.3.0           # reads the GeoLite2 file for the map on the
                            # Network page. Small and offline - it opens a
                            # local file, it never asks the network. Used to
                            # be optional, which meant the map stayed empty
