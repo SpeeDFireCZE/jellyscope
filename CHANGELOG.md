@@ -10,6 +10,12 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## Unreleased
+
+### 🐛 Fixes
+
+- Security: Log only the names of a message's values when filling it fails
+
 ## 1.9.2
 
 A security and reliability pass over the whole app, cards that refresh themselves on an open page, and how available and reliable your indexers are.

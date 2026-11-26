@@ -121,6 +121,27 @@ request = FakeRequest()
 web._flash(request, "Něco s {chybnou} značkou", "info", jina=1)
 check("flash" in request.session, "a typo in a placeholder does not throw the message away")
 
+# The rescue logs which values came, not what they hold: a value can be a text from another service (an error of the
+# connection test) and that has no place in the log (code scanning, py/clear-text-logging-sensitive-data).
+import logging  # noqa: E402
+
+class _Lines(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(record.getMessage())
+
+lines = _Lines()
+logging.getLogger("jellyscope").addHandler(lines)
+request = FakeRequest()
+web._flash(request, "Failed: {cause}", "error", reason="token=S3cretValue1234")
+logging.getLogger("jellyscope").removeHandler(lines)
+said = [line for line in lines.lines if "could not fill message" in line]
+check(len(said) == 1 and "S3cretValue1234" not in said[0] and "reason" in said[0],
+      f"a message that cannot be filled logs the names of its values, never the values ({said})")
+
 
 print()
 print("--- every message has an English counterpart ---")

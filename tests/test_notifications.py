@@ -586,6 +586,7 @@ def starttls_server(cert: Path, key: Path) -> tuple[int, list[str], threading.Th
             connection.recv(1024)                                   # STARTTLS
             connection.sendall(b"220 ready\r\n")
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2          # even the test's server offers no old TLS
             context.load_cert_chain(cert, key)
             try:
                 encrypted = context.wrap_socket(connection, server_side=True)

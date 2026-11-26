@@ -682,9 +682,10 @@ def _flash(request: Request, message: str, level: str = "info", *, translated: b
     except (KeyError, IndexError, ValueError):
         # The rescue has to be utterly dumb: the raw template is returned.
         # Trying to fill it in again here would fail on the same thing -
-        # and bring the page down over a message about a result.
+        # and bring the page down over a message about a result. The log gets the names
+        # of the values, not what they hold: a value can be a text from another service.
         log.warning("could not fill message %r with values %r",
-                    message, values)
+                    message, sorted(values))
         text = message
     request.session["flash"] = {"message": text, "level": level}
 
