@@ -23,27 +23,27 @@
 # tests/test_deploy.py checks that every package the requirements pull in
 # is here, at the version installed.
 
-annotated-doc==0.0.5        # FastAPI
+annotated-doc==0.0.7        # FastAPI
 annotated-types==0.8.0      # pydantic
-anyio==4.15.1               # FastAPI, Starlette, httpx
-certifi==2026.10.23         # httpx - the certificate authorities it trusts
-click==8.5.0                # uvicorn
+anyio==4.16.0               # FastAPI, Starlette, httpx
+certifi==2026.11.20         # httpx - the certificate authorities it trusts
+click==8.5.1                # uvicorn
 h11==0.16.0                 # uvicorn, httpcore - reads HTTP/1.1
 httpcore==1.0.9             # httpx
 httptools==0.9.0            # uvicorn[standard] - the fast HTTP parser
 idna==3.20                  # httpx, anyio
 MarkupSafe==3.0.4           # Jinja2 - the escaping of the pages
 opentelemetry-api==1.45.2   # FastAPI (tracing, which Jellyscope does not switch on)
-pydantic==2.14.1            # FastAPI
-pydantic_core==2.50.1       # pydantic
+pydantic==2.14.4            # FastAPI
+pydantic_core==2.50.5       # pydantic
 python-dotenv==1.2.4        # uvicorn[standard]
-PyYAML==6.0.3               # uvicorn[standard]
-typing-inspection==0.4.4    # FastAPI, pydantic
+PyYAML==6.0.4               # uvicorn[standard]
+typing-inspection==0.4.5    # FastAPI, pydantic
 typing_extensions==4.16.0   # FastAPI, pydantic, anyio
 uvloop==0.23.0              # uvicorn[standard], not on Windows
 watchfiles==1.3.0           # uvicorn[standard]
-websockets==17.3            # uvicorn[standard]
+websockets==17.4            # uvicorn[standard]
 
 # requirements-postgres.txt - the PostgreSQL driver
-psycopg-binary==3.3.6       # psycopg[binary], always the same version as psycopg
+psycopg-binary==3.3.9       # psycopg[binary], always the same version as psycopg
 psycopg-pool==3.3.3         # psycopg[pool]

@@ -1583,7 +1583,12 @@ def _restore_postgres(config: Any, source: Path) -> None:
         db.close_pool()
         return
 
-    # The output of pg_dump - that one needs psql.
+    # The output of pg_dump. psql below drops the tables and replays the file in one transaction - a file with no
+    # statements (cut off, or only named like a backup) would commit the drops and restore nothing. pg_dump ends its
+    # plain output with this line (followed by "\unrestrict ..." since PostgreSQL 17.6), so a file without it is
+    # refused before anything is dropped.
+    if not _pg_dump_is_whole(source):
+        raise BackupError("The backup is incomplete - its writing was cut off before the end")
     tool = _find_psql()
     if not tool:
         raise BackupError(
@@ -1613,6 +1618,18 @@ def _restore_postgres(config: Any, source: Path) -> None:
             raise BackupError("psql reported an error: {detail}", detail=detail)
         raise BackupError("psql ended with code {code}.", code=result.returncode)
     db.close_pool()
+
+
+PG_DUMP_END = "-- PostgreSQL database dump complete"
+
+
+def _pg_dump_is_whole(source: Path) -> bool:
+    """Whether a pg_dump file reached its end: the closing comment pg_dump writes last, within its final lines."""
+    with source.open("rb") as file:
+        file.seek(0, os.SEEK_END)
+        file.seek(max(0, file.tell() - 4096))
+        tail = file.read().decode("utf-8", errors="replace")
+    return PG_DUMP_END in tail
 
 
 def _find_psql() -> str | None:

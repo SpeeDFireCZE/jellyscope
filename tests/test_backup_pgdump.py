@@ -241,6 +241,55 @@ check(pg_size > 0, f"the size is returned ({pg_size} B)")
 
 
 print()
+print("--- a pg_dump backup that is not whole is refused before psql drops anything ---")
+# Found 26. 11. 2026: psql drops Jellyscope's tables and replays the file in ONE transaction - but a file with no
+# statements (a dump cut off, or anything named like a backup) commits the drops and restores nothing: the data is
+# gone. pg_dump ends its plain output with "-- PostgreSQL database dump complete" (then "\unrestrict ..."); a file
+# without that line is refused and psql never runs. The own export has its own check (COMMIT; at the end).
+psql_calls: list[list[str]] = []
+
+
+def _psql_run(command, **kwargs):  # type: ignore[no-untyped-def]
+    psql_calls.append(list(command))
+
+    class Result:
+        returncode = 0
+        stdout = b""
+        stderr = b""
+
+    return Result()
+
+
+WHOLE_DUMP = ("--\n-- PostgreSQL database dump\n--\n\n\\restrict abc\n\nSET statement_timeout = 0;\n"
+              "CREATE TABLE public.items (id text);\n\n--\n-- PostgreSQL database dump complete\n--\n\n\\unrestrict abc\n")
+original_find_psql, original_drops = tasks._find_psql, tasks._jellyscope_drops
+_subprocess.run = _psql_run                             # type: ignore[assignment]
+tasks._find_psql = lambda: "/usr/bin/psql"             # type: ignore[assignment]
+tasks._jellyscope_drops = lambda conn: ["DROP TABLE IF EXISTS items CASCADE"]  # type: ignore[assignment]
+try:
+    for label, text in (("a file with no statements", "-- dump\n"),
+                        ("a pg_dump cut off before its end", WHOLE_DUMP.split("--\n-- PostgreSQL database dump complete")[0])):
+        dump_file = Path(_tmp) / f"jellyscope-20260101-00000{len(psql_calls)}.sql"
+        dump_file.write_text(text, encoding="utf-8")
+        psql_calls.clear()
+        try:
+            tasks._restore_postgres(_Config(), dump_file)
+            refused = False
+        except tasks.BackupError:
+            refused = True
+        check(refused and not psql_calls, f"{label}: refused, psql does not run and drops nothing ({refused}, {len(psql_calls)} runs)")
+    whole_file = Path(_tmp) / "jellyscope-20260101-000009.sql"
+    whole_file.write_text(WHOLE_DUMP, encoding="utf-8")
+    psql_calls.clear()
+    tasks._restore_postgres(_Config(), whole_file)
+    check(len(psql_calls) == 1 and "--single-transaction" in psql_calls[0],
+          "a whole pg_dump still goes to psql, in one transaction")
+finally:
+    _subprocess.run = _original_run                     # type: ignore[assignment]
+    tasks._find_psql, tasks._jellyscope_drops = original_find_psql, original_drops
+
+
+print()
 print("--- the progress indicator with the file analysis ---")
 # The indicator rose three times for one file (after taking the semaphore,
 # after the analysis and after the write), so it got up to 300 % and the interface

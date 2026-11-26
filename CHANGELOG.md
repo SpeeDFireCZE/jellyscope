@@ -15,6 +15,11 @@ restart.
 ### 🐛 Fixes
 
 - Security: Log only the names of a message's values when filling it fails
+- Refuse to restore a `pg_dump` backup that was cut off, instead of emptying the database
+
+### 🔧 Changes
+
+- Update FastAPI to 0.165.0, psycopg to 3.3.9 and twelve other dependencies
 
 ## 1.9.2
 
