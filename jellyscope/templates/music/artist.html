@@ -2,7 +2,7 @@
 
    Data: stats.music_artist (web/music/artist.py adds the cover addresses and links).
    The block "Who listened" only with the area "...including who listened" - without it
-   the route does not send the names at all (`d.posluchaci` is None). A track without an album
+   the route does not send the names at all (`d.listeners` is None). A track without an album
    is just text: a track has no page of its own. #}
 {% extends "base.html" %}
 {% from "_macros.html" import tile, poster, link, period_filter, row_class, whole_table_button, table_window with context %}

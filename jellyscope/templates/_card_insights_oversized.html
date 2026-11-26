@@ -23,7 +23,7 @@
                     {% call link("/item/" ~ row.id) %}{{ row.label }}{% endcall %}
                 </td>
                 <td class="num strong">{{ row.size_bytes | bytes }}</td>
-                <td class="num">{{ '%.1f' | format(row.gb_per_hour or 0) | replace('.', ',') }}</td>
+                <td class="num">{{ row.gb_per_hour | decimal(1) }}</td>
                 <td class="num muted">{{ row.plays | number }}</td>
             </tr>
             {% endfor %}

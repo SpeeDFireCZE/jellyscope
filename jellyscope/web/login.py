@@ -3,6 +3,8 @@
 A part of the web package (see jellyscope/web/__init__.py)."""
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 from fastapi import APIRouter, Form, Request
@@ -10,9 +12,17 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import access, accounts, db, i18n, navigation
 from ..jellyfin import JellyfinClient, JellyfinError, QUICK_TIMEOUT
-from .base import _flash, current_account, log, start_session, templates
+from .base import (_flash, current_account, end_session, forget_secret, hold_secret, log, peek_secret,
+                   start_session, templates)
 
 router = APIRouter()
+
+# Jellyfin forgets a Quick Connect code after ten minutes; the status ends then, whatever it answers.
+QUICK_CODE_LIFETIME = 600
+# The status asks Jellyfin at most once a second per code (the page asks every two seconds), so a
+# replayed cookie cannot relay requests to Jellyfin as fast as it likes. The handle of a code -> when it last asked.
+QUICK_POLL_SECONDS = 1.0
+_quick_polls: dict[str, float] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -109,8 +119,13 @@ async def _sign_in_through_jellyfin(name: str, password: str) -> dict[str, Any] 
     server does not respond" would tell a stranger there is a Jellyfin here,
     and above all would turn the sign-in page into a tool for probing whether
     somebody else's network is reachable. It goes to the log.
+
+    An empty password is refused before Jellyfin is asked. Jellyfin lets a user without a
+    password in with an empty one, and the question comes from this server's address, so
+    Jellyfin's limits on remote access do not hold here: a profile without a password would
+    open Jellyscope to anybody who knows its name. Such a user signs in with a code.
     """
-    if not access.login_enabled():
+    if not access.login_enabled() or not password:
         return None
 
     url, api_key = db.jellyfin_connection()
@@ -133,6 +148,12 @@ async def _sign_in_through_jellyfin(name: str, password: str) -> dict[str, Any] 
     return accounts.from_jellyfin(details)
 
 
+def _brake_name(method: str, username: str) -> str:
+    """The name the brake counts an attempt under: with the door. A local account and a user of Jellyfin may share
+    a name - a success at one door must not forget the guesses at the other."""
+    return f"{'jellyfin' if method == 'jellyfin' else 'local'}:{username}"
+
+
 @router.post("/login")
 async def login_submit(
     request: Request, username: str = Form(""), password: str = Form(""),
@@ -151,15 +172,23 @@ async def login_submit(
             status_code=429,
         )
 
+    # Counted before the password is checked and with nothing awaited since the check above,
+    # so requests sent at once cannot all pass it while the first ones wait for the answer.
+    # A success forgets the attempt again.
+    block = accounts.begin_attempt(address, _brake_name(method, username))
+
     # The door a person chose is the one knocked on. So the password of a local
     # account never leaves for Jellyfin and a password from Jellyfin is not compared
     # with the local hashes.
-    if method == "jellyfin":
+    if block:
+        account = None
+    elif method == "jellyfin":
         account = await _sign_in_through_jellyfin(username, password)
     else:
-        account = accounts.authenticate(username, password)
+        # In a thread: the hash takes a quarter of a second and would hold up every other request.
+        account = await asyncio.to_thread(accounts.authenticate, username, password)
     if account is None:
-        block = accounts.count_failure(address)
+        block = block or accounts.attempt_failed(address)
         if block:
             log.warning("sign-in from %s blocked (level %s, %s)", address,
                         block["level"],
@@ -172,6 +201,9 @@ async def login_submit(
                  "jellyfin_login": access.login_enabled()},
                 status_code=429,
             )
+        # The door from a fixed pair, not the form's text, and no name: a password typed
+        # into the name field must not end up in the log.
+        log.warning("sign-in failed from %s (%s)", address, "jellyfin" if method == "jellyfin" else "local")
         # On purpose it is not said whether the name or the password was wrong. Were
         # they told apart, the list of accounts could be found out this way.
         return templates.TemplateResponse(
@@ -182,7 +214,7 @@ async def login_submit(
             status_code=401,
         )
 
-    accounts.forget_failures(address)
+    accounts.forget_failures(address, _brake_name(method, username))
 
     start_session(request, account)
     return RedirectResponse(_landing_after_login(account), status_code=303)
@@ -201,10 +233,11 @@ def _landing_after_login(account: dict[str, Any]) -> str:
 async def login_quick(request: Request):
     """Starts signing in with a code. No password is entered anywhere.
 
-    The secret the sign-in is finished with stays **in the session on the
-    server**. Only a six-digit code goes to the browser, and that by itself lets
-    nobody in anywhere - until a person confirms it in their Jellyfin where they
-    are signed in already, it is just a number.
+    The secret the sign-in is finished with stays **in the server's memory**
+    (base.hold_secret) - the session cookie carries only a handle to it, as the
+    cookie is signed, not encrypted. Only a six-digit code goes to the browser,
+    and that by itself lets nobody in anywhere - until a person confirms it in
+    their Jellyfin where they are signed in already, it is just a number.
     """
     if current_account(request) is not None:
         return RedirectResponse("/", status_code=303)
@@ -214,9 +247,9 @@ async def login_quick(request: Request):
     # The same brake as with a password. Without it an address blocked for guessing
     # passwords would pass through this second gate - and anybody could keep
     # creating codes in Jellyfin. Every start counts as an attempt: a code nobody
-    # confirms is an unfinished attempt. A successful sign-in clears the counter
-    # (see login_quick_status). Eight codes a minute from one address is not a
-    # person who wants to sign in.
+    # confirms is an unfinished attempt. A successful sign-in with a code forgets
+    # these starts, not the wrong passwords (see login_quick_status). Eight codes
+    # a minute from one address is not a person who wants to sign in.
     address = _client_address(request)
     remaining = accounts.block_remaining(address)
     if remaining:
@@ -255,8 +288,12 @@ async def login_quick(request: Request):
     if not started:
         return _login_error(request, "Quick Connect could not be started.")
 
-    # The secret goes into the session, not into the page: whoever has it signs in with it.
-    request.session["quick_secret"] = started["secret"]
+    # The secret goes neither into the page nor into the readable cookie: whoever has it signs in with it. It waits
+    # in the server's memory as long as Jellyfin keeps the code; the session carries its handle. A code started
+    # before in this browser ends.
+    forget_secret(request.session.get("quick_handle"))
+    request.session["quick_handle"] = hold_secret(started["secret"], QUICK_CODE_LIFETIME)
+    request.session["quick_started"] = int(time.time())
     return templates.TemplateResponse(
         request, "login_quick.html", {"code_value": started["code"]})
 
@@ -269,14 +306,24 @@ async def login_quick_status(request: Request):
     "not yet" or "done": more would tell what accounts there are on the
     server.
     """
-    secret = str(request.session.get("quick_secret") or "")
+    # An unknown handle (the app restarted, the code ended) ends the code like any other end: it starts again.
+    handle = request.session.get("quick_handle")
+    secret = peek_secret(handle) or ""
     if not secret or not access.login_enabled():
-        return {"done": False, "end": True}
+        return _end_quick(request)
+    started = request.session.get("quick_started")
+    if not isinstance(started, int) or time.time() - started > QUICK_CODE_LIFETIME:
+        return _end_quick(request)
+    if not _may_ask_jellyfin(handle):
+        return {"done": False}
 
     url, api_key = db.jellyfin_connection()
     try:
         async with JellyfinClient(url, api_key, timeout=QUICK_TIMEOUT) as jf:
-            if not await jf.quick_connect_confirmed(secret):
+            confirmed = await jf.quick_connect_confirmed(secret)
+            if confirmed is None:
+                return _end_quick(request)
+            if not confirmed:
                 return {"done": False}
             details = await jf.quick_connect_finish(secret)
     except JellyfinError as error:
@@ -284,14 +331,36 @@ async def login_quick_status(request: Request):
         return {"done": False}
 
     if not details or details.get("is_disabled"):
-        request.session.pop("quick_secret", None)
-        return {"done": False, "end": True}
+        return _end_quick(request)
 
+    forget_secret(handle)     # a copy of the cookie signs nobody in again
     account = accounts.from_jellyfin(details)
     start_session(request, account)
-    accounts.forget_failures(_client_address(request))
+    accounts.forget_failures(_client_address(request))     # the starts of codes, not wrong passwords
     log.info("signed in through Quick Connect: %s", details.get("name"))
     return {"done": True}
+
+
+def _end_quick(request: Request) -> dict[str, bool]:
+    """The code is no longer valid: the secret leaves the server's memory, its handle the session, and the page says so.
+
+    An old copy of the cookie carries the handle only, and that leads nowhere now.
+    """
+    forget_secret(request.session.pop("quick_handle", None))
+    request.session.pop("quick_started", None)
+    return {"done": False, "end": True}
+
+
+def _may_ask_jellyfin(handle: str) -> bool:
+    """May the status ask Jellyfin about this code now? At most once in QUICK_POLL_SECONDS."""
+    now = time.monotonic()
+    if now - _quick_polls.get(handle, now - QUICK_POLL_SECONDS) < QUICK_POLL_SECONDS:
+        return False
+    _quick_polls.pop(handle, None)
+    _quick_polls[handle] = now
+    while len(_quick_polls) > 1000:        # the oldest codes first, so memory stays small
+        del _quick_polls[next(iter(_quick_polls))]
+    return True
 
 
 def _login_error(request: Request, message: str):
@@ -305,7 +374,7 @@ def _login_error(request: Request, message: str):
 
 @router.post("/logout")
 def logout(request: Request):
-    request.session.clear()
+    end_session(request)
     return RedirectResponse("/login", status_code=303)
 
 

@@ -72,9 +72,11 @@
 </div>
 
 {# ------------------------------------------------------------------ #}
-{# Six small tables, three side by side (two and then one on a        #}
-{# narrower screen - the grid wraps by itself).                       #}
+{# The indexers' reliability over the whole width, then six small     #}
+{# tables, two side by side (one under the other on a narrow screen - #}
+{# the grid wraps by itself).                                         #}
 {{ page_section("Sources and quality", _("Sources and quality"), _("Where the imported files came from. The share is of the number of imported files, the size is their total.")) }}
+{{ c("indexer_reliability") }}
 <div class="grid-2 align-top">
     {{ c("indexers") }}
     {{ c("groups") }}

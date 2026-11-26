@@ -362,6 +362,27 @@ check(first == 0 and row("music_track", "Jiná").get("missing") == 1 and row("mu
       and row("music_track", "First Light").get("missing") == 0,
       "one of the music libraries vanished: after two runs its albums and tracks are missing, the others stay")
 
+# The daily full pass in a run Jellyfin left one of the libraries out (once - it may be starting): that library
+# was not read, so its albums, tracks and artist are not marked missing. Only _gone_libraries decides, after two
+# runs in a row.
+db.set_setting(sync.GONE_LIBRARIES_KEY, "")
+with db.connect() as conn:
+    conn.execute("INSERT INTO music_artist (id, name, synced_at) VALUES ('druhy-interpret', 'Druhý interpret', ?)",
+                 (db.utcnow(),))
+    conn.execute("INSERT INTO music_album (id, name, artist_id, library_id, synced_at) VALUES ('druhe-album', 'Druhé album',"
+                 " 'druhy-interpret', 'druha-knihovna', ?)", (db.utcnow(),))
+    conn.execute("INSERT INTO music_track (id, name, album_id, artist_id, library_id, synced_at) VALUES ('druha-skladba',"
+                 " 'Druhá', 'druhe-album', 'druhy-interpret', 'druha-knihovna', ?)", (db.utcnow(),))
+    conn.commit()
+run_sync(fake_jellyfin(), full=True)
+check(row("music_track", "Druhá").get("missing") == 0 and row("music_album", "Druhé album").get("missing") == 0
+      and row("music_artist", "Druhý interpret").get("missing") == 0,
+      "a full pass without one of the libraries: its tracks, album and artist are not missing after one run")
+run_sync(fake_jellyfin(), full=True)
+check(row("music_track", "Druhá").get("missing") == 1 and row("music_album", "Druhé album").get("missing") == 1
+      and row("music_artist", "Druhý interpret").get("missing") == 1 and row("music_track", "First Light").get("missing") == 0,
+      "left out of two runs in a row: they are missing, the others stay")
+
 # A MusicBrainz id is kept only for artists (their list does not have it). Albums and tracks have their
 # own: when somebody deletes it in Jellyfin (a fixed tag), it goes here too.
 import _music  # noqa: E402

@@ -187,7 +187,15 @@ check("Není tu žádný místní správce" not in html, "no warning while a loc
 with db.connect() as conn:       # an older installation: its only local administrator was deleted long ago
     conn.execute("UPDATE accounts SET jellyfin_user_id = 'ffff0000eeee1111dddd2222cccc3333' WHERE id = ?", (admin_id,))
     conn.commit()
-check("Není tu žádný místní správce" in client.get("/settings?section=accounts").text,
+# Made an account from Jellyfin under its session, the account has another session fingerprint and that session
+# ended (accounts.session_fingerprint) - the page is read in a session signed the way Starlette signs it, with
+# a record on the server (a cookie without one opens nothing).
+sys.path.insert(0, str(PROJECT / "tests"))
+from _apps import session_data, signed_session  # noqa: E402
+
+as_jellyfin = TestClient(app)
+as_jellyfin.cookies.set("jellyscope_session", signed_session(session_data(admin_id)))
+check("Není tu žádný místní správce" in as_jellyfin.get("/settings?section=accounts").text,
       "without a local administrator Settings → Accounts warns")
 with db.connect() as conn:
     conn.execute("UPDATE accounts SET jellyfin_user_id = NULL WHERE id = ?", (admin_id,))
@@ -208,6 +216,57 @@ question = re.search(r'data-confirm="(.*?)"', reader_row, re.S)
 question_text = _html.unescape(question.group(1)) if question else ""
 check("ctenar2" in question_text and "nejde vzít zpět" in question_text,
       f"with a question that says what will happen ({question_text[:60]!r})")
+
+print()
+print("--- two changes at once still leave one local administrator ---")
+# Two administrators demote (or delete) each other at the same moment: both checks used to see two local
+# administrators and both writes passed - nobody could open Settings. The barrier lets both checks run
+# before either change is written, the worst order the thread pool of the routes can produce.
+import threading  # noqa: E402
+
+real_local_admin_count = accounts.local_admin_count
+
+
+def at_once(action, first: int, second: int) -> list[str]:
+    barrier = threading.Barrier(2, timeout=5)
+
+    def counted() -> int:
+        count = real_local_admin_count()
+        try:
+            barrier.wait()
+        except threading.BrokenBarrierError:
+            pass
+        return count
+
+    refusals: list[str] = []
+
+    def run(account_id: int) -> None:
+        refusals.append(refused(action, account_id) if action is accounts.delete
+                        else refused(action, account_id, False))
+
+    accounts.local_admin_count = counted
+    try:
+        threads = [threading.Thread(target=run, args=(account_id,)) for account_id in (first, second)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30)
+    finally:
+        accounts.local_admin_count = real_local_admin_count
+    return refusals
+
+
+race = accounts.create("spravce4", PASSWORD, is_admin=True)
+check(accounts.local_admin_count() == 2, "two local administrators before the race")
+refusals = at_once(accounts.set_admin, admin_id, race)
+check(accounts.local_admin_count() == 1 and sum("last local administrator" in r for r in refusals) == 1,
+      f"two demotions at once: one is refused, one local administrator stays ({refusals})")
+for account_id in (admin_id, race):
+    accounts.set_admin(account_id, True)
+check(accounts.local_admin_count() == 2, "both local administrators again")
+refusals = at_once(accounts.delete, admin_id, race)
+check(accounts.local_admin_count() == 1 and sum("last local administrator" in r for r in refusals) == 1,
+      f"two deletions at once: one is refused, one local administrator stays ({refusals})")
 
 
 print()

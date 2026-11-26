@@ -9,7 +9,8 @@ the identity.
 It all stands on one difference the test watches: what goes to the browser is
 **the code**, what stays on the server is **the secret**. The code by itself lets nobody
 anywhere - without the confirmation in Jellyfin it is six digits. The secret lets one in,
-and that is why it must never appear on the page.
+and that is why it must never appear on the page nor in the session cookie (signed, not
+encrypted: it waits in the server's memory, web/base.py hold_secret).
 
 Run:
     .venv/bin/python tests/test_quick_connect.py
@@ -23,6 +24,7 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = _tmp
@@ -31,10 +33,15 @@ os.environ["SECRET_KEY"] = "testovaci-podpisovy-klic-dostatecne-dlouhy"
 os.environ["JELLYFIN_URL"] = "http://jellyfin.test"
 os.environ["JELLYFIN_API_KEY"] = "test-key"
 
+import json  # noqa: E402
+
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from _apps import read_session  # noqa: E402
 from jellyscope import access, accounts, db, jellyfin, web  # noqa: E402
+from jellyscope.web import base as web_base  # noqa: E402
+from jellyscope.web import login as web_login  # noqa: E402
 
 failures = 0
 
@@ -58,7 +65,7 @@ db.forget_settings()
 accounts.create("admin", "longpassword", is_admin=True)
 
 # The state of the pretend server: what it answers and what it has already got from us.
-state = {"enabled": True, "confirmed": False}
+state = {"enabled": True, "confirmed": False, "known": True}
 REQUESTS: list[httpx.Request] = []
 REVOKED: list[str] = []
 
@@ -72,6 +79,9 @@ def server(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"Authenticated": False,
                                          "Secret": SECRET, "Code": CODE})
     if path == "/QuickConnect/Connect":
+        if not state["known"]:
+            # Jellyfin forgets a code after ten minutes; an unknown secret is a 404 there.
+            return httpx.Response(404)
         return httpx.Response(200, json={"Authenticated": state["confirmed"]})
     if path == "/Users/AuthenticateWithQuickConnect":
         return httpx.Response(200, json={
@@ -114,7 +124,9 @@ check(response.status_code == 200, f"the dialog with the code opened "
 check(CODE in response.text, "and the code is seen in it")
 check(SECRET not in response.text,
       "the secret is NOT on the page - with it anybody would sign in")
-check(SECRET not in str(response.cookies), "nor in a cookie")
+# The session cookie is signed, not encrypted: whoever sees it reads it - so it is read here without the key (audit SA-11).
+check(SECRET not in json.dumps(read_session(client)),
+      f"nor in the session cookie - it carries only a handle ({sorted(read_session(client))})")
 
 print()
 print("--- waiting for the confirmation ---")
@@ -134,6 +146,7 @@ with db.connect() as conn:
     conn.commit()
 
 state["confirmed"] = True
+web_login._quick_polls.clear()      # the status may ask Jellyfin once a second; this is the next second
 status_response = client.get("/login/quick/status")
 check(status_response.json() == {"done": True},
       f"after the confirmation they signed in ({status_response.json()})")
@@ -203,6 +216,88 @@ db.forget_settings()
 check(switched_off.get("/login/quick/status").json()
       == {"done": False, "end": True},
       "and a code in progress ends the moment the administrator switches the login off")
+
+print()
+print("--- a code Jellyfin forgot, an old code and a status asked too often ---")
+# The status answered "not yet" for ever once Jellyfin had forgotten the code: the page never said it expired, and
+# whoever had the cookie of one started code could make Jellyscope ask Jellyfin as fast as they liked (audit SA-13).
+db.set_setting(access.LOGIN_KEY, "1")
+db.forget_settings()
+
+
+def asked_status() -> int:
+    return len([z for z in REQUESTS if z.url.path == "/QuickConnect/Connect"])
+
+
+forgotten = TestClient(web.app)
+forgotten.post("/login/quick")
+forgotten_cookies = httpx.Cookies(forgotten.cookies)
+forgotten_handle = read_session(forgotten).get("quick_handle")
+state["known"], state["confirmed"] = False, False
+web_login._quick_polls.clear()      # a clean count: the status asks Jellyfin at most once a second per code
+before = asked_status()
+check(forgotten.get("/login/quick/status").json() == {"done": False, "end": True},
+      "a code Jellyfin no longer knows ends, so the page says it is no longer valid")
+check(forgotten.get("/login/quick/status").json() == {"done": False, "end": True} and asked_status() == before + 1,
+      "and the secret is dropped - nothing more is asked")
+replayed = TestClient(web.app)
+replayed.cookies = forgotten_cookies
+for _ in range(10):
+    replayed.get("/login/quick/status")
+check(asked_status() == before + 1, f"nor through an old copy of the cookie, within the second ({asked_status() - before})")
+state["known"] = True
+
+old_code = TestClient(web.app)
+old_code.post("/login/quick")
+lifetime = web_login.QUICK_CODE_LIFETIME
+web_login.QUICK_CODE_LIFETIME = -1
+before = asked_status()
+try:
+    answer = old_code.get("/login/quick/status").json()
+finally:
+    web_login.QUICK_CODE_LIFETIME = lifetime
+check(answer == {"done": False, "end": True} and asked_status() == before,
+      f"a code older than Jellyfin's lifetime ends without asking Jellyfin ({answer})")
+
+impatient = TestClient(web.app)
+impatient.post("/login/quick")
+web_login._quick_polls.clear()
+before = asked_status()
+answers = [impatient.get("/login/quick/status").json() for _ in range(30)]
+check(asked_status() - before == 1 and all(a == {"done": False} for a in answers),
+      f"30 questions in a row ask Jellyfin once - at most once a second ({asked_status() - before})")
+
+print()
+print("--- the secret lives on the server only as long as the code ---")
+# The secret is held in the server's memory under a handle (web/base.py hold_secret), and only until the code is
+# confirmed, refused or expires. A restart forgets it: a code in progress simply has to be started again.
+restarted = TestClient(web.app)
+restarted.post("/login/quick")
+handle = read_session(restarted).get("quick_handle")
+web_base._held_secrets.clear()          # what a restart of the app does to the memory
+before = asked_status()
+check(restarted.get("/login/quick/status").json() == {"done": False, "end": True} and asked_status() == before,
+      "after a restart the code ends without an error, nobody asks Jellyfin")
+check(handle and "quick_handle" not in read_session(restarted), "and the unknown handle left the session")
+check(forgotten_handle and web_base.peek_secret(forgotten_handle) is None,
+      "a code Jellyfin forgot took its secret out of the server's memory too")
+
+signed_in = TestClient(web.app)
+signed_in.post("/login/quick")
+handle = read_session(signed_in).get("quick_handle")
+copy_before = httpx.Cookies(signed_in.cookies)
+state["confirmed"] = True
+web_login._quick_polls.clear()
+check(signed_in.get("/login/quick/status").json() == {"done": True}, "a confirmed code signs in")
+check(web_base.peek_secret(handle) is None, "and its secret is forgotten at once")
+finished = len([z for z in REQUESTS if z.url.path == "/Users/AuthenticateWithQuickConnect"])
+web_login._quick_polls.clear()
+again = TestClient(web.app)
+again.cookies = copy_before
+check(again.get("/login/quick/status").json() == {"done": False, "end": True}
+      and len([z for z in REQUESTS if z.url.path == "/Users/AuthenticateWithQuickConnect"]) == finished,
+      "a copy of the cookie from before the sign-in signs nobody in a second time")
+state["confirmed"] = False
 
 print()
 print("--- the brake: codes cannot be started endlessly ---")

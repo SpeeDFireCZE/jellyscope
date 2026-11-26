@@ -3,7 +3,7 @@
 Part of the statistics package (see jellyscope/stats/__init__.py)."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, UTC
 from typing import Any
 
@@ -66,10 +66,22 @@ OLDEST_HISTORY = "2000-01-01 00:00:00"
 
 
 def period_of_days(days: int) -> Period:
-    """The last N days. The end is open - see END_OF_TIME."""
+    """The last N days: today and the N - 1 days before it, whole calendar days in the app's zone.
+
+    The days the chart by day draws, the History page filters and the API's `days=N` takes. The window used to be
+    N x 24 hours back from now, so the numbers above a chart counted the rest of the day before its first bar and
+    the bars added up to less than the headline (the owner's decision, 25. 11. 2026: count by whole days). The start
+    is the local midnight, converted to UTC only at the end - a day is not always 24 hours. The end is open - see
+    END_OF_TIME.
+    """
     day_count = max(1, int(days))
-    start = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=day_count)
-    return Period(since=start.strftime(db.TIME_FORMAT), until=END_OF_TIME, days=day_count)
+    zone = formatting.zone()
+    today = datetime.now(zone).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
+    first = today - timedelta(days=day_count - 1)
+    return Period(since=first.replace(tzinfo=zone).astimezone(UTC).strftime(db.TIME_FORMAT),
+                  until=END_OF_TIME, days=day_count,
+                  since_local=first.strftime(db.TIME_FORMAT),
+                  until_local=(today + timedelta(days=1)).strftime(db.TIME_FORMAT))
 
 
 def whole_history_period(first: str | None = None) -> Period:
@@ -137,12 +149,19 @@ def period_between(start_text: Any, end_text: Any) -> Period | None:
 
     start_time, _ = start
     end_time, end_is_date = end
+    zone = formatting.zone()
+    # Nothing is stored before OLDEST_HISTORY and nothing ahead of now. A wider window only adds work - every
+    # daily chart builds a point per day, and 2000..9000 is millions of them, replayed from the session on every
+    # page - and dates the calendar cannot shift or write back (31.12.9999 plus a day overflows, %Y does not pad
+    # a year below 1000). The end may reach the end of next year, so a whole year typed in ahead stays as it is.
+    start_time = max(start_time, datetime.strptime(OLDEST_HISTORY, db.TIME_FORMAT))
+    latest = datetime(datetime.now(zone).year + 2, 1, 1)
     if end_is_date:
-        end_time += timedelta(days=1)
+        end_time = min(end_time, latest - timedelta(days=1)) + timedelta(days=1)
+    end_time = min(end_time, latest)
     if end_time <= start_time:
         return None
 
-    zone = formatting.zone()
     def _utc(moment: datetime) -> str:
         return moment.replace(tzinfo=zone).astimezone(UTC).strftime(db.TIME_FORMAT)
 
@@ -189,6 +208,19 @@ def _as_period(spec: Any) -> Period:
     return spec if isinstance(spec, Period) else period_of_days(int(spec or 30))
 
 
+def _from_day_before(spec: Any) -> Period:
+    """The period from the local midnight of the day before its first day, the end as it is - the base of a growth.
+
+    A size measured at the end of each day (the library's and the disks' daily snapshots) grows over N days from the
+    end of the day before them: measured from the first day's own snapshot, what was added during that day fell out.
+    """
+    period = _as_period(spec)
+    zone = formatting.zone()
+    first = datetime.combine(_local_day(period.since_local, period.since), datetime.min.time()) - timedelta(days=1)
+    return replace(period, since=first.replace(tzinfo=zone).astimezone(UTC).strftime(db.TIME_FORMAT),
+                   since_local=first.strftime(db.TIME_FORMAT), days=period.days + 1)
+
+
 def _bounds(spec: Any) -> tuple[str, str]:
     """A pair for a query: (od, do). Unpacked into the parameters with a star."""
     period = _as_period(spec)
@@ -202,26 +234,39 @@ def previous_period(spec: Any) -> Period:
     out the same, for a stretch picked by dragging in a chart no more: a two-hour pick has `days == 1`, so it
     would be compared with a whole previous day - and every arrow "compared with the previous period" would
     show a drop that never happened.
+
+    "The last N days" hold only the part of today that has passed, so their previous window is the same span
+    shifted back by N days (the owner's decision, 25. 11. 2026): from the midnight N days before their first day
+    to this clock time N days ago. N whole days made every morning look like a drop.
     """
     period = _as_period(spec)
+    zone = formatting.zone()
+
+    def _utc(local: datetime) -> datetime:
+        return local.replace(tzinfo=zone).astimezone(UTC).replace(tzinfo=None)
+
     try:
         end = datetime.strptime(period.since, db.TIME_FORMAT)
-        # "The last N days" has an open end (END_OF_TIME), so the length cannot be measured from the bounds -
-        # there the count of days holds.
-        length = (timedelta(days=period.days) if period.relative
-                  else datetime.strptime(period.until, db.TIME_FORMAT) - end)
+        if period.relative and period.since_local:
+            # The open end (END_OF_TIME) has no length to measure: both ends are shifted by the count of days, in
+            # the zone - N x 24 hours in UTC would move them an hour off across a change of the clocks.
+            shift = timedelta(days=period.days)
+            start = _utc(datetime.strptime(period.since_local, db.TIME_FORMAT) - shift)
+            end = _utc(datetime.now(zone).replace(tzinfo=None, microsecond=0) - shift)
+        else:
+            length = (timedelta(days=period.days) if period.relative
+                      else datetime.strptime(period.until, db.TIME_FORMAT) - end)
+            start = end - length
     except ValueError:
         return period
-    start = end - length
-    # `relative=False`: the previous window has a fixed end (the start of the chosen one), so it is no longer
-    # "the last N days".
-    zone = formatting.zone()
+    # `relative=False`: the previous window has a fixed end (the start of the chosen one, for "the last N days"
+    # this clock time N days ago), so it is no longer "the last N days".
 
     def _local(moment: datetime) -> str:
         return (moment.replace(tzinfo=UTC).astimezone(zone)
                 .strftime(db.TIME_FORMAT))
 
-    return Period(since=start.strftime(db.TIME_FORMAT), until=period.since,
+    return Period(since=start.strftime(db.TIME_FORMAT), until=end.strftime(db.TIME_FORMAT),
                   days=period.days, relative=False,
                   since_local=_local(start), until_local=_local(end),
                   whole_day=period.whole_day)

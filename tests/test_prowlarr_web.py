@@ -131,6 +131,62 @@ check(prowlarr.is_connected() and db.get_setting("arr_prowlarr_api_key") == KEY 
 check(reader.post("/settings/arr/prowlarr", data={"enabled": "", "url": "", "api_key": "", "action": "save"},
                   follow_redirects=False).status_code in (303, 403) and prowlarr.is_connected(), "a reader saves nothing")
 
+
+def sent_form(html: str, action: str) -> dict[str, str]:
+    """What a browser sends from the form with `action`: its fields as the page writes them (ticked boxes only) and
+    the first named button."""
+    found = re.search(rf'<form method="post" action="{re.escape(action)}">(.*?)</form>', html, re.S)
+    data: dict[str, str] = {}
+    for tag in re.findall(r"<input\b[^>]*>", found.group(1) if found else ""):
+        name, kind, value = (re.search(rf'{attribute}="([^"]*)"', tag) for attribute in ("name", "type", "value"))
+        if name and not ((kind and kind.group(1) in ("checkbox", "radio")) and not re.search(r"\schecked\b", tag)):
+            data[name.group(1)] = html_lib.unescape(value.group(1)) if value else ""
+    button = re.search(r'<button[^>]*name="([^"]*)"[^>]*value="([^"]*)"', found.group(1) if found else "")
+    if button:
+        data[button.group(1)] = button.group(2)
+    return data
+
+
+def measuring() -> tuple[str, str]:
+    db.forget_settings()
+    return db.get_setting("arr_prowlarr_watch_enabled", ""), db.get_setting("arr_prowlarr_watch_interval", "")
+
+
+print("- measuring the indexers' status in the background -")
+page = admin.get("/settings?section=arr").text
+form = sent_form(page, "/settings/arr/prowlarr")
+card = settings_card(page)
+check(form.get("watch") == "1" and form.get("watch_interval") == "60" and form.get("watch_field") == "1"
+      and 'name="watch_interval"' in card and 'min="15"' in card and 'max="600"' in card
+      and "Průběžně měřit stav indexerů" in card and "Měřit každých (sekund)" in card,
+      f"Prowlarr's form: the switch on by default, every 60 s (15-600) ({ {k: v for k, v in form.items() if 'watch' in k} })")
+check("Čím kratší interval, tím přesněji karta Dostupnost indexerů změří i krátké výpadky" in html_lib.unescape(card)
+      and "Prowlarr sám vynechává selhávající indexer nejméně na několik minut" in html_lib.unescape(card),
+      "with the hint: the shorter, the more precise; under a minute adds little")
+check('name="watch_interval"' not in page[:page.find('id="arr-prowlarr"')], "the other apps' forms do not have it")
+admin.post("/settings/arr/prowlarr", data={**form, "watch": "", "watch_interval": "45"})
+check(measuring() == ("0", "45"), f"switched off, every 45 s: saved ({measuring()})")
+again = sent_form(admin.get("/settings?section=arr").text, "/settings/arr/prowlarr")
+admin.post("/settings/arr/prowlarr", data=again)
+check("watch" not in again and again.get("watch_interval") == "45" and measuring() == ("0", "45") and prowlarr.is_connected(),
+      f"the form sent back as the page writes it changes nothing ({measuring()})")
+for sent, expected, label in (("5", "15", "below the bounds: 15"), ("9999", "600", "above them: 600"),
+                              ("", "600", "a cleared field keeps the saved value"), ("abc", "600", "and so does nonsense")):
+    admin.post("/settings/arr/prowlarr", data={**again, "watch": "1", "watch_interval": sent})
+    check(measuring() == ("1", expected), f"the interval {sent!r}: {label} ({measuring()})")
+admin.post("/settings/arr/prowlarr", data={"enabled": "1", "url": "http://prowlarr.test", "api_key": "", "action": "save"})
+check(measuring() == ("1", "600"), "a form without the fields (a tab opened before) leaves the measuring as it is")
+admin.post("/settings/arr/prowlarr", data={**again, "watch": "", "watch_interval": "30", "action": "test"})
+check(measuring() == ("1", "600"), "the connection test saves nothing of it")
+redrawn = sent_form(admin.get("/settings?section=arr").text, "/settings/arr/prowlarr")
+check("watch" not in redrawn and redrawn.get("watch_interval") == "30" and redrawn.get("url") == "http://prowlarr.test",
+      f"but the form drawn again after the test keeps what was typed - unticked, 30 s - as it keeps the address"
+      f" ({ {k: v for k, v in redrawn.items() if 'watch' in k} })")
+admin.post("/settings/arr/sonarr", data={"enabled": "", "url": "", "api_key": "", "watch_field": "1", "watch_interval": "30", "action": "save"})
+check(measuring() == ("1", "600"), "nor does another app's form, even with the fields")
+admin.post("/settings/arr/prowlarr", data={**again, "watch": "1", "watch_interval": "60"})
+check(measuring() == ("1", "60") and prowlarr.watch_settings()["interval"] == 60, "(back to the default)")
+
 print()
 print("--- D) the Prowlarr tab ---")
 check(registry.connected() == ["prowlarr"] and 'href="/arr/' in menu(admin.get("/account").text)
@@ -139,7 +195,7 @@ check(registry.connected() == ["prowlarr"] and 'href="/arr/' in menu(admin.get("
 fill_prowlarr()
 s = admin.get("/arr/prowlarr?days=0")
 check(s.status_code == 200 and re.findall(r"<!-- card: (\w+) -->", s.text) == ALL_CARDS,
-      f"thirteen cards in the order of the sections ({len(re.findall(r'<!-- card: ', s.text))})")
+      f"fourteen cards in the order of the sections ({len(re.findall(r'<!-- card: ', s.text))})")
 headings = re.findall(r'<div class="section-head">\s*<div>\s*<h2>([^<]+)</h2>', s.text)
 check(headings == ["Teď v aplikaci", "Dotazy", "Výkon indexerů", "Vyžádaná vydání"], f"the sections' headings ({headings})")
 check(subtabs(s.text) == ["/arr/prowlarr"] and "<title>*Arr · Prowlarr" in s.text, "the sub-tab only Prowlarr, the page's title")
@@ -162,11 +218,15 @@ card = settings_card(r.text)
 check(f"Stažená historie: {HISTORY}" in re.sub(r"\s+", " ", card) and "Poslední synchronizace" in card, "the card shows the number of events and the last synchronisation")
 check("Prowlarr si historii drží jen omezenou dobu" in card and "Prowlarr si historii drží" not in page,
       "the delete dialog says that Prowlarr no longer has the older history (the other applications do not have that sentence)")
+check("Smažou se i vzorky dostupnosti indexerů, které už znovu stáhnout nejde." in card,
+      "and that the samples of the indexers' availability go too and cannot be fetched again")
 result = asyncio.run(tasks.run_now("arr"))
 check(result["status"] == "ok" and result["message"] == "Prowlarr: 0 nových záznamů", f"the task “Synchronizace *Arr” synchronises Prowlarr too ({result})")
 check("Prowlarr" in tasks.TASKS["arr"].description and "Prowlarr" in next(o.description for o in access.AREAS if o.key == "arr"),
       "the description of the task and of the rights area names Prowlarr")
-r = admin.post("/settings/arr/prowlarr", data={"enabled": "1", "url": "http://jiny-prowlarr.test", "api_key": "", "action": "save"})
+# Another server needs its key typed again (the saved one goes only to its own server).
+r = admin.post("/settings/arr/prowlarr", data={"enabled": "1", "url": "http://jiny-prowlarr.test", "api_key": "jiny-klic",
+                                               "action": "save"})
 check("Adresa Prowlarr se změnila a stažená historie je z původní adresy" in html_lib.unescape(r.text),
       "a change of the address with downloaded data: a warning that it may be another instance")
 admin.post("/settings/arr/prowlarr", data={"enabled": "1", "url": "http://prowlarr.test", "api_key": "", "action": "save"})

@@ -33,6 +33,7 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = _tmp
@@ -44,6 +45,7 @@ os.environ["JELLYFIN_API_KEY"] = "test-key"
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from _package import substitute  # noqa: E402
 from jellyscope import accounts, db, seerr, web  # noqa: E402
 
 RESPONSES = PROJECT / "tests" / "seerr_responses"
@@ -156,13 +158,60 @@ check("API klíč obsahuje znak" in refused.text, "the form refuses a key with d
 after_refusal = admin.post("/settings/seerr", data={"enabled": "1", "url": "http://127.0.0.1:1", "api_key": "",
                                                     "action": "test"})
 check("API klíč obsahuje znak" not in after_refusal.text and "flash error" in after_refusal.text,
-      "a refused key is not remembered: the next connection test tries the stored key")
+      "a refused key is not remembered: the next connection test does not repeat its error")
 r = admin.post("/settings/seerr", data={"enabled": "1", "url": "nas:5055", "api_key": "", "action": "save"},
                follow_redirects=False)
 db.forget_settings()
 check(r.status_code == 303 and r.headers.get("location", "").startswith("/settings?section=seerr")
       and seerr.stored_settings()["url"] == "http://nas:5055", "the admin saves (not the key of the unsaved test, the stored one stays)")
 check(db.get_setting("seerr_api_key") in ("tajny-klic", "jiny-klic"), "a key is stored")
+
+# The saved key went to any address put into the form with the key field left empty: a test or a save sent from a
+# page of another site on the same machine, or by another administrator, who never sees the key, had the app send
+# it there (and keep it for that address).
+ANOTHER_SERVER = "uložený klíč se posílá jen na server"
+seerr.save_settings(True, "http://nas:5055/seerr", "tajny-klic")
+db.forget_settings()
+sent: list[tuple[str, str]] = []
+
+
+async def record_key(url: str, key: str) -> tuple[bool, str]:
+    sent.append((url, key))
+    return True, "9.9"
+
+
+def post(url: str, key: str = "", action: str = "test") -> str:
+    return admin.post("/settings/seerr", data={"enabled": "1", "url": url, "api_key": key, "action": action}).text
+
+
+async def no_images() -> None:
+    """The test asks no Seerr whether it hands out images."""
+
+
+put_backs = [substitute(seerr, "check_connection", record_key), substitute(seerr, "check_images", no_images)]
+try:
+    answers = [post(url) for url in ("http://utocnik.example:5055", "https://nas:5055/seerr", "http://nas:5056/seerr")]
+    check(not sent and all(ANOTHER_SERVER in answer for answer in answers),
+          f"a test at another host, scheme or port with the key field empty sends no key and asks for it ({sent})")
+    answer = post("http://utocnik.example:5055", action="save")
+    db.forget_settings()
+    check(seerr.stored_settings()["url"] == "http://nas:5055/seerr" and ANOTHER_SERVER in answer,
+          f"nor is it saved for another server ({seerr.stored_settings()['url']})")
+    post("nas:5055/jinde")
+    check(sent == [("nas:5055/jinde", "tajny-klic")],
+          f"the same server (another path) with the key field empty tests with the saved key ({sent})")
+    sent.clear()
+    post("http://novy.doma:5055", "klic-novy")
+    post("http://utocnik.example:5055")
+    post("http://novy.doma:5055", "klic-novy")
+    post("http://novy.doma:5055/x")
+    check(sent == [("http://novy.doma:5055", "klic-novy")] * 2 + [("http://novy.doma:5055/x", "klic-novy")],
+          f"a key typed at a test goes again only to the server it was typed for ({sent})")
+finally:
+    for put_back in put_backs:
+        put_back()
+seerr.save_settings(True, "http://nas:5055", "tajny-klic")
+db.forget_settings()
 
 print()
 print("--- D) the key is a secret ---")

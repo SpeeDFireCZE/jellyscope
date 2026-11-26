@@ -35,6 +35,12 @@ async def settings_arr(
     url: str = Form(""),
     api_key: str = Form(""),
     action: str = Form("save"),
+    # Prowlarr's measuring of the indexers' status in the background: the switch, its interval and the mark that the
+    # form has them (an unticked box sends nothing, the same as a form without the fields - another app's, a tab
+    # opened before).
+    watch: str = Form(""),
+    watch_interval: str = Form(""),
+    watch_field: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
     """Saves or tests one app - by the button the form was sent with.
@@ -44,20 +50,32 @@ async def settings_arr(
     what was filled in is held as a draft: the form is drawn again with it
     and the key that was tried holds for the following Save too - it does not go
     back into the page, so a person would otherwise have to type it again.
+
+    An app with settings of its own (Prowlarr's measuring) saves them with Save, whatever the connection's result:
+    they do not depend on it. A cleared interval keeps the saved one. The test keeps them in the draft as typed.
     """
     if app not in registry.APPS:
         raise HTTPException(status_code=404)
     chosen = registry.APPS[app]
     name = draft_name(app)
     draft = _draft_read(account, name) or {}
-    key = api_key.strip() or draft.get("api_key", "")
+    key = api_key.strip() or services.draft_key(url, draft)
     # A key that does not pass the check (a character outside ASCII) is not put into the
     # draft: otherwise the next Test or Save with an empty field would try it again
     # instead of the saved one and the administrator would get the same error until the draft expires.
     filled = {"enabled": enabled == "1", "url": url.strip(), "api_key": "" if services.key_error(key) else key}
 
     if action == "test":
-        _draft_save(account, name, filled)
+        # The app's own settings typed in the form stay in it too, as typed (only Save saves them).
+        own = {}
+        if watch_field and chosen.save_watch_settings:
+            own["watch"] = {"enabled": watch == "1", "interval": watch_interval.strip()}
+        _draft_save(account, name, {**filled, **own})
+        # The saved key goes only to its own server (a Save is refused the same way, by save_settings).
+        refused = services.key_refused(url, key, chosen.stored_settings()["url"], _saved_key(app))
+        if refused:
+            _flash(request, refused, "error")
+            return RedirectResponse("/settings?section=arr", status_code=303)
         ok, text = await chosen.check_connection(url, key or _saved_key(app))
         if ok:
             _flash(request, "Connection works: {name} {version}", "success", name=chosen.shown_name(), version=text)
@@ -65,6 +83,8 @@ async def settings_arr(
             _flash(request, "The connection failed: {reason}", "error", reason=text)
         return RedirectResponse("/settings?section=arr", status_code=303)
 
+    if watch_field and chosen.save_watch_settings:
+        chosen.save_watch_settings(watch == "1", watch_interval)
     previous_url = chosen.stored_settings()["url"]
     error = chosen.save_settings(enabled == "1", url, key)
     if error:

@@ -15,8 +15,8 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from html import escape
 from typing import Any
 
-from ... import __version__, db, i18n, tasks, updates
-from ..base import STARTED_AT, _flash, log, require_admin
+from ... import __version__, db, i18n, scanner, tasks, updates
+from ..base import STARTED_AT, _flash, log, require_admin, spawn
 
 router = APIRouter()
 
@@ -71,7 +71,7 @@ def _update_page(nonce: str) -> str:
     # The page is put together in Python, so Jinja's autoescape does not protect it.
     # Translations are written by other people through Weblate: a tag in them has to show
     # as text and an apostrophe ("It's taking longer") must not break the JS string,
-    # otherwise the function zkus() would not arise and the waiting room would never let anybody on.
+    # otherwise the function attempt() would not arise and the waiting room would never let anybody on.
     heading = escape(i18n.translate("Updating…"))
     description = escape(i18n.translate("The new version is downloaded. The app is restarting now. As soon as it is "
                                         "up, you will be let through."))
@@ -204,7 +204,7 @@ def _schedule_restart() -> None:
             log.exception("restart via execv failed, shutting down")
             os._exit(1)
 
-    asyncio.create_task(_restart_soon())
+    spawn(_restart_soon(), "restart")
 
 
 @router.get("/settings/backup/download")
@@ -245,7 +245,15 @@ async def backup_restore(request: Request, name: str = Form(""),
     The restart is not cosmetic: the app has in memory settings and open
     connections to the database that no longer hold after the restore.
     """
-    result = await asyncio.to_thread(tasks.restore_backup, name)
+    # A running sync or analysis would write into the restored database after it (its batches wait for the lock),
+    # until the restart - the sync's marking of vanished titles over nearly the whole restored library. Imports,
+    # backups and the clean-up take no lock, they are counted (tasks.data_job). The restore then holds the lock
+    # itself, so no task the scheduler starts meanwhile writes into the database being restored.
+    if scanner.is_scan_running() or tasks.data_job_running():
+        _flash(request, "Another task is already running, wait for it to finish.", "warning")
+        return RedirectResponse("/settings?section=tasks", status_code=303)
+    async with scanner.task_lock():
+        result = await asyncio.to_thread(tasks.restore_backup, name)
     if result.get("status") != "ok":
         _flash(request, result.get("message", "The restore failed."), "error")
         return RedirectResponse("/settings?section=tasks", status_code=303)

@@ -11,6 +11,7 @@ Run:
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -37,6 +38,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from _package import sample_movie  # noqa: E402
 from jellyscope import accounts, charts, db, formatting, languages, probe  # noqa: E402
+from jellyscope.i18n import translate as _t  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
 failures = 0
@@ -256,6 +258,31 @@ for got, want in [
 ]:
     check(got == want, f"{got!r} == {want!r}")
 
+print("--- numbers in the page's language ---")
+# The server wrote every number the Czech way ("12,5 %", "1 234") while the page's
+# JavaScript wrote the live counts in the page's language ("1,234") - on an English
+# page a decimal comma then read as a thousands separator. Czech and Spanish keep
+# what they had, English gets its own notation.
+from jellyscope import charts as _charts, i18n as _i18n  # noqa: E402
+
+for code, want in [
+    ("cs", ["1 234 567", "12,3 %", "52,0 GB", "1 000 GB", "8,0 Mb/s", "1 234 h", "1 234", "2,5"]),
+    ("es", ["1 234 567", "12,3 %", "52,0 GB", "1 000 GB", "8,0 Mb/s", "1 234 h", "1 234", "2,5"]),
+    ("en", ["1,234,567", "12.3 %", "52.0 GB", "1,000 GB", "8.0 Mb/s", "1,234 h", "1,234", "2.5"]),
+]:
+    token = _i18n.set_account_language(code)
+    try:
+        got = [formatting.number(1234567), formatting.percent(12.345, 1),
+               formatting.bytes_human(52 * 1024 ** 3), formatting.bytes_human(1000 * 1024 ** 3),
+               formatting.bitrate_human(8_000_000), formatting.hours_human(1234),
+               _charts._fmt(1234), _charts._fmt(2.5)]
+    finally:
+        _i18n.reset_account_language(token)
+    check(got == want, f"numbers on a page in {code}: {got}")
+check(_i18n.translate_plural("{n} records", 1234, "en") == "1,234 records"
+      and _i18n.translate_plural("{n} records", 1234, "cs") == "1 234 záznamů",
+      "a count in a sentence is written in the sentence's language, not the page's")
+
 for raw in ("2026-08-12T09:47:00.1234567Z", "2026-08-12 09:47:00", "2026-08-12T09:47:00+02:00"):
     check(formatting.datetime_human(raw) != "-", f"the time {raw!r} is read")
 
@@ -334,6 +361,29 @@ svg = charts.stacked_bar([
 check("var(--series-2)" in svg and "var(--series-1)" in svg,
       "stacked_bar respects its own colour slot")
 
+# Ten parts, 10 h each (100 h): the eight colour slots draw 10 % each - the share of the whole, as the table beside
+# the bar says - and the last two go into one "Other" of 20 %, so the bar still makes 100 %.
+svg = charts.stacked_bar([{"label": f"L{n}", "value": 10} for n in range(1, 11)])
+tips = re.findall(r'data-tip="([^"]+)"', svg)
+check(len(tips) == 9 and tips[0].endswith("(10 %)") and tips[-1].startswith(f"{_t('Other')}: ")
+      and tips[-1].endswith("(20 %)"),
+      f"stacked_bar shares are of the whole, the rest is one Other part ({tips[:1]} … {tips[-1:]})")
+# Its legend names the same parts as the bar: the eight in colour, the grey "Other" (a legend is required - colour
+# alone carries no identity) and not a part with nothing, which the bar does not draw. The legend used to cut the
+# list at eight with no "Other", and a leading zero made it name another eight than the bar.
+parts = [{"label": "L0", "value": 0}] + [{"label": f"L{n}", "value": 10} for n in range(1, 11)]
+try:
+    named = re.findall(r'background: ([^"]+)"></span>([^<]*)</li>', charts.stacked_legend(parts))
+except AttributeError as exc:
+    named = [("", f"{type(exc).__name__}: {exc}")]
+drawn = re.findall(r'background: ([^;]+);[^>]*data-tip="([^:]+):', charts.stacked_bar(parts))
+check(named == drawn and [n for _c, n in named] == [f"L{n}" for n in range(1, 9)] + [_t("Other")],
+      f"the legend of a stacked bar names what the bar draws, its Other included ({named[-2:]} / {drawn[-2:]})")
+# And the cards that draw a stacked bar use that legend, not the plain one that cuts at eight.
+plain = sorted(path.name for path in (PROJECT / "jellyscope" / "templates").rglob("*.html")
+               if "charts.stacked_bar(" in (text := path.read_text(encoding="utf-8")) and "charts.legend(" in text)
+check(not plain, f"no template under a stacked bar draws the plain legend ({plain})")
+
 svg = charts.hbar_chart([{"label": "<script>x</script>", "value": 5}], "label", "value")
 check("<script>" not in svg and "&lt;script&gt;" in svg, "a dangerous name is escaped")
 
@@ -349,6 +399,23 @@ check('data-tip="2026-08-12 · 5 h"' in spark, "the mini chart has values for ho
 check('"heading":"2026-08-12"' in spark.replace("&quot;", '"'),
       "and the tooltip knows the date as its heading too")
 check('aria-hidden' not in spark, "the mini chart is no longer marked as decoration")
+
+# What a screen reader reads of a chart is in the page's language - it used to be Czech without diacritics for all.
+from jellyscope import i18n  # noqa: E402
+
+labels = {}
+for code in ("cs", "en"):
+    token = i18n.set_account_language(code)
+    try:
+        labels[code] = [re.search(r'aria-label="([^"]*)"', svg).group(1) for svg in (
+            charts.sparkline([{"day": "2026-08-11", "hours": 2}, {"day": "2026-08-12", "hours": 5}]),
+            charts.area_chart_multi([{"day": "2026-08-11", "a": 2, "b": 1}], "day",
+                                    [{"key": "a", "label": "A"}, {"key": "b", "label": "B"}]))]
+    finally:
+        i18n.reset_account_language(token)
+check(labels == {"cs": ["Vývoj v čase, 2 dny", "Vývoj v čase, 2 série"],
+                 "en": ["Trend over time, 2 days", "Trend over time, 2 series"]},
+      f"the charts' label for a screen reader is translated ({labels})")
 
 # No permanent point. All of them show only on hover - an end point in place
 # looked like a point that "got stuck". The big chart does not have it either,

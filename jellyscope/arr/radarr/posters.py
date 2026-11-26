@@ -131,6 +131,19 @@ def clean_up_posters() -> int:
     return deleted
 
 
+def own_posters() -> set[str]:
+    """The TMDB ids of the provisional posters on the disk that are Radarr's: of movies in its list of movies.
+
+    A request in Seerr for the same title has the same file (images.title_file: the kind and the TMDB id). Seerr,
+    deleting its data, leaves these: the card "Stahuje se" shows them and `clean_up_posters` deletes them once the
+    movie is in the library.
+    """
+    on_disk = sorted({tmdb for kind, tmdb in images.titles_on_disk() if kind == MEDIA_TYPE})
+    if not on_disk:
+        return set()
+    return {str(r["tmdb_id"]) for r in db.query_all_in("SELECT tmdb_id FROM radarr_title WHERE tmdb_id IN ({})", on_disk)}
+
+
 async def title_poster(tmdb_id: str) -> bytes | None:
     """The movie's poster as Radarr has it, by its TMDB id. None = Radarr is not connected or does not know the movie.
 

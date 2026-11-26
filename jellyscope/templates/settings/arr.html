@@ -50,6 +50,22 @@
             </p>
         </div>
 
+        {# Prowlarr only: measuring the indexers' status in the background (arr/prowlarr/watch.py). `watch_field`
+           tells the route the form has these fields - an unticked box sends nothing, the same as a form without them. #}
+        {% if a.watch %}
+        <input type="hidden" name="watch_field" value="1">
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
+            <input type="checkbox" name="watch" value="1" {{ 'checked' if a.watch.enabled }}>
+            <span>{{ _("Measure the indexers' status continuously") }}</span>
+        </label>
+        <div class="field">
+            <label for="arr_{{ a.app }}_watch_interval">{{ _("Measure every (seconds)") }}</label>
+            <input type="number" id="arr_{{ a.app }}_watch_interval" name="watch_interval" value="{{ a.watch.interval }}"
+                   min="{{ a.watch.minimum }}" max="{{ a.watch.maximum }}">
+            <p class="hint">{{ _("The shorter the interval, the more precisely the Indexer availability card measures short outages too. Under a minute adds little: Prowlarr itself skips a failing indexer for at least a few minutes.") }}</p>
+        </div>
+        {% endif %}
+
         {% if a.draft %}
             <p class="hint">{{ _("The form shows the details you tested; they are not saved yet.") }}</p>
         {% endif %}
@@ -101,8 +117,8 @@
     {# Confirming the delete. A window of our own instead of the browser's confirm(): it says what
        is deleted and what is not, and Cancel has the focus - Enter out of habit deletes nothing. #}
     <form method="post" action="/settings/arr/{{ a.app }}/delete" id="arr-delete-{{ a.app }}"></form>
-    <dialog id="modal-arr-delete-{{ a.app }}" class="dialog">
-        <h2>{{ _("Delete the downloaded history of") }} {{ a.name }}</h2>
+    <dialog id="modal-arr-delete-{{ a.app }}" class="dialog" aria-labelledby="modal-arr-delete-{{ a.app }}-title">
+        <h2 id="modal-arr-delete-{{ a.app }}-title">{{ _("Delete the downloaded history of") }} {{ a.name }}</h2>
         <p>
             {{ _n("Deletes {n} history records downloaded from {name}. They stay in the app. While the app is connected, the next sync downloads them all again.", a.count, name=a.name) }}
         </p>

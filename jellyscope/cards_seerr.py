@@ -12,16 +12,20 @@ What it stands on:
 * **The requesters' names only with the area "...including who requested"**
   (the area `seerr_who`). Without it the requester's name and id are removed from the rows
   already here - the template then cannot write them out, not even by mistake - and
-  the "Kdo žádá" card is not computed at all (it has that area as its own). With it
+  the "Who requests" card is not computed at all (it has that area as its own). With it
   anonymising still guards the names (the keys `user_id` and `user_name`, see
   access.anonymise).
 * **A title that is in the library already is a link to its detail** (`detail`);
   where the account may not go, the template draws no link (the odkaz macro).
 * **A request has a poster** (`poster`): a title that is in the library the one from
-  Jellyfin - the same address, and so the same file, as "Nedávno přidané". A title
+  Jellyfin - the same address, and so the same file, as "Recently added". A title
   outside the library a provisional one from the connected apps (seerr/posters.py).
-* **The live card "Čeká na vyřízení"** takes the state from `seerr.pending` (a
+* **The live card "Waiting for approval"** takes the state from `seerr.pending` (a
   one-minute cache); it leaves the error's detail only to the administrator.
+* **"Latest requests" is live too**: Seerr's newest requests (`seerr.latest_requests`,
+  loaded with the pending ones under the same entry of the one-minute cache) over the
+  period's stored ones, so its states agree with "Waiting for approval". When Seerr does not answer, the stored requests with a note
+  saying when the last sync saw them.
 
 stats/seerr.py computes the numbers, here they are only put together for the templates.
 """
@@ -31,7 +35,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from . import insights, seerr, stats
-from .cards_base import Card, _once, current_is_admin, current_sees, duration, live
+from .cards_base import LIVE, PLAYS, Card, _once, current_is_admin, current_sees, duration, live
 from .i18n import translate as _t
 from .jellyfin import digits_only
 
@@ -142,7 +146,7 @@ def _poster_hint(rows: list[dict[str, Any]]) -> dict[str, Any]:
     Only for the administrator (only they can do something about it - and Seerr's
     address is no business of the others), only when Seerr gives no images ("Enable
     Image Caching" off) and only when the card has at least one provisional poster. A
-    card with only posters from Jellyfin needs no hint - "Nikdo nepustil" thus has it
+    card with only posters from Jellyfin needs no hint - "Nobody started" thus has it
     only exceptionally.
     """
     turned_off = (current_is_admin() and seerr.images_state() == "0"
@@ -182,10 +186,17 @@ def _d_pending() -> dict[str, Any]:
 
 
 def _d_latest(period: Any) -> dict[str, Any]:
+    """Live: Seerr's newest requests over the period's stored ones (stats.seerr_with_live) - the states are the
+    present ones, the same as "Waiting for approval" shows. Seerr does not answer: the stored requests and when the
+    last sync saw them (`synced_at`), for the note under the heading."""
     events = _events(period)
+    fresh = live(seerr.latest_requests)
+    if fresh["available"]:
+        events = stats.seerr_with_live(period, fresh, analysis=events)
     rows = [_row_with_poster(r, state=_t(STATE_SHORT[r["group"]]), state_full=_t(STATE_LABELS[r["group"]]))
             for r in stats.seerr_latest(period, limit=ROWS, analysis=events)]
-    return {"rows": rows, "total": len(events["requests"]), **_poster_hint(rows)}
+    return {"rows": rows, "total": len(events["requests"]), "live": fresh["available"],
+            "synced_at": "" if fresh["available"] else stats.seerr_synced_at(), **_poster_hint(rows)}
 
 
 def _d_numbers(period: Any) -> dict[str, Any]:
@@ -239,9 +250,10 @@ def _d_nobody(period: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _card(name: str, title: str, description: str, data: Callable[[Any], dict[str, Any]] | None = None, *,
-          width: str = "full", area: str = "seerr", table_window: bool = False) -> Card:
+          width: str = "full", area: str = "seerr", table_window: bool = False, sources: tuple[str, ...] = ()) -> Card:
     """One Seerr card. `data(period)` returns a dict for the template; the registry
-    gets it under the card's key. Without `data` it is the live card "Čeká na vyřízení"."""
+    gets it under the card's key. Without `data` it is the live card "Waiting for approval".
+    `sources` only where the default (cards_base.default_sources) does not hold."""
     key = card_key(name)
 
     def compute(period: Any) -> dict[str, Any]:
@@ -250,14 +262,17 @@ def _card(name: str, title: str, description: str, data: Callable[[Any], dict[st
         return {key: data(_once(seerr_period, period))}
 
     return Card(key, title, description, f"_card_seerr_{name}.html", compute, uses_period=data is not None,
-                width=width, area=area, has_table_window=table_window, group=NAME, available=seerr.is_connected)
+                width=width, area=area, has_table_window=table_window, group=NAME, available=seerr.is_connected,
+                sources=sources)
 
 
 CARDS: tuple[Card, ...] = (
     _card("pending", "Waiting for approval",
           "Requests waiting for approval in Seerr right now, longest waiting first."),
     _card("latest", "Latest requests",
-          "A strip of posters of the most recently requested titles and how each request ended.", _d_latest, table_window=True),
+          "A strip of posters of the most recently requested titles and how each request ended.", _d_latest, table_window=True,
+          # Seerr live; the stored requests when it does not answer.
+          sources=(LIVE, "seerr")),
     _card("numbers", "Request numbers",
           "How many requests came in: movies, series, 4K and automatic ones from watchlists.", _d_numbers),
     _card("by_day", "Requests per day",
@@ -270,13 +285,15 @@ CARDS: tuple[Card, ...] = (
     # "...including who requested" does not get the card and its data are not computed.
     _card("who", "Who requests",
           "A ranking of requesters: how much they asked for, what was approved and what they watched themselves.", _d_who,
-          width="half", area="seerr_who", table_window=True),
+          width="half", area="seerr_who", table_window=True, sources=("seerr", PLAYS)),
     _card("speed", "How fast requests are handled",
           "How long it takes from a request to approval and to the library.", _d_speed, width="half"),
     _card("watching", "Requested and watched?",
-          "Requested titles in the library: did the requester watch them, someone else, or nobody?", _d_watching),
+          "Requested titles in the library: did the requester watch them, someone else, or nobody?", _d_watching,
+          sources=("seerr", PLAYS)),
     _card("nobody", "Nobody started",
-          "Requested titles that are in the library and nobody has started since the request.", _d_nobody, table_window=True),
+          "Requested titles that are in the library and nobody has started since the request.", _d_nobody, table_window=True,
+          sources=("seerr", PLAYS)),
 )
 
 # Not `assert`: Python with -O leaves it out and a difference between SECTIONS and the cards would show only on the page.

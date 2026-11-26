@@ -4,11 +4,11 @@ A part of the web package (see jellyscope/web/__init__.py). The page is drawn
 from the card registry (jellyscope/cards_seerr.py) - the same cards can be added
 to a custom dashboard. The route only picks the cards the account may see and lets
 the registry compute their data: stats/seerr.py computes the numbers over the saved
-requests, the live card "Čeká na vyřízení" comes from seerr.pending with a one-minute
+requests, the live card "Waiting for approval" comes from seerr.pending with a one-minute
 cache. A Seerr that is not connected has no page (404, missing in the menu).
 
 The requesters' names are only with the area "...including who requested" (`seerr_who`):
-without it the card "Kdo žádá" is not among the allowed ones and cards_seerr.py
+without it the card "Who requests" is not among the allowed ones and cards_seerr.py
 removes the names from the other cards - the template then cannot write them, not even
 by mistake. With it anonymising guards them (`_context`).
 """

@@ -10,8 +10,37 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .. import access, accounts, api, applog, cards, collector, db, scanner, tasks
+from .. import access, accounts, api, applog, cards, collector, db, notifications, scanner, tasks, web_sessions
+from ..arr import prowlarr
+from ..config import warn_about_short_secret_key
 from .base import config, log
+
+# How long the start waits for the work on the data and backup files (_tidy_files). A backup folder on a network share
+# that does not answer (a NAS asleep, a hard NFS mount) must not keep the port closed; past it the work goes on in its
+# thread, without the start.
+FILE_WORK_SECONDS: float = 10
+
+
+async def _tidy_files() -> None:
+    """At the start: half-written backups go and files from before umask 077 are narrowed - off the event loop.
+
+    The backups the interrupted runs were writing stayed half-written (*.partial), the size of the database each time;
+    the database, logs and backups of an installation from before umask 077 were readable to every account. Both
+    touch the backup folder, which may lie on another disk or a share.
+    """
+    def work() -> tuple[int, int]:
+        return tasks.remove_partial_backups(), tasks.narrow_private_files()
+
+    try:
+        partial, narrowed = await asyncio.wait_for(asyncio.to_thread(work), FILE_WORK_SECONDS)
+    except TimeoutError:
+        log.warning("the data and backup files did not answer within %s s, the start goes on without them",
+                    FILE_WORK_SECONDS)
+        return
+    if partial:
+        log.info("deleted %s half-written backups left by the previous start", partial)
+    if narrowed:
+        log.info("made %s data files and folders readable by their owner only", narrowed)
 
 
 @asynccontextmanager
@@ -20,13 +49,15 @@ async def lifespan(app: FastAPI):
 
     The data collector is started here in the background. It runs alongside the web:
     while you click through pages, it asks Jellyfin every few seconds what is
-    playing right now.
+    playing right now. Beside it Prowlarr's loop measures the indexers' status
+    (it idles while Prowlarr is not connected).
     """
     # Writing the log to a file is switched on first, so that a possible error
     # while preparing the database gets into it too - that one is the most interesting.
     log_file = applog.setup()
     if log_file:
         log.info("the log is also written to a file: %s", log_file)
+    warn_about_short_secret_key(config)
 
     db.init_db()
     log.info("database ready")
@@ -46,6 +77,8 @@ async def lifespan(app: FastAPI):
     access.split_books_rights()
     # Root keys stored with areas the API has no address for lose them (16. 11. 2026), once.
     api.drop_unusable_key_areas()
+    # The mail server's certificate is checked (25. 11. 2026): an SMTP set up before keeps sending unchecked, once.
+    notifications.convert_smtp_verification()
 
     # The app's time zone into the process environment.
     #
@@ -82,6 +115,13 @@ async def lifespan(app: FastAPI):
     if backup_folder:
         log.info("in a container: backup folder set to %s", backup_folder)
 
+    # A task the previous start left running (a restart in the middle of it) ends as failed - nothing runs yet.
+    interrupted = scanner.close_interrupted_task_logs()
+    if interrupted:
+        log.info("closed %s task runs interrupted by the previous start", interrupted)
+    # The backups those runs were writing stayed half-written, and old private files readable to everyone.
+    await _tidy_files()
+
     # Items that should never have come into the library (a series instead of an episode).
     # Without it they would look vanished again at every synchronisation.
     phantoms = scanner.clean_up_phantoms()
@@ -92,16 +132,26 @@ async def lifespan(app: FastAPI):
     # not only after the first synchronisation. Otherwise it is a few queries that write nothing.
     scanner.recount_copies_after_sync()
 
+    # Accounts from Jellyfin have no local password (24. 11. 2026): one an older version let be set is cleared, once.
+    cleared = accounts.clear_jellyfin_passwords()
+    if cleared:
+        log.info("cleared the local passwords of %s accounts from Jellyfin", cleared)
+    # Sign-in blocks stored under a whole IPv6 address move under their network, where the brake looks today.
+    accounts.convert_block_keys()
     # Expired sign-in blocks tell nothing any more - the permanent ones stay.
     deleted = accounts.clean_up_blocks()
     if deleted:
         log.info("cleaned up %s stale sign-in blocks", deleted)
+    # Sign-in sessions unused for longer than the cookie lives - the quick refresh cleans them too.
+    ended = web_sessions.clean_up()
+    if ended:
+        log.info("cleaned up %s expired sign-in sessions", ended)
 
     background = []
     if config.demo_mode:
         # In the demo mode there is nothing to connect to. The collector would only
         # fill the log with errors and at start close the made-up playback that is
-        # to be seen on the Overview.
+        # to be seen on the Overview. Nor is there a Prowlarr to measure.
         db.set_setting(collector.STATUS_KEY, "demo")
         log.info("demo mode: the collector is not started")
         # Made-up data age: they are made for the moment of the seed and the public
@@ -110,11 +160,11 @@ async def lifespan(app: FastAPI):
         from .. import demodata
 
         background.append(
-            asyncio.create_task(demodata.keep_refreshing(), name="demo-obnova")
+            asyncio.create_task(demodata.keep_refreshing(), name="demo-refresh")
         )
         # And something always plays in Now playing - the made-up stream plays on.
         background.append(
-            asyncio.create_task(demodata.keep_live_forever(), name="demo-zivy-stream")
+            asyncio.create_task(demodata.keep_live_forever(), name="demo-live-stream")
         )
     else:
         background.append(
@@ -122,6 +172,9 @@ async def lifespan(app: FastAPI):
         )
         background.append(
             asyncio.create_task(tasks.run_scheduler(), name="scheduler")
+        )
+        background.append(
+            asyncio.create_task(prowlarr.watch_indexers_forever(), name="prowlarr-watch")
         )
 
     try:

@@ -12,7 +12,8 @@ Jinja environment and checks, without rendering:
       of every card (cards.ALL_CARDS), of every *Arr app (arr.registry.APPS) and of every library
       kind (web.library_kinds.KINDS);
   (d) every template is used: a literal target in a template or a name from (c);
-  (e) `from "x" import a, b`: x defines the macros a and b; every macro is called somewhere;
+  (e) `from "x" import a, b`: x defines the macros a and b, and the template uses both - a copied
+      header must not hide which macros a template needs; every macro is called somewhere;
   (f) a call of a macro passes only its parameters (keywords) and no more positional arguments
       than it has (unless the macro reads `kwargs` / `varargs`);
   (g) the comments of the templates in ENGLISH carry no Czech (the rule of test_english_code:
@@ -23,7 +24,8 @@ Jinja environment and checks, without rendering:
       the Python code (a string constant or a keyword) - a context key renamed in Python but not
       in a template is caught here when its old name is gone from the code;
   (k) every name a template comment cites in backticks exists in the code or the templates - a
-      comment that documents a template's context ("Expects `x`") cannot keep a renamed key;
+      comment that documents a template's context ("Expects `x`", `d.rows`) cannot keep a renamed key;
+      each part of a dotted name counts, and the maps of old names (OLD_NAME_MAPS) do not make a name known;
   (l) every `card.<name>` a template reads is a field of cards.Card - templates call a card `card`
       everywhere, and Jinja draws a missing attribute as an empty string, so a field renamed in Python
       but not in a template would only show as an empty spot on a page.
@@ -253,6 +255,19 @@ def macro_problems(trees: dict[str, nodes.Template], unused_allowed: dict[str, s
     return problems
 
 
+def unused_imports(trees: dict[str, nodes.Template]) -> list[str]:
+    """(e) Macros a template imports (`from "x" import a`) but never uses, as "template: a"."""
+    found = []
+    for name, tree in trees.items():
+        used = {node.name for node in tree.find_all(nodes.Name) if node.ctx == "load"}
+        for node in tree.find_all(nodes.FromImport):
+            for entry in node.names:
+                alias = entry if isinstance(entry, str) else entry[1]
+                if alias not in used:
+                    found.append(f"{name}: {alias}")
+    return sorted(found)
+
+
 def czech_comments(name: str, text: str) -> list[str]:
     """(g) Comments of a template with Czech in them (quoted text aside), as "name:line: word"."""
     found = []
@@ -267,7 +282,11 @@ def czech_comments(name: str, text: str) -> list[str]:
 # HTML attributes and events comments cite in backticks; they are no names of the code.
 HTML_WORDS = {"onerror", "onchange", "onclick", "formnovalidate", "enctype", "autocomplete", "loading", "alt", "id",
               "title", "type", "name", "value", "form", "placeholder", "hidden", "selected", "checked", "disabled"}
-BACKTICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
+# A name or a dotted name (`d.rows`, `content_section.data`) - every part of it is checked.
+BACKTICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)`")
+# Modules that keep the old (Czech) names on purpose, to convert old databases and addresses: a name only they
+# know is a renamed one.
+OLD_NAME_MAPS = {"schema_names.py", "legacy_urls.py"}
 
 
 def code_words(texts: list[str]) -> set[str]:
@@ -303,8 +322,9 @@ def stale_backticked(texts: dict[str, str], known: set[str]) -> list[str]:
     for name, text in texts.items():
         for match in COMMENT.finditer(text):
             for word in BACKTICKED.findall(match.group(1)):
-                if word not in known and word not in HTML_WORDS:
-                    found.append(f"{name}: {word}")
+                for part in word.split("."):
+                    if part not in known and part not in HTML_WORDS:
+                        found.append(f"{name}: {part}")
     return sorted(set(found))
 
 
@@ -389,7 +409,8 @@ check(not lost, f"(i) every free name of a template is bound in templates, a Jin
 template_words = {t for tree in trees.values() for t in
                   [n.name for n in tree.find_all(nodes.Name)] + [n.attr for n in tree.find_all(nodes.Getattr)]
                   + [m.name for m in tree.find_all(nodes.Macro)] + [a.name for m in tree.find_all(nodes.Macro) for a in m.args]}
-known_words = (code_words([path.read_text(encoding="utf-8") for path in sorted((PROJECT / "jellyscope").rglob("*.py"))])
+known_words = (code_words([path.read_text(encoding="utf-8") for path in sorted((PROJECT / "jellyscope").rglob("*.py"))
+                            if path.name not in OLD_NAME_MAPS])
                | template_words | set(ENV.globals) | set(ENV.filters))
 stale_words = stale_backticked(texts, known_words)
 check(not stale_words, f"(k) every name a template comment cites in backticks exists in the code or templates ({stale_words})")
@@ -415,6 +436,8 @@ stale = sorted(entry for entry in UNUSED_MACROS
                if tuple(entry.split(":", 1)) not in macros_of(trees)
                or not macro_problems(trees, {k: v for k, v in UNUSED_MACROS.items() if k != entry}))
 check(not stale, f"no exception for an unused macro is stale ({stale})")
+idle_imports = unused_imports(trees)
+check(not idle_imports, f"(e) every macro a template imports is used there ({idle_imports})")
 
 print()
 print("--- comments in English ---")
@@ -468,12 +491,16 @@ with tempfile.TemporaryDirectory() as folder:
     check(any("m.html: the macro idle is never called" == p for p in found), "(e) a macro never called is found")
     check(any("has no parameter c" in p for p in found), "(f) an unknown keyword argument is found")
     check(any("takes 2 arguments, gets 3" in p for p in found), "(f) too many positional arguments are found")
+    check(unused_imports(trap_trees) == ["imports.html: absent"], "(e) an imported macro the template never uses is found")
     check(not macro_problems(trap_trees, {"m.html:idle": "planted"}) == found, "(e) an exception silences one macro")
     lone = {"lone.html": ENV.parse("{{ nobody_gives_this }}{% set mine = 1 %}{{ mine }}{{ known_key }}")}
     check(unprovided(lone, python_names(['f(known_key=1)'])) == ["lone.html: nobody_gives_this"],
           "(i) a name nobody provides is found, a bound name and a Python name are not")
     check(stale_backticked({"c.html": "{# reads `gone_key` and `kept_key`, see `onerror` #}"}, {"kept_key"})
           == ["c.html: gone_key"], "(k) a backticked name that exists nowhere is found")
+    check(stale_backticked({"e.html": "{# `d.radky` and `d.rows`, `content_section.data` #}"},
+                           {"d", "rows", "content_section", "data"}) == ["e.html: radky"],
+          "(k) a renamed part of a dotted name is found, a dotted name that exists is not")
     check(unknown_card_attributes({"d.html": ENV.parse("{{ card.key }}\n{{ card.klic }}{{ row.klic }}")}, {"key"})
           == ["d.html:2 card.klic"], "(l) a card attribute that is no field of Card is found, other objects are not")
     check(czech_comments("orphan.html", trap_texts["orphan.html"]) == ["orphan.html:1: č"],

@@ -24,6 +24,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
@@ -136,6 +137,9 @@ check(not ({r["id"] for r in first_page} & {r["id"] for r in second_page}),
 
 check(stats.library_rows_count(search="Kancel") == 1, "the search finds the series")
 check(stats.library_rows_count(search="Matr") == 1, "and the movie")
+check(stats.library_rows_count(search="_") == 0 and stats.library_rows_count(search="%") == 0
+      and stats.library_rows_count(search="M_trix") == 0,
+      "% and _ are searched as they are typed, not as wildcards")
 
 
 print()
@@ -211,6 +215,116 @@ response = client.post("/settings/scan",
                        follow_redirects=False)
 check(response.headers["location"] == "/settings?section=tasks",
       f"an unknown library leads back to Settings ({response.headers['location']})")
+
+
+print()
+print("--- the list places unknown values as PostgreSQL would: last, ties by the id ---")
+# PostgreSQL takes NULL for the LARGEST value (first with DESC, last with ASC), SQLite for the smallest. PostgreSQL
+# cannot run here, so the queries are run on SQLite with PostgreSQL's default written out into every ORDER BY term
+# that does not place NULL itself. Only the placement of NULL is emulated: what else PostgreSQL alone refuses (an
+# alias inside an expression, the rules of GROUP BY) is not seen here - test_sql_groupby.py and a run of the
+# suite on PostgreSQL are for that.
+
+
+def _split_terms(clause: str) -> list[str]:
+    terms, depth, chunk = [], 0, ""
+    for char in clause:
+        depth += (char == "(") - (char == ")")
+        if char == "," and depth == 0:
+            terms.append(chunk)
+            chunk = ""
+        else:
+            chunk += char
+    return [t.strip() for t in terms + [chunk] if t.strip()]
+
+
+def postgres_order(sql: str) -> str:
+    """`sql` with PostgreSQL's NULL placement in every ORDER BY (up to LIMIT/OFFSET or the closing bracket)."""
+    done, rest = "", sql
+    while match := re.search(r"\bORDER\s+BY\b", rest, re.I):
+        done, rest = done + rest[:match.end()], rest[match.end():]
+        depth, end = 0, len(rest)
+        for pos, char in enumerate(rest):
+            if char == ")" and depth == 0 or depth == 0 and re.match(r"\s(LIMIT|OFFSET)\b", rest[pos:], re.I):
+                end = pos
+                break
+            depth += (char == "(") - (char == ")")
+        terms = [t if re.search(r"\bNULLS\b", t, re.I)
+                 else t + (" NULLS FIRST" if re.search(r"\bDESC$", t, re.I) else " NULLS LAST")
+                 for t in _split_terms(rest[:end])]
+        done, rest = done + " " + ", ".join(terms), rest[end:]
+    return done + rest
+
+
+check(postgres_order("SELECT a FROM t ORDER BY a DESC, b LIMIT 1")
+      == "SELECT a FROM t ORDER BY a DESC NULLS FIRST, b NULLS LAST LIMIT 1",
+      "the helper writes out PostgreSQL's default")
+
+with db.connect() as conn:
+    # One title with technical data (4K, a known bitrate), one without anything - not even a size.
+    conn.execute("INSERT INTO items (id, name, type, library_id, size_bytes, width, height, bitrate, is_missing,"
+                 " synced_at) VALUES ('film-3', 'Alien', 'Movie', 'lib', 1000, 3840, 2160, 8000000, 0, ?)",
+                 (db.utcnow(),))
+    conn.execute("INSERT INTO items (id, name, type, library_id, is_missing, synced_at)"
+                 " VALUES ('film-4', 'Brazil', 'Movie', 'lib', 0, ?)", (db.utcnow(),))
+
+seen: list[str] = []
+real_query_all = db.query_all
+
+
+def as_on_postgres(sql: str, params: Any = ()) -> list[dict[str, Any]]:
+    seen.append(sql)
+    return real_query_all(postgres_order(sql), params)
+
+
+db.query_all = as_on_postgres
+try:
+    by_bitrate = [r["name"] for r in stats.library_rows(50, 0, sort="bitrate")]
+    by_resolution = [r["name"] for r in stats.library_rows(50, 0, sort="resolution")]
+    orderings = {}
+    for sort in ("size", "bitrate", "name", "plays", "resolution"):
+        seen.clear()
+        stats.library_rows(50, 0, sort=sort)
+        orderings[sort] = _split_terms(re.findall(r"ORDER BY(.+?)LIMIT", seen[-1], re.S)[-1])
+    posters = {card["id"]: card["poster_id"] for card in stats.library_cards()}
+finally:
+    db.query_all = real_query_all
+check(by_bitrate[0] == "Alien",
+      f"by bitrate the title with a known bitrate comes first, the unknown ones after it ({by_bitrate})")
+check(by_resolution[0] == "Alien" and by_resolution[-1] == "Brazil",
+      f"by resolution 4K first and the title without a height last ({by_resolution})")
+check(all(terms[-1] == "id" for terms in orderings.values()),
+      f"every sort ends with the title's id, so ties keep one order from page to page ({orderings})")
+check(posters.get("lib") == "film-2",
+      f"the library's tile shows the largest title, not one of unknown size ({posters.get('lib')})")
+
+
+print()
+print("--- other episodes: around the open one, the whole count, the width ---")
+# A hundred episodes (five seasons of twenty), scope 1920x800: by the height alone that is 720p, by the width 1080p.
+with db.connect() as conn:
+    for season in range(1, 6):
+        for number in range(1, 21):
+            conn.execute(
+                "INSERT INTO items (id, name, type, library_id, series_id, series_name, index_number,"
+                " parent_index_number, size_bytes, width, height, is_missing, synced_at)"
+                " VALUES (?, ?, 'Episode', 'lib', 'serial-2', 'Dlouhý', ?, ?, 1000, 1920, 800, 0, ?)",
+                (f"long-{season}-{number:02d}", f"Díl {season}x{number:02d}", number, season, db.utcnow()))
+siblings = stats.sibling_episodes(stats.item("long-5-10"))
+listed = [r["id"] for r in siblings["episodes"]]
+check(siblings["total"] == 100, f"the count is the whole series ({siblings['total']})")
+check(len(listed) == 40 and "long-5-10" in listed,
+      f"the list holds the open episode among forty ({len(listed)}, from {listed[:1]} to {listed[-1:]})")
+check(listed == sorted(listed), "in the series' order")
+check(stats.sibling_episodes(stats.item("long-1-01"))["episodes"][0]["id"] == "long-1-01",
+      "the first episode opens the list at the start")
+check(stats.sibling_episodes(stats.item("long-5-20"))["episodes"][-1]["id"] == "long-5-20",
+      "and the last one at the end")
+page = client.get("/item/long-5-10").text
+card = page[page.find("Ostatní epizody"):]
+check("100 v seriálu" in card, "the page says the whole count")
+check('href="/item/long-5-10"' in card, "and lists the open episode")
+check("1080p" in card and "720p" not in card, "1920x800 is 1080p by its width")
 
 
 print()

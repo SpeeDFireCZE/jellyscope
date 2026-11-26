@@ -202,7 +202,7 @@ restore = substitute(prowlarr, "ProwlarrClient", _apps.prowlarr_client(_apps.pro
 _apps.connect_prowlarr()
 _apps.fill_prowlarr()                     # "Who asks" is from the database: Radarr, Sonarr and Prowlarr itself
 check_lists("prowlarr", fresh_page(prowlarr, "prowlarr"),
-            ("prowlarr_indexers_now", "prowlarr_who", "prowlarr_health"))
+            ("prowlarr_indexers_now", "prowlarr_who", "prowlarr_availability", "prowlarr_health"))
 warnings_of("prowlarr", fresh_page(prowlarr, "prowlarr"), "prowlarr_health")
 restore()
 

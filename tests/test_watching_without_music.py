@@ -71,10 +71,12 @@ COUNTS_ALL = {
     "access.py": "the order of devices for anonymising",
     "scanner/": "merging and archiving the library's items",
     "stats/play_history.py": "History: the kind is chosen by a person (`kind`)",
+    "web/history.py:_filter_options": "History: the highest row number tells a new play of any kind came",
     "stats/locations.py": "where who connects from - traffic is traffic",
     "stats/network.py": "the network - traffic is traffic",
     "stats/playback.py": "playing right now",
     "stats/item_detail.py": "the plays of one library item",
+    "images.py:known_tags": "whether an id is being played right now (any kind) - an image of it may then be fetched",
     # The base of the stats package imports nothing of the package (test_stats_package), so it cannot use the condition.
     # The start of "the whole history" is the first record of anything; the Music page has its own start.
     "stats/periods.py:first_record": "since when there is any history - the start of \"the whole history\"",
@@ -189,8 +191,14 @@ API_HEADER = {"Authorization": f"Bearer {api.create_token('books-test')['token']
 PAGES = ("/?days=30", "/users", f"/users/{USERS[0]}?days=30", "/video/compare")
 
 
+def page_content(text: str) -> str:
+    """The page without what is not its content: the charts' gradient names (a counter numbers them) and the markers the
+    page's refresher starts from (data-markers: the plays' marker moves with any play, music and books too)."""
+    return re.sub(r"data-markers='[^']*'", "", re.sub(r"gradient-[\w-]+", "gradient", re.sub(r"\s+", " ", text)))
+
+
 def pages_snapshot() -> dict[str, Any]:
-    snap: dict[str, Any] = {path: re.sub(r"prechod-[\w-]+", "prechod", re.sub(r"\s+", " ", client.get(path).text)) for path in PAGES}
+    snap: dict[str, Any] = {path: page_content(client.get(path).text) for path in PAGES}
     snap["api summary"] = TestClient(web_app).get("/api/v1/summary?days=30", headers=API_HEADER).json()
     return snap
 

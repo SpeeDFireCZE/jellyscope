@@ -103,6 +103,9 @@ check(playing["sessions"][0]["is_transcode"] is True, "and the transcode recogni
 library = client.get("/api/v1/library", headers=header).json()
 check(library["items"] == 1 and library["size_bytes"] == 1024 ** 3,
       f"library: {library['items']} items, {library['size_human']}")
+# Numbers on pages follow the page's language ("1.0 GB" in English); the JSON keeps the
+# notation it always had - a client may read the text.
+check(library["size_human"] == "1,0 GB", f"the API's size text keeps its notation ({library['size_human']})")
 
 index = client.get("/api/v1/", headers=header).json()
 check("/api/v1/summary" in index["endpoints"], "the index lists the addresses")

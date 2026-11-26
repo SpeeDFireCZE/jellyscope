@@ -498,8 +498,8 @@ import html as html_lib  # noqa: E402
 from _apps import card_html  # noqa: E402
 from jellyscope import cards, cards_sonarr  # noqa: E402
 
-check(len(cards_sonarr.CARDS) == 23 and len(cards.ALL_CARDS) == 206,
-      f"23 Sonarr cards, 206 in the registry ({len(cards_sonarr.CARDS)}, {len(cards.ALL_CARDS)})")
+check(len(cards_sonarr.CARDS) == 24 and len(cards.ALL_CARDS) == 211,
+      f"24 Sonarr cards, 211 in the registry ({len(cards_sonarr.CARDS)}, {len(cards.ALL_CARDS)})")
 check(cards_sonarr.SECTIONS[0][1][:2] == ("live_numbers", "downloading"), "Stahuje se is the second card of the section Teď v aplikaci (now in the app)")
 accounts.create("viewer", "longpassword")                 # default permissions: it has the *Arr area, it is no admin
 viewer = login("viewer")

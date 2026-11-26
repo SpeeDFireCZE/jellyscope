@@ -88,6 +88,8 @@ with db.connect(source) as conn:
         ("INSERT INTO api_tokens (id, name, token_hash, preview, created_at, account_id)"
          " VALUES (12, 'Grafana', 'otisk', 'js_abc', ?, 7)", (T,)),
         ("INSERT INTO login_blocks (ip, level) VALUES ('203.0.113.9', 1)", ()),
+        # A sign-in session goes along: switching the database does not sign anybody out.
+        ("INSERT INTO web_sessions (token_hash, account_id, created_at, last_used_at) VALUES ('hash', 7, ?, ?)", (T, T)),
         ("INSERT INTO forgettings (id, user_id, name, session_count, forgotten_at)"
          " VALUES (3, 'u9', 'Petr', 1, ?)", (T,)),
         ("INSERT INTO detailed_map_tile (detail_level, x, y, content) VALUES (1, 2, 3, '{}')", ()),
@@ -157,6 +159,10 @@ with db.connect(source) as conn:
          " VALUES (23, ?, 1, 'Radarr', 'Film.2024.1080p.WEB-DL', 'proxy', 1, 41, '')", (T,)),
         ("INSERT INTO prowlarr_indexer (id, name, protocol, privacy, enabled, removed, seen_at)"
          " VALUES (1, 'arr-test', 'usenet', 'private', 1, 0, ?)", (T,)),
+        # A sample of the indexers' status: the sample's own row and an indexer left out at that moment.
+        ("INSERT INTO prowlarr_sample (sampled_at, indexer_id, enabled_ids, interval_seconds) VALUES (?, 0, ',1,3,', 3600)", (T,)),
+        ("INSERT INTO prowlarr_sample (sampled_at, indexer_id, failing_since, skipped_until, last_failure)"
+         " VALUES (?, 1, '2026-11-15 06:33:00', '2026-11-15 06:38:34', '2026-11-15 06:37:34')", (T,)),
     ):
         conn.execute(sql, values)
     db._ensure_playback_bin(conn)

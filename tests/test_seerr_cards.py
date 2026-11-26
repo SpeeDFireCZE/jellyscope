@@ -127,7 +127,7 @@ check({k.key for k in cards_seerr.CARDS if k.area == "seerr_who"} == {"seerr_who
       and all(k.area in ("seerr", "seerr_who") and k.group == "Seerr" for k in cards_seerr.CARDS),
       "the Seerr area, Kdo žádá under an area of its own; the Seerr group")
 check({k.key for k in cards_seerr.CARDS if not k.uses_period} == {"seerr_pending"}, "only the live card without a period")
-check(all(k in cards.ALL_CARDS for k in cards_seerr.CARDS) and len(cards.ALL_CARDS) == 206, f"they are in the registry; there are 206 cards ({len(cards.ALL_CARDS)})")
+check(all(k in cards.ALL_CARDS for k in cards_seerr.CARDS) and len(cards.ALL_CARDS) == 211, f"they are in the registry; there are 211 cards ({len(cards.ALL_CARDS)})")
 WIDTHS = {"pending": "full", "latest": "full", "numbers": "full", "by_day": "full", "when": "half", "states": "half",
           "who": "half", "speed": "half", "watching": "full", "nobody": "full"}
 CARD_NAMES = {"pending": "Čeká na vyřízení", "latest": "Poslední žádosti", "numbers": "Čísla žádostí",
@@ -332,10 +332,140 @@ count = sum("FROM seerr_request WHERE created_at >= ?" in q for q in db_queries)
 check(count == 1, f"the page selects the period's requests once ({count}×)")
 
 print()
+print("--- F2) the latest requests live from Seerr ---")
+# The user (26. 11. 2026): "Seerr poslední žádosti není live." The card read only what the last sync stored (every
+# hour by default): a fresh request was missing and an approved one still said "čeká", while "Čeká na vyřízení" next
+# to it already knew better. Now the card asks Seerr like the pending one does (3 s, a minute in the cache).
+# Seerr since the last sync: request 10 approved, 12 cancelled by its requester (gone), 20 new and pending.
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+import httpx  # noqa: E402
+
+from jellyscope import services  # noqa: E402
+
+FRESH_AT = (datetime.now(UTC) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+FRESH = {**request(10), "id": 20, "createdAt": FRESH_AT, "updatedAt": FRESH_AT,
+         "media": {**request(10)["media"], "tmdbId": 550, "jellyfinMediaId": None}}
+SEERR_NOW = [FRESH, *[{**z, "status": 2} if z["id"] == 10 else z for z in reversed(REQUESTS) if z["id"] != 12]]
+PENDING = [FRESH]
+live_calls: list[httpx.Request] = []
+recorded_seerr = seerr_handler()
+
+
+def seerr_now(call: httpx.Request) -> httpx.Response:
+    """Seerr as it is now, the newest first (Seerr sorts by itself, `sortDirection=desc`)."""
+    path = call.url.path.split("/api/v1/", 1)[-1]
+    if path == "request" or path.startswith(("movie/", "tv/")):
+        live_calls.append(call)
+    if path == "request":
+        listed = PENDING if call.url.params.get("filter") == "pending" else SEERR_NOW
+        return httpx.Response(200, json={"pageInfo": {"pages": 1, "pageSize": int(call.url.params["take"]),
+                                                      "results": len(listed), "page": 1}, "results": listed})
+    return recorded_seerr(call)
+
+
+def lists_asked() -> list[str]:
+    return sorted(str(c.url.params.get("filter")) for c in live_calls if c.url.path.endswith("/request"))
+
+
+def names_asked() -> list[str]:
+    return [c.url.path.split("/api/v1/", 1)[-1] for c in live_calls if not c.url.path.endswith("/request")]
+
+
+SEERR_CARDS = {k.key: k for k in cards_seerr.CARDS}
+restore()
+restore = substitute(seerr, "SeerrClient", seerr_client(seerr_now))
+seerr.live.CACHE.clear()
+stored_before = [dict(r) for r in db.query_all("SELECT id, status, deleted_at FROM seerr_request ORDER BY id")]
+live_calls.clear()
+s_live = admin.get("/seerr?days=365").text
+first_render = (lists_asked(), names_asked())
+latest_live = html_lib.unescape(card_html(s_live, "seerr_latest"))
+pending_live = card_html(s_live, "seerr_pending")
+data_live = cards.data_for([SEERR_CARDS["seerr_pending"], SEERR_CARDS["seerr_latest"]], 365, account=admin_account)
+rows_live = data_live["seerr_latest"]["rows"]
+groups_live = {z["request_id"]: z["group"] for z in rows_live}
+check(bool(rows_live) and rows_live[0]["request_id"] == 20 and rows_live[0]["title"] == "Film 550" and groups_live[20] == "waiting"
+      and 0 < latest_live.find("Film 550") < latest_live.find("Seriál 95396"),
+      f"a request newer than the last sync is in the card at once, the newest first, with its name from Seerr ({rows_live[:1]})")
+check({z["request_id"] for z in rows_live if z["group"] == "waiting"} == {z["request_id"] for z in data_live["seerr_pending"]["requests"]} == {20}
+      and "Film 550" in pending_live and "Film 872585" not in pending_live,
+      f"the states agree with “Čeká na vyřízení” on the same page ({sorted(groups_live.items())})")
+check(groups_live[10] == "approved" and groups_live[12] == "deleted" and groups_live[1] == "available",
+      f"approved meanwhile = schváleno, gone from Seerr = smazáno v Seerru, the others as Seerr has them ({groups_live})")
+
+
+def gone(seen: set[int], span_from: int | None) -> list[int]:
+    fresh = {"requests": [], "seen": frozenset(seen), "span_from": span_from}
+    return sorted(z["id"] for z in stats.seerr_with_live(365, fresh)["requests"] if z["deleted_at"])
+
+
+check(gone({14}, 10) == [10, 12] and gone({14}, None) == [],
+      f"gone from Seerr = only what the page speaks for and lacks; a page in an unknown order marks nothing ({gone({14}, 10)}, {gone({14}, None)})")
+# The page was cached a moment ago with the requests up to 12; then a sync ("Sync now" or the hourly task) stored 14,
+# made in Seerr meanwhile. Within the cache's minute the page does not know 14 - it is newer than all it holds, not gone.
+check(gone({1, 2, 3, 4, 5, 6, 10, 12}, 0) == [] and gone({1, 2, 3, 4, 5, 6, 10, 14}, 0) == [12],
+      f"a request newer than the page's highest id is not gone; a missing one below it is ({gone({1, 2, 3, 4, 5, 6, 10, 12}, 0)})")
+check(gone({10, 12}, 10) == [] and gone(set(), 0) == [],
+      f"a full page speaks only up to its highest id; an empty page marks nothing ({gone({10, 12}, 10)}, {gone(set(), 0)})")
+check(data_live["seerr_latest"]["total"] == len(REQUESTS) + 1 and len(rows_live) == len(REQUESTS) + 1,
+      f"the count of the period's requests counts the new one too ({data_live['seerr_latest']['total']})")
+check(all("id" not in z for z in rows_live) and "z poslední synchronizace" not in latest_live,
+      "no row carries the key `id`; a card from Seerr has no note about the last sync")
+check([dict(r) for r in db.query_all("SELECT id, status, deleted_at FROM seerr_request ORDER BY id")] == stored_before,
+      "the live card stores nothing: the sync stays the only writer")
+check(first_render == (["all", "pending"], ["movie/550"]),
+      f"one render: one list of the newest, one of the pending, the one unknown name once ({first_render})")
+latest_call = next((c for c in live_calls if c.url.params.get("filter") == "all"), None)
+check(latest_call is not None and dict(latest_call.url.params) == {"take": str(cards_seerr.ROWS), "skip": "0", "filter": "all",
+                                                                  "sort": "added", "sortDirection": "desc"}
+      and (latest_call.extensions.get("timeout") or {}).get("read") == services.LIVE_TIMEOUT.read,
+      f"one page of as many as the card shows, the newest first, waiting 3 s ({dict(latest_call.url.params) if latest_call else None})")
+live_calls.clear()
+admin.get("/seerr?days=365")
+cards.save_layout(["seerr_latest"])
+dashboard_live = html_lib.unescape(card_html(admin.get("/dashboard?days=365").text, "seerr_latest"))
+check(live_calls == [] and "Film 550" in dashboard_live,
+      f"within a minute from the cache, the page and the dashboard alike ({lists_asked()}, {names_asked()})")
+check(set(seerr.live.CACHE) == {"seerr"}, f"both live cards come from one entry of the cache: one load, one moment ({sorted(seerr.live.CACHE)})")
+# Meanwhile request 20 was approved in Seerr. Once the minute is over, whichever card asks first loads both lists: a
+# dashboard holding only "Latest requests" and the Seerr page after it cannot disagree about the request.
+SEERR_NOW[0] = {**FRESH, "status": 2}
+PENDING.clear()
+stamp, *kept = seerr.live.CACHE["seerr"]
+seerr.live.CACHE["seerr"] = (stamp - seerr.live.TTL - 1, *kept)
+live_calls.clear()
+only_latest = cards.data_for([SEERR_CARDS["seerr_latest"]], 365, account=admin_account)["seerr_latest"]
+then_both = cards.data_for([SEERR_CARDS["seerr_pending"], SEERR_CARDS["seerr_latest"]], 365, account=admin_account)
+states = ({z["request_id"]: z["group"] for z in only_latest["rows"]}.get(20),
+          {z["request_id"]: z["group"] for z in then_both["seerr_latest"]["rows"]}.get(20), then_both["seerr_pending"]["count"])
+check(states == ("approved", "approved", 0) and lists_asked() == ["all", "pending"],
+      f"one card alone reloads both lists: the two cards agree on a request approved meanwhile ({states}, {lists_asked()})")
+SEERR_NOW[0] = FRESH
+PENDING.append(FRESH)
+seerr.live.CACHE.clear()
+short_period = cards.data_for([SEERR_CARDS["seerr_latest"]], 2, account=admin_account)["seerr_latest"]
+check([z["request_id"] for z in short_period["rows"]] == [20] and short_period["total"] == 1,
+      f"the period holds: the last two days have only the new request ({[z['request_id'] for z in short_period['rows']]})")
+reader_rights(DEFAULTS)
+reader_account = accounts.get_by_name("reader")
+reader_latest = json.dumps(cards.data_for([SEERR_CARDS["seerr_latest"]], 365, account=reader_account), default=str, ensure_ascii=False)
+s_reader_live = reader.get("/seerr?days=365").text
+check("Film 550" in reader_latest and "user_name" not in reader_latest and "user_id" not in reader_latest
+      and "Film 550" in s_reader_live and "Janička" not in s_reader_live,
+      "without “…kdo žádal” the live rows carry no requester either")
+reader_rights(None)
+reader_account = accounts.get_by_name("reader")
+
+print()
 print("--- G) Seerr does not answer ---")
 restore()
 restore = substitute(seerr, "SeerrClient", seerr_client(not_responding()))
 seerr.live.CACHE.clear()
+with db.connect() as conn:        # the last sync three hours ago - the note below says when
+    conn.execute("UPDATE seerr_request SET synced_at = ?",
+                 ((datetime.now(UTC) - timedelta(hours=3, minutes=5)).strftime(db.TIME_FORMAT),))
+    conn.commit()
 cards.save_layout(["seerr_pending", "seerr_numbers", "seerr_latest"])
 r = admin.get("/dashboard?days=365")
 check(r.status_code == 200 and "Seerr neodpovídá" in card_html(r.text, "seerr_pending")
@@ -345,6 +475,11 @@ check("Connection refused" in r.text and "tajny-klic" not in r.text, "the admini
 s_reader = reader.get("/seerr?days=365").text
 check("Seerr neodpovídá" in s_reader and "Connection refused" not in s_reader and tile(s_reader, "Žádostí") == str(len(REQUESTS)),
       "whoever is not the administrator sees only the sentence that Seerr does not answer - and the statistics from the database")
+latest_down = card_html(r.text, "seerr_latest")
+NOTE = "Seerr neodpovídá. Žádosti jsou z poslední synchronizace (před 3 h)."
+check(NOTE in latest_down and latest_down.count("Seerr neodpovídá") == 1 and "Film 550" not in latest_down
+      and "Connection refused" not in latest_down and NOTE in card_html(s_reader, "seerr_latest"),
+      "the latest requests from the database with one note that they are from the last sync and when that was")
 restore()
 restore = substitute(seerr, "SeerrClient", seerr_client(seerr_handler(asked)))
 seerr.live.CACHE.clear()

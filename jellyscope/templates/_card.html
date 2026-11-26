@@ -26,20 +26,37 @@
      (`in_dashboard` is not set) it is empty - it is clear there whose card it is.
    Older cards read neither.
 
-   The comment with the key before the card: a test tells the order of cards by it without
-   adding an element that would break the grid (.grid-2 > .card). #}
+   The card's slot (`card-slot`): one element around the whole card, on every page and in a
+   dashboard, with the card's key and its sources (Card.sources) - an open page finds its cards by it
+   and has them drawn again (/partials/cards, web/dashboards.py). `data-card-period` = the card
+   follows the page's period: over "the last N days" it is drawn anew now and then even when no
+   source moved (static/js/app.js); `data-card-still` = it is not drawn anew by itself on this page
+   (show_card's keep_still). It makes no box of its own
+   (`display: contents` in style.css), so the grid (.grid-2) and a dashboard's cell still lay out the
+   card itself; the rules that reach for a card through its parent name the slot too.
+
+   The comment with the key before the slot: tests tell the order of cards by it. #}
 <!-- card: {{ card.key }} -->
 {%- set d = card_data(card.key) %}
+{#- Flowing right now refreshes itself on the Network page, as it always did; in a dashboard only with Refreshing
+    cards on (Settings → Interface) - it never did there before them, and switched off nothing is to ask more. #}
+{%- set own_wrapper = (card.wrapper_id or card.refresh_partial or card.after_sync)
+                      and not (in_dashboard and card.key == "live_traffic" and not ui_self_refresh) %}
 {%- set prefix = (_(card.group) ~ " · ") if (in_dashboard and card.group) else "" %}
 {%- set wrapper_attrs %}{% if card.wrapper_id %} id="{{ card.wrapper_id }}"{% endif %}
-    {%- if card.refresh_partial %} data-refresh="{{ poll_interval }}" data-partial="{{ card.refresh_partial }}"{% endif %}
+    {#- A card with a period asks with the page's period, not the session's (another tab may have changed it). #}
+    {%- if card.refresh_partial %} data-refresh="{{ poll_interval }}" data-partial="{{ card.refresh_partial }}
+        {%- if card.uses_period and period is defined %}?{{ period.query }}{% endif %}"{% endif %}
     {%- if card.after_sync %} data-version="{{ library_version }}"{% endif %}{% endset %}
+<div class="card-slot" data-card-key="{{ card.key }}" data-card-sources="{{ card.sources | join(' ') }}"
+     {%- if card.uses_period %} data-card-period="1"{% endif %}{% if keep_still %} data-card-still="1"{% endif %}>
 {% if card.wrap_in_card %}
 <div class="card"{{ wrapper_attrs }}>{% include card.template %}</div>
-{% elif card.wrapper_id or card.refresh_partial or card.after_sync %}
+{% elif own_wrapper %}
 {#- A class for the custom dashboard: a cell there zeroes the bottom margin of its
     last element, and that is the wrapper now, not the card (see .card-wrapper). #}
 <div class="card-wrapper"{{ wrapper_attrs }}>{% include card.template %}</div>
 {% else %}
 {% include card.template %}
 {% endif %}
+</div>

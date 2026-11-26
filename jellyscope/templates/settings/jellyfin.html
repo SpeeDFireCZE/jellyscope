@@ -6,7 +6,7 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker, permissions_tree %}
+{% from "_macros.html" import running_task, permissions_tree %}
 
 {# ================================================================== #}
 <div class="card">
@@ -143,13 +143,14 @@
     </label>
     <p class="hint">
         {{ _("Anybody with a Jellyfin account signs in here with the same username and password. The password is not stored here; it is only passed to Jellyfin to check. A Jellyfin administrator is an administrator here too; everybody else sees what is ticked below.") }}
+        {{ _("A Jellyfin user without a password cannot sign in here with a password. A code (Quick Connect) still works when Jellyfin allows it.") }}
     </p>
 
     {# The tree: what is indented applies only with its parent. That is why
        a sub-area cannot be switched on alone - the library off means
        "kdo to sledoval" off too. #}
-    <div class="field" style="margin-top:18px">
-        <label>{{ _("What a viewer sees") }}</label>
+    <div class="field" style="margin-top:18px" role="group" aria-labelledby="viewer-tree-label">
+        <label id="viewer-tree-label">{{ _("What a viewer sees") }}</label>
         <p class="hint" style="margin-top:0">
             {{ _("Their own statistics and their own history are always visible; without those, signing in would be pointless.") }}
         </p>

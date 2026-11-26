@@ -287,8 +287,9 @@ import asyncio  # noqa: E402
 sent: list[tuple[str, str]] = []
 
 
-async def capture(subject: str, message_text: str) -> None:
+async def capture(subject: str, message_text: str) -> list[dict[str, object]]:
     sent.append((subject, message_text))
+    return [{"channel": "ntfy", "ok": True, "error": ""}]      # delivered: only then the new state is stored
 
 
 original_send, original_channels = notifications.send, notifications.enabled_channels

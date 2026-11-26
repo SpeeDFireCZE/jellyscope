@@ -52,7 +52,7 @@ def check(condition: bool, label: str) -> None:
 SAVING_FORMS = {
     "/settings/interface", "/settings/language", "/settings/notifications", "/settings/notifications/events",
     "/settings/notifications/texts", "/settings/tasks", "/settings/accounts/keys", "/settings/readers",
-    "/settings/viewers", "/settings",
+    "/settings/viewers", "/settings", "/settings/api/key-limit",
 }
 # Left out, and why: /settings/connection and /settings/arr/<app>, /settings/seerr test a connection;
 # /settings/database switches the database; the rest start, delete, restore or download something.
@@ -61,17 +61,19 @@ AWAY_FROM_DEFAULTS = {
     "ui_max_streams": "7", "ui_max_viewers": "9", "ui_max_rows": "13", "ui_max_rows_mobile": "4",
     "ui_max_rows_arr": "11", "ui_max_rows_arr_mobile": "3", "ui_max_rows_seerr": "12", "ui_max_rows_seerr_mobile": "6",
     "ui_max_rows_music": "14", "ui_max_rows_music_mobile": "2", "ui_map_zoom": "wheel", "ui_map_podklad": "osm",
-    "ui_skin": "classic", "ui_exact_time": "1", "ui_events": "0", "dashboard_name": "Rodina",
+    "ui_skin": "classic", "ui_exact_time": "1", "ui_events": "0", "ui_self_refresh": "0", "dashboard_name": "Rodina",
     "ui_dashboard": "1",
     "notify_smtp_enabled": "1", "notify_smtp_host": "smtp.example.test", "notify_smtp_port": "2525",
     "notify_smtp_user": "sender-user", "notify_smtp_sender": "from@example.test",
-    "notify_smtp_recipient": "to@example.test", "notify_smtp_tls": "0", "notify_telegram_chat": "12345",
+    "notify_smtp_recipient": "to@example.test", "notify_smtp_tls": "0", "notify_smtp_verify": "0",
+    "notify_telegram_chat": "12345",
     "notify_event_space": "0", "notify_event_collector": "1", "notify_event_summary": "1",
     "notify_space_days": "21", "notify_summary_day": "3", "notify_summary_time": "07:15", "notify_quiet_minutes": "45",
     notifications.text_key("collector_down", "subject"): "Collector stopped",
     notifications.text_key("collector_down", "body"): "It has been quiet for {minutes} min",
     "logrotate_days": "9", "logrotate_count": "4",
     "poll_interval": "17", "tech_source": "ffprobe", "ffprobe_concurrency": "5",
+    "api_key_limit_enabled": "1", "api_key_limit": "6",
 }
 # A tick box shows a lost field only from "1" (an unticked box sends nothing, like a lost one), a
 # text field only when filled - so the forms go round twice: once as above, once with every 0/1
@@ -187,7 +189,7 @@ def round_trip(flipped: bool) -> set[str]:
         db.set_setting(key, value)
     db.forget_settings()
     seen: set[str] = set()
-    for section in ("interface", "notifications", "tasks", "accounts", "jellyfin", "general", "data"):
+    for section in ("interface", "notifications", "tasks", "accounts", "jellyfin", "general", "data", "api"):
         page = client.get(f"/settings?section={section}")
         check(page.status_code == 200, f"/settings?section={section} opens")
         parser = Forms()
@@ -224,6 +226,23 @@ db.forget_settings()
 check(db.get_setting(notifications.text_key("collector_down", "subject"), "") == "Subject by its new name"
       and db.get_setting(notifications.text_key("collector_down", "body"), "") == "Text {minutes}",
       "text_<message>_subject and _text are saved as the message's subject and body")
+
+print("--- Data collection: a cleared or missing number keeps the saved value ---")
+# FastAPI gives an empty or a missing field the parameter's default: the poll interval became 10 and the
+# number of parallel analyses 3, as with the tasks' intervals before.
+for sent_fields in ({"poll_interval": "", "ffprobe_concurrency": ""}, {}):
+    db.set_setting("poll_interval", "17")
+    db.set_setting("ffprobe_concurrency", "5")
+    db.forget_settings()
+    client.post("/settings", data={"tech_source": "ffprobe", "path_mappings": "[]", **sent_fields})
+    db.forget_settings()
+    kept = (db.get_setting("poll_interval", ""), db.get_setting("ffprobe_concurrency", ""))
+    check(kept == ("17", "5"), f"a {'cleared' if sent_fields else 'missing'} field keeps the saved number ({kept})")
+client.post("/settings", data={"tech_source": "ffprobe", "path_mappings": "[]", "poll_interval": "30",
+                               "ffprobe_concurrency": "2"})
+db.forget_settings()
+check((db.get_setting("poll_interval", ""), db.get_setting("ffprobe_concurrency", "")) == ("30", "2"),
+      "a filled-in number is saved")
 
 print(f"\n{'DONE - failures: 0' if not failures else f'DONE - failures: {failures}'}")
 sys.exit(1 if failures else 0)

@@ -26,6 +26,7 @@ from typing import Any
 import httpx
 
 from .. import db, i18n, images, stats
+from ..arr import radarr, sonarr
 from ..jellyfin import DEFAULT_TIMEOUT, id_without_dashes, id_forms
 from ..services import SYNC_ALREADY_RUNNING as ALREADY_RUNNING
 from ..services import utc_time, integer, read_state, write_state
@@ -391,7 +392,6 @@ async def _fetch(transport: httpx.AsyncBaseTransport | None) -> dict[str, int]:
     # And whether Seerr serves images ("Enable Image Caching") - for the line in Settings and the hint
     # at the cards. A failed request does not bring the sync down.
     await posters.check_images(transport)
-    db.set_setting("seerr_last_sync", now)
     _write_state("ok", new)
     log.info("%s sync: %s new requests of %s, %s deleted", NAME, new, len(seen), deleted)
     return {"new_count": new, "total": len(seen), "deleted_count": deleted}
@@ -426,17 +426,27 @@ def sync_running() -> bool:
 SYNC_RUNNING = "{name} sync is running right now, the downloaded data cannot be deleted yet. Try again in a moment."
 
 
+def _forget_posters() -> int:
+    """Delete the provisional posters of the requests. Returns the count.
+
+    Only movies and series, and not those Radarr or Sonarr know: the same file is the poster of their card
+    "Stahuje se" and their sync deletes it once the title is in the library. The covers of Lidarr's albums and
+    Readarr's books are never Seerr's; the images from Jellyfin stay too.
+    """
+    kept = {("movie", tmdb_id) for tmdb_id in radarr.own_posters()} | {("tv", tmdb_id) for tmdb_id in sonarr.own_posters()}
+    return sum(images.forget_title(kind, tmdb_id) for kind, tmdb_id in images.titles_on_disk()
+               if kind in posters.APPS and (kind, tmdb_id) not in kept)
+
+
 def _delete() -> int:
-    """Delete the requests, the sync's mark and the state. Called only under the lock `_RUNNING`."""
+    """Delete the requests and the state. Called only under the lock `_RUNNING`."""
     count = request_count()
     with db.connect() as conn:
         conn.execute("DELETE FROM seerr_request")
         conn.commit()
-    db.set_setting("seerr_last_sync", "")
     db.set_setting("seerr_state", "")
     db.set_setting(POSTERS_MARK_KEY, "")
-    # The provisional posters belonged to the requests; the images from Jellyfin stay.
-    images.forget_titles()
+    _forget_posters()
     posters.forget_missing()
     log.info("deleted the stored requests of %s: %s", NAME, count)
     return count

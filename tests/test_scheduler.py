@@ -284,6 +284,116 @@ check(tasks._is_due(RECENT) is False, "zero means never")
 
 
 print()
+print("--- the notifications keep their interval ---")
+# The notifications task wrote nothing into the task log, so an interval task that "never ran" was due on every
+# tick of the scheduler: every minute, whatever interval the administrator set.
+from jellyscope import notifications  # noqa: E402
+
+NOTIFY = tasks.TASKS["notifications"]
+db.set_setting(NOTIFY.enabled_setting, "1")
+db.set_setting("notifications_minutes", "15")
+checked: list[str] = []
+
+
+async def fake_check(now: Any = None) -> dict[str, Any]:
+    checked.append("check")
+    return {"status": "ok", "message": "Nothing new to report.", "task_log": "Nothing new to report."}
+
+
+real_check = notifications.check
+notifications.check = fake_check           # type: ignore[assignment]
+try:
+    result = asyncio.run(tasks.run_now("notifications"))
+finally:
+    notifications.check = real_check       # type: ignore[assignment]
+record = scanner.last_scan("notifications") or {}
+check(checked == ["check"] and result.get("status") == "ok", f"the task runs the check ({checked}, {result})")
+check(record.get("status") == "ok" and bool(record.get("finished_at")), f"and writes its run into the task log ({record})")
+check(tasks._is_due(NOTIFY) is False, "right after a run the notifications are not due again")
+FakeClock.current = FakeClock.current + timedelta(minutes=16)
+check(tasks._is_due(NOTIFY) is True, "after the set 15 minutes they are")
+FakeClock.current = datetime(2026, 8, 17, 15, 0, 0)
+db.set_setting(NOTIFY.enabled_setting, "0")
+
+# The tidy-up and the update check had no record of a run either: Settings → Tasks said "never" for them.
+from jellyscope import importers, updates  # noqa: E402
+
+
+async def fake_tidy() -> dict[str, Any]:
+    return {"parts": [], "left": 0}
+
+
+async def fake_updates(forced: bool = False) -> dict[str, Any]:
+    return {"status": "ok", "is_newer": True, "found_one": "9.9.9"}
+
+
+real_tidy, real_updates = importers.tidy_data, updates.check
+importers.tidy_data, updates.check = fake_tidy, fake_updates      # type: ignore[assignment]
+try:
+    asyncio.run(tasks.run_now("tidy"))
+    asyncio.run(tasks.run_now("updates"))
+finally:
+    importers.tidy_data, updates.check = real_tidy, real_updates  # type: ignore[assignment]
+for kind in ("tidy", "updates"):
+    record = scanner.last_scan(kind) or {}
+    check(record.get("status") == "ok" and bool(record.get("finished_at")),
+          f"{kind}: the run is in the task log ({record.get('status')}, "
+          f"{i18n.stored_text(record.get('message') or '', record.get('message_values') or '', 'en')!r})")
+
+print()
+print("--- one failing task does not hold up the others ---")
+
+
+class QuickAsyncio:
+    """asyncio with a sleep that does not wait: one round of the scheduler without its 25 s at the start."""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(asyncio, name)
+
+    @staticmethod
+    async def sleep(seconds: float) -> None:
+        await asyncio.sleep(0.001)
+
+
+ran: list[str] = []
+
+
+async def broken() -> dict[str, Any]:
+    ran.append("broken")
+    raise RuntimeError("a task that fails every time")
+
+
+async def healthy() -> dict[str, Any]:
+    ran.append("healthy")
+    return {"status": "ok"}
+
+
+test_tasks = {key: tasks.Task(key=key, name=key, description="", runner=runner, log_kind=f"test-{key}",
+                              interval_setting=f"test_{key}_minutes", default_minutes=15)
+              for key, runner in (("first", broken), ("second", healthy))}
+for key in test_tasks:
+    db.set_setting(f"task_{key}_enabled", "1")
+
+
+async def a_few_rounds() -> None:
+    job = asyncio.create_task(tasks.run_scheduler())
+    await asyncio.sleep(0.2)
+    job.cancel()
+    await asyncio.gather(job, return_exceptions=True)
+
+
+real_tasks, real_asyncio = tasks.TASKS, tasks.asyncio
+tasks.TASKS, tasks.asyncio = test_tasks, QuickAsyncio()     # type: ignore[assignment]
+tasks.log.disabled = True                                    # a traceback of the failing task on every round
+try:
+    asyncio.run(a_few_rounds())
+finally:
+    tasks.TASKS, tasks.asyncio = real_tasks, real_asyncio
+    tasks.log.disabled = False
+check("broken" in ran and "healthy" in ran,
+      f"the task after a failing one still runs ({sorted(set(ran))})")
+
+print()
 print("--- the synchronisation follows the chosen data source ---")
 # The analysis no longer has its own tick box. Whether it starts after the
 # synchronisation is decided only by Data collection.
@@ -332,6 +442,41 @@ finally:
     substitute(scanner, "run_tech_scan", scanner_tech)
 
 check(tasks.TASKS.get("tech") is None, "the separate task 'tech' no longer exists")
+
+
+print()
+print("--- interval tasks over the night the clocks go back ---")
+# 25. 10. 2026 in Prague: 02:00-03:00 happens twice. The last run at 00:50 UTC (02:50 summer time), now
+# 01:10 UTC (02:10 winter time) - 20 real minutes later. Counted on the local clock it was -40 minutes, and
+# every interval task (recent, *Arr, Seerr, music, books) waited about an hour.
+import time  # noqa: E402
+
+if not hasattr(time, "tzset"):
+    print("SKIP   needs time.tzset (not on Windows)")
+else:
+    zone_before = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Prague"
+    time.tzset()
+    try:
+        FakeClock.current = datetime(2026, 10, 25, 2, 10, fold=1)       # the second 02:10, winter time
+        check(FakeClock.now(timezone.utc).strftime("%H:%M") == "01:10", "the clock is 01:10 UTC (02:10 winter time)")
+        db.set_setting("task_recent_enabled", "1")
+        db.set_setting("recent_sync_minutes", "15")
+        with db.connect() as conn:
+            conn.execute("DELETE FROM scan_log WHERE kind = 'recent'")
+            conn.execute("INSERT INTO scan_log (kind, started_at, finished_at, status)"
+                         " VALUES ('recent', '2026-10-25 00:50:00', '2026-10-25 00:51:00', 'done')")
+        elapsed = tasks._minutes_elapsed({"started_at": "2026-10-25 00:50:00"})
+        check(round(elapsed) == 20, f"20 minutes passed since the run at 02:50 summer time ({elapsed:.1f})")
+        check(tasks._is_due(RECENT) is True, "so the 15-minute task is due")
+    finally:
+        if zone_before is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = zone_before
+        time.tzset()
+        FakeClock.current = datetime(2026, 8, 17, 15, 0, 0)
+        db.set_setting("recent_sync_minutes", "0")
 
 
 print()

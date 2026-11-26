@@ -250,9 +250,10 @@ TIMEOUT_RETRIES = 2
 QUICK_TIMEOUT = httpx.Timeout(connect=5.0, read=20.0, write=10.0, pool=5.0)
 
 # Images Jellyscope passes on from Jellyfin to its own address. Not "anything
-# image/*": SVG can carry a script, and were somebody to open it directly at
-# Jellyscope's address, it would run under it (the pages have script-src
-# 'unsafe-inline'). Posters and profile photos are these raster formats.
+# image/*": SVG can carry a script, and opened directly at Jellyscope's address
+# it would be a document of Jellyscope's own origin. The CSP (script-src 'self')
+# keeps a script inside it from running, but such a file has no business here
+# anyway. Posters and profile photos are these raster formats.
 IMAGE_TYPES = ("image/png", "image/jpeg", "image/webp", "image/gif",
                "image/avif", "image/bmp")
 
@@ -298,11 +299,20 @@ class JellyfinClient:
         # It decides what is sent and what is tried - see `headers()` and
         # `old_server()`.
         self.version = _remembered_version() if version is None else version
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
-            headers=headers(api_key, self.version),
-        )
+        # A value stored before Settings guarded it (services.address, services.key_error): httpx refuses it
+        # before anything is sent, with an error the callers do not catch - an error of the client instead.
+        try:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
+                headers=headers(api_key, self.version),
+            )
+        except UnicodeEncodeError:
+            raise JellyfinError(
+                "The API key contains a character that does not belong there (a space, an accented letter or an invisible character). Copy it again."
+            ) from None
+        except httpx.InvalidURL:
+            raise JellyfinError("The app address is not valid.") from None
 
     async def __aenter__(self) -> JellyfinClient:
         return self
@@ -312,6 +322,12 @@ class JellyfinClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+    def _without_key(self, text: str) -> str:
+        """A safeguard: should the key appear in a text from elsewhere (an error page that repeats the request's
+        headers, a library exception's text), it is replaced with dots - the text goes into the side panel, the log
+        and the notifications."""
+        return text.replace(self.api_key, "•••") if self.api_key else text
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """One GET call. Converts all errors to JellyfinError."""
@@ -332,15 +348,18 @@ class JellyfinClient:
                     "takes longer than allowed - typically with a large library or while it is transcoding.",
                     path=path, kind=exc.__class__.__name__) from exc
             except httpx.RequestError as exc:
-                raise JellyfinError("Could not connect to Jellyfin: {error}", error=exc) from exc
+                raise JellyfinError("Could not connect to Jellyfin: {error}", error=self._without_key(str(exc))) from exc
 
+        if 300 <= response.status_code < 400:
+            raise self._redirected(response, path)
         if response.status_code == 401:
             raise JellyfinError("Jellyfin refused the API key (401). Check it in Settings → Jellyfin.")
         if response.status_code == 403:
             raise JellyfinError("The API key has no permission for this (403).")
         if response.status_code >= 400:
-            raise JellyfinError("Jellyfin returned error {status} on {path}: {body}",
-                                status=response.status_code, path=path, body=response.text[:200])
+            # Clean first, cut after: a key split by the cut would otherwise not be replaced and its start would leak.
+            raise JellyfinError("Jellyfin returned error {status} on {path}: {body}", status=response.status_code,
+                                path=path, body=self._without_key(response.text[:200 + len(self.api_key)])[:200])
 
         if not response.content:
             return None
@@ -348,6 +367,34 @@ class JellyfinClient:
             return response.json()
         except ValueError as exc:
             raise JellyfinError("Jellyfin returned invalid JSON on {path}", path=path) from exc
+
+    def _redirected(self, response: httpx.Response, path: str) -> JellyfinError:
+        """A redirect as an error with the address to enter instead (like services.HttpClient._check_status).
+
+        It is not followed on purpose: the key in the header would leave for another address. Typically http:// in
+        front of a proxy with TLS -> https://; with an empty body it used to count as an empty answer, so the
+        connection test "worked" and the collector collected nothing. The address offered is without credentials,
+        the query and the API path - the message goes to the page and the log.
+        """
+        target = response.url.join(response.headers.get("location", ""))
+        where = str(target.copy_with(userinfo=b"")).split("?")[0].split("#")[0]
+        if where.endswith(path):
+            where = where[:-len(path)]
+        return JellyfinError("{name} redirects elsewhere at this address. Enter the address {target} directly.",
+                             name="Jellyfin", target=self._without_key(where.rstrip("/")))
+
+    @staticmethod
+    def _sign_in_answer(response: httpx.Response) -> dict[str, Any]:
+        """The JSON object of a sign-in answer, {} when there is none.
+
+        A body that is no JSON (a proxy's sign-in page with 200) is an error of the client the sign-in routes
+        catch - not an exception the sign-in page falls on.
+        """
+        try:
+            data = response.json() if response.content else None
+        except ValueError as exc:
+            raise JellyfinError("Jellyfin returned invalid JSON on {path}", path=response.url.path) from exc
+        return data if isinstance(data, dict) else {}
 
     # -----------------------------------------------------------------
     # Concrete queries
@@ -363,7 +410,12 @@ class JellyfinClient:
         """
         from . import db
 
-        info = await self._get("/System/Info") or {}
+        info = await self._get("/System/Info")
+        # Something other than Jellyfin answers (an empty page, foreign JSON): no working connection "? (Jellyfin ?)".
+        if not isinstance(info, dict) or not (info.get("Version") or info.get("Id")):
+            raise JellyfinError(
+                "The {name} API is not answering at this address ({path} returned an unexpected answer).",
+                name="Jellyfin", path="/System/Info")
         version = str(info.get("Version") or "").strip()
         # It is always written, even with a manual choice. It is an
         # observation of the server, not a setting: when a person chooses
@@ -489,20 +541,23 @@ class JellyfinClient:
         # a week there would be fifty of them.
         header = self._login_header()
         body = {"Username": username, "Pw": password}
+        path = "/Users/AuthenticateByName"
         try:
             response = await self._client.post(
-                "/Users/AuthenticateByName", json=body,
+                path, json=body,
                 headers={"Content-Type": "application/json",
                          "Authorization": header})
         except httpx.RequestError as error:
-            raise JellyfinError("Could not connect to Jellyfin: {error}", error=error) from error
+            raise JellyfinError("Could not connect to Jellyfin: {error}", error=self._without_key(str(error))) from error
 
         if response.status_code in (400, 401, 403):
             return None
+        if 300 <= response.status_code < 400:
+            raise self._redirected(response, path)
         if response.status_code >= 400:
             raise JellyfinError("Jellyfin answered {status}", status=response.status_code)
 
-        data = response.json() or {}
+        data = self._sign_in_answer(response)
         user = data.get("User") or {}
         if not user.get("Id"):
             return None
@@ -543,34 +598,37 @@ class JellyfinClient:
         """Asks for a code. Returns {"code", "secret"}, or None.
 
         `secret` (the secret) is what finishes the sign-in - it belongs on
-        the server and never gets into the browser. Only `code` (the code) is
-        shown in the window, and by itself it lets nobody anywhere: without
-        the confirmation in Jellyfin it is just six digits.
+        the server: web/login.py keeps it in the server's memory
+        (web/base.py hold_secret), neither in the page nor in the cookie. Only
+        `code` (the code) is shown in the window, and by itself it lets nobody
+        anywhere: without the confirmation in Jellyfin it is just six digits.
         """
         try:
             response = await self._client.post(
                 "/QuickConnect/Initiate",
                 headers={"Authorization": self._login_header()})
         except httpx.RequestError as error:
-            raise JellyfinError("Could not connect to Jellyfin: {error}", error=error) from error
+            raise JellyfinError("Could not connect to Jellyfin: {error}", error=self._without_key(str(error))) from error
         if response.status_code != 200:
             return None
-        data = response.json() or {}
+        data = self._sign_in_answer(response)
         if not data.get("Secret") or not data.get("Code"):
             return None
         return {"code": str(data["Code"]), "secret": str(data["Secret"])}
 
-    async def quick_connect_confirmed(self, secret: str) -> bool:
-        """Has the person confirmed it in their Jellyfin yet?"""
+    async def quick_connect_confirmed(self, secret: str) -> bool | None:
+        """Has the person confirmed it in their Jellyfin yet? None = Jellyfin does not know the code (it expired)."""
         try:
             response = await self._client.get(
                 "/QuickConnect/Connect", params={"secret": secret},
                 headers={"Authorization": self._login_header()})
         except httpx.RequestError:
             return False
+        if response.status_code == 404:
+            return None
         if response.status_code != 200:
             return False
-        return bool((response.json() or {}).get("Authenticated"))
+        return bool(self._sign_in_answer(response).get("Authenticated"))
 
     async def quick_connect_finish(
             self, secret: str) -> dict[str, Any] | None:
@@ -582,11 +640,11 @@ class JellyfinClient:
                 headers={"Content-Type": "application/json",
                          "Authorization": self._login_header()})
         except httpx.RequestError as error:
-            raise JellyfinError("Could not connect to Jellyfin: {error}", error=error) from error
+            raise JellyfinError("Could not connect to Jellyfin: {error}", error=self._without_key(str(error))) from error
         if response.status_code != 200:
             return None
 
-        data = response.json() or {}
+        data = self._sign_in_answer(response)
         user = data.get("User") or {}
         if not user.get("Id"):
             return None
@@ -925,7 +983,7 @@ def video_range_of(item: dict[str, Any]) -> str | None:
     It is stored next to the measured range, because Dolby Vision in Matroska
     can be read only by ffmpeg 5. An older ffprobe says nothing about it (it
     has neither side data nor a codec tag) and the file looks like ordinary
-    HDR - whereas Jellyfin knows it. See stats.RANGE_CASE.
+    HDR - whereas Jellyfin knows it. See stats.tech.RANGE_CASE.
     """
     sources = item.get("MediaSources") or []
     streams = (sources[0].get("MediaStreams") if sources else None) or []

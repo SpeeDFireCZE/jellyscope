@@ -177,6 +177,31 @@ def live(coroutine: Callable[..., Awaitable[T]], *args: Any) -> T:
     raise RuntimeError("live() is called from a thread, not from the asyncio loop: run data_for through asyncio.to_thread")
 
 
+# What a card's data come from: by a change of which the card shows something else (Card.sources). Every
+# source but "live" has a marker in /health (web/status.py), so an open page knows which cards to redraw:
+# "plays" moves when a play starts or ends (and once a minute while something plays), "library" with the
+# library's version, a task's kind when a run of the task finishes or "Sync now" in Settings ran. "live" is
+# an app's live state - it has no marker, its cache is fresh for a minute.
+PLAYS, LIBRARY, LIVE = "plays", "library", "live"
+TASK_SOURCES = ("arr", "seerr", "music", "books")
+SOURCES = (PLAYS, LIBRARY, *TASK_SOURCES, LIVE)
+
+# The sources of a card that names none, by the menu section of its area: (with a period, without one). A card
+# with a period counts what happened in it - an app's stored history, otherwise plays; a card without a period
+# shows a state - an app's live state, otherwise a library. The Library section is the library either way (its
+# disks and growth have a period, the snapshots behind them are written by the library's sync).
+_SOURCES_BY_SECTION = {access.ARR: ("arr", LIVE), access.SEERR: ("seerr", LIVE), access.MUSIC: (PLAYS, "music"),
+                       access.BOOKS: (PLAYS, "books"), access.LIBRARY: (LIBRARY, LIBRARY)}
+_SOURCES_ELSEWHERE = (PLAYS, LIBRARY)
+
+
+def default_sources(area: str, uses_period: bool) -> tuple[str, ...]:
+    """The sources of a card that names none - from its area's section and whether it has a period."""
+    section = getattr(access.BY_KEY.get(area), "section", "")
+    with_period, without = _SOURCES_BY_SECTION.get(section, _SOURCES_ELSEWHERE)
+    return (with_period if uses_period else without,)
+
+
 @dataclass(frozen=True)
 class Card:
     """One card that can be rearranged.
@@ -229,3 +254,14 @@ class Card:
     # for everyone does not draw it; the saved layout is not deleted because of it -
     # once the app is connected, the card is back (see cards.is_available).
     available: Callable[[], bool] | None = field(default=None, kw_only=True)
+    # What the card's data come from (SOURCES): an open page redraws the card when one of them moved. Empty =
+    # derived from the area and the period (default_sources); a card that mixes two says so itself.
+    sources: tuple[str, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        if not self.sources:
+            object.__setattr__(self, "sources", default_sources(self.area, self.uses_period))
+        unknown = sorted(set(self.sources) - set(SOURCES))
+        if unknown:
+            # Not `assert`, like the registry's other checks: a typo must stop the start, not a card's refresh.
+            raise ValueError(f"the card {self.key} names unknown sources: {unknown}")

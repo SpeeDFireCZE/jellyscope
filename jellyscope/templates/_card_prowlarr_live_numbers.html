@@ -3,9 +3,9 @@
    Prowlarr's state right now, the period does not concern it. Drawn by the Prowlarr
    tab and by dashboards (cards_prowlarr.py). Expects `d` = the live state for the account
    (cards_prowlarr.for_account): what did not load is None and shows as "–",
-   not as zero. Only the admin gets the error's detail (`d.chyba`).
+   not as zero. Only the admin gets the error's detail (`d.error`).
 
-   "Nedostupné" are the indexers Prowlarr skips for a while because of errors,
+   "Unavailable indexers" are the indexers Prowlarr skips for a while because of errors,
    and those it names in the warning about unavailable indexers (the block
    expired, but it has not tried them again yet) - not those a person switched off.
 

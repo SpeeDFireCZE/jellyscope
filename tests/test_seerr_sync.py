@@ -49,7 +49,7 @@ os.environ["JELLYFIN_API_KEY"] = "test-key"
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import accounts, db, scanner, seerr, tasks, web  # noqa: E402
+from jellyscope import accounts, db, scanner, seerr, services, tasks, web  # noqa: E402
 
 RESPONSES = PROJECT / "tests" / "seerr_responses"
 failures = 0
@@ -83,6 +83,7 @@ class Seerr:
         self.timeouts: list[tuple[str, float]] = []   # (filter, read timeout in seconds)
         self.pages: list[tuple[int, int]] = []
         self.names: list[str] = []
+        self.name_timeouts: list[float] = []      # the read timeout of every look-up of a name
         self.concurrent = self.max_concurrent = 0
 
     async def handler(self, request: httpx.Request) -> httpx.Response:
@@ -109,6 +110,7 @@ class Seerr:
             return httpx.Response(200, json=record) if record else httpx.Response(404)
         if path.startswith(("movie/", "tv/")):
             self.names.append(path)
+            self.name_timeouts.append((request.extensions.get("timeout") or {}).get("read"))
             self.concurrent += 1
             self.max_concurrent = max(self.max_concurrent, self.concurrent)
             await asyncio.sleep(0.01)
@@ -335,7 +337,6 @@ sync(Seerr(changed + many))
 
 print()
 print("--- F) errors, concurrency, log ---")
-mark = db.get_setting("seerr_last_sync", "")
 try:
     sync(Seerr(changed, code=401))
 except seerr.SeerrError:
@@ -343,7 +344,9 @@ except seerr.SeerrError:
 state = seerr.sync_state()
 check(state["result"] == "error" and "401" in state["error"] and "tajny-klic" not in state["error"],
       f"an error without the key in the state ({state['error']})")
-check(db.get_setting("seerr_last_sync", "") == mark, "an error does not move the mark of the last sync")
+# The state (seerr_state) is the sync's only record: a mark of the last sync nobody reads is not written.
+check(db.query_value("SELECT COUNT(*) FROM settings WHERE key = 'seerr_last_sync'") == 0,
+      "the sync keeps no unread mark of the last sync (seerr_last_sync)")
 seerr.sync._RUNNING.add("seerr")
 try:
     sync(Seerr(changed))
@@ -359,8 +362,8 @@ logging.getLogger("jellyscope.db").addHandler(catcher)
 logging.getLogger("jellyscope.db").setLevel(logging.INFO)
 sync(Seerr(changed + many))
 logging.getLogger("jellyscope.db").removeHandler(catcher)
-check(not [c for c in caught if "seerr_state" in c or "seerr_last_sync" in c],
-      f"the sync does not log the change of the state and the mark ({caught[:2]})")
+check(not [c for c in caught if "seerr_state" in c],
+      f"the sync does not log the change of the state ({caught[:2]})")
 
 print()
 print("--- The live card \"Waiting for approval\" ---")
@@ -368,8 +371,10 @@ waiting = [sample(id=2000 + i, status=1, createdAt=f"2026-11-15T10:{i // 60:02d}
 s = Seerr(waiting, newest_first=True)
 seerr.live.CACHE.clear()
 live = asyncio.run(seerr.pending(transport=s.transport()))
-check(bool(s.timeouts) and all(limit is not None and limit <= 20 for _f, limit in s.timeouts),
-      f"the live request has a short timeout, so a slow Seerr does not hold the page up ({s.timeouts[:2]})")
+# Audit QA-4: the live card waited up to 20 s for every request (the client's default), the live requests of the
+# *Arr apps wait 3 s (services.LIVE_TIMEOUT) - the page waits for them.
+check(bool(s.timeouts) and all(limit == services.LIVE_TIMEOUT.read for _f, limit in s.timeouts),
+      f"the live request waits as long as the *Arr apps' (3 s), so a slow Seerr does not hold the page up ({s.timeouts[:2]})")
 check(live["available"] and live["count"] == 120 and len(live["requests"]) == 120,
       f"every pending request loads, over several pages too ({live['count']}, {len(live['requests'])})")
 check([r["request_id"] for r in live["requests"][:2]] == [2000, 2001],
@@ -388,11 +393,63 @@ check(live["requests"][0]["title"] == "Film 4200" and "movie/4200" in s.names,
       f"a fresh pending request has its name from Seerr ({live['requests'][0]['title']})")
 check(0 < len(s.names) <= 20 and live["requests"][-1]["title"] == "TMDB 4229",
       f"at most 20 look-ups per page load, the oldest first ({len(s.names)})")
+check(bool(s.name_timeouts) and all(limit == services.LIVE_TIMEOUT.read for limit in s.name_timeouts),
+      f"a look-up of a name waits at most 3 s too ({sorted(set(s.name_timeouts))})")
 looked_up = len(s.names)
 seerr.live.CACHE.clear()
 asyncio.run(seerr.pending(transport=s.transport()))
 check(len(s.names) - looked_up <= 10 and "movie/4200" not in s.names[looked_up:],
       "looked-up names are remembered - the next load fills in only the rest")
+# Audit QA-3: an odd record (a text or a number where an object belongs) raised AttributeError and every page with the
+# card failed - the sync of the same answers skipped it. Now it is a row with what is known.
+odd_records = [sample(id=4000, status=1, createdAt="2026-11-17T10:00:00.000Z", requestedBy="x", media="text"),
+               sample(id=4001, status=1, createdAt="2026-11-17T10:00:01.000Z", requestedBy=5, media=[1])]
+seerr.live.CACHE.clear()
+try:
+    live = asyncio.run(seerr.pending(transport=Seerr(odd_records).transport()))
+except Exception as error:      # noqa: BLE001 - the check below reports it
+    live = {"available": False, "requests": [], "error": repr(error)}
+check(live["available"] and [(r["request_id"], r["user_name"], r["tmdb_id"], r["title"]) for r in live["requests"]]
+      == [(4000, "", "", "TMDB ?"), (4001, "", "", "TMDB ?")],
+      f"an odd requester or title (a text, a number) does not break the card ({live['requests'] or live['error']})")
+
+
+def odd_page_info(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/api/v1/request"):
+        return httpx.Response(200, json={"pageInfo": "x", "results": [sample(id=4002, status=1)]})
+    return httpx.Response(404)
+
+
+seerr.live.CACHE.clear()
+try:
+    live = asyncio.run(seerr.pending(transport=httpx.MockTransport(odd_page_info)))
+except Exception as error:      # noqa: BLE001 - the check below reports it
+    live = {"available": False, "count": 0, "error": repr(error)}
+check(live["available"] and live["count"] == 1, f"an odd pageInfo counts the records that came ({live['count']}, {live['error']})")
+seerr.live.CACHE.clear()
+
+print()
+print("--- The live card \"Latest requests\" ---")
+# 26. 11. 2026: the card reads one page of Seerr's newest requests through the same live path (3 s, the cache).
+newest = [sample(id=5000 + i, status=2, createdAt=f"2026-11-18T10:{i // 60:02d}:{i % 60:02d}.000Z") for i in range(130)]
+s = Seerr(newest, newest_first=True)
+latest = asyncio.run(seerr.latest_requests(transport=s.transport()))
+# The pending requests load in the same go (one entry of the cache for both live cards): the newest are one page.
+newest_pages = [page for page, (kind, _) in zip(s.pages, s.timeouts, strict=True) if kind == "all"]
+check(latest["available"] and newest_pages == [(0, 100)] and [r["id"] for r in latest["requests"][:2]] == [5129, 5128]
+      and len(latest["requests"]) == 100 and {kind for kind, _ in s.timeouts} == {"all", "pending"}
+      and all(limit == services.LIVE_TIMEOUT.read for _, limit in s.timeouts),
+      f"one page of a hundred of the newest (the pending ones with it), the newest first, waiting 3 s ({s.pages}, {s.timeouts[:1]})")
+check(latest["span_from"] == 5030 and 5029 not in latest["seen"] and all("id" in r for r in latest["requests"]),
+      f"a full page sent from the highest id speaks for the requests from its lowest id on ({latest['span_from']})")
+seerr.live.CACHE.clear()
+s = Seerr(newest)        # a Seerr that sent the oldest first after all
+latest = asyncio.run(seerr.latest_requests(transport=s.transport()))
+check(latest["available"] and latest["span_from"] is None,
+      f"a full page in another order speaks for nothing - no stored request is taken for deleted by it ({latest['span_from']})")
+seerr.live.CACHE.clear()
+latest = asyncio.run(seerr.latest_requests(transport=Seerr(newest[:7]).transport()))
+check(latest["span_from"] == 0 and len(latest["requests"]) == 7, "a page with fewer requests than asked for holds them all")
 seerr.live.CACHE.clear()
 
 print()
@@ -417,11 +474,12 @@ check('action="/settings/seerr/sync"' in page and 'data-modal="modal-seerr-delet
       and f"{n}" in page, "the card: Sync now, Delete downloaded data (a dialog) and the count of requests")
 check(reader.post("/settings/seerr/delete", follow_redirects=False).status_code in (303, 403) and count() == n,
       "a reader deletes nothing")
-answer = admin.post("/settings/seerr", data={"enabled": "1", "url": "http://jiny-seerr:5055", "api_key": "",
+# Another server needs its key typed again (the saved one goes only to its own server).
+answer = admin.post("/settings/seerr", data={"enabled": "1", "url": "http://jiny-seerr:5055", "api_key": "jiny-klic",
                                              "action": "save"})
 check("flash warning" in answer.text and "Smazat stažená data" in answer.text and count() == n,
       "a change of the address with downloaded data: a warning, nothing is deleted")
-admin.post("/settings/seerr", data={"enabled": "1", "url": "http://127.0.0.1:1", "api_key": "", "action": "save"})
+admin.post("/settings/seerr", data={"enabled": "1", "url": "http://127.0.0.1:1", "api_key": "tajny-klic", "action": "save"})
 answer = admin.post("/settings/seerr/sync")
 db.forget_settings()
 check("flash error" in answer.text and seerr.sync_state()["result"] == "error",
@@ -447,7 +505,7 @@ check("already running" in concurrent_result and count() == 0 and not seerr.sync
 seerr.save_settings(True, "http://nas:5055/seerr", "tajny-klic")
 sync(Seerr(changed + many))
 n = count()
-seerr.save_settings(True, "http://127.0.0.1:1", "")
+seerr.save_settings(True, "http://127.0.0.1:1", "tajny-klic")
 
 
 # Code review: the task caught only SeerrError - after another exception (a locked database, an

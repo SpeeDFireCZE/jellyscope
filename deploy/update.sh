@@ -76,6 +76,10 @@ echo "  user:   $APP_USER"
 
 # --- 1. backup -------------------------------------------------------------
 
+# Set for both branches below: the way back at the end names this folder
+# even when the backup was made by the previous version of this script.
+BACKUP_DIR="$APP_DIR/data/before-update"
+
 # Started again by its own previous version (see the end of step 2)? The
 # backup is from a moment ago - a second one would only take space.
 if [[ "${JELLYSCOPE_UPDATE_ZNOVU:-}" == "1" ]]; then
@@ -85,7 +89,6 @@ else
 say "Database backup"
 # We back up before changing anything. If the update goes wrong, there is
 # somewhere to go back to - and it costs a few seconds.
-BACKUP_DIR="$APP_DIR/data/before-update"
 mkdir -p "$BACKUP_DIR"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -283,6 +286,16 @@ check_python "$( { tr -d '[:space:]' < "$APP_DIR/deploy/python-minimum"; } 2>/de
 "$VENV/bin/python" -m pip install --quiet --upgrade pip \
     || warn "pip could not be updated - carrying on with the one there is"
 "$VENV/bin/python" -m pip install --quiet -r "$APP_DIR/requirements.txt"
+
+# The PostgreSQL driver is not in requirements.txt - a platform without its
+# packages must not fail every update. Where install.sh (or a person) put it,
+# it is brought to the version of requirements-postgres.txt here, or it
+# would stay at the one of the day of the installation for good. A failure
+# is a warning: the driver that is there keeps working.
+if "$VENV/bin/python" -c "import psycopg" 2>/dev/null; then
+    "$VENV/bin/python" -m pip install --quiet -r "$APP_DIR/requirements-postgres.txt" \
+        || warn "The PostgreSQL driver could not be updated - the installed one keeps working."
+fi
 ok "up to date"
 
 # --- 4. restart and check --------------------------------------------------

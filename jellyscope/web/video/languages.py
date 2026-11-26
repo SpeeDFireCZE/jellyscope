@@ -11,10 +11,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ... import db, langstats, languages as language_names
 from ..base import _context, _flash, require_admin, require_login, templates
+from ..dashboards import _registry_page
 from ..periods import _days
 
 router = APIRouter()
 PER_PAGE = 50
+# The page's cards from the registry, in the order of video/languages.html.
+LANGUAGE_CARDS = ("language_share", "who_language", "dubbing", "subtitles", "library_languages", "combinations",
+                  "missing_track")
 
 
 @router.get("/video/languages/undetermined", response_class=HTMLResponse)
@@ -29,14 +33,17 @@ def languages_undetermined(
     A page of its own, not another insight card: it is a work list - one
     opens it to fix things, otherwise it should not be in the way.
     """
-    page = max(1, page)
     total = langstats.undefined_language_count(search)
+    pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    # A page past the end is the last one, as in the History - a huge number
+    # from the address would not even fit into OFFSET.
+    page = min(max(1, page), pages)
     return templates.TemplateResponse(request, "video/languages_undetermined.html", _context(
         request, account,
         files=langstats.undefined_language_files(PER_PAGE, (page - 1) * PER_PAGE, search),
         total=total,
         page=page,
-        pages=max(1, (total + PER_PAGE - 1) // PER_PAGE),
+        pages=pages,
         search=search or "",
     ))
 
@@ -77,33 +84,18 @@ def languages(
     account: dict[str, Any] = Depends(require_login)
 ):
     days = _days(request, days, since, until)
-
-    # Colours are assigned once and used in every chart of the page - on
-    # purpose regardless of the period, or a filter change would recolour them.
-    colours = langstats.colour_map()
     preferred = langstats.preferred_language()
 
     return templates.TemplateResponse(request, "video/languages.html", _context(
         request, account,
         days=days,
-        # These depend on the chosen period - they are about the viewers.
-        watched=langstats.watched_languages(days, colours),
-        by_user=langstats.languages_by_user(days, colours),
-        subtitles=langstats.subtitle_usage(days),
-        dubbing=langstats.dubbed_vs_original(days, preferred),
-        missing_preferred=langstats.missing_preferred(days, preferred),
-        # The choice of the preferred language offers only what is in the
-        # library - see langstats.library_language_options().
-        preferred=preferred,
+        # The cards: the registry draws them and computes their data - the languages' colours once for
+        # every chart of the page, regardless of the period (a filter change would recolour them); the
+        # library's languages and combinations are the state of the library right now (cards.py).
+        **_registry_page(request, account, LANGUAGE_CARDS, days),
+        # The preferred language and its choice (only what is in the library, langstats.library_language_options)
+        # come with the card Language ratio, which draws the main number (cards.py).
         preferred_name=language_names.display(preferred),
-        language_options=langstats.library_language_options(),
-        # The state of the library right now - nothing to do with the period.
-        library=langstats.library_languages(colours),
-        combinations=langstats.language_combinations(),
-        # The full list for the window behind the "Other" row; sent with the
-        # page because it is one GROUP BY over a table read anyway.
-        all_combinations=langstats.all_combinations(),
-        undefined_items=langstats.undefined_language_items(),
         coverage=langstats.coverage(),
         # How many playbacks the numbers above leave out because they came
         # by import without a language. See langstats.WITHOUT_IMPORTS.

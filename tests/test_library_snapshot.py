@@ -424,5 +424,107 @@ check(charts._value_label(28.8, "h") == "29 h",
       "for hours a whole number stays on the contrary")
 
 print()
+print("--- a period that ends before the first snapshot is seated on it too ---")
+# Two titles of 10 GB (January) and 5 GB (March), today's sizes; the first snapshot on 1 June measured 30 GB,
+# the sizes of then. The backfill is shifted by +15 GB to meet it - also for a period that ends on 31 May,
+# otherwise the same day is 15 GB in one period and 30 GB in another, and comparing May with June shows the
+# library doubling overnight.
+GB = 10 ** 9
+with db.connect() as conn:
+    conn.execute("DELETE FROM library_snapshot")
+    conn.execute("UPDATE items SET date_created = NULL, is_missing = 0")
+    conn.execute("UPDATE music_track SET added_at = NULL")
+    conn.execute("UPDATE book SET added_at = NULL")
+    two = [r["id"] for r in conn.execute("SELECT id FROM items ORDER BY id LIMIT 2").fetchall()]
+    for item_id, created, size in zip(two, ("2026-01-10T10:00:00.0000000Z", "2026-03-01T10:00:00.0000000Z"),
+                                      (10 * GB, 5 * GB)):
+        conn.execute("UPDATE items SET date_created = ?, size_bytes = ? WHERE id = ?", (created, size, item_id))
+    conn.commit()
+snapshot("2026-06-01", 30 * GB, items=2)
+snapshot("2026-06-10", 30 * GB, items=2)
+may = stats.period_between("2026-04-01", "2026-05-31")
+to_june = stats.period_between("2026-04-01", "2026-06-15")
+in_may = {r["day"]: r for r in stats.snapshots(may)}
+in_june = {r["day"]: r for r in stats.snapshots(to_june)}
+check(in_june["2026-05-31"]["size_bytes"] == 30 * GB,
+      f"a period spanning the first snapshot has 31 May seated ({in_june['2026-05-31']['size_bytes'] / GB:g} GB)")
+check(in_may["2026-05-31"]["size_bytes"] == 30 * GB and in_may["2026-04-01"]["size_bytes"] == 30 * GB,
+      f"a period ending the day before has the same 31 May ({in_may['2026-05-31']['size_bytes'] / GB:g} GB)"
+      f" and 1 April ({in_may['2026-04-01']['size_bytes'] / GB:g} GB)")
+check(max(in_may) == "2026-05-31" and all(r["backfilled"] for r in in_may.values()),
+      "and it stays within its own days, all of them backfilled")
+check(stats.library_growth(may, forecast=False)["size"] == 30 * GB,
+      "the comparison's size at the end of the period matches")
+
+print()
+print("--- a title created on 1 January of the year 1 does not slow the curve down ---")
+# Jellyfin can report DateCreated as DateTime.MinValue (0001-01-01). The curve must count such a title from the
+# start without walking 739 000 days one by one to the period (about half a second for every curve on a page).
+# Counted in the days the curve steps through, not in time: a timing check flaked on a loaded machine.
+from jellyscope.stats import growth as stats_growth  # noqa: E402
+
+
+def walked_days() -> int:
+    """How many days the curve over April and May steps through (61 = only the period)."""
+    steps: list[int] = []
+    real = stats_growth.timedelta
+    stats_growth.timedelta = lambda *a, **k: steps.append(1) or real(*a, **k)
+    try:
+        stats._backfilled_curve("2026-04-01", "2026-05-31")
+    finally:
+        stats_growth.timedelta = real
+    return len(steps)
+
+
+usual = walked_days()
+with db.connect() as conn:
+    third = conn.execute("SELECT id FROM items WHERE date_created IS NULL ORDER BY id LIMIT 1").fetchone()["id"]
+    conn.execute("UPDATE items SET date_created = '0001-01-01T00:00:00.0000000Z', size_bytes = ? WHERE id = ?",
+                 (1 * GB, third))
+    conn.commit()
+curve = {r["day"]: r for r in stats._backfilled_curve("2026-04-01", "2026-05-31")}
+check(min(curve) == "2026-04-01" and curve["2026-04-01"]["size_bytes"] == 16 * GB
+      and curve["2026-04-01"]["item_count"] == 3,
+      f"the title counts from the start ({curve['2026-04-01']['size_bytes'] / GB:g} GB, "
+      f"{curve['2026-04-01']['item_count']} titles)")
+year_one = walked_days()
+check(usual == 61 and year_one == usual,
+      f"and the curve steps through the period's days only, as without it ({year_one} days vs {usual})")
+
+print()
+print("--- 'the last N days' grow over all N days, the chart keeps its N points ---")
+# A snapshot holds the state at the end of its day. Since "the last 7 days" start at the midnight of the first of
+# them, the increase measured from that first day's snapshot left out everything added during it: one movie a day
+# for 7 days came out as 6. The base is the state at the end of the day before the first day.
+with db.connect() as conn:
+    conn.execute("DELETE FROM library_snapshot")
+    conn.execute("UPDATE items SET date_created = NULL, is_missing = 0")
+    conn.commit()
+for ago in range(20, -1, -1):
+    snapshot((today - timedelta(days=ago)).isoformat(), (20 - ago) * GB, items=100 + (20 - ago))
+week = stats.library_growth(7)
+check(week["enough_data"] and week["increase"] == 7 * GB and week["item_count"] == 7 and week["days"] == 7,
+      f"one movie a day: 7 movies in the last 7 days ({week.get('increase', 0) / GB:g} GB, "
+      f"{week.get('item_count')} items, {week.get('days')} days)")
+check(len(stats.snapshots(7)) == 7, f"and the chart draws the seven days ({len(stats.snapshots(7))} points)")
+both = stats.comparison(7, stats.previous_period(7))
+library_rows = next((g["rows"] for g in both["groups"] if g.get("area") == "library"), [])
+check(both["library_known"] and [(r["a"], r["b"]) for r in library_rows[:2]] == [(7, 7), (7 * GB, 7 * GB)],
+      f"Comparison: 7 items and 7 GB added in both weeks ({[(r['a'], r['b']) for r in library_rows[:2]]})")
+
+with db.connect() as conn:
+    conn.execute("DELETE FROM library_snapshot")
+    for ago in range(10, -1, -1):
+        created = (today - timedelta(days=ago)).isoformat() + "T12:00:00.0000000Z"
+        conn.execute("INSERT INTO items (id, name, type, path, size_bytes, is_missing, date_created, synced_at)"
+                     " VALUES (?, ?, 'Movie', ?, ?, 0, ?, ?)",
+                     (f"daily-{ago}", f"Daily {ago}", f"/media/daily/{ago}.mkv", GB, created, db.utcnow()))
+    conn.commit()
+backfilled_week = stats.library_growth(7)
+check(backfilled_week["enough_data"] and backfilled_week["increase"] == 7 * GB and backfilled_week["item_count"] == 7,
+      f"the backfilled past the same: 7 movies ({backfilled_week.get('increase', 0) / GB:g} GB, "
+      f"{backfilled_week.get('item_count')} items)")
+
+print()
 print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

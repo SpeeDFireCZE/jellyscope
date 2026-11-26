@@ -157,6 +157,41 @@ def login(name: str, password: str = "longpassword") -> Any:
     return client
 
 
+def session_data(account_id: int) -> dict[str, Any]:
+    """What a sign-in writes into the session cookie, with a fresh record on the server (web_sessions).
+
+    For a test that signs a cookie itself (a session with old keys, an account changed under it): a cookie
+    without a record opens nothing. Sign it the way Starlette does - see signed_session.
+    """
+    from jellyscope import accounts, web_sessions
+
+    return {"account_id": account_id, "fingerprint": accounts.session_fingerprint(accounts.get(account_id) or {}),
+            web_sessions.COOKIE_KEY: web_sessions.create(account_id)}
+
+
+def signed_session(data: dict[str, Any]) -> str:
+    """The value of the session cookie for `data`, signed the way Starlette's SessionMiddleware signs it."""
+    import base64
+
+    from itsdangerous import TimestampSigner
+
+    from jellyscope.config import load_config
+
+    signer = TimestampSigner(str(load_config().secret_key))
+    return signer.sign(base64.b64encode(json.dumps(data).encode("utf-8"))).decode("utf-8")
+
+
+def read_session(client: Any) -> dict[str, Any]:
+    """What the session cookie of a TestClient carries, read without the signing key - as anybody who sees it reads it.
+
+    Starlette signs the cookie, it does not encrypt it: the value before the first dot is base64 of the JSON.
+    """
+    import base64
+
+    raw = client.cookies.get("jellyscope_session") or ""
+    return json.loads(base64.b64decode(raw.split(".", 1)[0])) if raw else {}
+
+
 def card_html(html: str, key: str) -> str:
     """The cut of a page with one card: from its mark to the next card's mark.
 

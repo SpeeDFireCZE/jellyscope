@@ -14,6 +14,7 @@ from ..base import (
     LIMIT_MAX,
     LIMIT_MIN,
     MAP_BASEMAPS,
+    SELF_REFRESH_KEY,
     SKINS,
     TABLE_LIMITS,
     ZOOM_MODES,
@@ -50,6 +51,7 @@ def settings_interface(request: Request,
                        ui_dashboard: str = Form("0"),
                        dashboard_name: str = Form(""),
                        ui_events: str = Form("1"),
+                       ui_self_refresh: str = Form("1"),
                        ui_default_page: str = Form(""),
                        account: dict[str, Any] = Depends(require_admin)):
     """Settings → Interface: the limits of long lists, the map, the skin, the dashboard for everyone.
@@ -100,6 +102,8 @@ def settings_interface(request: Request,
     # Seasonal decoration: only an explicit "0" switches it off. A form without the field
     # (another card, an older page) leaves it on - the default is on.
     db.set_setting("ui_events", "0" if ui_events == "0" else "1")
+    # Cards that refresh by themselves: the same - only an explicit "0" switches them off.
+    db.set_setting(SELF_REFRESH_KEY, "0" if ui_self_refresh == "0" else "1")
     # The dashboard for everyone has a name that goes into the menu. It is checked whenever
     # somebody sends it or switches the dashboard on; an invalid one is not saved and the
     # previous one holds. Without a valid name the dashboard is not switched on - there
@@ -145,7 +149,7 @@ async def settings_updates(request: Request,
     """Checking for a new version by hand.
 
     Whether to ask regularly and when is set in Tasks like
-    everything else that runs by itself - see the task "Kontrola aktualizací".
+    everything else that runs by itself - see the task "Check for updates".
     Only a one-off click is left here, which asks regardless of
     whether the task is on: that is an action, not a schedule.
     """

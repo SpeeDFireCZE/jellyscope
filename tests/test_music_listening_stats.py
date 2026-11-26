@@ -233,9 +233,11 @@ per_listen = peak / max(1, len(big["rows"]))
 check(len(big["rows"]) >= LISTENS and per_listen < 1500,
       f"the analysis of a long period: memory per listen ({per_listen:.0f} B, {len(big['rows'])} listens)")
 conversions = {"n": 0}
+from _package import substitute  # noqa: E402
+
 from jellyscope.stats import shared as stats_shared  # noqa: E402
 
-_original_local = stats_shared._local
+_original_local, _original_fast = stats_shared._local, stats_shared.local_fast
 
 
 def _count(text):
@@ -243,11 +245,19 @@ def _count(text):
     return _original_local(text)
 
 
-stats_shared._local = _count
+def _count_fast(text, zone):
+    conversions["n"] += 1
+    return _original_fast(text, zone)
+
+
+# Both converters, in every module that holds them: music_listening binds local_fast itself (from .shared import),
+# so a substitute in stats.shared alone would never see a conversion the cards made.
+restore = [substitute(stats, "_local", _count), substitute(stats, "local_fast", _count_fast)]
 try:
-    by_day, grid = stats.music_by_day(big), stats.music_heatmap(big)
+    by_day, grid = listening.music_by_day(big), listening.music_heatmap(big)
 finally:
-    stats_shared._local = _original_local
+    for undo in restore:
+        undo()
 check(conversions["n"] == 0 and sum(d["seconds"] for d in by_day) == sum(x["watched_seconds"] for x in big["rows"])
       and abs(sum(map(sum, grid)) * 3600 - sum(x["watched_seconds"] for x in big["rows"])) < 1,
       f"the cards by days and by hours do not convert the time again - the analysis row carries the local time ({conversions['n']} conversions)")

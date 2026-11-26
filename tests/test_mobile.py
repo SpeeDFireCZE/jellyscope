@@ -142,7 +142,10 @@ print()
 print("--- History: the side columns hide on a phone ---")
 history = (TEMPLATES / "history.html").read_text(encoding="utf-8")
 header = history[history.index("<thead>"):history.index("</thead>")]
-body = history[history.index("<tbody>"):history.index("{% endfor %}")]
+# From the table's body to the end of its loop of rows: the first {% endfor %} after <tbody> - the filter above the
+# table has loops of its own.
+body_at = history.index("<tbody>")
+body = history[body_at:history.index("{% endfor %}", body_at)]
 # Counted on tags, not by occurrences of the string - otherwise the comment
 # that explains it would get into the sum.
 th_extra = len(re.findall(r'<th[^>]*class="[^"]*extra-column', header))

@@ -6,10 +6,10 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker, key_cell, area_name, permissions_tree %}
+{% from "_macros.html" import key_cell, area_name, permissions_tree %}
 
 {# What a root key may - shared by the new key's window and the Permissions window.
-   With "Všechno" the rest hides (the script below): the tree would only confuse there,
+   With "Everything (including areas added later)" the rest hides (the script below): the tree would only confuse there,
    the key may everything regardless of the ticks. Without the script everything
    is visible and the switch decides. #}
 {% macro key_permissions(permissions, group_id, dashboard_name) %}
@@ -170,11 +170,37 @@
     {% endif %}
 </div>
 
+{# How many keys of their own the accounts may make in My account. Off = as many as they like (the
+   default). Only active keys count; root keys made above are never limited. #}
+<div class="card" id="key-limit">
+    <div class="card-head">
+        <h2>{{ _("Own API keys") }}</h2>
+    </div>
+    <form method="post" action="/settings/api/key-limit">
+        <label class="switch">
+            <input type="checkbox" name="key_limit_enabled" {{ 'checked' if api_key_limit_on }}>
+            <span>
+                {{ _("Limit the number of keys an account can make") }}
+                <span class="hint">{{ _("Only keys made on the My account page. Root keys made here are not limited.") }}</span>
+            </span>
+        </label>
+        <div class="field" style="margin-top:12px">
+            <label for="key-limit-number">{{ _("Most active keys per account") }}</label>
+            <input type="number" id="key-limit-number" name="key_limit"
+                   min="{{ api_key_limit_min }}" max="{{ api_key_limit_max }}" value="{{ api_key_limit }}">
+            <p class="hint">{{ _("Disabled keys do not count. Keys made before the limit keep working.") }}</p>
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+    </form>
+</div>
+
 {# A new root key. A window, not a row above the table: the tree of areas is taller
    than a phone's screen - only the content scrolls, Make stays visible. #}
-<dialog class="modal modal-scrolling" id="modal-new-key">
+<dialog class="modal modal-scrolling" id="modal-new-key" aria-labelledby="modal-new-key-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("New root key") }}</h2>
+        <h2 id="modal-new-key-title">{{ _("New root key") }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -196,9 +222,9 @@
 {# The permissions of one root key. Pre-filled with what applies; saving applies
    from the key's next query. #}
 {% for token in api_tokens if token.id in api_key_permissions %}
-<dialog class="modal modal-scrolling" id="modal-key-permissions-{{ token.id }}">
+<dialog class="modal modal-scrolling" id="modal-key-permissions-{{ token.id }}" aria-labelledby="modal-key-permissions-{{ token.id }}-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Rights of key") }} {{ token.display_name }}</h2>
+        <h2 id="modal-key-permissions-{{ token.id }}-title">{{ _("Rights of key") }} {{ token.display_name }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>

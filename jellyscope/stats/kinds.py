@@ -3,6 +3,7 @@
 Part of the statistics package (see jellyscope/stats/__init__.py)."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from ..i18n import translate as _t
@@ -41,7 +42,7 @@ ALLOWED_KINDS = (KIND_BOTH, KIND_MOVIE, KIND_SERIES, KIND_OTHER)
 # What "series" means in the history. Besides episodes, the series itself and a season too:
 #
 # Imported history sometimes carries the kind "Series" instead of "Episode" - either it came that way straight from
-# Jellystat (see importers._jellystat_item_type), or it was copied into the record from the item when unifying
+# Jellystat (see importers.jellystat._jellystat_item_type), or it was copied into the record from the item when unifying
 # names. It says less than "Episode": we know only which series was watched, not which episode. It is still a
 # series, though, so it does not belong to "Other" - one looks for concerts and live TV there, not for hours of
 # watching a series.
@@ -69,6 +70,9 @@ _BOOK_TYPES_SQL = ", ".join(f"'{type_name}'" for type_name in BOOK_TYPES)
 _NOT_WATCHING_SQL = ", ".join(f"'{type_name}'" for type_name in MUSIC_TYPES + BOOK_TYPES)
 # The kind switch in History, in the order on the page. The Overview keeps ALLOWED_KINDS.
 HISTORY_KINDS = (KIND_ALL, KIND_MOVIE, KIND_SERIES, KIND_MUSIC, KIND_BOOKS, KIND_OTHER)
+# The item types of the kinds whose plays tell who listened or who read - left out for an account that may not see
+# that (access.hidden_kinds, access.visible_plays).
+TYPES_OF_KIND = {KIND_MUSIC: MUSIC_TYPES, KIND_BOOKS: BOOK_TYPES}
 
 
 def watching_only(prefix: str = "") -> str:
@@ -102,6 +106,18 @@ def only_books(prefix: str = "") -> str:
     return f" AND {prefix}item_type IN ({_BOOK_TYPES_SQL})"
 
 
+def without_kinds(kinds: Iterable[str], prefix: str = "") -> str:
+    """A piece of SQL (" AND ...") that leaves the plays of these kinds (TYPES_OF_KIND) out; nothing to leave out = "".
+
+    A row without a kind stays, as with `watching_only`: until the music sync pairs it, nobody knows it is music.
+    """
+    types = [type_name for kind in sorted(kinds) for type_name in TYPES_OF_KIND.get(kind, ())]
+    if not types:
+        return ""
+    names = ", ".join(f"'{type_name}'" for type_name in types)
+    return f" AND ({prefix}item_type IS NULL OR {prefix}item_type NOT IN ({names}))"
+
+
 def _kind_condition(kind: str, prefix: str = "") -> str:
     """A piece of SQL that limits a query to one kind.
 
@@ -132,7 +148,7 @@ def _kind_condition(kind: str, prefix: str = "") -> str:
     return watching_only(prefix)
 
 
-# What an item's kind is called in Czech. The keys are what Jellyfin sends.
+# What an item's kind is called (translation keys). The keys are what Jellyfin sends.
 #
 # What it is for: in the history and in the chart's bubbles we want to see a readable label instead of
 # "TvChannel". What is not in the list shows as it came - better than hiding it under "Other", because exactly that
@@ -163,7 +179,7 @@ UNKNOWN_TYPE = "Unknown (from import)"
 
 
 def type_label(item_type: Any) -> str:
-    """The item kind's Czech label. An empty value = an imported record."""
+    """The item kind's label in the interface language. An empty value = an imported record."""
     text = str(item_type or "").strip()
     if not text:
         return _t(UNKNOWN_TYPE)

@@ -135,27 +135,44 @@ def start_task_log(kind: str) -> int:
 
 
 def versions() -> dict[str, str]:
-    """Both versions at once - the library and the finished tasks.
+    """The versions at once - the library, the finished tasks and the last finished run of each kind the cards show.
 
-    One query, because both ask the same two tables and go together: **every call of /health** reaches for
-    them, and the browser asks for it every ten seconds from every open tab. In two queries that meant two
+    One query, because they ask the same two tables and go together: **every call of /health** reaches for
+    them, and the browser asks for it every ten seconds from every open tab. In more queries that meant more
     connections to the database instead of one - and the overhead of a connection is bigger here than the
-    work itself.
+    work itself. A kind's run is a look-up in the index idx_scan_log_kind (kind, id).
+
+    The keys "arr", "seerr", "music" and "books" are the row of the kind's last finished run (the markers of
+    the cards over that task's data, web/status.py); a run that is still going does not count yet. So is the
+    library's: the last finished sync of the library or analysis of its files ("tech" runs after the sync and
+    fills in the codecs, resolutions and dynamic range) - by its row, not its time: the analysis of a small
+    library finishes within the sync's second. The three take the scan's lock (one at a time), so a later
+    row also finishes later.
 
     `SELECT (subquery), (subquery)` without FROM is understood by SQLite and PostgreSQL.
     """
     row = db.query_one(
         """
-        SELECT (SELECT MAX(finished_at) FROM scan_log
-                 WHERE kind IN ('library', 'recent'))      AS library_time,
+        SELECT (SELECT MAX(id) FROM scan_log
+                 WHERE kind IN ('library', 'recent', 'tech')
+                   AND finished_at IS NOT NULL)    AS library_task_id,
                (SELECT COUNT(*) FROM items)                AS item_count,
                (SELECT MAX(id) FROM scan_log
-                 WHERE finished_at IS NOT NULL)            AS last_task_id
+                 WHERE finished_at IS NOT NULL)            AS last_task_id,
+               (SELECT MAX(id) FROM scan_log
+                 WHERE kind = 'arr' AND finished_at IS NOT NULL)   AS arr_task_id,
+               (SELECT MAX(id) FROM scan_log
+                 WHERE kind = 'seerr' AND finished_at IS NOT NULL) AS seerr_task_id,
+               (SELECT MAX(id) FROM scan_log
+                 WHERE kind = 'music' AND finished_at IS NOT NULL) AS music_task_id,
+               (SELECT MAX(id) FROM scan_log
+                 WHERE kind = 'books' AND finished_at IS NOT NULL) AS books_task_id
         """
     ) or {}
     return {
-        "library": f"{row.get('library_time') or ''}:{row.get('item_count') or 0}",
+        "library": f"{row.get('library_task_id') or 0}:{row.get('item_count') or 0}",
         "tasks": str(row.get("last_task_id") or 0),
+        **{kind: str(row.get(f"{kind}_task_id") or 0) for kind in ("arr", "seerr", "music", "books")},
     }
 
 
@@ -238,6 +255,18 @@ def _thin_records(conn: Any, kind: str) -> None:
         return
     conn.execute("DELETE FROM scan_log WHERE kind = ? AND id < ?",
                  (kind, row["id"]))
+
+
+def close_interrupted_task_logs() -> int:
+    """At the start: runs the previous start left "running" (a restart, a crash) end as failed. Returns how many.
+
+    Nothing runs yet at that moment. Without this the record stayed "running" for good and Settings → Tasks showed
+    a running task that never ended.
+    """
+    with db.connect() as conn:
+        return conn.execute(
+            "UPDATE scan_log SET status = 'error', finished_at = ?, message = ?, message_values = NULL"
+            " WHERE status = 'running'", (db.utcnow(), "Interrupted by a restart of the application.")).rowcount
 
 
 def last_scan(kind: str) -> dict[str, Any] | None:

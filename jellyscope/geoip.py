@@ -12,9 +12,9 @@ every address at run time would mean sending the viewers' addresses to
 someone else's server - and that is exactly what this application does not
 do. GeoLite2 is one file (`.mmdb`) that lies in `data/` and answers offline.
 
-**The library is optional.** `maxminddb` is not in requirements.txt: whoever
-does not want the map has no reason to install it. Without it the section
-simply does not show.
+**The library comes with the installation.** `maxminddb` is in requirements.txt
+(it used to be optional, and the map stayed empty for whoever missed the note).
+The code still copes without it: the section then simply does not show.
 
 **Precision.** GeoLite2 is free and it shows: the city fits rather for fixed
 lines, for mobile networks it points even to the middle of the country. For
@@ -22,7 +22,7 @@ the question "does somebody watch from abroad?" that is enough, for finding
 people it is not - and so it should stay.
 
 Data © MaxMind, GeoLite2 (CC BY-SA 4.0). The application does not download it
-by itself; the admin downloads the file with a button in Settings.
+by itself; the admin downloads the file with a button on the Network page.
 """
 from __future__ import annotations
 
@@ -44,6 +44,13 @@ FILE_NAME = "GeoLite2-City.mmdb"
 # key, which would turn one button into a form with three fields.
 SOURCE_URL = ("https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/"
               + FILE_NAME)
+
+# The ceiling of a download. The file has about 65 MB; an answer without an end (a mirror gone wrong) must not
+# fill the disk the application's database lies on too (like detailed_map.MAX_BYTES).
+MAX_BYTES = 200 * 1024 * 1024
+
+# A downloaded file that does not open as a MaxMind database of cities (a translation key - one string).
+NOT_A_DATABASE = "The downloaded file is not a GeoLite2 City database."
 
 
 def database_path() -> Path:
@@ -121,11 +128,14 @@ def lookup(address: str) -> dict[str, Any] | None:
     """
     if not is_available():
         return None
+    import maxminddb
+
     try:
         record = _open().get(address)
-    except (ValueError, OSError) as error:
-        # An invalid address or a damaged file. The map is an extra, so
-        # nothing is brought down because of it.
+    except (ValueError, OSError, maxminddb.InvalidDatabaseError) as error:
+        # An invalid address or a damaged file (a file that is no database at all is InvalidDatabaseError,
+        # a RuntimeError). The map is an extra, so nothing is brought down because of it - the page shows
+        # without it, with the button to download it again.
         log.debug("address %s could not be located: %s", address, error)
         return None
 
@@ -147,6 +157,22 @@ def lookup(address: str) -> dict[str, Any] | None:
     }
 
 
+def _check_database(path: Path) -> None:
+    """Raises when the file is no MaxMind database of cities - before it replaces the working one."""
+    import maxminddb
+
+    try:
+        reader = maxminddb.open_database(str(path))
+    except (ValueError, OSError, maxminddb.InvalidDatabaseError) as error:
+        raise i18n.TranslatableError(NOT_A_DATABASE) from error
+    try:
+        kind = str(reader.metadata().database_type or "")
+    finally:
+        reader.close()
+    if "City" not in kind:
+        raise i18n.TranslatableError(NOT_A_DATABASE)
+
+
 async def download() -> dict[str, Any]:
     """Downloads the database from SOURCE_URL to data/.
 
@@ -164,9 +190,16 @@ async def download() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
             async with client.stream("GET", SOURCE_URL) as response:
                 response.raise_for_status()
+                written = 0
                 with partial.open("wb") as file:
                     async for chunk in response.aiter_bytes(1 << 20):
+                        written += len(chunk)
+                        if written > MAX_BYTES:
+                            raise i18n.TranslatableError("{file} is larger than {mb} MB", file=FILE_NAME,
+                                                         mb=MAX_BYTES // (1024 * 1024))
                         file.write(chunk)
+        # Anything with 200 used to replace a working database: a page of a captive portal, a damaged file.
+        _check_database(partial)
     except Exception as error:  # noqa: BLE001 - the network fails in many ways
         partial.unlink(missing_ok=True)
         log.warning("the GeoLite2 database could not be downloaded: %s", error)

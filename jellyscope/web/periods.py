@@ -149,7 +149,7 @@ def _kind(request: Request, value: str | None,
     `session_key` tells the single filters apart. The most watched titles have
     their own - were they to share the choice with the watching by days, switching
     at one card would silently redraw the other too. They also have a narrower
-    list of allowed values (see TOP_ALLOWED_KINDS), so "Ostatní" does not get
+    list of allowed values (see TOP_ALLOWED_KINDS), so "Other" does not get
     into them through the address either.
     """
     allowed = (TOP_ALLOWED_KINDS if session_key == TOP_KIND_SESSION_KEY

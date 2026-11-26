@@ -1,0 +1,89 @@
+{# The Prowlarr card "Indexer availability": how long every indexer was available in the period, and its days.
+
+   From the stored samples of the indexers' status (cards_prowlarr.py, `d.rows`; stats.prowlarr_availability):
+   the share of the measured time Prowlarr did not skip the indexer, how many outages, the longest one, the last
+   failure (UTC, written in the app's zone) and the share of failed queries from the history. An indexer whose
+   outage still runs has "unavailable" by its name - not by the longest outage, which may be an older one. Ready texts, "–" = nothing to compute from; the most troublesome first. While the
+   samples do not reach back to the period's start, a note says since when it is measured, and the interval the
+   period was measured with (`d.interval`) with a hint that shorter is more precise - for the administrator with a
+   link to Prowlarr's settings, where the measuring in the background is set (`is_admin` of the page: the card's
+   data are the same for everybody). Before the first
+   sample (`d.sampled` false) only the failed queries mean anything: the card shows them with a sentence that
+   availability is measured from now on - how (`d.measuring`, arr/prowlarr/samples.how_measured): continuously by the
+   background loop, once Prowlarr answers it, or with every *Arr sync - without a strip.
+
+   The strip is one piece per run of days in the same state (OK / failed queries / outage / not measured), as
+   wide as its days (flex-grow); the colours are the theme's (style.css, .day-strip). A screen reader gets how
+   many days of each state (`strip_text`), a mouse the dates of a piece in its title.
+
+   A long table as the other *Arr tables: the first rows in the card, the whole one in the window. The table
+   follows the card's width (wrapper-by-width): on a narrow card the outages, the longest one and the last
+   failure stand under the name - only when there was an outage (without one they are all "–"). #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("share of the measured time Prowlarr did not skip the indexer") }}</p>
+    </div>
+    {% if not d.sampled and d.measuring == "loop" %}
+        <p class="card-note">{{ _("Availability is measured continuously from now on: Jellyscope keeps noting which indexers Prowlarr skips. Until then only the failed queries from the history are shown.") }}</p>
+    {% elif not d.sampled and d.measuring == "no_answer" %}
+        <p class="card-note">{{ _("Availability will be measured as soon as Prowlarr answers - it does not answer right now. Until then only the failed queries from the history are shown.") }}</p>
+    {% elif not d.sampled %}
+        <p class="card-note">{{ _("Availability is measured from now on: with every *Arr sync Jellyscope notes which indexers Prowlarr skips. Until then only the failed queries from the history are shown.") }}</p>
+    {% elif d.measured_since %}
+        <p class="card-note">{{ _("measured since {when}").format(when=d.measured_since | datetime) }}</p>
+    {% endif %}
+    {% if d.interval %}
+        <p class="card-note">{{ _("measured every {interval}").format(interval=d.interval) }} &middot;
+            {{ _("The shorter the interval, the more precisely short outages are measured.") }}
+            {% if is_admin %}<a href="/settings?section=arr#arr-prowlarr">{{ _("Settings → *Arr") }}</a>{% endif %}</p>
+    {% endif %}
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Indexer") }}</th>
+            {% if d.sampled %}
+            <th class="num">{{ _("Availability") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Outages") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Longest outage") }}</th>
+            <th class="wide-wrapper-only">{{ _("Last failure") }}</th>
+            {% else %}
+            <th class="num">{{ _("Queries#count") }}</th>
+            {% endif %}
+            <th class="num">{{ _("Failed queries") }}</th>
+            {% if d.sampled %}<th class="day-strip-cell">{{ _("Day by day") }}</th>{% endif %}
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            {% set last_failure = r.last_failure | datetime if r.last_failure else "–" %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong break-anywhere">{{ r.name }}{% if r.removed %} <span class="muted">{{ _("removed") }}</span>{% endif %}
+                    {% if r.running %}<span class="badge warning"><span class="dot"></span>{{ _("unavailable") }}</span>{% endif %}
+                    {% if d.sampled and r.outages %}<div class="narrow-wrapper-only cell-sub">{{ _("Outages") }} {{ r.outages | number }} &middot; {{ _("Longest outage") }} {{ r.longest }} &middot; {{ _("Last failure") }} {{ last_failure }}</div>{% endif %}</td>
+                {% if d.sampled %}
+                <td class="num">{{ r.availability }}</td>
+                <td class="num wide-wrapper-only">{{ r.outages | number }}</td>
+                <td class="num wide-wrapper-only">{{ r.longest }}</td>
+                <td class="wide-wrapper-only">{{ last_failure }}</td>
+                {% else %}
+                <td class="num">{{ r.query_count | number }}</td>
+                {% endif %}
+                <td class="num">{{ r.failure_share }}</td>
+                {% if d.sampled %}
+                <td class="day-strip-cell"><span class="day-strip" role="img" aria-label="{{ r.strip_text }}">
+                    {%- for p in r.strip %}<span class="day-strip-{{ p.state }}" style="flex-grow: {{ p.days }}" title="{{ p.title }}"></span>{% endfor -%}
+                </span></td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% if d.sampled %}
+    <ul class="legend">
+        {% for item in d.legend %}<li><span class="legend-swatch day-strip-{{ item.state }}"></span>{{ item.label }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

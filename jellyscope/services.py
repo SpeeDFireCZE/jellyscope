@@ -112,9 +112,9 @@ def is_connected(settings: Mapping[str, Any]) -> bool:
 
 def save_service_settings(prefix: str, enabled: bool, url: str, key: str,
                           before_write: Callable[[str], None] | None = None) -> str:
-    """Stores an application's settings. Returns an error (a Czech sentence, a translation key), or "".
+    """Stores an application's settings. Returns an error (a sentence, a translation key), or "".
 
-    An empty `key` keeps the stored one. Turning on works only with an address
+    An empty `key` keeps the stored one - for the same server only (key_refused). Turning on works only with an address
     and a key - an application turned on without them would have no page and
     nobody would know why. A turned-off one is stored without them too and
     keeps its address and key. `before_write` gets the checked address just
@@ -126,6 +126,9 @@ def save_service_settings(prefix: str, enabled: bool, url: str, key: str,
     key = (key or "").strip()
     if key_error(key):
         return key_error(key)
+    refused = key_refused(url, key, db.get_setting(f"{prefix}_url", ""), db.get_setting(f"{prefix}_api_key", ""))
+    if refused:
+        return refused
     if enabled and not url:
         return "The app cannot be enabled without an address."
     if enabled and not (key or service_settings(prefix)["has_key"]):
@@ -268,6 +271,48 @@ def address(url: str) -> tuple[str, str]:
     except httpx.InvalidURL:
         return url, INVALID_ADDRESS
     return url, ""
+
+
+# A test or a save with the key field left empty, at an address on another server than the saved one (a
+# translation key).
+KEY_FOR_ANOTHER_SERVER = ("The address leads to another server than the saved one. Fill in the API key again: the saved "
+                          "key is sent only to the server it was saved for.")
+
+
+def same_server(url: str, other: str) -> bool:
+    """Do both addresses lead to the same server - the same scheme, host and port? The path may differ.
+
+    An address without a scheme is taken the way address() completes it; a missing port is the scheme's own.
+    """
+    def server(text: str) -> tuple[str, str, int | None]:
+        parts = urlsplit(address(text)[0])
+        return parts.scheme, parts.hostname or "", parts.port or {"http": 80, "https": 443}.get(parts.scheme)
+
+    try:
+        first = server(url)
+        return bool(first[1]) and first == server(other)
+    except ValueError:      # a port that is no number
+        return False
+
+
+def key_refused(url: str, typed: str, saved_url: str, saved_key: str) -> str:
+    """KEY_FOR_ANOTHER_SERVER when an empty key field would send the saved key to another server, else "".
+
+    The saved key used to go to any address put into the form with the key field left empty: a connection
+    test or a save sent from a page of another site on the same machine (a SameSite cookie lets it through),
+    or by another administrator, who never sees the key, had the application itself send it there - and
+    keep it for that address. Another server needs the key typed again; the same server keeps the saved one
+    (the user, 25. 11. 2026). An empty address sends nothing anywhere.
+    """
+    if (typed or "").strip() or not saved_key or not (url or "").strip() or same_server(url, saved_url):
+        return ""
+    return KEY_FOR_ANOTHER_SERVER
+
+
+def draft_key(url: str, draft: Mapping[str, Any]) -> str:
+    """The key a connection test left in the draft - only for the server it was typed for (see key_refused)."""
+    key = str(draft.get("api_key") or "")
+    return key if key and same_server(url, str(draft.get("url") or "")) else ""
 
 
 # A name without a password counts as a token only from this length (see _secrets_from_address).

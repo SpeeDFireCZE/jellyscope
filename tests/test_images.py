@@ -15,7 +15,10 @@ D) tidying an item (after a change of the tag in the scanner) deletes all its im
    and nothing foreign - neither an item with a longer id, nor the provisional posters;
 E) the /image/ route: an image is downloaded from Jellyfin once, the second time it comes
    from the disk with the right type; the fallback is Primary; what does not exist is 404 and nothing
-   is stored; an old file of unknown content is sent as before.
+   is stored; an old file of unknown content is sent as before;
+G) what the address cannot make the route do (an audit finding): an id Jellyscope does not know
+   asks Jellyfin nothing, a tag other than the stored one is dropped, a width is one of a few fixed ones;
+   the folder has a ceiling, past it the oldest images of items go.
 
 Spec: docs/superpowers/specs/2026-11-13-karty-arr-seerr-design.md
 
@@ -170,6 +173,10 @@ from jellyscope import web  # noqa: E402
 accounts.create("reader", "longpassword")
 client = TestClient(web.app)
 client.post("/login", data={"username": "reader", "password": "longpassword", "method": "local"})
+# The proxy downloads only the images of ids Jellyscope knows (section G).
+with db.connect() as conn:
+    conn.execute("INSERT INTO items (id, name, type, image_tag) VALUES ('film-1', 'Duna', 'Movie', 't1')")
+    conn.execute("INSERT INTO items (id, name, type) VALUES ('film-2', 'No poster', 'Movie')")
 
 r1 = client.get("/image/film-1?kind=Primary&w=300&tag=t1")
 r2 = client.get("/image/film-1?kind=Primary&w=300&tag=t1")
@@ -179,13 +186,15 @@ check((FOLDER / "film-1-Primary-300-t1.img").read_bytes() == PNG, "it lies under
 check(r1.headers["content-type"] == "image/png" and r2.headers["content-type"] == "image/png",
       f"from the disk too it is sent with the right type ({r2.headers['content-type']})")
 check("max-age=604800" in r2.headers.get("cache-control", ""), "the browser may keep it for a week")
+with db.connect() as conn:      # somebody changed the poster in Jellyfin, the sync stored the new tag
+    conn.execute("UPDATE items SET image_tag = 't2' WHERE id = 'film-1'")
 client.get("/image/film-1?kind=Primary&w=300&tag=t2")
 check(len(calls) == 2 and (FOLDER / "film-1-Primary-300-t2.img").exists(), "another tag = another file, downloaded again")
 
 calls.clear()
-r = client.get("/image/film-1?kind=Backdrop&w=800")
-check(r.status_code == 200 and calls == [("film-1", "Backdrop", 800), ("film-1", "Primary", 800)]
-      and (FOLDER / "film-1-Backdrop-800.img").exists(), "a kind the item does not have: the fallback is the poster")
+r = client.get("/image/film-1?kind=Backdrop&w=1200")
+check(r.status_code == 200 and calls == [("film-1", "Backdrop", 1200), ("film-1", "Primary", 1200)]
+      and (FOLDER / "film-1-Backdrop-1200.img").exists(), "a kind the item does not have: the fallback is the poster")
 answers["Primary"] = None
 calls.clear()
 r = client.get("/image/film-2?kind=Primary&w=300")
@@ -223,6 +232,107 @@ for odd in ("²", "٣", "12²"):
     check(raises(ValueError, lambda: images.title_file("tv", odd)), f"title_file refuses the TMDB id {odd!r}")
 check(images.save_title("tv", "²", JPEG) is False and images.load_title("tv", "²") is None
       and not list(images.folder().glob("titul-tv-²*")), "a provisional poster with such an id is neither stored nor loaded")
+
+print()
+print("--- G) what a signed-in account can make the proxy do ---")
+# An audit finding (SD-2, SA-6, SO-1, SF-2): any id, any tag and any width from 80 to 1200 meant a new
+# request to Jellyfin and a new file next to the database - a loop with a counter in the tag filled the disk.
+with db.connect() as conn:
+    conn.execute("INSERT INTO items (id, name, type, image_tag) VALUES ('poster-1', 'Film', 'Movie', 'tagA')")
+    conn.execute("INSERT INTO items (id, name, type, series_id, series_image_tag)"
+                 " VALUES ('ep-1', 'Episode', 'Episode', 'series-1', 'serA')")
+    conn.execute("INSERT INTO music_album (id, name, cover_tag) VALUES ('album-1', 'Album', 'cov1')")
+    conn.execute("INSERT INTO book (id, name, cover_tag) VALUES ('book-1', 'Book', 'bk1')")
+    conn.execute("INSERT INTO playback (session_key, item_id, is_active, started_at, last_seen_at)"
+                 " VALUES ('s-1', 'playing-1', 1, ?, ?)", (db.utcnow(), db.utcnow()))
+answers["Primary"] = (PNG, "image/png")
+
+
+def files_of(item_id: str) -> list[str]:
+    return sorted(p.name for p in FOLDER.glob(f"{item_id}-*.img"))
+
+
+calls.clear()
+r = client.get("/image/unknown-1?kind=Primary&w=300&tag=x1")
+check(r.status_code == 404 and calls == [] and files_of("unknown-1") == [],
+      f"an id Jellyscope does not know: 404, no request to Jellyfin, no file ({r.status_code}, {calls})")
+calls.clear()
+known = {i: client.get(f"/image/{i}?kind=Primary&w=300").status_code
+         for i in ("poster-1", "ep-1", "series-1", "album-1", "book-1", "playing-1")}
+check(set(known.values()) == {200} and len(calls) == 6,
+      f"an item, an episode, a series, an album, a book and what is playing right now are known ({known})")
+
+calls.clear()
+for n in range(5):
+    client.get(f"/image/poster-1?kind=Primary&w=300&tag=bogus{n}")
+check(files_of("poster-1") == ["poster-1-Primary-300.img"] and calls == [],
+      f"a tag Jellyfin did not give is dropped: the file without a tag, nothing new ({files_of('poster-1')}, {calls})")
+client.get("/image/poster-1?kind=Primary&w=300&tag=tagA")
+check("poster-1-Primary-300-tagA.img" in files_of("poster-1"), "the stored tag goes into the file's name as before")
+client.get("/image/series-1?kind=Primary&w=300&tag=serA")
+client.get("/image/album-1?kind=Primary&w=300&tag=cov1")
+client.get("/image/book-1?kind=Primary&w=300&tag=bk1")
+check("series-1-Primary-300-serA.img" in files_of("series-1") and "album-1-Primary-300-cov1.img" in files_of("album-1")
+      and "book-1-Primary-300-bk1.img" in files_of("book-1"), "so does the series', the album's and the book's tag")
+
+calls.clear()
+for width in range(81, 121):
+    client.get(f"/image/album-1?kind=Primary&w={width}&tag=cov1")
+client.get("/image/album-1?kind=Primary&w=99999&tag=cov1")
+widths = sorted({width for _i, _k, width in calls})
+check(widths == [200, 1200] and len(calls) == 2,
+      f"a width is one of a few fixed ones, rounded up (81-120 -> 200, more than 1200 -> 1200: {widths}, {len(calls)} requests)")
+# The widths the pages really ask for - read from the templates, the scripts and the code that builds an image's
+# address (a literal `w=300` or a `POSTER_WIDTH = 300` beside an /image/ address), not a list of their own: a width
+# that is not a fixed one is rounded up, so the page gets a larger file than it asked for.
+import re  # noqa: E402
+
+asked: dict[int, str] = {}
+for source in sorted([*(PROJECT / "jellyscope" / "templates").rglob("*.html"), *(PROJECT / "jellyscope" / "static").rglob("*.js"),
+                      *(PROJECT / "jellyscope").rglob("*.py")]):
+    text = source.read_text(encoding="utf-8")
+    if "/image/" not in text:
+        continue
+    found = re.findall(r"/image/[^\"'\n]*?[?&]w=(\d+)", text)
+    if source.suffix == ".py":
+        found += re.findall(r"^\w*_WIDTH\s*=\s*(\d+)", text, re.M)
+    for width in found:
+        asked.setdefault(int(width), source.name)
+check(len(asked) >= 4 and set(asked) <= set(images.WIDTHS),
+      f"every width a page asks for is one of the fixed ones ({sorted(asked)}; not fixed: "
+      f"{sorted(f'{w} ({where})' for w, where in asked.items() if w not in images.WIDTHS)})")
+
+# The folder has a ceiling: past it the images downloaded longest ago go, the provisional posters stay.
+for path in FOLDER.glob("*.img"):
+    path.unlink()
+BIG = b"\x89PNG\r\n\x1a\n" + b"0" * 192          # 200 bytes
+for n in range(10):
+    old = FOLDER / f"old-{n}-Primary-300.img"
+    old.write_bytes(BIG)
+    os.utime(old, (1_000_000 + n, 1_000_000 + n))
+images.save_title("movie", "77", BIG)
+os.utime(images.title_file("movie", "77"), (900_000, 900_000))
+answers["Primary"] = (BIG, "image/png")
+saved_limit = images.CACHE_LIMIT
+images.CACHE_LIMIT = 1500
+r = client.get("/image/poster-1?kind=Primary&w=600&tag=tagA")
+total = sum(p.stat().st_size for p in FOLDER.glob("*.img"))
+left = sorted(p.name for p in FOLDER.glob("old-*.img"))
+check(r.status_code == 200 and total <= 1500, f"the folder keeps under its ceiling ({total} bytes)")
+check(left == [f"old-{n}-Primary-300.img" for n in range(5, 10)] and files_of("poster-1") == ["poster-1-Primary-600-tagA.img"]
+      and images.load_title("movie", "77") is not None,
+      f"the oldest images went first, the new one and the provisional poster stayed ({left})")
+images.CACHE_LIMIT = saved_limit
+answers["Primary"] = (PNG, "image/png")
+
+r = client.get("/image/poster-1?kind=Primary&w=300&tag=tagA")
+check(r.headers.get("cache-control", "").startswith("private") and "public" not in r.headers.get("cache-control", ""),
+      f"behind the sign-in: a shared cache must not keep it ({r.headers.get('cache-control')})")
+
+# QW-7: a very long id ended in "File name too long" (500) when the cache was asked.
+calls.clear()
+check(status_of("/image/" + "x" * 3000) == 404 and status_of("/image/" + "x" * 65) == 404 and calls == [],
+      f"a very long id: 404, not 500 ({status_of('/image/' + 'x' * 3000)})")
 
 print()
 print(f"DONE - failures: {failures}")

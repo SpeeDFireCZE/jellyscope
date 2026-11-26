@@ -63,8 +63,8 @@ _register("sl", "slv", "slovenian")
 _register("ca", "cat", "catalan")
 _register("fa", "fas", "per", "persian")
 
-# Names for display. They are Czech - display() translates them through
-# i18n, the same as any other text of the application.
+# Names for display. They are English (the source language) - display() translates
+# them through i18n, the same as any other text of the application.
 _NAMES: dict[str, str] = {
     "cs": "Czech",
     "sk": "Slovak",
@@ -142,9 +142,9 @@ def normalize(raw: str | None) -> str:
 def display(code: str | None) -> str:
     """The name of a language for display, in the interface language.
 
-    The source form is Czech ("Cestina") and goes through translation the
+    The source form is English ("Czech") and goes through translation the
     same as any other text of the application. When the translation is
-    missing, it stays Czech - that is still better than nothing.
+    missing, it stays English - that is still better than nothing.
 
     The import is inside the function on purpose: i18n reaches into the
     database for the set language, and `languages` is otherwise a clean

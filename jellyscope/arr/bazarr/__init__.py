@@ -14,7 +14,7 @@ from here:
   `detect_format` recognises the format from a page of history and `to_utc` converts it.
 * `sync` - the subtitle history into the table `bazarr_event` (page by page from the newest, an
   upsert by the fingerprint), the state, deleting the data.
-* `live` - the live state for the cards "Teď v aplikaci" (now in the app: what is missing, providers,
+* `live` - the live state for the cards "In the app right now" (what is missing, providers,
   warnings), a one-minute cache.
 
 The statistics are in `stats/bazarr.py`, the cards in `cards_bazarr.py`. Which name lives in which

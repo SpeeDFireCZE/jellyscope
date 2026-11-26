@@ -5,7 +5,7 @@ Every question is a card of its own in the registry (jellyscope/cards_sonarr.py)
 and the tab and the dashboards draw it the same way.
 Watched:
 
-A) the registry: 23 cards, keys `arr_sonarr_<name>`, area, group, widths,
+A) the registry: 24 cards, keys `arr_sonarr_<name>`, area, group, widths,
    templates, translations; an unconnected Sonarr is not offered;
 B) the /arr/sonarr tab draws exactly Sonarr's cards in the order of the sections,
    with the sections' headings and with the same numbers the statistics give;
@@ -81,10 +81,10 @@ db.forget_settings()
 print("--- A) the registry ---")
 CARDS = cards_sonarr.CARDS
 NAMES = [j for _, names in cards_sonarr.SECTIONS for j in names]
-check(len(NAMES) == 23 and len(set(NAMES)) == 23, f"23 card names ({len(NAMES)})")
+check(len(NAMES) == 24 and len(set(NAMES)) == 24, f"24 card names ({len(NAMES)})")
 check([i18n.translate(n, "cs") if n else "" for n, _ in cards_sonarr.SECTIONS] == ["Teď v aplikaci", "Co přibylo", "Rychlost", "Zdroje a kvalita", "Upgrady"],
       "five sections in the page's order")
-check(len(CARDS) == 23 and len({k.key for k in CARDS}) == 23, "23 cards, the keys different")
+check(len(CARDS) == 24 and len({k.key for k in CARDS}) == 24, "24 cards, the keys different")
 check([k.key for k in CARDS] == [f"arr_sonarr_{j}" for j in NAMES] and cards_sonarr.card_key("queue") == "arr_sonarr_queue",
       "keys arr_sonarr_<name>, in the order of the sections")
 check(all(k.area == "arr" and k.group == "Sonarr" for k in CARDS), "the *Arr area and the Sonarr group")
@@ -94,19 +94,19 @@ live_keys = {cards_sonarr.card_key(j) for j in ("live_numbers", "queue", "calend
 check({k.key for k in CARDS if not k.uses_period} == live_keys | {"arr_sonarr_downloading"}, "only the live cards without a period")
 WIDTHS = {"live_numbers": "full", "downloading": "full", "queue": "half", "calendar": "half", "health": "full", "numbers": "full", "by_day": "full",
           "when": "half", "best_days": "half", "largest": "full", "downloads": "half", "after_release": "half",
-          "indexers": "third", "groups": "third", "clients": "third", "protocols": "third", "qualities": "third",
+          "indexer_reliability": "full", "indexers": "third", "groups": "third", "clients": "third", "protocols": "third", "qualities": "third",
           "resolutions": "third", "upgrades": "full", "how_all": "half", "how_upgrades": "half", "transitions": "half",
           "upgraded": "half"}
 wrong = [(k.key, k.width) for j, k in zip(NAMES, CARDS, strict=True) if k.width != WIDTHS[j]]
 check(not wrong, f"the widths by the spec ({wrong[:3]})")
-with_table = {"largest", "indexers", "groups", "clients", "protocols", "qualities", "resolutions", "transitions", "upgraded",
+with_table = {"largest", "indexer_reliability", "indexers", "groups", "clients", "protocols", "qualities", "resolutions", "transitions", "upgraded",
               "queue", "calendar", "health"}   # the live lists too (23. 11. 2026)
 check({j for j, k in zip(NAMES, CARDS, strict=True) if k.has_table_window} == with_table,
       "cards with a long table want the dialog for the whole table")
 CARD_NAMES = {"live_numbers": "Čísla teď", "downloading": "Stahuje se", "queue": "Fronta s chybou nebo varováním", "calendar": "Vyjde v příštích 7 dnech",
               "health": "Varování aplikace", "numbers": "Čísla období", "by_day": "Přírůstky po dnech",
               "when": "Kdy se převádí do knihovny", "best_days": "Nejlepší dny", "largest": "Největší převzaté soubory",
-              "downloads": "Jak dlouho se stahuje", "after_release": "Jak brzy po vydání", "indexers": "Indexery",
+              "downloads": "Jak dlouho se stahuje", "after_release": "Jak brzy po vydání", "indexer_reliability": "Spolehlivost indexerů", "indexers": "Indexery",
               "groups": "Release skupiny", "clients": "Klienti stahování", "protocols": "Usenet a torrent",
               "qualities": "Kvalita převzatých souborů", "resolutions": "Rozlišení převzatých souborů", "upgrades": "Čísla upgradů",
               "how_all": "Jak se stahovalo všechno", "how_upgrades": "Jak se stahovaly upgrady",
@@ -136,7 +136,7 @@ admin, reader = login("admin"), login("reader")
 
 s = admin.get("/arr/sonarr?days=365").text
 order = re.findall(r"<!-- card: (\w+) -->", s)
-check(order == [cards_sonarr.card_key(j) for j in NAMES], f"23 Sonarr cards in the order of the sections ({len(order)})")
+check(order == [cards_sonarr.card_key(j) for j in NAMES], f"24 Sonarr cards in the order of the sections ({len(order)})")
 check(all(f"<h2>{i18n.translate(n, 'cs')}</h2>" in s for n, _ in cards_sonarr.SECTIONS), "the sections' headings (the page is Czech)")
 additions = stats.sonarr_additions(365)
 total = sum(r["count"] for r in additions)
@@ -153,6 +153,20 @@ check("No audio tracks detected" in card_html(s, "arr_sonarr_queue")
       and "No indexers available with RSS sync enabled" in card_html(s, "arr_sonarr_health"),
       "the administrator: the queue's message and the application's warning in their cards")
 check("ruční výběr" in card_html(s, "arr_sonarr_how_all"), "how it was downloaded, in Czech")
+# Indexer reliability over the recorded history: the test Sonarr downloads through Blackhole, which reports no
+# download_id with a grab - so nothing can be matched and there is no success rate, only the grabs.
+reliability = card_html(s, "arr_sonarr_indexer_reliability")
+reliability_rows = [(re.search(r'<td class="strong[^"]*">([^<]*)', tr).group(1).strip(), re.findall(r'<td class="num[^"]*">([^<]*)</td>', tr))
+                    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", reliability, re.S) if "<td" in tr]
+check(reliability_rows == [("arr-test", ["6", "0", "0", "6", "–"]), ("–", ["4", "0", "0", "4", "–"])],
+      f"Spolehlivost indexerů: downloads, imported, failed, cannot be matched, success rate ({reliability_rows})")
+check("<th class=\"num\">Stahování</th>" in reliability and "dvojdíl je jedno stahování" in reliability,
+      "the first column counts downloads and the note says one release is one download")
+check("ne dostupnost jeho API" in reliability and "nelze spárovat" in reliability,
+      "the card says it is the releases' reliability, not the API's availability, and why some downloads cannot be matched")
+rates = [cards_sonarr.success_rate(share) for share in (None, 1.0, 0.9996, 2 / 3, 0.0)]
+check(rates == ["–", "100,0 %", "99,9 %", "66,6 %", "0,0 %"],
+      f"the success rate with one decimal, rounded down: one failure in thousands is not 100 % ({rates})")
 check('<span class="badge critical">error</span>' in card_html(s, "arr_sonarr_health"), "the health pill shows the type of the message (error)")
 # "Jak brzy po vydání" counts only what was waited for. The test Sonarr got series from 2011
 # only in 2026 - none of their episodes is counted therefore and the card says so with a sentence with the count.
@@ -187,7 +201,7 @@ cards.save_layout(["arr_sonarr_queue"])
 check("modal-period" not in admin.get("/dashboard").text, "a live card not")
 cards.save_layout([k.key for k in CARDS])
 everything = admin.get("/dashboard?days=365")
-check(everything.status_code == 200 and len(re.findall(r"<!-- card: arr_sonarr_\w+ -->", everything.text)) == 23, "all 23 cards at once in one dashboard")
+check(everything.status_code == 200 and len(re.findall(r"<!-- card: arr_sonarr_\w+ -->", everything.text)) == 24, "all 24 cards at once in one dashboard")
 
 print()
 print("--- E) the period's events once, the whole history from the first event ---")
@@ -286,7 +300,7 @@ db.forget_settings()
 print()
 print("--- G) rights ---")
 s_reader = reader.get("/arr/sonarr?days=365").text
-check(reader.get("/arr/sonarr").status_code == 200 and len(re.findall(r"<!-- card: (\w+) -->", s_reader)) == 23,
+check(reader.get("/arr/sonarr").status_code == 200 and len(re.findall(r"<!-- card: (\w+) -->", s_reader)) == 24,
       "a reader sees the tab and the cards (the area is on by default)")
 check("No indexers available with RSS sync enabled" not in s_reader and "No audio tracks detected" not in s_reader,
       "whoever is not the administrator sees neither the application's warning texts nor the queue's messages")

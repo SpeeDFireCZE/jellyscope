@@ -105,9 +105,9 @@
 <div class="card">
     <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
         <input type="hidden" name="tab" value="media">
-        <input type="search" name="search" value="{{ search }}"
+        <input type="search" name="search" value="{{ search }}" aria-label="{{ _('Search') }}"
                placeholder="{{ _('Search title...') }}" style="width:230px">
-        <select name="sort" style="width:auto">
+        <select name="sort" style="width:auto" aria-label="{{ _('Sorting') }}">
             <option value="size"       {{ 'selected' if sort == 'size' }}>{{ _("By size") }}</option>
             <option value="bitrate"    {{ 'selected' if sort == 'bitrate' }}>{{ _("By bitrate") }}</option>
             <option value="resolution" {{ 'selected' if sort == 'resolution' }}>{{ _("By resolution") }}</option>
@@ -160,9 +160,9 @@
 {# Bulk assignment. A row = an archived item (episodes apart), beside it
    the target picker with a search in the live library. What has no target chosen is
    left alone. One backup for the whole batch. #}
-<dialog class="modal modal-layout" id="modal-assignment">
+<dialog class="modal modal-layout" id="modal-assignment" aria-labelledby="modal-assignment-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Assign the archive to other titles") }}</h2>
+        <h2 id="modal-assignment-title">{{ _("Assign the archive to other titles") }}</h2>
         <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
     {# Two steps in one form: choice and confirmation with a recap.
@@ -228,9 +228,9 @@
    The same two steps as with assignment: "Delete selected" only shows what
    will vanish - only "Yes, delete", carrying potvrzeno=1, deletes. The script is
    in static/js/app.js (data-archive-delete). #}
-<dialog class="modal modal-layout" id="modal-delete">
+<dialog class="modal modal-layout" id="modal-delete" aria-labelledby="modal-delete-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Delete from the archive") }}</h2>
+        <h2 id="modal-delete-title">{{ _("Delete from the archive") }}</h2>
         <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
     <form method="post" action="/library/{{ library.id }}/archive/delete"
@@ -334,7 +334,7 @@
     {% endfor %}
 </div>
 
-{% set extra %}&tab=media&sort={{ sort }}{% if search %}&search={{ search }}{% endif %}{% if archived %}&archived=1{% endif %}{% endset %}
+{% set extra %}&tab=media&sort={{ sort }}{% if search %}&search={{ search | urlencode }}{% endif %}{% if archived %}&archived=1{% endif %}{% endset %}
 {{ pager(page, pages, total, '/library/' ~ library.id, extra) }}
 {% else %}
 <div class="card"><p class="chart-empty">{{ _("Nothing found.") }}</p></div>

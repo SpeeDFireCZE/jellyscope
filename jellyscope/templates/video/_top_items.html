@@ -40,9 +40,9 @@
         {{ _("The whole ranking") }} &rarr;
     </a>
 </p>
-<dialog class="modal modal-wide" id="modal-top-all">
+<dialog class="modal modal-wide" id="modal-top-all" aria-labelledby="modal-top-all-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Most watched titles") }} &ndash; {{ _("the whole ranking") }}</h2>
+        <h2 id="modal-top-all-title">{{ _("Most watched titles") }} &ndash; {{ _("the whole ranking") }}</h2>
         <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
     <div class="modal-body"></div>
@@ -52,9 +52,9 @@
 {# Hiding never happens silently. The watched time is not lost anywhere,
    the History keeps showing it - only here a row that cannot be clicked
    and pretends to be a film that does not exist would say nothing. #}
-{% if top_items and top_items[0]._skryto %}
+{% if top_items and top_items[0]._hidden %}
 <p class="card-note" style="margin-top:12px">
-    {{ _n("Not shown: {n} titles with no counterpart in the library or the archive. The record does not say what they were.", top_items[0]._skryto) }}
+    {{ _n("Not shown: {n} titles with no counterpart in the library or the archive. The record does not say what they were.", top_items[0]._hidden) }}
     <a href="/settings?section=import">{{ _("Try to match them") }}</a>
 </p>
 {% endif %}

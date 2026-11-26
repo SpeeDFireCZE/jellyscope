@@ -208,7 +208,7 @@ def transcode_speeds(days: int) -> dict[str, Any]:
     time of transcoding - a long movie is to say more than a trailer somebody
     played for ten seconds.
 
-    "Nestíhalo" (could not keep up) = the transcode's average below the video's
+    "Fell behind" = the transcode's average below the video's
     frame rate. Such a playback stuttered, however Jellyfin looked about it.
 
     Playbacks from before the speed was watched (and imported history) have
@@ -381,7 +381,7 @@ def upgrade_candidates(days: int, limit: int = 15) -> list[dict[str, Any]]:
     full 1080p. So the width decides.
 
     And the width did not get into the template at all, so the column
-    "Rozlišení" showed something else than what the file really is too.
+    "Resolution" showed something else than what the file really is too.
     """
     rows = db.query_all(
         f"""
@@ -562,7 +562,8 @@ def duplicate_candidates(limit: int = 30) -> list[dict[str, Any]]:
           AND name IS NOT NULL
         GROUP BY LOWER(TRIM(name)), production_year
         HAVING COUNT(*) > 1
-        ORDER BY size_bytes DESC
+        -- Unknown sizes last and the key of the group on a tie, the same in SQLite and PostgreSQL.
+        ORDER BY COALESCE(SUM(size_bytes), 0) DESC, key_name, production_year IS NULL, production_year
         LIMIT ?
         """,
         (limit,),
@@ -589,14 +590,16 @@ def never_finished(days: int, limit: int = 15) -> list[dict[str, Any]]:
     """Started, but not finished.
 
     We compare how far the playback got with the item's total length. Below
-    15 % of the length we take as "tried and gave up".
+    15 % of the length we take as "tried and gave up". One row per title: a
+    series by its id (nobody got past 15 % in any of its episodes), a movie by
+    its record (copies of one movie in one library are one, scanner/copies.py).
     """
     return db.query_all(
         f"""
-        SELECT COALESCE(p.series_name, p.item_name) AS label,
+        SELECT MAX(COALESCE(p.series_name, p.item_name)) AS label,
                COUNT(*) AS attempts,
                MAX(p.position_ticks * 100.0 / i.runtime_ticks) AS best_percent,
-               i.runtime_ticks / 600000000.0 AS runtime_minutes
+               MAX(i.runtime_ticks) / 600000000.0 AS runtime_minutes
         FROM playback p
         JOIN items i ON i.id = p.item_id
         WHERE p.started_at >= ? AND p.started_at < ?
@@ -604,11 +607,11 @@ def never_finished(days: int, limit: int = 15) -> list[dict[str, Any]]:
           AND p.watched_seconds >= ?
           AND i.runtime_ticks > 0
           AND p.position_ticks IS NOT NULL
-        GROUP BY COALESCE(p.series_name, p.item_name), i.runtime_ticks
+        GROUP BY COALESCE(i.series_id, i.main_id, i.id)
         HAVING MAX(p.position_ticks * 100.0 / i.runtime_ticks) < 15
-        -- On a tie the name and the length (= the key of the group): without them the limit
+        -- On a tie the name and the key of the group: without them the limit
         -- picks other titles in SQLite than in PostgreSQL.
-        ORDER BY attempts DESC, best_percent ASC, label, i.runtime_ticks
+        ORDER BY attempts DESC, best_percent ASC, label, COALESCE(i.series_id, i.main_id, i.id)
         LIMIT ?
         """,
         (*_bounds(days), MIN_PLAY_SECONDS, limit),

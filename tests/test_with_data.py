@@ -68,6 +68,9 @@ ROUTES = [
     "/library?library_id=demo-tv", "/library?page=2",
     "/users", "/users?days=90", "/users/demo-u1", "/users/demo-u2?days=7",
     "/history", "/history?page=2", "/history?user_id=demo-u1", "/history?search=Chernobyl",
+    # Dates at the calendar's edge: the index bounds two days around them overflowed (500).
+    "/history?day=0001-01-01", "/history?day=9999-12-31", "/history?since=0001-01-01&until=2026-11-24",
+    "/history?period=custom&since=1.1.2026&until=31.12.9999",
     "/settings", "/health", "/api/now-playing",
 ]
 
@@ -102,13 +105,55 @@ with TestClient(app) as client:
     saved = db.get_settings()
     for key, expected in [
         ("tech_source", "jellyfin"),        # an unknown value -> the default
-        ("poll_interval", "10"),            # "abc" -> the default
+        ("poll_interval", "15"),            # "abc" -> the saved value, as a cleared field (not the default)
         ("ffprobe_concurrency", "16"),      # 999 -> the maximum
     ]:
         check(saved[key] == expected,
               f"the setting {key} = {saved[key]!r} (expected {expected!r})")
     check(saved["path_mappings"].startswith("[{"),
           "an invalid JSON did not change the stored path mapping")
+    # Valid JSON of the wrong shape (a pair of texts, a number for a path) used to be stored, and from then on
+    # every file analysis ended with an error nobody could read.
+    kept = saved["path_mappings"]
+    for wrong in ('["/media", "/mnt/media"]', '[{"from": "/media", "to": 5}]', '[{"from": "/media"}]'):
+        response = client.post("/settings", data=dict(forms[0], path_mappings=wrong))
+        db.forget_settings()
+        check(db.get_setting("path_mappings") == kept and "nechal jsem původní hodnotu" in response.text,
+              f"a mapping that is not a list of from/to texts is not stored, with a warning ({wrong})")
+
+    # Out of every range: 1e400 and inf are no whole number, a 20-digit id does not fit the database's
+    # integer, a 300-character zone is a file name too long. Each of them used to end with a 500.
+    def answer(route: str, data: dict[str, str]) -> str:
+        try:
+            return str(client.post(route, data=data, follow_redirects=False).status_code)
+        except Exception as exc:  # noqa: BLE001 - the test client passes the server's error on
+            return type(exc).__name__
+
+    HUGE = "99999999999999999999"
+    password = {"password": "longpassword", "password_again": "longpassword"}
+    zone_before = db.get_setting("app_timezone", "")
+    for route, field, value, rest in [
+        ("/settings", "poll_interval", "1e400", forms[0]),
+        ("/settings", "poll_interval", "-inf", forms[0]),
+        ("/settings/notifications/events", "silence_minutes", "inf", {}),
+        ("/settings/api/token/revoke", "token_id", HUGE, {}),
+        ("/settings/api/token/disable", "token_id", HUGE, {}),
+        ("/settings/api/token/enable", "token_id", HUGE, {}),
+        ("/settings/accounts/delete", "account_id", HUGE, {}),
+        ("/settings/accounts/role", "account_id", HUGE, {"is_admin": "1"}),
+        ("/settings/accounts/password", "account_id", HUGE, password),
+        ("/settings/accounts/permissions", "account_id", HUGE, {}),
+        ("/settings/history/restore", "event", HUGE, {}),
+        ("/settings/language", "app_timezone", "x" * 300, {"ui_language": "cs"}),
+    ]:
+        status = answer(route, {**rest, field: value})
+        check(status == "303", f"{route} {field}={value[:12]}… -> {status}, not an error")
+    db.forget_settings()
+    check(db.get_setting("poll_interval") == "15" and db.get_setting("app_timezone", "") == zone_before,
+          f"the interval stays saved, as for abc, the zone stays ({db.get_setting('poll_interval')},"
+          f" {db.get_setting('app_timezone', '')!r})")
+    check(accounts.get_by_name("tester") is not None and accounts.get_by_name("reader") is not None,
+          "no account was touched")
 
     print("--- scheduled tasks ---")
     response = client.post("/settings/tasks", data={
@@ -142,6 +187,51 @@ with TestClient(app) as client:
     }, follow_redirects=False)
     check(db.get_settings()["library_sync_time"] == "02:05",
           f"an empty field keeps the original time ({db.get_settings()['library_sync_time']})")
+    # The same for an interval: an emptied field used to save the task's default.
+    db.set_setting("recent_sync_minutes", "45")
+    response = client.post("/settings/tasks", data={
+        "enabled_recent": "1", "minutes_recent": "",
+        "backup_path": str(TMP_DB.parent / "jellyscope-test-backup"), "backup_keep": "3",
+    }, follow_redirects=False)
+    db.forget_settings()
+    check(response.status_code == 303 and db.get_setting("recent_sync_minutes") == "45",
+          f"an empty interval keeps the original one ({db.get_setting('recent_sync_minutes')})")
+    # The same for how long the history is kept and how many backups: an emptied field (or an older tab without
+    # it) saved the defaults 365 and 7 - with the history's clean-up on, the next night deleted everything older
+    # than a year, and the next backup pruned the kept ones down to seven (the review of the audit fixes).
+    from jellyscope import purge as _purge
+    db.set_setting(_purge.RETENTION_KEY, "3650")
+    db.set_setting("backup_keep", "30")
+    for form in ({"history_retention_days": "", "backup_keep": ""}, {}):
+        response = client.post("/settings/tasks", data={
+            "enabled_recent": "1", "minutes_recent": "45",
+            "backup_path": str(TMP_DB.parent / "jellyscope-test-backup"), **form,
+        }, follow_redirects=False)
+        db.forget_settings()
+        check(response.status_code == 303 and db.get_setting(_purge.RETENTION_KEY) == "3650" and db.get_setting("backup_keep") == "30",
+              f"an empty or missing field keeps how long the history is kept and how many backups "
+              f"({db.get_setting(_purge.RETENTION_KEY)}, {db.get_setting('backup_keep')}; form {sorted(form)})")
+    response = client.post("/settings/tasks", data={
+        "enabled_recent": "1", "minutes_recent": "45", "history_retention_days": "400", "backup_keep": "12",
+        "backup_path": str(TMP_DB.parent / "jellyscope-test-backup"),
+    }, follow_redirects=False)
+    db.forget_settings()
+    check(db.get_setting(_purge.RETENTION_KEY) == "400" and db.get_setting("backup_keep") == "12", "a typed value is saved as before")
+    db.set_setting("backup_keep", "3")
+
+    # The Network page's live card refreshes by itself and sends the period of its own page. That must not become
+    # "the last period chosen": a tab left open on Network would switch every other page to its period with
+    # each refresh (the review of the audit fixes).
+    client.get("/video/languages?days=365")
+    live = client.get("/partials/network-live?days=7")
+    after = client.get("/video/languages").text
+    check(live.status_code == 200 and 'data-period="days=365"' in after,
+          "the live card's own refresh does not change the remembered period")
+    # ... and the history filter's script looks for its own switch, not for anything with data-period (the page's
+    # <body> carries the period under that name too).
+    scripts = (PROJECT / "jellyscope" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    check('querySelector("[data-period]")' not in scripts and 'querySelector("select[data-period]")' in scripts,
+          "the history filter finds its period switch, not the page's body")
 
     # The database backup must really be made and be openable.
     import asyncio as _asyncio
@@ -253,6 +343,24 @@ with TestClient(app) as client:
 
     check(client.get("/library/neexistuje").status_code == 404, "an unknown library -> 404")
 
+    # A page past the end is the last page, as in the History. A huge number went straight into
+    # OFFSET and SQLite refused it (OverflowError, 500); a page just past the end showed an empty list.
+    from jellyscope import stats  # noqa: E402
+
+    media_pages = max(1, -(-stats.library_rows_count(library_id) // 48))
+    undetermined_pages = max(1, -(-langstats.undefined_language_count(None) // 50))
+    for base, last_page in ((f"/library/{library_id}?tab=media&page=", media_pages),
+                            ("/video/languages/undetermined?page=", undetermined_pages)):
+        last = client.get(f"{base}{last_page}").text
+        for page_number in (last_page + 1, 10 ** 30):
+            try:
+                response, error = client.get(f"{base}{page_number}"), ""
+            except Exception as e:  # noqa: BLE001
+                response, error = None, repr(e)
+            check(response is not None and response.status_code == 200 and response.text == last,
+                  f"{base}{page_number} shows the last page {last_page}"
+                  f" ({response.status_code if response is not None else error})")
+
     item_id = db.query_value("SELECT id FROM items LIMIT 1", default="")
     response = client.get(f"/item/{item_id}")
     check(response.status_code == 200, f"/item/{item_id} -> {response.status_code}")
@@ -330,7 +438,7 @@ with TestClient(app) as client:
     # Czech text is looked for only in what a person really sees. Scripts and
     # comments may name a section in Czech (in quotes) - without this
     # the test would fall over every time somebody mentions a section's name in a comment.
-    visible = re.sub(r"<script\b.*?</script>", "", english, flags=re.S | re.I)
+    visible = re.sub(r"<script\b.*?</script\b[^>]*>", "", english, flags=re.S | re.I)
     visible = re.sub(r"<!--.*?-->", "", visible, flags=re.S)
     check("Přehled" not in visible, "the Czech headings disappeared")
 
@@ -467,10 +575,11 @@ check(sum(row["series_hours"] for row in split) > 0, "series have some watching"
 # The breakdown must equal what is in the database. Formerly it was compared
 # with a second function over the same data - but two functions can have the same
 # error. A query written separately is a more honest check.
-# It is compared over the same days the breakdown returned: the window's bound is
-# computed in UTC, but the days are put together in local time, so the very first
-# day may be only partial. We check that within its range
-# the breakdown loses nothing and counts nothing twice.
+# It is compared over the same days the breakdown returned: "the last N days" are whole
+# calendar days in local time (since 25. 11. 2026; the window used to start N x 24 hours
+# back, in the middle of the day before the first row). We check that within its range
+# the breakdown loses nothing and counts nothing twice - and that it adds up to the
+# headline above the chart.
 # Without music listening and books: the sample data has them and they do not count into watching (the app's own condition).
 in_database = float(db.query_value(
     "SELECT SUM(watched_seconds) / 3600.0 FROM playback"
@@ -480,6 +589,9 @@ in_database = float(db.query_value(
 new_sum = sum(row["hours"] for row in split)
 check(abs(in_database - new_sum) < 0.5,
       f"the sum matches the database ({in_database:.2f} vs {new_sum:.2f})")
+headline = float(stats.overview(30)["watched_seconds"] or 0) / 3600
+check(abs(headline - new_sum) < 0.5,
+      f"the bars add up to the headline ({new_sum:.2f} vs {headline:.2f})")
 
 
 print()
@@ -491,6 +603,15 @@ series = stats.history_count(day=last_day, kind=stats.KIND_SERIES)
 check(movies + series <= everything,
       f"movies + series fit into the whole ({movies} + {series} <= {everything})")
 check(stats.history_count(day="1999-01-01") == 0, "a day without data returns zero")
+# The safety bounds for the index reach two days past the dates; at the calendar's edge that overflowed.
+all_plays = stats.history_count()
+for filters, expected in (({"day": "0001-01-01"}, 0), ({"day": "9999-12-31"}, 0),
+                          ({"since": "0001-01-01"}, all_plays), ({"until": "9999-12-31"}, all_plays)):
+    try:
+        found, error = stats.history_count(**filters), ""
+    except Exception as e:  # noqa: BLE001
+        found, error = None, repr(e)
+    check(found == expected, f"the history filter {filters} counts {found} of {expected} {error}")
 
 rows = stats.history(50, 0, day=last_day)
 check(all(str(row["started_at"])[:10] == last_day or True for row in rows),
@@ -514,6 +635,81 @@ check(stats.library_rows_count() != stats.library_rows_count(archived=True)
 item_count = db.query_value("SELECT COUNT(*) FROM items WHERE is_missing = 0")
 check(stats.library_rows_count() < item_count,
       f"the list ({stats.library_rows_count()}) is shorter than the number of items ({item_count})")
+
+print()
+print("--- the History's 'last N days' are N days, as the API's days=N ---")
+# The page took today and N whole days before it (8 days for "last 7 days"), the API and the daily
+# charts today and N - 1 before it. One viewer, so the API's answer stays under its row cap.
+from datetime import date, timedelta  # noqa: E402
+
+from jellyscope import api  # noqa: E402
+
+api_header = {"Authorization": f"Bearer {api.create_token('History check')['token']}"}
+with TestClient(app) as client:
+    client.post("/login", data={"username": "tester", "password": "testingpass"})
+    for key, days in (("7", 7), ("30", 30)):
+        page_html = client.get(f"/history?period={key}&user_id=demo-u1").text
+        shown = re.search(r'<span class="card-note"[^>]*>\s*([\d\s  ]+?)\s*[^\d\s<]', page_html)
+        on_page = int(re.sub(r"\D", "", shown.group(1))) if shown else None
+        from_api = client.get(f"/api/v1/history?days={days}&user=demo-u1&limit=500",
+                              headers=api_header).json().get("count")
+        expected = stats.history_count(user_id="demo-u1",
+                                       since=(date.today() - timedelta(days=days - 1)).isoformat())
+        check(on_page == from_api == expected and 0 < expected < 500,
+              f"History 'last {days} days' = {on_page}, the API days={days} = {from_api},"
+              f" {days} calendar days = {expected}")
+
+print()
+print("--- the History's pages keep every filter ---")
+# The links to the next page carried only the viewer, the search, the day and the kind: page 2 of "Transcode" or of
+# "last 7 days" was the whole history. And the search went into the link as it was, so "Tom & Jerry #2" came to
+# page 2 as "Tom ".
+import html as _html  # noqa: E402
+from urllib.parse import parse_qs, urlsplit  # noqa: E402
+
+with db.connect() as conn:
+    conn.execute("UPDATE playback SET item_name = 'Tom & Jerry #2 ' || item_name WHERE id % 20 = 0")
+options = stats.filter_values()
+month_ago = date.today() - timedelta(days=60)
+
+
+def pager_total(page_html: str) -> int | None:
+    shown = re.search(r'<div class="pager">.*?&middot;\s*\S+\s*([\d\s\u00a0\u202f]+)</span>', page_html, re.S)
+    return int(re.sub(r"\D", "", shown.group(1))) if shown else None
+
+
+with TestClient(app) as client:
+    client.post("/login", data={"username": "tester", "password": "testingpass"})
+    for query in ("method=Transcode", "period=7", f"client={options['clients'][0]}",
+                  f"language={options['languages'][0]}", "kind=movies&user_id=demo-u1",
+                  f"period=custom&since={month_ago.day}.{month_ago.month}.{month_ago.year}"
+                  f"&until={date.today().day}.{date.today().month}.{date.today().year}",
+                  "search=Tom%20%26%20Jerry%20%232"):
+        first = client.get(f"/history?{query}").text
+        link = re.search(r'<a class="btn" href="(/history\?page=2[^"]*)"', first)
+        if not link:
+            check(False, f"/history?{query}: the filtered history has a second page ({pager_total(first)})")
+            continue
+        href = _html.unescape(link.group(1))
+        second = client.get(href).text
+        asked = {k: v for k, v in parse_qs(query).items() if k not in ("since", "until")}
+        carried = parse_qs(urlsplit(href).query)
+        check(pager_total(first) == pager_total(second) and pager_total(first) is not None
+              and all(carried.get(k) == v for k, v in asked.items()),
+              f"/history?{query}: page 2 has the same {pager_total(first)} records ({pager_total(second)}, {href})")
+
+    # The library's list and the files without a language had the same unencoded search in their pages.
+    with db.connect() as conn:
+        conn.execute("UPDATE items SET name = 'Tom & Jerry #2 ' || name, audio_languages = NULL")
+        for number in range(60):                 # the demo's movies fit one page of the library's list
+            conn.execute("INSERT INTO items (id, name, type, library_id) VALUES (?, ?, 'Movie', 'demo-movies')",
+                         (f"pager-{number}", f"Tom & Jerry #2 ({number})"))
+    for address in ("/library/demo-movies?tab=media", "/video/languages/undetermined?page=1"):
+        first = client.get(f"{address}&search=Tom%20%26%20Jerry%20%232").text
+        link = re.search(r'<a class="btn" href="([^"]*\?page=2[^"]*)"', first)
+        carried = parse_qs(urlsplit(_html.unescape(link.group(1))).query) if link else {}
+        check(carried.get("search") == ["Tom & Jerry #2"],
+              f"{address}: the next page searches for the same text ({link and _html.unescape(link.group(1))})")
 
 print()
 print("DONE - failures:", failures)

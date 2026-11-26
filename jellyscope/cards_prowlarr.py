@@ -8,9 +8,9 @@ What it stands on:
 
 * **The period's sums are computed once** (`stats.prowlarr_analysis`) and the cards
   are different views of them; the memo of one computation holds them.
-* **Live cards** ("Teď v aplikaci") take the state from `prowlarr.live_state` (a
+* **Live cards** ("In the app right now") take the state from `prowlarr.live_state` (a
   one-minute cache). What did not load is None and the card says so - a zero would
-  be a claim nobody checked. "V pořádku" is an indexer Prowlarr does not skip right
+  be a claim nobody checked. "OK" is an indexer Prowlarr does not skip right
   now nor names in the warning about unavailable ones.
 * **The texts from the app only for the administrator**: the error's detail and
   Prowlarr's warnings. The others see that something is there, not what.
@@ -18,11 +18,20 @@ What it stands on:
   indexer for (always with usenet) it writes as successful and without a time.
   Failures and the time are therefore counted only from the releases it downloaded
   itself, and the card says how many those were.
+* **Availability** ("Indexer availability") is computed from the stored samples of
+  the indexers' status (`stats.prowlarr_availability`); the interval each sample was
+  taken with decides what is a gap, and an indexer counts only where it was there and
+  enabled. Its strip by days is drawn as pieces of days in the same state, not as one
+  element per day. The card says the interval the period was measured with (the
+  shorter, the more precisely short outages are measured); the administrator gets a
+  link to Prowlarr's settings, where the background measuring is set.
 
 stats/prowlarr.py computes the numbers, here they are only put together for the templates.
 """
 from __future__ import annotations
 
+import math
+from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
@@ -34,20 +43,23 @@ from .i18n import translate as _t
 NAME = prowlarr.NAME
 
 # The tab's sections and the names of their cards, in the order on the page. The
-# heading is a Czech sentence = a translation key. The layout is in
+# heading is an English sentence = a translation key. The layout is in
 # arr_prowlarr.html; that the template draws exactly these cards in this order is
 # guarded by tests/test_prowlarr_web.py.
 SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("In the app right now", ("live_numbers", "indexers_now", "health")),
     ("Queries", ("numbers", "by_day", "when", "who")),
-    ("Indexer performance", ("indexers", "response_time", "failures")),
+    ("Indexer performance", ("availability", "indexers", "response_time", "failures")),
     ("Grabbed releases", ("grabbed_numbers", "grabbed_indexers", "grabbed_latest")),
 )
 NAMES: tuple[str, ...] = tuple(name for _, names in SECTIONS for name in names)
 
-# How a grabbed release ended - labels (translation keys). "Přesměrováno" is no result:
+# How a grabbed release ended - labels (translation keys). "redirected" is no result:
 # Prowlarr only sent the app to the indexer and does not know how the download ended.
 RESULT_LABELS = {"ok": "downloaded#neuter", "failed": "failed", "redirected": "redirected", "unknown": "unknown"}
+# The states of a day in the availability strip (stats.prowlarr_availability) and their labels (translation keys), in
+# the legend's order.
+STRIP_LABELS = {"fine": "OK", "failed": "failed queries", "outage": "outage", "unmeasured": "not measured"}
 # How many rows of a long table a card gets at most (a window opens the rest).
 ROWS = insights.INSIGHT_ROWS
 # How many indexers the response time chart shows.
@@ -87,8 +99,54 @@ def percent(share: float | None) -> str:
     return "–" if share is None else formatting.percent(share * 100)
 
 
+def availability_text(share: float | None) -> str:
+    """The availability (0-1) as a percentage with one decimal, rounded down: an indexer that was out for a moment
+    does not read "100,0 %". Nothing measured = "–"."""
+    if share is None:
+        return "–"
+    return formatting.percent(math.floor(share * 1000 + 1e-9) / 10, 1)
+
+
+def _one_interval(seconds: int) -> str:
+    """One interval: under a minute or not whole minutes in seconds ("45 s", "90 s"), otherwise as a length ("10 min")."""
+    return f"{seconds} s" if seconds < 60 or seconds % 60 else formatting.seconds_human(seconds)
+
+
+def interval_text(seconds: list[int]) -> str:
+    """The intervals a period was measured with (stats.prowlarr_availability, from the shortest): one, or the shortest
+    to the longest ("1 min – 1 h 00 min"). None = ""."""
+    if not seconds:
+        return ""
+    shortest, longest = _one_interval(seconds[0]), _one_interval(seconds[-1])
+    return shortest if shortest == longest else f"{shortest} – {longest}"
+
+
+def day_strip(days: list[str], states: list[str]) -> list[dict[str, Any]]:
+    """The strip by days as pieces of days in a row with the same state: [{"state", "days", "title"}] - one piece per
+    change, not one per day (a year would be 365 elements in every row of the table). The title says the dates."""
+    pieces: list[dict[str, Any]] = []
+    for day, state in zip(days, states):
+        if pieces and pieces[-1]["state"] == state:
+            pieces[-1]["days"] += 1
+            pieces[-1]["last"] = day
+        else:
+            pieces.append({"state": state, "days": 1, "first": day, "last": day})
+    for piece in pieces:
+        first, last = formatting.czech_date(piece.pop("first")), formatting.czech_date(piece.pop("last"))
+        piece["title"] = f"{first if first == last else f'{first} – {last}'}: {_t(STRIP_LABELS[piece['state']])}"
+    return pieces
+
+
+def strip_text(pieces: list[dict[str, Any]]) -> str:
+    """The strip for a screen reader: how many days of every state, in the legend's order ("OK: 20 days, outage: 2 days")."""
+    counts: Counter[str] = Counter()
+    for piece in pieces:
+        counts[piece["state"]] += piece["days"]
+    return ", ".join(f"{_t(label)}: {formatting.plural('{n} days', counts[state])}" for state, label in STRIP_LABELS.items() if counts[state])
+
+
 def indexer_name(number: int, name: str | None) -> str:
-    """The indexer's name; an indexer without a name (long gone from Prowlarr) is "indexer č. N".
+    """The indexer's name; an indexer without a name (long gone from Prowlarr) is "indexer no. N".
     An event for which Prowlarr named no indexer (number 0) belongs to "an unknown indexer"."""
     if name:
         return name
@@ -96,7 +154,7 @@ def indexer_name(number: int, name: str | None) -> str:
 
 
 def result_label(release: dict[str, Any]) -> str:
-    """How a grabbed release ended: `ok` / `failed` (Prowlarr downloaded it itself), `redirected`, `unknownkind` (a key of RESULT_LABELS)."""
+    """How a grabbed release ended: `ok` / `failed` (Prowlarr downloaded it itself), `redirected`, `unknown` (a key of RESULT_LABELS)."""
     if not release["succeeded"]:
         return "failed"
     return {"proxy": "ok", "redirect": "redirected"}.get(release["method"], "unknown")
@@ -164,6 +222,24 @@ def _d_when(period: Any) -> dict[str, Any]:
 def _d_who(period: Any) -> dict[str, Any]:
     return {"rows": [{**r, "name": r["app"] or _t("unknown app")}
                       for r in stats.prowlarr_who(period, analysis=_analysis(period))]}
+
+
+def _d_availability(period: Any) -> dict[str, Any]:
+    found = stats.prowlarr_availability(period, analysis=_analysis(period))
+    rows = []
+    for r in found["indexers"][:ROWS]:
+        strip = day_strip(found["days"], r["days"])
+        rows.append({"indexer_id": r["indexer_id"], "name": indexer_name(r["indexer_id"], r["name"]), "removed": r["removed"],
+                     "availability": availability_text(r["availability"]), "outages": r["outages"], "running": r["running"],
+                     "longest": "–" if r["longest"] is None else formatting.seconds_human(r["longest"]), "last_failure": r["last_failure"],
+                     "query_count": r["query_count"], "failure_share": percent(r["failure_share"]), "strip": strip, "strip_text": strip_text(strip)})
+    # Before the first sample only the failed queries mean anything - and the card says how it is measured from now on
+    # (`measuring`: the background loop, the loop Prowlarr does not answer, the *Arr sync); until the samples reach the
+    # period's start, since when. And the interval the period was measured with (the template links the administrator
+    # to its settings).
+    return {"sampled": bool(found["first_sample"]), "measured_since": found["measured_since"], "rows": rows,
+            "legend": [{"state": state, "label": _t(label)} for state, label in STRIP_LABELS.items()],
+            "interval": interval_text(found["intervals"]), "measuring": prowlarr.how_measured()}
 
 
 def _indexers(period: Any) -> list[dict[str, Any]]:
@@ -246,6 +322,9 @@ CARDS: tuple[Card, ...] = (
     _card("who", "Who asks",
           "Which apps search, read RSS and grab releases through Prowlarr.", _d_who, width="half", table_window=True),
     # --- Indexer performance ---
+    _card("availability", "Indexer availability",
+          "How long each indexer was available in the selected period, how often and how long Prowlarr skipped it after errors, day by day. "
+          "The most troublesome come first.", _d_availability, table_window=True),
     _card("indexers", "Indexer performance",
           "Queries, failures, response time and search success per indexer.", _d_indexers, table_window=True),
     _card("response_time", "Indexer response time",

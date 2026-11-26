@@ -131,7 +131,7 @@ check(seasonal.motion(None) and seasonal.motion({"events_motion": None})
 print("--- the settings and the account ---")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import accounts  # noqa: E402
+from jellyscope import access, accounts  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
 
@@ -148,6 +148,9 @@ accounts.create("viewer", "viewerpass")
 with db.connect() as conn:
     conn.execute("UPDATE accounts SET jellyfin_user_id = 'u-viewer' WHERE username = 'viewer'")
     conn.commit()
+# A viewer from Jellyfin is signed in only while sign-in through Jellyfin is on (access.viewer_shut_out).
+db.set_setting(access.LOGIN_KEY, "1")
+db.forget_settings()
 admin = sign_in("admin", "longpassword")
 
 

@@ -90,7 +90,9 @@
     document.addEventListener("change", function (event) {
         var field = event.target;
         if (field.hasAttribute("data-submit-on-change")) {
-            field.form.submit();
+            // requestSubmit, not submit(): it fires the submit event, so the confirmation
+            // below and the demo's guard (app.js) see the form too.
+            if (field.form.requestSubmit) { field.form.requestSubmit(); } else { field.form.submit(); }
         } else if (field.hasAttribute("data-file-name")) {
             field.parentNode.querySelector(".file-name").textContent =
                 field.files.length ? field.files[0].name : field.dataset.fileName;

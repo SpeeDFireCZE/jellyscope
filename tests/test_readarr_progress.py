@@ -41,7 +41,7 @@ import httpx  # noqa: E402
 
 from _apps import READARR_RESPONSES, connect_readarr, readarr_client, readarr_handler, no_network, recorded_response  # noqa: E402
 from _package import substitute  # noqa: E402
-from jellyscope import db, images, stats  # noqa: E402
+from jellyscope import db, images  # noqa: E402
 from jellyscope.arr import readarr  # noqa: E402
 
 failures = 0
@@ -383,6 +383,41 @@ check(state["available"] and odd is not None and [(e["title"], e["title_id"]) fo
 check(state["calendar"] is not None and [(c["title"], c["title_id"], c["has_file"]) for c in state["calendar"]] == [("Calendar odd", 9, False)],
       f"an odd calendar record is named by its title ({state['calendar']})")
 live_instead.clear()
+# Audit stats-apps-forms-3: the queue answer itself of the wrong kind (a text for the count, a number or an object for
+# the list) is no error of the whole state either - it ran after the requests, outside any try, and every view failed.
+odd_answers = []
+for answer in ({"totalRecords": "n/a", "records": []}, {"records": 5}, {"totalRecords": [1], "records": {"a": 1}},
+               {"totalRecords": None, "records": [{"title": "A"}, "x"]}):
+    try:
+        odd_answers.append(readarr.live._queue(answer)["count"])
+    except Exception as error:      # noqa: BLE001 - the check below reports it
+        odd_answers.append(repr(error))
+check(odd_answers == [0, 0, 0, 1], f"a queue answer of the wrong kind counts what is there ({odd_answers})")
+
+# Audit QA-6: the minute queue (the tile "Ve frontě", the card of queue items with an error) left out a download
+# Readarr did not pair with any title - the API leaves it out without `includeUnknownAuthorItems` - while the card "Stahuje se"
+# (whole_queue) showed it. Such an item is the one that needs a hand (a manual import).
+UNKNOWN_ITEM = {"title": "Unknown.Release.1080p", "status": "completed", "trackedDownloadStatus": "warning",
+                "trackedDownloadState": "importPending", "statusMessages": [{"title": "x", "messages": ["Manual import required"]}]}
+
+
+def with_unknown_item(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/api/v1/queue") and request.url.params.get("pageSize") != "200":
+        records = [UNKNOWN_ITEM] if request.url.params.get("includeUnknownAuthorItems") == "true" else []
+        return httpx.Response(200, json={"totalRecords": len(records), "records": records})
+    return recorded_readarr(request)
+
+
+restore_client()
+recorded_readarr = readarr_handler(live_requests, live_instead)
+restore_client = substitute(readarr, "ReadarrClient", readarr_client(with_unknown_item))
+readarr.live.CACHE.clear()
+unknown_state = asyncio.run(readarr.live_state())
+check(unknown_state["queue"] is not None and unknown_state["queue"]["count"] == 1
+      and [e["title"] for e in unknown_state["queue"]["with_error"]] == ["Unknown.Release.1080p"],
+      f"a download Readarr did not pair is in the queue's count and among the items with an error ({unknown_state['queue']})")
+restore_client()
+restore_client = substitute(readarr, "ReadarrClient", readarr_client(readarr_handler(live_requests, live_instead)))
 readarr.live.CACHE.clear()
 live_instead.update({p: httpx.Response(500) for p in ("queue", "wanted/missing", "wanted/cutoff", "calendar", "health")})
 state = asyncio.run(readarr.live_state())

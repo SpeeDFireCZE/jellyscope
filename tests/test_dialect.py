@@ -111,6 +111,10 @@ check(dialect.group_concat(dialect.POSTGRES, "path", "','") == "string_agg(path,
 check(dialect.greatest(dialect.SQLITE, "a", "b") == "MAX(a, b)", "MAX for SQLite")
 check(dialect.greatest(dialect.POSTGRES, "a", "b") == "GREATEST(a, b)",
       "GREATEST for PostgreSQL")
+check(dialect.short_lock_wait(dialect.SQLITE, 200) == "PRAGMA busy_timeout = 200",
+      "a short wait for a lock: the busy timeout on SQLite")
+check(pg(dialect.short_lock_wait(dialect.POSTGRES, 200)) == "SET LOCAL lock_timeout = '200ms'",
+      "on PostgreSQL the lock timeout of the one transaction, intact through the translation (no PRAGMA there)")
 
 print("--- real queries of the application ---")
 # We go through queries as the application really sends them and check that
@@ -215,24 +219,41 @@ def _without_psycopg(name, *args, **kwargs):
 
 no_pool = dialect.DatabaseConfig(kind=dialect.POSTGRES, host="x", database="d",
                                  user="u", password="p", use_pool=False)
-builtins.__import__ = _without_psycopg
-try:
-    db._open_raw(no_pool)
-    message = ""
-except RuntimeError as exc:
-    message = str(exc)
-except Exception as exc:  # noqa: BLE001
-    message = f"another exception: {type(exc).__name__}"
-finally:
-    builtins.__import__ = _real_import
 
-check("psycopg[binary]\"" in message,
-      "the message advises the basic psycopg[binary], not the pool extra right away")
-check("psycopg[binary,pool]" not in message,
-      "the message does not enforce the pool when it is switched off")
+
+def driver_message(our_image: bool) -> str:
+    """The message of a missing driver - in our Docker image or outside it (the configuration is pretended)."""
+    from types import SimpleNamespace
+
+    real_load_config = db.load_config
+    db.load_config = lambda reload=False: SimpleNamespace(our_image=our_image)
+    builtins.__import__ = _without_psycopg
+    try:
+        db._open_raw(no_pool)
+        return ""
+    except RuntimeError as exc:
+        return str(exc)
+    except Exception as exc:  # noqa: BLE001
+        return f"another exception: {type(exc).__name__}"
+    finally:
+        builtins.__import__ = _real_import
+        db.load_config = real_load_config
+
+
+message = driver_message(our_image=False)
+# The driver's version is set in one place, requirements-postgres.txt (a bare "psycopg[...]" took the newest one,
+# in time a 4.x with another API).
+requirements = PROJECT / "requirements-postgres.txt"
+check(f"{sys.executable} -m pip install -r {requirements}" in message,
+      f"the message installs the pinned driver of requirements-postgres.txt ({message[:160]!r})")
+check("psycopg[" not in message, "and no unpinned psycopg")
 check(sys.executable in message,
       "the message shows the python of the virtual environment, not a general 'pip'")
 check("-m pip install" in message, "the message uses python -m pip")
+message = driver_message(our_image=True)
+# In our image a driver installed by hand is gone with the next `docker compose up -d --build`.
+check("PSYCOPG=1" in message and "docker compose up -d --build" in message and "pip install" not in message,
+      f"in our Docker image it says to rebuild the image with PSYCOPG=1, not to run pip in it ({message[:160]!r})")
 
 
 print("--- the choice of pool is saved ---")
@@ -640,7 +661,8 @@ check(writes >= 2, f"both of the collector's writes were found ({writes})")
 # PostgreSQL has NULLS FIRST as the default with DESC and puts them at the
 # start. For a query that takes ONE row this is no cosmetics - another row is
 # returned. Exactly like this the free space would be measured on the disk of
-# the first unmeasured file.
+# the first unmeasured file. The same holds for a list cut by LIMIT (a top-N
+# list, a subquery that takes one row): unknowns fill its top on PostgreSQL.
 
 def _nullable_columns() -> set[str]:
     """Columns of the schema that may be NULL."""
@@ -687,28 +709,59 @@ def _sql_of_call(node: ast.Call) -> str:
 
 
 def _risky_orderings(source: str) -> list[str]:
-    """Queries for one row ordered descending by a nullable column."""
+    """Queries for one row, or lists cut by LIMIT, ordered descending by a nullable column.
+
+    A column the same query keeps from NULL (`IS NOT NULL`, a comparison) passes.
+    """
     nullable = _nullable_columns()
     findings: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    tree = ast.parse(source)
+    # Pieces of SQL kept in a variable (`{common_where}`): their text counts for the conditions.
+    pieces: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and isinstance(node.value, (ast.JoinedStr, ast.Constant)):
+            text = " ".join(n.value for n in ast.walk(node.value)
+                            if isinstance(n, ast.Constant) and isinstance(n.value, str))
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    pieces[target.id] = pieces.get(target.id, "") + " " + text
+    for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         function_name = (node.func.attr if isinstance(node.func, ast.Attribute)
                          else getattr(node.func, "id", ""))
-        if function_name not in ("query_one", "query_value"):
+        one_row = function_name in ("query_one", "query_value")
+        if not one_row and function_name not in ("query_all", "query_all_in"):
             continue
         sql = _sql_of_call(node)
-        for expression in re.findall(r"ORDER BY\s+(.+?)(?:\s+LIMIT\b|$)", sql, re.I | re.S):
+        conditions = sql + " ".join(pieces.get(n.id, "") for arg in node.args[:1] for n in ast.walk(arg)
+                                    if isinstance(n, ast.Name))
+        # A list matters only where LIMIT cuts it - its order is then what is left in.
+        pattern = r"ORDER BY\s+(.+?)(?:\s+LIMIT\b|$)" if one_row else r"ORDER BY\s+(.+?)\s+LIMIT\b"
+        for expression in re.findall(pattern, sql, re.I | re.S):
             for term in _terms(expression):
                 if not re.search(r"\bDESC\b", term, re.I):
                     continue
                 if re.search(r"COALESCE|NULLS", term, re.I):
                     continue
-                column = re.sub(r"\bDESC\b", "", term, flags=re.I).strip()
-                column = column.split(".")[-1].strip().lower()
-                if column in nullable:
+                qualified = re.sub(r"\bDESC\b", "", term, flags=re.I).strip()
+                column = qualified.split(".")[-1].strip().lower()
+                if column in nullable and not _kept_from_null(qualified, conditions):
                     findings.append(f"line {node.lineno}: ORDER BY {term.strip()}")
     return findings
+
+
+def _kept_from_null(qualified: str, conditions: str) -> bool:
+    """Does a WHERE (or HAVING) of the query keep this very column from NULL (`IS NOT NULL`, a comparison)?
+
+    Only the conditions count, not the column's name anywhere in the text: a JOIN's ON, a CASE in the selection or
+    the same name of another table (`o.size_bytes > 0` for `s.size_bytes`) keep nothing from NULL. An unqualified
+    column is matched only unqualified, a qualified one only with its alias.
+    """
+    where = " ".join(re.findall(r"\b(?:WHERE|HAVING)\b(.*?)(?=\bORDER\s+BY\b|\bGROUP\s+BY\b|\bLIMIT\b|\)|$)",
+                                conditions, re.I | re.S))
+    name = re.escape(qualified.strip())
+    return bool(re.search(rf"(?<![\w.]){name}\s+(IS\s+NOT\s+NULL\b|>=|<=|>|<)", where, re.I))
 
 
 print()
@@ -755,6 +808,31 @@ clean = _risky_orderings(
 check(not clean, "COALESCE passes")
 key_column = _risky_orderings('db.query_one("SELECT id FROM items ORDER BY id DESC")')
 check(not key_column, "a column that must not be NULL passes too")
+top_list = _risky_orderings('db.query_all("SELECT path FROM items ORDER BY size_bytes DESC LIMIT ?", (5,))')
+check(len(top_list) == 1, f"a list cut by LIMIT is found too ({len(top_list)})")
+subquery = _risky_orderings('db.query_all("SELECT (SELECT s.id FROM items s ORDER BY s.size_bytes DESC LIMIT 1) AS x'
+                            ' FROM libraries")')
+check(len(subquery) == 1, f"and a subquery taking one row ({len(subquery)})")
+kept_from_null = _risky_orderings('db.query_all("SELECT path FROM items WHERE size_bytes IS NOT NULL'
+                                  ' ORDER BY size_bytes DESC LIMIT ?", (5,))')
+check(not kept_from_null, "a column the query keeps from NULL passes")
+kept_in_variable = _risky_orderings('where = "WHERE size_bytes IS NOT NULL"\n'
+                                    'db.query_all(f"SELECT path FROM items {where} ORDER BY size_bytes DESC LIMIT 5")')
+check(not kept_in_variable, "also with the condition in a variable")
+whole_list = _risky_orderings('db.query_all("SELECT path FROM items ORDER BY size_bytes DESC")')
+check(not whole_list, "a whole list without LIMIT is not judged")
+# The exemption holds only for a WHERE of the query and the very column: another table's column of the same name,
+# a JOIN's condition or a CASE in the selection keep nothing from NULL.
+for label, sql in (("another table's column of the same name",
+                    "SELECT s.path FROM items s JOIN items o ON o.id = s.id WHERE o.size_bytes > 0 ORDER BY s.size_bytes DESC LIMIT 5"),
+                   ("a JOIN's condition", "SELECT s.path FROM items s LEFT JOIN libraries l ON s.size_bytes > 0"
+                                          " ORDER BY s.size_bytes DESC LIMIT 5"),
+                   ("a CASE in the selection", "SELECT CASE WHEN size_bytes > 0 THEN path END FROM items ORDER BY size_bytes DESC LIMIT 5"),
+                   ("the unqualified name of an alias's column", "SELECT s.path FROM items s WHERE o.size_bytes IS NOT NULL"
+                                                                 " ORDER BY size_bytes DESC LIMIT 5")):
+    check(len(_risky_orderings(f'db.query_all("{sql}")')) == 1, f"the exemption is not fooled by {label}")
+check(not _risky_orderings('db.query_all("SELECT s.path FROM items s WHERE s.size_bytes IS NOT NULL'
+                           ' ORDER BY s.size_bytes DESC LIMIT 5")'), "a qualified column kept from NULL by its alias passes")
 
 print()
 print("--- prefilter: lower case in ASCII only, non-ASCII rows always through ---")

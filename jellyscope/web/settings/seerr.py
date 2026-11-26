@@ -39,7 +39,7 @@ async def settings_seerr(
     get the key again - it does not go back into the page.
     """
     draft = _draft_read(account, DRAFT_NAME) or {}
-    key = api_key.strip() or draft.get("api_key", "")
+    key = api_key.strip() or services.draft_key(url, draft)
     # A key that does not pass the check (a character outside ASCII) is not put into the
     # draft: otherwise the next Test or Save with an empty field would try it again
     # instead of the saved one and the administrator would get the same error until the draft expires.
@@ -47,6 +47,11 @@ async def settings_seerr(
 
     if action == "test":
         _draft_save(account, DRAFT_NAME, filled)
+        # The saved key goes only to its own server (a Save is refused the same way, by save_settings).
+        refused = services.key_refused(url, key, seerr.stored_settings()["url"], db.get_setting("seerr_api_key", ""))
+        if refused:
+            _flash(request, refused, "error")
+            return RedirectResponse("/settings?section=seerr", status_code=303)
         ok, text = await seerr.check_connection(url, key or db.get_setting("seerr_api_key", ""))
         if ok:
             _flash(request, "Connection works: {name} {version}", "success", name=seerr.NAME, version=text)

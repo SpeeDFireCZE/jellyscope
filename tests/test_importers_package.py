@@ -44,7 +44,8 @@ os.environ["DATABASE_PATH"] = str(Path(_tmp) / "importers_package.db")
 os.environ["SECRET_KEY"] = "testovaci-klic"
 os.environ["JELLYSCOPE_DEMO"] = "0"
 
-from _package import substitutes_in_submodules, wrong_substitutes  # noqa: E402
+from _package import (outside_sources, read_through_door, substitutes_in_submodules, unread_door_names,  # noqa: E402
+                      wrong_substitutes)
 
 failures = 0
 
@@ -73,8 +74,9 @@ SUBMODULES: dict[str, list[str]] = {
     "linking": ["_unify_ids", "refresh_playback_metadata", "_orphan_item_ids", "_relink",
                 "_link_by_tmdb", "_orphan_records", "_link_by_name", "_link_by_episode_number",
                 "link_imported_history"],
-    "pbr": ["PBR_QUERY", "PBR_QUERY_WITHOUT_ROWID", "playback_reporting_available", "import_playback_reporting",
-            "PBR_TSV_COLUMNS", "_tsv_columns", "import_playback_reporting_tsv", "_process_pbr"],
+    "pbr": ["PBR_QUERY", "PBR_QUERY_WITHOUT_ROWID", "_body_without_key", "playback_reporting_available",
+            "import_playback_reporting", "PBR_TSV_COLUMNS", "_tsv_columns", "import_playback_reporting_tsv",
+            "_process_pbr"],
     "jellystat": ["_jellystat_item_type", "JELLYSTAT_TABLES", "_find_jellystat_rows", "_pick", "_by_source",
                   "_read_record", "_fix_redirected", "_row_from_record", "import_jellystat_json"],
     "cleanup": ["CAP_MULTIPLE", "cap_nonsense_durations", "duplicate_playback_groups", "merge_duplicate_playback",
@@ -159,6 +161,17 @@ all_names = set(getattr(importers, "__all__", []))
 check(all_names == door_imports and len(all_names) == len(importers.__all__),
       f"__all__ is exactly what the door imports, each once (only in __all__ {sorted(all_names - door_imports)[:6]},"
       f" only imported {sorted(door_imports - all_names)[:6]})")
+# The other way round (audit CL-10): a name the door takes from a submodule is read - in the door itself or from
+# the outside. A re-export nobody reads only hides where the name lives, and the check above keeps it for ever.
+# What is read through an alias or by a string (`substitute(importers, "X")`) counts too.
+door_reads = read_through_door("jellyscope.importers", outside_sources(PROJECT, PACKAGE, WITH_EXAMPLES), PROJECT)
+# Read only by a dev tool outside the repository (.superpowers/tools/compare_import.py, the comparison of step 4):
+# kept in the door while that tool may still be run. A name gone from the door leaves the list.
+READ_BY_DEV_TOOLS = {"duplicate_playback_groups"}
+check(READ_BY_DEV_TOOLS <= set(importers.__all__), f"the names kept for the dev tool are in the door ({sorted(READ_BY_DEV_TOOLS)})")
+re_exported, unread = unread_door_names(PACKAGE / "__init__.py", set(used) | door_reads | READ_BY_DEV_TOOLS)
+check(len(re_exported) > 25 and not unread,
+      f"every name the door takes from a submodule is read in the door or from the outside ({len(unread)} unread: {unread})")
 
 print()
 print("--- (b) every name lives in its submodule ---")

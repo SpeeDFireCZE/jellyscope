@@ -64,12 +64,12 @@
 {# not see where it was going while dragging it - and the whole layout    #}
 {# did not fit on one screen. Here it is visible at once.                 #}
 {# ====================================================================== #}
-<dialog class="modal modal-layout" id="modal-layout">
+<dialog class="modal modal-layout" id="modal-layout" aria-labelledby="modal-layout-title">
     {# The cross does the same as Cancel: it closes the window and drops the changes
        in progress. Two different ways of closing one window would be a trap - a person
        would expect something to be saved, and it would not be (or the other way round). #}
     <div class="modal-head">
-        <h2>{{ _("Overview layout") }}</h2>
+        <h2 id="modal-layout-title">{{ _("Overview layout") }}</h2>
         <button class="btn modal-close dash-close" type="button"
                 aria-label="{{ _("Close") }}">&times;</button>
     </div>
@@ -83,6 +83,7 @@
         <div class="dash-column">
             <p class="card-note">
                 {{ _("The tiles match the panels on the page. Drag to reorder, use the button to change the width.") }}
+                {{ _("The arrows on a tile move it too.") }}
             </p>
             {# The width marks go from the registry into JavaScript too - so that
                they are not there twice and one of them does not drift away in time. #}
@@ -91,7 +92,11 @@
                     so in an attribute with double quotes the JSON would end the tag
                     in the middle. #}
                  data-widths='{{ widths | tojson }}'
-                 data-empty="{{ _('Nothing yet. Pick from the list on the right.') }}">
+                 data-empty="{{ _('Nothing yet. Pick from the list on the right.') }}"
+                 {# The names of a tile's buttons for the tiles JavaScript adds. #}
+                 data-label-earlier="{{ _('Move earlier') }}" data-label-later="{{ _('Move later') }}"
+                 data-label-width="{{ _('Change the panel width') }}"
+                 data-label-remove="{{ _('Remove from the overview') }}">
                 {# The tile of a disconnected app's card stays (greyed out):
                    saving takes the order from the tiles, and without it the first
                    other change would throw the card out of the layout. #}
@@ -101,13 +106,20 @@
                      {%- if card.key in unavailable %} title="{{ _('{app} is not connected. The card will show up once an administrator connects it.').format(app=_(card.group)) }}"{% endif %}>
                     <span class="dash-tile-name">{{ card_title(card) }}</span>
                     <span class="dash-tile-tools">
+                        {# The arrows move the tile one place: dragging needs a mouse, a finger
+                           scrolls the grid and a keyboard cannot drag at all. #}
+                        <button class="btn dash-move" type="button" data-move="-1"
+                                title="{{ _('Move earlier') }}" aria-label="{{ _('Move earlier') }}">&larr;</button>
+                        <button class="btn dash-move" type="button" data-move="1"
+                                title="{{ _('Move later') }}" aria-label="{{ _('Move later') }}">&rarr;</button>
                         {# The width switches round: a third -> a half -> the whole. #}
                         <button class="btn dash-width" type="button"
                                 title="{{ _('Change the panel width') }}">
                             {{ widths[card.width] }}
                         </button>
                         <button class="btn dash-removed" type="button"
-                                title="{{ _('Remove from the overview') }}">&times;</button>
+                                title="{{ _('Remove from the overview') }}"
+                                aria-label="{{ _('Remove from the overview') }}">&times;</button>
                     </span>
                 </div>
                 {% endfor %}

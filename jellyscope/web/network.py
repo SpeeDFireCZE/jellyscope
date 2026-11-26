@@ -3,7 +3,6 @@
 A part of the web package (see jellyscope/web/__init__.py)."""
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import re
 from typing import Any
@@ -11,11 +10,15 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from .. import cards, detailed_map, formatting, geoip, i18n, scanner
-from .base import _context, _flash, require_admin, require_login, templates
+from .. import detailed_map, formatting, geoip, scanner
+from .base import _context, _flash, require_admin, require_login, spawn, templates
+from .dashboards import _registry_page
 from .periods import _days
 
 router = APIRouter()
+
+# The page's cards from the registry, in the order of network.html.
+NETWORK_CARDS = ("network_numbers", "live_traffic", "peaks_by_day", "who_streamed", "by_player", "origin", "map")
 
 
 @router.get("/network", response_class=HTMLResponse)
@@ -29,9 +32,9 @@ def network_page(request: Request, days: int | None = None,
     data already there.
     """
     days = _days(request, days, since, until)
-    # The page is put together from the Network cards, the data come from their registry.
+    # The page is put together from the Network cards: the registry draws them and computes their data.
     return templates.TemplateResponse(request, "network.html", _context(
-        request, account, days=days, **cards.area_data("network", days)))
+        request, account, days=days, **_registry_page(request, account, NETWORK_CARDS, days)))
 
 
 @router.post("/network/geoip")
@@ -69,8 +72,7 @@ async def network_detailed_map(request: Request,
     if scanner.is_scan_running():
         _flash(request, "Another task is already running, wait for it to finish.", "warning")
         return RedirectResponse("/network#map", status_code=303)
-    # In the server's language, not in that of whoever clicked - see i18n.without_account_language.
-    asyncio.create_task(i18n.without_account_language(detailed_map.start_task()))
+    spawn(detailed_map.start_task(), "detailed map")
     _flash(request, "The detailed map download has started. It takes a few minutes; the page refreshes by itself.",
            "info")
     return RedirectResponse("/network?wait=task#map", status_code=303)

@@ -36,7 +36,7 @@ What the script installs, and nothing else (in particular, never
 | `python3`, `python3-venv` | only when missing | The script stops; without them there is nothing to run. |
 | `ffmpeg` | only when `ffprobe` is missing | Just a warning, and the app then takes technical data from Jellyfin. Skip it up front with `SKIP_FFMPEG=1 bash deploy/install.sh`: it is a large package and only the ffprobe data source uses it. |
 | `requirements.txt` | into `.venv`, always | The script stops. |
-| `psycopg[binary,pool]` | into `.venv`, always | Just a warning. Some platforms (Alpine/musl) have no prebuilt package; SQLite works without it, PostgreSQL does not. |
+| `requirements-postgres.txt` (the `psycopg` driver) | into `.venv`, always | Just a warning. Some platforms (Alpine/musl) have no prebuilt package; SQLite works without it, PostgreSQL does not. |
 
 It also creates `.venv`, writes `.env` with a generated `SECRET_KEY` and
 prepares configs for systemd and supervisord.
@@ -115,7 +115,10 @@ packages in a dry run (`pip install --dry-run`). When they cannot be
 installed here - for example because the new version needs a newer
 Python - nothing is downloaded, the running version keeps running and the
 message says which Python is needed and what to do. In Docker the button
-is off; there the image is rebuilt.
+is off; there the image is rebuilt. It is off as well where the app may
+not write into its own folder, such as under the system or user service
+made from `deploy/jellyscope.service`, which may write only into `data/`.
+The dialog then says to update with `deploy/update.sh`.
 
 ---
 
@@ -151,12 +154,15 @@ Then open <http://localhost:8097> and create the first account.
 | `TZ` | the container's time zone. Without it the container runs in UTC and the evening peak in the charts moves by a couple of hours. |
 | `FFPROBE` | `0` builds an image without ffmpeg. It is about 250 MB smaller, and the technical data is limited to what Jellyfin reports. |
 | `PGDUMP` | `0` builds an image without `pg_dump`, about 30 MB smaller. It only affects PostgreSQL backups, which then use the app's own export. |
-| `SECURE_COOKIES`, `FORWARDED_ALLOW_IPS` | behind HTTPS, with the same meaning as anywhere else; see [Reverse proxy](#reverse-proxy). |
+| `PSYCOPG` | `0` builds an image without the PostgreSQL driver, about 20 MB smaller. Only for SQLite: without it a database switched to PostgreSQL cannot be opened. |
+| `SECURE_COOKIES`, `FORWARDED_ALLOW_IPS` | behind HTTPS; see [Reverse proxy](#reverse-proxy). In a container `FORWARDED_ALLOW_IPS` is not `127.0.0.1`: the proxy's connection comes from the Docker network, so put that in, e.g. `172.16.0.0/12`. |
 | `JELLYSCOPE_DEMO` | `1` runs the container as a public demo: everything can be looked at, nothing can be saved. Off unless set. It does not replace the login on a normal installation. |
 
 **Data.** Everything worth keeping (the database, the log, the image
 cache, backups) is in the folder mounted at `/app/data`. `docker compose
-down` does not touch it, and a backup is a copy of that folder.
+down` does not touch it, and a backup is a copy of that folder. Since this
+version the folder is readable only by the account that runs Jellyscope,
+so make that copy as that account or with `sudo`.
 
 **Who owns that folder.** The application runs as UID 10001, while the
 folder on the host belongs to whoever created it. On a first `docker
@@ -261,6 +267,26 @@ Set `SECURE_COOKIES=1` and `FORWARDED_ALLOW_IPS=127.0.0.1` in `.env`.
 The second one matters beyond logs. Without it every request looks like it
 comes from the proxy, so one failed-login block locks out everybody.
 
+**In Docker `127.0.0.1` never matches.** Inside the container the proxy's
+connection comes from the Docker network: from its gateway (for example
+`172.18.0.1`) when the proxy runs on the host, from the proxy container's
+address when it runs in a container of its own. Put in that network, e.g.
+`FORWARDED_ALLOW_IPS=172.16.0.0/12` (the range of Docker's default
+networks) or the exact subnet from `docker network inspect`. Never `*`:
+then anybody can write any address into `X-Forwarded-For`. To check it,
+sign in with a wrong password once: **Settings → Log** shows
+`sign-in failed from …` with your own address, not the gateway's.
+
+**When a block locks everybody out**, administrator included, lift it
+without signing in:
+
+```bash
+.venv/bin/python manage.py unblock --all          # git installation
+docker compose exec -u jellyscope jellyscope python manage.py unblock --all
+```
+
+`manage.py blocks` lists them first.
+
 On the proxy side, two things are easy to miss. Both are already in the
 example configs:
 
@@ -306,7 +332,7 @@ says so, and SQLite keeps working), add it by hand into the same
 virtualenv the app runs in:
 
 ```bash
-/opt/jellyscope/.venv/bin/python -m pip install "psycopg[binary,pool]"
+/opt/jellyscope/.venv/bin/python -m pip install -r /opt/jellyscope/requirements-postgres.txt
 ```
 
 Backups use `pg_dump`, which is **not** part of the installation. It comes
@@ -368,7 +394,7 @@ git clone https://github.com/SpeeDFireCZE/jellyscope.git /opt/jellyscope && cd /
 
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip install "psycopg[binary,pool]"   # only for PostgreSQL
+.venv/bin/python -m pip install -r requirements-postgres.txt   # only for PostgreSQL
 cp .env.example .env
 # The example already has an empty SECRET_KEY= line - rewrite it rather
 # than adding a second one, or the empty one wins.

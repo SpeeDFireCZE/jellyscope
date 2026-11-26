@@ -263,6 +263,47 @@ listed = {b["name"] for b in tasks.list_backups()} if db.set_setting("backup_pat
 check(any("pred-mazanim" in n for n in listed) and any("before-delete" in n for n in listed),
       "the list of backups shows both")
 
+print()
+print("--- a backup file that vanishes while the old ones are pruned ---")
+# A file can vanish between listing the folder and reading its time (another cleanup, a person deleting it).
+# Reading its time used to end the backup with an exception after the copy was written, and the task log
+# stayed "running" for good. A link to nothing is such a file: the folder lists it, its time cannot be read.
+from jellyscope import scanner  # noqa: E402
+
+vanishing = OWN / "jellyscope-20250101-000000.db"
+try:
+    vanishing.symlink_to(OWN / "gone-meanwhile.db")
+except OSError:
+    vanishing = None
+if vanishing is None:
+    check(True, "(this system makes no links; skipped)")
+else:
+    import logging  # noqa: E402
+
+    warnings: list[str] = []
+    catcher = logging.Handler(logging.WARNING)
+    catcher.emit = lambda record: warnings.append(record.getMessage())  # type: ignore[method-assign]
+    logging.getLogger("jellyscope.tasks").addHandler(catcher)
+    try:
+        outcome = asyncio.run(tasks.backup_database())
+    except Exception as error:  # noqa: BLE001 - the old behaviour, measured
+        outcome = {"raised": repr(error)}
+    finally:
+        logging.getLogger("jellyscope.tasks").removeHandler(catcher)
+    record = scanner.last_scan("backup") or {}
+    check(outcome.get("status") == "ok", f"the backup is written and reported ({outcome})")
+    check(record.get("status") == "done" and bool(record.get("finished_at")),
+          f"and its task log is closed ({record.get('status')})")
+    # Skipping the whole queue for one unreadable file left it unpruned for good (a link that stays, ESTALE on NFS):
+    # keep=7 stopped holding, the disk filled, and the log said nothing.
+    night = [p for p in backups(OWN) if p != vanishing and "delete" not in p.name and "mazanim" not in p.name]
+    check(len(night) == 7, f"the rest of the queue is pruned to its seven all the same ({len(night)})")
+    check(any(vanishing.name in line for line in warnings), f"the file that was skipped is in the log ({warnings})")
+    listed = [b["name"] for b in tasks.list_backups()]
+    check(len(listed) == 10 and vanishing.name not in listed,
+          f"Settings lists the backups without the unreadable one ({len(listed)})")
+    vanishing.unlink()
+print()
 print("--- the backup before a restore ---")
 made = tasks._backup_before_restore(db.database_config())
 check(made.name.endswith("-before-restore.db") and made.exists() and tasks.BACKUP_BEFORE_RESTORE == "before-restore",

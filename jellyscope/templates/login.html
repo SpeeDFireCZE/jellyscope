@@ -100,8 +100,8 @@
 {# with Esc, moving the focus and dimming the background. It needs    #}
 {# no library and no keyboard handling of its own.                    #}
 {# ------------------------------------------------------------------ #}
-<dialog id="forgotDialog" class="dialog">
-    <h2>{{ _("Forgot password") }}</h2>
+<dialog id="forgotDialog" class="dialog" aria-labelledby="forgotDialog-title">
+    <h2 id="forgotDialog-title">{{ _("Forgot password") }}</h2>
 
     <p>{{ _("The password is stored as a hash, which cannot be read back. Set a new one directly on the server:") }}</p>
 

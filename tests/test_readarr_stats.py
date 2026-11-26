@@ -32,7 +32,10 @@ What follows from it and the test guards:
   qualities one each, by size: MP3 98, AZW3 6, EPUB 4, PDF 2 MB;
 - upgrades: one (book 11, EPUB -> AZW3); the grab that brought it was a manual pick; all four grabs of the period:
   Rss + Search = 2 automatic, 1 manual, 1 user's search;
-- failures: one (event 109).
+- failures: one (event 109);
+- indexer reliability: arr-test 3 grabs, 3 imported; tracker 1 grab, 1 failed - further hand-made grabs add a grab
+  still downloading at the period's end, a Blackhole grab without download_id and a grab before the period; a
+  release of two books (a grab per book, one download_id) is one download.
 
 Run:
     .venv/bin/python tests/test_readarr_stats.py
@@ -192,6 +195,67 @@ check(u["how"] == {"manual": 1}, f"a manual pick brought the upgrade ({u['how']}
 check(u["how_all"] == {"automatic": 2, "manual": 1, "user": 1}, f"all grabs of the period ({u['how_all']})")
 check(stats.readarr_failures(PERIOD) == 1, "failures: one")
 check(stats.readarr_first() == "2026-11-12 20:50:18", f"the first event of the history ({stats.readarr_first()})")
+
+print()
+print("--- Indexer reliability: downloads of the period, their book imports and failures by download_id ---")
+
+
+def reliability(period) -> list[tuple]:
+    """(name, downloads, imported, failed, unmatched, success) per indexer, in the function's order."""
+    return [(x["name"], x["downloads"], x["imported"], x["failed"], x["unmatched"], x["success"])
+            for x in stats.readarr_indexer_reliability(period)]
+
+
+# From the recording: arr-test grabbed aaa111, bbb222 and ddd444 (all three imported as books), tracker ccc333 (failed).
+check(reliability(PERIOD) == [("tracker", 1, 0, 1, 0, 0.0), ("arr-test", 3, 3, 0, 0, 1.0)],
+      f"a book's grab is imported or failed by its download_id; the most failures first ({reliability(PERIOD)})")
+insert(1100, "grabbed", "2026-11-30 23:50:00", "L", None, book=90, source="Rss", indexer="arr-test")
+insert(1101, "bookFileImported", "2026-12-01 00:10:00", "L", 9001, book=90, size=MB)
+insert(1102, "grabbed", "2026-11-26 10:00:00", None, None, book=91, source="ReleasePush", indexer="Other")
+insert(1103, "bookFileImported", "2026-11-26 10:10:00", "Blackhole_z", 9101, book=91, size=MB)
+insert(1104, "grabbed", "2026-10-30 10:00:00", "P", None, book=92, source="Rss", indexer="tracker")
+insert(1105, "downloadFailed", "2026-11-01 01:00:00", "P", None, book=92)
+rows = reliability(PERIOD)
+check(("arr-test", 4, 3, 0, 0, 1.0) in rows,
+      f"a grab still downloading at the period's end (imported only after it) is neither a success nor a failure ({rows})")
+check(("Other", 1, 0, 0, 1, None) in rows,
+      f"a grab without download_id (Blackhole) cannot be matched and lowers no success rate ({rows})")
+check(("tracker", 1, 0, 1, 0, 0.0) in rows, "a grab before the period does not count, not even with its failure in the period")
+check([r[0] for r in rows] == ["tracker", "arr-test", "Other"],
+      f"sorted by failures, then the lowest success rate; nothing finished comes last ({[r[0] for r in rows]})")
+analysis, before = stats.readarr_events(PERIOD), stats.readarr_indexer_reliability(PERIOD)
+insert(1106, "grabbed", "2026-11-27 15:00:00", "S", None, book=95, source="Rss", indexer="Later")
+from_page = stats.readarr_indexer_reliability(PERIOD, analysis=analysis)
+check(from_page == before and from_page != stats.readarr_indexer_reliability(PERIOD),
+      "it computes from the page's paired events (analysis=), not from the table again: a grab stored after them is not in it")
+remove(1100, 1106)
+# The same download_id grabbed again after its failure is a download of its own (the outcome pairs with the last grab
+# before it, as the sources pair it). A download is imported when it was imported - a failure written after the import
+# does not make it failed: failed = a failure and no import.
+insert(1110, "grabbed", "2026-12-01 10:00:00", "R", None, book=93, source="Rss", indexer="Again")
+insert(1111, "downloadFailed", "2026-12-01 11:00:00", "R", None, book=93)
+insert(1112, "grabbed", "2026-12-02 10:00:00", "R", None, book=93, source="Search", indexer="Again")
+insert(1113, "bookFileImported", "2026-12-02 10:30:00", "R", 9301, book=93, size=MB)
+insert(1114, "grabbed", "2026-12-03 10:00:00", "M", None, book=94, source="Rss", indexer="Marked")
+insert(1115, "bookFileImported", "2026-12-03 10:20:00", "M", 9401, book=94, size=MB)
+insert(1116, "downloadFailed", "2026-12-03 12:00:00", "M", None, book=94)
+december = reliability(stats.period_between("2026-12-01", "2026-12-03"))
+check(december == [("Again", 2, 1, 1, 0, 0.5), ("Marked", 1, 1, 0, 0, 1.0)],
+      f"a repeated download_id after its failure is another download; a failure after the import leaves it imported ({december})")
+check(stats.readarr_indexer_reliability(stats.period_between("2026-01-01", "2026-01-02")) == [], "an empty period: no rows")
+remove(1110, 1116)
+# A release of several books (a series in one archive): Readarr writes a grab and a failure per BOOK, all with one
+# download_id, and imports the files of each. Two books imported, two books that failed - one download each.
+for n, book in enumerate((96, 97)):
+    insert(1120 + n, "grabbed", "2026-12-10 10:00:00", "SERIES", None, book=book, source="Rss", indexer="Shelf")
+    insert(1122 + n, "bookFileImported", "2026-12-10 11:00:00", "SERIES", 9600 + n, book=book, size=MB)
+for n, book in enumerate((98, 99)):
+    insert(1130 + n, "grabbed", "2026-12-11 10:00:00", "BAD", None, book=book, source="Rss", indexer="Shelf")
+    insert(1132 + n, "downloadFailed", "2026-12-11 11:00:00", "BAD", None, book=book)
+several = reliability(stats.period_between("2026-12-10", "2026-12-11"))
+check(several == [("Shelf", 2, 1, 1, 0, 0.5)],
+      f"a release of two books imported and one that failed are one download each, not one per book ({several})")
+remove(1120, 1133)
 
 print()
 print("--- An upgrade to ANOTHER edition of the book, and a slow import ---")

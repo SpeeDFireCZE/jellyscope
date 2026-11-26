@@ -34,19 +34,23 @@ CACHE: dict[str, tuple[float, str, dict[str, Any], RadarrError | None]] = {}
 
 
 def _title(record: dict[str, Any]) -> str:
-    return str((record.get("movie") or {}).get("title") or record.get("title") or "?")
+    movie = record.get("movie")
+    return str((movie.get("title") if isinstance(movie, dict) else None) or record.get("title") or "?")
 
 
 def _queue(answer: dict[str, Any]) -> dict[str, Any]:
     """The count of items in the queue and those with an error or a warning (and why)."""
-    records = [r for r in answer.get("records") or [] if isinstance(r, dict)]
+    raw = answer.get("records")
+    records = [r for r in raw if isinstance(r, dict)] if isinstance(raw, list) else []
     with_error = []
     for r in records:
         state = str(r.get("trackedDownloadStatus") or "").lower()
         if state not in ("warning", "error") and str(r.get("status") or "").lower() not in ("failed", "warning"):
             continue
-        statuses = r.get("statusMessages") or []
-        messages = [m for s in statuses for m in (s.get("messages") or [])] or [s.get("title") for s in statuses if s.get("title")]
+        # An odd value (a text where a list belongs, a number in the list) is skipped, not an error of the whole state.
+        statuses = [s for s in r.get("statusMessages") or [] if isinstance(s, dict)] if isinstance(r.get("statusMessages"), list) else []
+        messages = [m for s in statuses for m in (s.get("messages") if isinstance(s.get("messages"), list) else [])] \
+            or [s.get("title") for s in statuses if s.get("title")]
         with_error.append({
             "title": _title(r),
             # The movie's id in Radarr: by it the card finds the movie in the library.
@@ -55,7 +59,7 @@ def _queue(answer: dict[str, Any]) -> dict[str, Any]:
             "state": str(r.get("trackedDownloadState") or r.get("status") or ""),
             "message": str(r.get("errorMessage") or "; ".join(str(m) for m in messages[:2])),
         })
-    return {"count": int(answer.get("totalRecords") or len(records)), "with_error": with_error}
+    return {"count": integer(answer.get("totalRecords"), None) or len(records), "with_error": with_error}
 
 
 def _calendar(records: list[dict[str, Any]], start: str) -> list[dict[str, Any]]:

@@ -430,6 +430,18 @@ CREATE TABLE IF NOT EXISTS login_blocks (
     note          TEXT
 );
 
+-- Sign-in sessions (jellyscope/web_sessions.py): one row per sign-in of a browser. The session cookie
+-- carries a random token, the row only its hash - whoever reads the database signs in with nothing.
+-- A page opens only while its row exists, so signing out (deleting it) ends every copy of the cookie.
+-- A row unused for the cookie's life (14 days) is over and is cleaned up.
+CREATE TABLE IF NOT EXISTS web_sessions (
+    token_hash    TEXT PRIMARY KEY,             -- sha256 of the token in the cookie
+    account_id    INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    created_at    TEXT NOT NULL,                -- UTC, the sign-in
+    last_used_at  TEXT NOT NULL                 -- UTC, moved at most every few minutes
+);
+CREATE INDEX IF NOT EXISTS idx_web_sessions_account ON web_sessions (account_id);
+
 -- Every /health asks by the kind of a task (every ten seconds from every
 -- open tab). Without an index that means walking the whole table.
 CREATE INDEX IF NOT EXISTS idx_scan_log_kind ON scan_log (kind, id);
@@ -727,6 +739,27 @@ CREATE TABLE IF NOT EXISTS prowlarr_indexer (
     enabled  INTEGER NOT NULL DEFAULT 1,
     removed  INTEGER NOT NULL DEFAULT 0,      -- 1 = no longer in Prowlarr
     seen_at  TEXT                             -- when Jellyscope last saw it in Prowlarr
+);
+
+-- Samples of the indexers' status (jellyscope/arr/prowlarr/samples.py). A block is silent in the history (an
+-- indexer that refuses connections writes nothing there, Prowlarr only leaves it out for a while), so Jellyscope
+-- asks now and then who is left out and keeps the answer. Every sample has a row of its own (indexer_id 0) and a
+-- row for every indexer left out at that moment: without the first, "nobody left out" could not be told from
+-- "not measured". The sample's own row says which indexers were there and enabled at that moment and how often
+-- samples came then: an indexer's time is measured only while it was there, and a gap is judged by the interval
+-- of its time, not by today's setting. A sample of the background loop (watch.py) also says until when the loop saw
+-- the same state at every round (`measured_until`): the loop stores a new sample only when the state changes, and
+-- every ten minutes. The indexers' numbers are those of the tables above (negative = set aside after a renumbering).
+CREATE TABLE IF NOT EXISTS prowlarr_sample (
+    sampled_at       TEXT NOT NULL,           -- UTC, db.TIME_FORMAT: when the sample was taken
+    indexer_id       INTEGER NOT NULL,        -- the indexer left out; 0 = the row of the sample itself
+    failing_since    TEXT,                    -- UTC: since when it fails (Prowlarr's initialFailure)
+    skipped_until    TEXT,                    -- UTC: until when Prowlarr leaves it out (disabledTill)
+    last_failure     TEXT,                    -- UTC: its most recent failure (mostRecentFailure)
+    enabled_ids      TEXT,                    -- the sample's own row: the indexers there and enabled, ",1,3,7,"
+    interval_seconds INTEGER,                 -- the sample's own row: the usual time between samples then
+    measured_until   TEXT,                    -- the loop's sample's own row: UTC, its last round; NULL = the task's or a page's
+    PRIMARY KEY (sampled_at, indexer_id)
 );
 
 -- Music (jellyscope/music/sync.py): the artists, albums and tracks of the music libraries

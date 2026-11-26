@@ -107,8 +107,13 @@ class LidarrClient(HttpClient):
         return await self._list("artist", ARTIST_FIELDS, timeout=DEFAULT_TIMEOUT)
 
     async def queue(self) -> dict[str, Any]:
-        """The download queue (the first page, up to 100 items), with the album and the artist."""
-        return await self._object("queue", {"pageSize": 100, **INCLUDE})
+        """The download queue (the first page, up to 100 items), with the album and the artist.
+
+        With the downloads the app did not pair with any artist too (`includeUnknownArtistItems`), like
+        `whole_queue`: such an item waits for a manual import, and the count and the card of items with an
+        error are to show it.
+        """
+        return await self._object("queue", {"pageSize": 100, "includeUnknownArtistItems": "true", **INCLUDE})
 
     async def whole_queue(self) -> dict[str, Any]:
         """The whole queue in one page for the live card: `{"records": [...], "total": n}`.

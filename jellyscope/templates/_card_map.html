@@ -105,7 +105,9 @@
     {% endif %}
 
     {% if geo.database %}
-        <p class="card-note" style="margin-top:12px">
+        {# A <div>, not a <p>: a <form> cannot be inside a paragraph - the parser closed the paragraph before it,
+           the button fell onto a line of its own and the stray </p> made an empty paragraph. #}
+        <div class="card-note" style="margin-top:12px">
             {{ _("Database") }}: {{ geo.byte_count | bytes }},
             {{ _("downloaded") }} {{ geo.age | relative }}.
             {% if is_admin and not in_dashboard %}
@@ -113,7 +115,7 @@
                 <button class="btn" type="submit" style="margin-left:8px">{{ _("Update") }}</button>
             </form>
             {% endif %}
-        </p>
+        </div>
 
         {# The detailed map (Natural Earth 1:10M, detailed_map.py): when
            zooming in, coasts, lakes, rivers, regions and city outlines. It is downloaded

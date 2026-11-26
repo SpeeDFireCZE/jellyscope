@@ -18,6 +18,8 @@ Run:
 """
 from __future__ import annotations
 
+import html
+import json
 import os
 import re
 import sys
@@ -138,6 +140,20 @@ with db.connect() as conn:
         " 'DirectPlay', ?, ?, ?, 200, 0, 0)", (at(-timedelta(hours=2)), at(-timedelta(hours=1)), at(-timedelta(hours=1))))
     # Books: one e-book is enough for the section to exist (its pages are empty frames so far).
     conn.execute("INSERT INTO book (id, kind, name, title, author) VALUES ('kniha-m', 'book', 'KnihaMaticeQX', 'KnihaMaticeQX', 'AutorQX')")
+    # Plays of music and books carry the person - "who listened" and "who read" (music_who, books_who): Jana's and
+    # Petr's track and audiobook. Their titles are the plays' own (the music and books pages name the track and the book
+    # from the library), so they are only where the plays are listed: History and the history in the API. Now playing
+    # of music and books: tests/test_rights_by_section.py.
+    for key, uid, name, title, kind in (("hudba-j2", "u-jana", "JanaZQX", "SkladbaJanyQX", "Audio"),
+                                        ("kniha-j", "u-jana", "JanaZQX", "KapitolaJanyQX", "AudioBook"),
+                                        ("hudba-p", "u-petr", "PetrZQX", "SkladbaPetraQX", "Audio"),
+                                        ("kniha-p", "u-petr", "PetrZQX", "KapitolaPetraQX", "AudioBook")):
+        conn.execute(
+            "INSERT INTO playback (session_key, user_id, user_name, item_id, item_name, item_type, client, device_name,"
+            " play_method, started_at, last_seen_at, ended_at, watched_seconds, paused_seconds, is_active)"
+            " VALUES (?, ?, ?, ?, ?, ?, 'Finamp', 'Telefon', 'DirectPlay', ?, ?, ?, 300, 0, 0)",
+            (key, uid, name, "skladba-m" if kind == "Audio" else "kniha-m", title, kind,
+             at(-timedelta(minutes=50)), at(-timedelta(minutes=40)), at(-timedelta(minutes=40))))
     conn.commit()
 
 # The custom dashboard switched on and in it a card from the Overview - so /dashboard has something to open.
@@ -146,9 +162,14 @@ db.set_setting(cards.ENABLED_KEY, "1")
 db.set_setting(access.LOGIN_KEY, "1")
 # The collector "runs" - only then the left panel writes out the state with the number of plays.
 db.set_setting(collector.STATUS_KEY, "ok")
-cards.save_layout([("souhrn", "cela"), ("bazarr_providers", "cela"), ("prowlarr_indexers", "cela"),
-                      ("music_numbers", "cela"), ("music_listeners", "pul")])
+LAYOUT = [("summary", "full"), ("bazarr_providers", "full"), ("prowlarr_indexers", "full"),
+          ("music_numbers", "full"), ("music_listeners", "half")]
+cards.save_layout(LAYOUT)
 db.forget_settings()
+# save_layout throws away an unknown key or width: a renamed one would quietly leave the card out of the dashboard
+# and the marks that depend on it would check nothing.
+check([(card.key, card.width) for card in cards.load_layout()] == LAYOUT,
+      f"the custom dashboard holds every card the matrix put there ({[(c.key, c.width) for c in cards.load_layout()]})")
 
 ALL_AREAS = [o.key for o in access.AREAS]
 
@@ -202,7 +223,15 @@ AREA_ADDRESSES = {
     "books_insights": ["/books/insights"],
 }
 check(set(AREA_ADDRESSES) == set(ALL_AREAS), f"the test knows all the areas ({sorted(set(ALL_AREAS) - set(AREA_ADDRESSES))})")
-ALWAYS_PAGES = ["/history", "/account", "/health", "/library/filmy?tab=activity"]
+# The cards of an open page drawn again (/partials/cards): asked for every card of the registry at once - the answer
+# holds only what the account sees, so the content marks and the dead links below watch it like a page.
+CARDS_ADDRESS = "/partials/cards?keys=" + ",".join(card.key for card in cards.ALL_CARDS)
+# History's bar of new plays (/history/new) asked from nought for music (no play shown, none newer than row 0): it
+# counts every play History?kind=music lists.
+NEW_PLAYS_ADDRESS = "/history/new?known=0&known_id=0&kind=music"
+# History with the kind chosen in the address: music and books only with "who listened" and "who read".
+ALWAYS_PAGES = ["/history", "/history?kind=music", "/history?kind=books", "/account", "/health",
+                "/library/filmy?tab=activity", CARDS_ADDRESS, NEW_PLAYS_ADDRESS]
 # Addresses that belong to more areas: they open when at least one holds.
 # The Movies/Series switch by the Most watched card on the Overview calls it
 # the same way as the Insights page.
@@ -226,6 +255,16 @@ CONTENT = {
     # The Bazarr card is in the custom dashboard too: without the *Arr area it must not show even there.
     "arr": [("a subtitles provider from Bazarr", "PoskytovatelMaticeQX"), ("an indexer from Prowlarr", "IndexerMaticeQX")],
 }
+# Jana's plays of music and books (History, the history in the API) - only with "who listened" and "who read".
+# Petr's own ones a viewer sees whatever is ticked (OWN_PLAYS).
+CONTENT["music_who"].append(("a track Jana listened to", "SkladbaJanyQX"))
+CONTENT["books_who"] = [("an audiobook Jana listened to", "KapitolaJanyQX")]
+# Petr's plays: (area, mark) - a reader sees them only with the area, Petr himself always.
+OWN_PLAYS = (("music_who", "SkladbaPetraQX"), ("books_who", "KapitolaPetraQX"))
+# The groups of the comparison that belong to other areas, by their rows ("Transferred"; the languages' heading; "Items
+# added", or the note that the library's growth cannot be compared yet).
+COMPARE_GROUPS = {"network": ("Přeneseno",), "languages": ("V jakém jazyce se sledovalo",),
+                  "library": ("Přibylo položek", "Růst knihovny se dá srovnat")}
 # The number of running plays (/health) is "who watches what now" too.
 CONTENT["now_playing"].append(("the number of plays in /health", '"active_sessions"'))
 # ...and in the left panel of every page (under the collector's state) and in the API's summary.
@@ -235,6 +274,8 @@ API_CONTENT = {"now_playing": [("the number of plays in the API summary", '"acti
 # Who watched it - the title's detail and the library's activity (names elsewhere are governed by anonymising).
 WHO_WATCHED = ("/item/film-1", "/library/filmy?tab=activity")
 NAME = "JanaZQX"
+# What a viewer's page says the person watched: the most watched title, the device, the genres' card.
+WATCHED_BLOCKS = ("KnihaTitulQX", "Obyvak", "Jaké žánry sleduje")
 
 
 def blocked(status: int) -> bool:
@@ -265,6 +306,11 @@ def walk(name: str, enabled: set[str], label: str) -> None:
     for address in ALL_PAGES:
         r = k.get(address, follow_redirects=False)
         pages[address] = (r.status_code, r.text if r.status_code == 200 else "")
+    if name == "viewer":
+        # A viewer lands on their own page (navigation.default_page_url) whatever is ticked - its links are walked too.
+        r = k.get("/users/u-petr", follow_redirects=False)
+        pages["/users/u-petr"] = (r.status_code, r.text if r.status_code == 200 else "")
+        check(r.status_code == 200, f"{label}: their own page opens ({r.status_code})")
     # 1) The areas' addresses: they open only when the area holds.
     for area, addresses in AREA_ADDRESSES.items():
         for address in addresses:
@@ -291,6 +337,20 @@ def walk(name: str, enabled: set[str], label: str) -> None:
     if name == "reader":
         in_menu = 'href="/history"' in pages["/account"][1]
         check(in_menu == may_history, f"{label}: History in the menu - {'yes' if in_menu else 'no'}")
+    # History's bar of new plays is behind History's gate and counts by its rights: from nought, every play the page
+    # lists - its rows, not the number the page computes by the same count - and from the address the page wrote
+    # itself, nought: nothing came since it was drawn.
+    status, text = pages[NEW_PLAYS_ADDRESS]
+    check((status == 200) == may_history, f"{label}: /history/new {'opens' if may_history else 'is closed'} ({status})")
+    music_history = pages["/history?kind=music"][1]
+    if status == 200:
+        counted = json.loads(text).get("count")
+        rows = music_history.split("<tbody>", 1)[-1].split("</tbody>", 1)[0].count("<tr")
+        own = re.search(r'data-history-new="([^"]+)"', music_history)
+        again = k.get(html.unescape(own.group(1))).json().get("count") if own else None
+        check(rows > 0 and counted == rows and again == 0,
+              f"{label}: /history/new counts the plays History lists, and nought from the page's own address"
+              f" ({counted}, {rows} rows, {again})")
     # The whole ranking (/video/insights/top) only with its area - otherwise the link would lead to "you may not".
     status, text = pages["/video/overview"]
     if status == 200 and "charts" not in valid:
@@ -298,6 +358,16 @@ def walk(name: str, enabled: set[str], label: str) -> None:
     # A link behind which "you may not" waits is worse than none.
     dead = dead_links(k, pages)
     check(not dead, f"{label}: no link leads to a closed page ({len(dead)}: {dead[:4]})")
+    # The partial with every card: exactly the cards of the areas that hold (an app's only while connected) - and so
+    # every card the account's pages draw, none of another area.
+    returned = set(re.findall(r'data-card-key="(\w+)"', pages[CARDS_ADDRESS][1]))
+    seen = {key for address, (_status, text) in pages.items() if address != CARDS_ADDRESS
+            for key in re.findall(r"<!-- card: (\w+) -->", text)}
+    expected = {card.key for card in cards.ALL_CARDS if card.area in valid and cards.is_available(card)}
+    check(pages[CARDS_ADDRESS][0] == 200 and returned == expected and seen <= returned,
+          f"{label}: /partials/cards draws exactly the cards the account sees ({len(returned)} cards,"
+          f" extra {sorted(returned - expected)[:4]}, missing {sorted(expected - returned)[:4]},"
+          f" on pages but not drawn {sorted(seen - returned)[:4]})")
     # 2) The switched-off areas' content on no open page.
     for area, marks in CONTENT.items():
         if area in valid:
@@ -313,6 +383,39 @@ def walk(name: str, enabled: set[str], label: str) -> None:
             check(NAME in text, f"{label}: {address} writes out the viewers (knihovna_kdo on)")
         else:
             check(NAME not in text, f"{label}: {address} without viewers (knihovna_kdo off)")
+    # Who listened and who read: somebody else's plays only with the area, the own ones always - and History offers
+    # the kind only when it would find something.
+    status, text = pages["/history"]
+    if status == 200:
+        for area, mark in OWN_PLAYS:
+            shows = name == "viewer" or area in valid
+            check((mark in text) == shows, f"{label}: Petr's play in History ({area}) {'shows' if shows else 'is hidden'}")
+        for area, kind in (("music_who", "music"), ("books_who", "books")):
+            offered = f'<option value="{kind}"' in text
+            check(offered == (name == "viewer" or area in valid),
+                  f"{label}: History offers the kind {kind} - {'yes' if offered else 'no'}")
+    # The comparison: a group of another area (its numbers have their own page and cards) only with that area.
+    status, text = pages["/video/compare"]
+    if status == 200:
+        for area, marks in COMPARE_GROUPS.items():
+            shows = any(mark in text for mark in marks)
+            check(shows == (area in valid), f"{label}: the comparison {'shows' if shows else 'without'} the group of {area}")
+    # A viewer's page: somebody else's music listening only with "who listened", the own one with Music.
+    for address, area in (("/users/u-jana", "music_who"), ("/users/u-petr", "music")):
+        status, text = pages.get(address, (0, ""))
+        if status == 200:
+            shows = area in valid
+            check(("Poslech hudby" in text) == shows,
+                  f"{label}: {address} {'shows' if shows else 'without'} the music listening ({area})")
+    # ...and what the person watched (the most watched titles, devices, genres) is "who watched what": somebody
+    # else's only with "...including who watched it", as History; one's own always.
+    for address, own in (("/users/u-jana", False), ("/users/u-petr", True)):
+        status, text = pages.get(address, (0, ""))
+        if status == 200:
+            shows = own or "library_who" in valid
+            marks = [mark for mark in WATCHED_BLOCKS if mark in text]
+            check(marks == (list(WATCHED_BLOCKS) if shows else []),
+                  f"{label}: {address} {'shows' if shows else 'without'} what the person watched ({marks})")
 
 
 print("--- with everything switched on the areas' content really shows (the marks do not watch nothing) ---")
@@ -402,7 +505,7 @@ def api_get(token: str, address: str):
     return TestClient(web.app).get(address, headers={"Authorization": f"Bearer {token}"})
 
 
-def walk_api(token: str, valid: set[str], history: bool, label: str) -> None:
+def walk_api(token: str, valid: set[str], history: bool, label: str, viewer: bool | None = None) -> None:
     answers = {}
     for address, area in API_ADDRESSES.items():
         r = api_get(token, address)
@@ -421,6 +524,11 @@ def walk_api(token: str, valid: set[str], history: bool, label: str) -> None:
             if title == "the playback card":
                 continue      # an HTML mark - it has no business in the JSON API
             check(not where, f"{label}: {title} ({area}) is in no API answer ({where})")
+    # An account's key: Petr's plays like on the pages (a root key has no Music or Books areas - CONTENT watches it).
+    for area, mark in OWN_PLAYS if viewer is not None and answers["/api/v1/history"].status_code == 200 else ():
+        shows = viewer or area in valid
+        check((mark in answers["/api/v1/history"].text) == shows,
+              f"{label}: Petr's play in /api/v1/history ({area}) {'shows' if shows else 'is hidden'}")
     if "library_who" not in valid:
         where = [a for a in ("/api/v1/item/film-1", "/api/v1/library", "/api/v1/libraries", "/api/v1/recently-added")
                  if answers[a].status_code == 200 and NAME in answers[a].text]
@@ -434,7 +542,7 @@ for name in ("reader", "viewer"):
         # An account key's history = the account's history (see /history above).
         walk_api(keys[name], effective(enabled),
                  name == "viewer" or "library_who" in effective(enabled),
-                 f"key {name} " + (f"without {area}" if area else "with everything"))
+                 f"key {name} " + (f"without {area}" if area else "with everything"), name == "viewer")
 
 print()
 print("--- the API: a root key with one area opens only that one ---")

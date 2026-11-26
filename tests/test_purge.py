@@ -123,6 +123,53 @@ check(asyncio.run(tasks.TASKS["purge"].runner())["deleted"] == 0,
       "the second run has nothing to delete")
 
 print()
+print("--- a failure deleting Prowlarr's old samples comes after the plays' own work ---")
+# The old samples of the indexers' status used to be deleted right after the plays, before the log line and the
+# rewrite that removes the deleted plays' traces from the file (db.compact). Their failure skipped both for good: the
+# next night has no old plays and rewrites nothing.
+import logging  # noqa: E402
+
+from _package import substitute  # noqa: E402
+
+logged: list[str] = []
+
+
+class Keep(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        logged.append(record.getMessage())
+
+
+logging.getLogger("jellyscope").addHandler(Keep())
+logging.getLogger("jellyscope.purge").setLevel(logging.INFO)
+compacted: list[bool] = []
+real_compact = db.compact
+
+
+def compact_and_note() -> bool:
+    compacted.append(True)
+    return real_compact()
+
+
+def samples_locked(before: str) -> int:
+    raise OSError("the samples could not be deleted")
+
+
+session(90, 400)
+session(91, 400)
+restore = [substitute(db, "compact", compact_and_note), substitute(purge.prowlarr, "delete_old_samples", samples_locked)]
+try:
+    purge.delete_old(365)
+    raised = ""
+except OSError as error:
+    raised = str(error)
+finally:
+    for back in restore:
+        back()
+check(count() == 5 and compacted and any("Cleared out 2 playbacks" in m for m in logged),
+      f"the plays are deleted, logged and the file rewritten ({count()}, {compacted}, {logged[-1:]})")
+check(raised == "the samples could not be deleted", f"and the samples' failure still ends the run as an error ({raised!r})")
+
+print()
 print("--- forgetting a viewer ---")
 for number in range(20, 23):
     session(number, days_ago=10, user="u2")
@@ -190,6 +237,35 @@ with TestClient(app) as client:
                            follow_redirects=False)
     check(response.status_code == 303, "forgetting redirects back")
     check(count() == 0, f"and that viewer's history is gone ({before} -> {count()})")
+
+print()
+print("--- an unexpected error leaves no run hanging as running ---")
+# purge.overview() and the backup before deleting stood before the guarded part: a database locked by a VACUUM
+# ended the task with the exception and Settings -> Tasks showed the clean-up as running until the next restart.
+import sqlite3  # noqa: E402
+
+from jellyscope import scanner  # noqa: E402
+
+
+def locked(*args, **kwargs):
+    raise sqlite3.OperationalError("database is locked")
+
+
+db.set_setting("task_purge_enabled", "1")
+db.forget_settings()
+real_overview = purge.overview
+purge.overview = locked
+try:
+    asyncio.run(tasks.TASKS["purge"].runner())
+    raised = ""
+except sqlite3.OperationalError as error:
+    raised = str(error)
+finally:
+    purge.overview = real_overview
+record = scanner.last_scan("purge") or {}
+check(raised == "database is locked", f"the error still reaches the scheduler's log ({raised!r})")
+check(record.get("status") == "error" and bool(record.get("finished_at")),
+      f"and the run is closed as failed ({record.get('status')}, {record.get('finished_at')})")
 
 print()
 print("--- in the demo mode nothing is deleted ---")

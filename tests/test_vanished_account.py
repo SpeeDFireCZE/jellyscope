@@ -277,5 +277,36 @@ with db.connect() as conn:
     conn.commit()
 
 print()
+print("--- a kept cookie does not open the account that gets a deleted account's id ---")
+# Ids come back: a restored backup, or a copy to another database, sets the counter to the highest id there is. An
+# account from Jellyfin has no password hash, so a fingerprint of the hash alone was the same for all of them and
+# a deleted viewer's cookie opened whoever got the id next - an administrator too.
+sync([MIREK, JANA])
+kept = TestClient(web.app)
+kept.post("/login", data={"username": "Mirek", "password": "x", "method": "jellyfin"}, follow_redirects=False)
+check(kept.get("/history", follow_redirects=False).status_code == 200, "Mirek is signed in")
+freed = account("Mirek")
+with db.connect() as conn:
+    conn.execute("DELETE FROM accounts WHERE id = ?", (freed["id"],))
+    conn.execute("INSERT INTO accounts (id, username, password_hash, is_admin, created_at, jellyfin_user_id)"
+                 " VALUES (?, 'Owner', '', 1, ?, 'ffffffff000011112222333333333333')", (freed["id"], db.utcnow()))
+    conn.commit()
+response = kept.get("/settings", follow_redirects=False)
+check(response.status_code in (302, 303, 307) and "/login" in response.headers.get("location", ""),
+      f"the deleted viewer's cookie does not open the new administrator under the same id ({response.status_code})")
+jana = accounts.from_jellyfin({"id": JANA["Id"], "name": "Jana", "is_admin": False})
+check(accounts.session_fingerprint(account("Owner")) != accounts.session_fingerprint(jana),
+      "two accounts from Jellyfin have different fingerprints")
+import hashlib  # noqa: E402
+
+local_hash = str(account("reader")["password_hash"])
+check(accounts.session_fingerprint(account("reader"))
+      == hashlib.sha256(("relace:" + local_hash).encode("utf-8")).hexdigest()[:16],
+      "a local account keeps the fingerprint it had, so its sessions hold after an upgrade")
+with db.connect() as conn:
+    conn.execute("DELETE FROM accounts WHERE username = 'Owner'")
+    conn.commit()
+
+print()
 print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

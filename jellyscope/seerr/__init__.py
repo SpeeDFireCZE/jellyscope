@@ -11,7 +11,12 @@ everything from here:
   (does it serve images? the address for the link to its settings).
 * `sync` - all requests into the table `seerr_request` (upsert, times of state changes, deleted in
   Seerr, the titles' names), the state, deleting the stored data.
-* `live` - the live card "Waiting for approval" with the one-minute cache `live.CACHE`.
+* `live` - the live card "Waiting for approval" (the pending requests' rows) and what both live
+  cards share: the one-minute cache `live.CACHE`, the names of titles the table does not know yet.
+* `latest` - the page of Seerr's newest requests for "Latest requests" and its rows
+  (stats.seerr_with_live lays them over the stored requests).
+* `now` - both live cards loaded at once under one entry of the cache (`pending`,
+  `latest_requests`): one wait for a hanging Seerr, the same moment in both cards.
 * `posters` - the provisional poster of a title that is not in Jellyfin: from Radarr or Sonarr,
   else from Seerr; the clean-up once the title arrives in the library; finding out whether Seerr
   serves images ("Enable Image Caching").
@@ -22,7 +27,7 @@ lives in which file is guarded by tests/test_seerr_package.py.
 from __future__ import annotations
 
 from .client import NAME, SeerrClient, SeerrError
-from .live import pending
+from .now import latest_requests, pending
 from .posters import check_images, clean_up_posters, forget_missing, poster_path, provisional_poster
 from .settings import check_connection, images_state, is_connected, save_settings, settings_link, stored_settings
 from .sync import (
@@ -48,6 +53,7 @@ __all__ = [
     "forget_missing",
     "images_state",
     "is_connected",
+    "latest_requests",
     "normalize_id",
     "pending",
     "poster_path",

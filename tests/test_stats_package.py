@@ -43,7 +43,8 @@ os.environ["DATABASE_PATH"] = str(Path(_tmp) / "stats_package.db")
 os.environ["SECRET_KEY"] = "testovaci-klic"
 os.environ["JELLYSCOPE_DEMO"] = "0"
 
-from _package import substitute, substitutes_in_submodules, wrong_substitutes  # noqa: E402
+from _package import (outside_sources, read_through_door, substitute, substitutes_in_submodules,  # noqa: E402
+                      unread_door_names, wrong_substitutes)
 
 failures = 0
 
@@ -64,23 +65,25 @@ WITH_EXAMPLES = {Path(__file__).name, "test_stats_package.py", "test_web_package
 # Which top-level name lives in which submodule. A new name of the package adds itself here.
 SUBMODULES: dict[str, list[str]] = {
     "periods": ["Period", "END_OF_TIME", "NO_LIMIT", "OLDEST_HISTORY", "period_of_days", "whole_history_period",
-                "_local_time", "period_between", "period_from_instants", "_as_period", "_bounds", "previous_period",
+                "_local_time", "period_between", "period_from_instants", "_as_period", "_from_day_before", "_bounds",
+                "previous_period",
                 "first_record", "can_compare", "transcode_condition", "_local_day", "chart_days"],
     "kinds": ["VIDEO_LIBRARY_TYPES", "NOT_LIBRARY_TYPES", "is_video_library", "video_library_sql", "KIND_MOVIE", "KIND_SERIES",
               "KIND_OTHER", "KIND_BOTH", "ALLOWED_KINDS", "SERIES_TYPES", "_KNOWN_TYPES", "_SERIES_TYPES_SQL",
               "_KNOWN_TYPES_SQL", "KIND_MUSIC", "KIND_ALL", "MUSIC_TYPES", "_MUSIC_TYPES_SQL", "HISTORY_KINDS",
               "KIND_BOOKS", "BOOK_TYPES", "_BOOK_TYPES_SQL", "_NOT_WATCHING_SQL",
-              "watching_only", "by_titles", "only_music", "only_books", "_kind_condition", "ITEM_TYPE_LABELS",
+              "TYPES_OF_KIND", "watching_only", "by_titles", "only_music", "only_books", "without_kinds",
+              "_kind_condition", "ITEM_TYPE_LABELS",
               "UNKNOWN_TYPE",
               "type_label"],
     "shared": ["UPGRADE_PAIRING_WINDOW", "GRAB_WINDOW", "BUCKETS", "UNKNOWN", "_time", "_local", "local_fast", "_shift",
-               "_quantile", "_pair_grabs", "_pair_upgrades", "_ranked"],
-    "playback": ["active_session_count", "transcode_speed", "transcode_description", "active_sessions"],
+               "_quantile", "_pair_grabs", "_downloads", "_pair_upgrades", "_ranked"],
+    "playback": ["active_session_count", "plays_state", "transcode_speed", "transcode_description", "active_sessions"],
     "tech": ["RESOLUTION_CASE", "RESOLUTION_ORDER", "tech_coverage", "_video_coverage", "codec_breakdown",
              "resolution_breakdown", "RANGE_CASE", "item_range", "video_range_breakdown"],
     "recent": ["_KEY", "_NEWEST_GROUPS", "recently_added", "_sort_episodes", "_episode_preference", "BATCH_HOURS",
                "_hours_back", "_in_same_batch"],
-    "content_history": ["Changes", "_remembered", "kind_changes", "series_from_changes", "_remember", "all_changes",
+    "content_history": ["Changes", "_remembered", "_remembered_lock", "kind_changes", "series_from_changes", "_remember", "all_changes",
                         "changes_by_disk", "kinds_of", "complete_rows", "complete_library_rows", "complete_disk_rows"],
     "titles": ["_SERIES_FROM_NAME", "series_from_name", "_episodes_by_name", "_series_names", "extra_copies",
                "title_key", "TITLE_GROUP_KEY", "TITLE_GROUP_COLUMNS", "_merge_titles", "top_items"],
@@ -90,31 +93,35 @@ SUBMODULES: dict[str, list[str]] = {
                     "item_playback_summary", "sibling_episodes", "delete_item", "_delete_item", "item_thumbnail",
                     "file_name", "item_label"],
     "play_history": ["PLAY_METHODS", "_safety_bounds", "_history_filter", "history", "history_for_api",
-                     "history_count", "filter_values"],
+                     "history_count", "history_last_id", "filter_values"],
     "archive": ["archived_count", "only_archived", "delete_from_archive", "_ALL_PLAYS", "archived_items",
                 "_EPISODE_CODE", "_ASCII_PART", "_WORD_EDGE", "CANDIDATE_LIMIT", "_for_search", "_episode_mark",
                 "_standalone", "_like_anywhere", "find_existing", "AssignmentError", "assign_to_other"],
     "locations": ["HOME_PREFIXES", "is_home", "_traffic_by_address", "watching_locations", "places", "hotspots",
                   "viewer_countries"],
-    "network": ["_network_rows", "_seconds", "bandwidth_timeline", "flow_now", "SHORTEST_LIVE_WINDOW",
-                "LIVE_STEP_SECONDS", "MAX_LIVE_POINTS", "bandwidth_live", "bandwidth_daily_peaks",
+    "network": ["_network_rows", "_seconds", "_flow_events", "_Flows", "network_flows", "bandwidth_timeline", "flow_now",
+                "SHORTEST_LIVE_WINDOW", "LIVE_STEP_SECONDS", "MAX_LIVE_POINTS", "bandwidth_live", "bandwidth_daily_peaks",
                 "bandwidth_summary", "bandwidth_by"],
     "disks": ["MEASURED", "DISK_KINDS", "SINGLE_DISK", "disk_snapshots", "complete_disks", "disk_changes", "_has_kinds", "_segment",
               "_pace", "files_forecast", "_files_pace", "disks_to_choose", "_outside_series", "outside_series", "disks_overview", "runs_out_first"],
-    "growth": ["_backfilled_curve", "library_state", "snapshots", "_period_days", "_anchor", "_free_space_now",
+    "growth": ["_backfilled_curve", "library_state", "snapshots", "_first_snapshot", "_period_days", "_anchor", "_free_space_now",
                "library_growth", "_growth_base", "_segment_start", "_SERIES_MEMO", "disk_growth_memo", "disk_growth_series", "_disk_growth_series", "disk_growth", "_by_disk",
                "_all_disks", "_without_unknown_disks", "space_forecast"],
     "sonarr": ["TRIGGERS", "_COLUMNS", "_is_import", "_is_upgrade", "_analysis", "sonarr_events", "sonarr_additions",
-               "sonarr_heatmap", "sonarr_largest", "sonarr_speed", "sonarr_sources", "_trigger", "sonarr_upgrades",
+               "sonarr_heatmap", "sonarr_largest", "sonarr_speed", "sonarr_sources", "sonarr_indexer_reliability", "_trigger",
+               "sonarr_upgrades",
                "sonarr_first", "sonarr_failures", "sonarr_library", "sonarr_detail_links", "sonarr_imports"],
     "lidarr": ["TRIGGERS", "SAME_IMPORT", "ALBUM_UPGRADE_WINDOW", "ALBUM_UPGRADE_SLACK", "_COLUMNS", "_is_import", "_is_upgrade", "_import_key", "_album_imports", "_mark_upgrades",
                "_analysis", "lidarr_events", "lidarr_additions", "lidarr_heatmap", "lidarr_largest", "lidarr_speed",
-               "lidarr_sources", "_trigger", "lidarr_upgrades", "lidarr_first", "lidarr_failures", "lidarr_library"],
+               "lidarr_sources", "lidarr_indexer_reliability", "_trigger", "lidarr_upgrades", "lidarr_first", "lidarr_failures",
+               "lidarr_library"],
     "readarr": ["TRIGGERS", "SAME_IMPORT", "BOOK_UPGRADE_WINDOW", "BOOK_UPGRADE_SLACK", "_COLUMNS", "_is_import", "_is_upgrade", "_import_key", "_book_imports", "_mark_upgrades",
                 "_analysis", "readarr_events", "readarr_additions", "readarr_heatmap", "readarr_largest", "readarr_speed",
-                "readarr_sources", "_trigger", "readarr_upgrades", "readarr_first", "readarr_failures", "readarr_library"],
+                "readarr_sources", "readarr_indexer_reliability", "_trigger", "readarr_upgrades", "readarr_first",
+                "readarr_failures", "readarr_library"],
     "radarr": ["TRIGGERS", "_COLUMNS", "_is_import", "_is_upgrade", "_analysis", "radarr_events", "radarr_additions",
-               "radarr_heatmap", "radarr_largest", "radarr_speed", "radarr_sources", "_trigger", "radarr_upgrades",
+               "radarr_heatmap", "radarr_largest", "radarr_speed", "radarr_sources", "radarr_indexer_reliability", "_trigger",
+               "radarr_upgrades",
                "radarr_first", "radarr_failures", "radarr_library", "radarr_detail_links", "radarr_imports"],
     "bazarr": ["ACTIONS", "ACQUIRED", "UPGRADE", "OTHER", "ACTION_ORDER", "BUCKETS", "SCORE_BUCKETS", "IMPORTS",
                "_COLUMNS", "_ACQUIRED_SQL", "_order", "_mean", "_median", "_acquired", "_action_counts", "_earlier",
@@ -125,12 +132,17 @@ SUBMODULES: dict[str, list[str]] = {
                  "_GRABBED_BY_APP", "_LATEST", "_whole", "_share", "_mean", "prowlarr_first",
                  "prowlarr_indexer_names", "prowlarr_analysis", "prowlarr_numbers", "prowlarr_by_day",
                  "prowlarr_heatmap", "prowlarr_who", "prowlarr_indexers", "prowlarr_grabbed",
-                 "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest"],
+                 "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest", "GAP_TIMES", "LOOP_GAP_TIMES", "FINE", "FAILED", "OUTAGE",
+                 "UNMEASURED", "_RUN", "_FIRST_SAMPLE", "_SAMPLE_BEFORE", "_SAMPLE_FROM", "_SAMPLES", "_FAILED_HOURS",
+                 "_ENABLED", "Stretch", "Outage", "_Point", "Samples", "_moment", "_seconds", "_ids", "_gap_times", "_points", "_joined", "_samples",
+                 "_step_measured", "_measured", "_pieces", "_outages",
+                 "_strip_days", "_day_bounds", "_days_hit", "_failed_days", "_availability_of", "_strip", "_troublesome",
+                 "prowlarr_availability"],
     "seerr": ["AVAILABLE", "DELETED", "APPROVED", "DECLINED", "_COLUMNS", "_time", "_local", "_in_library",
               "_items_by_id", "_title_items", "_watching", "_posters_by_id", "_ids_from_other_requests",
               "seerr_posters", "seerr_with_posters", "seerr_events", "_requests", "seerr_summary", "seerr_by_day",
               "seerr_heatmap", "seerr_requesters", "_group", "seerr_handling", "seerr_watching", "seerr_latest",
-              "seerr_first"],
+              "seerr_with_live", "seerr_first", "seerr_synced_at"],
     "music_comparison": ["TOP", "_added", "_genre_rows", "_hours", "_side", "music_comparison"],
     "music_listening": ["PLAY_FROM_SECONDS", "TICKS", "_SHARED_TEXT_COLUMNS", "music_analysis",
                         "music_first", "music_numbers", "music_by_day", "music_heatmap", "music_listeners",
@@ -226,6 +238,20 @@ all_names = set(getattr(stats, "__all__", []))
 check(all_names == door_imports and len(all_names) == len(stats.__all__),
       f"__all__ is exactly what the door imports, each once (only in __all__ {sorted(all_names - door_imports)[:6]},"
       f" only imported {sorted(door_imports - all_names)[:6]})")
+# The other way round (audit CL-10): a name the door takes from a submodule is read - in the door itself or from
+# the outside. A re-export nobody reads only hides where the name lives, and the check above keeps it for ever.
+# What is read through an alias (`from jellyscope import stats as _stats`) or by a string (`substitute(stats, "X")`)
+# counts too - the text `stats.X` alone does not see it.
+door_reads = read_through_door("jellyscope.stats", outside_sources(PROJECT, PACKAGE, WITH_EXAMPLES), PROJECT)
+re_exported, unread = unread_door_names(PACKAGE / "__init__.py", set(used) | door_reads)
+check(len(re_exported) > 150 and not unread,
+      f"every name the door takes from a submodule is read in the door or from the outside ({len(unread)} unread: {unread})")
+SAMPLE_READS = read_through_door("jellyscope.stats", {
+    PROJECT / "tests" / "sample.py": "from jellyscope import stats as s\nfrom jellyscope.stats import a\ns.b()\n"
+                                     "substitute(s, 'c', 1)\ns.kinds.d\nimport jellyscope.stats\njellyscope.stats.e\n",
+    PROJECT / "jellyscope" / "web" / "sample.py": "from .. import stats\nfrom ..stats import f\nstats.g\n"}, PROJECT)
+check(SAMPLE_READS == {"a", "b", "c", "kinds", "e", "f", "g"},
+      f"the reads through the door are found however they are written, a submodule's name is not read ({sorted(SAMPLE_READS)})")
 
 print()
 print("--- (b) every name lives in its submodule ---")
@@ -238,6 +264,10 @@ if is_package():
     check(sorted(on_map) == sorted(in_files),
           f"the map covers every top-level name of the submodules ({len(on_map)} names; not on the map "
           f"{sorted(set(in_files) - set(on_map))[:6]}, not defined {sorted(set(on_map) - set(in_files))[:6]})")
+    # The door's docstring is the reader's map of the package: it names every submodule too.
+    door_doc = ast.get_docstring(tree(PACKAGE / "__init__.py")) or ""
+    unnamed = [m for m in FILES if f"* `{m}` - " not in door_doc]
+    check(not unnamed, f"the docstring of the door names every submodule ({unnamed})")
     missing_in = []
     owners: dict[str, list[object]] = {}
     for m, names in SUBMODULES.items():

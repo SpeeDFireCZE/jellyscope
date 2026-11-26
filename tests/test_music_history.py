@@ -98,12 +98,17 @@ check(not any(f'href="/item/{sid}"' in h for sid in tracks.values()), "no track 
 reader_rights([o for o in DEFAULTS if o != "music"] + ["library_who"])
 reader = login("reader")
 h_reader = reader.get("/history?kind=all").text
-# An album page belongs to the Library (menu by sections, 16. 11. 2026): without Music but with
-# the Library the track still leads to its album. Without the Library a reader has no History at
-# all (it needs "...including who watched"); that /album/ is then closed and never linked is the
-# permission matrix's job (test_rights_matrix: area addresses and dead links).
+# A track in History tells who listened - "...including who listened" under Music (access.hidden_kinds), so without
+# Music there is none.
+check("First Light" not in h_reader and "SkladbaBezAlbaQX" not in h_reader and "FilmVKnihovneQX" in h_reader,
+      "an account without Music: History without tracks, the movies stay")
+reader_rights(DEFAULTS + ["library_who", "music_who"])
+h_reader = reader.get("/history?kind=all").text
+# An album page belongs to the Library (menu by sections, 16. 11. 2026), so the track leads to its album. Without the
+# Library a reader has no History at all (it needs "...including who watched"); that /album/ is then closed and never
+# linked is the permission matrix's job (test_rights_matrix: area addresses and dead links).
 check("First Light" in h_reader and f'href="/album/{AURORA}#track-' in h_reader,
-      "an account without Music but with the Library: the track leads to the album (the album belongs to the Library)")
+      "an account with who listened: the track leads to the album (the album belongs to the Library)")
 
 print()
 print("--- B) a viewer's page ---")
@@ -115,9 +120,30 @@ check("Poslech hudby" in d and tile(d, "Poslech hudby") == formatting.seconds_hu
       and artist is not None and artist.groups() == (f"/music/artist/{listening['artist_id']}", listening["artist"]),
       f"a viewer who listened: the Poslech hudby row, the artist is a link ({listening}; {artist and artist.groups()})")
 check("Poslech hudby" not in admin.get("/users/u-tomas?days=30").text, "a viewer who did not listen has no row")
-reader_rights([o for o in DEFAULTS if o != "music"])
-check("Poslech hudby" not in reader.get("/users/u-jana?days=30").text, "an account without Music does not see the row")
+reader_rights([o for o in DEFAULTS if o != "music"] + ["users"])
+d = reader.get("/users/u-jana?days=30")
+check(d.status_code == 200 and "Poslech hudby" not in d.text, f"an account without Music does not see the row ({d.status_code})")
+# Somebody else's listening and their artist are the Listeners card's data: "...including who listened" (music_who).
+reader_rights(DEFAULTS + ["users"])
+d = reader.get("/users/u-jana?days=30")
+check(d.status_code == 200 and "Poslech hudby" not in d.text,
+      f"an account with Music but without who listened does not see the row ({d.status_code})")
+reader_rights(DEFAULTS + ["users", "music_who"])
+check("Poslech hudby" in reader.get("/users/u-jana?days=30").text, "with who listened the row is there")
 reader_rights(None)
+# A viewer's own page needs only Music - they know about themselves.
+accounts.create("jana", "longpassword")
+jana = accounts.get_by_name("jana")
+with db.connect() as conn:
+    conn.execute("UPDATE accounts SET jellyfin_user_id = 'u-jana' WHERE username = 'jana'")
+    conn.commit()
+db.set_setting(access.LOGIN_KEY, "1")
+for areas, shows in ((["music"], True), (["library"], False)):
+    accounts.save_permissions(jana["id"], access.pack_permissions(areas, False))
+    db.forget_settings()
+    d = login("jana").get("/users/u-jana?days=30")
+    check(d.status_code == 200 and ("Poslech hudby" in d.text) == shows,
+          f"a viewer's own page with {areas}: the row {'is there' if shows else 'is not'} ({d.status_code})")
 
 print()
 print("--- C) the sample data ---")

@@ -69,8 +69,16 @@ class App:
     # The name of the app that really answers when it can differ from `name` (Readarr, Chaptarr or Bookshelf).
     detected_name: Callable[[], str] | None = None
     # The slow counts of the live card (missing, cutoff; Bazarr's missing subtitles), counted by the *Arr sync task
-    # after the history - not by "Sync now" in Settings, which waits for its result (23. 11. 2026).
+    # after the history - not by "Sync now" in Settings, which waits for its result (23. 11. 2026). Prowlarr has no
+    # counts: in their place it takes a sample of the indexers' status (their availability over time).
     refresh_counts: Callable[[], Awaitable[None]] | None = None
+    # Prowlarr only: measuring the indexers' status in the background (arr/prowlarr/watch.py). Its switch and interval
+    # in the app's form in Settings - {"enabled", "interval", "minimum", "maximum"}, and saving them (a cleared interval
+    # keeps the stored one) - and the marker of a stored change: the app's cards are redrawn when it moves
+    # (web/base.change_markers).
+    watch_settings: Callable[[], dict[str, Any]] | None = None
+    save_watch_settings: Callable[[bool, str], None] | None = None
+    marker: Callable[[], str] | None = None
 
     def shown_name(self) -> str:
         """The name people see - in the *Arr menu, on the tab and in Settings: the app that answers, else `name`
@@ -226,7 +234,8 @@ def _prowlarr_app() -> App:
     """Prowlarr: a package, tables and cards of its own - for the web and the task the same functions as the others'.
 
     Unlike them it keeps its history only for a limited time: after the downloaded data is deleted,
-    only what it still has comes back from it. The deletion dialog says so.
+    only what it still has comes back from it, and the samples of the indexers' availability
+    (stored by its package) not at all. The deletion dialog says so.
     """
     return App(
         key="prowlarr", name=prowlarr.NAME,
@@ -234,6 +243,7 @@ def _prowlarr_app() -> App:
         save_settings=_later(prowlarr, "save_settings"),
         check_connection=_later(prowlarr, "check_connection"),
         synchronize=_later(prowlarr, "synchronize"),
+        refresh_counts=_later(prowlarr, "take_sample"),
         sync_running=_later(prowlarr, "sync_running"),
         sync_state=_later(prowlarr, "sync_state"),
         event_count=_later(prowlarr, "event_count"),
@@ -246,7 +256,11 @@ def _prowlarr_app() -> App:
         sample_url="http://localhost:9696",
         key_hint="In the app: Settings → General → Security → API Key.",
         delete_note=("Prowlarr keeps its history only for a limited time (30 days by default). "
-                     "Anything older will not come back after deleting."),
+                     "Anything older will not come back after deleting. "
+                     "The samples of the indexers' availability are deleted too and cannot be fetched again."),
+        watch_settings=_later(prowlarr, "watch_settings"),
+        save_watch_settings=_later(prowlarr, "save_watch_settings"),
+        marker=_later(prowlarr, "status_marker"),
     )
 
 

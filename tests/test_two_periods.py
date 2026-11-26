@@ -142,6 +142,14 @@ check(watching_unequal["Odsledováno"]["difference"] > 0, "in the sum the longer
 check(watching_unequal["Denní průměr"]["difference"] < 0,
       "but in the daily average the shorter - that is why the row is there")
 
+# The Comparison's default pair: "the last 30 days" and the same span 30 days back. Both hold the part of today that
+# has passed (25. 11. 2026), and the daily average divides by that real length - not by 30 whole days.
+default_pair = stats.comparison(30, stats.previous_period(30))
+check(default_pair["same_length"] and abs(default_pair["a"]["days"] - default_pair["b"]["days"]) < 0.05
+      and 29 <= default_pair["a"]["days"] < 30,
+      f"the default pair is equally long, the time that has really passed ({default_pair['a']['days']:.2f} vs"
+      f" {default_pair['b']['days']:.2f} days)")
+
 print()
 print("--- an overlap does not hide ---")
 check(not v["overlap"], "windows that are not adjacent do not overlap")
@@ -158,7 +166,7 @@ delivery = {r["label"]: r for r in v2["groups"][1]["rows"]}
 
 share = delivery["Podíl transcode"]
 check(share["relative"] is None, "a percentage gets no relative change")
-check(abs(share["difference"] - (share["a"] - share["b"])) < 0.001,
+check(abs(share["difference"] - (float(share["a"]) - float(share["b"]))) < 0.001,
       f"the difference is a plain difference in points ({share['difference']:.1f})")
 check(share["b"] > 0, f"and in B the transcode really got counted ({share['b']:.1f} %)")
 

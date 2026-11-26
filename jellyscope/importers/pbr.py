@@ -51,6 +51,16 @@ PBR_QUERY_WITHOUT_ROWID = (
 # 1. Playback Reporting (a Jellyfin plugin)
 # ---------------------------------------------------------------------------
 
+def _body_without_key(client: JellyfinClient, response: Any) -> str:
+    """The start of an error answer's body without the API key: it goes into the task log, the page and the log file.
+
+    A gateway's error page may repeat the request's headers. Cleaned first, cut after, as JellyfinClient._get does:
+    a key split by the cut would otherwise not be replaced and its start would leak.
+    """
+    body = (response.text or "").strip()
+    return client._without_key(body[:300 + len(client.api_key)])[:300]
+
+
 async def playback_reporting_available() -> tuple[bool, str]:
     """Find out whether the plugin is installed and answers."""
     try:
@@ -69,7 +79,7 @@ async def playback_reporting_available() -> tuple[bool, str]:
     if response.status_code >= 400:
         # Here too we write out the answer's body - "error 500" without it tells nobody where to look.
         return False, i18n.translate_with("The plugin answered with error {status}: {body}", None,
-                                          status=response.status_code, body=(response.text or "").strip()[:300])
+                                          status=response.status_code, body=_body_without_key(client, response))
 
     try:
         results = (response.json() or {}).get("results") or []
@@ -108,9 +118,7 @@ async def import_playback_reporting(min_seconds: int = 60) -> dict[str, Any]:
 
                 # The answer's body says what the plugin did not like. Without it "error 500" is a message one
                 # can do nothing with.
-                last_error = (
-                    f"{response.status_code}: {(response.text or '').strip()[:300]}"
-                )
+                last_error = f"{response.status_code}: {_body_without_key(client, response)}"
                 log.warning("the plugin refused the query (%s)", last_error)
 
             if payload is None:
@@ -228,80 +236,84 @@ async def _process_pbr(scan_id: int, columns: list[str], results: list[Any],
     into the other in time - and nobody would notice duplicates or wrong keys until someone used exactly the
     other way.
     """
-    users = _known_users()
-    items = _known_items()
-    existing = _existing_keys("import:pbr:")
-    time_index = _playback_index()
+    try:
+        users = _known_users()
+        items = _known_items()
+        existing = _existing_keys("import:pbr:")
+        time_index = _playback_index()
 
-    rows: list[tuple[Any, ...]] = []
-    skipped_short = 0
-    skipped_duplicate = 0
-    skipped_known = 0
+        rows: list[tuple[Any, ...]] = []
+        skipped_short = 0
+        skipped_duplicate = 0
+        skipped_known = 0
 
-    for record in results:
-        data = dict(zip(columns, record)) if columns else {}
-        started_at = _parse_time(data.get("datecreated"))
-        if not started_at:
-            continue
+        for record in results:
+            data = dict(zip(columns, record)) if columns else {}
+            started_at = _parse_time(data.get("datecreated"))
+            if not started_at:
+                continue
 
-        try:
-            duration = int(float(data.get("playduration") or 0))
-        except (TypeError, ValueError):
-            duration = 0
-        if duration < min_seconds:
-            skipped_short += 1
-            continue
+            try:
+                duration = int(float(data.get("playduration") or 0))
+            except (TypeError, ValueError):
+                duration = 0
+            if duration < min_seconds:
+                skipped_short += 1
+                continue
 
-        # The record's key. `rowid` is the best, since the plugin does not change it - but when it refused it
-        # (see PBR_QUERY_WITHOUT_ROWID), we compose the key from what describes the record unambiguously.
-        # Without this fallback all rows of the same title would get the same key and only one of them would be
-        # imported.
-        label = data.get("rowid")
-        if label is None:
-            label = f"{data.get('datecreated')}:{data.get('userid')}"
-        key = f"import:pbr:{label}:{data.get('itemid')}"
-        if key in existing:
-            skipped_duplicate += 1
-            continue
-        existing.add(key)
+            # The record's key. `rowid` is the best, since the plugin does not change it - but when it refused it
+            # (see PBR_QUERY_WITHOUT_ROWID), we compose the key from what describes the record unambiguously.
+            # Without this fallback all rows of the same title would get the same key and only one of them would be
+            # imported.
+            label = data.get("rowid")
+            if label is None:
+                label = f"{data.get('datecreated')}:{data.get('userid')}"
+            key = f"import:pbr:{label}:{data.get('itemid')}"
+            if key in existing:
+                skipped_duplicate += 1
+                continue
+            existing.add(key)
 
-        # The same record may be in the database already from Jellystat or from the collector.
-        if _already_there(time_index, data.get("userid"), data.get("itemid"),
-                          started_at, duration):
-            skipped_known += 1
-            continue
-        _remember(time_index, data.get("userid"), data.get("itemid"),
-                  started_at, duration)
+            # The same record may be in the database already from Jellystat or from the collector.
+            if _already_there(time_index, data.get("userid"), data.get("itemid"),
+                              started_at, duration):
+                skipped_known += 1
+                continue
+            _remember(time_index, data.get("userid"), data.get("itemid"),
+                      started_at, duration)
 
-        rows.append(_build_row(
-            key=key,
-            user_id=data.get("userid"),
-            item_id=data.get("itemid"),
-            started_at=started_at,
-            duration=duration,
-            item_type=data.get("itemtype"),
-            item_name=data.get("itemname"),
-            client=data.get("clientname"),
-            device=data.get("devicename"),
-            method=data.get("playbackmethod"),
-            audio_language=_language_from_source(data),
-            users=users,
-            items=items,
-        ))
+            rows.append(_build_row(
+                key=key,
+                user_id=data.get("userid"),
+                item_id=data.get("itemid"),
+                started_at=started_at,
+                duration=duration,
+                item_type=data.get("itemtype"),
+                item_name=data.get("itemname"),
+                client=data.get("clientname"),
+                device=data.get("devicename"),
+                method=data.get("playbackmethod"),
+                audio_language=_language_from_source(data),
+                users=users,
+                items=items,
+            ))
 
-    imported = _insert(rows)
+        imported = _insert(rows)
 
-    # The import sends no tmdb ID - we look it up ourselves, so the imported history joins the real titles in
-    # the library.
-    linked = await link_imported_history()
+        # The import sends no tmdb ID - we look it up ourselves, so the imported history joins the real titles in
+        # the library.
+        linked = await link_imported_history()
 
-    scanner.finish_task_log(
-        scan_id, "done", total=len(results), ok=imported, failed=0,
-        message=i18n.Message(
-            "{source} - new: {imported}, already there: {duplicates}, from another source: {known}, too short: {short}",
-            source=i18n.Message(source), imported=imported, duplicates=skipped_duplicate, known=skipped_known,
-            short=skipped_short),
-    )
+        scanner.finish_task_log(
+            scan_id, "done", total=len(results), ok=imported, failed=0,
+            message=i18n.Message(
+                "{source} - new: {imported}, already there: {duplicates}, from another source: {known}, too short: {short}",
+                source=i18n.Message(source), imported=imported, duplicates=skipped_duplicate, known=skipped_known,
+                short=skipped_short),
+        )
+    except Exception as exc:  # noqa: BLE001 - the run in the task log must not stay "running"
+        scanner.finish_task_log(scan_id, "error", message=exc)
+        raise
     return {
         "status": "ok",
         "source": source,

@@ -6,12 +6,11 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
 
 {# ================================================================== #}
 <div class="card">
     <div class="card-head">
-        <h2>{{ _("Database") }}</h2>
+        <h2 id="database-title">{{ _("Database") }}</h2>
         <p class="card-note">{{ _("currently in use") }}: {{ running_database.describe() }}</p>
     </div>
 
@@ -47,7 +46,7 @@
     <form method="post" action="/settings/database"
           class="db-form {{ 'is-postgres' if database.kind == 'postgres' else 'is-sqlite' }}"
           data-db-form>
-        <div class="radio-set">
+        <div class="radio-set" role="radiogroup" aria-labelledby="database-title">
             <label class="radio-card">
                 <input type="radio" name="kind" value="sqlite"
                        {{ 'checked' if database.kind == 'sqlite' }}>
@@ -69,8 +68,14 @@
                                installs it by itself, so most people
                                never see this paragraph. #}
                             <br><span class="badge critical"><span class="dot"></span>{{ _("the psycopg driver is missing") }}</span>
-                            <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code>
-                            <br>{{ _("Then restart the application.") }}
+                            {# The version requirements-postgres.txt pins; in our image pip would be gone with the next rebuild. #}
+                            {% if our_image %}
+                                <br>{{ _("In the Jellyscope Docker image the driver is part of the image. Set PSYCOPG=1 in .env (or leave PSYCOPG out, 1 is the default) and rebuild the image:") }}
+                                <br><code>docker compose up -d --build</code>
+                            {% else %}
+                                <br><code>{{ python_path }} -m pip install -r {{ driver_requirements }}</code>
+                                <br>{{ _("Then restart the application.") }}
+                            {% endif %}
                         {% endif %}
                     </span>
                 </span>
@@ -127,7 +132,12 @@
                             {{ _("Keeps a few connections open and lends them out instead of opening a new one for every query. A single page asks for data about a dozen times. Over a network the difference shows; on the same machine it is small.") }}
                             {% if not pool_available %}
                                 <br><span class="badge critical"><span class="dot"></span>{{ _("the psycopg_pool library is missing") }}</span>
-                                <br><code>{{ python_path }} -m pip install "psycopg[binary,pool]"</code><br>
+                                {% if our_image %}
+                                    <br>{{ _("In the Jellyscope Docker image the driver is part of the image. Set PSYCOPG=1 in .env (or leave PSYCOPG out, 1 is the default) and rebuild the image:") }}
+                                    <br><code>docker compose up -d --build</code><br>
+                                {% else %}
+                                    <br><code>{{ python_path }} -m pip install -r {{ driver_requirements }}</code><br>
+                                {% endif %}
                             {% endif %}
                             {{ _("If you cannot install it, leave this off. The application keeps working; it just opens connections one at a time.") }}
                         </span>

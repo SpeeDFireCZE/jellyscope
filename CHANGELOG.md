@@ -10,6 +10,94 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
+## 1.9.2
+
+A security and reliability pass over the whole app, cards that refresh themselves on an open page, and how available and reliable your indexers are.
+
+**Before you upgrade:**
+
+- Everybody signs in once more: sign-in sessions now live on the server.
+- Jellyfin accounts sign in through Jellyfin only: the local passwords older versions gave them are cleared, and an empty Jellyfin password is refused.
+- The data folder, logs and backups become readable by their owner only, so copy `data/` as that account or with `sudo`.
+- "Last N days" are whole days from local midnight, so some numbers differ a little from 1.9.1.
+- A reader without "who listened" or "who read" no longer sees music and books in History.
+- E-mail set up before keeps sending without checking the mail server's certificate; tick "verify the server's certificate" in Settings → Notifications.
+- Docker: rebuild the image (`git pull && docker compose up -d --build`). Behind a reverse proxy, set `FORWARDED_ALLOW_IPS` to the Docker network, not `127.0.0.1` (see `DEPLOY.md`), or every sign-in counts as coming from one address.
+
+**Coming from 1.8.x:** the first start converts the database to English names; a backup is kept for 30 days and 1.8.x cannot open the converted database. Read the 1.9.0 notes first: https://github.com/SpeeDFireCZE/jellyscope/releases/tag/1.9.0
+
+### ✨ Features
+
+- Show each Prowlarr indexer's availability, measured continuously from now on
+- Show each indexer's download reliability in Sonarr, Radarr, Lidarr and Readarr
+- Refresh cards on an open page once their data change
+- Show a bar on History when new plays arrive
+- Limit how many API keys an account can make
+- Add a switch to verify the mail server's certificate
+- Forget stored notification passwords, webhooks and tokens
+- List and lift sign-in blocks with `manage.py blocks` and `unblock`
+
+### 🐛 Fixes
+
+- Security: Keep sessions on the server, so signing out ends every copy
+- Security: Keep Quick Connect secrets and new API keys out of cookies
+- Security: Slow down password guessing per account and IPv6 /64 network
+- Security: Keep sign-in timing from revealing Jellyfin account names
+- Security: Refuse an empty password at the Jellyfin sign-in
+- Security: Stop setting local passwords on Jellyfin accounts, clear old ones
+- Security: End viewer sessions when Jellyfin sign-in is switched off
+- Security: Sign everybody out when a backup is restored
+- Security: Show others' titles, devices, music and books only with "who watched"
+- Security: Keep rows an account may not see off comparison pages
+- Security: Make the database, logs and backups owner-only, existing files too
+- Security: Keep API keys, webhooks and tokens out of errors and the Log page
+- Security: Send a saved API key only to its own server
+- Security: Download only known titles' images, in fixed widths, with a capped cache
+- Security: Keep signed-in pages and posters out of browser and proxy caches
+- Security: Refuse oversized requests and far-off dates that stall pages
+- Security: Pin every dependency and the PostgreSQL driver, also on existing installations
+- Security: Keep the container's code out of the app user's reach
+- Security: Hide visitors' IP addresses in the demo
+- Security: Warn at every start when `SECRET_KEY` is short
+- Show Seerr's latest requests live, matching Waiting for approval
+- Keep pages answering while a task, a locked database or a stalled share holds them
+- Keep the collector and the scheduled tasks running after a failure
+- Close interrupted and failed task runs as failed
+- Refuse a backup restore while another task runs, and keep it whole
+- Clean up half-written backups and keep pruning when one file is unreadable
+- Put the previous version back when an update's packages fail
+- Retry notifications that could not be sent, at their set interval
+- Keep the *Arr and Seerr pages up when an app answers oddly
+- Refuse a Jellyfin address or API key that cannot work
+- Keep titles, music and books when Jellyfin leaves a library out once
+- Fix History's filters, paging and searching for `%` and `_`
+- Keep saved numbers when a Settings field is cleared
+- Scroll windows, tables and the map properly on a phone
+- Move dashboard tiles by finger or keyboard, Esc discards the changes
+- Give windows, fields and charts names that screen readers announce
+- Write numbers, units and quotes in the page's language
+- Load the Network page and History's filters faster over long periods
+- Keep library sizes, sorting and paging the same in every period and database
+- Make split bars match their table, with Other in the legend
+- Check a GeoLite2 download and keep Network open with a damaged file
+- Fix installing with `sudo -u` and the container's health check on `PORT`
+
+### 🔧 Changes
+
+- Count "last N days" as whole calendar days, compared with the N days before
+- Draw the Network, Languages, Insights, Users and Library pages from the card registry
+- Ship the PostgreSQL driver in the Docker image; `PSYCOPG=0` leaves it out
+
+### 📚 Documentation
+
+- Describe `FORWARDED_ALLOW_IPS` in Docker and lifting sign-in blocks in `DEPLOY.md`
+
+### 🌍 Translations
+
+- Translate every new text to Czech and Spanish
+
+**Full Changelog**: https://github.com/SpeeDFireCZE/jellyscope/compare/1.9.1...1.9.2
+
 ## 1.9.1
 
 Disks get their own names and a forecast each, the *Arr pages load fast and keep the row limit, and Collections are no longer a library.

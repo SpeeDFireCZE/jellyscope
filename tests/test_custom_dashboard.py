@@ -284,6 +284,12 @@ with TestClient(app) as client:
     check(page.count('class="dash-card') == 2, "two sections are drawn")
     check('href="/dashboard"' in client.get("/").text, "and the tab is in the menu")
     check("Upravit přehled" in page, "the administrator has the edit button")
+    # On a phone dragging scrolls the grid: the arrows of a tile are the way for a finger and a keyboard, and the hint
+    # says so in a sentence of its own - the one before stays as it was (de.json, a translation of others, holds it).
+    hint = i18n.translate("The tiles match the panels on the page. Drag to reorder, use the button to change the width.")
+    arrows = i18n.translate("The arrows on a tile move it too.")
+    check(hint in page and arrows in page and page.index(hint) < page.index(arrows) and arrows != hint,
+          "the layout editor's hint mentions the arrows after the sentence about dragging")
 
     # The dialog offers the WHOLE registry and greys out the used sections. If they were
     # left out, the list would jump around when adding and removing.
@@ -518,9 +524,10 @@ MORE_AREAS = {"who_language": "languages", "combinations": "languages", "missing
               "libraries": "library", "network_numbers": "network", "map": "network"}
 check(all(getattr(cards.BY_KEY.get(k), "area", None) == o for k, o in MORE_AREAS.items()),
       "8 more cards are in the registry with the right area")
-# 42 page cards (+ Disks 7. 11. 2026), 2 × 23 *Arr cards (Sonarr, Radarr) and 10 Seerr cards (13. 11. 2026), 20 music cards,
-# 17 books cards (15. 11. 2026), 14 Bazarr and 13 Prowlarr cards, 22 Lidarr and 22 Readarr cards. Together 206.
-check(len(cards.ALL_CARDS) == 206, f"the builder has 206 cards ({len(cards.ALL_CARDS)})")
+# 42 page cards (+ Disks 7. 11. 2026), 2 × 24 *Arr cards (Sonarr, Radarr) and 10 Seerr cards (13. 11. 2026), 20 music cards,
+# 17 books cards (15. 11. 2026), 14 Bazarr and 14 Prowlarr cards (Indexer availability 25. 11. 2026), 23 Lidarr and
+# 23 Readarr cards; Indexer reliability in Sonarr, Radarr, Lidarr and Readarr (25. 11. 2026). Together 211.
+check(len(cards.ALL_CARDS) == 211, f"the builder has 211 cards ({len(cards.ALL_CARDS)})")
 with TestClient(app) as client:
     client.post("/login", data={"username": "admin", "password": "longpassword"},
                 follow_redirects=False)
@@ -620,6 +627,25 @@ def hold_live_state():
             module.TTL = ttl
 
 
+# The availability card says what measures the indexers right now (`measuring`): the background loop, which runs while
+# the app does. The pages are drawn by the running app (TestClient's lifespan starts the loop), the card is recomputed
+# here after it stopped - so the comparison sees the loop's state as its page saw it when it was drawn.
+LOOP_STATE = importlib.import_module("jellyscope.arr.prowlarr.samples").LOOP
+LOOP_AS_PAGES_SAW: dict[str, dict] = {}
+
+
+@contextlib.contextmanager
+def loop_as_page_saw(path: str):
+    """For the duration of the block the indexers' measuring loop is in the state the page was drawn with."""
+    original = dict(LOOP_STATE)
+    LOOP_STATE.update(LOOP_AS_PAGES_SAW.get(path, original))
+    try:
+        yield
+    finally:
+        LOOP_STATE.clear()
+        LOOP_STATE.update(original)
+
+
 def age_live_state(seconds: float) -> None:
     """Shifts the age of everything in the live state's cache, as if so many seconds had passed."""
     for module in LIVE_STATES:
@@ -634,6 +660,7 @@ def load_contexts(addresses) -> dict[str, dict]:
 
     def capture(request, name, *args, **kwargs):
         captured.setdefault(request.url.path, dict(args[0] if args else kwargs.get("context", {})))
+        LOOP_AS_PAGES_SAW.setdefault(request.url.path, dict(LOOP_STATE))
         return original_response(request, name, *args, **kwargs)
 
     web_base.templates.TemplateResponse = capture
@@ -688,7 +715,8 @@ differing, missing = [], []
 with hold_live_state():
     contexts = load_contexts(ALL_PAGES)
     for card in cards.ALL_CARDS:
-        card_differs, card_missing = differences(card, contexts.get(card_page(card), {}))
+        with loop_as_page_saw(card_page(card)):
+            card_differs, card_missing = differences(card, contexts.get(card_page(card), {}))
         differing += card_differs
         missing += card_missing
 check(len(contexts) == len(ALL_PAGES),
@@ -711,6 +739,19 @@ with hold_live_state():
     check(differences(live_card, seerr_context) == ([], []),
           "with the live state held the cache's boundary does not bring the comparison down",
           f"they differ {differences(live_card, seerr_context)[0]}")
+
+# The same trap for the indexers' measuring loop: recomputed after the app stopped, the availability card says the
+# *Arr sync measures, while the page drawn by the running app said the background loop does.
+availability = cards.BY_KEY["prowlarr_availability"]
+LOOP_AS_PAGES_SAW.pop("/arr/prowlarr", None)
+prowlarr_context = load_contexts(["/arr/prowlarr"])["/arr/prowlarr"]
+check(LOOP_AS_PAGES_SAW["/arr/prowlarr"]["running"] > 0 and LOOP_STATE["running"] == 0
+      and differences(availability, prowlarr_context)[0] == ["prowlarr_availability.prowlarr_availability (/arr/prowlarr)"],
+      "a trap: recomputed outside the running app, the availability card says another way of measuring")
+with loop_as_page_saw("/arr/prowlarr"):
+    check(differences(availability, prowlarr_context) == ([], []),
+          "with the loop as its page saw it, the availability card is the same as on the page",
+          f"they differ {differences(availability, prowlarr_context)[0]}")
 
 print()
 print("--- what more cards need is computed once ---")

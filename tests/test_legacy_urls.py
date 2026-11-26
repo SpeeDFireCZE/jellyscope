@@ -235,14 +235,15 @@ for referer in ("https://evil.example/x", "http://testserver//evil.example/x", "
 check(backs == ["/", "/", "/"], f"the way back never leaves this server ({backs})")
 
 
-print("--- an old session cookie (database step 6) still signs in and keeps what was chosen ---")
+print("--- an old session cookie (database step 6) keeps what was chosen ---")
 import base64  # noqa: E402
 import json  # noqa: E402
 
 from fastapi.testclient import TestClient  # noqa: E402
 from itsdangerous import TimestampSigner  # noqa: E402
 
-from jellyscope import api  # noqa: E402
+from _apps import session_data  # noqa: E402
+from jellyscope import api, web_sessions  # noqa: E402
 from jellyscope.config import load_config  # noqa: E402
 
 SIGNER = TimestampSigner(str(load_config().secret_key))
@@ -266,7 +267,13 @@ def with_cookie(data: dict) -> TestClient:
 
 
 admin_account = accounts.get_by_name("admin")
-signed = {"account_id": admin_account["id"], "otisk": accounts.session_fingerprint(admin_account)}
+# A cookie from before the sessions on the server has no token: it is signed out once (the owner, 25. 11. 2026).
+without_record = {"account_id": admin_account["id"], "otisk": accounts.session_fingerprint(admin_account)}
+old = with_cookie(without_record)
+check(old.get("/video/overview", follow_redirects=False).status_code in (303, 307) and not session_of(old),
+      "a cookie of an older version has no session on the server: it signs in once more")
+# The keys are converted all the same - here in a cookie that has its record (tests/_apps.session_data).
+signed = {**without_record, web_sessions.COOKIE_KEY: session_data(admin_account["id"])[web_sessions.COOKIE_KEY]}
 old = with_cookie(signed)
 overview = old.get("/video/overview", follow_redirects=False)
 now = session_of(old)

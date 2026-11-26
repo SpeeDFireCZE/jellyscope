@@ -3,7 +3,8 @@ r"""Translated code stays in English: no Czech left in comments, docstrings or n
 
 The English-code step (spec: docs/superpowers/specs/2026-11-16-english-code-design.md) moves the
 code to English package by package. Every finished package is listed in FINISHED, and every test
-(tests/*.py) is checked - all of them are English since part 10f.
+(tests/*.py) is checked - all of them are English since part 10f. Every other Python file of jellyscope/
+is checked too (25. 11. 2026), so a new module is checked from its first commit.
 In them a comment or a docstring with a Czech letter (diacritics) or a common Czech word fails,
 and so does a name that is not ASCII. Strings are not checked: translation keys (`_("...")`) and
 log texts stay Czech on purpose, and SQL names Czech tables and columns until the database step.
@@ -28,7 +29,8 @@ from typing import Any
 PROJECT = Path(__file__).resolve().parent.parent
 
 # Files and folders already in English. Each step of the spec added its package here. Tests are not listed:
-# since part 10f (21. 11. 2026) every tests/*.py is checked (finished_files), a new test from its first commit.
+# since part 10f (21. 11. 2026) every tests/*.py is checked (finished_files), a new test from its first commit;
+# the same holds for every jellyscope/**/*.py since 25. 11. 2026 (the books modules had slipped through the list).
 FINISHED = [
     # Step 1 (16. 11. 2026): the music package and its tests.
     "jellyscope/music",
@@ -153,19 +155,22 @@ def check(condition: bool, label: str) -> None:
         failures += 1
 
 
-def finished_files() -> tuple[list[Path], list[str]]:
-    """The Python files of FINISHED (and of FINISHED_DEV_ONLY where present), every test, and the FINISHED entries that do not exist."""
+def finished_files(root: Path = PROJECT) -> tuple[list[Path], list[str]]:
+    """The Python files of FINISHED (and of FINISHED_DEV_ONLY where present), every other file of jellyscope/, every test,
+    and the FINISHED entries that do not exist. `root` is the project (a made-up one for the check of the check)."""
     files: list[Path] = []
     missing: list[str] = []
     for entry in FINISHED + FINISHED_DEV_ONLY:
-        path = PROJECT / entry
+        path = root / entry
         if path.is_dir():
             files += sorted(p for p in path.rglob("*.py") if "__pycache__" not in p.parts)
         elif path.is_file():
             files.append(path)
         elif entry in FINISHED:
             missing.append(entry)
-    files += [path for path in sorted((PROJECT / "tests").glob("*.py")) if path not in files]
+    files += [path for path in sorted((root / "jellyscope").rglob("*.py"))
+              if "__pycache__" not in path.parts and path not in files]
+    files += [path for path in sorted((root / "tests").glob("*.py")) if path not in files]
     return files, missing
 
 
@@ -288,11 +293,12 @@ if SYNC_SCRIPT.is_file():
           f"FINISHED_DEV_ONLY holds only dev-only files ({sorted(set(FINISHED_DEV_ONLY) - dev_only)})")
 check(len(files) >= len(FINISHED) - len(missing), f"FINISHED holds {len(files)} Python files")
 
-found: list[str] = []
-for path in files:
+def czech_in_file(path: Path, root: Path = PROJECT) -> list[str]:
+    """What is Czech in one Python file: comments, docstrings, non-ASCII names and names with a Czech word."""
+    found: list[str] = []
     source = path.read_text(encoding="utf-8")
     toks, tree = tokens(source), ast.parse(source)
-    where = path.relative_to(PROJECT)
+    where = path.relative_to(root)
     for line, text in comments(toks):
         if czech_text(text):
             found.append(f"{where}:{line}: comment {czech_text(text)!r}: {text.strip()[:80]}")
@@ -304,9 +310,25 @@ for path in files:
     for line, name in sorted(set(bound_names(tree))):
         if czech_name_words(name):
             found.append(f"{where}:{line}: name {name!r} has a Czech word {sorted(czech_name_words(name))}")
+    return found
+
+
+found = [item for path in files for item in czech_in_file(path)]
 for item in found[:40]:
     print(f"    {item}")
 check(not found, f"no Czech in comments, docstrings or names of finished code ({len(found)} found)")
+# The check of the check: a module FINISHED does not name - a new one, in a new subfolder - is checked from its
+# first commit. (Comparing the files with the same rglob that collected them would always pass.)
+sample_root = Path(tempfile.mkdtemp())
+(sample_root / "jellyscope" / "brand_new").mkdir(parents=True)
+(sample_root / "tests").mkdir()
+(sample_root / "jellyscope" / "brand_new" / "module.py").write_text("# kdyz se to nepovede, zkus to znovu\nx = 1\n",
+                                                                   encoding="utf-8")
+(sample_root / "tests" / "brand_new_check.py").write_text("def over_odpoved():\n    pass\n", encoding="utf-8")
+sample_files, _ = finished_files(sample_root)
+sample_found = [item.split(":")[0] for path in sample_files for item in czech_in_file(path, sample_root)]
+check(sample_found == ["jellyscope/brand_new/module.py", "tests/brand_new_check.py"],
+      f"a new module in a new folder and a new test that FINISHED does not name are checked ({sample_found})")
 
 check(czech_name_words("spravce_k") == {"spravce"} and czech_name_words("odpoved") == {"odpoved"}
       and not czech_name_words("admin_client") and czech_name_words("ui_cas_presne") == {"cas"}
@@ -485,7 +507,8 @@ def js_czech_names(source: str) -> list[str]:
     return sorted(found)
 
 
-INLINE_SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.S | re.I)
+# The closing tag may carry whitespace and attributes ("</script >") - the browser ends the script there too.
+INLINE_SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script\b[^>]*>", re.S | re.I)
 
 
 def inline_scripts(text: str) -> list[str]:
@@ -508,6 +531,8 @@ check("jellyscope/web/settings/updates.py" in inline,
       "the inline scripts are found (the update page's waiting script among them)")
 check(inline_scripts('<script nonce="{n}">var zkus;</script><script type="application/json" id="t">{"zkus": 1}</script>')
       == ["var zkus;"], "an inline script is read, a JSON data block is not")
+check(inline_scripts("<script>var a;</script >\n<SCRIPT>var b;</SCRIPT\t data-x>") == ["var a;", "var b;"],
+      "a closing tag with whitespace, attributes or in capitals ends the script too")
 
 
 # Comments of static files (part 10c3) and of the inline scripts and styles in Python. Old comments there
@@ -615,12 +640,13 @@ check(js_czech_names('var precti = 1; x.precti(); /* precti */ "precti"; functio
 CLASS_FIELDS: dict[str, tuple[str, set[str]]] = {
     "Card": ("jellyscope/cards_base.py", {
         "key", "name", "description", "template", "data", "uses_period", "width", "wrap_in_card", "area",
-        "has_table_window", "wrapper_id", "refresh_partial", "after_sync", "group", "available"}),
+        "has_table_window", "wrapper_id", "refresh_partial", "after_sync", "group", "available", "sources"}),
     "App": ("jellyscope/arr/registry.py", {
         "key", "name", "stored_settings", "save_settings", "check_connection", "synchronize", "sync_running",
         "sync_state", "event_count", "delete_downloaded_data", "cards", "card_key", "sections", "template",
         "period", "sample_url", "key_hint", "already_running", "delete_note", "provisional_poster",
-        "downloading", "downloading_template", "detected_name", "refresh_counts", "shown_name"}),
+        "downloading", "downloading_template", "detected_name", "refresh_counts", "watch_settings", "save_watch_settings",
+        "marker", "shown_name"}),
     "Area": ("jellyscope/access.py", {"key", "name", "description", "paths", "default", "parent", "section",
                                       "heading"}),
     "Message": ("jellyscope/notifications.py", {"key", "name", "subject", "text", "variables"}),
@@ -682,6 +708,84 @@ check(class_fields(hidden, "Card") == {"key", "nazev", "spocti", "obal"}
       and class_fields(hidden, "Area") == {"klic", "a", "pod"},
       f"also an unannotated class attribute, a method, object.__setattr__, an annotated or unpacked self.x "
       f"({sorted(class_fields(hidden, 'Card'))}, {sorted(class_fields(hidden, 'Area'))})")
+
+print()
+print("--- the internal keys in the strings of the code are English ---")
+# Strings are not read by the checks above, so Czech lived on in keys only the code itself reads: a group
+# key ("serial:<id>"), a dict key ("_skryto"), an SVG id ("prechod-3"), a reason ("jedna_shoda"), a task's
+# name, a script's error (audit CL-7). A Python string shaped like a name (no spaces - a sentence is a UI
+# text or a log key) and every string of a script must not hold a Czech word. What a database, a saved
+# file, an address or the API carries stays as it was: those are listed with the reason.
+KEY_WORDS = CZECH_NAME_WORDS | {"prechod", "vydani", "jedna", "shod", "zna", "nic", "nejsilnejsi", "zastupci",
+                                "skryto", "uctu", "obnova", "zivy", "relace", "je", "neni", "vic"}
+KEY_SHAPE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*[:-]?")
+# The old names mapped to the new ones - Czech on purpose.
+KEYS_OF_OLD_NAMES = {"schema_names.py", "legacy_urls.py", "conversion.py"}
+KEPT_KEYS: dict[tuple[str, str], str] = {
+    ("jellyscope/access.py", "skryto-"): "the placeholder id of a hidden viewer: in addresses, bookmarks and API answers",
+    ("jellyscope/accounts.py", "relace:"): "the prefix of the stored sessions: another one would sign everybody out",
+    ("jellyscope/arr/bazarr/sync.py", "dil"): "a part of the fingerprint stored with Bazarr's records",
+    **{("jellyscope/db.py", column): "a column of the old Czech *Arr tables a 1.8.x database converts from"
+       for column in ("typ", "polozka", "velikost", "klient", "nazev")},
+    ("jellyscope/db.py", "heslo"): "keeps the value of an old Czech setting key (smtp_heslo) out of the log",
+    ("jellyscope/demodata.py", "Historie"): "a genre of the demo library (data)",
+    ("jellyscope/demodata.py", "demo-movie-nazev"): "an item id the demo database holds",
+    ("jellyscope/tasks.py", "zalohy"): "the backup folder older installations have on disk",
+}
+
+
+def czech_key_words(value: str) -> set[str]:
+    return set(re.split(r"[^a-z]+", value.lower())) & KEY_WORDS
+
+
+def czech_keys(source: str) -> list[tuple[int, str]]:
+    """(line, value) of the strings of a Python source shaped like a name with a Czech word."""
+    return sorted({(node.lineno, node.value) for node in ast.walk(ast.parse(source))
+                   if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                   and KEY_SHAPE.fullmatch(node.value) and czech_key_words(node.value)})
+
+
+def czech_script_strings(source: str) -> list[str]:
+    """The strings of a script with a Czech word or letter (comments are checked elsewhere)."""
+    return [m.group()[1:-1] for m in JS_TOKEN.finditer(source) if m.group()[:1] in "\"'`"
+            and (czech_key_words(m.group()) or CZECH_LETTERS.search(m.group()))]
+
+
+def czech_sql_comments(source: str) -> list[tuple[int, str]]:
+    """(line, comment) of the SQL comments (-- ...) inside the strings of a Python source that are Czech."""
+    return sorted({(node.lineno, comment.strip()) for node in ast.walk(ast.parse(source))
+                   if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                   for comment in re.findall(r"--[^\n]*", node.value) if czech_text(comment)})
+
+
+czech_key_list = [f"{path.relative_to(PROJECT)}:{line}: {value!r}"
+                  for path in sorted((PROJECT / "jellyscope").rglob("*.py"))
+                  if "__pycache__" not in path.parts and path.name not in KEYS_OF_OLD_NAMES
+                  for line, value in czech_keys(path.read_text(encoding="utf-8"))
+                  if (path.relative_to(PROJECT).as_posix(), value) not in KEPT_KEYS]
+for item in czech_key_list[:40]:
+    print(f"    {item}")
+check(not czech_key_list, f"no Czech word in the keys of the code ({len(czech_key_list)} found)")
+# The header of the backups before 1.9.0 (conversion.py writes it on purpose, for going back to 1.8.x).
+KEPT_SQL_COMMENTS = {("jellyscope/tasks.py", "-- Záloha Jellyscope"): "the mark of a backup before 1.9.0 - it restores as well"}
+sql_comments = [f"{path.relative_to(PROJECT)}:{line}: {comment[:60]!r}"
+                for path in sorted((PROJECT / "jellyscope").rglob("*.py"))
+                if "__pycache__" not in path.parts and path.name not in KEYS_OF_OLD_NAMES
+                for line, comment in czech_sql_comments(path.read_text(encoding="utf-8"))
+                if (path.relative_to(PROJECT).as_posix(), comment) not in KEPT_SQL_COMMENTS]
+check(not sql_comments, f"the SQL comments inside strings are English ({sql_comments[:6]})")
+check([c for _, c in czech_sql_comments('q = """SELECT 1\n  -- kdyz Jellyfin nic neposle\n  -- the stored one stays\n"""\n')]
+      == ["-- kdyz Jellyfin nic neposle"], "a Czech SQL comment inside a string is found, an English one is not")
+script_strings = [f"{script}: {value!r}" for script in JS_FINISHED
+                  for value in czech_script_strings((PROJECT / script).read_text(encoding="utf-8"))]
+check(not script_strings, f"no Czech in the strings of the scripts ({script_strings[:6]})")
+check([value for _, value in czech_keys('k = f"serial:{x}"\nd["_skryto"] = 1\nm = "Jen text s mezerou"\nok = "series:"\n')]
+      == ["serial:", "_skryto"]
+      and czech_script_strings('throw new Error("bez karty"); var a = "no card"; // bez karty\n') == ["bez karty"],
+      "a Czech key in an f-string or a dict and a Czech string of a script are found, a sentence and a comment are not")
+stale_kept = sorted(f"{path}: {value}" for path, value in KEPT_KEYS
+                    if value not in {v for _, v in czech_keys((PROJECT / path).read_text(encoding="utf-8"))})
+check(not stale_kept, f"every kept key is still in its file - a gone one leaves the list ({stale_kept})")
 
 print()
 print("--- every test's check() takes the condition first ---")

@@ -43,7 +43,7 @@ os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
 os.environ["JELLYFIN_API_KEY"] = "tajny-klic-jellyfinu"
 
 from _package import substitute  # noqa: E402
-from _books import all_items, fake_jellyfin_books, fill_books, item, recorded  # noqa: E402
+from _books import all_items, fake_jellyfin_books, item, recorded  # noqa: E402
 from jellyscope import books, content_kinds, db, demodata, scanner, tasks  # noqa: E402
 from jellyscope.books import sync  # noqa: E402
 
@@ -279,6 +279,20 @@ check(count("missing = 0") == 0 and result.get("missing", 0) > 0 and not books.h
       f"missing from two runs in a row: its books are missing, there is no section ({result})")
 run_sync(fake_jellyfin_books(items=[new_book, bare, *all_items()]))
 check(count("missing = 1") == 0 and books.has_books(), "the library back: the books are back")
+
+# The daily full pass in a run Jellyfin left one of the books libraries out (once - it may be starting): that
+# library was not read, so its books are not marked missing. Only _gone_libraries decides, after two runs.
+db.set_setting("books_vanished_libraries", "")
+only_books = [lib for lib in LIBRARIES if lib.get("ItemId") != AUDIO_LIB]
+everything = [new_book, bare, *all_items()]
+in_audio = count(f"library_id = '{AUDIO_LIB}' AND missing = 0")
+run_sync(fake_jellyfin_books(libraries=only_books, items=everything), full=True)
+check(in_audio > 0 and count(f"library_id = '{AUDIO_LIB}' AND missing = 1") == 0,
+      f"a full pass without the audiobooks library: its {in_audio} books are not missing after one run")
+run_sync(fake_jellyfin_books(libraries=only_books, items=everything), full=True)
+check(count(f"library_id = '{AUDIO_LIB}' AND missing = 0") == 0 and count(f"library_id = '{BOOKS_LIB}' AND missing = 0") > 0,
+      "left out of two runs in a row: they are missing, the other library stays")
+run_sync(fake_jellyfin_books(items=everything), full=True)
 
 print()
 print("--- K) the content kind and the demo ---")

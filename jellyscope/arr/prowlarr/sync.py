@@ -65,6 +65,7 @@ from ... import db, i18n
 from ...services import SYNC_ALREADY_RUNNING as ALREADY_RUNNING
 from ...services import utc_time, integer, read_state, write_state
 from .client import KINDS, NAME, ProwlarrClient, ProwlarrError
+from .samples import RUN
 
 log = logging.getLogger("jellyscope.arr")
 
@@ -331,7 +332,7 @@ def _indexer_rows(indexers: list[dict[str, Any]], now: str) -> dict[int, tuple[A
 
 
 def _set_aside_indexers(conn: Any, rows: dict[int, tuple[Any, ...]], renumbered: bool) -> None:
-    """An indexer under whose number Prowlarr now has another one moves with its sums under a negative number of its own.
+    """An indexer under whose number Prowlarr now has another one moves with its sums (and samples) under a negative number of its own.
 
     It happens after Prowlarr is reinstalled (the indexers' numbers start again): without this the old
     sums would get the new indexer's name. "Another one" is an indexer with another name when the run
@@ -348,6 +349,10 @@ def _set_aside_indexers(conn: Any, rows: dict[int, tuple[Any, ...]], renumbered:
         lowest -= 1
         conn.execute("UPDATE prowlarr_hour SET indexer_id = ? WHERE indexer_id = ?", (lowest, r["id"]))
         conn.execute("UPDATE prowlarr_grab SET indexer_id = ? WHERE indexer_id = ?", (lowest, r["id"]))
+        conn.execute("UPDATE prowlarr_sample SET indexer_id = ? WHERE indexer_id = ?", (lowest, r["id"]))
+        # The samples' lists of the enabled indexers name it by its number between commas (samples.id_list).
+        conn.execute("UPDATE prowlarr_sample SET enabled_ids = REPLACE(enabled_ids, ?, ?) WHERE indexer_id = ? AND enabled_ids LIKE ?",
+                     (f",{r['id']},", f",{lowest},", RUN, f"%,{r['id']},%"))
         conn.execute("UPDATE prowlarr_indexer SET id = ?, removed = 1 WHERE id = ?", (lowest, r["id"]))
 
 
@@ -473,7 +478,8 @@ async def synchronize(transport: httpx.AsyncBaseTransport | None = None) -> dict
 
 
 def _delete() -> int:
-    """Delete the sums, the grabbed releases, the indexers, both marks and the state. Called only under the `_RUNNING` lock.
+    """Delete the sums, the grabbed releases, the indexers, the samples of their status, the marks and the state.
+    Called only under the `_RUNNING` lock.
 
     The tables and the marks in one transaction: a mark without sums would never fetch the history again,
     sums without a mark would add it a second time next time.
@@ -483,6 +489,7 @@ def _delete() -> int:
         conn.execute("DELETE FROM prowlarr_hour")
         conn.execute("DELETE FROM prowlarr_grab")
         conn.execute("DELETE FROM prowlarr_indexer")
+        conn.execute("DELETE FROM prowlarr_sample")
         conn.execute(MARK_UPSERT, (MARK_KEY, ""))
         conn.execute(MARK_UPSERT, (TIME_MARK_KEY, ""))
         conn.execute(MARK_UPSERT, (COUNT_KEY, "0"))

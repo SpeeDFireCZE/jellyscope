@@ -472,6 +472,27 @@ check(loaded_one == {"Nastavení": "Ajustes"},
       f"an empty translation from Weblate is not loaded, only the real one ({loaded_one})")
 
 print()
+print("--- the templates glue no language's habits around a value ---")
+# A unit after a printed number ("{{ n }} min"), "in" before it, Czech quotation marks or Czech example addresses
+# were the same in every language: a translator could not move the word, change the unit or the quotes.
+# The value goes into a whole sentence through `_()` instead ("in {n} min", "“{text}”").
+GLUED_UNIT = re.compile(r"\}\}[ \t]*(?:min|h|s|d|ms|GB|MB|TB|kB)\b")
+CZECH_HABITS = re.compile(r"„|\.cz\b")
+
+
+def glued(text: str) -> list[str]:
+    """The lines of a template (outside its comments) with a unit glued to a value or a Czech habit."""
+    text = re.sub(r"\{#.*?#\}", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
+    return [line.strip()[:60] for line in text.splitlines() if GLUED_UNIT.search(line) or CZECH_HABITS.search(line)]
+
+
+habits = [f"{path.name}: {line}" for path in TEMPLATES for line in glued(path.read_text(encoding="utf-8"))]
+check(not habits, f"no unit, quote or example address outside a sentence: {len(habits)} {habits[:4]}")
+check(glued('{{ n }} min\n{# {{ n }} h #}\n„{{ x }}"\n{{ _("in {n} min").format(n=n) }}\nsmtp.seznam.cz')
+      == ["{{ n }} min", '„{{ x }}"', "smtp.seznam.cz"],
+      "the search finds a glued unit, the quotes and the address, and not a comment or a sentence")
+
+print()
 # A trial of the translation through the public interface.
 sentence = i18n.translate_plural("in {n} seasons", 3, "cs")
 check(sentence == "v 3 řadách" and i18n.translate_plural("in {n} seasons", 1, "cs") == "v 1 řadě",

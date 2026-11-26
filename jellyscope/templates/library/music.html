@@ -49,7 +49,7 @@
 <div class="card">
     <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
         <input type="hidden" name="tab" value="albums">
-        <input type="search" name="search" value="{{ search }}" maxlength="200"
+        <input type="search" name="search" value="{{ search }}" maxlength="200" aria-label="{{ _('Search') }}"
                placeholder="{{ _('Search album or artist...') }}" style="width:260px">
         <select name="sort" style="width:auto" aria-label="{{ _('Sorting') }}">
             {% for key, label in (("added", _("By date added")), ("name", _("By name")), ("artist", _("By artist")),
@@ -97,7 +97,7 @@
 <div class="section-head">
     <div>
         <p class="card-note">
-            {# The whole history comes as a period of its own (period.vlastni too), so it goes first. #}
+            {# The whole history comes as a period of its own (period.own too), so it goes first. #}
             {% if period.whole_history %}{{ _("What was listened to from the library over the whole history.") }}
             {% elif period.own %}{{ _("What was listened to from the library in the selected period.") }}
             {% elif days == 365 %}{{ _("What was listened to from the library over the last year.") }}

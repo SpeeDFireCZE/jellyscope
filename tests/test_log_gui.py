@@ -100,10 +100,75 @@ logger.error("holy klic v hlasce: %s", KEY)
 whole = "\n".join(r["text"] for r in applog.read_lines(limit=200)["lines"])
 check(KEY not in whole, "the API key does not appear in the listing")
 check(DB_PASSWORD not in whole, "nor the database password")
+# A connection string's password is masked however long it is, and a long line full of "://x:" without an "@" is
+# read once: the pattern used to start over from every "://" (80 KB took 8-11 s on the Log page).
+import time  # noqa: E402
+
+check(applog._mask(f"postgres://jelly:{'p' * 400}@db:5432 and ://a:b c@d", []) == "postgres://jelly:***@db:5432 and ://a:b c@d",
+      "a long password in a connection string is masked, a value with a space in it is no password")
+started = time.perf_counter()
+masked = applog._mask("://a:" * 8000 + " " + "://a:" * 8000, [])
+took = time.perf_counter() - started
+check(masked == "://a:" * 8000 + " " + "://a:" * 8000 and took < 0.5,
+      f"a long line full of '://x:' is masked in linear time ({took:.2f} s)")
 check("***" in whole, "asterisks are in their place")
 # The rest of the row must stay readable - otherwise masking would throw away even what
 # a person looks into the log for.
 check("na /Items" in whole, "the message's surrounding text stays")
+
+# Every stored secret of the app, not a list of its own beside it: the keys of the *Arr apps and of Seerr were
+# missing, so a key of Sonarr in a log line would have shown whole. The secrets are found in the code itself, apart
+# from db.SECRET_SETTINGS (the list the masking reads): a new channel's token stored under a key that list lacks
+# would otherwise be masked by nothing and checked by nothing.
+import ast  # noqa: E402
+import re  # noqa: E402
+
+SECRET_NAME = re.compile(r"(?:password|token|webhook|api_key|secret)$")
+
+
+def named_setting_keys(sources: dict[Path, str]) -> set[str]:
+    """The settings keys the code names: a constant handed to get_setting/set_setting, a notification channel's
+    field (`notifications.setting_key("smtp", "password")`) and an *Arr app's f"{SETTINGS_PREFIX}_api_key"."""
+    trees = {path: ast.parse(text) for path, text in sources.items()}
+    prefixes = {path.parent: node.value.value for path, tree in trees.items() for node in tree.body
+                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+                and any(getattr(target, "id", "") == "SETTINGS_PREFIX" for target in node.targets)}
+    keys: set[str] = set()
+    for path, tree in trees.items():
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and node.args):
+                continue
+            name, first = getattr(node.func, "attr", None) or getattr(node.func, "id", ""), node.args[0]
+            if name in ("get_setting", "set_setting") and isinstance(first, ast.Constant) and isinstance(first.value, str):
+                keys.add(first.value)
+            elif name in ("get_setting", "set_setting") and isinstance(first, ast.JoinedStr):
+                parts = [prefixes.get(path.parent) if isinstance(v, ast.FormattedValue) and getattr(v.value, "id", "") == "SETTINGS_PREFIX"
+                         else v.value if isinstance(v, ast.Constant) else None for v in first.values]
+                keys |= {"".join(parts)} if None not in parts else set()
+            elif name == "setting_key" and len(node.args) == 2 and all(isinstance(a, ast.Constant) for a in node.args):
+                keys.add(f"notify_{node.args[0].value}_{node.args[1].value}")
+    return keys
+
+
+code = {path: path.read_text(encoding="utf-8") for path in (PROJECT / "jellyscope").rglob("*.py") if "__pycache__" not in path.parts}
+stored_secrets = {key for key in named_setting_keys(code) if SECRET_NAME.search(key)}
+check(len(stored_secrets) >= 11 and stored_secrets <= set(db.SECRET_SETTINGS),
+      f"every secret the code stores is in db.SECRET_SETTINGS ({sorted(stored_secrets - set(db.SECRET_SETTINGS))})")
+sample = {PROJECT / "jellyscope" / "arr" / "newarr" / "client.py": 'SETTINGS_PREFIX = "arr_newarr"\n',
+          PROJECT / "jellyscope" / "arr" / "newarr" / "live.py": 'db.get_setting(f"{SETTINGS_PREFIX}_api_key")\n',
+          PROJECT / "jellyscope" / "notifications.py": 'db.set_setting(setting_key("ntfy", "token"), x)\nget_setting("ui_language")\n'}
+check({key for key in named_setting_keys(sample) if SECRET_NAME.search(key)} == {"arr_newarr_api_key", "notify_ntfy_token"},
+      "a new channel's token and a new app's key are found in the code")
+other_secrets = {key: f"OtherSecret{number:02d}Value" for number, key in enumerate(sorted(stored_secrets))
+                 if key != "jellyfin_api_key"}
+for key, value in other_secrets.items():
+    db.set_setting(key, value)
+db.forget_settings()
+for value in other_secrets.values():
+    logger.error("a library repeated the value %s in its message", value)
+whole = "\n".join(r["text"] for r in applog.read_lines(limit=200)["lines"])
+shown = [key for key, value in other_secrets.items() if value in whole]
+check(not shown, f"no stored secret appears in the listing ({shown})")
 
 
 print()

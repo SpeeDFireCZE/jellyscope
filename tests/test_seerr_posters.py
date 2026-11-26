@@ -495,6 +495,23 @@ images.item_file("film-1", "Primary", 300).write_bytes(JPEG)
 images.save_title("movie", "5", JPEG)
 seerr.delete_data()
 check(images.item_file("film-1", "Primary", 300).exists() and images.titles_on_disk() == [], "the images from Jellyfin stay")
+# Audit QA-5: the deletion took every provisional poster - the covers of Lidarr's albums and Readarr's books, and the
+# posters the card "Stahuje se" of Sonarr and Radarr shows (the same file as a request's: the kind and the TMDB id).
+# Only the posters of movies and series Radarr and Sonarr do not know go with Seerr's data now.
+with db.connect() as conn:
+    conn.execute("INSERT INTO radarr_title (title_id, name, tmdb_id) VALUES (70, 'A movie in Radarr', '700')")
+    conn.execute("INSERT INTO sonarr_title (title_id, name, tmdb_id) VALUES (80, 'A series in Sonarr', '800')")
+    conn.commit()
+for kind, title_id in (("album", "31"), ("book", "22"), ("movie", "700"), ("tv", "800"), ("movie", "5"), ("tv", "6")):
+    images.save_title(kind, title_id, JPEG)
+seerr.delete_data()
+check(images.titles_on_disk() == [("album", "31"), ("book", "22"), ("movie", "700"), ("tv", "800")],
+      f"the covers of albums and books and the posters of titles Radarr and Sonarr know stay ({images.titles_on_disk()})")
+with db.connect() as conn:
+    conn.execute("DELETE FROM radarr_title WHERE title_id = 70")
+    conn.execute("DELETE FROM sonarr_title WHERE title_id = 80")
+    conn.commit()
+images.forget_titles()
 
 print()
 print("--- I) \"Enable Image Caching\": the state, filling in after switching on, the link to Seerr ---")

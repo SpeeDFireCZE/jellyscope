@@ -101,6 +101,9 @@ class Config:
 
 _cached: Config | None = None
 
+# The shortest signing key that is taken for one: the generated one has 64 characters, a stored one is used from 32.
+SHORTEST_SECRET_KEY = 32
+
 
 def load_config(reload: bool = False) -> Config:
     """Returns the configuration. The second time just the one read before (cache)."""
@@ -129,6 +132,22 @@ def load_config(reload: bool = False) -> Config:
         our_image=_flag("JELLYSCOPE_DOCKER"),
     )
     return _cached
+
+
+def warn_about_short_secret_key(config: Config) -> bool:
+    """Says in the log that SECRET_KEY (from .env or the environment) is short. True = it warned.
+
+    The key signs the sign-in cookie, and a short word is found from any cookie's signature offline - with it a
+    cookie of a Jellyfin account (an administrator's too) can be signed without a password. It is still used:
+    refusing to start or switching to another key would sign everybody out without saying why. Called at the
+    start of the app after the log file is switched on, so the warning is in it at every start.
+    """
+    if len(config.secret_key) >= SHORTEST_SECRET_KEY:
+        return False
+    log.warning(
+        "SECRET_KEY has only %s characters, so a sign-in cookie can be forged by guessing it. Set at least %s random characters (python3 -c \"import secrets; print(secrets.token_hex(32))\") and restart.",
+        len(config.secret_key), SHORTEST_SECRET_KEY)
+    return True
 
 
 def _in_container() -> bool:
@@ -175,7 +194,7 @@ def _generated_secret_key() -> str:
     try:
         if path.is_file():
             stored = path.read_text(encoding="utf-8").strip()
-            if len(stored) >= 32:
+            if len(stored) >= SHORTEST_SECRET_KEY:
                 return stored
 
         new_key = secrets.token_hex(32)

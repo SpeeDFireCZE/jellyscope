@@ -198,6 +198,16 @@ def sync_state() -> dict[str, Any]:
     return read_state(_key("state"))
 
 
+async def _check_app(client: SonarrClient) -> None:
+    """Make sure Sonarr answers (the same error as the connection test) before anything is fetched.
+
+    Another *Arr app at the address would give a history that is no series, and it would be written into the tables.
+    """
+    name = str((await client.status()).get("appName") or "")
+    if name.lower() != NAME.lower():
+        raise SonarrError("{other} answers at this address, not {name}.", other=name or "?", name=NAME)
+
+
 async def _fetch(transport: httpx.AsyncBaseTransport | None) -> dict[str, int]:
     url, key = db.get_setting(_key("url"), ""), db.get_setting(_key("api_key"), "")
     if not url or not key:
@@ -208,6 +218,7 @@ async def _fetch(transport: httpx.AsyncBaseTransport | None) -> dict[str, int]:
     since = _since()
     seen: set[Any] = set()        # series ids from the history just fetched (for the list of titles)
     async with SonarrClient(url, key, transport=transport) as client:
+        await _check_app(client)
         if since is None:
             new, total = await _page_by_page(client)
         else:

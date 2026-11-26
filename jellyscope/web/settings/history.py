@@ -14,6 +14,7 @@ from ..base import (
     _clamp,
     _context,
     _flash,
+    _form_number,
     _import_message,
     require_admin,
     templates,
@@ -76,7 +77,7 @@ async def history_restore(request: Request, event: str = Form(""),
     It is no dangerous action - nothing is deleted, only what was cleared away a
     moment ago comes back - so it asks nothing and has no window of its own.
     """
-    result = await asyncio.to_thread(purge.restore_from_bin, event)
+    result = await asyncio.to_thread(purge.restore_from_bin, _form_number(event))
     if not result["returned"]:
         _flash(request,
                "Could not bring it back; there is no such thing in the bin any more.", "error")
@@ -101,9 +102,10 @@ async def import_playback_reporting(
     min_seconds: str = Form("60"),
     account: dict[str, Any] = Depends(require_admin),
 ):
-    result = await importers.import_playback_reporting(
-        min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
-    )
+    with tasks.data_job():       # no backup is restored under an import
+        result = await importers.import_playback_reporting(
+            min_seconds=int(_clamp(min_seconds, 0, 3600, 60))
+        )
     _import_message(
         request, result,
         "Playback Reporting: imported {n} records "

@@ -179,7 +179,7 @@ for name, client in ACCOUNTS.items():
     set_rights(name, ALL_AREAS, anonymise=True)
     page = client.get("/arr/prowlarr" + PERIOD).text
     hidden = access.anonymise_for(cards_data(who=name), account(name))
-    same = all(hidden[k] == reference[k] for k in ("prowlarr_indexers", "prowlarr_who", "prowlarr_numbers", "prowlarr_when", "prowlarr_response_time",
+    same = all(hidden[k] == reference[k] for k in ("prowlarr_availability", "prowlarr_indexers", "prowlarr_who", "prowlarr_numbers", "prowlarr_when", "prowlarr_response_time",
                                                    "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest", "prowlarr_indexers_now"))
     check(access.hides_names(account(name)) and same and INDEXER in page and "Divák " not in card_html(page, "prowlarr_who")
           and "Sonarr" in card_html(page, "prowlarr_who") and "Divák " not in card_html(page, "prowlarr_indexers"),
@@ -195,7 +195,7 @@ def offered(text: str) -> list[str]:
 
 
 builder = admin.get("/dashboard").text
-check(sorted(offered(builder)) == sorted(k.key for k in CARDS), f"the administrator is offered all thirteen Prowlarr cards when building ({len(offered(builder))})")
+check(sorted(offered(builder)) == sorted(k.key for k in CARDS), f"the administrator is offered all fourteen Prowlarr cards when building ({len(offered(builder))})")
 cards.save_layout(["summary", "prowlarr_numbers", "prowlarr_indexers"])
 db_queries: list[str] = []
 original_query_all = db.query_all
@@ -235,7 +235,7 @@ for name, client in ACCOUNTS.items():
     account_id = account(name)["id"]
     set_rights(name, ALL_AREAS)
     mine = client.get("/account/dashboard").text
-    check(sorted(offered(mine)) == sorted(k.key for k in CARDS), f"{name} with the *Arr area: My dashboard offers all thirteen Prowlarr cards ({len(offered(mine))})")
+    check(sorted(offered(mine)) == sorted(k.key for k in CARDS), f"{name} with the *Arr area: My dashboard offers all fourteen Prowlarr cards ({len(offered(mine))})")
     client.post("/account/dashboard", data={"order": "prowlarr_numbers:cela,prowlarr_indexers:pul"}, follow_redirects=False)
     mine = client.get("/account/dashboard" + PERIOD).text
     check([s.key for s in cards.load_layout(account_id)] == ["prowlarr_numbers", "prowlarr_indexers"] and INDEXER in mine

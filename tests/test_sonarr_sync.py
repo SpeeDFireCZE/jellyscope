@@ -76,8 +76,9 @@ def count() -> int:
 
 
 def app_with_history(history: list[dict], requests: list[str] | None = None,
-                     code: int = 200) -> httpx.MockTransport:
-    """An app with the given history: `history/since` (the whole of it since a date) and the paged `history`.
+                     code: int = 200, status: dict | None = None) -> httpx.MockTransport:
+    """An app with the given history: `history/since` (the whole of it since a date), the paged `history`
+    and `system/status` (the recorded one unless `status` is given).
 
     It notes `since <date>` or `page <number> of <size>` into `requests`. It orders the pages by date
     ascending like a real Sonarr.
@@ -97,6 +98,8 @@ def app_with_history(history: list[dict], requests: list[str] | None = None,
             ordered = sorted(history, key=lambda r: (r["date"], r["id"]))
             return httpx.Response(200, json={"page": page, "pageSize": size, "totalRecords": len(history),
                                              "records": ordered[(page - 1) * size:page * size]})
+        if request.url.path.endswith("/api/v3/system/status"):
+            return httpx.Response(200, json=status if status is not None else recorded("system_status"))
         return httpx.Response(404)
     return httpx.MockTransport(handler)
 
@@ -214,6 +217,25 @@ check(db.get_setting("arr_sonarr_last_sync", "") == mark_before and count() == n
 asyncio.run(sonarr.synchronize(transport=app_with_history(SONARR)))
 check(sonarr.sync_state()["result"] == "ok", "the next successful sync fixes the state again")
 
+# Audit QA-2: Radarr at Sonarr's address (the same API v3) gave a history of another app, written into Sonarr's
+# tables, and the mark moved past Sonarr's own history. Now the sync asks the app's name first, like the
+# connection test.
+with db.connect() as conn:
+    conn.execute("DELETE FROM sonarr_event")
+    conn.commit()
+db.set_setting("arr_sonarr_last_sync", "")
+db.forget_settings()
+try:
+    asyncio.run(sonarr.synchronize(transport=app_with_history(SONARR, status={"appName": "Radarr", "version": "5"})))
+    other = ""
+except sonarr.SonarrError as error:
+    other = str(error)
+check("Radarr answers at this address, not Sonarr" in other and sonarr.sync_state()["result"] == "error" and count() == 0
+      and db.get_setting("arr_sonarr_last_sync", "") == "",
+      f"another app at the address: the connection test's error, no row written, the mark unmoved ({other})")
+asyncio.run(sonarr.synchronize(transport=app_with_history(SONARR)))
+check(count() == n and sonarr.sync_state()["result"] == "ok", "with Sonarr at the address the whole history comes again")
+
 print()
 print("--- F) web ---")
 accounts.create("admin", "longpassword", is_admin=True)
@@ -249,14 +271,16 @@ db.set_setting("backup_path", str(Path(_tmp) / "backups"))   # so list_backups()
 db.forget_settings()
 # Review finding 5: another address for an app with downloaded data (another instance, a reinstall)
 # would quietly mix two histories (the record ids start from 1 again). A warning, nothing is deleted.
-answer = admin.post("/settings/arr/sonarr", data={"enabled": "1", "url": "http://jiny-sonarr:8989", "api_key": "",
+# Another server needs its key typed again (the saved one goes only to its own server).
+answer = admin.post("/settings/arr/sonarr", data={"enabled": "1", "url": "http://jiny-sonarr:8989", "api_key": "jiny-klic",
                                                   "action": "save"})
 check("flash warning" in answer.text and "Smazat stažená data" in answer.text and count() == n,
       "a change of the address for an app with data: a warning with the button's name, the data stays")
 answer = admin.post("/settings/arr/sonarr", data={"enabled": "1", "url": "http://jiny-sonarr:8989", "api_key": "",
                                                   "action": "save"})
 check("flash warning" not in answer.text, "a save without a change of the address does not warn")
-admin.post("/settings/arr/sonarr", data={"enabled": "1", "url": "http://nas:8989/sonarr", "api_key": "", "action": "save"})
+admin.post("/settings/arr/sonarr", data={"enabled": "1", "url": "http://nas:8989/sonarr", "api_key": "tajny-klic",
+                                          "action": "save"})
 # A minor from a review: deleting during a sync would leave the last hour with a new mark and the
 # whole history would never come back - now it is not deleted.
 sonarr.sync._RUNNING.add(sonarr.NAME)
@@ -304,6 +328,8 @@ def with_counts(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"totalRecords": {"wanted/missing": 41, "wanted/cutoff": 7}[path], "records": []})
     if path == "history":
         return httpx.Response(200, json={"page": 1, "pageSize": 1000, "totalRecords": 0, "records": []})
+    if path == "system/status":
+        return httpx.Response(200, json=recorded("system_status"))
     return httpx.Response(200, json=[])
 
 

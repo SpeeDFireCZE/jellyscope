@@ -6,7 +6,6 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
 
 {# ================================================================== #}
 {# The form wraps all cards of the section - they are saved with one
@@ -14,7 +13,7 @@
 <form method="post" action="/settings">
 <div class="card">
     <div class="card-head">
-        <h2>{{ _("Technical data source") }}</h2>
+        <h2 id="tech-source-title">{{ _("Technical data source") }}</h2>
         <p class="card-note">{{ _("where codecs, bitrates and sizes come from") }}</p>
     </div>
 
@@ -28,7 +27,7 @@
         <span>{{ _("This choice only affects file details (codec, resolution, size). Who watches what is always read from Jellyfin, and this setting does not change that.") }}</span>
     </div>
 
-    <div class="radio-set">
+    <div class="radio-set" role="radiogroup" aria-labelledby="tech-source-title">
         <label class="radio-card">
             <input type="radio" name="tech_source" value="jellyfin"
                    {{ 'checked' if settings.tech_source == 'jellyfin' }}>
@@ -129,6 +128,8 @@
         <div class="field-with-unit">
             <input type="number" id="library_capacity_gb" name="library_capacity_gb"
                    value="{{ capacity_amount }}" min="0" step="1">
+            {# Says the form has the field: a cleared one is then 0, not "left as it was". #}
+            <input type="hidden" name="capacity_field" value="1">
             <select name="library_capacity_unit" aria-label="{{ _('Unit') }}">
                 <option value="GB" {{ 'selected' if capacity_unit_name == 'GB' }}>GB</option>
                 <option value="TB" {{ 'selected' if capacity_unit_name == 'TB' }}>TB</option>

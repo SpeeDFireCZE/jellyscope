@@ -75,7 +75,7 @@ def _cluster_of(group: list[dict[str, Any]]) -> dict[str, Any]:
         "description": label,
         # Which places it is made of (the order in the list of places) - by that
         # the drawing recognises it as the same cluster as one level lower.
-        "members": tuple(sorted(b["_poradi"] for b in group)),
+        "members": tuple(sorted(b["_order"] for b in group)),
     }
 
 
@@ -100,7 +100,7 @@ def clusters(places: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # the same every time.
     points.sort(key=lambda b: (-int(b.get("seconds") or 0), b["_x"], b["_y"]))
     for position, point in enumerate(points):
-        point["_poradi"] = position
+        point["_order"] = position
 
     levels: list[dict[str, Any]] = []
     previous: list[tuple[int, ...]] | None = None

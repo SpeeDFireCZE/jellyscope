@@ -14,7 +14,9 @@ from .periods import _bounds
 # An episode's name as the Playback Reporting plugin and some clients write it: "Series - s01e01 - Episode name".
 # Such a record has neither `series_name` nor an item in the library, so the series can be told only from here -
 # and without it the overviews broke it up into single episodes.
-_SERIES_FROM_NAME = re.compile(r"^(?P<series>.+?)\s*[-–]\s*s\d{1,3}e\d{1,4}\b", re.I)
+# The series ends in a visible character (the name is stripped): `.+?` tried every length against a long run of
+# spaces (seconds for one name), `.*?\S` skips the lengths that end in a space.
+_SERIES_FROM_NAME = re.compile(r"^(?P<series>.*?\S)\s*[-–]\s*s\d{1,3}e\d{1,4}\b", re.I)
 
 
 def series_from_name(name: Any) -> str | None:
@@ -38,7 +40,7 @@ def _episodes_by_name() -> dict[str, tuple[str, str]]:
     **Only unambiguous matches.** Episode names repeat between series ("Pilot", "Part 1"); with such a name we
     rather do not guess, because wrongly assigned history is worse than history we know is set aside.
 
-    The keys have the prefix `dil:` so that they do not mix with series names - a series and its episode can have
+    The keys have the prefix `episode:` so that they do not mix with series names - a series and its episode can have
     the same name.
     """
     by_name: dict[str, set[str]] = {}
@@ -50,7 +52,7 @@ def _episodes_by_name() -> dict[str, tuple[str, str]]:
         by_name.setdefault(name, set()).add(str(row["series_id"]))
 
     names = _series_names()
-    return {f"dil:{name}": (next(iter(series_ids)),
+    return {f"episode:{name}": (next(iter(series_ids)),
                             names.get(next(iter(series_ids)), "?"))
             for name, series_ids in by_name.items() if len(series_ids) == 1}
 
@@ -112,7 +114,7 @@ def title_key(row: dict[str, Any],
     their own instead of one "Blue", or the episode "The Bells" as a movie beside "Game of Thrones".
     """
     if row.get("series_id"):
-        return (f"serial:{row['series_id']}",
+        return (f"series:{row['series_id']}",
                 str(row.get("series_name") or row.get("i_series_name")
                     or series_from_name(row.get("item_name")) or row.get("i_name") or "?"),
                 True)
@@ -127,7 +129,7 @@ def title_key(row: dict[str, Any],
     # An episode without `series_id` is the exception: there guessing helps, because otherwise we have no way to
     # assign it to the series.
     if row.get("existing_id") and str(row.get("i_type") or "") != "Episode":
-        return (f"polozka:{row.get('main_id') or row.get('item_id') or row['existing_id']}",
+        return (f"item:{row.get('main_id') or row.get('item_id') or row['existing_id']}",
                 str(row.get("i_name") or row.get("item_name") or "?"), False)
 
     # The last try, still before giving up: an episode of that name exists in the library and knows its series.
@@ -135,10 +137,10 @@ def title_key(row: dict[str, Any],
     # it. Without this the overview made a title of its own of it beside the series it belongs to.
     # See `_episodes_by_name()`.
     from_library = (by_name or {}).get(
-        "dil:" + str(row.get("item_name") or "").strip().lower())
+        "episode:" + str(row.get("item_name") or "").strip().lower())
     if from_library:
         series_id, name = from_library
-        return (f"serial:{series_id}", name, True)
+        return (f"series:{series_id}", name, True)
 
     series_name = (row.get("series_name") or row.get("i_series_name")
                    or series_from_name(row.get("item_name")))
@@ -149,21 +151,21 @@ def title_key(row: dict[str, Any],
         # too). Exactly that showed in the overview.
         known = (by_name or {}).get(normalized)
         if known:
-            return (f"serial:{known}", str(series_name).strip(), True)
+            return (f"series:{known}", str(series_name).strip(), True)
 
         # A key from the name is weaker than from the id, but it still merges what belongs together. It compares
         # in lower case - "Blue" and "blue" are the same.
-        return (f"nazev:{normalized}", str(series_name).strip(), True)
+        return (f"name:{normalized}", str(series_name).strip(), True)
 
     # And one more possibility: the record's name is the series' name right away. It happens with imported history
     # that does not remember the episode, or when Jellyfin records a play at the level of the series.
     as_series = (by_name or {}).get(
         str(row.get("item_name") or "").strip().lower())
     if as_series:
-        return (f"serial:{as_series}", str(row["item_name"]).strip(), True)
+        return (f"series:{as_series}", str(row["item_name"]).strip(), True)
 
     item = row.get("item_id") or row.get("item_name") or "?"
-    return (f"polozka:{item}",
+    return (f"item:{item}",
             str(row.get("i_name") or row.get("item_name") or "?"), False)
 
 
@@ -208,7 +210,7 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
     watching to someone else's series.
 
     In the ranking of the most watched such a row says nothing - it cannot be clicked and poses as a movie that
-    does not exist. How many there were is returned in `_skryto`, so that the page can say it out loud; the watched
+    does not exist. How many there were is returned in `_hidden`, so that the page can say it out loud; the watched
     time is not lost anywhere by it, History keeps showing it.
 
     `copies_apart` keeps every copy of a movie as a row of its own with its own link (otherwise a movie twice in one
@@ -255,7 +257,7 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
         group = groups.get(key)
         if group is None:
             group = {"group_key": key, "label": label, "is_series": is_series,
-                     "_zastupci": [], "_nejsilnejsi": (-1.0, {})}
+                     "_representatives": [], "_strongest": (-1.0, {})}
             for target in values:
                 group[target] = 0.0
             groups[key] = group
@@ -267,8 +269,8 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
         weight = float(row.get(next(iter(values.values()))) or 0)
         for target, source in values.items():
             group[target] += float(row.get(source) or 0)
-        if weight > group["_nejsilnejsi"][0]:
-            group["_nejsilnejsi"] = (weight, row)
+        if weight > group["_strongest"][0]:
+            group["_strongest"] = (weight, row)
 
         # A representative for the link. An **archived** item is taken too, i.e. one that was in the library and is
         # no longer in Jellyfin: the watching really happened, the detail opens and shows the title is in the
@@ -277,7 +279,7 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
         # Without the archive a movie you once watched and have deleted since would fall among the "unsorted" and
         # `hide_unsorted` would throw it out - a valid statistic would vanish, not waste.
         if row.get("existing_id"):
-            group["_zastupci"].append(
+            group["_representatives"].append(
                 (1 if row.get("is_missing") else 0,
                  -float(row.get(next(iter(values.values()))) or 0),
                  # A movie's copy links to the main copy - that one represents the record.
@@ -289,18 +291,18 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
     # The link is built only here, so an "unsorted" one is known only after it. That is why it is cut to `limit`
     # only at the end - otherwise hidden rows would take room from those that are to show.
     for group in ordered:
-        _, strongest = group.pop("_nejsilnejsi")
+        _, strongest = group.pop("_strongest")
         for column in carry:
             group[column] = strongest.get(column)
 
-        representatives = group.pop("_zastupci")
+        representatives = group.pop("_representatives")
         if not representatives:
             # No record of this group points to a live item. But when a series from the library decided the group,
             # we have the link anyway - the key carries its id. It happens with history where nothing leads to the
             # episode's item any more, but the series itself is still in the library.
             key = str(group["group_key"])
-            group["detail_url"] = ("/series/" + key[len("serial:"):]
-                                   if key.startswith("serial:") else None)
+            group["detail_url"] = ("/series/" + key[len("series:"):]
+                                   if key.startswith("series:") else None)
             # A title nothing at all is left of in the library stays without a link - a link to a 404 error page is
             # worse than none.
             continue
@@ -313,11 +315,11 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
         # because the representative is picked by the watched time, it was enough for such a record to be the
         # strongest, and the link aimed somewhere quite different from the label.
         #
-        # The key `serial:<id>` is meanwhile the most reliable thing we know about the group - the series' id from
+        # The key `series:<id>` is meanwhile the most reliable thing we know about the group - the series' id from
         # the library. When we have it, the link is to come from nothing else.
         key = str(group["group_key"])
-        if key.startswith("serial:"):
-            group["detail_url"] = "/series/" + key[len("serial:"):]
+        if key.startswith("series:"):
+            group["detail_url"] = "/series/" + key[len("series:"):]
             continue
 
         representatives.sort()
@@ -340,7 +342,7 @@ def _merge_titles(rows: list[dict[str, Any]], kind: str, limit: int,
     hidden = len(ordered) - len(placed)
     result = placed[:limit]
     if result:
-        result[0]["_skryto"] = hidden
+        result[0]["_hidden"] = hidden
     return result
 
 

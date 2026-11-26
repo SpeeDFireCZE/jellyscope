@@ -518,13 +518,17 @@ def _why_unopenable(path: Path, error: Exception) -> list[tuple[str, dict[str, A
     return lines
 
 
+# The one place the PostgreSQL driver's version is set; the advice for a missing driver installs from it.
+DRIVER_REQUIREMENTS = Path(__file__).resolve().parent.parent / "requirements-postgres.txt"
+
+
 def _open_raw(config: dialect.DatabaseConfig) -> Any:
     if config.is_postgres:
         try:
             import psycopg
             from psycopg.rows import dict_row
         except ImportError as exc:  # pragma: no cover - depends on the installation
-            # Two things this message used to break on:
+            # Three things this message used to break on:
             #
             # 1. It advised `psycopg[binary,pool]`, so it looked as if it
             #    enforced the connection pool - even when the user had it
@@ -536,11 +540,23 @@ def _open_raw(config: dialect.DatabaseConfig) -> Any:
             #    would be pointless (and newer Ubuntu would refuse it
             #    outright). sys.executable is the right python - the one
             #    this is running with right now.
-            raise TranslatableError(
-                "PostgreSQL needs the psycopg library. Install it into the same environment the application "
-                "runs in:\n    {python} -m pip install \"psycopg[binary]\"\nThen restart the application. (The "
-                "connection pool has nothing to do with it - it is switched on separately and adds the extra "
-                "\"pool\".)", python=sys.executable) from exc
+            #
+            # 3. A bare "psycopg[...]" installed the newest driver, not the version requirements-postgres.txt
+            #    pins - and in our image a driver installed by hand is gone with the next rebuild of the image.
+            #
+            # An unavailable database like the others: at the start the launcher answers it with the stand-in
+            # page. As a bare error it ended the start, and a container restarted it round and round.
+            if load_config().our_image:
+                raise DatabaseUnavailable([(
+                    "PostgreSQL needs the psycopg library, and in the Jellyscope Docker image it is part of the "
+                    "image: one installed by hand in the container is gone with the next rebuild. Set PSYCOPG=1 in "
+                    ".env (or leave PSYCOPG out, 1 is the default) and rebuild the image:\n"
+                    "    docker compose up -d --build", {})]) from exc
+            raise DatabaseUnavailable([(
+                "PostgreSQL needs the psycopg library. Install it into the same environment the application runs "
+                "in, at the version the application pins:\n    {python} -m pip install -r {requirements}\n"
+                "Then restart the application.",
+                {"python": sys.executable, "requirements": str(DRIVER_REQUIREMENTS)})]) from exc
 
         raw_conn = psycopg.connect(
             host=config.host,
@@ -771,6 +787,13 @@ def test_connection(config: dialect.DatabaseConfig) -> tuple[bool, str]:
 # This is called a **database migration**. Big projects have whole libraries
 # for it; this dictionary is enough for us.
 MIGRATIONS: dict[str, dict[str, str]] = {
+    "prowlarr_sample": {
+        # The samples of the indexers' status grew while the feature was built (25.-26. 11. 2026): a database that
+        # ran an earlier build has the table without these, and the availability card failed with "no such column".
+        "enabled_ids": "TEXT",
+        "interval_seconds": "INTEGER",
+        "measured_until": "TEXT",
+    },
     "scan_log": {
         # A task's message as an English key with its values apart (21. 11. 2026), so each reader gets
         # it in their language - i18n.message_parts / stored_text. Empty in older rows.
@@ -823,7 +846,7 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         "main_id": "TEXT",
         # A fingerprint of the image from Jellyfin (ImageTags.Primary). Another
         # image = another fingerprint, so it tells us the cached one is no
-        # longer valid. See web.item_image() and scanner._forget_images().
+        # longer valid. See web.item_image() and scanner.writing._forget_images().
         "image_tag": "TEXT",
         # A fingerprint of the SERIES poster (Jellyfin reports it with every
         # episode as SeriesPrimaryImageTag). We have no item for the series, so
@@ -834,7 +857,7 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         "subtitle_languages": "TEXT",
         "default_audio_language": "TEXT",
         # What the file name promises but cannot be assigned to a particular
-        # stream. Added to the language summaries - see scanner._recount_item_languages.
+        # stream. Added to the language summaries - see scanner.stream_languages._recount_item_languages.
         "audio_from_name": "TEXT",
         "subtitle_from_name": "TEXT",
         # An identifier from TMDB. It survives re-encoding the file, unlike
@@ -846,7 +869,7 @@ MIGRATIONS: dict[str, dict[str, str]] = {
         # The dynamic range as Jellyfin reports it (SDR/HDR/DOVI).
         # Next to what ffprobe measured: Dolby Vision in Matroska can be read
         # only by ffmpeg 5, so an older ffprobe reports just "HDR" and the DV
-        # gets lost. Jellyfin knows it, though. See stats.RANGE_CASE.
+        # gets lost. Jellyfin knows it, though. See stats.tech.RANGE_CASE.
         "video_range_reported": "TEXT",
     },
     "dashboard_layout": {
@@ -1196,10 +1219,10 @@ def _init_db(config: dialect.DatabaseConfig, tables: str,
 # table added to schema.sql has to be added here too.
 TABLES = ("libraries", "users", "items", "item_versions", "item_streams",
           "accounts", "dashboard_layout", "library_snapshot", "library_disk_snapshot",
-          "settings", "scan_log", "api_tokens", "login_blocks",
+          "settings", "scan_log", "api_tokens", "login_blocks", "web_sessions",
           "forgettings", "playback", "detailed_map_tile", "sonarr_event", "sonarr_title", "radarr_event", "radarr_title",
           "lidarr_event", "lidarr_title", "readarr_event", "readarr_title", "seerr_request", "bazarr_event",
-          "prowlarr_hour", "prowlarr_grab", "prowlarr_indexer",
+          "prowlarr_hour", "prowlarr_grab", "prowlarr_indexer", "prowlarr_sample",
           "music_artist", "music_album", "music_track", "book")
 
 
@@ -1404,17 +1427,21 @@ UNLOGGED_SETTINGS = ("_", "jellyfin_version", "notify_state_", "db_compaction_pe
                      "arr_readarr_state", "arr_readarr_last_sync", "arr_readarr_titles", "arr_readarr_titles_version", "arr_readarr_app_name",
                      "arr_bazarr_state", "arr_bazarr_last_sync",
                      "arr_prowlarr_state", "arr_prowlarr_last_id", "arr_prowlarr_last_event_at", "arr_prowlarr_counted",
+                     # The marker of a change of the indexers' status the background loop stored (several a day).
+                     "arr_prowlarr_status_changed",
                      "arr_sonarr_titles", "arr_radarr_titles", "arr_sonarr_titles_version", "arr_radarr_titles_version",
                      # The counts of missing and cutoff and Bazarr's languages, stored with their time by every sync.
                      "arr_sonarr_counts", "arr_radarr_counts", "arr_lidarr_counts", "arr_readarr_counts",
                      "arr_bazarr_missing_languages",
-                     "seerr_state", "seerr_last_sync",
+                     "seerr_state",
                      # What Jellyscope finds out about Seerr by itself with every sync.
                      "seerr_images", "seerr_web", "seerr_posters_retry",
                      # The state of the music sync (every hour).
                      "music_state", "music_full_pass", "music_vanished_libraries",
                      # The same for the books sync.
-                     "books_state", "books_full_pass", "books_vanished_libraries")
+                     "books_state", "books_full_pass", "books_vanished_libraries",
+                     # The mark of rewritten plays (note_plays_rewritten) - every forgetting or tidy-up.
+                     "plays_rewritten")
 
 
 # Name endings whose value may be printed. Numbers, switches, the server's
@@ -1459,6 +1486,19 @@ def _log_change(key: str, old: str, new: str) -> None:
         return
     log.info("setting %s: %s -> %s", key, old or "(empty)",
              new or "(empty)")
+
+
+# The mark of plays deleted or rewritten outside the collector and outside a task the tasks' log records
+# (forgetting a viewer, tidying the history from Settings, a title deleted, the history of a replaced file moved):
+# the plays' marker (stats.plays_state) carries it, so an open page draws its cards over plays again. A stamp
+# that only grows, so two actions in a row move the marker twice; not written into the log (UNLOGGED_SETTINGS).
+PLAYS_REWRITTEN_KEY = "plays_rewritten"
+
+
+def note_plays_rewritten() -> None:
+    """Called after the plays were deleted or rewritten (committed already: a second connection would wait for
+    the first one's lock)."""
+    set_setting(PLAYS_REWRITTEN_KEY, str(time.time_ns()))
 
 
 def set_setting(key: str, value: str) -> None:
@@ -1558,6 +1598,19 @@ def query_iter(sql: str, params: Any = ()) -> Iterator[dict[str, Any]]:
     with connect() as conn:
         for row in conn.execute(sql, params):
             yield dict(row)
+
+
+# What follows a search pattern from like_contains() in the query: `name LIKE ? ESCAPE '!'`.
+LIKE_ESCAPE = "ESCAPE '!'"
+
+
+def like_contains(text: str) -> str:
+    """A LIKE pattern "anywhere inside" for text a person typed: %, _ and ! in it are ordinary characters.
+
+    For `LIKE ? ESCAPE '!'` (LIKE_ESCAPE). An exclamation mark, not a backslash: that would break the literal on
+    PostgreSQL with standard_conforming_strings=off (see api._history_prefilter).
+    """
+    return "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
 
 
 def query_one(sql: str, params: Any = ()) -> dict[str, Any] | None:

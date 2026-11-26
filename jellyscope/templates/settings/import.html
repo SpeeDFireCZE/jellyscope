@@ -6,7 +6,7 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
+{% from "_macros.html" import file_picker %}
 
 {# ================================================================== #}
 <div class="card">
@@ -39,8 +39,8 @@
         {{ _("Data is taken directly through Jellyfin, so you do not have to upload any file. You will find the plugin in Jellyfin: Dashboard -> Plugins -> Catalogue.") }}
     </p>
     <form method="post" action="/settings/import/playback-reporting" class="btn-row">
-        <label class="card-note">{{ _("Ignore playbacks shorter than") }}</label>
-        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <label class="card-note" for="import-min-seconds">{{ _("Ignore playbacks shorter than") }}</label>
+        <input type="number" id="import-min-seconds" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
         <span class="card-note">{{ _("seconds") }}</span>
         <button data-keep-scroll class="btn primary" type="submit">{{ _("Import") }}</button>
     </form>
@@ -71,7 +71,8 @@
         <form method="post" action="/settings/import/playback-reporting-file"
               enctype="multipart/form-data" class="btn-row">
             {{ file_picker("backup", ".tsv,.txt,text/tab-separated-values") }}
-            <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+            <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px"
+                   aria-label="{{ _('Ignore playbacks shorter than') }}">
             <span class="card-note">{{ _("seconds min.") }}</span>
             <button data-keep-scroll class="btn primary" type="submit">{{ _("Upload and import") }}</button>
         </form>
@@ -85,7 +86,8 @@
     <form method="post" action="/settings/import/jellystat"
           enctype="multipart/form-data" class="btn-row">
         {{ file_picker("backup", ".json,application/json") }}
-        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px">
+        <input type="number" name="min_seconds" value="60" min="0" max="3600" style="width:90px"
+               aria-label="{{ _('Ignore playbacks shorter than') }}">
         <span class="card-note">{{ _("seconds min.") }}</span>
         <button data-keep-scroll class="btn primary" type="submit">{{ _("Upload and import") }}</button>
     </form>

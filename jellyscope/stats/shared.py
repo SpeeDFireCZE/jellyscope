@@ -1,4 +1,4 @@
-"""Calculations that know no app: time in the zone, the quantile, pairing grabs with imports.
+"""Calculations that know no app: time in the zone, the quantile, pairing grabs with imports, downloads.
 
 Part of the statistics package (see jellyscope/stats/__init__.py). The statistics of the single apps
 (stats/<app>.py) take from here what they share. What knows names from some app's API, its table, or what is an
@@ -92,6 +92,38 @@ def _pair_grabs(grabs: list[dict[str, Any]], imports: list[dict[str, Any]]) -> d
         if g is not None:
             result[i["arr_id"]] = g
     return result
+
+
+def _downloads(grabs: list[dict[str, Any]], imported: set[int], failed: set[int]) -> list[dict[str, Any]]:
+    """The grabs put together into downloads: [{"grab": its last grab, "imported": bool, "failed": bool}].
+
+    One release can stand for several items - a season pack, a double episode, a release of several albums: the app
+    writes a grab (and an import, a failure) per item, all with the same `download_id`, and every outcome pairs with
+    the last grab of that id before it (`_pair_grabs`). So the grabs of one `download_id` up to the one an outcome is
+    paired with are one download; a grab of the same id after it is the release grabbed again - a download of its
+    own. A grab without `download_id` cannot be put together with anything: a download of its own.
+
+    `imported` and `failed` are the arr_ids of the grabs an import or a failure is paired with. A download is
+    imported when any of its grabs is, failed when one is failed and none imported, otherwise neither (still
+    downloading). `grabs` are sorted by time; the result is sorted by the downloads' last grabs.
+    """
+    parts: list[list[dict[str, Any]]] = []
+    open_by_id: dict[str, list[dict[str, Any]]] = {}
+    for g in grabs:
+        if not g["download_id"]:
+            parts.append([g])
+            continue
+        part = open_by_id.setdefault(g["download_id"], [])
+        part.append(g)
+        if g["arr_id"] in imported or g["arr_id"] in failed:
+            parts.append(open_by_id.pop(g["download_id"]))
+    parts += open_by_id.values()
+    downloads = []
+    for part in parts:
+        ids = {g["arr_id"] for g in part}
+        was_imported = bool(ids & imported)
+        downloads.append({"grab": part[-1], "imported": was_imported, "failed": not was_imported and bool(ids & failed)})
+    return sorted(downloads, key=lambda d: (d["grab"]["happened_at"], d["grab"]["arr_id"]))
 
 
 def _pair_upgrades(upgrades: list[dict[str, Any]], imports: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:

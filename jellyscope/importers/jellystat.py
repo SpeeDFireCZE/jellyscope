@@ -217,73 +217,77 @@ def _row_from_record(entry: dict[str, Any], record: dict[str, Any],
 async def import_jellystat_json(raw: bytes, min_seconds: int = 60) -> dict[str, Any]:
     """Take over the history from a Jellystat JSON backup."""
     scan_id = scanner.start_task_log("import")
+    try:  # from the run's start: an odd file (a number among the records, JSON too deep) must not stay "running"
+        try:
+            payload = json.loads(raw.decode("utf-8", errors="replace"))
+        except ValueError as exc:
+            scanner.finish_task_log(scan_id, "error", message="The file is not valid JSON.")  # the key, translated
+            return {"status": "error",
+                    "message": i18n.translate_with("The file is not valid JSON: {error}", None, error=exc)}
 
-    try:
-        payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except ValueError as exc:
-        scanner.finish_task_log(scan_id, "error", message="The file is not valid JSON.")   # the key, translated for the reader
-        return {"status": "error", "message": i18n.translate_with("The file is not valid JSON: {error}", None, error=exc)}
+        records = _find_jellystat_rows(payload)
+        if not records:
+            no_table = "There is no playback table (jf_playback_activity) in the file. Is it really a Jellystat backup?"
+            scanner.finish_task_log(scan_id, "error", message=no_table)
+            return {"status": "error", "message": no_table}
 
-    records = _find_jellystat_rows(payload)
-    if not records:
-        no_table = "There is no playback table (jf_playback_activity) in the file. Is it really a Jellystat backup?"
-        scanner.finish_task_log(scan_id, "error", message=no_table)
-        return {"status": "error", "message": no_table}
+        users = _known_users()
+        items = _known_items()
+        existing = _existing_keys("import:jst:")
+        by_source = _by_source(existing)
+        repaired = 0
+        time_index = _playback_index()
 
-    users = _known_users()
-    items = _known_items()
-    existing = _existing_keys("import:jst:")
-    by_source = _by_source(existing)
-    repaired = 0
-    time_index = _playback_index()
+        rows: list[tuple[Any, ...]] = []
+        skipped_short = 0
+        skipped_duplicate = 0
+        skipped_known = 0
 
-    rows: list[tuple[Any, ...]] = []
-    skipped_short = 0
-    skipped_duplicate = 0
-    skipped_known = 0
+        for index, record in enumerate(records):
+            entry = _read_record(record, index)
+            if entry is None:
+                continue
+            if entry["duration"] < min_seconds:
+                skipped_short += 1
+                continue
 
-    for index, record in enumerate(records):
-        entry = _read_record(record, index)
-        if entry is None:
-            continue
-        if entry["duration"] < min_seconds:
-            skipped_short += 1
-            continue
+            key = entry["key"]
+            if key in existing:
+                skipped_duplicate += 1
+                continue
 
-        key = entry["key"]
-        if key in existing:
-            skipped_duplicate += 1
-            continue
+            if _fix_redirected(entry, record, by_source, existing):
+                repaired += 1
+                continue
 
-        if _fix_redirected(entry, record, by_source, existing):
-            repaired += 1
-            continue
+            existing.add(key)
+            by_source[entry["base"]] = key
 
-        existing.add(key)
-        by_source[entry["base"]] = key
+            # The same record may be in the database already from Playback Reporting or from the collector.
+            if _already_there(time_index, entry["user_id"], entry["item_id"],
+                              entry["started_at"], entry["duration"]):
+                skipped_known += 1
+                continue
+            _remember(time_index, entry["user_id"], entry["item_id"],
+                      entry["started_at"], entry["duration"])
 
-        # The same record may be in the database already from Playback Reporting or from the collector.
-        if _already_there(time_index, entry["user_id"], entry["item_id"],
-                          entry["started_at"], entry["duration"]):
-            skipped_known += 1
-            continue
-        _remember(time_index, entry["user_id"], entry["item_id"],
-                  entry["started_at"], entry["duration"])
+            rows.append(_row_from_record(entry, record, users, items))
 
-        rows.append(_row_from_record(entry, record, users, items))
+        imported = _insert(rows)
 
-    imported = _insert(rows)
+        # A Jellystat backup holds no tmdb ID - we look it up ourselves.
+        linked = await link_imported_history()
 
-    # A Jellystat backup holds no tmdb ID - we look it up ourselves.
-    linked = await link_imported_history()
-
-    scanner.finish_task_log(
-        scan_id, "done", total=len(records), ok=imported, failed=0,
-        message=i18n.Message(
-            "Jellystat - new: {imported}, repaired: {repaired}, already there: {duplicates}, from another source: "
-            "{known}, too short: {short}", imported=imported, repaired=repaired, duplicates=skipped_duplicate,
-            known=skipped_known, short=skipped_short),
-    )
+        scanner.finish_task_log(
+            scan_id, "done", total=len(records), ok=imported, failed=0,
+            message=i18n.Message(
+                "Jellystat - new: {imported}, repaired: {repaired}, already there: {duplicates}, from another source: "
+                "{known}, too short: {short}", imported=imported, repaired=repaired, duplicates=skipped_duplicate,
+                known=skipped_known, short=skipped_short),
+        )
+    except Exception as exc:  # noqa: BLE001 - the run in the task log must not stay "running"
+        scanner.finish_task_log(scan_id, "error", message=exc)
+        raise
     if repaired:
         log.info("import: %s records moved from the series to a specific episode",
                  repaired)

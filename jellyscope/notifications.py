@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from . import db, i18n
@@ -237,9 +237,46 @@ def event_enabled(event: str) -> bool:
     return db.get_setting(event_key(event), "") == "1"
 
 
+# Set once an SMTP set up before the certificate check was given "do not verify" (convert_smtp_verification).
+SMTP_VERIFY_CONVERSION_KEY = "conversion_smtp_verify"
+
+
+def convert_smtp_verification() -> bool:
+    """One-off at start: an SMTP set up before the mail certificate was checked keeps sending without the check.
+
+    Until 25. 11. 2026 the certificate of the mail server was not verified, so a home server with a self-signed
+    one worked. Verifying from the upgrade on would silence its alarms without a word - so an installation with
+    an SMTP host keeps "do not verify" (the settings say so) and the admin decides. A new installation, or SMTP
+    filled in later, verifies. Once per database: after it the mark is set. True = "do not verify" was stored.
+    """
+    if db.get_setting(SMTP_VERIFY_CONVERSION_KEY, ""):
+        return False
+    stored = False
+    verify_key = setting_key("smtp", "verify")
+    if db.get_setting(setting_key("smtp", "host"), "").strip() and not db.get_setting(verify_key, ""):
+        db.set_setting(verify_key, "0")
+        stored = True
+    db.set_setting(SMTP_VERIFY_CONVERSION_KEY, "1")
+    return stored
+
+
 # ---------------------------------------------------------------------------
 # Sending
 # ---------------------------------------------------------------------------
+
+def _raise_for_status(response: Any) -> None:
+    """`raise_for_status` without the address in the error's text.
+
+    httpx writes the address in as it normalised it (the host in lower case, without `:443`, an invisible
+    character copied along percent-encoded), so masking by the stored value (`without_secrets`) missed it - and
+    with Discord the address is the secret, with Telegram the token is in it. The status is enough to tell why.
+    """
+    import httpx
+
+    if response.is_error:
+        raise httpx.HTTPStatusError(f"{response.status_code} {response.reason_phrase}",
+                                    request=response.request, response=response)
+
 
 async def _send_discord(subject: str, text: str) -> None:
     import httpx
@@ -254,7 +291,7 @@ async def _send_discord(subject: str, text: str) -> None:
             # processes mentions.
             "allowed_mentions": {"parse": []},
         })
-        response.raise_for_status()
+        _raise_for_status(response)
 
 
 async def _send_telegram(subject: str, text: str) -> None:
@@ -266,12 +303,34 @@ async def _send_telegram(subject: str, text: str) -> None:
         response = await client.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={"chat_id": chat, "text": f"{subject}\n\n{text}"})
-        response.raise_for_status()
+        _raise_for_status(response)
+
+
+# What a refused certificate of the mail server says - the checkbox by its name in the settings.
+CERTIFICATE_ERROR = ("The mail server's certificate could not be verified ({error}). If the server uses a "
+                     "self-signed certificate, untick “verify the server's certificate” in the e-mail settings.")
+
+
+def _tls_context() -> Any:
+    """The TLS context of the mail connection: the certificate and the host name checked, unless switched off.
+
+    smtplib without a context of its own checks neither - whoever sits on the way offers their own certificate
+    and gets the login with the mailbox's password. A home mail server with a self-signed certificate is let
+    through only when the admin unticks the check in the settings.
+    """
+    import ssl
+
+    context = ssl.create_default_context()
+    if db.get_setting(setting_key("smtp", "verify"), "1") == "0":
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    return context
 
 
 def _send_smtp_blocking(subject: str, text: str) -> None:
     """A function of its own, because smtplib is blocking - see _send_smtp()."""
     import smtplib
+    import ssl
     from email.message import EmailMessage
 
     host = db.get_setting(setting_key("smtp", "host"), "").strip()
@@ -288,22 +347,27 @@ def _send_smtp_blocking(subject: str, text: str) -> None:
     email["To"] = recipient
     email.set_content(text)
 
-    # Port 465 is SMTPS (encrypted from the first byte), 587 is STARTTLS (an
-    # unencrypted connection that is upgraded). Mixing them up means the
-    # connection just hangs quietly until the timeout.
-    if port == 465:
-        with smtplib.SMTP_SSL(host, port, timeout=20) as connection:
+    try:
+        # Port 465 is SMTPS (encrypted from the first byte), 587 is STARTTLS (an
+        # unencrypted connection that is upgraded). Mixing them up means the
+        # connection just hangs quietly until the timeout.
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=20, context=_tls_context()) as connection:
+                if user:
+                    connection.login(user, password)
+                connection.send_message(email)
+            return
+
+        with smtplib.SMTP(host, port, timeout=20) as connection:
+            if tls:
+                connection.starttls(context=_tls_context())
             if user:
                 connection.login(user, password)
             connection.send_message(email)
-        return
-
-    with smtplib.SMTP(host, port, timeout=20) as connection:
-        if tls:
-            connection.starttls()
-        if user:
-            connection.login(user, password)
-        connection.send_message(email)
+    except ssl.SSLCertVerificationError as error:
+        # The error names the checkbox: a home server's own certificate is the usual cause.
+        raise i18n.TranslatableError(CERTIFICATE_ERROR,
+                                     error=getattr(error, "verify_message", None) or str(error)) from error
 
 
 async def _send_smtp(subject: str, text: str) -> None:
@@ -365,7 +429,10 @@ async def send(subject: str, text: str,
             description = without_secrets(str(error))
             log.warning("could not send a notification through %s: %s: %s",
                         channel, type(error).__name__, description)
-            results.append({"channel": channel, "ok": False, "error": description})
+            # The log file is English; the error the settings show is in the server's language (a
+            # refused mail certificate names the checkbox by the name the page gives it).
+            results.append({"channel": channel, "ok": False,
+                            "error": without_secrets(i18n.error_text(error, i18n.server_language()))})
 
     if results:
         db.set_setting("notify_last_send", db.utcnow())
@@ -491,7 +558,12 @@ def _weekly_summary() -> str:
     """The text of the weekly overview."""
     from . import formatting, stats
 
-    overview_data = stats.overview(7)
+    # The week since the previous summary - 7 x 24 hours back from now, not the statistics' "last 7 days" (whole
+    # calendar days, stats.period_of_days): sent on Monday at nine it would leave out last Monday from nine to
+    # midnight, which the previous summary did not have yet either.
+    week = stats.Period(since=(datetime.now(UTC) - timedelta(days=7)).strftime(db.TIME_FORMAT),
+                        until=stats.END_OF_TIME, days=7)
+    overview_data = stats.overview(week)
     hours = float(overview_data.get("watched_seconds") or 0) / 3600.0
     lines = [
         f"{_ts('Watched')}: {formatting.hours_human(hours)}",
@@ -499,14 +571,14 @@ def _weekly_summary() -> str:
         f"{_ts('Viewers')}: {formatting.number(overview_data.get('users') or 0)}",
     ]
 
-    titles = stats.top_items(7, limit=3)
+    titles = stats.top_items(week, limit=3)
     if titles:
         lines.append("")
         lines.append(_ts("Most watched titles") + ":")
         lines += [f"  {t['label']} - {formatting.hours_human(t['hours'])}"
                   for t in titles]
 
-    people = stats.top_users(7, limit=3)
+    people = stats.top_users(week, limit=3)
     if people:
         lines.append("")
         lines.append(_ts("Most active users") + ":")
@@ -515,8 +587,17 @@ def _weekly_summary() -> str:
     return "\n".join(lines)
 
 
-async def _report_change(event: str, failing: bool, reason: str, **values: Any) -> bool:
-    """Sends a message only when the state CHANGED.
+def _delivered(results: list[dict[str, Any]]) -> bool:
+    """Did at least one channel take the message? (send() returns a result per channel.)"""
+    return any(result.get("ok") for result in results)
+
+
+async def _report_change(event: str, failing: bool, reason: str, **values: Any) -> str:
+    """Sends a message only when the state CHANGED. Returns "" (no change), "sent" or "failed".
+
+    The new state is stored only once a channel took the message: the outage that stops the
+    collector often stops the sending too, and the alarm would be lost for good. Until then the
+    next run tries again.
 
     Without that the same sentence would come on every run of the task, a
     person would turn the notifications off and it would be of no use.
@@ -529,14 +610,15 @@ async def _report_change(event: str, failing: bool, reason: str, **values: Any) 
     previous = db.get_setting(_state_key(event), "ok")
     current = "bad" if failing else "ok"
     if previous == current:
-        return False
+        return ""
 
-    db.set_setting(_state_key(event), current)
     # `values` are the message's further variables (disk, days, minutes...), see *_VARIABLES.
     subject, text = message_text(CHANGE_MESSAGES[event][failing],
                                  detail=reason, **values)
-    await send(subject, text)
-    return True
+    if not _delivered(await send(subject, text)):
+        return "failed"
+    db.set_setting(_state_key(event), current)
+    return "sent"
 
 
 # The message a change of an event's state sends: {event: {failing: message}}.
@@ -566,33 +648,43 @@ def _summary_due(now: datetime) -> bool:
 async def check(now: datetime | None = None) -> dict[str, Any]:
     """Goes through the watched things and sends what is needed. Run by the task."""
     if not enabled_channels():
-        return {"status": "ok", "message": _ts("No channel is set up.")}
+        return {"status": "ok", "message": _ts("No channel is set up."), "task_log": "No channel is set up."}
 
     now = now or datetime.now()
-    sent = []
+    outcomes: dict[str, list[str]] = {"sent": [], "failed": []}
 
     if event_enabled("collector"):
         collector_state = _collector_state()
-        if await _report_change("collector", collector_state["bad"], collector_state["reason"],
-                                **collector_state["values"]):
-            sent.append("collector")
+        outcome = await _report_change("collector", collector_state["bad"], collector_state["reason"],
+                                       **collector_state["values"])
+        if outcome:
+            outcomes[outcome].append("collector")
 
     if event_enabled("space"):
         space_state = _space_state()
         failing, reason = _space_running_out(space_state)
-        if await _report_change("space", failing, reason, **space_state["values"]):
-            sent.append("space")
+        outcome = await _report_change("space", failing, reason, **space_state["values"])
+        if outcome:
+            outcomes[outcome].append("space")
 
     if event_enabled("summary") and _summary_due(now):
-        db.set_setting("notify_summary_sent", now.date().isoformat())
         subject, _text = message_text("summary")
-        await send(subject, _weekly_summary())
-        sent.append("summary")
+        # Marked as sent only once a channel took it - otherwise a later run that day tries again.
+        if _delivered(await send(subject, _weekly_summary())):
+            db.set_setting("notify_summary_sent", now.date().isoformat())
+            outcomes["sent"].append("summary")
+        else:
+            outcomes["failed"].append("summary")
 
-    if not sent:
-        return {"status": "ok", "message": _ts("Nothing new to report.")}
-    return {"status": "ok",
-            "message": _ts("Sent: {what}").format(what=", ".join(sent))}
+    sent, failed = outcomes["sent"], outcomes["failed"]
+    if not sent and not failed:
+        return {"status": "ok", "message": _ts("Nothing new to report."), "task_log": "Nothing new to report."}
+    # `task_log` is the same as a key and its values: the task log is read in the reader's language.
+    task_log = i18n.join_messages(
+        ([i18n.Message("Sent: {what}", what=", ".join(sent))] if sent else [])
+        + ([i18n.Message("Sending failed: {what}", what=", ".join(failed))] if failed else []), ". ")
+    return {"status": "error" if failed else "ok", "message": task_log.translated(i18n.server_language()),
+            "task_log": task_log}
 
 
 async def send_test(channel: str) -> dict[str, Any]:

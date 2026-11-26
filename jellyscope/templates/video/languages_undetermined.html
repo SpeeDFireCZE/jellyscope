@@ -24,7 +24,7 @@
     {# The path is the main thing here - without it the list would say "something is
        wrong" and leave the search to you. That is why one can search by it too. #}
     <form method="get" action="/video/languages/undetermined" class="btn-row">
-        <input type="search" name="search" value="{{ search }}"
+        <input type="search" name="search" value="{{ search }}" aria-label="{{ _('Search') }}"
                placeholder="{{ _('Search name or path...') }}" style="width:320px">
         <button class="btn primary" type="submit">{{ _("Show") }}</button>
         {% if search %}
@@ -79,7 +79,7 @@
     </div>
 </div>
 
-{% set extra %}{% if search %}&search={{ search }}{% endif %}{% endset %}
+{% set extra %}{% if search %}&search={{ search | urlencode }}{% endif %}{% endset %}
 {{ pager(page, pages, total, '/video/languages/undetermined', extra) }}
 {% else %}
 <div class="card">

@@ -185,10 +185,9 @@ check(bool(re.search(r'<input[^>]*value="custom"[^>]*checked', dialog)),
       "the switch stands at “custom”")
 
 
-# The tree with labels is longer than a laptop's screen. Because of
-# the suggestions the dialog has `overflow: visible`, so without a scroll of its own the content
-# ran out below the dialog's edge. Only the content scrolls, the Save button stays
-# seen at the bottom.
+# The tree with labels is longer than a laptop's screen. Without a scroll of its own the content
+# ran out below the dialog's edge (the dialog had `overflow: visible` then). Only the content
+# scrolls, the Save button stays seen at the bottom.
 dialog_start = page.rindex("<dialog", 0, start)
 check("modal-scrolling" in page[dialog_start:start],
       "the Rights dialog has scrolling content (modal-scrolling)")

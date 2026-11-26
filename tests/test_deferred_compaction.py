@@ -223,6 +223,12 @@ check("jde vrátit zpět" in text,
       "and that it can be taken back until the night")
 check("Nejbližší úklid" in text,
       "the Restore dialog says until when it can be taken back")
+# The time is written the way the app writes times (formatting.DATETIME_PATTERN), not by a pattern of its own.
+# It is the scheduler's local time already, so it is not converted from UTC.
+deadline = tasks.deferred_compaction_time()
+shown = re.search(r"Nejbližší úklid: ([^.]*\.[^.]*\.[^ ]* [0-9:]+)", text)
+check(deadline is not None and shown is not None and shown.group(1) == deadline.strftime("%d.%m.%Y %H:%M"),
+      f"the clean-up time in the app's date format ({shown and shown.group(1)}, deadline {deadline})")
 check(REWRITES["count"] == before_click, "the click did not rewrite the file")
 
 print()

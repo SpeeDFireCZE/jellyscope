@@ -455,8 +455,8 @@ check(radarr.clean_up_posters() == 1 and not images.title_file("movie", "27205")
 
 print()
 print("--- E) the card Stahuje se, its body and the slice ---")
-check(len(cards_radarr.CARDS) == 23 and len(cards.ALL_CARDS) == 206,
-      f"23 Radarr cards, 206 in the registry ({len(cards_radarr.CARDS)}, {len(cards.ALL_CARDS)})")
+check(len(cards_radarr.CARDS) == 24 and len(cards.ALL_CARDS) == 211,
+      f"24 Radarr cards, 211 in the registry ({len(cards_radarr.CARDS)}, {len(cards.ALL_CARDS)})")
 check(cards_radarr.SECTIONS[0][1][:2] == ("live_numbers", "downloading"), "Stahuje se is the second card of the section Teď v aplikaci (now in the app)")
 accounts.create("viewer", "longpassword")                 # default permissions: it has the *Arr area, it is no admin
 viewer = login("viewer")

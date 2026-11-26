@@ -6,7 +6,6 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
 
 {# ================================================================== #}
 {# Notifications.
@@ -60,7 +59,7 @@
                 <label for="smtp-host">{{ _("Host") }}</label>
                 <input type="text" id="smtp-host" name="smtp_host"
                        value="{{ settings.notify_smtp_host or '' }}"
-                       placeholder="smtp.seznam.cz" autocomplete="off">
+                       placeholder="smtp.example.com" autocomplete="off">
             </div>
             <div class="field">
                 <label for="smtp-port">{{ _("Port") }}</label>
@@ -85,7 +84,8 @@
                 <input type="password" id="smtp-password" name="smtp_password"
                        value="" autocomplete="new-password"
                        placeholder="{{ _('stored (leave empty to keep it)') if has_smtp_password else '' }}">
-                <p class="hint">{{ _("A stored password is never written into the page. An empty field leaves it alone.") }}</p>
+                <p class="hint">{{ _("A stored password is never written into the page. An empty field leaves it alone.") }}
+                    {% if has_smtp_password %}· <button data-keep-scroll class="link-button" type="submit" form="forget-smtp_password">{{ _("Forget") }}</button>{% endif %}</p>
             </div>
         </div>
 
@@ -94,22 +94,33 @@
                 <label for="smtp-sender">{{ _("From#sender") }}</label>
                 <input type="text" id="smtp-sender" name="smtp_from"
                        value="{{ settings.notify_smtp_sender or '' }}"
-                       placeholder="jellyscope@doma.cz" autocomplete="off">
+                       placeholder="jellyscope@example.com" autocomplete="off">
                 <p class="hint">{{ _("Empty = the user is used.") }}</p>
             </div>
             <div class="field">
                 <label for="smtp-to">{{ _("To#recipient") }}</label>
                 <input type="text" id="smtp-to" name="smtp_to"
                        value="{{ settings.notify_smtp_recipient or '' }}"
-                       placeholder="ja@doma.cz" autocomplete="off">
+                       placeholder="you@example.com" autocomplete="off">
             </div>
         </div>
 
-        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:20px">
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:12px">
             <input type="checkbox" name="smtp_tls" value="1"
                    {{ 'checked' if settings.notify_smtp_tls != '0' }}>
             <span>{{ _("upgrade the connection with STARTTLS") }}</span>
         </label>
+
+        {# The certificate is checked unless unticked (a home server's own certificate). An SMTP set up
+           before the check came keeps it unticked after the upgrade - the hint says what that means. #}
+        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; margin-bottom:{{ '6px' if settings.notify_smtp_verify == '0' else '20px' }}">
+            <input type="checkbox" name="smtp_verify" value="1"
+                   {{ 'checked' if settings.notify_smtp_verify != '0' }}>
+            <span>{{ _("verify the server's certificate") }}</span>
+        </label>
+        {% if settings.notify_smtp_verify == '0' %}
+        <p class="hint" style="margin:0 0 20px">{{ _("The server's certificate is not checked: anyone on the way to the mail server could read the password and the messages.") }}</p>
+        {% endif %}
 
         {# --- Discord --- #}
         <h3 class="group">{{ _("Discord") }}</h3>
@@ -124,7 +135,8 @@
             <input type="password" id="discord-webhook" name="discord_webhook"
                    value="" autocomplete="off"
                    placeholder="{{ _('stored (leave empty to keep it)') if has_discord else 'https://discord.com/api/webhooks/…' }}">
-            <p class="hint">{{ _("On the channel: Edit Channel -> Integrations -> Webhooks. Anyone with that address can post to the channel as you, which is why it is not written back here.") }}</p>
+            <p class="hint">{{ _("On the channel: Edit Channel -> Integrations -> Webhooks. Anyone with that address can post to the channel as you, which is why it is not written back here.") }}
+                {% if has_discord %}· <button data-keep-scroll class="link-button" type="submit" form="forget-discord_webhook">{{ _("Forget") }}</button>{% endif %}</p>
         </div>
 
         {# --- Telegram --- #}
@@ -141,7 +153,8 @@
                 <input type="password" id="telegram-token" name="telegram_token"
                        value="" autocomplete="off"
                        placeholder="{{ _('stored (leave empty to keep it)') if has_telegram else '123456:ABC…' }}">
-                <p class="hint">{{ _("@BotFather creates the bot.") }}</p>
+                <p class="hint">{{ _("@BotFather creates the bot.") }}
+                    {% if has_telegram %}· <button data-keep-scroll class="link-button" type="submit" form="forget-telegram_token">{{ _("Forget") }}</button>{% endif %}</p>
             </div>
             <div class="field">
                 <label for="telegram-chat">{{ _("Chat ID") }}</label>
@@ -156,6 +169,15 @@
             <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
         </div>
     </form>
+
+    {# "Forget" next to a stored secret: an empty field keeps it, so this is the way to remove it. Each
+       has a form of its own (forms cannot nest); the button by the field is joined to it by form="…". #}
+    {% for secret, stored in (("smtp_password", has_smtp_password), ("discord_webhook", has_discord), ("telegram_token", has_telegram)) if stored %}
+    <form method="post" action="/settings/notifications/forget" id="forget-{{ secret }}"
+          data-confirm="{{ _("Forget the stored value? Jellyscope cannot show it again; to use it, fill it in anew.") }}">
+        <input type="hidden" name="secret" value="{{ secret }}">
+    </form>
+    {% endfor %}
 
     {# The test message. Without it the settings are checked only when something
        breaks - and that is exactly the moment they have to work. #}
@@ -322,9 +344,9 @@
        in every interface language. An unknown curly bracket stays in the text
        as it is. The content in .modal-body - it scrolls on a low display. #}
     {% for msg in notification_state.messages if msg.variables %}
-    <dialog class="modal modal-wide" id="modal-variables-{{ msg.key }}">
+    <dialog class="modal modal-wide" id="modal-variables-{{ msg.key }}" aria-labelledby="modal-variables-{{ msg.key }}-title">
         <form method="dialog" class="modal-head">
-            <h2>{{ _("Variables: {message}").format(message=_(msg.name)) }}</h2>
+            <h2 id="modal-variables-{{ msg.key }}-title">{{ _("Variables: {message}").format(message=_(msg.name)) }}</h2>
             <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
         </form>
         <div class="modal-body">

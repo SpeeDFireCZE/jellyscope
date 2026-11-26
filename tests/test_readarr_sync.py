@@ -269,7 +269,8 @@ try:
 except readarr.ReadarrError as error:
     missing = str(error)
 check("tajny-klic" not in missing and readarr.sync_state()["result"] == "error", "a switched-off app with no address: an error without the key")
-readarr.save_settings(True, "http://nas:8787/readarr", "")
+# The saved key goes only to the server it was saved for: after the address was cleared it is typed again.
+readarr.save_settings(True, "http://nas:8787/readarr", "tajny-klic")
 
 print()
 print("--- E) deleting the downloaded data ---")

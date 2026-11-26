@@ -148,6 +148,16 @@ for broken in ("{", '{"a": 1}'):
     result = asyncio.run(scanner.run_tech_scan(only_missing=False, item_ids=["pol-0"]))
     check(result.get("status") == "ok" and paths == ["/media/film-0.mkv"],
           f"a broken path mapping {broken!r} is skipped, the path stays ({paths})")
+# A mapping stored before the save checked its shape: an entry that is not an object of texts is skipped, the
+# others still apply - the analysis does not end with an error for every file.
+for broken, expected in (('["/media", "/mnt/media"]', "/media/film-0.mkv"),
+                         ('[{"from": "/media", "to": 5}, {"from": "/media", "to": "/mnt/media"}]',
+                          "/mnt/media/film-0.mkv")):
+    db.set_setting("path_mappings", broken)
+    paths.clear()
+    result = asyncio.run(scanner.run_tech_scan(only_missing=False, item_ids=["pol-0"]))
+    check(result.get("status") == "ok" and paths == [expected],
+          f"a mapping entry of the wrong shape is skipped ({broken}: {result.get('status')}, {paths})")
 db.set_setting("path_mappings", "[]")
 
 paths.clear()

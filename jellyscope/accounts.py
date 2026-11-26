@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import logging
 import os
 import re
@@ -80,7 +81,7 @@ class AccountError(TranslatableError, ValueError):
 # The brake has two floors:
 #
 #   1. **Counting attempts** is kept in the process's memory. It is a record
-#      of the last minutes, and writing every wrong password into the database
+#      of the last hour, and writing every wrong password into the database
 #      would be exactly what an attacker wants.
 #   2. **A block** does belong in the database: it has to survive a restart,
 #      otherwise waiting for an update would do. And above all it escalates -
@@ -94,12 +95,51 @@ ATTEMPTS_BEFORE_BLOCK = 8
 BLOCK_STEPS = (60, 120, 300, 900)      # 1 min, 2 min, 5 min, 15 min
 # After four blocks it is permanent - an admin has to unblock it in Settings.
 
+# Eight attempts a minute catch a burst, not a patient script: seven a minute
+# are ten thousand guesses a day. So the last hour counts too - twenty attempts
+# in it are a block as well, the same steps.
+LONG_WINDOW_SECONDS = 3600
+ATTEMPTS_IN_LONG_WINDOW = 20
+# The addresses kept in memory. Above it the one quiet for the longest is
+# forgotten, so memory cannot be filled by changing addresses - and a burst
+# from thousands of them does not wipe the count of the others.
+MAX_COUNTED_ADDRESSES = 5000
+
 # When an address behaves for a long time, it starts again from the first step.
 # Without it, a person who mistypes their password once every half a year
 # would get blocked permanently after a few years.
 FORGET_AFTER_HOURS = 24
 
-_attempts: dict[str, list[float]] = {}
+# The attempts of an address: (when, a mark of the door and name aimed at). None = no name - a code (Quick Connect).
+_attempts: dict[str, list[tuple[float, str | None]]] = {}
+
+
+def _target(name: str | None) -> str | None:
+    """A short mark of the name an attempt aimed at ("local:petr"), never the name itself.
+
+    The name comes straight from the sign-in form and may be as long as the form lets it be (a megabyte):
+    kept whole, a few addresses with a few attempts each filled the memory without ever meeting a block.
+    """
+    if name is None:
+        return None
+    return hashlib.sha256(name.strip().lower().encode("utf-8", "surrogatepass")).hexdigest()[:32]
+
+
+def _brake_key(ip: str) -> str:
+    """The address the brake counts: an IPv6 one as its /64 network, an IPv4-mapped one as the IPv4 address.
+
+    One host gets a whole /64 and can take a new address of it for every few guesses - counted one by
+    one, it never met a block. Anything that is no address (a network from the list in Settings) stays.
+    """
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped:
+            return str(address.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return str(address)
 
 
 def _block_row(ip: str) -> dict[str, Any] | None:
@@ -108,7 +148,7 @@ def _block_row(ip: str) -> dict[str, Any] | None:
 
 def block_remaining(ip: str) -> int:
     """How many seconds the address still has to wait. 0 = it may try, -1 = permanently."""
-    row = _block_row(ip)
+    row = _block_row(_brake_key(ip))
     if row is None:
         return 0
     if row["permanent"]:
@@ -129,30 +169,68 @@ def _seconds_until(utc_time: str) -> int:
     return int((end - datetime.now(UTC).replace(tzinfo=None)).total_seconds())
 
 
-def count_failure(ip: str) -> dict[str, Any] | None:
-    """Records a failed attempt. When there are too many already, creates a block.
-
-    Returns a description of the block when it has just come into being - None otherwise.
-    """
+def _recent_attempts(ip: str) -> list[tuple[float, str | None]]:
     now = time.monotonic()
-    attempts = [t for t in _attempts.get(ip, []) if now - t < BLOCK_STEPS[0]]
-    attempts.append(now)
-    _attempts[ip] = attempts[-ATTEMPTS_BEFORE_BLOCK:]
+    return [a for a in _attempts.get(ip, []) if now - a[0] < LONG_WINDOW_SECONDS]
 
-    # A ceiling on the number of addresses, so memory cannot be filled by changing addresses.
-    if len(_attempts) > 5000:
-        _attempts.clear()
 
-    if len(attempts) < ATTEMPTS_BEFORE_BLOCK:
+def _used_up(attempts: list[tuple[float, str | None]]) -> bool:
+    """Has the address no attempt left - eight in the last minute, or twenty in the last hour?"""
+    now = time.monotonic()
+    in_minute = sum(1 for a in attempts if now - a[0] < BLOCK_STEPS[0])
+    return in_minute >= ATTEMPTS_BEFORE_BLOCK or len(attempts) >= ATTEMPTS_IN_LONG_WINDOW
+
+
+def begin_attempt(ip: str, name: str | None = None) -> dict[str, Any] | None:
+    """Counts an attempt aimed at `name` (None = a code) before its password is checked.
+
+    Called with nothing awaited since the check of the block (block_remaining): counted only
+    after the answer, requests sent at once all passed the check while the first ones waited
+    for Jellyfin or the hash, and every one of them got its guess. The attempt counts as
+    failed until a success forgets it (forget_failures); attempt_failed() after a wrong
+    password makes the block at the last allowed one, as before.
+
+    The attempts of all names count together - the name only tells which of them a successful
+    sign-in forgets. Returns a block when the address has used up its attempts already
+    (checked or still waiting for their answer) - the password is then not checked at all.
+    """
+    ip = _brake_key(ip)
+    attempts = _recent_attempts(ip)
+    _attempts.pop(ip, None)
+    if _used_up(attempts):
+        return _block(ip)
+    attempts.append((time.monotonic(), _target(name)))
+    _attempts[ip] = attempts       # at the end again: the most recent address
+
+    while len(_attempts) > MAX_COUNTED_ADDRESSES:
+        del _attempts[next(iter(_attempts))]
+    return None
+
+
+def attempt_failed(ip: str) -> dict[str, Any] | None:
+    """The attempt begun by begin_attempt failed. Returns the block when the address has just used up its attempts."""
+    ip = _brake_key(ip)
+    if not _used_up(_recent_attempts(ip)):
         return None
-
     _attempts.pop(ip, None)
     return _block(ip)
 
 
+def count_failure(ip: str, name: str | None = None) -> dict[str, Any] | None:
+    """Records a failed attempt (the start of a code). When there are too many already, creates a block.
+
+    Returns a description of the block when it has just come into being - None otherwise.
+    """
+    return begin_attempt(ip, name) or attempt_failed(ip)
+
+
 def _block(ip: str) -> dict[str, Any]:
-    """Creates or tightens the block of an address."""
+    """Creates or tightens the block of an address. A block that runs already is returned as it is."""
     row = _block_row(ip)
+    if row and (row["permanent"] or _seconds_until(str(row["blocked_until"] or "")) > 0):
+        # Failures counted during a block (a burst that passed the check at once) do not climb a level each.
+        return {"ip": ip, "level": int(row["level"]), "permanent": bool(row["permanent"]),
+                "seconds": 0 if row["permanent"] else _seconds_until(str(row["blocked_until"]))}
     level = int(row["level"]) if row else 0
     failures = int(row["failures"] or 0) if row else 0
 
@@ -191,18 +269,20 @@ def _in_seconds(seconds: int) -> str:
             + timedelta(seconds=seconds)).strftime(db.TIME_FORMAT)
 
 
-def forget_failures(ip: str) -> None:
-    """After a successful sign-in it starts from zero again.
+def forget_failures(ip: str, name: str | None = None) -> None:
+    """After a successful sign-in the failures aimed at that name (None = a code) are forgotten.
 
-    The record in the database is deleted too, that is the block's level:
-    whoever knows the password is obviously the account's owner and should not
-    carry into the future that a few attempts failed. It does not get round a
-    blocked address - while a block applies, the password is not checked at all.
+    Only those: whoever knows their own password is not the owner of the other
+    accounts. When a success forgot every failure of the address, anybody with an
+    account guessed the administrator's password seven times, signed in as
+    themselves and went on - a block never came. For the same reason the record in
+    the database, the block's level, stays; it is forgotten after FORGET_AFTER_HOURS
+    of quiet (see _block and clean_up_blocks).
     """
-    _attempts.pop(ip, None)
-    with db.connect() as conn:
-        conn.execute("DELETE FROM login_blocks WHERE ip = ? AND permanent = 0",
-                     (ip,))
+    ip, target = _brake_key(ip), _target(name)
+    left = [a for a in _attempts.pop(ip, []) if a[1] != target]
+    if left:
+        _attempts[ip] = left
 
 
 def list_blocks() -> list[dict[str, Any]]:
@@ -219,6 +299,7 @@ def list_blocks() -> list[dict[str, Any]]:
 
 def unblock(ip: str) -> bool:
     """Removes the block of an address, including the counter of steps."""
+    ip = _brake_key(ip)
     with db.connect() as conn:
         cursor = conn.execute("DELETE FROM login_blocks WHERE ip = ?", (ip,))
     _attempts.pop(ip, None)
@@ -228,8 +309,42 @@ def unblock(ip: str) -> bool:
     return removed
 
 
+def convert_block_keys() -> int:
+    """Moves blocks stored under a whole address under the key the brake counts today. Returns how many rows moved.
+
+    Since 24. 11. 2026 an IPv6 address counts as its /64 and an IPv4-mapped one as IPv4 (_brake_key). A row an
+    older version stored under the whole address was found by nothing: a permanent block silently stopped
+    holding and could not be lifted. Rows that meet under one key join: the higher level, permanent when
+    any was, the later times. Run at every start; with nothing old it changes nothing.
+    """
+    moved = 0
+    with db.connect() as conn:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM login_blocks").fetchall()]
+        by_key: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            key = _brake_key(str(row["ip"]))
+            moved += key != row["ip"]
+            kept = by_key.get(key)
+            if kept is None:
+                by_key[key] = {**row, "ip": key}
+                continue
+            kept["level"] = max(int(kept["level"] or 0), int(row["level"] or 0))
+            kept["permanent"] = 1 if kept["permanent"] or row["permanent"] else 0
+            for column in ("blocked_until", "last_failure"):
+                kept[column] = max(str(kept[column] or ""), str(row[column] or "")) or None
+        if moved:
+            conn.execute("DELETE FROM login_blocks")
+            for row in by_key.values():
+                columns = list(row)
+                conn.execute(f"INSERT INTO login_blocks ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
+                             tuple(row[c] for c in columns))
+            conn.commit()
+    return moved
+
+
 def block_permanently(ip: str) -> None:
     """A manual permanent block from the list in Settings."""
+    ip = _brake_key(ip)
     with db.connect() as conn:
         conn.execute(
             """
@@ -406,10 +521,11 @@ def create(username: str, password: str, again: str | None = None, is_admin: boo
 def authenticate(username: str, password: str) -> dict[str, Any] | None:
     """Returns the account when both the name and the password fit. None otherwise."""
     account = get_by_name(username or "")
-    if account is None:
-        # Even when the account does not exist, the hash is computed for
-        # nothing. Without it the answer would come noticeably faster, and it
-        # would tell which names exist on the server.
+    if account is None or not account["password_hash"]:
+        # Even when the account does not exist - or comes from Jellyfin and has
+        # no password here - the hash is computed for nothing. Without it the
+        # answer would come noticeably faster, and it would tell which names
+        # exist on the server.
         hash_password(password or "")
         return None
 
@@ -420,6 +536,29 @@ def authenticate(username: str, password: str) -> dict[str, Any] | None:
         conn.execute("UPDATE accounts SET last_login = ? WHERE id = ?",
                      (db.utcnow(), account["id"]))
     return account
+
+
+# Set once the local passwords of accounts from Jellyfin were cleared (clear_jellyfin_passwords).
+JELLYFIN_PASSWORDS_KEY = "conversion_jellyfin_passwords"
+
+
+def clear_jellyfin_passwords() -> int:
+    """Clears the local passwords an older version let an administrator give to accounts from Jellyfin, once.
+
+    Such an account is opened through Jellyfin only (from_jellyfin stores no password). Until 24. 11. 2026
+    "change another account's password" took these accounts too; that password then opened the account at the
+    local door for ever - with signing in through Jellyfin switched off, after the password changed in
+    Jellyfin - and it can no longer be changed or removed (set_password refuses). Once per database: after
+    it the mark is set and nothing is touched again. Returns how many accounts lost such a password.
+    """
+    if db.get_setting(JELLYFIN_PASSWORDS_KEY, "") == "1":
+        return 0
+    with db.connect() as conn:
+        cursor = conn.execute("UPDATE accounts SET password_hash = '' WHERE COALESCE(jellyfin_user_id, '') <> ''"
+                              " AND COALESCE(password_hash, '') <> ''")
+        conn.commit()
+    db.set_setting(JELLYFIN_PASSWORDS_KEY, "1")
+    return int(cursor.rowcount or 0)
 
 
 def by_jellyfin_id(jellyfin_id: str) -> dict[str, Any] | None:
@@ -437,7 +576,7 @@ def from_jellyfin(details: dict[str, Any]) -> dict[str, Any]:
     not once somebody notices.
 
     No password is stored here. Such an account can be opened only through
-    Jellyfin - `prazdny_otisk()` matches nothing.
+    Jellyfin - the stored `password_hash` is empty, and authenticate() never accepts one.
     """
     jellyfin_id = str(details["id"])
     account = by_jellyfin_id(jellyfin_id)
@@ -636,12 +775,21 @@ def _free_name(base: str) -> str:
 
 
 def set_password(account_id: int, password: str, again: str | None = None) -> None:
+    """A new password of a local account. An account from Jellyfin has its password in Jellyfin.
+
+    A local one set here would be a second door to it: one its owner can neither change nor
+    see, and one that ignores sign-in through Jellyfin switched off.
+    """
+    account = get(account_id)
+    if account is None:
+        raise AccountError("The account does not exist.")
+    if account.get("jellyfin_user_id"):
+        raise AccountError("The password of a Jellyfin account is changed in Jellyfin.")
     password = validate_password(password, again)
     with db.connect() as conn:
         conn.execute("UPDATE accounts SET password_hash = ? WHERE id = ?",
                      (hash_password(password), account_id))
     # The password itself does not get into the log, only that it changed and whose.
-    account = get(account_id) or {}
     log.info("password changed for account %s", account.get("username") or account_id)
 
 
@@ -661,9 +809,16 @@ def session_fingerprint(account: dict[str, Any]) -> str:
     changes, the fingerprint stops matching and the old session ends. It is a
     hash of the hash, neither the password nor its stored hash: the cookie is
     signed, but readable. An account from Jellyfin has an empty password hash,
-    so this never signs it out.
+    so this never signs it out - and the hash alone would be the same for all of
+    them: once an id is handed out again (a restored backup, a copy to another
+    database sets the counter to the highest id), a deleted account's cookie would
+    open the new one. So its Jellyfin id and creation time are in it too. A local
+    account keeps the old form, its sessions hold over an upgrade.
     """
     source = "relace:" + str(account.get("password_hash") or "")
+    jellyfin_id = str(account.get("jellyfin_user_id") or "")
+    if jellyfin_id:
+        source += "|" + bare_id(jellyfin_id) + "|" + str(account.get("created_at") or "")
     return hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
 
 
@@ -729,8 +884,12 @@ def set_admin(account_id: int, is_admin: bool) -> None:
         raise AccountError("You cannot remove privileges from the last administrator.")
 
     with db.connect() as conn:
-        conn.execute("UPDATE accounts SET is_admin = ? WHERE id = ?",
-                     (1 if is_admin else 0, account_id))
+        if is_admin:
+            conn.execute("UPDATE accounts SET is_admin = 1 WHERE id = ?", (account_id,))
+        # The checks above and the write are two steps: two administrators demoting each other at once both
+        # passed them. The write checks again in the same statement, so one of them is refused.
+        elif not _write_keeping_admin(conn, _DEMOTE_KEEPING_LOCAL, account_id):
+            raise AccountError("You cannot remove privileges from the last local administrator.")
     log.info("account %s is now %s", account["username"],
              "admin" if is_admin else "reader")
 
@@ -746,6 +905,35 @@ def delete(account_id: int) -> None:
     if account["is_admin"] and admin_count() <= 1:
         raise AccountError("The last administrator cannot be deleted.")
 
+    local = not account.get("jellyfin_user_id")
     with db.connect() as conn:
-        conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        # Checked again in the write: somebody else may have changed the administrators since the checks above.
+        if not _write_keeping_admin(conn, _DELETE_KEEPING_LOCAL if local else _DELETE_KEEPING_ANY, account_id):
+            if local:
+                raise AccountError("The last local administrator cannot be deleted: one must always stay, "
+                                   "to get in when Jellyfin is not reachable.")
+            raise AccountError("The last administrator cannot be deleted.")
     log.info("account %s deleted", account["username"])
+
+
+# The write happens only when the account is no administrator or another (local) one stays. A local
+# administrator needs another local one, an administrator from Jellyfin any other administrator (an older
+# installation may have no local one).
+_OTHER_LOCAL_ADMIN = (" AND (is_admin = 0 OR (SELECT COUNT(*) FROM accounts WHERE is_admin = 1 AND id <> ?"
+                      " AND COALESCE(jellyfin_user_id, '') = '') >= 1)")
+_DEMOTE_KEEPING_LOCAL = "UPDATE accounts SET is_admin = 0 WHERE id = ?" + _OTHER_LOCAL_ADMIN
+_DELETE_KEEPING_LOCAL = "DELETE FROM accounts WHERE id = ?" + _OTHER_LOCAL_ADMIN
+_DELETE_KEEPING_ANY = ("DELETE FROM accounts WHERE id = ? AND (is_admin = 0"
+                       " OR (SELECT COUNT(*) FROM accounts WHERE is_admin = 1 AND id <> ?) >= 1)")
+
+
+def _write_keeping_admin(conn: Any, sql: str, account_id: int) -> bool:
+    """Runs one of the writes above, whose condition keeps an administrator. Returns whether it wrote.
+
+    The condition is part of the statement, so on SQLite the check and the write run under one write lock.
+    On PostgreSQL the administrators' rows are locked first: two such writes at once take turns, and the
+    second one sees the first one's result.
+    """
+    if conn.is_postgres:
+        conn.execute("SELECT id FROM accounts WHERE is_admin = 1 ORDER BY id FOR UPDATE")
+    return bool(conn.execute(sql, (account_id, account_id)).rowcount)

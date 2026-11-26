@@ -85,9 +85,9 @@ check({k.key for k in cards_music.CARDS if k.area == "music_who"} == {"music_lis
 LIBRARY_CARDS = {"library", "formats", "quality", "years", "new", "library_genres", "largest", "unplayed"}
 check({k.key for k in cards_music.CARDS if not k.uses_period} == {f"music_{j}" for j in LIBRARY_CARDS},
       "the library's cards have no period (the unlistened count the whole history)")
-check(all(k in cards.ALL_CARDS for k in cards_music.CARDS) and len(cards.ALL_CARDS) == 206
+check(all(k in cards.ALL_CARDS for k in cards_music.CARDS) and len(cards.ALL_CARDS) == 211
       and list(cards.ALL_CARDS[-37:-17]) == list(cards_music.CARDS) and cards.ALL_CARDS[-38].group == "Seerr",
-      f"after the apps' cards (Books come last); there are 206 cards ({len(cards.ALL_CARDS)})")
+      f"after the apps' cards (Books come last); there are 211 cards ({len(cards.ALL_CARDS)})")
 WIDTHS = {"numbers": "full", "by_day": "full", "when": "full", "listeners": "half", "most_played": "half",
           "albums": "full", "artists": "half",
           "tracks": "half", "genres": "full", "library": "full", "formats": "third", "quality": "third", "years": "third",

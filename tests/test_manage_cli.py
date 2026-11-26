@@ -18,9 +18,18 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
-os.environ["JELLYSCOPE_HOME"] = tempfile.mkdtemp()
+_tmp = tempfile.mkdtemp()
+os.environ["JELLYSCOPE_HOME"] = _tmp
+os.environ["DATABASE_PATH"] = str(Path(_tmp) / "manage.db")
+os.environ["SECRET_KEY"] = "manage-cli-test-key"
+os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
+os.environ["JELLYFIN_API_KEY"] = "manage-cli-test"
+
+import contextlib  # noqa: E402
+import io  # noqa: E402
 
 import manage  # noqa: E402
+from jellyscope import accounts, db  # noqa: E402
 
 failures = 0
 
@@ -56,6 +65,40 @@ written = [f"{p.relative_to(PROJECT)}:{t.count(chr(10), 0, m.start()) + 1}" for 
            for t in [p.read_text(encoding="utf-8")] for m in OLD.finditer(t)]
 check(not written and bool(OLD.search('manage.py heslo <em>x</em> --spravce')),
       f"no old command is written in the app or the documentation ({written[:4]})")
+
+print()
+print("--- sign-in blocks without the web UI ---")
+# A permanent block locks out everybody at that address, the administrator included - behind a proxy that is
+# every visitor. Lifting it needed a signed-in administrator or SQL by hand (audit SD-5).
+db.init_db()
+accounts.block_permanently("192.0.2.9")
+accounts.block_permanently("192.0.2.10")
+for words in (["blocks"], ["unblock", "192.0.2.9"], ["unblock", "--all"]):
+    try:
+        args = parser.parse_args(words)
+    except SystemExit:
+        args = None
+    # Only the parsing: what the commands do is checked below.
+    check(args is not None and getattr(args, "func", None) is not None, f"manage.py {' '.join(words)} parses as a command")
+shown = io.StringIO()
+with contextlib.redirect_stdout(shown):
+    manage.main(["blocks"])
+check("192.0.2.9" in shown.getvalue() and "permanent" in shown.getvalue(), f"the list shows them ({shown.getvalue()!r})")
+with contextlib.redirect_stdout(io.StringIO()):
+    lifted = manage.main(["unblock", "192.0.2.9"])
+check(lifted == 0 and accounts.block_remaining("192.0.2.9") == 0 and accounts.block_remaining("192.0.2.10") == -1,
+      "one address is lifted, the other stays")
+with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    unknown = manage.main(["unblock", "192.0.2.99"])
+check(unknown == 1, "an address without a block is an error")
+with contextlib.redirect_stdout(io.StringIO()):
+    manage.main(["unblock", "--all"])
+check(not accounts.list_blocks(), "--all lifts every block")
+check(all(f"manage.py {c}" in block for c in ("blocks", "unblock")), "the README shows the commands for blocks")
+deploy = (PROJECT / "DEPLOY.md").read_text(encoding="utf-8")
+docker = deploy[deploy.index("## Docker"):deploy.index("## Reverse proxy")]
+check("manage.py unblock" in deploy and "172.16.0.0/12" in docker,
+      "DEPLOY.md tells Docker which FORWARDED_ALLOW_IPS works and how to lift a block")
 
 print(f"\n{'DONE - failures: 0' if not failures else f'DONE - failures: {failures}'}")
 sys.exit(1 if failures else 0)

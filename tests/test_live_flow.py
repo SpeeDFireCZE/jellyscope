@@ -112,9 +112,20 @@ def hours(period) -> float:
     points = stats.bandwidth_live(period, points=180)
     return (points[-1]["time"] - points[0]["time"]) / 3600
 
+def whole_days(days: int) -> float:
+    """Hours from the local midnight that starts "the last N days" (today and N - 1 days before it) until now.
+
+    Whole calendar days since 25. 11. 2026, the days the charts by day draw - no longer N x 24 hours back."""
+    midnight = datetime.combine(datetime.now().date() - timedelta(days=days - 1), datetime.min.time()).astimezone()
+    return (datetime.now(timezone.utc) - midnight).total_seconds() / 3600
+
+
 check(23 <= hours(None) <= 25, f"without a filter a day ({hours(None):.1f} h)")
-check(160 <= hours(7) <= 170, f"seven days ({hours(7):.1f} h)")
-check(700 <= hours(30) <= 725, f"thirty days ({hours(30):.1f} h)")
+for days, label in ((7, "seven days"), (30, "thirty days")):
+    # The points sit in the middle of their steps, so the first and the last are one step (1/180) closer.
+    expected = whole_days(days) * 179 / 180
+    check(abs(hours(days) - expected) < 0.1,
+          f"{label} from the local midnight ({hours(days):.1f} h, expected {expected:.1f} h)")
 # A short own period must not shrink below a day.
 short = stats.period_between("2026-08-20", "2026-08-20")
 check(23 <= hours(short) <= 25, f"one day stays a day ({hours(short):.1f} h)")

@@ -38,7 +38,7 @@ TABS = ("overview", "books", "activity")
 # The permission area of the books statistics (Overview, Activity, the Library page section) - one place, read by
 # web/library_kinds.py too. The Books tab is the Library's.
 AREA = "books"
-# The library's cards of Books (cards_books.PAGES["library"]) without the numbers card - those are the tiles above them.
+# The library's cards of Books (cards_books.PAGES["library"]) without the numbers card - drawn above them on its own.
 # One list for a library's Overview and for the Library page's section; the templates get it as `card_keys`.
 LIBRARY_CARDS = tuple(cards_books.card_key(name) for name in cards_books.PAGES["library"] if name != "library")
 
@@ -114,5 +114,7 @@ def library_page(request: Request, library: dict[str, Any], account: dict[str, A
 def library_summary() -> dict[str, Any]:
     """The Books section of the Library page: every books library together (only its cards, LIBRARY_CARDS)."""
     overview = books_library_overview(cards=LIBRARY_CARDS)
-    return {"numbers": overview["numbers"], "cards": _cards(), "card_data": _card_data(overview, LIBRARY_CARDS),
+    # The numbers are the card Books library numbers there (the same count, cards_books.py), drawn by the registry.
+    return {"numbers": overview["numbers"], "cards": _cards(),
+            "card_data": {cards_books.card_key("library"): overview["numbers"], **_card_data(overview, LIBRARY_CARDS)},
             "card_keys": LIBRARY_CARDS}

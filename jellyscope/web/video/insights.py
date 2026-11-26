@@ -1,7 +1,7 @@
 """Insights and the most watched titles: /video/insights, /video/insights/top.
 
 Part of the "Movies & series" section (web/video/). The insights page is
-made of the cards of the "Zjištění" area (cards.area_data); the most
+made of the cards of the "Insights" area (INSIGHT_CARDS, drawn from the registry); the most
 watched titles have a full ranking page and a partial for the overview card.
 """
 from __future__ import annotations
@@ -11,11 +11,16 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
-from ... import cards, stats
+from ... import stats
 from ..base import _context, require_login, templates
+from ..dashboards import _registry_page
 from ..periods import TOP_KIND_SESSION_KEY, _days, _kind
 
 router = APIRouter()
+
+# The page's cards from the registry, in the order of video/insights.html.
+INSIGHT_CARDS = ("insight_unused", "insight_transcoded", "insight_reasons", "insight_speed", "insight_quality",
+                 "insight_large", "insight_libraries", "insight_duplicates", "insight_postponed")
 
 
 @router.get("/video/insights", response_class=HTMLResponse)
@@ -23,9 +28,9 @@ def insights(request: Request, days: int | None = None,
              since: str | None = None, until: str | None = None,
              account: dict[str, Any] = Depends(require_login)):
     days = _days(request, days, since, until)
-    # The page is made of the insight cards and takes their data from the registry.
+    # The page is made of the insight cards: the registry draws them and computes their data.
     return templates.TemplateResponse(request, "video/insights.html", _context(
-        request, account, days=days, **cards.area_data("charts", days)))
+        request, account, days=days, **_registry_page(request, account, INSIGHT_CARDS, days)))
 
 
 @router.get("/video/partials/top-items", response_class=HTMLResponse)

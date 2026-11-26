@@ -14,9 +14,14 @@ from ..i18n import translate as _t
 from ..stats.kinds import is_video_library
 from . import library_kinds
 from .base import _context, _flash, require_admin, require_login, templates
+from .dashboards import _registry_page
 from .periods import _days, _growth_disk
 
 router = APIRouter()
+
+# The Library page's cards from the registry, in the order of library_index.html. The sections of the other kinds
+# of content (music, books: library_kinds.summaries) add their library cards after them.
+INDEX_CARDS = ("libraries", "disks", "library_total", "library_growth", "codecs", "resolutions", "dynamic_range")
 
 
 # How many archived items the archive windows show (the most played
@@ -28,31 +33,26 @@ ARCHIVE_DELETE_LIMIT = 1000
 
 @router.get("/library", response_class=HTMLResponse)
 def library_index(request: Request, days: int | None = None,
-                  since: str | None = None, until: str | None = None, growth_disk: str | None = None,
+                  since: str | None = None, until: str | None = None,
                   account: dict[str, Any] = Depends(require_login)):
     """The signpost: the tiles of the single libraries from Jellyfin.
 
     The period is the same as everywhere else - one choice for the whole app,
     a custom range included. It concerns a single chart on the page (the library
     growth); the tiles above it are a state, not a period, and say so themselves.
+    The disk above that chart comes from the address (growth_disk) like on every page with the card.
     """
     days = _days(request, days, since, until)
-    # The Disks card and Library growth ask for the same disks' forecasts: one computation per disk.
-    with stats.disk_growth_memo():
-        disks = stats.disks_overview(days, stats.library_growth, stats.disk_growth)
-        growth = cards.growth_data(days, _growth_disk(request, growth_disk))
+    # Sections of the other kinds of content (music…) next to the video statistics. Each reads its libraries
+    # once for its numbers and its cards; the registry draws those cards with the data the section computed.
+    content_sections = library_kinds.summaries(account)
+    computed = {key: data for section in content_sections for key, data in section["data"]["card_data"].items()}
+    # The cards from the registry: the Disks card and Library growth share the disks' forecasts (one data_for).
     return templates.TemplateResponse(request, "library_index.html", _context(
         request, account,
         days=days,
-        # Sections of the other kinds of content (music…) next to the video statistics.
-        content_sections=library_kinds.summaries(account),
-        libraries=stats.library_cards(),
-        coverage=stats.tech_coverage(),
-        codecs=stats.codec_breakdown(),
-        resolutions=stats.resolution_breakdown(),
-        ranges=stats.video_range_breakdown(),
-        disks=disks,
-        **growth,
+        content_sections=content_sections,
+        **_registry_page(request, account, INDEX_CARDS + tuple(computed), days, computed),
     ))
 
 
@@ -60,7 +60,7 @@ def library_index(request: Request, days: int | None = None,
 def growth_partial(request: Request, days: int | None = None,
                    since: str | None = None, until: str | None = None, growth_disk: str | None = None,
                    account: dict[str, Any] = Depends(require_login)):
-    """Only the "Růst knihovny" card - for the disk choice above the chart.
+    """Only the "Library growth" card - for the disk choice above the chart.
 
     A disk's chip replaces this one card (static/js/app.js), so the page stays
     where it is - it does not reload and does not scroll away. The same template as
@@ -129,18 +129,21 @@ def library_detail(
             ),
         )
     elif tab == "media":
-        page = max(1, page)
         per_page = 48
         # Series show in the list as one row, not by episodes -
         # see stats.library_rows(). Hence the paging too is counted
         # from groups, not from items.
         total = stats.library_rows_count(library_id, search, archived=show_archived)
+        pages = max(1, (total + per_page - 1) // per_page)
+        # A page past the end is the last one, as in the History - a huge
+        # number from the address would not even fit into OFFSET.
+        page = min(max(1, page), pages)
         context.update(
             items=stats.library_rows(per_page, (page - 1) * per_page, library_id,
                                      search, sort, archived=show_archived),
             total=total,
             page=page,
-            pages=max(1, (total + per_page - 1) // per_page),
+            pages=pages,
         )
         # The windows "assign to other titles" and "delete from the archive" - only
         # in the archive and only for the administrator. Items one by one, episodes
@@ -203,7 +206,7 @@ def item_detail(
         request, account,
         item=item_row,
         # The range merges the measured value with what Jellyfin reports - see
-        # stats.RANGE_CASE. The template has nowhere to compute it.
+        # stats.tech.RANGE_CASE. The template has nowhere to compute it.
         dynamic_range=stats.item_range(item_row),
         # The versions of a title (4K next to 1080p). `chosen_version` is the one whose data
         # are drawn; without the parameter it is the one Jellyfin takes for the
@@ -497,7 +500,8 @@ async def item_image(
     """
     if kind not in ("Primary", "Backdrop", "Thumb", "Logo"):
         kind = "Primary"
-    w = max(80, min(1200, w))
+    # One of a few fixed widths, rounded up (images.WIDTHS): every width would be another file.
+    w = next((width for width in images.WIDTHS if width >= w), images.WIDTHS[-1])
 
     # The id from the address is used further **only in this checked form** - and
     # that in both places: in the file's name in the cache and in the query to
@@ -510,8 +514,10 @@ async def item_image(
     # Jellyfin is always a hexadecimal GUID, so this filter throws nothing valid away.
     # `isascii`: isalnum() alone lets through letters and digits outside ASCII too
     # ("é", "²"), which do not belong in a file name in the cache (images.py refuses them).
+    # At most 64 characters (a GUID has 32, with dashes 36): a longer name is "File name too long"
+    # when the cache is asked - a 500 instead of a 404.
     safe_id = "".join(c for c in item_id if c.isascii() and (c.isalnum() or c in "-_"))
-    if not safe_id or safe_id != item_id:
+    if not safe_id or safe_id != item_id or len(safe_id) > 64:
         raise HTTPException(status_code=404, detail="Invalid id.")
 
     # The image's tag (ImageTags from Jellyfin) is a part of the file's name.
@@ -519,7 +525,8 @@ async def item_image(
     # has another tag, hence another address and another file. Without it
     # Jellyscope kept the first image for ever - even after a person fixed it in
     # Jellyfin, because a wrongly identified item had a wrong poster.
-    safe_tag = "".join(c for c in tag if c.isascii() and c.isalnum())[:32]
+    # Only the tag stored with the item is kept (images.item_image), any other is dropped.
+    safe_tag = images.clean_tag(tag)
 
     # Where the image lies and where it is taken from only the store knows (jellyscope/images.py):
     # from the disk, otherwise from Jellyfin - and then it is saved, so that it is downloaded only once.
@@ -531,5 +538,6 @@ async def item_image(
     return Response(
         content,
         media_type=media_type,
-        headers={"Cache-Control": "public, max-age=604800"},
+        # `private`: the image is behind the sign-in - a shared cache in front of Jellyscope must not keep it.
+        headers={"Cache-Control": "private, max-age=604800"},
     )

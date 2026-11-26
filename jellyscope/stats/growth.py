@@ -14,7 +14,7 @@ from .. import content_kinds, db, formatting
 from .content_history import Changes, all_changes, complete_library_rows, kind_changes, series_from_changes
 from .disks import (DISK_KINDS, _pace, _segment, complete_disks, disk_changes, files_forecast, runs_out_first,
                     disk_snapshots)
-from .periods import _local_day, _as_period
+from .periods import _from_day_before, _local_day, _as_period
 from .tech import RESOLUTION_CASE, RANGE_CASE
 
 
@@ -110,12 +110,17 @@ def _backfilled_curve(first: str, last: str, belongs: Callable[[str], bool] | No
     if not changes and not first_with_kind:
         return []
 
-    # The running total from the oldest change to the end of the period.
+    # The running total from the oldest change to the end of the period. What changed before the period only sets
+    # the starting state - one sum, not a walk day by day (Jellyfin's DateCreated can be 0001-01-01).
     curve: list[dict[str, Any]] = []
     state = {"item_count": 0, "size_bytes": 0, "movie_count": 0, "episode_count": 0}
-    day = date.fromisoformat(min(d for d in (min(changes) if changes else "", first_with_kind) if d))
+    oldest = date.fromisoformat(min(d for d in (min(changes) if changes else "", first_with_kind) if d))
+    for key in [key for key in changes if key < first]:
+        for name, value in changes.pop(key).items():
+            state[name] += value
     last_date = date.fromisoformat(last)
     first_date = date.fromisoformat(first)
+    day = max(oldest, first_date)
     while day <= last_date:
         key = day.isoformat()
         if key in changes:
@@ -203,8 +208,10 @@ def snapshots(days: Any = 90) -> list[dict[str, Any]]:
     if boundary and boundary <= first_day:
         return measured           # we have the whole period measured
 
-    whole = _backfilled_curve(first_day, last_day)
-    backfilled = [row for row in whole if not boundary or row["day"] < boundary]
+    # The backfill reaches the first snapshot even when the period ends before it (as the disk curve does):
+    # the anchor below needs both on that day, otherwise the same day has another size in another period.
+    whole = _backfilled_curve(first_day, max(last_day, boundary))
+    backfilled = [row for row in whole if (not boundary or row["day"] < boundary) and row["day"] <= last_day]
     if not backfilled:
         return measured
 
@@ -215,12 +222,23 @@ def snapshots(days: Any = 90) -> list[dict[str, Any]]:
     # then. Without anchoring there is a step at the joint - and "the library lost 200 GB overnight" is a claim
     # about a specific day that is simply untrue. The shift is one number for the whole backfilled part, so the
     # shape does not change.
-    _anchor(backfilled, whole, next((r for r in measured if r["day"] >= boundary), None),
+    _anchor(backfilled, whole, next((r for r in measured if r["day"] >= boundary), None) or _first_snapshot(boundary),
             ("size_bytes", "item_count", "movie_count", "episode_count"))
 
     # The curve must join up: the last backfilled day and the first measured day are side by side, so the line does
     # not break.
     return backfilled + measured
+
+
+def _first_snapshot(boundary: str) -> dict[str, Any] | None:
+    """The first snapshot at all, completed like the period's rows - the anchor of a period that ends before it."""
+    if not boundary:
+        return None
+    rows = db.query_all(
+        "SELECT day, item_count, movie_count, episode_count, size_bytes, kinds FROM library_snapshot WHERE day = ?",
+        (boundary,))
+    complete_library_rows(rows)
+    return rows[0] if rows else None
 
 
 def _period_days(days: Any) -> tuple[str, str]:
@@ -282,9 +300,10 @@ def library_growth(days: Any = 90, forecast: bool = True) -> dict[str, Any]:
     * otherwise it says how big the library will be in a year.
 
     Promising the first where only the second holds would be worse than staying silent. `forecast` False = only
-    the growth (the comparison of periods shows no forecast; a disk's forecast can walk the disk's files).
+    the growth (the comparison of periods shows no forecast; a disk's forecast can walk the disk's files). The growth
+    counts from the end of the day before the period (see _from_day_before) - the chart draws the period's own days.
     """
-    rows = snapshots(days)
+    rows = snapshots(_from_day_before(days))
     result = _growth_base(rows)
     if not result["enough_data"]:
         return result
@@ -438,16 +457,26 @@ def disk_growth_memo() -> Iterator[None]:
         _SERIES_MEMO.reset(token)
 
 
-def disk_growth_series(days: Any, key: str) -> list[dict[str, Any]]:
-    """Jellyfin's data on one disk day by day - see _disk_growth_series; kept within disk_growth_memo()."""
+def disk_growth_series(days: Any, key: str, day_before: bool = False) -> list[dict[str, Any]]:
+    """Jellyfin's data on one disk day by day - see _disk_growth_series; kept within disk_growth_memo().
+
+    The period's own days (the chart); `day_before` with the day before the first one too - the base of the growth
+    (disk_growth, see _from_day_before). One curve is computed for both.
+    """
+    extended = _from_day_before(days)
     memo = _SERIES_MEMO.get()
     if memo is None:
-        return _disk_growth_series(days, key)
-    memo_key = (*_period_days(days), str(key))
-    if memo_key not in memo:
-        memo[memo_key] = _disk_growth_series(days, key)
-    # A copy: the chart's caller adds its own fields to the rows.
-    return copy.deepcopy(memo[memo_key])
+        rows = _disk_growth_series(extended, key)
+    else:
+        memo_key = (*_period_days(extended), str(key))
+        if memo_key not in memo:
+            memo[memo_key] = _disk_growth_series(extended, key)
+        # A copy: the chart's caller adds its own fields to the rows.
+        rows = copy.deepcopy(memo[memo_key])
+    if day_before:
+        return rows
+    first_day = _period_days(days)[0]
+    return [row for row in rows if row["day"] >= first_day]
 
 
 def _disk_growth_series(days: Any, key: str) -> list[dict[str, Any]]:
@@ -484,17 +513,17 @@ def _disk_growth_series(days: Any, key: str) -> list[dict[str, Any]]:
     return backfilled + measured
 
 
-def disk_growth(days: Any, key: str, series: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def disk_growth(days: Any, key: str) -> dict[str, Any]:
     """The Library growth tiles for one disk - like library_growth(), only for a disk.
 
-    The increase and "daily" from the disk's curve. "The space runs out in" and the free space the same as the Disks
-    card and the notifications: the pace over the last segment of snapshots with the same disk settings
-    (stats.disks._pace). A period that ends before the disk's first snapshot has only the backfill: then there is
-    neither the free space nor a forecast. The disks' snapshots carry no count of items, hence `item_count` None.
-    `series` is a ready disk_growth_series(days, key), if the caller has it computed already (the card draws it) -
-    the backfill walks the items of the whole library, twice would be a waste.
+    The increase and "daily" from the disk's curve, from the end of the day before the period (see _from_day_before).
+    "The space runs out in" and the free space the same as the Disks card and the notifications: the pace over the
+    last segment of snapshots with the same disk settings (stats.disks._pace). A period that ends before the disk's
+    first snapshot has only the backfill: then there is neither the free space nor a forecast. The disks' snapshots
+    carry no count of items, hence `item_count` None. The curve is the chart's one (disk_growth_series): within
+    disk_growth_memo() it is computed once - the backfill walks the items of the whole library.
     """
-    result = _growth_base(disk_growth_series(days, key) if series is None else series)
+    result = _growth_base(disk_growth_series(days, key, day_before=True))
     result["disk_name"] = str(db.query_value(
         "SELECT name FROM library_disk_snapshot WHERE disk = ? ORDER BY day DESC", (key,), default="") or "")
     if not result["enough_data"]:

@@ -10,7 +10,7 @@ The statistics compute the data (stats/music_listening.py - listening, stats/mus
 - the library). The period's listening is selected once for the whole computation
 (`_analysis`, the memo of one computation `_once`) and every card reads from it.
 
-The listeners' names are shown only by the "Posluchači" card with its own area
+The listeners' names are shown only by the "Listeners" card with its own area
 "...including who listened" (`music_who`); whoever does not have it does not get the card
 and its data are not computed. The other cards carry no viewers' names at all.
 """
@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 from . import insights, music, stats
-from .cards_base import Card, _once
+from .cards_base import PLAYS, Card, _once
 
 NAME = music.NAME
 
@@ -188,15 +188,17 @@ def _d_network(period: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _card(name: str, title: str, description: str, data: Callable[[Any], dict[str, Any]], *,
-          width: str = "full", area: str = "music", table_window: bool = False) -> Card:
-    """One music card. `data(period)` returns a dict for the template; the registry gets it under the card's key."""
+          width: str = "full", area: str = "music", table_window: bool = False, sources: tuple[str, ...] = ()) -> Card:
+    """One music card. `data(period)` returns a dict for the template; the registry gets it under the card's key.
+    `sources` only where the default (cards_base.default_sources) does not hold."""
     key = card_key(name)
 
     def compute(period: Any) -> dict[str, Any]:
         return {key: data(_once(music_period, period))}
 
     return Card(key, title, description, f"_card_music_{name}.html", compute, uses_period=name not in WITHOUT_PERIOD,
-                width=width, area=area, has_table_window=table_window, group=NAME, available=music.has_music)
+                width=width, area=area, has_table_window=table_window, group=NAME, available=music.has_music,
+                sources=sources)
 
 
 CARDS: tuple[Card, ...] = (
@@ -220,7 +222,7 @@ CARDS: tuple[Card, ...] = (
     _card("tracks", "Most played tracks", "Tracks with the most hours of listening.", _d_tracks, width="half", area="music_insights", table_window=True),
     _card("genres", "Genres by listening", "How many hours each genre was listened to.", _d_genres, area="music_insights", table_window=True),
     _card("unplayed", "What nobody listens to", "Albums without a single play in the whole history, longest in the library first.",
-          _d_unplayed, area="music_insights", table_window=True),
+          _d_unplayed, area="music_insights", table_window=True, sources=(PLAYS, "music")),
     _card("library", "Music library numbers", "How many artists, albums and tracks there are, how big the library is and how long it would play.",
           _d_library),
     _card("formats", "File formats", "FLAC, MP3, AAC…: how many tracks and how much space.", _d_formats, width="third", table_window=True),

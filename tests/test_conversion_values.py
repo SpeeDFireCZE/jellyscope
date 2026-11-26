@@ -349,8 +349,9 @@ values = {"minutes": "12", "threshold": "45", "error": "timeout", "disk": "dev-a
 sent: list[str] = []
 
 
-async def _fake_send(subject: str, text: str, **kw: Any) -> None:
+async def _fake_send(subject: str, text: str, **kw: Any) -> list[dict[str, Any]]:
     sent.append(subject)
+    return [{"channel": "test", "ok": True, "error": ""}]       # delivered: only then the new state is stored
 
 real_send, notifications.send = notifications.send, _fake_send
 seen_notify = {
@@ -362,7 +363,8 @@ seen_notify = {
 first = asyncio.run(notifications._report_change(notifications.EVENTS[0], True, "x", **values))
 second = asyncio.run(notifications._report_change(notifications.EVENTS[1], True, "x", **values))
 notifications.send = real_send
-seen_notify["report"] = [first, second, sent]
+# _report_change answers "" (nothing changed), "sent" or "failed" since 24. 11. 2026; what was sent is the same.
+seen_notify["report"] = [bool(first), bool(second), sent]
 seen_notify["summary_due"] = [notifications._summary_due(_when(2026, 11, 25, 9, 0)), notifications._summary_due(_when(2026, 11, 26, 9, 0))]
 page = admin_client.get("/settings?section=notifications").text
 seen_notify["page"] = ["Sběrač stojí {minutes} min" in page, _old_notifications.PASSWORD in page, "smtp.test" in page, "admin@test" in page]

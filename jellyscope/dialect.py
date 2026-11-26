@@ -208,6 +208,18 @@ def greatest(dialect: str, first: str, second: str) -> str:
     return f"MAX({first}, {second})"
 
 
+def short_lock_wait(dialect: str, milliseconds: int) -> str:
+    """The statement after which this connection waits for another's lock `milliseconds` at most, then fails.
+
+    For a write that may be skipped (web_sessions). SQLite's connection otherwise waits out its busy timeout
+    (db._open_raw), PostgreSQL without a limit; there only for the transaction (SET LOCAL), so a connection
+    the pool lends again does not keep it.
+    """
+    if dialect == POSTGRES:
+        return f"SET LOCAL lock_timeout = '{int(milliseconds)}ms'"
+    return f"PRAGMA busy_timeout = {int(milliseconds)}"
+
+
 # ---------------------------------------------------------------------------
 # Translating SQL
 # ---------------------------------------------------------------------------

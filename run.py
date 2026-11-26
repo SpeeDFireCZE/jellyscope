@@ -8,6 +8,8 @@ hand the reins to uvicorn — the server that serves our web application.
 
 from __future__ import annotations
 
+import os
+
 import uvicorn
 
 from jellyscope.config import load_config
@@ -29,6 +31,9 @@ def _outage_mode(config, error: Exception) -> int:
 
 
 def main() -> int:
+    # Everything the app creates is for its user only: the database holds the apps' keys and passwords readably,
+    # the logs and backups the same. With the usual umask 022 they were readable to every account on the machine.
+    os.umask(0o077)
     config = load_config()
 
     # We prepare the database already here, not only in web/start.py. Thanks

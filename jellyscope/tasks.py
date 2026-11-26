@@ -71,13 +71,15 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 
-from . import applog, db, i18n, purge, scanner
+from . import applog, db, i18n, purge, scanner, web_sessions
 from .i18n import translate as _t
 from .config import BASE_DIR
 
@@ -89,6 +91,31 @@ class BackupError(i18n.TranslatableError):
 
 # How often the scheduler wakes up and checks whether something is due.
 TICK_SECONDS = 60
+
+# Imports, backups and the clean-up take no task lock (a sync may run beside them), but a backup restored under
+# one of them would get its writes, waiting for the database, after the restore. They count themselves here for
+# their whole run (data_job), and the restore is refused while the count is not zero. A count, not a flag: two of
+# them can run at once.
+_data_jobs = 0
+_data_jobs_guard = threading.Lock()
+
+
+@contextmanager
+def data_job() -> Iterator[None]:
+    """Marks an import, a backup or the clean-up as running for the whole block - an error ends the mark too."""
+    global _data_jobs
+    with _data_jobs_guard:
+        _data_jobs += 1
+    try:
+        yield
+    finally:
+        with _data_jobs_guard:
+            _data_jobs -= 1
+
+
+def data_job_running() -> bool:
+    """Does an import, a backup or the clean-up run right now (in this process)?"""
+    return _data_jobs > 0
 
 
 @dataclass(frozen=True)
@@ -156,6 +183,8 @@ async def _run_sync() -> dict[str, Any]:
 
 
 async def _run_recent() -> dict[str, Any]:
+    # Expired sign-in sessions go with the most frequent task that is on by default (and at start).
+    web_sessions.clean_up()
     # The task determines the boundary itself from the last known title -
     # see scanner.sync_recent().
     return await scanner.sync_recent()
@@ -166,6 +195,12 @@ async def _run_backup() -> dict[str, Any]:
 
 
 async def _run_purge() -> dict[str, Any]:
+    """The clean-up task (see _purge_run); no restore beside it."""
+    with data_job():
+        return await _purge_run()
+
+
+async def _purge_run() -> dict[str, Any]:
     """Clears out the history older than the set boundary.
 
     The task runs only when it is on - the scheduler watches that. Still we
@@ -173,35 +208,37 @@ async def _run_purge() -> dict[str, Any]:
     and the task can be started by hand with a button too.
     """
     scan_id = scanner.start_task_log("purge")
-    if not purge.enabled():
-        scanner.finish_task_log(scan_id, "ok",
-                                message="Clearing out is switched off, nothing was deleted.")
-        return {"status": "ok", "deleted": 0}
-
-    # A backup only when something will be deleted: copying 5 GB every night
-    # for zero deleted rows would be work that protects nobody.
-    if purge.overview()["leaving"]:
-        backup = await backup_before_delete()
-        if backup.get("status") != "ok":
-            message = i18n.Message("Nothing is deleted without a backup: {reason}",
-                                   reason=backup.get("reason") or i18n.Message("the backup failed"))
-            log.warning("clean-up stopped: %s", message)
-            scanner.finish_task_log(scan_id, "error", message=message)
-            return {"status": "error", "deleted": 0, "message": message.translated()}
-
+    # The whole run is guarded, not only the deleting: an unexpected error in the overview or the backup before it
+    # (a database locked by a VACUUM) left the run "running" in Settings -> Tasks until the next restart.
     try:
+        if not purge.enabled():
+            scanner.finish_task_log(scan_id, "ok",
+                                    message="Clearing out is switched off, nothing was deleted.")
+            return {"status": "ok", "deleted": 0}
+
+        # A backup only when something will be deleted: copying 5 GB every night
+        # for zero deleted rows would be work that protects nobody.
+        if purge.overview()["leaving"]:
+            backup = await backup_before_delete()
+            if backup.get("status") != "ok":
+                message = i18n.Message("Nothing is deleted without a backup: {reason}",
+                                       reason=backup.get("reason") or i18n.Message("the backup failed"))
+                log.warning("clean-up stopped: %s", message)
+                scanner.finish_task_log(scan_id, "error", message=message)
+                return {"status": "error", "deleted": 0, "message": message.translated()}
+
         result = await asyncio.to_thread(purge.delete_old)
+
+        deleted = result["deleted"]
+        scanner.finish_task_log(
+            scan_id, "ok", total=deleted, ok=deleted,
+            # Days are at least purge.MIN_DAYS (30), so one form of the word serves.
+            message=(i18n.Message("Cleared out {n} playbacks older than {days} days.", n=deleted, days=result["days"])
+                     if deleted else
+                     i18n.Message("Nothing here is older than {days} days.", days=result["days"])))
     except Exception as exc:  # noqa: BLE001 - an unexpected error belongs into the log too
         scanner.finish_task_log(scan_id, "error", message=exc)
         raise
-
-    deleted = result["deleted"]
-    scanner.finish_task_log(
-        scan_id, "ok", total=deleted, ok=deleted,
-        # Days are at least purge.MIN_DAYS (30), so one form of the word serves.
-        message=(i18n.Message("Cleared out {n} playbacks older than {days} days.", n=deleted, days=result["days"])
-                 if deleted else
-                 i18n.Message("Nothing here is older than {days} days.", days=result["days"])))
     return {"status": "ok", **result}
 
 
@@ -214,14 +251,22 @@ async def _run_updates() -> dict[str, Any]:
     """
     from . import updates
 
-    result = await updates.check(forced=True)
+    # The run goes into the task log: Settings → Tasks shows when it last ran and how it ended.
+    scan_id = scanner.start_task_log("updates")
+    try:
+        result = await updates.check(forced=True)
+    except Exception as error:   # noqa: BLE001 - a run in the tasks' log must not stay hanging as "running"
+        scanner.finish_task_log(scan_id, "error", message=error)
+        raise
     if result.get("status") == "error":
+        scanner.finish_task_log(scan_id, "error", message=result.get("message") or "The check failed.")
         return {"status": "error",
                 "message": result.get("message") or _t("The check failed.")}
     if result.get("is_newer"):
-        return {"status": "ok",
-                "message": _t("Version {version} is available.").format(
-                    version=result.get("found_one") or "?")}
+        message = i18n.Message("Version {version} is available.", version=result.get("found_one") or "?")
+        scanner.finish_task_log(scan_id, "ok", message=message)
+        return {"status": "ok", "message": message.translated()}
+    scanner.finish_task_log(scan_id, "ok", message="You are running the latest release.")
     return {"status": "ok", "message": _t("You are running the latest release.")}
 
 
@@ -252,16 +297,20 @@ def next_rotation() -> date | None:
 async def _rotate_logs() -> dict[str, Any]:
     """Turns the application and API logs at once - the manual "Run now" too."""
     scan_id = scanner.start_task_log("logrotate")
-    count = rotation_count()
-    result = await asyncio.to_thread(applog.rotate, count)
-    db.set_setting(applog.LAST_ROTATION_KEY, date.today().isoformat())
-    message = i18n.Message("Rotated: {files}. {count} old logs are kept.",
-                           files=", ".join(result["rotated"]) or "-", count=count)
-    if result["errors"]:
-        message = i18n.join_messages([message, "; ".join(result["errors"])])
-        log.warning("log rotation: %s", "; ".join(result["errors"]))
-    state = "error" if result["errors"] and not result["rotated"] else "ok"
-    scanner.finish_task_log(scan_id, state, message=message)
+    try:
+        count = rotation_count()
+        result = await asyncio.to_thread(applog.rotate, count)
+        db.set_setting(applog.LAST_ROTATION_KEY, date.today().isoformat())
+        message = i18n.Message("Rotated: {files}. {count} old logs are kept.",
+                               files=", ".join(result["rotated"]) or "-", count=count)
+        if result["errors"]:
+            message = i18n.join_messages([message, "; ".join(result["errors"])])
+            log.warning("log rotation: %s", "; ".join(result["errors"]))
+        state = "error" if result["errors"] and not result["rotated"] else "ok"
+        scanner.finish_task_log(scan_id, state, message=message)
+    except Exception as exc:  # noqa: BLE001 - the run in the task log must not stay "running"
+        scanner.finish_task_log(scan_id, "error", message=exc)
+        raise
     log.info("log rotation: %s", ", ".join(result["rotated"]) or "-")
     return {"status": state, "message": message.translated()}
 
@@ -288,14 +337,23 @@ async def _run_notifications() -> dict[str, Any]:
     """
     from . import notifications
 
-    return await notifications.check()
+    # The run goes into the task log like any other: by it the scheduler tells when the next one is due.
+    scan_id = scanner.start_task_log("notifications")
+    try:
+        result = await notifications.check()
+    except Exception as error:   # noqa: BLE001 - a run in the tasks' log must not stay hanging as "running"
+        scanner.finish_task_log(scan_id, "error", message=error)
+        raise
+    scanner.finish_task_log(scan_id, "error" if result.get("status") == "error" else "ok",
+                            message=result.get("task_log") or "")
+    return result
 
 
 async def _run_arr() -> dict[str, Any]:
     """Pulls the new history from all connected *Arr apps.
 
     All the work is in arr.registry.synchronize_all() - the synchronisation of
-    one app is started by the "Synchronizovat teď" button in Settings → *Arr
+    one app is started by the "Sync now" button in Settings → *Arr
     too. Here the run is only written into the tasks' log (by it the scheduler
     tells when the next one is due) and the result is translated into a sentence.
     """
@@ -329,7 +387,7 @@ async def _run_arr() -> dict[str, Any]:
 async def _run_seerr() -> dict[str, Any]:
     """Pulls all requests from Seerr (seerr.synchronize).
 
-    The "Synchronizovat teď" button in Settings → Seerr starts the same
+    The "Sync now" button in Settings → Seerr starts the same
     function. Here the run is only written into the tasks' log (by it the
     scheduler tells when the next one is due) and the result is translated
     into a sentence.
@@ -429,16 +487,23 @@ async def _run_tidy() -> dict[str, Any]:
     """
     from . import importers  # only here - importers pull in scanner and tasks
 
-    result = await importers.tidy_data()
+    # The run goes into the task log: Settings → Tasks shows when it last ran and how it ended.
+    scan_id = scanner.start_task_log("tidy")
+    try:
+        result = await importers.tidy_data()
+    except Exception as error:   # noqa: BLE001 - a run in the tasks' log must not stay hanging as "running"
+        scanner.finish_task_log(scan_id, "error", message=error)
+        raise
     if not result["parts"]:
+        scanner.finish_task_log(scan_id, "ok", message="There was nothing to tidy, the history is in order.")
         return {"status": "ok",
                 "message": _t("There was nothing to tidy, the history is in order.")}
 
-    sentences = [i18n.translate_with(template, None, **values) for template, values in result["parts"]]
-    message = ", ".join(sentences)
+    message = i18n.join_messages([i18n.Message(template, **values) for template, values in result["parts"]], ", ")
     if result["left"]:
-        message += ". " + i18n.translate_plural("{n} records remain unassigned.", result["left"])
-    return {"status": "ok", "message": message}
+        message = i18n.join_messages([message, i18n.Message("{n} records remain unassigned.", n=result["left"])], ". ")
+    scanner.finish_task_log(scan_id, "ok", message=message)
+    return {"status": "ok", "message": message.translated()}
 
 
 TASKS: dict[str, Task] = {
@@ -666,6 +731,12 @@ async def backup_before_delete() -> dict[str, Any]:
 
 
 async def backup_database(reason: str = "") -> dict[str, Any]:
+    """Stores a copy of the database into the folder from the settings (see _write_backup); no restore beside it."""
+    with data_job():
+        return await _write_backup(reason)
+
+
+async def _write_backup(reason: str) -> dict[str, Any]:
     """Stores a copy of the database into the folder from the settings.
 
     Each database is backed up by its own tool - SQLite by the built-in
@@ -702,9 +773,9 @@ async def backup_database(reason: str = "") -> dict[str, Any]:
     # exactly the one a person will want to go back to.
     destination = _free_name(target_dir, name, suffix)
     if database.is_postgres:
-        runner = lambda: _dump_postgres(database, destination)  # noqa: E731
+        runner = lambda: _write_whole(lambda path: _dump_postgres(database, path), destination)  # noqa: E731
     else:
-        runner = lambda: _backup_sqlite(database, destination)  # noqa: E731
+        runner = lambda: _write_whole(lambda path: _backup_sqlite(database, path), destination)  # noqa: E731
 
     try:
         size = await asyncio.to_thread(runner)
@@ -735,13 +806,145 @@ async def backup_database(reason: str = "") -> dict[str, Any]:
 
 
 def _free_name(folder: Path, name: str, suffix: str) -> Path:
-    """The first free name: name, name-2, name-3…"""
+    """The first free name: name, name-2, name-3… (also free of a backup being written under it, .partial)"""
     target = folder / f"{name}{suffix}"
     number = 2
-    while target.exists():
+    while target.exists() or _partial(target).exists():
         target = folder / f"{name}-{number}{suffix}"
         number += 1
     return target
+
+
+def _partial(destination: Path) -> Path:
+    """The temporary name a backup is written under until it is whole."""
+    return destination.with_name(destination.name + ".partial")
+
+
+def narrow_private_files() -> int:
+    """At the start: what holds secrets and exists from before is made its owner's only. Returns how many paths.
+
+    The launchers set umask 077, so whatever the app creates is its owner's only - but an installation from before
+    kept its database (the apps' keys and passwords readably, the accounts' password hashes) with its -wal and
+    -shm, the logs and the backups readable to every account on the machine (644). Files get 600, their folders in
+    data/ 700; a backup folder of the administrator's own outside data/ keeps its rights (it may be shared on
+    purpose), its backups are narrowed. Only the rights change - nothing is rewritten, moved or opened; only what
+    the process owns; only what really lies in data/ (a folder in it that is a link out is not followed), apart
+    from the database and the backup folder set by the administrator; a failure is logged and skipped, the start
+    goes on as before. Windows has no such rights - the folder's access holds there.
+    """
+    if os.name == "nt":
+        return 0
+    outcomes: list[str] = []
+    try:
+        data = (BASE_DIR / "data").resolve()
+        files, folders, configured = _private_paths(data)
+        for path in files + folders:
+            outcomes.append(_narrow(path, data, path in configured))
+    except Exception as exc:  # noqa: BLE001 - the start must go on whatever happens here
+        log.warning("the rights of the data files could not be narrowed: %s", exc)
+    if outcomes.count("ignored"):
+        log.warning("the file system ignores the rights: %s data files and folders stay readable to other accounts",
+                    outcomes.count("ignored"))
+    return outcomes.count("narrowed")
+
+
+def _private_paths(data: Path) -> tuple[list[Path], list[Path], set[Path]]:
+    """The files with secrets and the folders in data/ that hold them (narrow_private_files); missing ones too.
+
+    The third: the files set by the administrator (the database, the backups in the backup folder of Settings),
+    narrowed also when they lie outside data/.
+    """
+    files = [BASE_DIR / "data" / "secret_key", BASE_DIR / "data" / "database.json"]
+    configured: set[Path] = set()
+    database = db.database_config()
+    if not database.is_postgres:
+        path = Path(database.path)
+        path = path if path.is_absolute() else BASE_DIR / path
+        configured |= {path.with_name(path.name + suffix) for suffix in ("", "-wal", "-shm", "-journal")}
+    update_backups = BASE_DIR / "data" / "before-update"       # deploy/update.sh's copies of the database
+    folders = [BASE_DIR / "data", applog.log_dir(), update_backups]
+    files += _entries(applog.log_dir(), "*") + _entries(update_backups, "*")
+    target = db.get_setting("backup_path", "").strip()
+    for folder in {fallback_backup_folder(), *([Path(target)] if target else [])}:
+        backups = _entries(folder, "jellyscope-*.db") + _entries(folder, "jellyscope-*.sql")
+        if target and folder == Path(target):
+            configured |= set(backups)
+        else:
+            files += backups
+        if folder.resolve().is_relative_to(data):
+            folders.append(folder)
+    return files + sorted(configured), folders, configured
+
+
+def _entries(folder: Path, pattern: str) -> list[Path]:
+    """What lies in a folder under a pattern, folders left out; nothing when the folder cannot be read."""
+    try:
+        return [path for path in folder.glob(pattern) if not path.is_dir()]
+    except OSError:
+        return []
+
+
+def _narrow(path: Path, data: Path, configured: bool = False) -> str:
+    """Takes the group's and the others' rights off one path the process owns.
+
+    Only a path that really lies in data/ - a configured one anywhere, unless it is itself a link out. Returns
+    "narrowed", "ignored" (chmod went through and the rights stayed: a file system without them, CIFS or drvfs)
+    or "" (left as it was).
+    """
+    try:
+        if not path.resolve().is_relative_to(data) and (path.is_symlink() or not configured):
+            return ""
+        found = path.stat()
+        if found.st_uid != os.geteuid() or not found.st_mode & 0o077:
+            return ""
+        path.chmod(found.st_mode & 0o700)
+        return "ignored" if path.stat().st_mode & 0o077 else "narrowed"
+    except FileNotFoundError:
+        return ""
+    except (OSError, RuntimeError) as exc:
+        log.warning("the rights of %s could not be narrowed: %s", path, exc)
+        return ""
+
+
+def remove_partial_backups() -> int:
+    """At the start: deletes the backups a previous process left half-written (*.partial). Returns how many.
+
+    `_write_whole` deletes its temporary file when the write fails, but a process that ends in the middle of it
+    (a restart through execv, a stopped container, a crash) gets no exception: the file stayed for good - the size
+    of the database each time, seen by neither Settings nor the pruning. Called before anything writes a backup.
+    """
+    target = db.get_setting("backup_path", "").strip()
+    folders = {fallback_backup_folder(), *([Path(target)] if target else [])}
+    removed = 0
+    for folder in folders:
+        try:
+            leftovers = list(folder.glob("jellyscope-*.partial"))
+        except OSError:
+            continue
+        for leftover in leftovers:
+            try:
+                leftover.unlink()
+                removed += 1
+            except OSError as exc:
+                log.warning("backup %s could not be deleted: %s", leftover.name, exc)
+    return removed
+
+
+def _write_whole(write: Callable[[Path], int], destination: Path) -> int:
+    """Writes a backup by `write` under a temporary name and gives it its own only when it is whole.
+
+    A backup that fails half-way (a full disk, PostgreSQL gone in the middle of the export) must not stay
+    with a backup's name: Settings would offer it for a restore and the pruning would count it, pushing
+    out the good ones. The same as jellyscope.conversion.backup_before.
+    """
+    partial = _partial(destination)
+    try:
+        size = write(partial)
+        partial.replace(destination)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    return size
 
 
 def _backup_sqlite(config: Any, destination: Path) -> int:
@@ -758,6 +961,9 @@ def _backup_sqlite(config: Any, destination: Path) -> int:
 
     source = sqlite3.connect(path)
     try:
+        # Born private: the copy is the whole database (the accounts' password hashes, the apps' keys) - not
+        # readable to others even while it is being written. An existing file (a partial one) keeps its rights.
+        destination.touch(mode=0o600)
         target = sqlite3.connect(destination)
         try:
             source.backup(target)
@@ -1113,8 +1319,16 @@ def _prune_backups(directory: Path) -> int:
             except OSError:
                 pass
     for files in queues.values():
-        files.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-        for stale in files[keep:]:
+        readable = []
+        for file in files:
+            try:
+                readable.append((file.stat().st_mtime, file))
+            except OSError as exc:
+                # Vanished since the listing, a link to nothing, a stale share: only this file is skipped - the rest of
+                # its queue is pruned all the same, or keep would stop holding for good.
+                log.warning("backup %s skipped by the pruning, its time cannot be read: %s", file.name, exc)
+        readable.sort(key=lambda pair: pair[0], reverse=True)
+        for _, stale in readable[keep:]:
             try:
                 stale.unlink()
                 removed += 1
@@ -1133,20 +1347,25 @@ def list_backups() -> list[dict[str, Any]]:
     if not directory.is_dir():
         return []
 
-    result = []
+    found = []
     try:
-        for path in sorted(list(directory.glob("jellyscope-*.db")) + list(directory.glob("jellyscope-*.sql")),
-                           key=lambda p: p.stat().st_mtime, reverse=True)[:10]:
-            stat = path.stat()
-            result.append({
-                "name": path.name,
-                "size_bytes": stat.st_size,
-                "created_at": datetime.fromtimestamp(
-                    stat.st_mtime, tz=UTC
-                ).strftime(db.TIME_FORMAT),
-            })
+        paths = list(directory.glob("jellyscope-*.db")) + list(directory.glob("jellyscope-*.sql"))
     except OSError:
         return []
+    for path in paths:
+        try:
+            found.append((path, path.stat()))
+        except OSError:
+            continue        # vanished meanwhile, a link to nothing: the others are listed all the same
+    result = []
+    for path, stat in sorted(found, key=lambda pair: pair[1].st_mtime, reverse=True)[:10]:
+        result.append({
+            "name": path.name,
+            "size_bytes": stat.st_size,
+            "created_at": datetime.fromtimestamp(
+                stat.st_mtime, tz=UTC
+            ).strftime(db.TIME_FORMAT),
+        })
     return result
 
 
@@ -1191,7 +1410,8 @@ def restore_backup(name: str) -> dict[str, Any]:
 
     What can be restored:
 
-      * **SQLite** - the file simply goes back to the database's place.
+      * **SQLite** - the backup's content goes back into the database by the
+        built-in `backup()` (see _restore_sqlite).
       * **PostgreSQL, our own export** - it is plain SQL we wrote ourselves,
         so we can run it too.
       * **PostgreSQL, the output of pg_dump** - that contains COPY blocks and
@@ -1237,6 +1457,11 @@ def restore_backup(name: str) -> dict[str, Any]:
                     None, error=i18n.error_text(exc), file=safety.name)}
 
     log.info("database restored from backup %s", name)
+    # Everybody signs in again - before the restart the page asks for next (web_sessions.reset).
+    try:
+        web_sessions.reset()
+    except Exception:  # noqa: BLE001 - the backup is restored; a failure here must not hide that
+        log.exception("the sign-in sessions could not be reset after the restore")
     return {"status": "ok", "file": name, "safety": safety.name}
 
 
@@ -1246,40 +1471,54 @@ def _backup_before_restore(config: Any) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     if config.is_postgres:
         target = folder / f"jellyscope-{stamp}-{BACKUP_BEFORE_RESTORE}.sql"
-        _dump_postgres(config, target)
+        _write_whole(lambda path: _dump_postgres(config, path), target)
     else:
         target = folder / f"jellyscope-{stamp}-{BACKUP_BEFORE_RESTORE}.db"
-        _backup_sqlite(config, target)
+        _write_whole(lambda path: _backup_sqlite(config, path), target)
+    # The whole database, like any backup: for the owner only (see _run_backup).
+    try:
+        target.chmod(0o600)
+    except OSError:
+        pass
     return target
 
 
 def _restore_sqlite(config: Any, source: Path) -> None:
-    """Puts the database's file back in place.
+    """Puts the backup's content back into the database.
 
     First it is checked that it really is a SQLite database and that our
     tables are in it. Overwriting a running database with a foreign file would
     break the application and it could be put back only by hand.
+
+    Not by copying the file: the collector, the tasks and the web keep their
+    own connections meanwhile. A connection open across a copy still holds the
+    old journal (WAL) and writes it into the new file when it closes - the
+    restore is undone or the file damaged. The built-in `backup()` into the
+    live database goes through its locks and its journal like any write: it
+    waits for a write under way, and the others see the restored content.
+
+    The backup is opened by an encoded URI (a # or ? in the folder's name would
+    end the path) as immutable: read-only, without the journal files a WAL
+    database would otherwise leave beside it.
     """
-    conn = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    conn = sqlite3.connect(source.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)
     try:
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "playback" not in tables or "items" not in tables:
+            raise BackupError("There are no Jellyscope tables in the file - it is not its backup.")
+
+        target = Path(config.path)
+        if not target.is_absolute():
+            target = BASE_DIR / target
+
+        live = sqlite3.connect(target, timeout=60.0)
+        try:
+            conn.backup(live)
+        finally:
+            live.close()
     finally:
         conn.close()
-    if "playback" not in tables or "items" not in tables:
-        raise BackupError("There are no Jellyscope tables in the file - it is not its backup.")
-
-    target = Path(config.path)
-    if not target.is_absolute():
-        target = BASE_DIR / target
-
-    db.close_pool()
-    shutil.copyfile(source, target)
-    # The journal and the shared memory belong to the original file; were they
-    # left, SQLite would write changes from them that do not belong to the
-    # restored database.
-    for suffix in ("-wal", "-shm"):
-        Path(str(target) + suffix).unlink(missing_ok=True)
 
 
 def _jellyscope_tables() -> set[str]:
@@ -1327,6 +1566,10 @@ def _restore_postgres(config: Any, source: Path) -> None:
         # either names - an old backup brings the old ones), in the same
         # transaction as the export: a failure leaves the database as it was.
         content = _read_export(source)
+        if not content.rstrip().endswith("COMMIT;"):
+            # An export cut off half-way (an older version wrote it straight under the final name) holds
+            # only part of the tables: replayed, it would drop them all and commit what is there.
+            raise BackupError("The backup is incomplete - its writing was cut off before the end")
         with db.connect() as conn:
             _drop_jellyscope_tables(conn)
             # Directly through the driver, not through our wrapper: that one
@@ -1527,11 +1770,17 @@ def _minutes_until_due(task: Task, last: dict[str, Any] | None) -> float | None:
 
 
 def _minutes_elapsed(last: dict[str, Any]) -> float:
-    """How many minutes passed since the last run."""
-    local = _local_time(last["started_at"])
-    if local is None:
+    """How many minutes passed since the last run.
+
+    Counted in UTC, not on the local clock: when the clocks go back, an hour
+    repeats, and a run from its first pass would seem to be in the future -
+    every interval task would wait about an hour.
+    """
+    try:
+        started = datetime.strptime(str(last["started_at"]).replace("T", " ")[:19], db.TIME_FORMAT)
+    except (TypeError, ValueError):
         return 0.0
-    return (datetime.now() - local).total_seconds() / 60
+    return (datetime.now(UTC) - started.replace(tzinfo=UTC)).total_seconds() / 60
 
 
 def last_automatic_run(task: Task) -> datetime | None:
@@ -1670,7 +1919,13 @@ async def run_scheduler() -> None:
                     log.info("scheduled task: %s", i18n.UiName(task.name))
                     if task.is_daily:
                         _record_automatic_run(task)
-                    result = await task.runner()
+                    try:
+                        result = await task.runner()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:  # noqa: BLE001 - one failing task must not hold up the ones after it
+                        log.exception("task %s failed", task.key)
+                        continue
                     log.info("task %s finished: %s", task.key, result.get("status"))
 
             # It is not a task - it has no switching on nor a schedule, only a

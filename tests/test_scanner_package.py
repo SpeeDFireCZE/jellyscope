@@ -45,7 +45,8 @@ os.environ["DATABASE_PATH"] = str(Path(_tmp) / "scanner_package.db")
 os.environ["SECRET_KEY"] = "testovaci-klic"
 os.environ["JELLYSCOPE_DEMO"] = "0"
 
-from _package import substitute, substitutes_in_submodules, wrong_substitutes  # noqa: E402
+from _package import (outside_sources, read_through_door, substitute, substitutes_in_submodules,  # noqa: E402
+                      unread_door_names, wrong_substitutes)
 
 failures = 0
 
@@ -70,7 +71,7 @@ SUBMODULES: dict[str, list[str]] = {
     "task_state": ["_scan_lock", "is_scan_running", "task_lock", "_stop_requested", "request_stop",
                    "stop_requested", "_progress", "progress", "_start_progress", "_add_progress", "_clear_progress",
                    "_clear_stop", "start_task_log", "versions", "library_version", "tasks_version",
-                   "finish_task_log", "RECORDS_PER_KIND", "_thin_records", "last_scan"],
+                   "finish_task_log", "RECORDS_PER_KIND", "_thin_records", "close_interrupted_task_logs", "last_scan"],
     "free_space": ["CAPACITY_KEY", "JF_FREE_KEY", "JF_TOTAL_KEY", "SOURCE_KEY", "_number", "space_from_jellyfin",
                    "remember_space_from_jellyfin", "_free_from_capacity", "_library_free_space", "write_snapshot"],
     "merging": ["_old_to_merge", "_merge_by_tmdb", "duplicates_of_new", "_by_tmdb", "_by_name", "_select",
@@ -88,7 +89,7 @@ SUBMODULES: dict[str, list[str]] = {
                       "delete_virtual", "decide_same", "undo_decision"],
     "writing": ["write_versions", "_write_batch", "_write_items", "_ID_COLUMN", "_SERIES_COLUMN",
                 "_SERIES_IMAGE_TAG_COLUMN", "_IMAGE_TAG_COLUMN", "_items_with_new_image", "_forget_images",
-                "save_streams", "_mark_missing", "_archive_pairs", "merge_archive_into_live", "archive_overview",
+                "save_streams", "_unconfirmed_libraries", "_library_names", "_mark_missing", "_archive_pairs", "merge_archive_into_live", "archive_overview",
                 "clean_up_phantoms"],
     "sync": ["sync_library", "_sync_users", "EMPTY_ANSWER_COUNTS_AFTER", "_only_libraries", "_sync_libraries", "tmdb_id_of",
              "item_identity", "_item_row", "_already_known", "_live_among_old",
@@ -171,6 +172,13 @@ all_names = set(getattr(scanner, "__all__", []))
 check(all_names == door_imports and len(all_names) == len(scanner.__all__),
       f"__all__ is exactly what the door imports, each once (only in __all__ {sorted(all_names - door_imports)[:6]},"
       f" only imported {sorted(door_imports - all_names)[:6]})")
+# The other way round (audit CL-10): a name the door takes from a submodule is read - in the door itself or from
+# the outside. A re-export nobody reads only hides where the name lives, and the check above keeps it for ever.
+# What is read through an alias or by a string (`substitute(scanner, "X")`) counts too.
+door_reads = read_through_door("jellyscope.scanner", outside_sources(PROJECT, PACKAGE, WITH_EXAMPLES), PROJECT)
+re_exported, unread = unread_door_names(PACKAGE / "__init__.py", set(used) | door_reads)
+check(len(re_exported) > 50 and not unread,
+      f"every name the door takes from a submodule is read in the door or from the outside ({len(unread)} unread: {unread})")
 check(not (door_imports & NOT_IN_DOOR) and not hasattr(scanner, "_stop_requested"),
       "_stop_requested is not in the door (an import would make a copy that never changes)")
 

@@ -3,13 +3,12 @@
 A part of the subpackage web/settings (see jellyscope/web/settings/__init__.py)."""
 from __future__ import annotations
 
-import asyncio
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from typing import Any
 
 from ... import applog, conversion, db, i18n, purge, scanner, stats, tasks
-from ..base import _clamp, _flash, require_admin
+from ..base import _clamp, _flash, require_admin, spawn
 
 router = APIRouter()
 
@@ -25,8 +24,7 @@ async def settings_sync(request: Request, account: dict[str, Any] = Depends(requ
     if scanner.is_scan_running():
         _flash(request, "Another task is already running, wait for it to finish.", "warning")
     else:
-        # In the server's language, not in that of whoever clicked - see i18n.without_account_language.
-        asyncio.create_task(i18n.without_account_language(scanner.sync_library()))
+        spawn(scanner.sync_library(), "library sync")
         _flash(request, "Library sync started.", "info")
         # `wait=task` lets the page wait and refreshes it when done -
         # otherwise a person looks at "running" with no idea when it is finished.
@@ -96,8 +94,7 @@ async def settings_scan(
     if scanner.is_scan_running():
         _flash(request, "Another task is already running, wait for it to finish.", "warning")
     else:
-        asyncio.create_task(i18n.without_account_language(scanner.run_tech_scan(
-            only_missing=(mode == "missing"), library_id=library_id or None)))
+        spawn(scanner.run_tech_scan(only_missing=(mode == "missing"), library_id=library_id or None), "file analysis")
         _flash(request, "File analysis started.", "info")
         separator = "&" if "?" in back_url else "?"
         return RedirectResponse(f"{back_url}{separator}wait=task", status_code=303)
@@ -116,7 +113,7 @@ def conversion_notice_close(account: dict[str, Any] = Depends(require_admin)):
 async def tasks_save(
     request: Request,
     backup_path: str = Form(""),
-    backup_keep: str = Form("7"),
+    backup_keep: str = Form(""),
     pg_dump_path: str = Form(""),
     history_retention_days: str = Form(""),
     logrotate_days: str = Form(""),
@@ -153,19 +150,23 @@ async def tasks_save(
             db.set_setting(task.time_setting,
                            tasks.valid_time(time_text, task.default_time))
         else:
+            # The same for an interval: a cleared field keeps the saved one.
             db.set_setting(
                 task.interval_setting,
-                _clamp(str(form.get(f"minutes_{task.key}", task.default_minutes)),
-                       0, 10080, task.default_minutes),
+                _clamp(str(form.get(f"minutes_{task.key}", "")),
+                       0, 10080, tasks.interval_minutes(task)),
             )
 
     # How much history is kept. It is saved even when purging is off -
     # once it is switched on, the number the person saw on the page is to hold.
+    # A cleared or missing field keeps the saved number, never the default: with the clean-up
+    # on, 365 in place of ten years deleted the older history the next night.
     db.set_setting(purge.RETENTION_KEY,
                    _clamp(history_retention_days, purge.MIN_DAYS,
-                          purge.MAX_DAYS, purge.DEFAULT_DAYS))
+                          purge.MAX_DAYS, purge.retention_days()))
     db.set_setting("backup_path", backup_path.strip())
-    db.set_setting("backup_keep", _clamp(backup_keep, 1, 365, 7))
+    # The same for the number of backups kept: the default pruned the kept backups at the next run.
+    db.set_setting("backup_keep", _clamp(backup_keep, 1, 365, db.get_int_setting("backup_keep", 1, 365, 7)))
     db.set_setting("pg_dump_path", pg_dump_path.strip())
     # Log rotation. A cleared field is not to break the schedule: the fallback is the saved
     # value, not zero.
@@ -216,7 +217,7 @@ async def tasks_run(
         # and the second task then only hit the lock and ended silently.
         _flash(request, "Another task is already running, wait for it to finish.", "warning")
     else:
-        asyncio.create_task(i18n.without_account_language(tasks.run_now(key)))
+        spawn(tasks.run_now(key), f"task {key}")
         # The task's name is a Czech constant of tasks.py - in an English
         # interface it has to be translated like the rest of the message.
         _flash(request, "{task}: {state}", "info",

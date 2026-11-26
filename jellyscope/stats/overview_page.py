@@ -3,7 +3,7 @@
 Part of the statistics package (see jellyscope/stats/__init__.py)."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .. import db, formatting
@@ -79,12 +79,16 @@ def length_seconds(spec: Any) -> float:
     picked by dragging in a chart no more: a two-hour pick has `days == 1` and the daily average would come out twelve
     times smaller than it is.
 
-    "The last N days" has an open end (END_OF_TIME), so the length cannot be measured from the bounds - there the
-    count of days holds.
+    "The last N days" has an open end (END_OF_TIME): its length is the time that has really passed since its start -
+    today only partly (see previous_period) - so a daily average divides by the real length.
     """
     period = _as_period(spec)
     if period.relative:
-        return period.days * 86400.0
+        try:
+            start = datetime.strptime(period.since, db.TIME_FORMAT).replace(tzinfo=UTC)
+        except ValueError:
+            return max(1, period.days) * 86400.0
+        return max(1.0, (datetime.now(UTC) - start).total_seconds())
     try:
         start = datetime.strptime(period.since, db.TIME_FORMAT)
         end = datetime.strptime(period.until, db.TIME_FORMAT)
@@ -223,7 +227,8 @@ def comparison(first_spec: Any, second_spec: Any) -> dict[str, Any]:
             ],
         },
         {
-            "heading": _t("Network"),
+            # `area`: a group of another area (access.AREAS) - the page shows it only with that area.
+            "heading": _t("Network"), "area": "network",
             "rows": [
                 _row(_t("Transferred"), "bytes",
                      network_a.get("byte_count"), network_b.get("byte_count")),
@@ -238,7 +243,7 @@ def comparison(first_spec: Any, second_spec: Any) -> dict[str, Any]:
     # language".
     languages = _language_rows(first_period, second_period)
     if languages:
-        groups.append({"heading": _t("Which language was watched in"),
+        groups.append({"heading": _t("Which language was watched in"), "area": "languages",
                        "rows": languages, "with_share": True})
 
     # The library stands on the daily snapshots, and those start only with the version that can write them. So they
@@ -249,7 +254,7 @@ def comparison(first_spec: Any, second_spec: Any) -> dict[str, Any]:
     library_backfilled = bool(growth_a.get("backfilled") or growth_b.get("backfilled"))
     if library_known:
         groups.append({
-            "heading": _t("Library"),
+            "heading": _t("Library"), "area": "library",
             "rows": [
                 _row(_t("Items added"), "number",
                      growth_a.get("item_count"), growth_b.get("item_count")),

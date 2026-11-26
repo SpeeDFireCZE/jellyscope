@@ -82,8 +82,8 @@ def _library_filter(library_id: str | None, search: str | None,
         where.append("i.library_id = ?")
         params.append(library_id)
     if search:
-        where.append("(i.name LIKE ? OR i.series_name LIKE ?)")
-        params.extend([f"%{search}%", f"%{search}%"])
+        where.append(f"(i.name LIKE ? {db.LIKE_ESCAPE} OR i.series_name LIKE ? {db.LIKE_ESCAPE})")
+        params.extend([db.like_contains(search)] * 2)
     return where, params
 
 
@@ -95,12 +95,15 @@ def library_rows(limit: int, offset: int, library_id: str | None = None,
 
     # The sorting must not be pasted into SQL straight from the user's input. A fixed list of choices and we take from
     # it.
+    # A title without technical data (bitrate, height NULL) goes last in both databases - PostgreSQL puts NULL first
+    # with DESC. The aggregate, not the alias: PostgreSQL takes an alias in ORDER BY only as a bare name. The group's
+    # id decides a tie, otherwise PostgreSQL can order equal rows differently for every page and repeat or skip one.
     sort_options = {
-        "size": "size_bytes DESC",
-        "bitrate": "bitrate DESC",
-        "name": "name ASC",
-        "plays": "plays DESC",
-        "resolution": "height DESC",
+        "size": "size_bytes DESC, id",
+        "bitrate": "MAX(i.bitrate) IS NULL, bitrate DESC, id",
+        "name": "name ASC, id",
+        "plays": "plays DESC, id",
+        "resolution": "MAX(i.height) IS NULL, height DESC, id",
     }
     order_by = sort_options.get(sort, sort_options["size"])
 
@@ -298,7 +301,7 @@ def library_cards() -> list[dict[str, Any]]:
                COALESCE(SUM(i.runtime_ticks), 0) / 36000000000.0 AS hours,
                (SELECT COALESCE(s.series_id, s.id) FROM items s
                  WHERE s.library_id = l.id AND s.is_missing = 0
-                 ORDER BY s.size_bytes DESC LIMIT 1) AS poster_id
+                 ORDER BY COALESCE(s.size_bytes, 0) DESC, s.id LIMIT 1) AS poster_id
         FROM libraries l
         LEFT JOIN items i ON i.library_id = l.id AND i.is_missing = 0
         WHERE l.missing_runs < 2 AND {video_library_sql("l")}

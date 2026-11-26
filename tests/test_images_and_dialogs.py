@@ -247,14 +247,17 @@ map_js = (PROJECT / "jellyscope" / "static" / "map.js").read_text(encoding="utf-
 check('map.dataset.zoom === "wheel"' in map_js,
       "the wheel's listener depends on the mode")
 # The map and the card "who in which language" have a template of their own, which the page
-# and the dashboard include. The marks are looked for in it - and the page must include it.
+# and the dashboard draw. The marks are looked for in it - and the page must draw it.
 TEMPLATES = PROJECT / "jellyscope" / "templates"
+from jellyscope import cards  # noqa: E402
 
 
 def card_of_page(page: str, card: str) -> str:
-    """The card's template when the page really includes it; otherwise an empty text."""
-    includes = f'{{% include "{card}" %}}' in (TEMPLATES / page).read_text(encoding="utf-8")
-    return (TEMPLATES / card).read_text(encoding="utf-8") if includes else ""
+    """The card's template when the page really draws it - by its key from the registry (show_card), or included."""
+    text = (TEMPLATES / page).read_text(encoding="utf-8")
+    keys = [registered.key for registered in cards.ALL_CARDS if registered.template == card]
+    draws = f'{{% include "{card}" %}}' in text or any(f'show_card("{key}")' in text for key in keys)
+    return (TEMPLATES / card).read_text(encoding="utf-8") if draws else ""
 
 
 check('data-map="closer"' in card_of_page("network.html", "_card_map.html"),

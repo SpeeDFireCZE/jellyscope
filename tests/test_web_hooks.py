@@ -57,10 +57,42 @@ def check(condition: bool, label: str) -> None:
 NAME = r"-?[_a-zA-Z][\w-]*"
 JS_TOKEN = re.compile(r"""//[^\n]*|/\*.*?\*/|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`""", re.S)
 SELECTOR = re.compile(rf"\.({NAME})|#({NAME})|\[\s*data-([\w-]+)")
-# An attribute's value: Jinja blocks ({{ ... }}, {% ... %}, which may hold a quote) and other characters. Every
-# character has one way in - a block ends at its first closing brackets and a lone brace is a plain character - so
-# a value full of braces does not backtrack exponentially (CodeQL py/redos).
-TEMPLATE_ATTR = re.compile(r"""(?<![\w-])(class|id|for|form|list|aria-controls|aria-labelledby|aria-describedby|href|data-[\w-]+)\s*=\s*"((?:\{\{(?:(?!\}\}).)*\}\}|\{%(?:(?!%\}).)*%\}|\{(?![{%])|[^"{])*)\"""", re.S)
+# The start of an attribute up to its opening quote. The value is walked by hand (template_attrs): a Jinja block
+# {{ ... }} or {% ... %} may hold a quote and ends at its first closing brackets, a lone brace is a plain character.
+# No regex for the value - CodeQL (py/redos) reads a lookahead inside a starred alternation as exponential.
+TEMPLATE_ATTR_START = re.compile(
+    r"""(?<![\w-])(class|id|for|form|list|aria-controls|aria-labelledby|aria-describedby|href|data-[\w-]+)\s*=\s*\"""")
+
+
+def _value_end(text: str, start: int) -> int:
+    """Where the closing quote of a value that starts at `start` is - -1 when the value is not closed."""
+    position = start
+    while position < len(text):
+        if text[position] == '"':
+            return position
+        if text.startswith(("{{", "{%"), position):
+            closing = text.find("}}" if text[position + 1] == "{" else "%}", position + 2)
+            if closing < 0:
+                return -1                       # a block never closed spoils the value
+            position = closing + 2
+        else:
+            position += 1
+    return -1
+
+
+def template_attrs(text: str) -> list[tuple[str, str]]:
+    """(name, value) of every attribute TEMPLATE_ATTR_START names, in the order of the text."""
+    found, position = [], 0
+    while (start := TEMPLATE_ATTR_START.search(text, position)) is not None:
+        end = _value_end(text, start.end())
+        if end < 0:
+            position = start.start() + 1        # no attribute here; look on from the next character
+            continue
+        found.append((start.group(1), text[start.end():end]))
+        position = end + 1
+    return found
+
+
 STRING_ATTR = re.compile(r"""(?<![\w-])(class|id|data-[\w-]+)\s*=\s*\\?["']([^"'\\]*)""")
 
 
@@ -134,7 +166,7 @@ class Names:
 
     def template(self, text: str, where: str) -> None:
         text = re.sub(r"\{#.*?#\}", " ", text, flags=re.S)
-        for attr, value in TEMPLATE_ATTR.findall(text):
+        for attr, value in template_attrs(text):
             static = re.sub(r"\{\{.*?\}\}|\{%.*?%\}", " \x00 ", value, flags=re.S)
             strings = [s for e in re.findall(r"\{\{.*?\}\}|\{%.*?%\}", value, flags=re.S)
                        for s in re.findall(r"'([^']*)'|\"([^\"]*)\"", e) for s in s if s]

@@ -35,7 +35,10 @@ What follows from it and the test guards:
   MP3-320 x2 (85 MB), FLAC x1 (210 MB), FLAC 24bit x1 (180 MB);
 - upgrades: one (album 11, MP3-320 -> FLAC), counted once though three tracks were replaced; the grab that brought it
   was a manual pick; all four grabs of the period: Rss + Search = 2 automatic, 1 manual, 1 user's search;
-- failures: one (grab 116).
+- failures: one (grab 116);
+- indexer reliability: arr-test 3 grabs, 3 imported; tracker 1 grab, 1 failed - further hand-made grabs add a grab
+  still downloading at the period's end, a Blackhole grab without download_id and a grab before the period; a
+  release of two albums (a grab per album, one download_id) is one download.
 
 Run:
     .venv/bin/python tests/test_lidarr_stats.py
@@ -197,6 +200,68 @@ check(u["how"] == {"manual": 1}, f"a manual pick brought the upgrade ({u['how']}
 check(u["how_all"] == {"automatic": 2, "manual": 1, "user": 1}, f"all grabs of the period ({u['how_all']})")
 check(stats.lidarr_failures(PERIOD) == 1, "failures: one")
 check(stats.lidarr_first() == "2026-11-12 20:50:18", f"the first event of the history ({stats.lidarr_first()})")
+
+print()
+print("--- Indexer reliability: downloads of the period, their album imports and failures by download_id ---")
+
+
+def reliability(period) -> list[tuple]:
+    """(name, downloads, imported, failed, unmatched, success) per indexer, in the function's order."""
+    return [(x["name"], x["downloads"], x["imported"], x["failed"], x["unmatched"], x["success"])
+            for x in stats.lidarr_indexer_reliability(period)]
+
+
+# From the recording: arr-test grabbed aaa111, bbb222 and ddd444 (all three imported as albums), tracker ccc333 (failed).
+check(reliability(PERIOD) == [("tracker", 1, 0, 1, 0, 0.0), ("arr-test", 3, 3, 0, 0, 1.0)],
+      f"an album's grab is imported or failed by its download_id; the most failures first ({reliability(PERIOD)})")
+insert(1100, "grabbed", "2026-11-30 23:50:00", "L", None, album=90, source="Rss", indexer="arr-test")
+insert(1101, "trackFileImported", "2026-12-01 00:10:00", "L", 9001, album=90, size=MB)
+insert(1102, "grabbed", "2026-11-26 10:00:00", None, None, album=91, source="ReleasePush", indexer="Other")
+insert(1103, "trackFileImported", "2026-11-26 10:10:00", "Blackhole_z", 9101, album=91, size=MB)
+insert(1104, "grabbed", "2026-10-30 10:00:00", "P", None, album=92, source="Rss", indexer="tracker")
+insert(1105, "downloadFailed", "2026-11-01 01:00:00", "P", None, album=92)
+rows = reliability(PERIOD)
+check(("arr-test", 4, 3, 0, 0, 1.0) in rows,
+      f"a grab still downloading at the period's end (imported only after it) is neither a success nor a failure ({rows})")
+check(("Other", 1, 0, 0, 1, None) in rows,
+      f"a grab without download_id (Blackhole) cannot be matched and lowers no success rate ({rows})")
+check(("tracker", 1, 0, 1, 0, 0.0) in rows, "a grab before the period does not count, not even with its failure in the period")
+check([r[0] for r in rows] == ["tracker", "arr-test", "Other"],
+      f"sorted by failures, then the lowest success rate; nothing finished comes last ({[r[0] for r in rows]})")
+analysis, before = stats.lidarr_events(PERIOD), stats.lidarr_indexer_reliability(PERIOD)
+insert(1106, "grabbed", "2026-11-27 15:00:00", "S", None, album=95, source="Rss", indexer="Later")
+from_page = stats.lidarr_indexer_reliability(PERIOD, analysis=analysis)
+check(from_page == before and from_page != stats.lidarr_indexer_reliability(PERIOD),
+      "it computes from the page's paired events (analysis=), not from the table again: a grab stored after them is not in it")
+remove(1100, 1106)
+# The same download_id grabbed again after its failure is a download of its own (the outcome pairs with the last grab
+# before it, as the sources pair it). A download is imported when it was imported - a failure written after the import
+# does not make it failed: failed = a failure and no import.
+insert(1110, "grabbed", "2026-12-01 10:00:00", "R", None, album=93, source="Rss", indexer="Again")
+insert(1111, "downloadFailed", "2026-12-01 11:00:00", "R", None, album=93)
+insert(1112, "grabbed", "2026-12-02 10:00:00", "R", None, album=93, source="Search", indexer="Again")
+insert(1113, "trackFileImported", "2026-12-02 10:30:00", "R", 9301, album=93, size=MB)
+insert(1114, "grabbed", "2026-12-03 10:00:00", "M", None, album=94, source="Rss", indexer="Marked")
+insert(1115, "trackFileImported", "2026-12-03 10:20:00", "M", 9401, album=94, size=MB)
+insert(1116, "downloadFailed", "2026-12-03 12:00:00", "M", None, album=94)
+december = reliability(stats.period_between("2026-12-01", "2026-12-03"))
+check(december == [("Again", 2, 1, 1, 0, 0.5), ("Marked", 1, 1, 0, 0, 1.0)],
+      f"a repeated download_id after its failure is another download; a failure after the import leaves it imported ({december})")
+check(stats.lidarr_indexer_reliability(stats.period_between("2026-01-01", "2026-01-02")) == [], "an empty period: no rows")
+remove(1110, 1116)
+# A release of several albums (a discography): Lidarr writes a grab and a failure per ALBUM, all with one download_id,
+# and imports the tracks of each. Two albums imported, two albums that failed - one download each.
+insert(1120, "grabbed", "2026-12-10 10:00:00", "DISCO", None, album=96, source="Rss", indexer="Discs")
+insert(1121, "grabbed", "2026-12-10 10:00:00", "DISCO", None, album=97, source="Rss", indexer="Discs")
+for n, album in enumerate((96, 96, 97, 97)):
+    insert(1122 + n, "trackFileImported", f"2026-12-10 11:00:0{n}", "DISCO", 9600 + n, album=album, size=MB)
+for n, album in enumerate((98, 99)):
+    insert(1130 + n, "grabbed", "2026-12-11 10:00:00", "BAD", None, album=album, source="Rss", indexer="Discs")
+    insert(1132 + n, "downloadFailed", "2026-12-11 11:00:00", "BAD", None, album=album)
+several = reliability(stats.period_between("2026-12-10", "2026-12-11"))
+check(several == [("Discs", 2, 1, 1, 0, 0.5)],
+      f"a release of two albums imported and one that failed are one download each, not one per album ({several})")
+remove(1120, 1133)
 
 print()
 print("--- An upgrade to ANOTHER release of the album, and a slow import ---")

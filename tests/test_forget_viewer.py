@@ -117,7 +117,8 @@ print("--- it asks in its own window, and a click by itself deletes nothing ---"
 template = ""
 for _path in sorted((PROJECT / "jellyscope" / "templates").rglob("*.html")):
     _text = _path.read_text(encoding="utf-8")
-    if '_("Forget")' in _text:
+    # The viewer's button, not any "Forget": the notification settings have Forget buttons for stored secrets too.
+    if '_("Forget")' in _text and 'data-action="forget-viewer"' in _text:
         template = _text
         break
 check(bool(template), "the template with the \"Forget\" button was found")

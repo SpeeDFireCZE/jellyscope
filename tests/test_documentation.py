@@ -107,7 +107,8 @@ section_names = {EN.get(title, title) for _key, title, _admin in web.SETTINGS_SE
 # was split the test would quietly stop seeing the cards and start reporting that
 # the documentation refers somewhere it in fact refers to correctly.
 for template in (PROJECT / "jellyscope" / "templates").rglob("*.html"):
-    for hit in re.findall(r'<h2>\{\{ _\("([^"]+)"\) \}\}</h2>',
+    # A heading may carry an id (the name of its window or of a radio group, test_accessible_names).
+    for hit in re.findall(r'<h2(?: id="[^"]*")?>\{\{ _\("([^"]+)"\) \}\}</h2>',
                           template.read_text(encoding="utf-8")):
         section_names.add(EN.get(hit, hit))
 
@@ -190,6 +191,15 @@ else:
 # A trap: without this check the test would pass even over a made-up link.
 check(not (PROJECT / "deploy/neexistuje.sh").exists(),
       "and the check recognises a file that is not there")
+
+print()
+print("--- the data folder's rights ---")
+# The start makes data/ 700 and its files 600 (tasks.narrow_private_files), an older installation's too: a copy of the
+# folder made by another account on the host ends with Permission denied, so the paragraph about it says how.
+data_paragraph = next((block for block in TEXTS.get("DEPLOY.md", "").split("\n\n") if block.startswith("**Data.**")), "")
+check("account" in data_paragraph and "`sudo`" in data_paragraph,
+      "DEPLOY.md: the paragraph about the data folder says it is the app's account's only, a copy as it or with sudo",
+      repr(data_paragraph[:300]))
 
 print()
 print("DONE - failures:", failures)

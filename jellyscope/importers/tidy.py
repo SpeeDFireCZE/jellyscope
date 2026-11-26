@@ -100,6 +100,9 @@ async def tidy_data() -> dict[str, Any]:
 
     result["parts"] = parts
     result["left"] = orphan_playback_count()
+    if parts:
+        # The plays changed: an open page draws its cards over plays again (the plays' marker in /health).
+        db.note_plays_rewritten()
     log.info("data tidy-up: %s changes, %s orphans remain",
              len(parts), result["left"])
     return result

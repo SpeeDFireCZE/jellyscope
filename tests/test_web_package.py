@@ -68,7 +68,7 @@ PACKAGE = PROJECT / "jellyscope" / "web"
 # The modules of the package (a subpackage under its folder's name).
 MODULES = ["__init__", "start", "base", "settings", "periods", "login", "my_account", "dashboards",
            "library", "users", "history", "network", "status", "disks", "arr", "seerr", "video", "legacy",
-           "music", "books", "album", "book", "music_library", "books_library", "library_kinds"]
+           "music", "books", "album", "book", "music_library", "books_library", "library_kinds", "body_limit"]
 SETTINGS = "settings"               # the subpackage of the Settings page
 # Subpackages: their entry point (__init__.py) exposes the names of their modules.
 SUBPACKAGES = (SETTINGS, "video", "music", "books")
@@ -113,6 +113,7 @@ GET /arr/{app}/poster/{title_id} arr_poster
 GET /dashboard custom_dashboard
 GET /health health
 GET /history history
+GET /history/new history_new
 GET /hudba legacy_redirect
 GET /hudba/album/{album_id} legacy_redirect
 GET /hudba/interpret/{artist_id} legacy_redirect
@@ -139,6 +140,7 @@ GET /books/insights insights
 GET /network network_page
 GET /network/map/tiles/{detail}/{x}/{y} network_map_tile
 GET /partials/arr/{app}/downloading arr_downloading
+GET /partials/cards cards_partial
 GET /partials/network-live network_live_partial
 GET /partials/now-playing now_playing_partial
 GET /partials/recently-added recently_added_partial
@@ -196,6 +198,7 @@ POST /settings/accounts/keys settings_keys
 POST /settings/accounts/password account_password
 POST /settings/accounts/permissions settings_account_permissions
 POST /settings/accounts/role account_role
+POST /settings/api/key-limit api_key_limit
 POST /settings/api/token api_token_new
 POST /settings/api/token/disable api_token_disable
 POST /settings/api/token/enable api_token_enable
@@ -223,6 +226,7 @@ POST /settings/interface settings_interface
 POST /settings/language settings_language
 POST /settings/notifications settings_notifications
 POST /settings/notifications/events settings_notification_events
+POST /settings/notifications/forget settings_notification_forget
 POST /settings/notifications/test settings_notification_test
 POST /settings/notifications/texts settings_notification_texts
 POST /settings/readers settings_readers
@@ -243,7 +247,7 @@ POST /setup setup_submit
 POST /video/languages/preferred languages_preferred
 '''.strip().splitlines())
 MIDDLEWARE = [('BaseHTTPMiddleware', 'security_headers'), ('BaseHTTPMiddleware', 'legacy_query_middleware'),
-              ('ApiUsageLog', ''), ('SessionMiddleware', ''), ('LegacySession', ''),
+              ('ApiUsageLog', ''), ('SessionMiddleware', ''), ('LegacySession', ''), ('BodyLimit', ''),
               ('BaseHTTPMiddleware', 'account_language_middleware'), ('BaseHTTPMiddleware', 'viewer_scope_middleware'),
               ('BaseHTTPMiddleware', 'demo_mode_middleware')]
 ERROR_HANDLERS = ['fastapi.exceptions.HTTPException', 'fastapi.exceptions.RequestValidationError',
@@ -254,8 +258,9 @@ ERROR_HANDLERS = ['fastapi.exceptions.HTTPException', 'fastapi.exceptions.Reques
 OWN_GLOBALS = ['_', '_n', 'allowed_days', 'arr_connected', 'asset_version', 'card_data', 'charts', 'check_card', 'day_labels',
                'demo_mode', 'devtools_date', 'has_music', 'lang', 'seasonal_event', 'seasonal_motion', 'seasonal_year',
                'seerr_connected', 'stored_text', 'ui_languages']
-OWN_FILTERS = ['bitrate', 'bytes', 'czech_date', 'datetime', 'episode_code', 'hours', 'number', 'percent', 'relative',
-               'resolution', 'seconds', 'step_label', 'ticks', 'timecode', 'transcode_reasons', 'type_name', 'video_range']
+OWN_FILTERS = ['bitrate', 'bytes', 'czech_date', 'datetime', 'decimal', 'episode_code', 'hours', 'local_datetime',
+               'number', 'percent', 'relative', 'resolution', 'seconds', 'step_label', 'ticks', 'timecode',
+               'transcode_reasons', 'type_name', 'video_range']
 
 
 def defined(tree: ast.Module) -> set[str]:
@@ -293,6 +298,10 @@ present = ({p.stem for p in PACKAGE.glob("*.py")} | {p.parent.name for p in PACK
 check(present == set(MODULES) and len(MODULES) == len(set(MODULES)),
       f"the map has exactly the modules of the package (missing {sorted(set(MODULES) - present)}, extra {sorted(present - set(MODULES))})")
 check(all((PACKAGE / m / "__init__.py").is_file() for m in SUBPACKAGES), f"the subpackages are folders ({SUBPACKAGES})")
+# The door's docstring is the reader's map of the package: it names every module too.
+door_doc = ast.get_docstring(tree_of(PACKAGE / "__init__.py")) or ""
+unnamed = [m for m in MODULES if f"`{m}`" not in door_doc]
+check(not unnamed, f"the docstring of the door names every module ({unnamed})")
 if present != set(MODULES):
     print()
     print(f"DONE - failures: {failures}")
@@ -378,6 +387,15 @@ missing = sorted(f"{n} ({where})" for n, where in used.items()
                  if n not in ROOT_MODULES and n not in MODULES and not hasattr(web, n))
 check(len(used) > 15 and not missing, f"all {len(used)} names go through the door (missing {missing[:6]})")
 check(not through_door, f"nobody takes other modules through web - import the module directly ({through_door})")
+# The other way round: a name the door takes from a submodule is read - in the door itself or from the outside.
+# A re-export nobody reads only hides where the name lives, and (a) above would keep it there for ever.
+door_tree = tree_of(PACKAGE / "__init__.py")
+door_reads = {n.id for n in ast.walk(door_tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+re_exported = {alias.asname or alias.name for node in door_tree.body
+               if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module for alias in node.names}
+unread = sorted(name for name in re_exported if name not in door_reads and name not in used)
+check(len(re_exported) > 15 and not unread,
+      f"every name the door takes from a submodule is read in the door or from the outside ({len(unread)} unread: {unread})")
 
 print()
 print("--- (c) no cycles ---")
@@ -556,7 +574,7 @@ _request = Request({"type": "http", "method": "GET", "path": "/", "query_string"
 shared = set(web_base_module._context(_request, None))
 BASE_CONTEXT = {"collector_status", "collector_error", "last_poll", "flash", "active_count", "account", "own_viewer",
                 "is_admin", "account_image", "may_open", "menu", "menu_title", "sees", "ui_language",
-                "server_language", "today", "today_text", "quick_periods", "wait_for", "table_limits"}
+                "server_language", "today", "today_text", "quick_periods", "wait_for", "table_limits", "ui_self_refresh"}
 check(BASE_CONTEXT <= shared, f"_context() gives every template these keys (missing {sorted(BASE_CONTEXT - shared)})")
 old_czech = {"muj_divak", "je_spravce", "obrazek_uctu", "smi", "vidi", "jazyk_serveru", "dnes", "dnes_text",
              "rychla_obdobi", "stropy_tabulek"}

@@ -183,6 +183,37 @@ check(admin.get(f"/settings/log/download?file={applog.API_NAME}.1").status_code 
 check(f"{applog.API_NAME}.1" in admin.get("/settings?section=log&log_kind=api").text,
       "the older logs are in Log to download")
 
+# The rotation runs in a thread (tasks._rotate_logs) while the collector, the sync and the API write to the
+# same handlers: the rollover holds each handler's lock, as every write does, so no line goes to a file it
+# has just closed.
+import threading  # noqa: E402
+
+held: dict[str, bool] = {}
+for label, handler in (("app", applog._handler), ("API", applog._api_ready())):
+    real_rollover = handler.doRollover
+
+    def watched_rollover(handler=handler, label=label, real_rollover=real_rollover) -> None:
+        free: list[bool] = []
+
+        def try_lock() -> None:
+            free.append(handler.lock.acquire(blocking=False))
+            if free[-1]:
+                handler.lock.release()
+
+        other = threading.Thread(target=try_lock)
+        other.start()
+        other.join()
+        held[label] = not free[0]
+        real_rollover()
+
+    handler.doRollover = watched_rollover
+try:
+    applog.rotate(1)
+finally:
+    for handler in (applog._handler, applog._api_ready()):
+        del handler.doRollover
+check(held == {"app": True, "API": True}, f"the rollover holds the handler's lock ({held})")
+
 print()
 print("--- the Log rotation task ---")
 task = tasks.TASKS.get("logrotate")
@@ -210,6 +241,29 @@ check(db.get_setting(applog.DAYS_KEY) == "1" and db.get_setting(applog.COUNT_KEY
 page = admin.get("/settings?section=tasks").text
 check('name="logrotate_days"' in page and 'name="logrotate_count"' in page,
       "Tasks have both fields")
+
+# Nothing guarded the rotation and the write of its date: an unexpected error (a database locked by a VACUUM, a
+# folder that went read-only) ended the task with the exception, and Settings -> Tasks showed it running until
+# the next restart.
+from jellyscope import scanner  # noqa: E402
+
+
+def failing_rotation(count: int) -> dict:
+    raise PermissionError("Read-only file system")
+
+
+real_rotate = applog.rotate
+applog.rotate = failing_rotation
+try:
+    asyncio.run(tasks.run_now("logrotate"))
+    raised = ""
+except PermissionError as error:
+    raised = str(error)
+finally:
+    applog.rotate = real_rotate
+record = scanner.last_scan("logrotate") or {}
+check(record.get("status") == "error" and bool(record.get("finished_at")),
+      f"an unexpected error closes the run as failed ({record.get('status')}, {record.get('finished_at')}, {raised!r})")
 
 print()
 print("DONE - failures:", failures)

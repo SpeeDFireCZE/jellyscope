@@ -3,9 +3,9 @@
 {# Sign-in by a code (Quick Connect).
 
    The page holds only the code. The secret that finishes the sign-in lies
-   in the session on the server - it never reaches the browser, so it cannot be stolen
-   even from an open page. The code alone lets nobody in: until
-   the person confirms it in their Jellyfin, it is six digits.
+   in the server's memory (web/base.py hold_secret); the session cookie carries only a
+   handle to it - neither the page nor the cookie can give it away. The code alone
+   lets nobody in: until the person confirms it in their Jellyfin, it is six digits.
 
    The page asks by itself whether the confirmation came. When the script
    does not run, there is the button "Check now" - it just has to be clicked. #}

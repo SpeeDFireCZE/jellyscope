@@ -48,7 +48,8 @@ os.environ["DATABASE_PATH"] = str(Path(_tmp) / "settings_package.db")
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["JELLYSCOPE_DEMO"] = "0"
 
-from _package import substitutes_in_submodules, substitutes_at_door, flat_routes, wrong_substitutes  # noqa: E402
+from _package import (flat_routes, outside_sources, read_through_door, substitutes_at_door,  # noqa: E402
+                      substitutes_in_submodules, unread_door_names, wrong_substitutes)
 
 failures = 0
 
@@ -73,8 +74,9 @@ WITH_ROUTES = [m for m in SUBMODULES if m != "common"]
 MAY = {"common": set(), "page": {"common", "accounts"}, "accounts": set(), "connection": {"common"},
        "notifications": {"common"}, "interface": {"common"}, "updates": set(), "tasks": set(),
        "history": {"common"}, "arr": {"common"}, "seerr": {"common"}}
-ROUTES = 53   # 46 of the page + three routes /settings/arr/{app}… (*Arr) + three /settings/seerr… (Seerr)
-              # + closing the stripe about the backup before the conversion (tasks)
+ROUTES = 55   # 46 of the page + three routes /settings/arr/{app}… (*Arr) + three /settings/seerr… (Seerr)
+              # + closing the stripe about the backup before the conversion (tasks) + forgetting a secret (notifications)
+              # + the limit on keys of one's own (accounts)
 
 
 def defined(tree: ast.Module) -> set[str]:
@@ -184,10 +186,10 @@ for m in SUBMODULES:
         exported += 1
         if getattr(settings, name) is not getattr(module, name):
             mismatched.append(f"{m}.{name}")
-check(exported > 40 and not mismatched, f"the door points at the same objects as the files ({exported} names; {mismatched[:6]})")
+check(exported >= 8 and not mismatched, f"the door points at the same objects as the files ({exported} names; {mismatched[:6]})")
 # __all__ holds names as strings - a rename does not reach them by itself.
 stale = sorted(n for n in settings.__all__ if not hasattr(settings, n))
-check(len(settings.__all__) > 40 and not stale and list(settings.__all__) == sorted(settings.__all__),
+check(len(settings.__all__) >= 8 and not stale and list(settings.__all__) == sorted(settings.__all__),
       f"every name of __all__ exists and the list is sorted (missing {stale[:6]})")
 jellyfin = importlib.import_module("jellyscope.jellyfin")
 check(getattr(settings, "JellyfinClient", None) is jellyfin.JellyfinClient,
@@ -217,6 +219,13 @@ for path in sorted([*PROJECT.glob("jellyscope/**/*.py"), *PROJECT.glob("tests/*.
 used.pop("py", None)
 missing = sorted(f"{n} ({where})" for n, where in used.items() if n not in SUBMODULES and not hasattr(settings, n))
 check(len(used) > 5 and not missing, f"all {len(used)} names go through the door (missing {missing[:6]})")
+# The other way round (audit CL-10): a name the door takes from a file is read - in the door itself or from the
+# outside. A re-export nobody reads only hides where the name lives, and the check above keeps it for ever. The routes
+# reach the web through the router, not by their names. What is read through an alias or by a string counts too.
+door_reads = read_through_door(FULL_NAME, outside_sources(PROJECT, PACKAGE, EXAMPLE_FILES), PROJECT)
+re_exported, unread = unread_door_names(PACKAGE / "__init__.py", set(used) | door_reads)
+check(len(re_exported) > 5 and not unread,
+      f"every name the door takes from a file is read in the door or from the outside ({len(unread)} unread: {unread})")
 
 print()
 print("--- (c) no cycles, relative imports with the right number of dots ---")

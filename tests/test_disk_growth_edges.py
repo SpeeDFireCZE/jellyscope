@@ -132,7 +132,9 @@ r = admin.get("/library")
 check(r.status_code == 200, f"the Library with a past period and a remembered disk loads ({r.status_code})")
 db.set_setting(cards.ENABLED_KEY, "1")
 db.forget_settings()
-cards.save_layout([("rust_knihovny", "cela")])
+cards.save_layout([("library_growth", "full")])
+check([(card.key, card.width) for card in cards.load_layout()] == [("library_growth", "full")],
+      f"the custom dashboard holds the growth card ({[(c.key, c.width) for c in cards.load_layout()]})")
 check(admin.get("/dashboard").status_code == 200, "the custom dashboard too")
 admin.get("/library?days=30")
 

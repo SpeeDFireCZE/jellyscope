@@ -14,10 +14,24 @@ from datetime import date, datetime, timedelta, UTC
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from . import i18n
 from .db import TIME_FORMAT
 from .i18n import translate as _t
 
 _UNITS = ["B", "KB", "MB", "GB", "TB", "PB"]
+
+# How a number is written in a language: (the decimal separator, the one after the thousands). The page's
+# JavaScript writes its numbers in the page's language (toLocaleString), so the server writes them the same
+# way - an English reader took the decimal comma of "12,5 %" for a thousands separator. A language not listed
+# keeps the notation the application always had: a decimal comma and a space after the thousands.
+NUMBER_SEPARATORS: dict[str, tuple[str, str]] = {"en": (".", ",")}
+_USUAL_SEPARATORS = (",", " ")
+
+
+def in_notation(text: str, language: str | None = None) -> str:
+    """A number as Python writes it ("1,234.5") in the notation of a language (the page's by default)."""
+    decimal, thousands = NUMBER_SEPARATORS.get(language or i18n.current_language(), _USUAL_SEPARATORS)
+    return text.translate({ord("."): decimal, ord(","): thousands})
 
 
 def ticks_seconds(value: Any) -> float:
@@ -32,8 +46,8 @@ def ticks_seconds(value: Any) -> float:
         return 0.0
 
 
-def bytes_human(value: Any) -> str:
-    """The size of a file in units a person can read."""
+def bytes_human(value: Any, language: str | None = None) -> str:
+    """The size of a file in units a person can read (in the notation of `language`, the page's by default)."""
     try:
         size = float(value or 0)
     except (TypeError, ValueError):
@@ -48,11 +62,11 @@ def bytes_human(value: Any) -> str:
 
     # Bytes and kilobytes without a decimal place - for them it would carry
     # no information.
-    return f"{number_in_unit(size, whole=index <= 1)} {_UNITS[index]}"
+    return f"{number_in_unit(size, whole=index <= 1, language=language)} {_UNITS[index]}"
 
 
-def number_in_unit(value: float, whole: bool = False) -> str:
-    """The number of a size as it is written: "28,8" or "145".
+def number_in_unit(value: float, whole: bool = False, language: str | None = None) -> str:
+    """The number of a size as it is written: "28,8" or "145" ("28.8" in English).
 
     One place for the tiles and the charts. When it was in two, they drifted
     apart: a chart wrote "29 TB" where the tile next to it wrote "28,8 TB",
@@ -60,8 +74,8 @@ def number_in_unit(value: float, whole: bool = False) -> str:
     the same thing.
     """
     if whole or value >= 100:
-        return f"{value:,.0f}".replace(",", " ")
-    return f"{value:.1f}".replace(".", ",")
+        return in_notation(f"{value:,.0f}", language)
+    return in_notation(f"{value:.1f}", language)
 
 
 def hours_human(value: Any) -> str:
@@ -79,7 +93,7 @@ def hours_human(value: Any) -> str:
 
     whole_hours, minutes = divmod(total_minutes, 60)
     if whole_hours >= 100:
-        return f"{whole_hours:,} h".replace(",", " ")
+        return f"{number(whole_hours)} h"
     return f"{whole_hours} h {minutes:02d} min"
 
 
@@ -164,7 +178,7 @@ def bitrate_human(value: Any) -> str:
         return "-"
     if bits < 1_000_000:
         return f"{bits / 1000:.0f} kb/s"
-    return f"{bits / 1_000_000:.1f} Mb/s".replace(".", ",")
+    return f"{in_notation(f'{bits / 1_000_000:.1f}')} Mb/s"
 
 
 def resolution_human(height: Any, width: Any = None) -> str:
@@ -221,19 +235,25 @@ def video_range_human(value: Any) -> str:
     return RANGE_LABELS.get(str(value or "").strip().upper()) or _t("unknown#neuter")
 
 
-def number(value: Any) -> str:
-    """A number with a space after the thousands - the Czech convention."""
+def number(value: Any, language: str | None = None) -> str:
+    """A whole number with the thousands separated ("1 234", in English "1,234")."""
     try:
-        return f"{int(value or 0):,}".replace(",", " ")
+        return in_notation(f"{int(value or 0):,}", language)
+    except (TypeError, ValueError):
+        return "-"
+
+
+def decimal(value: Any, places: int = 1) -> str:
+    """A number with a fixed number of decimal places, without the thousands separated ("2,5", in English "2.5")."""
+    try:
+        return in_notation(f"{float(value or 0):.{places}f}")
     except (TypeError, ValueError):
         return "-"
 
 
 def percent(value: Any, decimals: int = 0) -> str:
-    try:
-        return f"{float(value or 0):.{decimals}f} %".replace(".", ",")
-    except (TypeError, ValueError):
-        return "-"
+    text = decimal(value, decimals)
+    return text if text == "-" else f"{text} %"
 
 
 def zone():
@@ -277,6 +297,10 @@ def step_label(minutes: Any) -> str:
     return plural("{n} days", days)
 
 
+# How a moment is written for a person - one pattern for every time the application prints.
+DATETIME_PATTERN = "%d.%m.%Y %H:%M"
+
+
 def datetime_human(value: Any) -> str:
     """A stored time (UTC) converted to the application's time and printed nicely."""
     if not value:
@@ -287,7 +311,13 @@ def datetime_human(value: Any) -> str:
         return text
 
     local = parsed.astimezone(zone())
-    return local.strftime("%d.%m.%Y %H:%M")
+    return local.strftime(DATETIME_PATTERN)
+
+
+def local_datetime_human(value: Any) -> str:
+    """A moment in local time already (a datetime without a zone, as the tasks' schedule computes it) printed
+    like datetime_human - without converting it from UTC first."""
+    return value.strftime(DATETIME_PATTERN) if isinstance(value, datetime) else "-"
 
 
 def plural(key: str, n: Any, /, **values: Any) -> str:
@@ -431,11 +461,13 @@ def register(env: Any) -> None:
         "bitrate": bitrate_human,
         "resolution": resolution_human,
         "number": number,
+        "decimal": decimal,
         "percent": percent,
         # The date as a person writes it into the period filter - so it is one
         # date on the page, not two different notations of the same.
         "czech_date": czech_date,
         "datetime": datetime_human,
+        "local_datetime": local_datetime_human,
         "relative": relative_human,
         "step_label": step_label,
         "video_range": video_range_human,

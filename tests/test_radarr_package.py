@@ -39,8 +39,8 @@ SUBMODULES: dict[str, list[str]] = {
     "live": ["live_state"],
     # The live downloads for the card "Stahuje se" (downloading).
     "progress": ["download_state"],
-    # Provisional posters of titles being downloaded; `title_poster` is for Seerr's requests.
-    "posters": ["poster_missing", "provisional_poster", "clean_up_posters", "title_poster"],
+    # Provisional posters of titles being downloaded; `title_poster` and `own_posters` are for Seerr.
+    "posters": ["poster_missing", "provisional_poster", "clean_up_posters", "title_poster", "own_posters"],
     # The app's list of titles (links from the cards to the library).
     "titles": ["title_rows", "sync_titles"],
 }

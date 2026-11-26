@@ -187,7 +187,7 @@ check(not dict(db.query_one(
 print()
 print("--- where a viewer may go and where not ---")
 k_viewer, _ = sign_in("mirek", "tajne")
-ALLOWED = ("/users/u-mirek", "/history", "/video/insights", "/library",
+ALLOWED = ("/users/u-mirek", "/history", "/history/new", "/video/insights", "/library",
            "/item/i-0", "/video/partials/top-items", "/partials/recently-added")
 FORBIDDEN = ("/users", "/users/" + OTHER_ID, "/network", "/settings",
              "/dashboard", "/video/languages", "/video/compare", "/partials/now-playing",
@@ -321,7 +321,11 @@ set_options(**{f"{access.VIEWER}_anonymise": True,
 
 print()
 print("--- switched-off signing in lets nobody from Jellyfin in ---")
+check(k_viewer.get("/history", follow_redirects=False).status_code == 200, "a viewer is signed in")
 set_options(**{access.LOGIN_KEY: False})
+response = k_viewer.get("/history", follow_redirects=False)
+check(response.status_code in (302, 303, 307) and "/login" in response.headers.get("location", ""),
+      f"switching it off ends the session of a viewer signed in before ({response.status_code})")
 _, status = sign_in("mirek", "tajne")
 check(status == 401, f"a viewer does not sign in ({status})")
 check('value="jellyfin"' not in client().get("/login").text,

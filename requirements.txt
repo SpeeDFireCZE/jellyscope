@@ -6,6 +6,11 @@
 # Needs Python 3.11 or newer - Starlette's floor since 1.8 (FastAPI's own
 # is 3.10), and Python 3.10 gets no security fixes after October 2026.
 
+# The packages below pull in about twenty more. Their versions are in
+# constraints.txt, and this line makes every install from this file honour
+# them - see the top of that file for why.
+-c constraints.txt
+
 fastapi==0.162.7           # web framework - routing, validation, async
 starlette==1.10.0          # what FastAPI is built on: routing, sessions,
                            # static files, multipart. Pinned explicitly even
@@ -39,7 +44,7 @@ maxminddb==3.2.0           # reads the GeoLite2 file for the map on the
 # The pins used to sit at fastapi 0.115.6 / starlette 0.41.3 /
 # python-multipart 0.0.20. Asking the OSV vulnerability database (the same
 # source pip-audit and Dependabot use) about exactly those versions came
-# back with 21 known holes - none in our own code, all in libraries:
+# back with 14 known holes - none in our own code, all in libraries:
 #
 #   starlette 0.41.3        CVE-2026-48710  a missing Host header check
 #                                           poisons request.url.path
@@ -59,28 +64,23 @@ maxminddb==3.2.0           # reads the GeoLite2 file for the map on the
 # world keeps finding holes in code that has not changed.
 
 # --- optional ----------------------------------------------------------
-# Only needed when you switch the database to PostgreSQL in Settings.
-# With SQLite (the default) this library is not used at all - which is why
-# it is commented out and the app asks for it only when it needs it.
+# The PostgreSQL driver (psycopg) is only needed when you switch the
+# database to PostgreSQL in Settings. With SQLite (the default) it is not
+# used at all - which is why it is not listed here and the app asks for it
+# only when it needs it.
 #
-# deploy/install.sh tries to install it, so on a server you usually do not
-# have to do anything. It is deliberately not listed here: when no wheel
-# exists for the platform (typically Alpine/musl), pip would try to build
-# it from source and take the whole installation down with it - including
-# for people who only ever wanted SQLite. This way you just get a warning.
+# It has a file of its own, requirements-postgres.txt, with its version and
+# the reason it is apart. deploy/install.sh installs it, so on a server you
+# usually do not have to do anything. Manually, into the same virtualenv
+# the app runs in:
 #
-# Manually, into the same virtualenv the app runs in:
-#
-#   .venv/bin/python -m pip install "psycopg[binary,pool]"
-#
-# The "pool" extra enables connection pooling; without it the app still
-# connects, it just opens a new connection per query.
+#   .venv/bin/python -m pip install -r requirements-postgres.txt
 
 # --- about the map -------------------------------------------------------
 # maxminddb (above) only knows how to READ the GeoLite2 file; the file
 # itself is not part of the installation. It is about 65 MB and the app
-# downloads it into data/ on a button press in Settings. Until then the
-# Network page simply explains what is missing.
+# downloads it into data/ on a button press on the Network page. Until then
+# the page simply explains what is missing.
 #
 # Nothing is asked of the network at runtime - the lookup happens against
 # that local file.

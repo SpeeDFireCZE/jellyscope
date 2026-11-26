@@ -11,8 +11,9 @@ B) the page's sections and cards ("Čeká na vyřízení", "Poslední žádosti"
 C) the area "…včetně kdo žádal" switched off (a reader by default): the card
    "Kdo žádá" is missing and the requester's name is nowhere in the page;
 D) with "…kdo žádal" and anonymising the others' names hide;
-E) the live card from the cache (a minute), a new key = a new load;
-F) an unavailable Seerr: "Seerr neodpovídá", the statistics from the database go on;
+E) the live cards ("Čeká na vyřízení", "Poslední žádosti") from the cache (a minute), a new key = a new load;
+F) an unavailable Seerr: "Seerr neodpovídá", the statistics from the database go on, the latest requests
+   from the database with a note about the last sync;
 G) the whole history (?days=0) starts with the first request, not with the first play.
 
 Seerr is not run: the answers are recorded from a real Seerr
@@ -220,9 +221,11 @@ print("--- E) the cache ---")
 before = asked.count("request?pending")
 admin.get("/seerr?days=365")
 check(before == 1 and asked.count("request?pending") == 1, f"two pages within a minute = one request for the pending ones ({asked.count('request?pending')})")
+# "Poslední žádosti" reads Seerr live too (26. 11. 2026), through the same one-minute cache.
+check(asked.count("request?all") == 1, f"... and one request for the latest ones ({asked.count('request?all')})")
 seerr.save_settings(True, "http://seerr.test", "novy-klic")
 admin.get("/seerr?days=365")
-check(asked.count("request?pending") == 2, "a new key = a new load at once")
+check(asked.count("request?pending") == 2 and asked.count("request?all") == 2, "a new key = a new load at once")
 
 print()
 print("--- F) an unavailable Seerr ---")
@@ -234,10 +237,14 @@ check("Seerr neodpovídá" in s and "<h2>Žádosti v období</h2>" in s and "taj
       "the sentence “Seerr neodpovídá”, the statistics from the database go on, the key nowhere")
 # A security finding (13. 11. 2026): the error's detail only for the administrator.
 check("Connection refused" in s, "the administrator sees the error's detail")
+latest_down = card_html(s, "Poslední žádosti")
+check("Žádosti jsou z poslední synchronizace (" in latest_down and "Connection refused" not in latest_down
+      and "Janička Testová" in latest_down, "the latest requests from the database, with a note that they are from the last sync")
 seerr.live.CACHE.clear()
 s_reader = sign_in("reader").get("/seerr?days=365").text
 check("Seerr neodpovídá" in s_reader and "Connection refused" not in s_reader,
       "whoever is not the administrator sees only the sentence that Seerr does not answer - without details")
+check("Žádosti jsou z poslední synchronizace (" in card_html(s_reader, "Poslední žádosti"), "... and the note under the latest requests too")
 restore()
 
 print()

@@ -367,7 +367,40 @@ def seerr_latest(days: Any = 30, limit: int = 100, analysis: dict[str, Any] | No
         for z in requests[:max(0, int(limit))])
 
 
+def seerr_with_live(days: Any, fresh: Mapping[str, Any], analysis: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The period's requests with Seerr's newest requests read right now in place of the stored ones.
+
+    For "Latest requests": `fresh` is the live state of seerr.latest_requests - `requests` (rows in the shape of the
+    table's rows), `seen` (the ids the page held) and `span_from` (from which id on the page holds every request,
+    None = unknown). A live row takes the place of the stored one: its state is the present one, the same as
+    "Waiting for approval" shows. A live row of the period the table does not know yet (newer than the last sync) is
+    added. A stored request the page should hold and does not is gone from Seerr - deleted in Seerr, as the next sync
+    marks it. The page speaks only for the ids from `span_from` up to its highest one: a request stored after the page
+    went into the cache (a sync within its minute) is newer than all of it and is not gone, and an empty page marks
+    nothing. The older stored requests stay as they are. Returns `{"requests": [...]}`, an analysis seerr_latest
+    takes; the other cards keep the stored requests. Nothing is changed in place: both inputs are shared.
+    """
+    period = _as_period(days)
+    live = {r["id"]: r for r in fresh["requests"]}
+    seen, span_from, now = fresh["seen"], fresh["span_from"], db.utcnow()
+    highest = max(seen, default=None)
+    merged = []
+    for z in _requests(days, analysis):
+        if z["id"] in live:
+            continue
+        gone = (span_from is not None and highest is not None and span_from <= z["id"] <= highest
+                and z["id"] not in seen and not z["deleted_at"])
+        merged.append({**z, "deleted_at": now} if gone else z)
+    merged += [r for r in live.values() if period.since <= r["created_at"] < period.until]
+    return {"requests": merged}
+
+
 def seerr_first() -> str:
     """The time of the first stored request (UTC) - the start of "the whole history" of the Seerr page."""
     return str(db.query_value("SELECT MIN(created_at) FROM seerr_request WHERE created_at >= ?",
                               (OLDEST_HISTORY,), default="") or "")
+
+
+def seerr_synced_at() -> str:
+    """When the last sync saw a request (UTC), "" = never - how old the stored requests are."""
+    return str(db.query_value("SELECT MAX(synced_at) FROM seerr_request", default="") or "")

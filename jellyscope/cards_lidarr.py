@@ -36,6 +36,7 @@ templates. Adding a card means adding a line to `CARDS` and its name to `SECTION
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -45,14 +46,14 @@ from .cards_base import Card, _once, current_is_admin, duration, live, per_item
 from .i18n import translate as _t
 
 # The sections of the page /arr/lidarr and the names of their cards, in the order on
-# the page. The heading is an English sentence = a translation key. The layout (pairs,
-# triples side by side) is in arr_lidarr.html; that the template draws exactly these
+# the page. The heading is an English sentence = a translation key. The layout (pairs
+# side by side) is in arr_lidarr.html; that the template draws exactly these
 # cards in this order is guarded by tests/test_lidarr_cards.py.
 SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("In the app right now", ("live_numbers", "downloading", "queue", "calendar", "health")),
     ("What was added", ("numbers", "by_day", "when", "best_days", "largest")),
     ("Speed", ("downloads", "after_release")),
-    ("Sources and quality", ("indexers", "groups", "clients", "protocols", "qualities")),
+    ("Sources and quality", ("indexer_reliability", "indexers", "groups", "clients", "protocols", "qualities")),
     ("Upgrades", ("upgrades", "how_all", "how_upgrades", "transitions", "upgraded")),
 )
 
@@ -143,6 +144,14 @@ def with_details(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     library = stats.lidarr_library({row.get("title_id") for row in rows})
     return [{**row, "detail_url": cards_music.album_link(library.get(row.get("title_id"), {}).get("album_id")),
              "artist_url": cards_music.artist_link(library.get(row.get("title_id"), {}).get("artist_id"))} for row in rows]
+
+
+def success_rate(share: float | None) -> str:
+    """The success rate (0-1) as a percentage with one decimal, rounded down: an indexer with one failure in a thousand
+    does not read "100,0 %". Nothing finished that can be matched = "–"."""
+    if share is None:
+        return "–"
+    return formatting.percent(math.floor(share * 1000 + 1e-9) / 10, 1)
 
 
 def track_count(count: int) -> str:
@@ -304,6 +313,13 @@ def _d_after_release(period: Any) -> dict[str, Any]:
             "buckets": [{"label": _t(BUCKET_LABELS[k]), "count": n} for k, n in since_release["buckets"].items()]}
 
 
+def _d_indexer_reliability(period: Any) -> dict[str, Any]:
+    rows = stats.lidarr_indexer_reliability(period, analysis=_events(period))
+    # Whether any grab cannot be matched (the Blackhole client): then the card says why.
+    return {"rows": [{**r, "success": success_rate(r["success"])} for r in rows[:ROWS]],
+            "unmatched": sum(r["unmatched"] for r in rows)}
+
+
 def _d_source(group: str) -> Callable[[Any], dict[str, Any]]:
     """The data of one of the five source cards (indexers, groups, clients…) - the same template, another group."""
     def data(period: Any) -> dict[str, Any]:
@@ -397,6 +413,9 @@ CARDS: tuple[Card, ...] = (
     _card("after_release", "How soon after release",
           "How long after its release an album is in the library.", _d_after_release, width="half"),
     # --- Sources and quality ---
+    _card("indexer_reliability", "Indexer reliability",
+          "How many album downloads from each indexer were imported into the library and how many failed. The most failures come first.",
+          _d_indexer_reliability, table_window=True),
     _source("indexers", "Indexers", "Which indexers the imported albums came from."),
     _source("groups", "Release groups", "Which release groups are the most common among imported albums."),
     _source("clients", "Download clients", "Which client downloaded the imported albums."),

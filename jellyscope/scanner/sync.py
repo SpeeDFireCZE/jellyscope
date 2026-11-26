@@ -36,7 +36,7 @@ from .task_state import (
     start_task_log,
     stop_requested,
 )
-from .writing import _mark_missing, _write_batch, clean_up_phantoms, write_versions
+from .writing import _library_names, _mark_missing, _unconfirmed_libraries, _write_batch, clean_up_phantoms, write_versions
 
 log = logging.getLogger("jellyscope.scanner")
 
@@ -62,6 +62,12 @@ async def sync_library() -> dict[str, Any]:
                 counts["users"] = await _sync_users(client)
                 libraries = await _sync_libraries(client)
                 counts["libraries"] = len(libraries)
+                # A starting Jellyfin lists no library, or only some: the items of a library it left out are still
+                # there. They keep their state until the library is missing from two lists in a row.
+                spared = await asyncio.to_thread(_unconfirmed_libraries, libraries)
+                if not libraries and spared:
+                    raise JellyfinError("Jellyfin did not list the libraries with movies and series. It may still be "
+                                        "starting, so nothing was marked as gone.")
 
                 use_jellyfin_tech = db.get_setting("tech_source") == "jellyfin"
 
@@ -94,7 +100,7 @@ async def sync_library() -> dict[str, Any]:
                 # would mark as "unseen" titles that are in Jellyfin as usual - they would disappear from the library
                 # and end in the archive. An unfinished sync rather changes nothing than lies.
                 if not stopped:
-                    _mark_missing(started_at)
+                    _mark_missing(started_at, spared)
                     # Items of a kind that does not belong here (collections from Jellyfin 12 before the fix) go right
                     # away - not only after a restart, when clean_up_phantoms() runs at start-up.
                     await asyncio.to_thread(clean_up_phantoms)
@@ -159,11 +165,13 @@ async def sync_library() -> dict[str, Any]:
         # happened.
         await asyncio.to_thread(write_daily_snapshots)
 
-        finish_task_log(
-            scan_id, "done", total=counts["items"], ok=counts["items"],
-            message=i18n.Message("libraries: {libraries}, users: {users}",
-                                 libraries=counts["libraries"], users=counts["users"]),
-        )
+        message = i18n.Message("libraries: {libraries}, users: {users}",
+                               libraries=counts["libraries"], users=counts["users"])
+        if spared:
+            message = i18n.join_messages([message, i18n.Message(
+                "Jellyfin did not list these libraries this time, so their titles were kept: {names}",
+                names=", ".join(_library_names(spared)))], ". ")
+        finish_task_log(scan_id, "done", total=counts["items"], ok=counts["items"], message=message)
         return {"status": "ok", **counts}
 
 

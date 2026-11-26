@@ -143,7 +143,7 @@ def music_listeners(analysis: dict[str, Any]) -> list[dict[str, Any]]:
     artists_by_person: dict[str, Counter] = defaultdict(Counter)
     names: dict[str, str] = {}
     for x in analysis["rows"]:
-        person_key = x["user_id"] or "jmeno:" + str(x["user_name"])
+        person_key = x["user_id"] or "name:" + str(x["user_name"])
         person = people.setdefault(person_key, {"user_id": x["user_id"], "user_name": x["user_name"], "seconds": 0, "plays": 0})
         person["seconds"] += x["watched_seconds"]
         person["plays"] += int(x["plays"])

@@ -77,8 +77,12 @@ check(abs(rows["Audiobooks listened"]["a"] - 2.0) < 1e-9 and abs(rows["Audiobook
       f"audiobooks listened: hours of A and B and the difference ({rows['Audiobooks listened']})")
 check(abs(rows["E-books read"]["a"] - 900 / 3600) < 1e-9 and abs(rows["E-books read"]["b"] - 600 / 3600) < 1e-9,
       f"e-books read: the time of reading ({rows['E-books read']['a']}/{rows['E-books read']['b']})")
-# Daily average: A (7200 + 900) / 3600 h over 7 days, B (2400 + 600) / 3600 h over 7 days.
-check(abs(rows["Daily average"]["a"] - 8100 / 3600 / 7) < 1e-9 and abs(rows["Daily average"]["b"] - 3000 / 3600 / 7) < 1e-9,
+# Daily average: A (7200 + 900) / 3600 h, B (2400 + 600) / 3600 h, each over its real length - "the last 7 days" hold
+# only the part of today that has passed, and B is the same span a week back (25. 11. 2026).
+check(6 <= c["a"]["days"] < 7 and abs(c["a"]["days"] - c["b"]["days"]) < 0.05,
+      f"both columns are six days and the part of today long ({c['a']['days']:.3f}/{c['b']['days']:.3f})")
+check(abs(rows["Daily average"]["a"] - 8100 / 3600 / c["a"]["days"]) < 1e-6
+      and abs(rows["Daily average"]["b"] - 3000 / 3600 / c["b"]["days"]) < 1e-6,
       f"daily average of the two together ({rows['Daily average']['a']}/{rows['Daily average']['b']})")
 # Readers A: jana, petr = 2, B: eva = 1. Works A: Cesta na jih (two parts = one), Duna, Hobit = 3, B: Hobit, Stare povesti = 2.
 # Authors A: Vypravec, Herbert, Tolkien = 3, B: Tolkien, Jirasek = 2.

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter with context %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
 {% block title %}{{ _("Library") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -15,25 +15,26 @@
     {{ period_filter(period, '/library') }}
 </div>
 
-{% include "_card_libraries.html" %}
+{# The cards come from the registry (web/library.py, INDEX_CARDS), each in its slot. #}
+{{ show_card("libraries") }}
 
 {# Disks: under the library cards, above their statistics - where things lie and how much is left. #}
-{% include "_card_disks.html" %}
+{{ show_card("disks") }}
 
 {# ------------------------------------------------------------------ #}
 {# A summary of all libraries together                                #}
-{% include "_card_library_total.html" %}
+{{ show_card("library_total") }}
 
-{% include "_card_growth.html" %}
+{{ show_card("library_growth") }}
 
 <div class="grid-2">
-    {% include "_card_codecs.html" %}
+    {{ show_card("codecs") }}
 
-    {% include "_card_resolution.html" %}
+    {{ show_card("resolutions") }}
 </div>
 
 {% if ranges %}
-{% include "_card_dynamic_range.html" %}
+{{ show_card("dynamic_range") }}
 {% endif %}
 
 {# The other kinds of content Jellyscope collects (web/library_kinds.py): music now, books
@@ -41,4 +42,7 @@
 {% for content_section in content_sections %}
 {% include content_section.template %}
 {% endfor %}
+{# One window for a whole table for every section: each section drew its own, so with music and books the page had
+   two <dialog id="table-window">. #}
+{% if content_sections %}{{ table_window() }}{% endif %}
 {% endblock %}

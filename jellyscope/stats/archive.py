@@ -57,6 +57,9 @@ def delete_from_archive(item_ids: list[str], library_id: str) -> dict[str, int]:
         for item_id in valid:
             plays += _delete_item(conn, item_id)
     log.info("deleted %s items from the archive (%s playbacks)", len(valid), plays)
+    if plays:
+        # An open page draws its cards over plays again (the plays' marker in /health).
+        db.note_plays_rewritten()
     return {"title_count": len(valid), "playbacks": plays}
 
 

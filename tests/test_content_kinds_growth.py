@@ -309,5 +309,43 @@ written = json.loads(db.query_value("SELECT kinds FROM library_disk_snapshot WHE
 check(written is not None and "books" not in written, f"a disk snapshot before the first sync leaves the books out ({written})")
 
 print()
+print("--- (m) a slow reading for old files does not land under the new files' fingerprint ---")
+# Pages run in a pool of threads. Request A reads the history for fingerprint "old" (slowly); meanwhile the files
+# change and request B, with fingerprint "new", reads its own. A's result must not end up remembered under "new":
+# the curves would then show the sizes from before the change until the files change again.
+import threading  # noqa: E402
+
+from jellyscope.stats import content_history  # noqa: E402
+
+content_history._remembered.clear()
+in_compute, release = threading.Event(), threading.Event()
+
+
+def slow_old() -> str:
+    in_compute.set()
+    release.wait(5)
+    return "old result"
+
+
+results: dict[str, object] = {}
+first = threading.Thread(target=lambda: results.update(a=content_history._remember("old", "*", slow_old)))
+first.start()
+in_compute.wait(5)
+second = threading.Thread(target=lambda: results.update(b=content_history._remember("new", "*", lambda: "new result")))
+second.start()
+second.join(1)            # without a guard B is done by now; with one it waits for A
+b_waited = "b" not in results
+release.set()
+first.join(5)
+second.join(5)
+# Each request gets its own result with or without the guard - what the guard changes is that B waits for A.
+check(b_waited and results == {"a": "old result", "b": "new result"},
+      f"the second request waits for the first one's compute, then each gets its own result ({b_waited}, {results})")
+check(content_history._remember("new", "*", lambda: "computed again") in ("new result", "computed again"),
+      f"and the new fingerprint does not keep the old result "
+      f"({content_history._remember('new', '*', lambda: 'computed again')})")
+content_history._remembered.clear()
+
+print()
 print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

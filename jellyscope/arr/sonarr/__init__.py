@@ -13,8 +13,8 @@ here and need not know which file a name lives in:
 * `progress` - the live downloads for the card "Stahuje se" (downloading): the queue by series with
   progress, the refresh command only while something downloads, a short cache.
 * `posters` - the provisional poster of a series that is still downloading (from Sonarr, through
-  the image store), the clean-up once the series arrives in the library and the poster for Seerr's
-  requests (`title_poster`).
+  the image store), the clean-up once the series arrives in the library, the poster for Seerr's
+  requests (`title_poster`) and which stored posters are Sonarr's (`own_posters`, kept by Seerr's deletion).
 * `titles` - Sonarr's list of series with the ids of the title databases and their pairing with
   Jellyfin's series: by it the cards link a series into the library.
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from .client import NAME, SonarrClient, SonarrError
 from .live import live_state
-from .posters import clean_up_posters, poster_missing, provisional_poster, title_poster
+from .posters import clean_up_posters, own_posters, poster_missing, provisional_poster, title_poster
 from .progress import download_state
 from .settings import check_connection, is_connected, save_settings, stored_settings
 from .sync import (
@@ -54,6 +54,7 @@ __all__ = [
     "event_from_history",
     "is_connected",
     "live_state",
+    "own_posters",
     "poster_missing",
     "provisional_poster",
     "refresh_counts",

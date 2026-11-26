@@ -104,7 +104,7 @@ def settings_link() -> str:
 
 
 def save_settings(enabled: bool, url: str, key: str) -> str:
-    """Save the settings. Returns an error (a Czech sentence, a translation key), or "".
+    """Save the settings. Returns an error (a sentence, a translation key), or "".
 
     The rules (an empty key keeps the stored one, it can be switched on only with an address and a
     key) are shared by all apps - services.save_service_settings.

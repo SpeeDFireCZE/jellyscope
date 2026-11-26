@@ -127,7 +127,16 @@ async def _analyse_files(
             finally:
                 _add_progress(1)
 
-    await asyncio.gather(*(analyse(row) for row in targets))
+    jobs = [asyncio.ensure_future(analyse(row)) for row in targets]
+    try:
+        await asyncio.gather(*jobs)
+    except BaseException:
+        # One analysis failed unexpectedly (a locked database...): the others stop too and are waited for, so
+        # none writes after the task ended and released the lock - where Stop would no longer reach it.
+        for job in jobs:
+            job.cancel()
+        await asyncio.gather(*jobs, return_exceptions=True)
+        raise
     _clear_progress()
     return results, without_language
 
@@ -247,8 +256,14 @@ async def run_tech_scan(only_missing: bool = True, limit: int = 0,
             finish_task_log(scan_id, "done", message="Nothing to analyse.")  # the key: the task log is read in the reader's language
             return {"status": "ok", "total": 0, "ok": 0, "failed": 0}
 
-        results, without_language = await _analyse_files(targets, ffprobe_bin, mappings, concurrency)
-        filled, from_name, ranges = await _additions_after_analysis(without_language, library_id, item_ids)
+        try:
+            results, without_language = await _analyse_files(targets, ffprobe_bin, mappings, concurrency)
+            filled, from_name, ranges = await _additions_after_analysis(without_language, library_id, item_ids)
+        except Exception as exc:  # noqa: BLE001 - the task log must not stay "running"
+            log.exception("the file analysis failed")
+            _clear_progress()
+            finish_task_log(scan_id, "error", message=exc)
+            return {"status": "error", "message": i18n.translate_with("Unexpected error: {error}", None, error=exc)}
         addition = _additions_text(filled, from_name, ranges)
 
         if results["skipped"]:
@@ -305,7 +320,7 @@ async def fill_range_from_jellyfin(item_ids: list[str]) -> int:
     """Write the dynamic range to the items as Jellyfin sees it.
 
     Beside what ffprobe measured. Dolby Vision in Matroska can be read only by ffmpeg 5, so an older ffprobe
-    reports just "HDR" - and Jellyfin is then the only one who knows about DV. See stats.RANGE_CASE.
+    reports just "HDR" - and Jellyfin is then the only one who knows about DV. See stats.tech.RANGE_CASE.
 
     Returns the count of items for which Jellyfin stated some range.
     """

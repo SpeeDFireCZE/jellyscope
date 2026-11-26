@@ -1,0 +1,49 @@
+# Jellyscope - the versions of what the dependencies pull in
+#
+# requirements.txt names what the application uses, each at one version.
+# Those packages need packages of their own (FastAPI needs pydantic, httpx
+# needs certifi, uvicorn needs h11 ...), and they ask only for "this version
+# or newer". Left like that, a new installation gets whatever is newest that
+# day - a combination nobody tested - and no update touches them again: an
+# installed package satisfies "or newer" for ever, so a fix in one of them
+# would never reach a server installed long ago.
+#
+# This file gives each of them one version, the one the tests ran with.
+# requirements.txt refers to it (-c constraints.txt), so every
+# `pip install -r requirements.txt` honours it: deploy/install.sh,
+# deploy/update.sh, the Update button in the app (its dry run too) and the
+# Docker image. pip then also moves an installed package to the version
+# here. A constraint installs nothing by itself, it only says which version.
+#
+# One version, one place: a package of requirements.txt is pinned there,
+# not here. Development tools (ruff, rope ...) do not belong here either.
+#
+# Changing a version: build a fresh .venv from requirements.txt, run the
+# tests, and take the versions from `.venv/bin/python -m pip freeze`.
+# tests/test_deploy.py checks that every package the requirements pull in
+# is here, at the version installed.
+
+annotated-doc==0.0.5        # FastAPI
+annotated-types==0.8.0      # pydantic
+anyio==4.15.1               # FastAPI, Starlette, httpx
+certifi==2026.10.23         # httpx - the certificate authorities it trusts
+click==8.5.0                # uvicorn
+h11==0.16.0                 # uvicorn, httpcore - reads HTTP/1.1
+httpcore==1.0.9             # httpx
+httptools==0.9.0            # uvicorn[standard] - the fast HTTP parser
+idna==3.20                  # httpx, anyio
+MarkupSafe==3.0.4           # Jinja2 - the escaping of the pages
+opentelemetry-api==1.45.2   # FastAPI (tracing, which Jellyscope does not switch on)
+pydantic==2.14.1            # FastAPI
+pydantic_core==2.50.1       # pydantic
+python-dotenv==1.2.4        # uvicorn[standard]
+PyYAML==6.0.3               # uvicorn[standard]
+typing-inspection==0.4.4    # FastAPI, pydantic
+typing_extensions==4.16.0   # FastAPI, pydantic, anyio
+uvloop==0.23.0              # uvicorn[standard], not on Windows
+watchfiles==1.3.0           # uvicorn[standard]
+websockets==17.3            # uvicorn[standard]
+
+# requirements-postgres.txt - the PostgreSQL driver
+psycopg-binary==3.3.6       # psycopg[binary], always the same version as psycopg
+psycopg-pool==3.3.3         # psycopg[pool]

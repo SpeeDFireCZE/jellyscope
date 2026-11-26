@@ -431,7 +431,7 @@ how_many = event_selections(lambda: admin.get("/dashboard?days=365"))
 check(how_many == {"sonarr_event": 1, "radarr_event": 1}, f"a dashboard with both apps' cards selects the events once per app ({how_many})")
 cards.save_layout([c.key for c in BOTH_CARDS])
 all_cards = admin.get("/dashboard?days=365")
-check(all_cards.status_code == 200 and len(re.findall(r"<!-- card: arr_\w+ -->", all_cards.text)) == 46, "all 46 cards at once on one dashboard")
+check(all_cards.status_code == 200 and len(re.findall(r"<!-- card: arr_\w+ -->", all_cards.text)) == 48, "all 48 cards at once on one dashboard")
 cards.save_layout(["arr_sonarr_downloading", "arr_radarr_downloading"])
 downloading = html_lib.unescape(admin.get("/dashboard").text)
 check("Sonarr · Stahuje se" in downloading and "Radarr · Stahuje se" in downloading and downloading.count('data-partial="/partials/arr/') == 2
@@ -645,6 +645,57 @@ check(second_result == {"volani": 2} and took < 1.0,
       f"a stuck request does not lock the card for the others: after the limit the view asks by itself ({took:.2f} s)")
 check(isinstance(cards_base.MAX_WAIT, float) and cards_base.MAX_WAIT > 1,
       f"the substitution of MAX_WAIT is undone: later live() calls wait the real limit ({cards_base.MAX_WAIT!r})")
+
+print()
+print("--- G) a saved key goes only to the server it was saved for ---")
+# The saved key went to any address put into the form with the key field left empty: a test or a save sent from a
+# page of another site on the same machine, or by another administrator, who never sees the key, had the app send
+# it there (and keep it for that address). Every app of the registry, through the one route of the *Arr cards.
+ANOTHER_SERVER = "uložený klíč se posílá jen na server"
+for key in registry.APPS:
+    package = sys.modules[f"jellyscope.arr.{key}"]
+    sent: list[tuple[str, str]] = []
+
+    async def recorded(url: str, api_key: str, sent: list[tuple[str, str]] = sent) -> tuple[bool, str]:
+        sent.append((url, api_key))
+        return True, "9.9"
+
+    put_back = substitute(package, "check_connection", recorded)
+    chosen_app = registry.APPS[key]
+    try:
+        chosen_app.save_settings(True, f"http://{key}.doma:8000/base", f"klic-{key}")
+        db.forget_settings()
+
+        def post(url: str, api_key: str = "", action: str = "test") -> str:
+            return admin.post(f"/settings/arr/{key}", data={"enabled": "1", "url": url, "api_key": api_key,
+                                                            "action": action}).text
+
+        answers = [post(url) for url in ("http://utocnik.example:8000", f"https://{key}.doma:8000/base",
+                                         f"http://{key}.doma:8001/base")]
+        check(not sent and all(ANOTHER_SERVER in answer for answer in answers),
+              f"{key}: a test at another host, scheme or port with the key field empty sends no key and asks for it ({sent})")
+        answer = post("http://utocnik.example:8000", action="save")
+        db.forget_settings()
+        check(chosen_app.stored_settings()["url"] == f"http://{key}.doma:8000/base" and ANOTHER_SERVER in answer,
+              f"{key}: nor is it saved for another server ({chosen_app.stored_settings()['url']})")
+        post(f"{key}.doma:8000/jinde")
+        check(sent == [(f"{key}.doma:8000/jinde", f"klic-{key}")],
+              f"{key}: the same server (another path) with the key field empty tests with the saved key ({sent})")
+        sent.clear()
+        # The key typed at a test is held in the draft for the next Test or Save - for its server only.
+        post("http://novy.doma:9000", "klic-novy")
+        post("http://utocnik.example:8000")
+        post("http://novy.doma:9000", "klic-novy")
+        post("http://novy.doma:9000/x")
+        check(sent == [("http://novy.doma:9000", "klic-novy")] * 2 + [("http://novy.doma:9000/x", "klic-novy")],
+              f"{key}: a key typed at a test goes again only to the server it was typed for ({sent})")
+        post("http://novy.doma:9000", action="save")
+        db.forget_settings()
+        check(chosen_app.stored_settings()["url"] == "http://novy.doma:9000"
+              and db.get_setting(f"arr_{key}_api_key") == "klic-novy",
+              f"{key}: and the next Save of that server stores it ({chosen_app.stored_settings()['url']})")
+    finally:
+        put_back()
 
 print()
 print(f"DONE - failures: {failures}")

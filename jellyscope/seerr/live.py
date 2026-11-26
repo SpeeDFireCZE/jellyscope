@@ -1,9 +1,13 @@
-"""The live card "Waiting for approval" ("Čeká na vyřízení"): requests waiting to be approved now.
+"""The live card "Waiting for approval" and what both live cards share: the one-minute cache, the names of fresh
+titles.
 
 Nothing is stored - it is "how it looks right now". The Seerr page asks when shown, but through a
 one-minute cache (`CACHE`), so reloading the page or switching the period does not flood Seerr with
 requests. The cache notices a change of the address and of the key (the key only as a fingerprint):
-fixed settings load at once.
+fixed settings load at once. Both live cards ("Latest requests" reads its page in latest.py) load
+together under ONE entry of it - now.py, where `pending` and `latest_requests` are; here are the
+pending requests' rows (`_read_pending`) and the names of titles the table does not know yet
+(`_add_titles`, looked up once for both cards).
 
 An unavailable Seerr does not bring the page down: `dostupny: False` and the error (without the key,
 translated on every read - the cache is shared and everyone reads it in their own language); the
@@ -12,24 +16,23 @@ statistics from the database still show.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import time
 from datetime import UTC, datetime
 from typing import Any
-
-import httpx
 
 from .. import db
 from ..jellyfin import id_without_dashes as normalize_id
 from ..services import utc_time, integer
 from .client import SeerrClient, SeerrError, _tmdb_id
 
-TTL = 60.0              # seconds in the cache
+TTL = 60.0              # seconds in the cache (now.py)
 PAGE_SIZE = 50          # how many pending requests per request to Seerr
 MAX_PAGES = 10          # at most 500 pending; nobody handles more at once
 MAX_TITLES = 20         # how many names are looked up per load (the page waits for them)
 CONCURRENT = 5          # how many requests for names go to Seerr at once
-CACHE: dict[str, tuple[float, str, dict[str, Any], SeerrError | None]] = {}
+# Both live cards under one entry (now.py): {CACHE_NAME: (when, fingerprint of the settings, {"pending": (state, error),
+# "latest": (state, error)})}.
+CACHE_NAME = "seerr"
+CACHE: dict[str, tuple[float, str, dict[str, tuple[dict[str, Any], SeerrError | None]]]] = {}
 # What was looked up for fresh requests: {(media type, TMDB id): {"name": ..., "poster": ...}}.
 # A request newer than the last sync is not in the table yet and without this the card would ask for
 # its name on every load. The poster path comes in the same answer; by it the route /seerr/poster/…
@@ -69,11 +72,14 @@ def _rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     now = datetime.now(UTC).replace(tzinfo=None)
     rows = []
     for record in records:
-        requested_by = record.get("requestedBy") or {}
+        # An odd value (a text or a number where an object belongs) is no requester or title, not an error of the card.
+        requested_by = record.get("requestedBy")
+        requested_by = requested_by if isinstance(requested_by, dict) else {}
         created = utc_time(record.get("createdAt"))
         user_id, user_name = (viewers.get(normalize_id(requested_by.get("jellyfinUserId")))
                               or ("", str(requested_by.get("displayName") or "")))
-        media = record.get("media") or {}
+        media = record.get("media")
+        media = media if isinstance(media, dict) else {}
         tmdb = _tmdb_id(media.get("tmdbId"))
         is_4k = bool(record.get("is4k"))
         rows.append({
@@ -124,42 +130,21 @@ async def _add_titles(client: SeerrClient, rows: list[dict[str, Any]]) -> None:
         row["title"] = row["title"] or known(row)
 
 
-async def _load(url: str, key: str, transport: httpx.AsyncBaseTransport | None) -> tuple[dict[str, Any], SeerrError | None]:
-    """All pending requests (page by page). The client's short timeout: a Seerr that accepts the
-    connection and does not answer must not hold the page up for minutes."""
-    state = _empty()
+async def _read_pending(client: SeerrClient) -> dict[str, Any]:
+    """All pending requests (page by page) as the card's state, the titles the table does not know yet still empty.
+    Raises SeerrError."""
     records: dict[int, dict[str, Any]] = {}       # by id: a shift while paging doubles nothing
     total = 0
-    try:
-        async with SeerrClient(url, key, transport=transport) as client:
-            for page in range(MAX_PAGES):
-                answer = await client.requests_page(page * PAGE_SIZE, PAGE_SIZE, "pending")
-                part = answer.get("results")
-                part = [r for r in part if isinstance(r, dict) and integer(r.get("id"), None) is not None] \
-                    if isinstance(part, list) else []
-                records.update({r["id"]: r for r in part})
-                total = integer((answer.get("pageInfo") or {}).get("results"), len(records))
-                if len(part) < PAGE_SIZE or (page + 1) * PAGE_SIZE >= total:
-                    break
-            # Queries to the database are blocking work - in a thread, so the web runs meanwhile.
-            rows = await asyncio.to_thread(_rows, list(records.values()))
-            await _add_titles(client, rows)
-    except SeerrError as error:
-        return state, error
-    for row in rows:
-        row["title"] = row["title"] or f"TMDB {row['tmdb_id'] or '?'}"
-    state.update(available=True, count=max(total, len(rows)), requests=rows)
-    return state, None
-
-
-async def pending(transport: httpx.AsyncBaseTransport | None = None) -> dict[str, Any]:
-    """The pending requests now (from the cache, if it is younger than a minute)."""
-    url, key = db.get_setting("seerr_url", ""), db.get_setting("seerr_api_key", "")
-    fingerprint = url + "|" + hashlib.sha256(key.encode()).hexdigest()
-    cached = CACHE.get("seerr")
-    if cached and cached[1] == fingerprint and time.monotonic() - cached[0] < TTL:
-        _, _, state, error = cached
-    else:
-        state, error = await _load(url, key, transport)
-        CACHE["seerr"] = (time.monotonic(), fingerprint, state, error)
-    return {**state, "error": error.translated() if error else ""}
+    for page in range(MAX_PAGES):
+        answer = await client.requests_page(page * PAGE_SIZE, PAGE_SIZE, "pending")
+        part = answer.get("results")
+        part = [r for r in part if isinstance(r, dict) and integer(r.get("id"), None) is not None] \
+            if isinstance(part, list) else []
+        records.update({r["id"]: r for r in part})
+        page_info = answer.get("pageInfo")
+        total = integer(page_info.get("results") if isinstance(page_info, dict) else None, len(records))
+        if len(part) < PAGE_SIZE or (page + 1) * PAGE_SIZE >= total:
+            break
+    # Queries to the database are blocking work - in a thread, so the web runs meanwhile.
+    rows = await asyncio.to_thread(_rows, list(records.values()))
+    return {**_empty(), "available": True, "count": max(total, len(rows)), "requests": rows}

@@ -272,5 +272,18 @@ check("V tomhle období se nic nečetlo ani neposlouchalo." in empty_activity
       "nothing yet is said in words, no empty table")
 
 print()
+print("--- the Library page with music and books ---")
+from _music import fill_music  # noqa: E402
+
+fill_music()
+# Each section used to draw its own window for a whole table: with music and books there were two
+# <dialog id="table-window"> and getElementById took the first one.
+for who in ("admin", "reader"):
+    index = login(who).get("/library").text
+    windows = index.count('id="table-window"')
+    check('id="music-in-library"' in index and 'id="books-in-library"' in index and windows == 1,
+          f"{who}: the Library page with both sections has one window for a whole table ({windows})")
+
+print()
 print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

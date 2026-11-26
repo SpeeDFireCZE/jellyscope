@@ -12,6 +12,7 @@ Important: ffprobe only **reads** files. It rewrites nothing, deletes nothing.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import shutil
 from pathlib import Path
@@ -27,6 +28,21 @@ PROBE_TIMEOUT_SECONDS = 60
 
 class ProbeError(TranslatableError):
     """Analysing one file failed - a key and its values (i18n.TranslatableError), stored with the item."""
+
+
+class ShareNotAnswering(TranslatableError):
+    """The look at a file did not come back within the limit: the share it lies on stalled.
+
+    Not a ProbeError on purpose - giving up the one file would not help, the next one lies on the same share. It ends
+    the whole analysis, which closes its run as failed and frees the lock (scanner.run_tech_scan).
+    """
+
+
+# The looks at files get threads of their own. A look at a stalled share keeps its thread for as long as the share
+# hangs; in the shared pool of asyncio.to_thread (the database writes of the web and the collector) every analysis
+# that gives up would leave more of them, until nothing else got a thread. Here they take at most as many as an
+# analysis may run at once (ffprobe_concurrency); a look that finds them all taken waits out its limit and gives up.
+_FILE_LOOKS = concurrent.futures.ThreadPoolExecutor(max_workers=16, thread_name_prefix="file-look")
 
 
 def find_ffprobe(configured_path: str = "") -> str | None:
@@ -75,8 +91,14 @@ def apply_path_mappings(path: str, mappings: list[dict[str, str]]) -> str:
         return path
 
     for mapping in mappings:
-        source = (mapping.get("from") or "").strip()
-        target = (mapping.get("to") or "").strip()
+        # A mapping stored before the save checked its shape (a pair of texts, a number for a path) is skipped,
+        # not a reason for every analysis to fail.
+        if not isinstance(mapping, dict):
+            continue
+        source, target = mapping.get("from") or "", mapping.get("to") or ""
+        if not isinstance(source, str) or not isinstance(target, str):
+            continue
+        source, target = source.strip(), target.strip()
         if not source:
             continue
         # Compared regardless of case and of the direction of slashes -
@@ -106,7 +128,16 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
     command injection, and it is one of the most common security holes of all.
     """
     file_path = Path(path)
-    if not file_path.is_file():
+    # In a thread: a file on a stalled network share hangs the look at it, and on the event loop that would
+    # stop the web and the collector too. With a limit: a hard-mounted share hangs it for good, and the analysis
+    # would keep its lock - Stop does not reach a look under way, and no other task could start until a restart.
+    try:
+        exists = await asyncio.wait_for(asyncio.get_running_loop().run_in_executor(_FILE_LOOKS, file_path.is_file),
+                                        timeout=PROBE_TIMEOUT_SECONDS)
+    except TimeoutError:
+        raise ShareNotAnswering("The file {path} did not answer within {seconds} s, the share it lies on seems to be "
+                                "stalled.", path=str(file_path), seconds=PROBE_TIMEOUT_SECONDS) from None
+    if not exists:
         raise ProbeError("The file does not exist or cannot be seen from here.")
 
     args = [
@@ -118,6 +149,7 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
         str(file_path),
     ]
 
+    process = None
     try:
         process = await asyncio.create_subprocess_exec(
             *args,
@@ -128,11 +160,16 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
             process.communicate(), timeout=PROBE_TIMEOUT_SECONDS
         )
     except TimeoutError as exc:
+        await _end(process)
         raise ProbeError("ffprobe did not answer within {seconds} s.", seconds=PROBE_TIMEOUT_SECONDS) from exc
     except FileNotFoundError as exc:
         raise ProbeError("ffprobe was not found ({path}).", path=ffprobe_bin) from exc
     except OSError as exc:
         raise ProbeError("ffprobe could not be started: {error}", error=exc) from exc
+    except BaseException:
+        # Cancelled (another file failed, the task ends): ffprobe must not go on running on its own.
+        await _end(process)
+        raise
 
     if process.returncode != 0:
         detail = stderr.decode("utf-8", errors="replace").strip()[:200]
@@ -145,9 +182,33 @@ async def probe_file(path: str, ffprobe_bin: str) -> dict[str, Any]:
     except ValueError as exc:
         raise ProbeError("ffprobe returned invalid JSON.") from exc
 
-    summary = _summarise(data, file_path)
+    # In a thread for the same reason as the look above: without a size from ffprobe the file is asked.
+    summary = await asyncio.to_thread(_summarise, data, file_path)
     summary["streams"] = extract_streams(data)
     return summary
+
+
+# How long a killed ffprobe is waited for. One stuck in a hung read of a network share dies only when the read
+# returns; the analysis does not wait for that.
+KILL_WAIT_SECONDS = 5
+
+
+async def _end(process: asyncio.subprocess.Process | None) -> None:
+    """Ends an ffprobe nobody waits for any more and reaps it.
+
+    Left running, every file past the limit (a stalled network share) would leave one ffprobe behind - outside
+    the count of the semaphore, so they would pile up until the service stops.
+    """
+    if process is None or process.returncode is not None:
+        return
+    try:
+        process.kill()
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(process.wait(), timeout=KILL_WAIT_SECONDS)
+    except TimeoutError:
+        pass
 
 
 def _summarise(data: dict[str, Any], file_path: Path) -> dict[str, Any]:

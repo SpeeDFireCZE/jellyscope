@@ -15,7 +15,7 @@
         {% set _x = res_segments.append({'label': _(row.label) if row.label == 'unknown' else row.label, 'value': row.size_bytes}) %}
     {% endfor %}
     {{ charts.stacked_bar(res_segments, unit='B') | safe }}
-    {{ charts.legend(res_segments) | safe }}
+    {{ charts.stacked_legend(res_segments) | safe }}
 
     <div class="table-wrap" style="margin-top:14px">
         <table>

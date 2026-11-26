@@ -33,7 +33,7 @@ def is_connected() -> bool:
 
 
 def save_settings(enabled: bool, url: str, key: str) -> str:
-    """Store the settings. Returns an error (a Czech sentence, a translation key), or "".
+    """Store the settings. Returns an error (a sentence, a translation key), or "".
 
     The rules (an empty key keeps the stored one, switching on only with an address and a key) are
     shared by every app - services.save_service_settings.

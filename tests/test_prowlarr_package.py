@@ -33,10 +33,12 @@ PACKAGE = PROJECT / "jellyscope" / "arr" / "prowlarr"
 # guards its names too.
 SUBMODULES: dict[str, list[str]] = {
     "client": ["NAME", "KINDS", "ProwlarrError", "ProwlarrClient"],
-    "settings": ["stored_settings", "is_connected", "save_settings", "check_connection"],
+    "settings": ["stored_settings", "is_connected", "save_settings", "check_connection", "watch_settings", "save_watch_settings"],
     "sync": ["event_from_history", "synchronize", "sync_running", "sync_state", "event_count",
              "delete_data", "delete_downloaded_data"],
-    "live": ["live_state"],
+    "live": ["live_state", "take_sample"],
+    "samples": ["delete_old_samples", "sample_interval", "status_marker", "how_measured"],
+    "watch": ["watch_indexers_forever"],
 }
 FILES = list(SUBMODULES)
 MAX_LINES = 600

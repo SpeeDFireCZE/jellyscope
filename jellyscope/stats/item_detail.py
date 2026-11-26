@@ -158,20 +158,27 @@ def item_playback_summary(item_id: str) -> dict[str, Any]:
             "last_played": max((r["last_played"] for r in rows), default=None)}
 
 
-def sibling_episodes(item_row: dict[str, Any], limit: int = 40) -> list[dict[str, Any]]:
-    """The other episodes of the same series - navigation in an episode's detail."""
+def sibling_episodes(item_row: dict[str, Any], limit: int = 40) -> dict[str, Any]:
+    """The other episodes of the same series - navigation in an episode's detail.
+
+    {"episodes": at most `limit` episodes around the open one, in the series' order; "total": all of them}. From the
+    first episode on, the open one fell out of a longer series and the count said only how many were listed.
+    """
     if not item_row.get("series_id"):
-        return []
-    return db.query_all(
+        return {"episodes": [], "total": 0}
+    # Unnumbered episodes first in both databases (PostgreSQL puts NULL last), the id on a tie.
+    rows = db.query_all(
         """
-        SELECT id, name, index_number, parent_index_number, size_bytes, height
+        SELECT id, name, index_number, parent_index_number, size_bytes, width, height
         FROM items
         WHERE series_id = ? AND is_missing = 0
-        ORDER BY parent_index_number, index_number
-        LIMIT ?
+        ORDER BY parent_index_number IS NOT NULL, parent_index_number, index_number IS NOT NULL, index_number, id
         """,
-        (item_row["series_id"], limit),
+        (item_row["series_id"],),
     )
+    here = next((i for i, row in enumerate(rows) if row["id"] == item_row.get("id")), 0)
+    start = max(0, min(here - limit // 2, len(rows) - limit))
+    return {"episodes": rows[start:start + limit], "total": len(rows)}
 
 
 def delete_item(item_id: str) -> dict[str, Any]:
@@ -192,6 +199,9 @@ def delete_item(item_id: str) -> dict[str, Any]:
         plays = _delete_item(conn, item_id)
 
     log.info("item %s deleted (%s plays)", row["name"], plays)
+    if plays:
+        # An open page draws its cards over plays again (the plays' marker in /health).
+        db.note_plays_rewritten()
     return {
         "status": "ok",
         "name": row["name"],

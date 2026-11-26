@@ -179,9 +179,9 @@
         </datalist>
         {% for d in disks.disks %}
         {% if d.kind == 'physical' %}
-        <dialog class="modal" id="modal-disk-{{ loop.index }}">
+        <dialog class="modal" id="modal-disk-{{ loop.index }}" aria-labelledby="modal-disk-{{ loop.index }}-title">
             <form method="dialog" class="modal-head">
-                <h2>{{ _("Disk “{disk}”").format(disk=d.name) }}</h2>
+                <h2 id="modal-disk-{{ loop.index }}-title">{{ _("Disk “{disk}”").format(disk=d.name) }}</h2>
                 <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
             </form>
             <p class="dialog-label">{{ _("Library folders") }}</p>
@@ -247,9 +247,9 @@
             {% endif %}
         </dialog>
         {% elif d.kind == 'virtual' %}
-        <dialog class="modal" id="modal-disk-{{ loop.index }}">
+        <dialog class="modal" id="modal-disk-{{ loop.index }}" aria-labelledby="modal-disk-{{ loop.index }}-title">
             <form method="dialog" class="modal-head">
-                <h2>{{ _("Virtual disk “{disk}”").format(disk=d.name) }}</h2>
+                <h2 id="modal-disk-{{ loop.index }}-title">{{ _("Virtual disk “{disk}”").format(disk=d.name) }}</h2>
                 <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
             </form>
             <form method="post" action="/library/disks/virtual/edit">
@@ -269,9 +269,9 @@
         </dialog>
         {% endif %}
         {% endfor %}
-        <dialog class="modal" id="modal-disk-new">
+        <dialog class="modal" id="modal-disk-new" aria-labelledby="modal-disk-new-title">
             <form method="dialog" class="modal-head">
-                <h2>{{ _("Add a virtual disk") }}</h2>
+                <h2 id="modal-disk-new-title">{{ _("Add a virtual disk") }}</h2>
                 <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
             </form>
             <form method="post" action="/library/disks/virtual">
@@ -289,9 +289,9 @@
            different device ids (typically Docker volumes). Only the admin may merge them -
            two different disks can match by chance. #}
         {% for a, b in disks.suspicions %}
-        <dialog class="modal" id="modal-same-disk-{{ loop.index }}">
+        <dialog class="modal" id="modal-same-disk-{{ loop.index }}" aria-labelledby="modal-same-disk-{{ loop.index }}-title">
             <form method="dialog" class="modal-head">
-                <h2>{{ _("Is it the same disk?") }}</h2>
+                <h2 id="modal-same-disk-{{ loop.index }}-title">{{ _("Is it the same disk?") }}</h2>
                 <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
             </form>
             <p class="card-note">

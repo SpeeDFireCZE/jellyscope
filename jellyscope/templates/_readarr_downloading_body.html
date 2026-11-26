@@ -80,9 +80,9 @@
 <p class="card-note">{{ _("The queue is longer than fits here. All of it is in the app.") }}</p>
 {% endif %}
 {% for b in d.blocks if b.window %}
-<dialog class="modal" id="{{ b.window }}">
+<dialog class="modal" id="{{ b.window }}" aria-labelledby="{{ b.window }}-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ b.title }} &middot; {{ _("downloading") }}</h2>
+        <h2 id="{{ b.window }}-title">{{ b.title }} &middot; {{ _("downloading") }}</h2>
         <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
     <div class="modal-body">

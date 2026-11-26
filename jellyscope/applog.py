@@ -34,6 +34,7 @@ database is the road to an endless loop.
 from __future__ import annotations
 
 import functools
+import ipaddress
 import logging
 import re
 from datetime import datetime
@@ -42,7 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from . import i18n
-from .config import BASE_DIR
+from .config import BASE_DIR, load_config
 
 log = logging.getLogger("jellyscope.applog")
 
@@ -195,10 +196,39 @@ def masked_lines(path: Path):
     shown must not leave either. It is read line by line, not whole into memory.
     """
     secrets = _secrets()
+    hide = load_config().demo_mode
     with path.open("rb") as file:
         for line in file:
-            yield _mask(line.decode("utf-8", errors="replace"),
-                        secrets).encode("utf-8")
+            text = _mask(line.decode("utf-8", errors="replace"), secrets)
+            yield (without_addresses(text) if hide else text).encode("utf-8")
+
+
+# What stands in for an IP address in the public demo. Its sign-in details are on the sign-in page, so anybody reads
+# the Log and Blocked addresses - and in them the address of a stranger who mistyped the password: personal data.
+HIDDEN_ADDRESS = "•••"
+# A run of the characters an address is written with: one class, so a line is read once, without backtracking.
+_ADDRESS_RUN = re.compile(r"[0-9A-Fa-f:.]+")
+_IPV4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?!\.?\d)")
+
+
+def without_addresses(text: str) -> str:
+    """The text with its IPv4 and IPv6 addresses replaced by HIDDEN_ADDRESS (the demo's Log and blocks)."""
+    def hide(match: re.Match[str]) -> str:
+        run = match.group(0)
+        if run.count(":") >= 2:
+            # An IPv6 address, maybe with a full stop or a colon of the sentence after it (a time 10:00:00 is none).
+            # At most three tries of at most 45 characters: a long run on a line is read once, not prefix by prefix.
+            for cut in range(3):
+                address, rest = run[:len(run) - cut], run[len(run) - cut:]
+                if len(address) > 45 or rest.strip(".:"):
+                    continue
+                try:
+                    ipaddress.IPv6Address(address)
+                except ValueError:
+                    continue
+                return HIDDEN_ADDRESS + rest
+        return _IPV4.sub(HIDDEN_ADDRESS, run)
+    return _ADDRESS_RUN.sub(hide, text)
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +256,7 @@ ERROR_VALUES: dict[str, tuple[int, ...]] = {
     'address %s could not be located: %s': (1,),
     'aligning the imported history failed: %s': (0,),
     'backup %s could not be deleted: %s': (1,),
+    'backup %s skipped by the pruning, its time cannot be read: %s': (1,),
     'books sync failed: %s': (0,),
     'collector: %s': (0,),
     'could not download poster %s from Seerr: %s': (1,),
@@ -247,6 +278,8 @@ ERROR_VALUES: dict[str, tuple[int, ...]] = {
     'marking the copies of movies failed: %s': (0,),
     'music sync failed: %s': (0,),
     'pg_dump cannot be used (%s), falling back to the built-in export': (0,),
+    "prowlarr: could not store a sample of the indexers' status: %s": (0,),
+    "prowlarr: measuring the indexers' status failed: %s": (0,),
     'prowlarr: the history cannot be read reliably: %s': (0,),
     'quick connect: the status request failed: %s': (0,),
     'the API log could not be created (%s): %s': (1,),
@@ -261,6 +294,8 @@ ERROR_VALUES: dict[str, tuple[int, ...]] = {
     'the Jellyfin version could not be detected while saving: %s': (0,),
     'the log file could not be created (%s): %s': (1,),
     'the poster of title %s could not be downloaded from %s: %s': (2,),
+    'the rights of %s could not be narrowed: %s': (1,),
+    'the rights of the data files could not be narrowed: %s': (0,),
     'The signing key cannot be saved (%s). Using a temporary one; everyone will have to sign in again after a restart.': (0,),
     'the version check could not be made: %s': (0,),
     'translation %s cannot be read: %s': (1,),
@@ -592,10 +627,13 @@ def read_api(limit: int = DEFAULT_LINES, account: str = "", key: Any = None,
     except (TypeError, ValueError):
         key_id = None
     chosen = []
+    hide = load_config().demo_mode
     for line in lines:
         record = _parse_api(line)
         if record is None:
             continue
+        if hide and record["ip"]:
+            record["ip"] = HIDDEN_ADDRESS        # before the filter too: in the demo an address is not to be guessed
         if account and (record["owner"] or "-") != account:
             continue
         if key_id is not None and record["key_id"] != key_id:
@@ -633,7 +671,10 @@ def rotate(count: int) -> dict[str, Any]:
         if handler is None:
             continue
         try:
-            handler.doRollover()
+            # Under the handler's lock, as every write takes it: a line written by another thread during the
+            # rollover would otherwise go to the file it has just closed.
+            with handler.lock:
+                handler.doRollover()
             rotated.append(name)
         except OSError as exc:
             # Typically Windows: another process holds the file open.
@@ -663,12 +704,11 @@ def _secrets() -> list[str]:
         database = db.database_config()
         if getattr(database, "password", ""):
             values.append(database.password)
-        # Credentials for the notifications. The Telegram token is part of
-        # the address, so it gets into a message even without anybody writing
-        # it there - see notifications.without_secrets().
-        from . import notifications
-
-        values += [db.get_setting(key, "") for key in notifications.SECRET_KEYS]
+        # Every stored secret: the credentials for the notifications (the Telegram token is part of
+        # the address, so it gets into a message even without anybody writing it there - see
+        # notifications.without_secrets()) and the keys of the *Arr apps and of Seerr. The one list
+        # of db, not one of its own here: a new app's key would otherwise show in the listing whole.
+        values += [db.get_setting(key, "") for key in db.SECRET_SETTINGS]
     except Exception:  # noqa: BLE001
         # An unreachable database must not prevent showing the log - exactly
         # that is where it will most likely say why it cannot be reached.
@@ -683,8 +723,10 @@ _PATTERNS = [
     re.compile(r"(api[_-]?key\s*[=:]\s*)(\S+)", re.I),
     re.compile(r"(token\s*[=:\"']+\s*)([^\s\"'&]+)", re.I),
     re.compile(r"(password\s*[=:]\s*)(\S+)", re.I),
-    # A password inside a connection string: postgres://user:password@host
-    re.compile(r"(://[^:/\s]+:)([^@\s]+)(@)"),
+    # A password inside a connection string: postgres://user:password@host. Possessive, with the "@" optional: a run
+    # with no "@" after it is taken whole and left as it is (_mask), so a long line full of "://x:" is read once - the
+    # pattern used to start over from every "://" up to the end of the line (80 KB took seconds).
+    re.compile(r"(://[^:/\s]++:)([^@\s]++)(@)?"),
 ]
 
 
@@ -693,7 +735,7 @@ def _mask(text: str, secrets: list[str]) -> str:
         text = text.replace(value, "***")
     for pattern in _PATTERNS:
         if pattern.groups >= 3:
-            text = pattern.sub(r"\1***\3", text)
+            text = pattern.sub(lambda m: m.group(1) + "***" + m.group(3) if m.group(3) else m.group(0), text)
         else:
             text = pattern.sub(r"\1***", text)
     return text
@@ -739,13 +781,15 @@ def read_lines(name: str = "", limit: int = DEFAULT_LINES,
                 "exists": True, "size_bytes": 0, "truncated": False}
 
     secrets = _secrets()
+    hide = load_config().demo_mode
     language = language or i18n.current_language()
     result = []
     for line in lines:
         line_level = _level(line)
         if level and line_level != level:
             continue
-        result.append({"text": translate_line(_mask(line.rstrip("\n"), secrets), language),
+        text = _mask(line.rstrip("\n"), secrets)
+        result.append({"text": translate_line(without_addresses(text) if hide else text, language),
                        "level": line_level})
 
     return {

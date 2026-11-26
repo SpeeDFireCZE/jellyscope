@@ -46,6 +46,7 @@ import hashlib
 import json
 import logging
 import secrets
+import threading
 from datetime import date, datetime, timedelta, UTC
 from typing import Any
 
@@ -167,7 +168,9 @@ def create_token(name: str, account_id: int | None = None,
     """
     # Without a name it is stored without one: the listing shows "unnamed" in the reader's language
     # (display_name), the data carries no language.
-    name = (name or "").strip()[:60]
+    # Only printable characters, spaces collapsed (like applog._field): the name goes into the app's log, and a
+    # line end in it (\n, \r, \x85, U+2028 …) would make a forged line of its own there - with any level and text.
+    name = " ".join("".join(c if c.isprintable() else " " for c in (name or "")).split())[:60]
     token = PREFIX + secrets.token_urlsafe(32)
     with db.connect() as conn:
         token_id = conn.insert_returning_id(
@@ -181,6 +184,33 @@ def create_token(name: str, account_id: int | None = None,
     log.info("API token %s created", name or "-")
     # "display_name" for people (the reader's language), "name" as stored (for the English log).
     return {"token": token, "display_name": display_name(name), "name": name, "id": token_id}
+
+
+# The limit on keys of one's own (Settings → API): off by default, then how many ACTIVE keys one account may
+# hold. A disabled key does not count and root keys are never limited - the administrator makes those.
+KEY_LIMIT_ENABLED = "api_key_limit_enabled"
+KEY_LIMIT = "api_key_limit"
+KEY_LIMIT_DEFAULT, KEY_LIMIT_MIN, KEY_LIMIT_MAX = 10, 1, 1000
+# The count and the new row together: requests sent at once must not all pass a count made before any insert.
+_OWN_KEY_LOCK = threading.Lock()
+
+
+def key_limit_setting() -> tuple[bool, int]:
+    """The limit on keys of one's own as saved: (on, how many active keys one account may hold)."""
+    return (db.get_setting(KEY_LIMIT_ENABLED, "0") == "1",
+            db.get_int_setting(KEY_LIMIT, KEY_LIMIT_MIN, KEY_LIMIT_MAX, KEY_LIMIT_DEFAULT))
+
+
+def create_own_token(name: str, account_id: int) -> dict[str, Any] | None:
+    """A key of one's own (My account), as create_token. None = the account already holds the limit."""
+    with _OWN_KEY_LOCK:
+        limited, limit = key_limit_setting()
+        if limited:
+            row = db.query_one("SELECT COUNT(*) AS n FROM api_tokens WHERE account_id = ? AND status = ?",
+                               (account_id, ACTIVE))
+            if int(row["n"] if row else 0) >= limit:
+                return None
+        return create_token(name, account_id)
 
 
 def list_tokens(account_id: int | None = None) -> list[dict[str, Any]]:
@@ -203,6 +233,15 @@ def list_tokens(account_id: int | None = None) -> list[dict[str, Any]]:
 def display_name(name: str | None) -> str:
     """A key's name for people: its own, or "unnamed" in the reader's language."""
     return str(name or "") or i18n.translate("unnamed")
+
+
+def _size_human(size: Any) -> str:
+    """A size for a person ("1,5 TB") in the notation the API always gave, whatever the caller's language.
+
+    That is the notation of Czech: a decimal comma, a space after the thousands. The numbers on pages follow
+    the page's language (formatting.NUMBER_SEPARATORS); the JSON does not, a client may read this text.
+    """
+    return formatting.bytes_human(size, language="cs")
 
 
 def pack_key_permissions(areas: Any, anonymise: bool, history: bool) -> str:
@@ -418,7 +457,7 @@ def verify_token(request: Request) -> dict[str, Any]:
     if account and accounts.disabled_in_jellyfin(account):
         raise ApiError(403, "viewer_disabled" if role == access.VIEWER else "account_disabled",
                        "The account is disabled in Jellyfin.")
-    if role == access.VIEWER and not access.login_enabled():
+    if access.viewer_shut_out(account):
         raise ApiError(403, "jellyfin_login_off", "Sign-in through Jellyfin is off.")
 
     _mark_use(row)
@@ -538,6 +577,15 @@ def _query_kind(query: api_query.Query) -> str:
                             (stats.KIND_BOTH, stats.KIND_MOVIE, stats.KIND_SERIES))
 
 
+def _hidden_kinds(token: dict[str, Any]) -> frozenset[str]:
+    """The kinds of plays the key may not see with the person (access.hidden_kinds).
+
+    A root key with everything has no account to ask, but the role of an administrator.
+    A root key with chosen rights has no Music or Books areas, so it gets no music and books.
+    """
+    return frozenset() if token["role"] == access.ADMIN else access.hidden_kinds(token.get("account"))
+
+
 def _for_owner(token: dict[str, Any], data: Any) -> Any:
     """Hides other people's names, ids and addresses when the key's owner has them hidden.
 
@@ -639,7 +687,7 @@ def _title(row: dict[str, Any]) -> dict[str, Any]:
         "library": row.get("library_name"),
         **_file(row),
         "size_bytes": row.get("size_bytes"),
-        "size_human": formatting.bytes_human(row.get("size_bytes") or 0),
+        "size_human": _size_human(row.get("size_bytes") or 0),
         "resolution": (f"{row.get('width')}x{row.get('height')}"
                        if row.get("width") and row.get("height") else None),
         "video_codec": row.get("video_codec"),
@@ -742,7 +790,7 @@ def libraries(query: api_query.Query = Depends(request_query)) -> dict[str, Any]
         "type": k.get("collection_type"),
         "items": int(k.get("item_count") or 0),
         "size_bytes": int(k.get("size_bytes") or 0),
-        "size_human": formatting.bytes_human(int(k.get("size_bytes") or 0)),
+        "size_human": _size_human(int(k.get("size_bytes") or 0)),
         "runtime_hours": round(float(k.get("hours") or 0), 1),
     } for k in stats.library_cards() if k["kind"] == "video"]     # video libraries, as the API always listed
     cards = api_query.apply(cards, *query.for_list("libraries"), limit)
@@ -830,7 +878,7 @@ def unwatched(query: api_query.Query = Depends(request_query)) -> dict[str, Any]
     else:
         size = int(dead.get("size_bytes") or 0)
         totals = {"count": int(dead.get("item_count") or 0), "size_bytes": size,
-                  "size_human": formatting.bytes_human(size),
+                  "size_human": _size_human(size),
                   "share_percent": round(float(dead.get("share") or 0), 1)}
     return {
         "days": days,
@@ -849,7 +897,7 @@ def _unused_summary(rows: list[dict[str, Any]], library_bytes: int) -> dict[str,
     return {
         "count": len(rows),
         "size_bytes": size,
-        "size_human": formatting.bytes_human(size),
+        "size_human": _size_human(size),
         "share_percent": round(size / library_bytes * 100, 1) if library_bytes else 0.0,
     }
 
@@ -906,16 +954,18 @@ def history(token: dict[str, Any] = Depends(may_open_path),
     who = None if query.values.get("user") == "" else api_query.identifier(query, "user")
     # With hidden names only a substitute id, as the API itself returns
     # (`skryto-2`); the real id of another viewer finds nothing - otherwise it
-    # would tell who "Divák 2" is.
+    # would tell who "Viewer 2" is.
     who = access.viewer_from_address(who, token.get("account"))
     own = access.own_viewer(token.get("account"))
     if own and who and accounts.bare_id(who) != accounts.bare_id(own):
         raise ApiError(403, "own_history_only",
                        "This key sees only the history of its own account.", "user")
+    # Music and books only with "who listened" and "who read", like on the History page.
+    hidden = _hidden_kinds(token)
     filters, sorts = query.for_list("playbacks")
     if not (filters or sorts):
         rows = _for_owner(token, stats.history(limit=limit, user_id=own or who,
-                                               kind=kind, since=since))
+                                               kind=kind, since=since, hidden_kinds=hidden))
         plays = [_plays(r) for r in rows]
     else:
         # The whole history of the period in batches: in memory only what the
@@ -923,7 +973,7 @@ def history(token: dict[str, Any] = Depends(may_open_path),
         # enough - the order is given by the query.
         plays = []
         for batch in stats.history_for_api(user_id=own or who, kind=kind, since=since,
-                                           conditions=_history_prefilter(filters)):
+                                           conditions=_history_prefilter(filters), hidden_kinds=hidden):
             plays += api_query.apply([_plays(r) for r in _for_owner(token, batch)],
                                      filters, [], None)
             if not sorts and len(plays) >= limit:
@@ -1114,7 +1164,7 @@ def insights_report(query: api_query.Query = Depends(request_query)) -> dict[str
             "plays": int(r.get("plays") or 0),
             "watched_hours": round(float(r.get("hours") or 0), 2),
             "size_bytes": r.get("size_bytes"),
-            "size_human": formatting.bytes_human(r.get("size_bytes") or 0),
+            "size_human": _size_human(r.get("size_bytes") or 0),
             "gb_per_hour": round(float(r.get("gb_per_hour") or 0), 2),
             "resolution": _resolution(r),
         } for r in insights.oversized_rarely_watched(
@@ -1168,7 +1218,7 @@ def traffic(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
     return {
         "days": days,
         "total_bytes": int(overview.get("byte_count") or 0),
-        "total_human": formatting.bytes_human(int(overview.get("byte_count") or 0)),
+        "total_human": _size_human(int(overview.get("byte_count") or 0)),
         "transcode_bytes": int(overview.get("byte_count_transcode") or 0),
         "transcode_share_percent": float(overview.get("transcode_share") or 0),
         "peak_mbit": round(float(overview.get("peak_mbit") or 0), 2),
@@ -1242,7 +1292,7 @@ def summary(token: dict[str, Any] = Depends(may_open_path),
             query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
     """The watching over a period - what is at the top of the Overview.
 
-    `active_now` (how much is being watched now) belongs to "Právě se hraje" -
+    `active_now` (how much is being watched now) belongs to "Now playing" -
     without it it is missing from the answer, just like in /health and in the
     pages' panel.
     """
@@ -1268,7 +1318,11 @@ def now_playing(token: dict[str, Any] = Depends(may_open_path),
     """The plays running right now. An empty list is an answer too."""
     limit = _query_limit(query, None, 500)
     sessions = []
-    for row in _for_owner(token, stats.active_sessions()):
+    rows = stats.active_sessions()
+    if token["role"] != access.ADMIN:
+        # Music and books only with "who listened" and "who read" (see _hidden_kinds).
+        rows = access.visible_plays(rows, token.get("account"))
+    for row in _for_owner(token, rows):
         sessions.append({
             "user": row.get("user_name"),
             "title": row.get("item_name"),
@@ -1305,7 +1359,7 @@ def library(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
         "movies": state["movie_count"],
         "episodes": state["episode_count"],
         "size_bytes": state["size_bytes"],
-        "size_human": formatting.bytes_human(state["size_bytes"]),
+        "size_human": _size_human(state["size_bytes"]),
         "items_without_size": int(stats.tech_coverage().get("without_size") or 0),
         "free_bytes": free,
         "growth": {

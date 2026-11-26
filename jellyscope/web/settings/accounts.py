@@ -3,12 +3,12 @@
 A part of the subpackage web/settings (see jellyscope/web/settings/__init__.py)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from typing import Any
 
 from ... import access, accounts, api, db
-from ..base import _flash, _form_number, log, require_admin, require_login
+from ..base import _clamp, _flash, _form_number, _hold_new_key, log, require_admin
 
 router = APIRouter()
 
@@ -58,10 +58,7 @@ async def settings_account_permissions(request: Request,
     permissions: the administrator sees everything and a tree would only confuse.
     """
     form = await request.form()
-    try:
-        account_id = int(str(form.get("account_id") or 0))
-    except ValueError:
-        account_id = 0
+    account_id = _form_number(form.get("account_id"))
     target = accounts.get(account_id)
     if target is None or target.get("is_admin"):
         _flash(request, "This account has no rights of its own.", "error")
@@ -181,10 +178,10 @@ def account_create(
 @router.post("/settings/accounts/password")
 def account_password(
     request: Request,
-    account_id: int = Form(...),
+    account_id: str = Form(""),
     password: str = Form(""),
     password_again: str = Form(""),
-    account: dict[str, Any] = Depends(require_login),
+    account: dict[str, Any] = Depends(require_admin),
 ):
     """Changing the password of another account (the administrator).
 
@@ -194,14 +191,13 @@ def account_password(
     demand for the current password would be bypassed (and an administrator from
     Jellyfin would set a local password).
     """
-    if account_id == account["id"]:
+    target = _form_number(account_id)
+    if target == account["id"]:
         _flash(request, "Your own password is changed on the My account page.", "info")
         return RedirectResponse("/account", status_code=303)
-    if not account["is_admin"]:
-        raise HTTPException(status_code=403, detail="Only an administrator may change someone else's password.")
 
     try:
-        accounts.set_password(account_id, password, password_again)
+        accounts.set_password(target, password, password_again)
         _flash(request, "Password changed.", "success")
     except accounts.AccountError as exc:
         _flash(request, exc.translated(), "error")
@@ -211,12 +207,12 @@ def account_password(
 @router.post("/settings/accounts/role")
 def account_role(
     request: Request,
-    account_id: int = Form(...),
+    account_id: str = Form(""),
     is_admin: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
     try:
-        accounts.set_admin(account_id, bool(is_admin))
+        accounts.set_admin(_form_number(account_id), bool(is_admin))
         _flash(request, "Permissions changed.", "success")
     except accounts.AccountError as exc:
         _flash(request, exc.translated(), "error")
@@ -309,12 +305,26 @@ async def api_token_new(request: Request,
     result = api.create_token(name if isinstance(name, str) else "", None, permissions)
     log.info("Admin %s created root key %s (%s)", account["username"],
              result["name"] or "-", api.permissions_for_log(permissions))
-    # Into the session, not into the address: the address shows in the proxy's log and in the
-    # browser's history, and this is the only moment the token is readable.
-    request.session["new_api_token"] = {"id": result["id"], "token": result["token"]}
+    # This is the only moment the token is readable: it waits for the page in the server's memory.
+    _hold_new_key(request, "new_api_token", result)
     _flash(request, 'Key "{user}" created.', "success",
            user=result["display_name"])
     return RedirectResponse("/settings?section=api", status_code=303)
+
+
+@router.post("/settings/api/key-limit")
+def api_key_limit(request: Request, key_limit_enabled: str = Form(""), key_limit: str = Form(""),
+                  account: dict[str, Any] = Depends(require_admin)):
+    """The limit on keys of one's own: on or off, and how many active keys one account may hold.
+
+    An unticked box is not sent at all (empty = off); a cleared or missing number keeps the saved
+    one. Keys already made over a lowered limit keep working; root keys are never limited.
+    """
+    _, saved = api.key_limit_setting()
+    db.set_setting(api.KEY_LIMIT_ENABLED, "1" if key_limit_enabled else "0")
+    db.set_setting(api.KEY_LIMIT, _clamp(key_limit, api.KEY_LIMIT_MIN, api.KEY_LIMIT_MAX, saved))
+    _flash(request, "Saved.", "success")
+    return RedirectResponse("/settings?section=api#key-limit", status_code=303)
 
 
 @router.post("/settings/api/token/permissions")
@@ -394,15 +404,16 @@ def api_token_enable(request: Request, token_id: str = Form(""),
 @router.post("/settings/accounts/delete")
 def account_delete(
     request: Request,
-    account_id: int = Form(...),
+    account_id: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
-    if account_id == account["id"]:
+    target = _form_number(account_id)
+    if target == account["id"]:
         _flash(request, "You cannot delete your own account.", "warning")
         return RedirectResponse("/settings?section=accounts", status_code=303)
 
     try:
-        accounts.delete(account_id)
+        accounts.delete(target)
         _flash(request, "Account deleted.", "success")
     except accounts.AccountError as exc:
         _flash(request, exc.translated(), "error")

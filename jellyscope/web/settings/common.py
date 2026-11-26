@@ -9,14 +9,14 @@ from fastapi.responses import RedirectResponse
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ... import db, importers, jellyfin, scanner
+from ... import db, importers, jellyfin, scanner, tasks
 from ...i18n import translate as _t
 from ..base import BACK_TO_IMPORT, CAPACITY_UNITS, _clamp, _flash, _import_message
 
 
 # The draft of the database settings.
 #
-# The buttons "Test connection" and "Přenést data" save nothing - after them the
+# The buttons "Test connection" and "Copy data into the selected database" save nothing - after them the
 # page loads again and the form would go back to what is saved. So you fill in
 # the server, the port, the user and the password, test the connection, it says "works"
 # - and the form is empty again and switched to SQLite. Hence the values being
@@ -109,13 +109,13 @@ def _zone_exists(name: str) -> bool:
         return True
     try:
         ZoneInfo(name)
-    except (ZoneInfoNotFoundError, ValueError):
+    except (ZoneInfoNotFoundError, ValueError, OSError):    # OSError: a name too long for a file name
         return False
     return True
 
 
 def _tidy_counts() -> dict[str, Any]:
-    """How many records of the history "Narovnání dat" has something to do with.
+    """How many records of the history "Data tidy-up" has something to do with.
 
     It shows in two places (Tasks and History import) and the same every
     time - hence one function. Otherwise a new count would be added in two
@@ -149,7 +149,8 @@ async def _import_from_file(request: Request, file: UploadFile,
     if raw is None:
         return RedirectResponse(BACK_TO_IMPORT, status_code=303)
 
-    result = await run_import(raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60)))
+    with tasks.data_job():       # no backup is restored under an import
+        result = await run_import(raw, min_seconds=int(_clamp(min_seconds, 0, 3600, 60)))
     _import_message(request, result, template)
     return RedirectResponse(BACK_TO_IMPORT, status_code=303)
 

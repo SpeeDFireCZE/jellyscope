@@ -24,7 +24,7 @@ Three things, and each can be switched off:
   the group stops being read for it altogether.
 
 * **anonymising** - when the admin lets viewers onto a page that lists people,
-  they need not see them by name there. Instead of the name it says "Divák 3",
+  they need not see them by name there. Instead of the name it says "Viewer 3",
   instead of an address a dash. A viewer still sees their own name - they
   know about themselves after all.
 
@@ -119,7 +119,7 @@ def viewer_from_address(value: str | None, account: dict[str, Any] | None) -> st
     id (`skryto-2`) - the pages and the API show it no other. That is turned
     back into the viewer here. The real id of another viewer finds nothing:
     whoever knows it (it is in the address of a profile in Jellyfin, say) would
-    tell by it that "Divák 2" is Petr. The own id stays - a viewer knows about
+    tell by it that "Viewer 2" is Petr. The own id stays - a viewer knows about
     themselves.
     """
     if not value or not hides_names(account):
@@ -157,8 +157,8 @@ class Area:
         """The area's name for places without the tree's headings.
 
         A section with one area of its own is named by the section alone (("Knihovna",)); in
-        one with more, or for a sub-area, the label follows (("Filmy a seriály", "Přehled")) -
-        "Přehled" alone could be any overview. Translation keys; a template translates the
+        one with more, or for a sub-area, the label follows (("Movies & series", "Overview")) -
+        "Overview" alone could be any overview. Translation keys; a template translates the
         parts and joins them with " · ". The tree draws the section as a heading and the label
         alone; the dashboard builder, the table of API keys and the note on a card without the
         right use this. Fixed once AREAS exists, so computed once per area.
@@ -281,6 +281,9 @@ ALWAYS = (
     "/image/",
     "/static/",
     "/health",
+    # The cards of an open page drawn again: the route draws only those the account sees, card by card by its
+    # area (cards.allowed) - an account without a single card gets an empty answer (web/dashboards.py).
+    "/partials/cards",
     "/login",
     "/logout",
     "/setup",
@@ -291,6 +294,16 @@ ALWAYS = (
 def login_enabled() -> bool:
     """May one get in with the Jellyfin password?"""
     return db.get_setting(LOGIN_KEY, "0") == "1"
+
+
+def viewer_shut_out(account: dict[str, Any] | None) -> bool:
+    """Is the account a viewer from Jellyfin while sign-in through Jellyfin is off?
+
+    One rule for the browser's session (web.base.current_account) and the API key (api.verify_token): the
+    administrator who switches it off is sure the viewers are out, so one signed in before must not go on
+    reading. An administrator from Jellyfin is not concerned - the one switching it off may be one.
+    """
+    return role(account) == VIEWER and not login_enabled()
 
 
 def area_key(who: str, area: Area) -> str:
@@ -605,6 +618,42 @@ def sees_history(account: dict[str, Any] | None) -> bool:
     return sees(who, "library_who", account)
 
 
+# A play outside watching tells who played what, when and on which device: a track's play is "...including who
+# listened", a book's "...including who read". History's own gate (sees_history) knows only the library's "who watched".
+# The kind (stats.KIND_MUSIC, stats.KIND_BOOKS) and the sub-area that lets its plays show with the person.
+WHO_OF_KIND = {"music": "music_who", "books": "books_who"}
+
+
+def _kinds_without_who(account: dict[str, Any] | None) -> frozenset[str]:
+    if role(account) == ADMIN:
+        return frozenset()
+    return frozenset(kind for kind, area in WHO_OF_KIND.items() if not account_sees(account, area))
+
+
+def hidden_kinds(account: dict[str, Any] | None) -> frozenset[str]:
+    """The kinds of plays History and the history in the API leave out for the account (WHO_OF_KIND).
+
+    A viewer from Jellyfin has nothing left out: their History holds only their own plays. Now playing lists
+    everybody's, so it goes row by row (visible_plays).
+    """
+    return frozenset() if own_viewer(account) else _kinds_without_who(account)
+
+
+def visible_plays(rows: list[dict[str, Any]], account: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Plays (Now playing) without the music and books the account may not see with the person (WHO_OF_KIND).
+
+    A viewer's own play stays - they know about themselves.
+    """
+    from .stats import TYPES_OF_KIND    # here: the statistics package is heavy and access is imported early
+
+    hidden = {item_type for kind in _kinds_without_who(account) for item_type in TYPES_OF_KIND[kind]}
+    if not hidden:
+        return rows
+    own = accounts.bare_id(own_viewer(account))
+    return [row for row in rows if row.get("item_type") not in hidden
+            or (own and accounts.bare_id(str(row.get("user_id") or "")) == own)]
+
+
 def missing_area(account: dict[str, Any] | None, area: str) -> str:
     """The area to tick so that `area` counts for the account: its parent when that is off.
 
@@ -619,7 +668,7 @@ def account_sees(account: dict[str, Any] | None, area: str) -> bool:
     """Does the account see an area of the permission tree? For content, not for an address.
 
     For a card a page puts in from another area (the Overview's
-    "Právě se hraje"), and for areas without an address of their own
+    "Now playing"), and for areas without an address of their own
     ("…including who watched it"). The middleware guards addresses only. The cards of the
     dashboards ask it (cards.may_see - the Overview and the custom dashboard) and
     so do the templates of pages (sees()) - one rule, not two copies.
@@ -667,7 +716,7 @@ def tree(who: str, account: dict[str, Any] | None = None) -> list[dict[str, Any]
 # Anonymising
 # ---------------------------------------------------------------------------
 #
-# A nickname has to be stable - "Divák 3" is to be the same person tomorrow as
+# A nickname has to be stable - "Viewer 3" is to be the same person tomorrow as
 # today, otherwise nothing can be read from the numbers and the page is of no
 # use. So it is taken from the order in the table of viewers, not from the
 # order on the page.
@@ -690,7 +739,7 @@ HIDDEN_ADDRESS = "—"
 
 # Device names. In Jellyfin they are often named after people
 # ("Petrův Shield"), and the neighbouring column would give the pseudonym
-# "Divák 3" away. The player (client: Jellyfin Web, Android TV…) gives nothing
+# "Viewer 3" away. The player (client: Jellyfin Web, Android TV…) gives nothing
 # away and stays.
 DEVICE_KEYS = ("device_name", "device")
 
@@ -712,7 +761,7 @@ def nickname(user_id: str, order: dict[str, int] | None = None) -> str:
 def _device_order() -> dict[str, int]:
     """Device numbers by their first appearance, not alphabetically.
 
-    Whoever knows the household's device names would map "Zařízení 1..N" back
+    Whoever knows the household's device names would map "Device 1..N" back
     by the alphabetical order. And a new device gets the next number, the
     numbers of the older ones do not move.
     """
@@ -735,7 +784,7 @@ _DEVICES: dict[str, Any] = {"at": None, "map": {}}
 
 
 def forget_devices() -> None:
-    """Throws away the order of devices in memory (tests, clearing out the history)."""
+    """Throws away the order of devices in memory - the tests call it; otherwise the order expires after DEVICE_ORDER_TTL."""
     _DEVICES.update(at=None, map={})
 
 
@@ -813,7 +862,7 @@ def _is_viewer(row: dict[str, Any]) -> bool:
     """Is this row a viewer from the table `users`, or something else?
 
     It is decided by the columns only a viewer has - `name` by itself is had by
-    a title, a library and plenty else, and renaming a movie to "Divák 2" would
+    a title, a library and plenty else, and renaming a movie to "Viewer 2" would
     be worse than showing the name. Hence not `hours` either: the library's
     tile has it too (the length of the content), and viewers' rows always have
     something more from the list below.

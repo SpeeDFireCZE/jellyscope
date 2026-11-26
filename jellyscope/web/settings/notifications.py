@@ -19,12 +19,13 @@ def settings_notifications(
     request: Request,
     smtp_enabled: str = Form(""),
     smtp_host: str = Form(""),
-    smtp_port: str = Form("587"),
+    smtp_port: str = Form(""),
     smtp_user: str = Form(""),
     smtp_password: str = Form(""),
     smtp_from: str = Form(""),
     smtp_to: str = Form(""),
     smtp_tls: str = Form(""),
+    smtp_verify: str = Form(""),
     discord_enabled: str = Form(""),
     discord_webhook: str = Form(""),
     telegram_enabled: str = Form(""),
@@ -37,13 +38,15 @@ def settings_notifications(
 
     db.set_setting(notifications.setting_key("smtp", "enabled"), "1" if smtp_enabled else "0")
     db.set_setting(notifications.setting_key("smtp", "host"), smtp_host.strip())
-    db.set_setting(notifications.setting_key("smtp", "port"),
-                   _clamp(smtp_port, 1, 65535, 587))
+    # A cleared or missing number keeps the saved one (FastAPI gives it the parameter's default).
+    port_key = notifications.setting_key("smtp", "port")
+    db.set_setting(port_key, _clamp(smtp_port, 1, 65535, db.get_int_setting(port_key, 1, 65535, 587)))
     db.set_setting(notifications.setting_key("smtp", "user"), smtp_user.strip())
     _save_secret(notifications.setting_key("smtp", "password"), smtp_password)
     db.set_setting(notifications.setting_key("smtp", "sender"), smtp_from.strip())
     db.set_setting(notifications.setting_key("smtp", "recipient"), smtp_to.strip())
     db.set_setting(notifications.setting_key("smtp", "tls"), "1" if smtp_tls else "0")
+    db.set_setting(notifications.setting_key("smtp", "verify"), "1" if smtp_verify else "0")
 
     db.set_setting(notifications.setting_key("discord", "enabled"), "1" if discord_enabled else "0")
     _save_secret(notifications.setting_key("discord", "webhook"), discord_webhook)
@@ -70,6 +73,36 @@ def settings_notifications(
     return RedirectResponse("/settings?section=notifications", status_code=303)
 
 
+# The stored secrets a "Forget" button removes: the button's value -> the channel, its field and the message.
+FORGETTABLE_SECRETS: dict[str, tuple[str, str, str]] = {
+    "smtp_password": ("smtp", "password", "Stored e-mail password forgotten."),
+    "discord_webhook": ("discord", "webhook", "Stored Discord webhook forgotten."),
+    "telegram_token": ("telegram", "token", "Stored Telegram bot token forgotten."),
+}
+
+
+@router.post("/settings/notifications/forget")
+def settings_notification_forget(
+    request: Request,
+    secret: str = Form(""),
+    account: dict[str, Any] = Depends(require_admin),
+):
+    """Forgets one stored secret of a channel: the SMTP password, the Discord webhook or the Telegram token.
+
+    An empty field keeps the stored value (see _save_secret), so without this a leaked webhook or a password
+    no longer wanted stayed in the settings and in every backup. The name is compared against a fixed list -
+    nothing else from the form may get to a setting.
+    """
+    if secret not in FORGETTABLE_SECRETS:
+        _flash(request, "Unknown field.", "error")
+        return RedirectResponse("/settings?section=notifications", status_code=303)
+    channel, field, message = FORGETTABLE_SECRETS[secret]
+    db.set_setting(notifications.setting_key(channel, field), "")
+    db.forget_settings()
+    _flash(request, message, "success")
+    return RedirectResponse("/settings?section=notifications", status_code=303)
+
+
 @router.post("/settings/notifications/events")
 def settings_notification_events(
     request: Request,
@@ -78,9 +111,9 @@ def settings_notification_events(
     event_summary: str = Form(""),
     silence_minutes: str = Form(""),
     free_space_days: str = Form(""),
-    summary_day: str = Form("0"),
-    summary_hour: str = Form("9"),
-    summary_minute: str = Form("0"),
+    summary_day: str = Form(""),
+    summary_hour: str = Form(""),
+    summary_minute: str = Form(""),
     account: dict[str, Any] = Depends(require_admin),
 ):
     """What to notify of and when."""
@@ -90,16 +123,21 @@ def settings_notification_events(
                          ("summary", event_summary)):
         db.set_setting(notifications.event_key(event), "1" if value else "0")
 
+    # A cleared or missing number keeps the saved one, never the default - as the tasks' intervals do.
     db.set_setting("notify_quiet_minutes",
-                   _clamp(silence_minutes, 5, 1440, notifications.DEFAULT_QUIET_MINUTES))
+                   _clamp(silence_minutes, 5, 1440, db.get_int_setting(
+                       "notify_quiet_minutes", 5, 1440, notifications.DEFAULT_QUIET_MINUTES)))
     db.set_setting("notify_space_days",
-                   _clamp(free_space_days, 1, 365, notifications.DEFAULT_SPACE_DAYS))
-    db.set_setting("notify_summary_day", _clamp(summary_day, 0, 6, 0))
+                   _clamp(free_space_days, 1, 365, db.get_int_setting(
+                       "notify_space_days", 1, 365, notifications.DEFAULT_SPACE_DAYS)))
+    db.set_setting("notify_summary_day",
+                   _clamp(summary_day, 0, 6, db.get_int_setting("notify_summary_day", 0, 6, 0)))
     # The hour and the minute come from two fields; `_clamp` guards the range and pads
     # with a zero, `tasks.valid_time` is the last safeguard - nothing but "HH:MM"
-    # may get into the schedule.
-    time_text = (f"{int(_clamp(summary_hour, 0, 23, 9)):02d}"
-                 f":{int(_clamp(summary_minute, 0, 59, 0)):02d}")
+    # may get into the schedule. A cleared field keeps the saved part, as the tasks' daily time does.
+    saved_hour, saved_minute = tasks.valid_time(db.get_setting("notify_summary_time", "09:00"), "09:00").split(":")
+    time_text = (f"{int(_clamp(summary_hour, 0, 23, int(saved_hour))):02d}"
+                 f":{int(_clamp(summary_minute, 0, 59, int(saved_minute))):02d}")
     db.set_setting("notify_summary_time", tasks.valid_time(time_text, "09:00"))
 
     db.forget_settings()

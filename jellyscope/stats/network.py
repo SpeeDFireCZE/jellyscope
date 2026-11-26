@@ -50,29 +50,25 @@ def _seconds(text: Any) -> float | None:
     under the chart then showed UTC, while the rest of the app local time - the evening peak thus "came" an hour
     earlier in summer than it really was.
 
-    The rest of the app does it the same way, see formatting._parse_any().
+    The rest of the app does it the same way, see formatting._parse_any(). fromisoformat first: a year of plays
+    means hundreds of thousands of times, and strptime is about ten times slower (shared.local_fast).
     """
+    candidate = str(text).replace("T", " ")[:19]
     try:
-        moment = datetime.strptime(str(text).replace("T", " ")[:19], db.TIME_FORMAT)
-    except (TypeError, ValueError):
-        return None
+        # Only the whole shape: fromisoformat would take a bare date for midnight, strptime refuses it.
+        moment = datetime.fromisoformat(candidate) if len(candidate) == 19 else None
+    except ValueError:
+        moment = None
+    if moment is None:
+        try:
+            moment = datetime.strptime(candidate, db.TIME_FORMAT)
+        except ValueError:
+            return None
     return moment.replace(tzinfo=UTC).timestamp()
 
 
-def bandwidth_timeline(days: int, points: int = 120) -> list[dict[str, Any]]:
-    """The concurrent flow over time - how many Mbit/s flowed from the server at once.
-
-    It is computed **by walking the events**, not by sampling: every play adds its bitrate at the start and takes
-    it away at the end. Sorting the events by time gives the exact curve of the concurrent flow, whether a play
-    lasted a minute or five hours.
-
-    The chart takes the maximum of every step from it - an average would smooth the peaks, and the peak is exactly
-    what interests: the line is sized by it.
-    """
-    rows = _network_rows(days)
-    if not rows:
-        return []
-
+def _flow_events(rows: list[dict[str, Any]]) -> list[tuple[float, int]]:
+    """The plays as sorted events (moment, +bitrate at the start / -bitrate at the end) - the curve and its peak."""
     events: list[tuple[float, int]] = []
     for row in rows:
         start = _seconds(row["started_at"])
@@ -95,10 +91,37 @@ def bandwidth_timeline(days: int, points: int = 120) -> list[dict[str, Any]]:
 
         events.append((start, int(row["bitrate"])))
         events.append((end, -int(row["bitrate"])))
+    events.sort()
+    return events
 
+
+# The period's plays and their flow as sorted events (moment, +-bitrate) - see network_flows().
+_Flows = tuple[list[dict[str, Any]], list[tuple[float, int]]]
+
+
+def network_flows(days: Any) -> _Flows:
+    """The period's plays with a known bitrate and their flow as sorted events (_flow_events) - read and parsed once.
+
+    The Network page's cards share it (cards._once): the figures and the peaks by day each read and parsed the whole
+    period themselves - over a year of a busy server seconds of the page's time.
+    """
+    rows = _network_rows(days)
+    return rows, _flow_events(rows)
+
+
+def bandwidth_timeline(days: int, points: int = 120) -> list[dict[str, Any]]:
+    """The concurrent flow over time - how many Mbit/s flowed from the server at once.
+
+    It is computed **by walking the events**, not by sampling: every play adds its bitrate at the start and takes
+    it away at the end. Sorting the events by time gives the exact curve of the concurrent flow, whether a play
+    lasted a minute or five hours.
+
+    The chart takes the maximum of every step from it - an average would smooth the peaks, and the peak is exactly
+    what interests: the line is sized by it.
+    """
+    events = _flow_events(_network_rows(days))
     if not events:
         return []
-    events.sort()
 
     first_ts, last_ts = events[0][0], events[-1][0]
     step = max((last_ts - first_ts) / max(1, points), 1.0)
@@ -269,34 +292,16 @@ def bandwidth_live(days: Any = None, points: int | None = None) -> list[dict[str
     return chart_points
 
 
-def bandwidth_daily_peaks(days: int) -> list[dict[str, Any]]:
+def bandwidth_daily_peaks(days: int, flows: _Flows | None = None) -> list[dict[str, Any]]:
     """The highest concurrent flow of every day.
 
     Over a longer period drawing every minute makes no sense - there would be more points than pixels and the
     curve would look like noise. One day = one number, the highest one: the line is sized by the peak, an average
-    would smooth it.
+    would smooth it. `flows` are the period's network_flows when the caller has them already.
     """
-    rows = _network_rows(days)
-    if not rows:
-        return []
-
-    events: list[tuple[float, int]] = []
-    for row in rows:
-        start = _seconds(row["started_at"])
-        end = _seconds(row["ended_at"] or row["last_seen_at"])
-        if start is None:
-            continue
-        if end is None or end <= start:
-            end = start + float(row["watched_seconds"] or 0)
-        watched = float(row["watched_seconds"] or 0)
-        if watched > 0:
-            end = min(end, start + watched)
-        events.append((start, int(row["bitrate"])))
-        events.append((end, -int(row["bitrate"])))
-
+    _rows, events = flows if flows is not None else network_flows(days)
     if not events:
         return []
-    events.sort()
 
     # We walk the events and remember the highest sum of every day. The day is decided in the APP'S ZONE - otherwise a
     # peak around midnight would fall into another day than the one the person lived it in.
@@ -331,10 +336,11 @@ def bandwidth_daily_peaks(days: int) -> list[dict[str, Any]]:
             for day, value in sorted(peaks.items())]
 
 
-def bandwidth_summary(days: int) -> dict[str, Any]:
-    """The peak, the volume of data and the transcode share. The numbers above the chart."""
-    rows = _network_rows(days)
-    timeline = bandwidth_timeline(days, points=600)
+def bandwidth_summary(days: int, flows: _Flows | None = None) -> dict[str, Any]:
+    """The peak, the volume of data and the transcode share. The numbers above the chart.
+
+    `flows` are the period's network_flows when the caller has them already."""
+    rows, events = flows if flows is not None else network_flows(days)
 
     total_bytes = 0.0
     transcode_bytes = 0.0
@@ -344,10 +350,17 @@ def bandwidth_summary(days: int) -> dict[str, Any]:
         if str(row["play_method"] or "") == "Transcode":
             transcode_bytes += volume
 
-    peak = max(timeline, key=lambda b: b["mbit"], default=None)
+    # The peak and its moment from the events themselves: a point of the curve stands for a whole step (over a
+    # year about 14 hours), so its time is not when the peak was.
+    peak, peak_at, flowing = 0, None, 0
+    for moment, change in events:
+        flowing += change
+        if flowing > peak:
+            peak, peak_at = flowing, moment
     return {
-        "peak_mbit": peak["mbit"] if peak else 0.0,
-        "peak_at": peak["label"] if peak else "",
+        "peak_mbit": round(peak / 1e6, 2),
+        "peak_at": (datetime.fromtimestamp(peak_at, formatting.zone()).strftime("%d.%m. %H:%M")
+                    if peak_at is not None else ""),
         "byte_count": int(total_bytes),
         "byte_count_transcode": int(transcode_bytes),
         "transcode_share": round(transcode_bytes / total_bytes * 100, 1) if total_bytes else 0.0,

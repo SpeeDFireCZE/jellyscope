@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
-from ... import stats
+from ... import access, stats
 from ..base import _context, _last_day, _period_for_template, require_login, templates
 from ..periods import ALLOWED_DAYS, DEFAULT_DAYS, _date_from_text, _days, _period_to_session
 
@@ -90,10 +90,15 @@ def compare(request: Request,
         default = DEFAULT_DAYS
     first = _period(request, COMPARE_A_KEY, a_days, a_since, a_until, default=default)
     second = _period(request, COMPARE_B_KEY, b_days, b_since, b_until, default=stats.previous_period(first))
+    comparison = stats.comparison(first, second)
+    # The network, the languages and the library have pages and cards of their own: their groups only with
+    # their area.
+    comparison["groups"] = [group for group in comparison["groups"]
+                            if not group.get("area") or access.account_sees(account, group["area"])]
 
     return templates.TemplateResponse(request, "video/compare.html", _context(
         request, account,
-        comparison=stats.comparison(first, second),
+        comparison=comparison,
         period_a=_period_for_template(first),
         period_b=_period_for_template(second),
         # The links of one switch carry the state of the other.

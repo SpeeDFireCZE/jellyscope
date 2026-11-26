@@ -1,8 +1,8 @@
 {# The Prowlarr card "Grabbed releases by indexer": the indexers apps take releases from.
 
-   From the database (cards_prowlarr.py, `d.radky`: name, count, share and failures
+   From the database (cards_prowlarr.py, `d.rows`: name, count, share and failures
    as ready text). The failures are "–" for an indexer where Prowlarr only redirected
-   the apps - it does not know the result (`d.nezname` = there is such a row). A long table as on Insights: the first rows in the card, the whole one in the window. #}
+   the apps - it does not know the result (`d.unknown` = there is such a row). A long table as on Insights: the first rows in the card, the whole one in the window. #}
 {% from "_macros.html" import row_class, whole_table_button with context %}
 <div class="card">
     <div class="card-head">

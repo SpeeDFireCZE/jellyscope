@@ -63,7 +63,9 @@
 
 {# ------------------------------------------------------------------ #}
 {{ page_section("Indexer performance", _("Indexer performance"), _("How the indexers answer: how many queries failed, how fast the answer came and whether the searches found anything.")) }}
-{# All three at the full width (as in the registry): a chart by day at half the page shrinks with its font too. #}
+{# All at the full width (as in the registry): a chart by day at half the page shrinks with its font too, and the
+   availability's strip by days needs the room. The availability first - the period's counterpart of "Indexers now". #}
+{{ c("availability") }}
 {{ c("indexers") }}
 {{ c("response_time") }}
 {{ c("failures") }}

@@ -18,8 +18,10 @@
    drawn by _card.html, the same as in a custom dashboard. An unknown key (a typo) is
    an error (cards.check_card), not a silently missing card. Import `with context`.
    A page with cards of its own (*Arr, Seerr) hands the template `page_card_keys`
-   - the keys its route computes data for; without them the Overview's cards apply. #}
-{% macro show_card(key_name) -%}
+   - the keys its route computes data for; without them the Overview's cards apply.
+   `keep_still`: the card does not refresh by itself on this page (data-card-still, static/js/app.js) - the page
+   writes numbers of its own the card adds up to, and the two would disagree once only the card is drawn anew. #}
+{% macro show_card(key_name, keep_still=false) -%}
     {{ check_card(key_name, page_card_keys if page_card_keys is defined else none) }}
     {%- if key_name in cards %}{% set card = cards[key_name] %}{% include "_card.html" %}{% endif -%}
 {%- endmacro %}
@@ -117,9 +119,9 @@
 {% endmacro %}
 
 {% macro table_window() %}
-<dialog class="modal modal-wide" id="table-window">
+<dialog class="modal modal-wide" id="table-window" aria-labelledby="table-window-title">
     <form method="dialog" class="modal-head">
-        <h2></h2>
+        <h2 id="table-window-title"></h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -166,9 +168,9 @@
     </button>
 </div>
 
-<dialog class="modal" id="modal-period">
+<dialog class="modal" id="modal-period" aria-labelledby="modal-period-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Custom period") }}</h2>
+        <h2 id="modal-period-title">{{ _("Custom period") }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -258,9 +260,9 @@
     </div>
 </div>
 
-<dialog class="modal" id="modal-period-{{ prefix }}">
+<dialog class="modal" id="modal-period-{{ prefix }}" aria-labelledby="modal-period-{{ prefix }}-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ switch_label }}</h2>
+        <h2 id="modal-period-{{ prefix }}-title">{{ switch_label }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -316,7 +318,7 @@
    `back` says which section to return to after the click. #}
 {% macro running_task(scan_running, stop_pending, back) %}
 {% if scan_running %}
-<div class="flash info" style="margin-top:14px">
+<div class="flash info" style="margin-top:14px" data-running-task>
     <span class="dot"></span>
     <span>
         {% if stop_pending %}
@@ -339,7 +341,7 @@
 {% if not stop_pending %}
 {# Red: it is the only action on the page that steps into what is running,
    and it is looked for at a moment a person is nervous. It has to be seen at once. #}
-<form method="post" action="/settings/stop" style="margin-top:12px">
+<form method="post" action="/settings/stop" style="margin-top:12px" data-running-task>
     <input type="hidden" name="back" value="{{ back }}">
     <button class="btn danger" type="submit">&#9632; {{ _("Stop task") }}</button>
     <p class="card-note" style="margin-top:8px">
@@ -488,7 +490,7 @@
 
 {# The sentence "what exactly is transcoded" for the tooltip at the transcode badge.
 
-   The facts are prepared by stats.transcode_description(); the text is put together here,
+   The facts are prepared by stats.playback.transcode_description(); the text is put together here,
    because only the template knows the signed-in person's language. A bare
    "transcode" does not say whether the server converts the picture (expensive),
    only the sound (cheap), or burns in subtitles. #}
@@ -547,15 +549,22 @@
 {# The cell "Key" in the table of API keys (Settings → API and My account).
 
    A freshly made key shows whole - but only on the first view after
-   it is made: the server keeps it in the session and drops it while rendering. With
+   it is made: the server keeps it in its memory for a few minutes (web/base.py
+   hold_secret, never in the cookie) and drops it while rendering. With
    the Copy button. After a refresh only the start of the key and asterisks
    are left - and the button goes with it, as there is nothing to copy.
    The whole key is in the page only once (no extra data attribute);
    the button takes it from <code> by id. See [data-copy] in static/js/app.js.
 
-   `new_key` = {"id": ..., "token": ...} from the session, or nothing. #}
+   `new_key` = {"id": ..., "token": ...} (web/base.py _new_key), or nothing. A token of None:
+   the memory lost the key (a restart) - the row says to make a new one. #}
 {% macro key_cell(key_name, new_key, stars=24) %}
-{% if new_key and new_key.id == key_name.id %}
+{% if new_key and new_key.id == key_name.id and not new_key.token %}
+<td class="new-key">
+    <code>{{ key_name.preview }}{{ '*' * stars }}</code>
+    <p class="hint">{{ _("This key can no longer be shown. Revoke it and make a new one.") }}</p>
+</td>
+{% elif new_key and new_key.id == key_name.id %}
 <td class="new-key">
     <code class="new-key-text" id="new-key-{{ key_name.id }}">{{ new_key.token }}</code>
     <div class="new-key-actions">
@@ -576,13 +585,13 @@
    For the dashboard for everyone with the name from the admin too - otherwise one could not
    tell which page the tick allows. #}
 {# The parts of a heading (access.Area.heading, a group of the dashboard builder) translated
-   and joined: "Filmy a seriály · Přehled". Plain text for .format() is joined in _dashboard_card. #}
+   and joined: "Movies & series · Overview". Plain text for .format() is joined in _dashboard_card. #}
 {% macro heading_text(parts) -%}
 {% for part in parts %}{{ _(part) }}{% if not loop.last %} · {% endif %}{% endfor %}
 {%- endmacro %}
 
 {# `with_section`: outside the tree, where no heading says it - Area.heading, "Library" or
-   "Filmy a seriály · Přehled" (only for access.Area, not for a row of the tree).
+   "Movies & series · Overview" (only for access.Area, not for a row of the tree).
    Without it `area` must be a row of the tree (access.tree(), the key `name`): an access.Area has
    no `name` and would draw an empty name. #}
 {% macro area_name(area, with_section=false) -%}

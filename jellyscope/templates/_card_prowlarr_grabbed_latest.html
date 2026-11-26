@@ -1,8 +1,8 @@
 {# The Prowlarr card "Latest grabbed releases": what each app took last.
 
-   From the database (cards_prowlarr.py, `d.radky` from the newest: the release's name,
-   indexer, app, time in UTC, `result` = ok / selhalo / presmerovano /
-   neznamy and its `label`). "Přesměrováno" is not a result: Prowlarr only
+   From the database (cards_prowlarr.py, `d.rows` from the newest: the release's name,
+   indexer, app, time in UTC, `result` = ok / failed / redirected /
+   unknown and its `label`). "redirected" is not a result: Prowlarr only
    sent the app to the indexer. A long table as on Insights: the first rows in the card, the whole one in the window.
 
    A release's name is one long word - it may wrap anywhere. The table

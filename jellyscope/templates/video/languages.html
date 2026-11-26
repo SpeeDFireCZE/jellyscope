@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter with context %}
+{% from "_macros.html" import period_filter, show_card with context %}
 {% block title %}{{ _("Languages") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -12,6 +12,10 @@
     </div>
     {{ period_filter(period, '/video/languages') }}
 </div>
+
+{# The cards come from the registry (web/video/languages.py, LANGUAGE_CARDS), each in its slot; the notes and
+   where the numbers come from are the page's own. The main number (the share of the preferred language) stands in
+   the slot of Language ratio (_card_language_share.html): it repeats the card's number, so it is drawn anew with it. #}
 
 {# What did not get into the numbers, the reader has to know. A statistic that
    silently leaves something out is worse than none.
@@ -67,75 +71,22 @@
 {% else %}
 
 {# ------------------------------------------------------------------ #}
-{# The main number: the share of Czech                                #}
+{# The main number and the share of languages                         #}
 {# ------------------------------------------------------------------ #}
-<div class="card">
-    <div class="card-head">
-        <div>
-            <p class="tile-label">
-                {{ _("Share of") }} {{ watched.preferred_name }}
-                {{ _("in watched time") }}
-            </p>
-            <div class="hero">{{ watched.preferred_percent | percent(1) }}</div>
-            <div class="delta flat">
-                {% if watched.second_name %}
-                    {{ watched.second_name }} {{ watched.second_percent | percent(1) }}
-                    &middot;
-                {% endif %}
-                {{ _("total") }} {{ watched.total_hours | hours }}
-                {# For a custom period (and the whole history) `day_labels` has nothing
-                   to say - the range is written. #}
-                {% if period.own %}
-                    {{ _("over {period}").format(period=period.since_label ~ " – " ~ period.until_label) }}
-                {% else %}
-                    {{ _("over {period}").format(period=_(day_labels[days])) }}
-                {% endif %}
-            </div>
-        </div>
-
-        {# The choice of the language the whole page turns around. Only languages
-           that really are in the library are offered - the one looked for is among them
-           by the nature of things, because a person builds the library for it.
-           The choice is saved, so it stays after a refresh. #}
-        {% if language_options and account.is_admin %}
-        <form method="post" action="/video/languages/preferred" class="lang-picker">
-            {# Only a number of days: a custom period is remembered by the session and
-               writing the object out would break the form (422). #}
-            {% if days is number %}
-            <input type="hidden" name="days" value="{{ days }}">
-            {% endif %}
-            <label class="tile-label" for="preferred">{{ _("Preferred language") }}</label>
-            <select id="preferred" name="code" data-submit-on-change>
-                {% for option in language_options %}
-                <option value="{{ option.code }}"
-                        {% if option.code == preferred %}selected{% endif %}>
-                    {{ option.name }} ({{ option.title_count | number }})
-                </option>
-                {% endfor %}
-            </select>
-            <noscript><button type="submit">{{ _("Save") }}</button></noscript>
-        </form>
-        {% endif %}
-    </div>
-</div>
-
-{# ------------------------------------------------------------------ #}
-{# The share of languages                                             #}
-{# ------------------------------------------------------------------ #}
-{% include "_card_language_share.html" %}
+{{ show_card("language_share") }}
 
 {# ------------------------------------------------------------------ #}
 {# Who how                                                            #}
 {# ------------------------------------------------------------------ #}
-{% include "_card_viewer_languages.html" %}
+{{ show_card("who_language") }}
 
 {# ------------------------------------------------------------------ #}
 {# Dub versus original + subtitles                                    #}
 {# ------------------------------------------------------------------ #}
 <div class="grid-2">
-    {% include "_card_dub.html" %}
+    {{ show_card("dubbing") }}
 
-    {% include "_card_subtitles.html" %}
+    {{ show_card("subtitles") }}
 </div>
 
 {% endif %}{# the end of the block that needs history #}
@@ -153,16 +104,16 @@
 </p>
 
 <div class="grid-2">
-    {% include "_card_library_languages.html" %}
+    {{ show_card("library_languages") }}
 
-    {% include "_card_stream_combinations.html" %}
+    {{ show_card("combinations") }}
 </div>
 
 {# ------------------------------------------------------------------ #}
 {# Missing Czech                                                      #}
 {# ------------------------------------------------------------------ #}
 {% if missing_preferred.rows %}
-{% include "_card_missing_stream.html" %}
+{{ show_card("missing_track") }}
 {% endif %}
 
 {# ------------------------------------------------------------------ #}

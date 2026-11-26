@@ -2,8 +2,9 @@
    its data is `content_section.data`):
    every music library together, next to the video statistics above - what the music libraries
    hold, in what format and quality, of which years and genres, the largest albums. The cards are the library's
-   cards of Music (cards_music.PAGES["library"]), with the same data shape. #}
-{% from "_macros.html" import tile, table_window with context %}
+   cards of Music (cards_music.PAGES["library"]), drawn by the registry (show_card) with the data this section
+   computed (`card_data`, the same shape). #}
+{% from "_macros.html" import show_card, tile with context %}
 <div class="section-head" id="music-in-library">
     <div>
         <h2>{{ _("Music") }}</h2>
@@ -17,12 +18,12 @@
     {{ tile(_("Size"), content_section.data.numbers.size_bytes | bytes) }}
     {{ tile(_("Duration"), content_section.data.numbers.seconds | seconds) }}
 </div>
+{# The tiles above count the artists of the tracks and albums (the rule of a library's Overview), the card
+   Music library numbers counts them otherwise - so the tiles are the section's own. The cards that add up to them
+   (formats and quality: the tracks and their size; decades: the albums) do not refresh by themselves: drawn anew
+   alone, they would disagree with the tiles (show_card's keep_still). #}
 <div class="grid-2">
     {% for key in ("music_formats", "music_quality", "music_years", "music_library_genres", "music_largest") %}
-        {# `card`, `d` and `prefix` are the names the card templates read. #}
-        {% set card = content_section.data.cards[key] %}{% set d = content_section.data.card_data[key] %}{% set prefix = "" %}
-        <!-- card: {{ key }} -->
-        {% include card.template %}
+        {{ show_card(key, keep_still=key in ("music_formats", "music_quality", "music_years")) }}
     {% endfor %}
 </div>
-{{ table_window() }}

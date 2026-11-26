@@ -1,0 +1,25 @@
+# Jellyscope - the PostgreSQL driver (optional)
+#
+# Only needed when you switch the database to PostgreSQL in Settings. With
+# SQLite (the default) it is not used at all.
+#
+# It is apart from requirements.txt on purpose: when no prebuilt package
+# exists for the platform (typically Alpine/musl), pip would try to build it
+# from source and take the whole installation down with it - including for
+# people who only ever wanted SQLite. Installed from here, a failure is just
+# a warning.
+#
+# This file is the one place its version is set: deploy/install.sh installs
+# it, deploy/update.sh and the Update button in the app bring an installed
+# driver to it, and the Docker image carries it. By hand, into the same
+# virtualenv the app runs in:
+#
+#   .venv/bin/python -m pip install -r requirements-postgres.txt
+#
+# The "pool" extra enables connection pooling; without it the app still
+# connects, it just opens a new connection per query. The versions of what
+# it pulls in (psycopg-binary, psycopg-pool) are in constraints.txt.
+
+-c constraints.txt
+
+psycopg[binary,pool]==3.3.6

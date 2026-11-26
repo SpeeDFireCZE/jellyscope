@@ -45,7 +45,6 @@ from ..base import (
     _no_cache,
     config,
     require_admin,
-    require_login,
     templates,
 )
 from .accounts import KEY_OPTIONS, _key_tree, _root_key_permissions
@@ -145,6 +144,9 @@ def _section_arr(account: dict[str, Any]) -> dict[str, Any]:
             "example_url": a.sample_url,
             "key_hint_text": a.key_hint,
             "deletion_note": a.delete_note,
+            # Prowlarr only: measuring the indexers' status in the background (its switch and interval) - after a
+            # connection test as it was typed.
+            "watch": {**a.watch_settings(), **draft.get("watch", {})} if a.watch_settings else None,
         })
     return {"arr_apps": app_cards}
 
@@ -247,8 +249,14 @@ def _section_api(request: Request, account: dict[str, Any]) -> dict[str, Any]:
     """The API section: the keys, their permissions, the guide and the key just made."""
     context: dict[str, Any] = {}
     tokens = api.list_tokens()
+    limited, limit = api.key_limit_setting()
     context.update(
         api_tokens=tokens,
+        # The limit on keys of one's own: the box and the number (shown even when off, to switch it on).
+        api_key_limit_on=limited,
+        api_key_limit=limit,
+        api_key_limit_min=api.KEY_LIMIT_MIN,
+        api_key_limit_max=api.KEY_LIMIT_MAX,
         # Root keys: what they may (the Type column and the permissions) and the
         # pre-filled Permissions window. A new key starts with nothing ticked - its
         # permissions are set knowingly.
@@ -261,9 +269,10 @@ def _section_api(request: Request, account: dict[str, Any]) -> dict[str, Any]:
         api_guide_fields=api.path_fields(api.allowed_paths(account)),
         api_guide_operators=api_query.OPERATORS,
         # A newly made key shows only once, right after the
-        # redirect; so it is held in the session, not in the address - and at
-        # the next load of the page nobody can write it out any more. It shows
-        # in the row of its key (the macro bunka_klice).
+        # redirect; so it waits in the server's memory, not in the address nor
+        # in the cookie (web/base.py _hold_new_key) - and at the next load of the
+        # page nobody can write it out any more. It shows in the row of its key
+        # (the macro key_cell).
         new_token=_new_key(request, "new_api_token"),
     )
     return context
@@ -272,8 +281,12 @@ def _section_api(request: Request, account: dict[str, Any]) -> dict[str, Any]:
 def _section_blocks() -> dict[str, Any]:
     """The Blocks section: the blocked addresses and the blocking rules."""
     context: dict[str, Any] = {}
+    blocks = accounts.list_blocks()
+    if config.demo_mode:
+        # The demo's sign-in details are public: the addresses are strangers' who mistyped the password.
+        blocks = [{**block, "ip": applog.HIDDEN_ADDRESS} for block in blocks]
     context.update(
-        blocks=accounts.list_blocks(),
+        blocks=blocks,
         block_levels=accounts.BLOCK_STEPS,
         block_attempts=accounts.ATTEMPTS_BEFORE_BLOCK,
         block_forget_hours=accounts.FORGET_AFTER_HOURS,
@@ -325,6 +338,9 @@ def _section_database(account: dict[str, Any]) -> dict[str, Any]:
         # copied - not a general "pip install", which in the case of a
         # virtual environment would install somewhere else.
         python_path=sys.executable,
+        # The driver at the version the application pins; in our image it comes by rebuilding the image.
+        driver_requirements=str(db.DRIVER_REQUIREMENTS),
+        our_image=config.our_image,
         psycopg_available=db.psycopg_available(),
         pool_available=db.pool_available(),
     )
@@ -423,13 +439,14 @@ def settings_page(
     log_account: str = "",
     log_key: str = "",
     log_ip: str = "",
-    account: dict[str, Any] = Depends(require_login),
+    account: dict[str, Any] = Depends(require_admin),
 ):
     allowed = {key for key, _name, admin_only in SETTINGS_SECTIONS
                if account["is_admin"] or not admin_only}
     if section not in allowed:
-        # A reader has only one section - the one where the password is changed.
-        section = "jellyfin" if account["is_admin"] else "accounts"
+        # An unknown section = the first one. Settings are the administrator's only, by the route itself
+        # too: every account and its rights are in them; one's own password is changed on My account.
+        section = "jellyfin"
 
     # The template gets the settings WITHOUT secrets - an API key must not
     # get into the page, not even by mistake.
@@ -493,14 +510,16 @@ def settings_page(
 def settings_save(
     request: Request,
     tech_source: str = Form("jellyfin"),
-    poll_interval: str = Form("10"),
+    poll_interval: str = Form(""),
     # The capacity field is in the form only with a Jellyfin without the disk breakdown -
     # otherwise the capacity is set at the disk in the Disks card. So a missing field
-    # must not overwrite the capacity with zero.
+    # must not overwrite the capacity with zero. `capacity_field` comes with the field: then an empty
+    # value (FastAPI makes it None, the same as a missing field) is zero, "find out yourself".
     library_capacity_gb: str | None = Form(None),
+    capacity_field: str = Form(""),
     library_capacity_unit: str = Form("GB"),
     ffprobe_path: str = Form(""),
-    ffprobe_concurrency: str = Form("3"),
+    ffprobe_concurrency: str = Form(""),
     path_mappings: str = Form("[]"),
     account: dict[str, Any] = Depends(require_admin),
 ):
@@ -510,7 +529,8 @@ def settings_save(
         tech_source = "jellyfin"
 
     db.set_setting("tech_source", tech_source)
-    db.set_setting("poll_interval", _clamp(poll_interval, 2, 300, 10))
+    # A cleared or missing number keeps the saved one (FastAPI gives it the parameter's default).
+    db.set_setting("poll_interval", _clamp(poll_interval, 2, 300, db.get_int_setting("poll_interval", 2, 300, 10)))
     # The time of the library synchronisation is not written here any more - it belongs
     # to the scheduled tasks and is changed in a form of its own. Were both to save it,
     # they would overwrite each other's value.
@@ -518,23 +538,30 @@ def settings_save(
     # With the disk breakdown the capacity is set at the disk. A form opened
     # before the first synchronisation has the field - and saved after it would
     # revive the old capacity the conversion has just moved to the disk.
-    if library_capacity_gb is not None and not scanner.physical_disks():
+    if (library_capacity_gb is not None or capacity_field) and not scanner.physical_disks():
         unit = library_capacity_unit if library_capacity_unit in CAPACITY_UNITS else "GB"
         db.set_setting("library_capacity_unit", unit)
         db.set_setting(scanner.CAPACITY_KEY,
-                       str(int(_clamp(library_capacity_gb, 0, 10 ** 6, 0))
+                       str(int(_clamp(library_capacity_gb or "0", 0, 10 ** 6, 0))
                            * CAPACITY_UNITS[unit]))
-    db.set_setting("ffprobe_concurrency", _clamp(ffprobe_concurrency, 1, 16, 3))
+    db.set_setting("ffprobe_concurrency",
+                   _clamp(ffprobe_concurrency, 1, 16, db.get_int_setting("ffprobe_concurrency", 1, 16, 3)))
     db.set_setting("ffprobe_path", ffprobe_path.strip())
 
     try:
         parsed = json.loads(path_mappings or "[]")
         if not isinstance(parsed, list):
             raise ValueError
-        db.set_setting("path_mappings", json.dumps(parsed))
     except ValueError:
         _flash(request, "The path mapping is not valid JSON, so I kept the original value.", "warning")
         return RedirectResponse("/settings?section=data", status_code=303)
+    # Valid JSON of another shape (a pair of texts, a number for a path) would break every file analysis.
+    if not all(isinstance(m, dict) and isinstance(m.get("from"), str) and isinstance(m.get("to"), str)
+               for m in parsed):
+        _flash(request, 'Each path mapping needs a text "from" and a text "to", so I kept the original value.',
+               "warning")
+        return RedirectResponse("/settings?section=data", status_code=303)
+    db.set_setting("path_mappings", json.dumps(parsed))
 
     _flash(request, "Settings saved.", "success")
     return RedirectResponse("/settings?section=data", status_code=303)

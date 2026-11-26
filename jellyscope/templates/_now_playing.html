@@ -175,9 +175,9 @@
 {# The window has to be on the page even when it hides only on a phone -
    the button above points at it. #}
 {% if hide or hide_mobile %}
-<dialog class="modal modal-wide" id="modal-streams">
+<dialog class="modal modal-wide" id="modal-streams" aria-labelledby="modal-streams-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Now playing") }} ({{ active | length }})</h2>
+        <h2 id="modal-streams-title">{{ _("Now playing") }} ({{ active | length }})</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>

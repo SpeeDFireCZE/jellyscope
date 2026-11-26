@@ -6,7 +6,6 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
 
 {# ================================================================== #}
 {# What a person sets about the look of the pages. A section of its own on purpose:
@@ -25,8 +24,8 @@
         <p class="card-note">{{ _("colours, cards and how time is written") }}</p>
     </div>
         <div class="field">
-            <label>{{ _("Appearance") }}</label>
-            <div class="radio-set" style="margin-top:6px">
+            <label id="ui-skin-label">{{ _("Appearance") }}</label>
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="ui-skin-label">
                 <label class="radio-card">
                     <input type="radio" name="ui_skin" value="new"
                            {{ 'checked' if ui_skin != 'classic' }}>
@@ -53,8 +52,8 @@
         </div>
 
         <div class="field">
-            <label>{{ _("Time in charts") }}</label>
-            <div class="radio-set" style="margin-top:6px">
+            <label id="ui-exact-time-label">{{ _("Time in charts") }}</label>
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="ui-exact-time-label">
                 <label class="radio-card">
                     <input type="radio" name="ui_exact_time" value="0"
                            {{ 'checked' if not ui_exact_time }}>
@@ -126,8 +125,8 @@
         <p class="card-note">{{ _("a page for everyone, put together by the admin") }}</p>
     </div>
         <div class="field">
-            <label>{{ _("Custom overview") }}</label>
-            <div class="radio-set" style="margin-top:6px">
+            <label id="ui-dashboard-label">{{ _("Custom overview") }}</label>
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="ui-dashboard-label">
                 <label class="radio-card">
                     <input type="radio" name="ui_dashboard" value="0"
                            {{ 'checked' if not ui_dashboard }}>
@@ -298,8 +297,8 @@
         <p class="card-note">{{ _("how far it zooms in, and where it starts") }}</p>
     </div>
         <div class="field">
-            <label>{{ _("Zooming the map") }}</label>
-            <div class="radio-set" style="margin-top:6px">
+            <label id="ui-map-zoom-label">{{ _("Zooming the map") }}</label>
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="ui-map-zoom-label">
                 <label class="radio-card">
                     <input type="radio" name="ui_map_zoom" value="click"
                            {{ 'checked' if map_zoom != 'wheel' }}>
@@ -328,8 +327,8 @@
            browsers to a foreign server - hence off by default and with a sentence
            about what exactly goes out. #}
         <div class="field">
-            <label>{{ _("Map background") }}</label>
-            <div class="radio-set" style="margin-top:6px">
+            <label id="ui-map-base-label">{{ _("Map background") }}</label>
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="ui-map-base-label">
                 <label class="radio-card">
                     <input type="radio" name="ui_map_base" value="drawn"
                            {{ 'checked' if map_basemap != 'osm' }}>
@@ -359,12 +358,46 @@
         </div>
 </div>
 
-<div class="card" id="decorations">
+{# Cards that refresh by themselves: an open page asks /health what changed and redraws only the cards over a
+   source that moved (cards_base.SOURCES). Off = what pages always did. #}
+<div class="card">
     <div class="card-head">
-        <h2>{{ _("Seasonal decorations") }}</h2>
+        <h2 id="self-refresh-title">{{ _("Refreshing cards") }}</h2>
     </div>
         <div class="field">
-            <div class="radio-set" style="margin-top:6px">
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="self-refresh-title">
+                <label class="radio-card">
+                    <input type="radio" name="ui_self_refresh" value="1" {{ 'checked' if ui_self_refresh }}>
+                    <span>
+                        <span class="title">{{ _("By themselves") }}</span>
+                        <span class="desc">
+                            {{ _("An open page redraws a card once its data change, for example after a new play or a finished sync, without reloading the page.") }}
+                        </span>
+                    </span>
+                </label>
+                <label class="radio-card">
+                    <input type="radio" name="ui_self_refresh" value="0" {{ 'checked' if not ui_self_refresh }}>
+                    <span>
+                        <span class="title">{{ _("Only on reload") }}</span>
+                        <span class="desc">
+                            {{ _('Cards show what they showed when the page opened, until you reload it. "Now playing" and "Downloading" keep refreshing as they always have.') }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button data-keep-scroll class="btn primary" type="submit">{{ _("Save") }}</button>
+        </div>
+</div>
+
+<div class="card" id="decorations">
+    <div class="card-head">
+        <h2 id="decorations-title">{{ _("Seasonal decorations") }}</h2>
+    </div>
+        <div class="field">
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="decorations-title">
                 <label class="radio-card">
                     <input type="radio" name="ui_events" value="1" {{ 'checked' if ui_events }}>
                     <span><span class="title">{{ _("On#feminine") }}</span></span>

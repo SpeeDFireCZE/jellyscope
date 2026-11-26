@@ -46,7 +46,7 @@ os.environ["JELLYSCOPE_DEMO"] = "0"
 
 import httpx  # noqa: E402
 
-from jellyscope import accounts, db, demodata, jellyfin, langstats, scanner  # noqa: E402
+from jellyscope import access, accounts, db, demodata, jellyfin, langstats, scanner  # noqa: E402
 
 failures = 0
 
@@ -353,6 +353,122 @@ check(slow.attempts == jellyfin.TIMEOUT_RETRIES + 1,
 message = asyncio.run(ask(Unreachable()))
 check("Could not connect" in message,
       f"an unreachable server on the contrary reports the connection: {message[:80]}")
+
+
+print()
+print("--- a character that does not belong in the key or the address is told at the form ---")
+# A key copied from a web page with an invisible space (U+200B), or `nas:port` in the address: httpx fails on
+# both before anything is sent, with an error that is not JellyfinError. The form saved the value first and the
+# page fell with a 500 - and from then on every sign-in through Jellyfin and every poster fell too.
+BAD_KEY = "abcdef0123456789\u200b"
+INVALID_KEY_CS = "API klíč obsahuje znak, který do něj nepatří"
+db.set_setting("jellyfin_url", "http://jellyfin.doma:8096")
+db.set_setting("jellyfin_api_key", "good-key-0123456789")
+db.forget_settings()
+with TestClient(app, raise_server_exceptions=False) as www:
+    www.post("/login", data={"username": "admin", "password": "secretpass1"})
+    for action in ("save", "test"):
+        response = www.post("/settings/connection", follow_redirects=False, data={
+            "jellyfin_url": "http://jellyfin.doma:8096", "jellyfin_api_key": BAD_KEY,
+            "jellyfin_generation": "auto", "action": action})
+        db.forget_settings()
+        page = www.get("/settings?section=jellyfin").text if response.status_code == 303 else ""
+        check(response.status_code == 303 and INVALID_KEY_CS in page,
+              f"{action} with an invisible character in the key: the form says why ({response.status_code})")
+        check(db.get_setting("jellyfin_api_key", "") == "good-key-0123456789",
+              f"{action}: and the stored key stayed as it was")
+    for address in ("nas:port", "http://ab\u00adc.doma"):
+        response = www.post("/settings/connection", follow_redirects=False, data={
+            "jellyfin_url": address, "jellyfin_api_key": "", "jellyfin_generation": "auto", "action": "save"})
+        db.forget_settings()
+        page = www.get("/settings?section=jellyfin").text if response.status_code == 303 else ""
+        check(response.status_code == 303 and "Adresa aplikace není platná." in page,
+              f"the address {address!r}: the form says it is not valid ({response.status_code})")
+        check(db.get_setting("jellyfin_url", "") == "http://jellyfin.doma:8096",
+              f"the address {address!r}: and the stored address stayed as it was")
+
+# A value stored before the form guarded it: an error of the client, not a fallen page.
+for url, key, label in (("http://jellyfin.doma:8096", BAD_KEY, "a key with an invisible character"),
+                        ("http://nas:port", "good-key-0123456789", "an address with a port that is no number")):
+    try:
+        jellyfin.JellyfinClient(url, key)
+        kind = "nothing"
+    except Exception as error:   # noqa: BLE001 - which error it is, is what is checked
+        kind = type(error).__name__
+    check(kind == "JellyfinError", f"the client with {label} raises JellyfinError ({kind})")
+
+db.set_setting("jellyfin_api_key", BAD_KEY)
+db.set_setting(access.LOGIN_KEY, "1")
+db.forget_settings()
+an_item = (db.query_one("SELECT id FROM items WHERE image_tag IS NOT NULL LIMIT 1")
+           or db.query_one("SELECT id FROM items LIMIT 1"))["id"]
+with TestClient(app, raise_server_exceptions=False) as www:
+    www.post("/login", data={"username": "admin", "password": "secretpass1"})
+    poster = www.get(f"/image/{an_item}")
+    check(poster.status_code == 404, f"a poster with the stored bad key: 404, not a fallen page ({poster.status_code})")
+    signing_in = TestClient(app, raise_server_exceptions=False).post(
+        "/login", data={"username": "mirek", "password": "whatever1", "method": "jellyfin"}, follow_redirects=False)
+    # A refused sign-in (401), not just "no 500": a 303 would mean the bad key let somebody in.
+    check(signing_in.status_code == 401, f"signing in through Jellyfin: refused with 401, no 500 ({signing_in.status_code})")
+db.set_setting("jellyfin_api_key", "good-key-0123456789")
+db.set_setting(access.LOGIN_KEY, "0")
+db.forget_settings()
+
+
+print()
+print("--- a redirect or an answer that is not Jellyfin is no success ---")
+# A reverse proxy that sends http:// on to https:// with an empty body: the connection test said "works: ? (Jellyfin ?)",
+# the collector reported fine and collected nothing, and signing in through Jellyfin fell on response.json().
+
+
+def proxy(status: int, body: bytes = b"", content_type: str = "") -> httpx.MockTransport:
+    def answer(request: httpx.Request) -> httpx.Response:
+        headers = {"content-type": content_type} if content_type else {}
+        if 300 <= status < 400:
+            headers["location"] = f"https://name:password@server{request.url.path}?api_key=klic"
+        return httpx.Response(status, content=body, headers=headers)
+    return httpx.MockTransport(answer)
+
+
+async def outcome(transport: httpx.AsyncBaseTransport, call: str, *arguments: str) -> str:
+    client = jellyfin.JellyfinClient("http://server:8096", "klic", version="12.0")
+    await client._client.aclose()
+    client._client = httpx.AsyncClient(base_url="http://server:8096", transport=transport)
+    try:
+        return f"returned {await getattr(client, call)(*arguments)!r}"
+    except jellyfin.JellyfinError as error:
+        return f"JellyfinError {error}"
+    except Exception as error:   # noqa: BLE001 - which error it is, is what is checked
+        return f"{type(error).__name__} {error}"
+    finally:
+        await client.close()
+
+
+for call in ("system_info", "sessions", "users"):
+    text = asyncio.run(outcome(proxy(308), call))
+    check(text.startswith("JellyfinError") and "redirects elsewhere" in text and "https://server" in text,
+          f"{call} with a redirect: an error that names the address to enter ({text[:110]})")
+    check("password" not in text and "api_key" not in text and "/System" not in text and "/Sessions" not in text,
+          f"{call}: the address offered has neither the credentials, nor the query, nor the API path")
+text = asyncio.run(outcome(proxy(200), "system_info"))
+check(text.startswith("JellyfinError") and "unexpected answer" in text,
+      f"an empty answer to /System/Info is not a working connection ({text[:110]})")
+text = asyncio.run(outcome(proxy(200, b'{"Something": "else"}', "application/json"), "system_info"))
+check(text.startswith("JellyfinError"), f"nor is JSON without a version and an id ({text[:110]})")
+text = asyncio.run(outcome(proxy(200, b'{"Version": "12.0.1", "Id": "abc"}', "application/json"), "system_info"))
+check(text.startswith("returned") and "12.0.1" in text, f"a real answer passes ({text[:110]})")
+
+PROXY_PAGE = (200, b"<html>Sign in to the proxy</html>", "text/html")
+for call, arguments, label in (("verify_login", ("mirek", "heslo"), "a password"),
+                               ("quick_connect_start", (), "starting Quick Connect"),
+                               ("quick_connect_confirmed", ("tajemstvi",), "asking about Quick Connect"),
+                               ("quick_connect_finish", ("tajemstvi",), "finishing Quick Connect")):
+    text = asyncio.run(outcome(proxy(*PROXY_PAGE), call, *arguments))
+    check(text.startswith(("JellyfinError", "returned None", "returned False")),
+          f"{label} answered by a proxy's page: no exception the sign-in page falls on ({text[:90]})")
+text = asyncio.run(outcome(proxy(308), "verify_login", "mirek", "heslo"))
+check(text.startswith("JellyfinError") and "redirects elsewhere" in text,
+      f"checking a password on a redirect: an error to the log, not a fallen page ({text[:90]})")
 
 
 print()

@@ -6,7 +6,7 @@ here, once; base.html only draws what `menu()` returns - the list on the
 desktop and the same tree in the burger on a phone.
 
 * `SECTIONS` - the sections in menu order and their pages. A page has its
-  address, a label (the Czech source text, translated when the menu is
+  address, a label (the English source text, translated when the menu is
   built) and the address prefixes that count as "this page is open" (an
   artist's page belongs to the Music overview, an item's detail to the
   Library).
@@ -223,7 +223,6 @@ DEFAULT_PAGES: dict[str, str] = {
 AUTO = "auto"
 # What is tried when the chosen page is not available, after the choice itself.
 _FALLBACK = ("video", "music", "books", "dashboard")
-_LAST_RESORT = ("/library", "/history", "/account")
 _PAGE_LABELS = {
     "/video/overview": "Movies & series", "/music/overview": "Music", "/books/overview": "Books", "/library": "Library",
     "/history": "History", "/account": "My account"}

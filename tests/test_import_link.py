@@ -307,6 +307,9 @@ check(len(candidates) == 1 and candidates[0]["id"] == "ser-2-e7",
       f"the search in the library finds the episode by its series ({candidates})")
 check(importers.candidates_for_orphan("S") == [],
       "a single letter is not searched for - it would return the whole library")
+check(importers.candidates_for_orphan("__") == [] and importers.candidates_for_orphan("%%") == []
+      and importers.candidates_for_orphan("Sh_rlock") == [],
+      "% and _ are searched as they are typed, not as wildcards")
 
 result = importers.assign_manually("osirele-0", "ser-2-e7")
 check(result["status"] == "ok" and result["rows"] == 25,

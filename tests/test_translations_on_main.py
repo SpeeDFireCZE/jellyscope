@@ -141,7 +141,7 @@ def fake_git(*args):
 
 
 updates._git = fake_git
-updates._run = lambda *a: fake_git("pip")
+updates._run = lambda *a, **k: fake_git("pip")
 db.set_setting(updates.FOUND_VERSION_KEY, "")          # no new release out
 db.forget_settings()
 

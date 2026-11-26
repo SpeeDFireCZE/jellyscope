@@ -3,7 +3,63 @@
    A template of its own, because it is drawn in two places: on its
    original page and in a custom dashboard, where a person can
    rearrange it. One copy, so the two places do not drift apart -
-   see jellyscope/cards.py. #}
+   see jellyscope/cards.py.
+
+   On its page (not in a dashboard) the page's main number stands above it, in the same slot: the share
+   of the preferred language repeats the card's number, so when the card is drawn anew by itself
+   (/partials/cards), the number above it is too - and the two never disagree. For the administrator
+   with the choice of the preferred language (`preferred`, `language_options` - the card's data). #}
+{% if not in_dashboard %}
+<div class="card">
+    <div class="card-head">
+        <div>
+            <p class="tile-label">
+                {{ _("Share of") }} {{ watched.preferred_name }}
+                {{ _("in watched time") }}
+            </p>
+            <div class="hero">{{ watched.preferred_percent | percent(1) }}</div>
+            <div class="delta flat">
+                {% if watched.second_name %}
+                    {{ watched.second_name }} {{ watched.second_percent | percent(1) }}
+                    &middot;
+                {% endif %}
+                {{ _("total") }} {{ watched.total_hours | hours }}
+                {# For a custom period (and the whole history) `day_labels` has nothing
+                   to say - the range is written. #}
+                {% if period.own %}
+                    {{ _("over {period}").format(period=period.since_label ~ " – " ~ period.until_label) }}
+                {% else %}
+                    {{ _("over {period}").format(period=_(day_labels[days])) }}
+                {% endif %}
+            </div>
+        </div>
+
+        {# The choice of the language the whole page turns around. Only languages
+           that really are in the library are offered - the one looked for is among them
+           by the nature of things, because a person builds the library for it.
+           The choice is saved, so it stays after a refresh. #}
+        {% if language_options and account.is_admin %}
+        <form method="post" action="/video/languages/preferred" class="lang-picker">
+            {# Only a number of days: a custom period is remembered by the session and
+               writing the object out would break the form (422). #}
+            {% if days is number %}
+            <input type="hidden" name="days" value="{{ days }}">
+            {% endif %}
+            <label class="tile-label" for="preferred">{{ _("Preferred language") }}</label>
+            <select id="preferred" name="code" data-submit-on-change>
+                {% for option in language_options %}
+                <option value="{{ option.code }}"
+                        {% if option.code == preferred %}selected{% endif %}>
+                    {{ option.name }} ({{ option.title_count | number }})
+                </option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit">{{ _("Save") }}</button></noscript>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Language ratio") }}</h2>
@@ -11,7 +67,7 @@
     </div>
 
     {{ charts.stacked_bar(watched.rows) | safe }}
-    {{ charts.legend(watched.rows) | safe }}
+    {{ charts.stacked_legend(watched.rows) | safe }}
 
     <div class="table-wrap" style="margin-top:16px">
         <table>

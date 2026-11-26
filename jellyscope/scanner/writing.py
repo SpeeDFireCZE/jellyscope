@@ -150,9 +150,9 @@ def _write_items(rows: list[tuple[Any, ...]], keep_existing_tech: bool) -> None:
             runtime_ticks = excluded.runtime_ticks,
             date_created = excluded.date_created,
             path = excluded.path,
-            -- COALESCE: kdyz Jellyfin tmdb_id zrovna neposle (nedohledane
-            -- metadata), nesmime uz ulozene prepsat na NULL - prisli bychom
-            -- o jedinou vec, podle ktere umime polozky slucovat.
+            -- COALESCE: when Jellyfin does not send tmdb_id this time (metadata
+            -- not found), the stored one must not be overwritten with NULL - we
+            -- would lose the only thing by which items can be merged.
             tmdb_id = COALESCE(excluded.tmdb_id, items.tmdb_id),
             {tech_update}
             image_tag = excluded.image_tag,
@@ -295,12 +295,33 @@ def save_streams(item_id: str, streams: list[dict[str, Any]]) -> None:
         )
 
 
-def _mark_missing(started_at: str) -> None:
+def _unconfirmed_libraries(listed: list[dict[str, Any]]) -> list[str]:
+    """Libraries with items in the library that this list left out, but not two lists in a row yet.
+
+    At its start Jellyfin returns an empty or incomplete list of libraries. A library is gone only when it is
+    missing from two lists in a row (`missing_runs`, see sync._sync_libraries); until then its items are not marked as
+    gone (_mark_missing).
+    """
+    read = {library["id"] for library in listed}
+    return sorted(row["library_id"] for row in db.query_all(
+        "SELECT DISTINCT i.library_id FROM items i JOIN libraries l ON l.id = i.library_id"
+        " WHERE i.is_missing = 0 AND l.missing_runs < 2") if row["library_id"] not in read)
+
+
+def _library_names(ids: list[str]) -> list[str]:
+    names = {row["id"]: row["name"] for row in db.query_all_in("SELECT id, name FROM libraries WHERE id IN ({})", ids)}
+    return [names.get(library_id) or library_id for library_id in ids]
+
+
+def _mark_missing(started_at: str, spared: list[str] | tuple[str, ...] = ()) -> None:
+    """Items the sync did not see are gone - except in the `spared` libraries (Jellyfin left them out of its list)."""
+    where, values = "synced_at < ?", [started_at]
+    if spared:
+        where += f" AND (library_id IS NULL OR library_id NOT IN ({','.join('?' * len(spared))}))"
+        values += list(spared)
     with db.connect() as conn:
         # `main_id` goes in the same step: a gone item is no copy...
-        conn.execute(
-            "UPDATE items SET is_missing = 1, main_id = NULL WHERE synced_at < ?", (started_at,)
-        )
+        conn.execute(f"UPDATE items SET is_missing = 1, main_id = NULL WHERE {where}", tuple(values))
         # ...and nobody may point at a gone main copy - the tile would lead into the archive until the next
         # recount (scanner/copies.py).
         conn.execute(

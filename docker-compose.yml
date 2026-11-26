@@ -19,6 +19,12 @@ services:
   jellyscope:
     build:
       context: .
+      # Fetch the newest python:3.13-slim at every build. Without it the base
+      # image (Python, OpenSSL) stays the one from the first build and the
+      # ffmpeg/postgresql-client layer comes from the cache - an update by
+      # `git pull && docker compose up -d --build` would never get their
+      # security fixes.
+      pull: true
       args:
         # 0 = without ffmpeg (~250 MB smaller image). Technical data is then
         # only what Jellyfin reports - no reading the files with ffprobe.
@@ -26,6 +32,9 @@ services:
         # 0 = without pg_dump (~30 MB). Only PostgreSQL backups care; without
         # it they use the app's own export. With SQLite it makes no difference.
         PGDUMP: "${PGDUMP:-1}"
+        # 0 = without the PostgreSQL driver (~20 MB). Only for SQLite: with it
+        # left out, a database switched to PostgreSQL cannot be opened.
+        PSYCOPG: "${PSYCOPG:-1}"
     image: jellyscope
     container_name: jellyscope
     restart: unless-stopped

@@ -230,6 +230,71 @@ check(tile is not None and tile.group(1).strip() == "–" and "V příštích 7 
       f"the page shows neither “ve frontě 0” nor “nic nevychází” when it could not be found out ({tile and tile.group(1)})")
 check("nepodařilo načíst" in s, "... and says that part did not load")
 
+# Audit QA-3: an odd record (a text or a number where an object belongs) does not break the whole state - it is named
+# by what is there, like Readarr's. A text in statusMessages raised AttributeError and every page view failed (500).
+ODD_QUEUE = {"totalRecords": 3, "records": [
+    {"title": "Odd release", "movieId": 7, "trackedDownloadStatus": "warning", "movie": "text",
+     "statusMessages": ["a text", 5, None, {"title": "Odd", "messages": "not a list"}, {"title": "Fine", "messages": ["m1", "m2", "m3"]}]},
+    {"title": "Another", "movieId": 8, "status": "failed", "movie": 5, "statusMessages": "oops"},
+    "not a record"]}
+
+
+def odd_records(request: httpx.Request) -> httpx.Response:
+    path = request.url.path.split("/api/v3/", 1)[-1]
+    if path == "queue" and request.url.params.get("pageSize") != "200":
+        return httpx.Response(200, json=ODD_QUEUE)
+    return recorded_radarr(request)
+
+
+restore()
+restore = substitute(radarr, "RadarrClient", radarr_client(odd_records))
+radarr.live.CACHE.clear()
+try:
+    odd_state = asyncio.run(radarr.live_state())
+except Exception as error:      # noqa: BLE001 - the check below reports it
+    odd_state = {"available": False, "queue": None, "calendar": None, "error": repr(error)}
+odd = odd_state["queue"]["with_error"] if odd_state["queue"] else None
+check(odd_state["available"] and odd is not None and [(e["title"], e["title_id"]) for e in odd] == [("Odd release", 7), ("Another", 8)]
+      and odd[0]["message"] == "m1; m2" and odd[1]["message"] == "",
+      f"an odd queue record (movie, statusMessages of the wrong kind) is named by its release and does not break the state ({odd or odd_state['error']})")
+try:
+    odd_page = reader.get("/arr/radarr?days=365").status_code
+except Exception as error:      # noqa: BLE001 - the check below reports it
+    odd_page = repr(error)
+check(odd_page == 200, f"the page with an odd queue record shows ({odd_page})")
+# Audit stats-apps-forms-3: the queue answer itself of the wrong kind (a text for the count, a number or an object for
+# the list) is no error of the whole state either - it ran after the requests, outside any try, and every view failed.
+odd_answers = []
+for answer in ({"totalRecords": "n/a", "records": []}, {"records": 5}, {"totalRecords": [1], "records": {"a": 1}},
+               {"totalRecords": None, "records": [{"title": "A"}, "x"]}):
+    try:
+        odd_answers.append(radarr.live._queue(answer)["count"])
+    except Exception as error:      # noqa: BLE001 - the check below reports it
+        odd_answers.append(repr(error))
+check(odd_answers == [0, 0, 0, 1], f"a queue answer of the wrong kind counts what is there ({odd_answers})")
+
+# Audit QA-6: the minute queue (the tile "Ve frontě", the card of queue items with an error) left out a download
+# Radarr did not pair with any title - the API leaves it out without `includeUnknownMovieItems` - while the card "Stahuje se"
+# (whole_queue) showed it. Such an item is the one that needs a hand (a manual import).
+UNKNOWN_ITEM = {"title": "Unknown.Release.1080p", "status": "completed", "trackedDownloadStatus": "warning",
+                "trackedDownloadState": "importPending", "statusMessages": [{"title": "x", "messages": ["Manual import required"]}]}
+
+
+def with_unknown_item(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/api/v3/queue") and request.url.params.get("pageSize") != "200":
+        records = [UNKNOWN_ITEM] if request.url.params.get("includeUnknownMovieItems") == "true" else []
+        return httpx.Response(200, json={"totalRecords": len(records), "records": records})
+    return recorded_radarr(request)
+
+
+restore()
+restore = substitute(radarr, "RadarrClient", radarr_client(with_unknown_item))
+radarr.live.CACHE.clear()
+unknown_state = asyncio.run(radarr.live_state())
+check(unknown_state["queue"] is not None and unknown_state["queue"]["count"] == 1
+      and [e["title"] for e in unknown_state["queue"]["with_error"]] == ["Unknown.Release.1080p"],
+      f"a download Radarr did not pair is in the queue's count and among the items with an error ({unknown_state['queue']})")
+
 print()
 print("--- E) an unavailable application (Review Focus 4) ---")
 restore()

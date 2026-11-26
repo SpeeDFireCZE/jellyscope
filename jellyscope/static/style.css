@@ -265,10 +265,17 @@
    to the right on opening. Only here, not always: a short page without a scrollbar would
    otherwise have an empty stripe on the right. */
 html:has(dialog:modal) { overflow: hidden; scrollbar-gutter: stable; }
-/* A partial safety net for a browser that does not know `:has()`: when the scrollable
-   content inside a window scrolls to its end, the page under the window does not
-   start scrolling instead. Such a browser does not stop the wheel over the dimmed backdrop. */
-dialog, dialog * { overscroll-behavior: contain; }
+/* The window itself hands no scrolling on to the page under it. Inside it the scrolling chains as usual:
+   a finger on a table (`.table-wrap` scrolls sideways) moves the list it sits in, and a list at its end
+   moves the window. `contain` on every element inside a window kept the vertical swipe in the table, so
+   a window with a table could not be scrolled on a phone (the user, 23. 11. 2026). */
+dialog { overscroll-behavior: contain; }
+/* A partial safety net for a browser that does not know `:has()` (the page under a window is not
+   locked there): the content inside a window does not hand its scrolling on to the page. Such a
+   browser does not stop the wheel over the dimmed backdrop. */
+@supports not selector(:has(a)) {
+    dialog * { overscroll-behavior: contain; }
+}
 
 body {
     margin: 0;
@@ -616,7 +623,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     gap: 18px;
     margin-bottom: 18px;
 }
-.grid-2 > .card { margin-bottom: 0; }
+.grid-2 > .card, .grid-2 > .card-slot > .card { margin-bottom: 0; }
+
+/* The slot of a card from the registry (_card.html): it carries the card's key and sources for the page's
+   script and makes no box of its own - the grid, a dashboard's cell and the page's flow lay out the card
+   inside it as if the slot were not there. The rules that reach for a card through its parent (above, and
+   the dashboard's cells below) name the slot too. */
+.card-slot { display: contents; }
 
 /* Cards whose content differs in height (a table next to a short
    chart on Insights). A stretched card then had an empty
@@ -926,7 +939,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     font-weight: 550;
     font-variant-numeric: tabular-nums;
     /* A long row wraps instead of being cut with "…": with transcode the important part
-       is at the end ("nestíhá, obraz může sekat") and on a phone almost nothing fits
+       is at the end ("falling behind, the picture may stutter") and on a phone almost nothing fits
        into the display's width. The continuation is indented, so it is
        visible that it belongs to the row above, not that it is another value. */
     padding-left: 1em;
@@ -989,6 +1002,17 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     flex: none;
 }
 
+/* The strip by days of the Prowlarr card "Indexer availability" (_card_prowlarr_availability.html): one piece per
+   run of days in the same state, as wide as its days (the piece's flex-grow). The colours are the theme's, the
+   legend's swatches take the same classes. */
+.day-strip-cell { width: 40%; min-width: 120px; }
+.day-strip { display: flex; gap: 1px; height: 12px; border-radius: 3px; overflow: hidden; }
+.day-strip > span { flex: 1 1 0; min-width: 2px; }
+.day-strip-fine { background: var(--good); }
+.day-strip-failed { background: var(--warning); }
+.day-strip-outage { background: var(--critical); }
+.day-strip-unmeasured { background: var(--axis); }
+
 /* --------------------------------------------------------------------- */
 /* A section heading on the home page                                     */
 /* --------------------------------------------------------------------- */
@@ -1013,7 +1037,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
 .sessions {
     display: grid;
     /* `min(380px, 100%)`, not a bare 380: the column would ask for them even where
-       358 are available - and the "právě se hraje" card then climbed
+       358 are available - and the "Now playing" card then climbed
        off the screen and was clipped on the right. */
     grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
     gap: 16px;
@@ -1135,7 +1159,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     cursor: pointer;
 }
 .poster-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* The link "zobrazit průběh →" in a block with several downloads stands where a block
+/* The link "show progress →" in a block with several downloads stands where a block
    with one download has a row with numbers - and it looks like that row: muted text,
    not a coloured link (the same as "zobrazit jako tabulku" in the cards' heads).
    It leads nowhere, it opens a window, hence a button. */
@@ -1248,7 +1272,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 620; color: var(--text-seco
     height: var(--poster-h);
     border-radius: 8px;
     overflow: hidden;
-    /* The same as with the poster in "právě se hraje": until the image downloads
+    /* The same as with the poster in "Now playing": until the image downloads
        (and for a title that has none, forever) the backdrop is visible. A grey
        surface looked like a loading error. */
     background: linear-gradient(155deg,
@@ -1723,16 +1747,16 @@ tbody tr:has(+ tr.extra-row) td { border-bottom: none; }
     tbody tr:has(+ tr.desktop-only) td { border-bottom: none; }
 }
 
-/* A table with many columns in a narrow card (Seerr "Kdo žádá"): the headings
+/* A table with many columns in a narrow card (Seerr "Who requests"): the headings
    wrap into two lines and the cells have smaller paddings. A normal table does not
-   wrap its headings - but here, with "V knihovně" and "Sám pustil" on one
+   wrap its headings - but here, with "In library" and "Watched it themselves" on one
    line, the last column would run out of the card and one would have to scroll sideways. */
 table.table-dense th,
 table.table-dense th.num { white-space: normal; vertical-align: bottom; line-height: 1.25; }
 table.table-dense th,
 table.table-dense td { padding-left: 6px; padding-right: 6px; }
 
-/* A table that follows its card's width, not the window's (Seerr "Kdo žádá"). A card
+/* A table that follows its card's width, not the window's (Seerr "Who requests"). A card
    of half the width is narrow even on a wide monitor (a 1280 px window = a 450 px card)
    and wide again once folded into one column - @media would say nothing here.
    The wrapper is a container: when it is narrower than 520 px, the `wide-wrapper-only` columns
@@ -1812,7 +1836,7 @@ table.compare .delta {
         border-bottom: none;
     }
 
-    /* The value on the right, the label on the left - it reads as a row "Období A … 753 h". */
+    /* The value on the right, the label on the left - it reads as a row "Period A … 753 h". */
     table.compare td:not(:first-child) {
         display: flex;
         justify-content: space-between;
@@ -1895,7 +1919,7 @@ details.paths pre {
 /* Badges on a playback card.
 
    The difference from badges elsewhere in the app: here five values meet on one
-   row that do NOT have the same weight. "Přepočítává se" is the server's state
+   row that do NOT have the same weight. "being re-encoded" is the server's state
    and is worth a look; "H264" is just a fact about the file. When they looked the same
    (a grey pill + a coloured dot), a person had to read them all to
    find the one that matters.
@@ -1967,7 +1991,8 @@ details.paths pre {
 .flash .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
 .flash.success .dot { background: var(--good); }
 .flash.error   .dot { background: var(--critical); }
-.flash.warning .dot { background: var(--warning); }
+.flash.warning .dot,
+.flash.expired .dot { background: var(--warning); }
 .flash.info    .dot { background: var(--series-1); }
 
 /* --------------------------------------------------------------------- */
@@ -2104,7 +2129,7 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 input[type="checkbox"]:checked::before,
 input[type="radio"]:checked::before { transform: scale(1); }
 
-/* Half-ticked - "Vybrat vše" when only some are chosen. A horizontal dash
+/* Half-ticked - "Select all" when only some are chosen. A horizontal dash
    instead of the tick. Only the script sets the state (indeterminate),
    it is not sent with the form in any way. */
 input[type="checkbox"]:indeterminate {
@@ -2164,7 +2189,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .radio-card:hover { border-color: var(--axis); }
 .radio-card input { margin-top: 3px; }
 /* The name on a line of its own. As an inline element it merged with the description into one
-   continuous sentence ("Používat connection pool Drží pár spojení...") and longer
+   continuous sentence ("Use a connection pool Keeps a few connections open...") and longer
    descriptions became unreadable. */
 .radio-card .title { display: block; font-weight: 620; font-size: 14px; }
 .radio-card .desc {
@@ -2300,7 +2325,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 /* A group's heading inside a long settings section.
 
    A card with ten fields in a row looks like one setting. Whoever does not read
-   all the text does not see that "Vzhled" and "Čas v grafech" are unrelated.
+   all the text does not see that "Appearance" and "Time in charts" are unrelated.
    A line above the heading divides it into parts the eye can skim.
 
    The first group in a card has no line - the card's heading is above it. */
@@ -2391,7 +2416,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 
 .dialog form { margin-top: 4px; }
 
-/* The offer of a fallback ("Nefunguje import přes API?").
+/* The offer of a fallback ("API import not working?").
 
    It has to stand out from the notes around it. In the notes' grey it merged with the surrounding
    text and looked like another explanation - yet it is the only
@@ -2435,7 +2460,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .log-controls select { width: auto; }
 
 /* On a phone a picker as wide as its longest option
-   ("err.log – chybový výstup (supervisord) (1.2 KB)") would climb off the screen:
+   ("err.log – error output (supervisord) (1.2 KB)") would climb off the screen:
    a label in a flex does not shrink below the width of its content. Here it takes
    at most the whole row and the picker adapts - the option's text is shortened,
    in the opened list it is whole. */
@@ -2489,8 +2514,11 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 /* Narrower screens                                                       */
 /* --------------------------------------------------------------------- */
 
-/* The menu button. Not on the desktop - there the whole list is always visible. */
-.menu-button { display: none; }
+/* The menu button and its tick box. Not on the desktop - there the whole list is always visible
+   (and `display: none` keeps the tick box out of Tab there). `input[type="checkbox"]` in the selector
+   to outweigh the look of the app's tick boxes. */
+.menu-button,
+input[type="checkbox"].menu-toggle { display: none; }
 
 .menu-bars {
     display: inline-flex;
@@ -2547,6 +2575,19 @@ details.fallback[open] > summary { margin-bottom: 4px; }
         font-weight: 600;
         cursor: pointer;
         user-select: none;
+    }
+
+    /* The tick box is not seen, but Tab reaches it and Space opens the menu - with `hidden` the
+       keyboard skipped the menu, and with it every page, signing out and the update. The ring
+       goes onto the button (the same as with the file picker). */
+    input[type="checkbox"].menu-toggle {
+        display: block;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+        opacity: 0;
+        pointer-events: none;
     }
 
     .menu-toggle:focus-visible + .menu-button {
@@ -2844,10 +2885,12 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    --------------------------------------------------------------------------- */
 .modal {
     width: min(520px, calc(100vw - 32px));
-    /* The browser gives a <dialog> `overflow: auto` by default, so it clips
-       anything that overflows (the calendar's suggester). Long content
-       handles its scrolling itself inside `.modal-body`, we do not need it here. */
-    overflow: visible;
+    /* A window taller than the screen (the update window with every skipped release, a long form on a small
+       phone, the history filter on a phone held sideways) scrolls as a whole - otherwise its bottom part with
+       the buttons overflowed off the screen, out of reach (the user, 23. 11. 2026). The calendar's suggester
+       is not clipped by it: it is `position: fixed` (see .calendar). The windows that scroll inside themselves
+       (`.modal-scrolling`, `.modal-layout`, later in this file) set their own `overflow: hidden`. */
+    overflow-y: auto;
     padding: 22px 24px 24px;
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -2978,8 +3021,11 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     border: 1px solid var(--border);
 }
 
-/* The cursor hints that the map can be moved. */
+/* The cursor hints that the map can be moved. A finger: in the click mode a map that is not zoomed in
+   leaves swipes up and down (and pinching) to the page - whoever scrolled past it on a phone got stuck
+   on it; sideways it still pans. Zoomed in, or in the wheel mode, the map takes every gesture. */
 .map { cursor: grab; touch-action: none; }
+.map[data-zoom="click"]:not(.is-zoomed) { touch-action: pan-y pinch-zoom; }
 .map:active { cursor: grabbing; }
 .map.is-zoomed { cursor: grabbing; }
 
@@ -3005,12 +3051,12 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 /* The suggester for a typed date.
 
    It is drawn into the field's parent, not into <body>: a window (<dialog>) is in the top
-   layer and anything attached to body would hide under it. */
+   layer and anything attached to body would hide under it. `position: fixed`, placed by the script
+   under the field (above it when there is no room below): a window that scrolls does not clip it
+   then, and on a small screen it stays on the screen. */
 .calendar {
-    position: absolute;
+    position: fixed;
     z-index: 30;
-    top: calc(100% + 6px);
-    left: 0;
     width: 268px;
     background: var(--surface-1);
     border: 1px solid var(--border);
@@ -3330,11 +3376,11 @@ details.fallback[open] > summary { margin-bottom: 4px; }
    and at the width of a normal window it would become one long column. */
 .modal-wide { width: min(760px, calc(100vw - 32px)); }
 
-/* The keys table: "Typ a práva" is a short list ("Root · Knihovna, …").
+/* The keys table: "Type and rights" is a short list ("Root · Library, …").
    Without a lower bound the table squeezes it to a word per line. */
 .key-type { min-width: 190px; }
 
-/* The "Jak se to používá" window of the API: filter examples and the fields of addresses.
+/* The "How to use it" window of the API: filter examples and the fields of addresses.
    An address with a filter is long and has no spaces ("path[starts_with]=/media/...")
    - on a phone it would be clipped, so it breaks anywhere and the label stands
    under it, not glued after it. */
@@ -3361,8 +3407,8 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .modal-body .session { break-inside: avoid; }
 
 /* A window whose content can be longer than the screen (an account's permissions: the tree
-   of areas with descriptions). `.modal` has `overflow: visible` for the suggesters,
-   so without this the content flowed out under the window's bottom edge. The window's height is
+   of areas with descriptions). Without this the whole window would scroll, its foot with the
+   button too. The window's height is
    watched by the browser itself (a modal <dialog> does not outgrow the screen); inside it splits
    into a head, scrollable content and a foot with a button that stays visible.
    `display: flex` only on an open window - see .modal-layout. */
@@ -3414,11 +3460,11 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 [hidden] { display: none !important; }
 
 
-/* The "zobrazit všech {n}" button stands where the first stream
+/* The "show all {n}" button stands where the first stream
    would otherwise be - that is why it is as tall as a stream's tile, not as a normal
    button. The card thus keeps its height regardless of how many are
    playing right now. */
-/* "Přehrávání jsou skrytá, je jich hodně" is not the page's main action - it is
+/* "Playbacks are hidden because there are many" is not the page's main action - it is
    an explanation of why something is not here, and an offer to show it. A full coloured surface
    across the full width made it the most prominent element on the page, although it is
    a stand-in for content that did not fit here.
@@ -3462,7 +3508,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .session-more .session-more-note { color: var(--accent); font-weight: 600; }
 
 
-/* The second line in the "Přehrávání jsou skrytá, je jich hodně" button: it adds
+/* The second line in the "Playbacks are hidden because there are many" button: it adds
    to the reason, it is not information of its own, so smaller and less prominent. */
 .session-more-note {
     font-size: 13px;
@@ -3654,7 +3700,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 [data-skin="classic"] .sparkline .chart-hit circle,
 [data-skin="classic"] .chart .chart-hit circle { filter: none; }
 
-/* The "Přehrávání jsou skrytá, je jich hodně" button was full colour. */
+/* The "Playbacks are hidden because there are many" button was full colour. */
 [data-skin="classic"] .session-more {
     background: var(--series-1);
     border: 1px solid var(--series-1);
@@ -3688,11 +3734,11 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 /* The spacing is made only by `gap`, the same as with `.grid-2` on the other
    pages. A card inside a section, however, carries its own 18 px bottom margin,
    so without this the gap was double compared with Languages or Network. */
-.dash-card > *:last-child { margin-bottom: 0; }
-/* A card with a live wrapper (_card.html: "Právě se hraje", "Nedávno přidané",
+.dash-card > *:last-child, .dash-card > .card-slot > :last-child { margin-bottom: 0; }
+/* A card with a live wrapper (_card.html: "Now playing", "Recently added",
    "Sledovanost po dnech") is not a direct child of the cell - otherwise the margin
    would pass through the wrapper and the gap was double again. */
-.dash-card > .card-wrapper > :last-child { margin-bottom: 0; }
+.dash-card > .card-slot > .card-wrapper > :last-child { margin-bottom: 0; }
 
 @media (min-width: 900px) {
     .dash-board {
@@ -3706,7 +3752,7 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     .dash-card.dash-full    { grid-column: span 6; }
 }
 
-/* The label above an app card's row of tiles ("Sonarr · Čísla teď"). A row
+/* The label above an app card's row of tiles ("Sonarr · Numbers right now"). A row
    of tiles has no heading of its own, and on the overview tiles of several
    apps stand side by side - without the label one could not tell whose numbers
    they are. On the app's page it is not drawn (there the section's heading is
@@ -3720,12 +3766,12 @@ details.fallback[open] > summary { margin-bottom: 4px; }
     color: var(--text-muted);
 }
 
-/* A card that starts with a section heading (Seerr "Čeká na vyřízení"): on
+/* A card that starts with a section heading (Seerr "Waiting for approval"): on
    its page the heading keeps a distance from what is above it, in a dashboard cell
    that would be an empty place above the card. */
-.dash-card > .section-head:first-child { margin-top: 0; }
+.dash-card > .card-slot > .section-head:first-child { margin-top: 0; }
 
-/* The stand-in poster (macro poster in _macros.html): a symbol and "Plakát chybí"
+/* The stand-in poster (macro poster in _macros.html): a symbol and "No poster"
    over the frame's coloured surface. It is always ready in the frame; it shows
    only when the frame gets `no-image` - straight from the template (the title
    has no poster), or from the script when the image fails to load
@@ -3775,14 +3821,14 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .card-head button.card-note:hover { color: var(--text-primary); }
 
 /* A row with additional information under a form in Settings
-   (Seerr: "Plakáty žádostí") - separated by a line like the buttons above it. */
+   (Seerr: "Request posters") - separated by a line like the buttons above it. */
 .settings-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .settings-row .card-note { line-height: 1.6; }
 
 /* A hint under a card with posters (admins only): why some are missing. */
 .posters-hint { margin: 10px 0 0; }
 
-/* A list of messages from an app (the app warnings card). */
+/* A short list inside a card: the reasons for transcoding (the music and books play-method cards). */
 .flash-list { margin: 0; padding-left: 18px; line-height: 1.7; }
 
 /* An album cover (the Music page): square, not portrait like a film poster -
@@ -3877,6 +3923,9 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 
 .dash-tile {
     display: flex;
+    /* A narrow tile (a third, a phone) puts its buttons under the name - and keeps the two together. */
+    flex-wrap: wrap;
+    align-content: center;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
@@ -3898,7 +3947,16 @@ details.fallback[open] > summary { margin-bottom: 4px; }
 .dash-tile.dash-unavailable .dash-tile-name { opacity: 0.55; }
 
 .dash-tile-name { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
-.dash-tile-tools { display: flex; gap: 5px; flex: none; }
+/* The buttons wrap too, inside the tile: on a phone a third of the grid is narrower than the four of them. */
+.dash-tile-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+}
 .dash-tile-tools .btn { padding: 2px 8px; font-size: 12px; cursor: pointer; }
 .dash-width { min-width: 30px; font-variant-numeric: tabular-nums; }
 
@@ -4163,7 +4221,7 @@ table.forget-table form { display: inline; }
 }
 
 /* Deleting from the archive: the whole row is the tick box's label, so one can
-   click anywhere. "Vybrat vše" is separated by a line above the list. */
+   click anywhere. "Select all" is separated by a line above the list. */
 .delete-all {
     display: flex;
     gap: 12px;

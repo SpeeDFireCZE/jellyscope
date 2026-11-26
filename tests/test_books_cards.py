@@ -80,9 +80,9 @@ check({k.key for k in cards_books.CARDS if k.area == "books_who"} == {"books_rea
 LIBRARY_CARDS = {"library", "formats", "years", "new", "library_genres", "largest", "unread"}
 check({k.key for k in cards_books.CARDS if not k.uses_period} == {f"books_{j}" for j in LIBRARY_CARDS},
       "the library's cards have no period (what nobody reads counts the whole history)")
-check(all(k in cards.ALL_CARDS for k in cards_books.CARDS) and len(cards.ALL_CARDS) == 206
+check(all(k in cards.ALL_CARDS for k in cards_books.CARDS) and len(cards.ALL_CARDS) == 211
       and list(cards.ALL_CARDS[-17:]) == list(cards_books.CARDS) and list(cards.ALL_CARDS[-37:-17]) == list(cards_music.CARDS),
-      f"at the end of the registry, after Music; there are 206 cards ({len(cards.ALL_CARDS)})")
+      f"at the end of the registry, after Music; there are 211 cards ({len(cards.ALL_CARDS)})")
 WIDTHS = {"new": "full", "numbers": "full", "by_day": "full", "readers": "half", "most_read": "half", "method": "half",
           "clients": "half", "when": "full", "works": "full", "authors": "half", "genres": "half", "unread": "full",
           "library": "full", "formats": "third", "years": "third", "library_genres": "third", "largest": "full"}

@@ -21,9 +21,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import pathlib
 import re
+import signal
 import sys
+import sysconfig
 import tempfile
 from datetime import datetime, timedelta, UTC
 from typing import Any
@@ -291,6 +294,14 @@ def why_no_update() -> str:
     if not (ROOT / ".git").is_dir():
         return ("Updating from the browser only works where the app came "
                 "from git. Otherwise deploy/update.sh is the way.")
+
+    # An update writes the code (git) and the packages (pip). The systemd service of deploy/ may write only
+    # into data/ (ProtectSystem=strict) - there git could not even fetch, and every click ended in "try again
+    # in a moment" with the real cause nowhere in sight.
+    packages = pathlib.Path(sysconfig.get_path("purelib"))
+    if not all(os.access(folder, os.W_OK) for folder in (ROOT, ROOT / ".git", packages)):
+        return ("The app may not write into its own folder here (a service allowed to write only into data/, "
+                "say), so it cannot update itself. Update it with deploy/update.sh.")
     return ""
 
 
@@ -414,13 +425,25 @@ async def update() -> dict[str, Any]:
     if failed:
         return failed
 
+    # The way back, should the packages fail after the download (see _put_back).
+    running = (await _git("rev-parse", "HEAD"))["output"].strip()
+    if not re.fullmatch(r"[0-9a-f]{7,64}", running):
+        return unavailable
+
     pull = await _git("merge", "--ff-only", verified)
     if pull["code"] != 0:
         return {"status": "error", "message": pull["output"][-400:]}
 
-    pip = await _pip("-r", str(ROOT / "requirements.txt"))
+    pip = await _pip("-r", str(ROOT / "requirements.txt"), limit=PIP_TIMEOUT_SECONDS)
     if pip["code"] != 0:
-        return {"status": "error", "message": pip["output"][-400:]}
+        return await _put_back(running, pip["output"])
+    # The PostgreSQL driver is not in requirements.txt (a platform without its packages must not fail every
+    # update). Where it is installed, it goes to the version of requirements-postgres.txt, as with update.sh - or
+    # it would stay at the one of the day of the installation for good. A failure leaves the installed one working.
+    if db.psycopg_available():
+        driver = await _pip("-r", str(ROOT / "requirements-postgres.txt"), limit=PIP_TIMEOUT_SECONDS)
+        if driver["code"] != 0:
+            log.warning("the PostgreSQL driver could not be updated, the installed one keeps working")
 
     log.info("update downloaded: %s", pull["output"].strip().splitlines()[-1:])
     # What was just downloaded is no longer "new". Without this the message
@@ -428,6 +451,25 @@ async def update() -> dict[str, Any]:
     # they are in the application already.
     db.set_setting(NEW_TRANSLATIONS_KEY, "")
     return {"status": "ok", "output": pull["output"]}
+
+
+async def _put_back(running: str, output: str) -> dict[str, Any]:
+    """The packages failed after the download: the code goes back to the commit that runs.
+
+    Left in place, the new code would start at the next restart (for any reason) with the old packages and
+    could fail at import, while the old one goes on running from memory until then.
+    """
+    said = output.strip()[-400:]
+    if (await _git("reset", "--keep", running))["code"] == 0:
+        return {"status": "error",
+                "message": "The packages of the new version could not be installed, so the previous version "
+                           "was put back and keeps running. What pip says: {output}",
+                "parameters": {"output": said}}
+    return {"status": "error",
+            "message": "The packages of the new version could not be installed, and the previous version could "
+                       "not be put back. Before the next restart run in the app folder: git reset --keep {commit} "
+                       "- What pip says: {output}",
+            "parameters": {"output": said, "commit": running}}
 
 
 def _python_error(required: str) -> dict[str, Any]:
@@ -459,7 +501,8 @@ async def _package_check(verified: str) -> dict[str, Any] | None:
 
     When it cannot be checked (an old pip without --dry-run), nothing is held
     up - the update runs as before and pip reports a possible error itself.
-    Without a change of `requirements.txt` (only translations, say) nothing is
+    Without a change of `requirements.txt` or `constraints.txt` (the versions of
+    what the packages pull in; only translations changed, say) nothing is
     tried - the packages are the same ones that already run.
 
     First the Python minimum from the new version's `deploy/python-minimum`:
@@ -471,7 +514,7 @@ async def _package_check(verified: str) -> dict[str, Any] | None:
     if re.fullmatch(r"3\.[0-9]{1,2}", required) and tuple(
             int(x) for x in required.split(".")) > sys.version_info[:2]:
         return _python_error(required)
-    if (await _git("diff", "--quiet", "HEAD", verified, "--", "requirements.txt"))["code"] == 0:
+    if (await _git("diff", "--quiet", "HEAD", verified, "--", "requirements.txt", "constraints.txt"))["code"] == 0:
         return None
     new = await _git_content("show", f"{verified}:requirements.txt")
     if new["code"] != 0:
@@ -499,7 +542,7 @@ async def _package_check(verified: str) -> dict[str, Any] | None:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(embedded["output"], encoding="utf-8")
                 queue.append(embedded["output"])
-        trial = await _pip("--dry-run", "-r", str(root / "requirements.txt"))
+        trial = await _pip("--dry-run", "-r", str(root / "requirements.txt"), limit=PIP_TIMEOUT_SECONDS)
     output = trial["output"]
     if trial["code"] == 0 or "no such option: --dry-run" in output:
         return None
@@ -544,8 +587,43 @@ async def _incoming_beyond_translations(verified: str) -> list[str] | None:
             if line.strip() and not line.strip().startswith(TRANSLATIONS_FOLDER)]
 
 
+# How long one git command may take (a fetch from a GitHub that does not answer would otherwise hold the
+# administrator's request for good) and one pip install (downloading, maybe building the packages).
+GIT_TIMEOUT_SECONDS = 120
+PIP_TIMEOUT_SECONDS = 1800
+
+
 async def _git(*args: str) -> dict[str, Any]:
     return await _run("git", "-C", str(ROOT), *args)
+
+
+def _environment() -> dict[str, str]:
+    """The application's environment, with git never asking for a password: nobody is at a terminal to type it."""
+    return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+
+async def _finish(process: asyncio.subprocess.Process, limit: float) -> bytes | None:
+    """The command's stdout, waited for at most `limit` seconds. None = it took longer and was killed.
+
+    Killed with what it started (git's helper for the network): left running, that one would keep the output
+    open and the wait would not end. The commands run in a session of their own for that (start_new_session).
+    """
+    try:
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=limit)
+    except TimeoutError:
+        try:
+            if hasattr(os, "killpg"):
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
+        try:
+            await asyncio.wait_for(process.wait(), timeout=10)
+        except TimeoutError:
+            pass
+        return None
+    return output
 
 
 async def _git_content(*args: str) -> dict[str, Any]:
@@ -560,25 +638,39 @@ async def _git_content(*args: str) -> dict[str, Any]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
         cwd=str(ROOT),
+        env=_environment(),
+        start_new_session=True,
     )
-    output, _ = await process.communicate()
+    output = await _finish(process, GIT_TIMEOUT_SECONDS)
+    if output is None:
+        return {"code": process.returncode or -1, "output": ""}
     return {"code": process.returncode, "output": output.decode("utf-8", "replace")}
 
 
-async def _pip(*args: str) -> dict[str, Any]:
+async def _pip(*args: str, limit: float | None = None) -> dict[str, Any]:
     """`pip install` with the Python the application runs on - one place for
     the dry run and for the real installation, so they check the same."""
-    return await _run(sys.executable, "-m", "pip", "install", "--quiet", *args)
+    return await _run(sys.executable, "-m", "pip", "install", "--quiet", *args, limit=limit)
 
 
-async def _run(*command: str) -> dict[str, Any]:
-    """Runs a command and returns the exit code and the output together."""
+async def _run(*command: str, limit: float | None = None) -> dict[str, Any]:
+    """Runs a command and returns the exit code and the output together.
+
+    At most `limit` seconds (GIT_TIMEOUT_SECONDS when not given); a command that takes longer is killed and
+    ends as a failure.
+    """
+    wait = GIT_TIMEOUT_SECONDS if limit is None else limit
     process = await asyncio.create_subprocess_exec(
         *command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         cwd=str(ROOT),
+        env=_environment(),
+        start_new_session=True,
     )
-    output, _ = await process.communicate()
+    output = await _finish(process, wait)
+    if output is None:
+        return {"code": process.returncode or -1,
+                "output": f"{pathlib.Path(command[0]).name} did not finish within {wait:g} s and was stopped."}
     return {"code": process.returncode,
             "output": output.decode("utf-8", "replace")}

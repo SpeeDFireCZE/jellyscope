@@ -70,6 +70,19 @@ def store_error(error: BaseException | i18n.Message) -> None:
     db.set_setting(ERROR_VALUES_KEY, values or "")
 
 
+async def _store_error_quietly(error: BaseException | i18n.Message) -> None:
+    """store_error() that cannot end the collector's loop.
+
+    The database that failed the poll (locked by a VACUUM, a PostgreSQL restart, a full disk) usually fails
+    this write too. The error is in the log already; the loop waits and tries again. In a thread: a locked
+    database makes every write wait for its timeout, and the web would stand still meanwhile.
+    """
+    try:
+        await asyncio.to_thread(store_error, error)
+    except Exception:  # noqa: BLE001 - whatever fails here, the collector runs on
+        log.exception("collector: the error could not be stored")
+
+
 def clear_error() -> None:
     db.set_setting(ERROR_KEY, "")
     db.set_setting(ERROR_VALUES_KEY, "")
@@ -685,20 +698,33 @@ def _store_sessions(sessions: list[dict[str, Any]], max_gap_seconds: int) -> dic
     return {"active": len(active_keys), "started": started, "ended": ended}
 
 
+def _close_orphans_quietly() -> None:
+    """close_orphans() that never raises: it is a database write outside the loop's try.
+
+    A database locked at the start (a restore or an update just before the restart) ended the collector
+    before its first poll and nothing was collected until the next restart; at the shutdown its error
+    replaced the cancellation. The left-open playbacks are closed by the first poll that sees them gone.
+    """
+    try:
+        close_orphans()
+    except Exception:  # noqa: BLE001 - the collector must start and stop whatever the database does
+        log.exception("collector: closing the playbacks left open failed")
+
+
 async def run_forever() -> None:
     """An endless loop running in the background for the whole time the application runs.
 
     It must never fall. When Jellyfin drops out, we write the error, wait and
     try again - the application as a whole runs on.
     """
-    close_orphans()
+    _close_orphans_quietly()
 
     backoff = 0  # how many seconds extra to wait after an error
 
     while True:
-        interval = db.get_int_setting("poll_interval", minimum=2, maximum=300, fallback=10)
-
         try:
+            # Inside the try: a database that cannot be read right now is an error like any other.
+            interval = db.get_int_setting("poll_interval", minimum=2, maximum=300, fallback=10)
             async with JellyfinClient(*db.jellyfin_connection(),
                                       timeout=QUICK_TIMEOUT) as client:
                 # Within one connection we run more snapshots - opening the
@@ -721,14 +747,14 @@ async def run_forever() -> None:
 
         except asyncio.CancelledError:
             # The application shuts down - we clean up after ourselves and end.
-            close_orphans()
+            _close_orphans_quietly()
             raise
         except JellyfinError as exc:
-            store_error(exc)
             log.warning("collector: %s", exc)
+            await _store_error_quietly(exc)
         except Exception as exc:  # noqa: BLE001 - the loop must not die of anything
-            store_error(i18n.Message("Unexpected error: {error}", error=exc))
             log.exception("collector: unexpected error")
+            await _store_error_quietly(i18n.Message("Unexpected error: {error}", error=exc))
 
         # After an error we wait gradually longer (2, 4, 8 ... max 60 s). This is
         # called exponential backoff and it is polite behaviour towards a server

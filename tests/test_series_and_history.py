@@ -196,7 +196,7 @@ with db.connect() as conn:
 keys = {stats.title_key({"item_name": name})[0] for name in (
     "Blue - s03e03 - Opičí dráha", "Blue - s01e17 - Calypso",
     "Blue - s01e37 - Dobrodružství")}
-check(keys == {"nazev:blue"}, f"three episodes give one key ({keys})")
+check(keys == {"name:blue"}, f"three episodes give one key ({keys})")
 check(stats.title_key({"item_name": "Blue - s01e17 - Calypso"})[1:] == ("Blue", True),
       "with the label 'Blue' and marked as a series")
 
@@ -272,7 +272,7 @@ check("Pilot" not in by_label,
       "two series have 'Pilot', so nothing is guessed and it does not belong among the titles")
 pilot_key = stats.title_key({"item_name": "Pilot"},
                             stats._episodes_by_name())[0]
-check(pilot_key.startswith("polozka:"),
+check(pilot_key.startswith("item:"),
       f"and it is filed under no series ({pilot_key})")
 
 # The watched time is lost nowhere - only this chart does not show it.
@@ -320,6 +320,17 @@ check(importers.split_episode_title("Nadace - s02e10 - Mýty o stvoření")["epi
 check(importers.split_episode_title("48. díl") is None,
       "a bare episode name cannot be taken apart - and nothing is made up")
 check(importers.split_episode_title("Mýtus") is None, "nor a movie's name")
+# A long run of spaces in a name made both patterns try every length of the series against the whole run
+# (16 000 spaces took 1-2 s per name); the series ends in a visible character, so it is read in linear time.
+import time  # noqa: E402
+
+spaced = "a" + " " * 16000 + "x"
+started = time.perf_counter()
+parsed = (importers.split_episode_title(spaced), stats.series_from_name(spaced),
+          importers.split_episode_title("Blue   -  s01e17  -  Calypso"), stats.series_from_name("Blue \t– S03E03 - x"))
+took = time.perf_counter() - started
+check(parsed == (None, None, {"series": "Blue", "season": 1, "episode": 17, "name": "Calypso"}, "Blue") and took < 0.3,
+      f"a name with a long run of spaces is read in linear time, the parts stay the same ({took:.2f} s)")
 
 with db.connect() as conn:
     # The library: the episodes are named the way Jellyfin named them -
@@ -375,8 +386,8 @@ overview = stats.top_items(365, limit=40)
 labels = {r["label"] for r in overview}
 check("48. díl" not in labels, "an unfileable leftover is not shown")
 check(all(r["detail_url"] for r in overview), "what stayed can be clicked through")
-check(overview[0].get("_skryto", 0) >= 1,
-      f"and it shows how many were hidden ({overview[0].get('_skryto')})")
+check(overview[0].get("_hidden", 0) >= 1,
+      f"and it shows how many were hidden ({overview[0].get('_hidden')})")
 
 # The archive must NOT be hidden. A title that was in the library and is no
 # longer in Jellyfin is a valid statistic - not waste.
@@ -1093,6 +1104,54 @@ with db.connect() as conn:
 importers.unify_names()
 check(db.query_value("SELECT item_name FROM playback WHERE session_key = 'osirely'")
       == "Něco dávného", "for a record without an item the name is not erased")
+
+
+print()
+print("--- started and abandoned: one row per title ---")
+# The card grouped by (name, runtime): three episodes of one series tried once each
+# came out as two rows both labelled "Show" (the two of 50 minutes merged only
+# because their length was equal). One row per title now - a series by its id,
+# a movie by its record (copies of one movie in one library are one record).
+TICKS_PER_MINUTE = 600_000_000
+with db.connect() as conn:
+    conn.execute("DELETE FROM items")
+    conn.execute("DELETE FROM playback")
+    conn.execute("INSERT INTO libraries (id, name, synced_at) VALUES ('lab','Vše',?)"
+                 " ON CONFLICT (id) DO NOTHING", (now,))
+    abandoned_items = [
+        # id, name, type, series id, series name, minutes, main id
+        ("ab-e1", "Ep 1", "Episode", "ser-show", "Show", 50, None),
+        ("ab-e2", "Ep 2", "Episode", "ser-show", "Show", 47, None),
+        ("ab-e3", "Ep 3", "Episode", "ser-show", "Show", 50, None),
+        ("ab-o1", "Pilot", "Episode", "ser-other", "Other", 50, None),
+        ("ab-m1", "Film", "Movie", None, None, 120, None),
+        ("ab-m2", "Film", "Movie", None, None, 121, "ab-m1"),
+    ]
+    for ident, name, kind, series_id, series_name, minutes, main_id in abandoned_items:
+        conn.execute(
+            """INSERT INTO items (id, name, type, library_id, series_id, series_name,
+                                  runtime_ticks, main_id, is_missing, synced_at)
+               VALUES (?,?,?,'lab',?,?,?,?,0,?)""",
+            (ident, name, kind, series_id, series_name, minutes * TICKS_PER_MINUTE, main_id, now))
+        conn.execute(
+            """INSERT INTO playback (session_key, user_id, item_id, item_name, item_type,
+                                     series_name, started_at, last_seen_at,
+                                     watched_seconds, position_ticks, is_active)
+               VALUES (?,'u1',?,?,?,?,?,?,150,?,0)""",
+            (f"ab-{ident}", ident, name, kind, series_name, now, now,
+             int(minutes * TICKS_PER_MINUTE * 0.05)))
+
+abandoned = insights.never_finished(30)
+labels = [r["label"] for r in abandoned]
+check(sorted(labels) == ["Film", "Other", "Show"],
+      f"one row per title, no label twice ({labels})")
+show = next((r for r in abandoned if r["label"] == "Show"), {})
+check(show.get("attempts") == 3,
+      f"all three episodes of the series are in its row ({show.get('attempts')})")
+film = next((r for r in abandoned if r["label"] == "Film"), {})
+check(film.get("attempts") == 2, f"both copies of the movie are one title ({film.get('attempts')})")
+check(round(float(show.get("runtime_minutes") or 0)) == 50,
+      f"the runtime of a series is its longest episode ({show.get('runtime_minutes')})")
 
 
 print()

@@ -2,12 +2,14 @@
 
 A part of the web package (see jellyscope/web/__init__.py). The watching overview, Comparison,
 Insights and the chart moved to the section web/video/ on 16. 11. 2026;
-`_card_choices` stays here, because the custom dashboards use it too."""
+`_card_choices` stays here, because the custom dashboards use it too, and so does `_registry_page`, the
+context of a page drawn from the card registry, and /partials/cards, any of its cards drawn again."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import access, cards, stats
@@ -51,11 +53,70 @@ def _card_choices(request: Request, kind: str | None = None,
             "growth_disk": _growth_disk(request, request.query_params.get("growth_disk"))}
 
 
+def _registry_page(request: Request, account: dict[str, Any] | None, keys: Sequence[str], period: Any,
+                   computed: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """What a page drawn from the card registry hands its template: its cards, their keys and their data.
+
+    `keys` are the page's cards in its order; the template places them by show_card(). Only the cards the
+    account may see and that are available are computed and drawn (cards.allowed) - in ONE data_for, so what
+    several cards share is computed once. The Overview, the *Arr and Seerr pages go the same way.
+
+    `computed` are the data the page has already computed for some of its cards, by the card's key (a section
+    of the Library reads its library once for its numbers and its cards): drawn the same, not computed again.
+    """
+    computed = computed or {}
+    allowed = cards.allowed([cards.BY_KEY[key] for key in keys], account)
+    data = cards.data_for([card for card in allowed if card.key not in computed], period, _card_choices(request), account)
+    data.update({card.key: computed[card.key] for card in allowed if card.key in computed})
+    return {"cards": {card.key: card for card in allowed}, "page_card_keys": list(keys), **data}
+
+
+# The most keys one request may ask for: every card of the registry once - a custom dashboard can hold all of
+# them, and no page holds more. A longer list can come only from a broken client and is refused unread.
+MAX_CARD_KEYS = len(cards.ALL_CARDS)
+
+
+@router.get("/partials/cards", response_class=HTMLResponse)
+def cards_partial(request: Request, keys: str = "", in_dashboard: bool = False,
+                  days: int | None = None, since: str | None = None, until: str | None = None,
+                  account: dict[str, Any] = Depends(require_login)):
+    """The asked cards of an open page drawn again - so that the page can refresh its cards by itself.
+
+    `keys` are the cards' keys separated by commas, the period (days / since / until, or a dragged
+    selection), the cards' choices (kind, top_kind, growth_disk) and `in_dashboard` are those of the page
+    that asks; without them the session's apply, as on every page. Every card is drawn by _card.html, in its
+    slot with its key - the browser takes the slots apart by `data-card-key`, in the asked order.
+
+    The rights are those of the account that asks, card by card, as on the page (cards.allowed): a card it
+    may not see or that is not available, an unknown key and a repeated one are simply not in the answer -
+    the same answer as for a key that does not exist, so it does not tell what is there. ONE data_for for
+    the whole list (what cards share is computed once), in a thread: a plain function, FastAPI runs it in
+    its pool, and the live cards need that (cards_base.live).
+
+    The page asks by itself, so it must not change what the session remembers: the period and the choices
+    it reads are put back, and so is a message waiting for the next page (_context takes it out).
+    """
+    asked = [key.strip() for key in keys.split(",") if key.strip()]
+    if len(asked) > MAX_CARD_KEYS:
+        raise HTTPException(status_code=400)
+    known = [cards.BY_KEY[key] for key in dict.fromkeys(asked) if key in cards.BY_KEY]
+    allowed = cards.allowed(known, account)
+    remembered = dict(request.session)
+    try:
+        period = _days(request, days, since, until)
+        data = cards.data_for(allowed, period, _card_choices(request), account)
+        context = _context(request, account, days=period, in_dashboard=in_dashboard, asked_cards=allowed, **data)
+    finally:
+        request.session.clear()
+        request.session.update(remembered)
+    return templates.TemplateResponse(request, "_cards_partial.html", context)
+
+
 @router.get("/partials/recently-added", response_class=HTMLResponse)
 def recently_added_partial(
     request: Request, account: dict[str, Any] = Depends(require_login)
 ):
-    """Only the "Nedávno přidané" strip.
+    """Only the "Recently added" strip.
 
     Until this existed, a person had to refresh the page by hand after a
     synchronisation finished - otherwise a new movie did not show on an Overview
@@ -72,19 +133,27 @@ def recently_added_partial(
 
 @router.get("/partials/network-live", response_class=HTMLResponse)
 def network_live_partial(
-    request: Request, account: dict[str, Any] = Depends(require_login)
+    request: Request,
+    days: int | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    account: dict[str, Any] = Depends(require_login),
 ):
-    """Only the "Právě teče" card of the Network page.
+    """Only the "Flowing right now" card of the Network page.
 
     The same idea as with "now playing": the Network page showed the state
     of the moment it loaded, so whoever left it open saw the past.
     Only this partial is refreshed - were the whole page loaded, it would
     scroll to the top and throw away the address table being read.
     """
-    # The period is taken from the session - the page saved it there when the
-    # person chose it. So the partial need not pass it in the address and it stays
-    # valid after switching the filter without refreshing the page.
-    days = _days(request, None)
+    # The page sends its own period (network.html): the session's is the last one chosen in any tab, and the card
+    # would switch to it at its next refresh. Without the parameters the session's holds, as on every page.
+    # The card asks by itself (every few seconds, on coming back to the tab), so its period must not become
+    # "the last one chosen": what the session remembers is put back.
+    remembered = dict(request.session)
+    days = _days(request, days, since, until)
+    request.session.clear()
+    request.session.update(remembered)
     return templates.TemplateResponse(request, "_network_live.html", _context(
         request, account,
         days=days,
@@ -97,7 +166,7 @@ def network_live_partial(
 def now_playing_partial(
     request: Request, account: dict[str, Any] = Depends(require_login)
 ):
-    """Only the "Právě se hraje" card.
+    """Only the "Now playing" card.
 
     The collector asks Jellyfin every few seconds, but the page did not know -
     it showed the state of the moment it loaded until a person refreshed it by hand.
@@ -108,7 +177,7 @@ def now_playing_partial(
     """
     return templates.TemplateResponse(request, "_now_playing.html", _context(
         request, account,
-        active=stats.active_sessions(),
+        active=access.visible_plays(stats.active_sessions(), account),
     ))
 
 
@@ -211,7 +280,8 @@ def _render_dashboard(request: Request, account: dict[str, Any], period: Any,
         # The period switch makes sense only when at least one card uses
         # it - otherwise it would stand there and do nothing.
         needs_period=any(card.uses_period for card in allowed),
-        # The Insights cards show a few rows and open the rest in a shared window.
+        # The cards with a long table (Insights, *Arr, Seerr, music, books) show a few rows and open the rest in a
+        # shared window.
         needs_table_window=any(card.has_table_window for card in allowed),
         may_edit=can_edit,
         **data,

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter with context %}
+{% from "_macros.html" import period_filter, show_card with context %}
 {% block title %}{{ _("Users") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -18,7 +18,8 @@
     {{ period_filter(period, '/users') }}
 </div>
 
-{% include "_card_users_chart.html" %}
+{# The cards come from the registry (web/users.py, USERS_CARDS), each in its slot. #}
+{{ show_card("users_chart") }}
 
-{% include "_card_users_table.html" %}
+{{ show_card("users_table") }}
 {% endblock %}

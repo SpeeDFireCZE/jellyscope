@@ -52,22 +52,45 @@ RUN if [ "$FFPROBE" = "1" ] || [ "$PGDUMP" = "1" ]; then \
 
 WORKDIR /app
 
-# Dependencies on their own, as the first layer: until requirements.txt
-# changes, the next build does not install them again.
-COPY requirements.txt .
+# Dependencies on their own, as the first layer: until requirements.txt or
+# constraints.txt (the versions of what they pull in) changes, the next
+# build does not install them again.
+COPY requirements.txt constraints.txt requirements-postgres.txt ./
 # pip itself first: the base image tends to carry the pip it was released
 # with, and pip has security fixes of its own (unpacking archives).
 RUN python -m pip install --no-cache-dir --upgrade pip \
  && python -m pip install --no-cache-dir -r requirements.txt
+
+# The PostgreSQL driver (psycopg), at the version of requirements-postgres.txt.
+# It has to be part of the image: installed by hand into a running container
+# it is gone with the next `docker compose up -d --build`, and the app then
+# cannot open the database data/database.json points at. ~20 MB; SQLite
+# does not use it, and
+#
+#     docker compose build --build-arg PSYCOPG=0
+#
+# leaves it out. A platform without its packages builds anyway, SQLite only.
+ARG PSYCOPG=1
+RUN if [ "$PSYCOPG" = "1" ]; then \
+        python -m pip install --no-cache-dir -r requirements-postgres.txt \
+        || echo "Jellyscope: the PostgreSQL driver could not be installed - this image works with SQLite only."; \
+    fi
 
 COPY . .
 
 # The app runs as its own user with a fixed UID - never as root. A fixed
 # number so that the owner of the mounted folder can be set on the host
 # too.
+#
+# The user gets data/ and nothing else. The code - the entrypoint among it,
+# which runs as root at every start - stays root's and nobody else may write
+# it, whatever rights the files had where the image was built: code running
+# as the app could otherwise rewrite the entrypoint and be root at the next
+# start. The app writes only into data/.
 RUN useradd --create-home --uid 10001 jellyscope \
+    && chmod -R go-w /app \
     && mkdir -p /app/data \
-    && chown -R jellyscope:jellyscope /app
+    && chown jellyscope:jellyscope /app/data
 
 # setpriv drops the root privileges in the entrypoint (see below). The
 # Debian base usually has it, but we do not rely on that: a missing tool
@@ -90,9 +113,10 @@ EXPOSE 8097
 
 # A container that runs but does not answer looks just like a healthy one
 # from outside. /setup answers even without signing in, so it suits better
-# than the home page.
+# than the home page. The port is the one the app listens on: PORT from
+# compose (.env), 8097 when it is not set.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/setup', timeout=4)"
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/setup' % os.environ.get('PORT', '8097'), timeout=4)"
 
 # The container starts as root for ONE thing only: to set the owner of the
 # mounted data folder. On the host that folder belongs to whoever created

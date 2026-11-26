@@ -7,9 +7,10 @@
     <div>
         <h1>{{ user.name }}</h1>
         <p class="subtitle">
-            <a href="/users">&larr; {{ _("back to users") }}</a>
+            {# Only for whoever may open the list - a viewer lands here and the list is closed to them by default. #}
+            {% if may_open("/users") %}<a href="/users">&larr; {{ _("back to users") }}</a>
+            &middot;{% endif %}
             {# The same three forms as on the list of users (users.html). #}
-            &middot;
             {% if period.own %}{{ _("in the selected period#alt") }}
             {% elif days == 365 %}{{ _("over the last year") }}
             {% else %}{{ _("over the last {period}").format(period=_(day_labels[days])) }}
@@ -37,6 +38,8 @@
 </div>
 {% endif %}
 
+{# What the person watched: somebody else's only with "...including who watched it" (the route's shows_watched). #}
+{% if shows_watched %}
 <div class="grid-2">
     <div class="card">
         <div class="card-head">
@@ -72,6 +75,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 {% if may_open("/history") %}
 <div class="card">
@@ -85,6 +89,7 @@
 
 {# Genres. A pie is read worse than bars, but the question "what part
    of the whole" is exactly where it pays off - and there are few parts. #}
+{% if shows_watched %}
 <div class="card" style="margin-top:18px">
     <div class="card-head">
         <h2>{{ _("Which genres they watch") }}</h2>
@@ -101,5 +106,6 @@
         </p>
     {% endif %}
 </div>
+{% endif %}
 
 {% endblock %}

@@ -15,10 +15,19 @@
    Coordinates are Web Mercator, the world is a 360 × 360 square (data-world);
    the default view (data-default) leaves out the poles. How far it can zoom
    in is given by data-max. */
-(function () {
+(function start(map) {
     "use strict";
 
-    var map = document.querySelector(".map");
+    /* A map card drawn anew by the page (the cards that refresh by themselves, app.js) is a new
+       element: it starts here again. The page redraws it only while nobody uses the map - see
+       data-busy below - so no zoom or drag is lost with the old one. */
+    if (!start.listening) {
+        start.listening = true;
+        document.addEventListener("card-redrawn", function (event) {
+            var fresh = event.target.querySelector ? event.target.querySelector(".map") : null;
+            if (fresh) { start(fresh); }
+        });
+    }
     if (!map) { return; }
 
     function numbers(text, fallback) {
@@ -92,7 +101,19 @@
             borders.setAttribute("stroke-opacity", strength.toFixed(3));
         }
         map.classList.toggle("is-zoomed", view[2] < initial[2] - 0.5);
+        markUse();
         afterChange.forEach(function (listener) { listener(view, currentZoom()); });
+    }
+
+    /* A map a person has zoomed in or holds is in use: the page does not draw its card anew under
+       them (app.js reads data-busy). Panned at the whole world's size it is not - that is the
+       default view a step aside, and waiting for it to come back would stop the card for good. */
+    function markUse() {
+        if (dragging || view[2] < initial[2] - 0.5) {
+            map.dataset.busy = "1";
+        } else {
+            delete map.dataset.busy;
+        }
     }
 
     /* Keep the view from leaving the world - otherwise a person ends up at an
@@ -149,6 +170,7 @@
     map.addEventListener("pointerdown", function (event) {
         dragging = { x: event.clientX, y: event.clientY,
                   vx: view[0], vy: view[1], moved: false };
+        markUse();
         map.setPointerCapture(event.pointerId);
     });
 
@@ -177,12 +199,26 @@
             zoom(event.altKey || event.button === 2 ? 2 : 0.5, pointUnderMouse(event));
         }
         dragging = null;
+        markUse();
         if (map.hasPointerCapture(event.pointerId)) {
             map.releasePointerCapture(event.pointerId);
         }
     }
     map.addEventListener("pointerup", release);
-    map.addEventListener("pointercancel", release);
+    /* The browser took the gesture over (a swipe that scrolls the page, see touch-action in
+       style.css): no click, so no zoom, and the map goes back to where the gesture found it -
+       the first few pixels of the swipe had already moved it. */
+    map.addEventListener("pointercancel", function (event) {
+        if (!dragging) { return; }
+        view[0] = dragging.vx;
+        view[1] = dragging.vy;
+        draw();
+        dragging = null;
+        markUse();
+        if (map.hasPointerCapture(event.pointerId)) {
+            map.releasePointerCapture(event.pointerId);
+        }
+    });
 
     /* A double click returns the default view - the only way back a person
        guesses without anybody explaining it. */
@@ -407,4 +443,4 @@
     }
 
     draw();
-})();
+})(document.querySelector(".map"));

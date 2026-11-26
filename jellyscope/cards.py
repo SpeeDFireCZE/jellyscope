@@ -37,7 +37,7 @@ from . import (access, cards_bazarr, cards_books, cards_lidarr, cards_music, car
 from .i18n import translate as _t
 # The registry's base (the card class, the memo of one computation, the choices, the account) is
 # in cards_base.py, so that the modules with the apps' cards can use it too.
-from .cards_base import Card, _account, _choices, _memo, _once, choice
+from .cards_base import LIBRARY, PLAYS, Card, _account, _choices, _memo, _once, choice, current_account, current_is_admin
 
 
 def _colours() -> dict[str, Any]:
@@ -49,10 +49,17 @@ def _watched_languages(period: Any) -> Any:
     return langstats.watched_languages(period, _colours())
 
 
+def _language_share(period: Any) -> dict[str, Any]:
+    """Language ratio, and for the main number above it on the Languages page the preferred language - with its
+    choice (the languages of the library) for the administrator only: nobody else gets the form."""
+    return {"watched": _once(_watched_languages, period), "preferred": langstats.preferred_language(),
+            "language_options": langstats.library_language_options() if current_is_admin() else []}
+
+
 def geoip_state() -> dict[str, Any]:
     """What the map needs and whether it has it - for the Network page and the dashboard card.
 
-    The maxminddb library (optional), the GeoLite2 database (downloaded on a
+    The maxminddb library (part of the installation), the GeoLite2 database (downloaded on a
     click), its size and age. And the path to the python the app runs with:
     the guide to installing it then shows a command that can be copied, not
     a general "pip install" that would miss in a virtual environment.
@@ -93,10 +100,12 @@ def growth_data(period: Any, disk: str | None = None) -> dict[str, Any]:
     disk = choice("growth_disk", "all") if disk is None else disk
     chosen = next((d for d in options if d["choice"] == disk), None)
     if chosen:
-        rows = stats.disk_growth_series(period, chosen["key"])
+        # One curve for the chart and the tiles (those count from the day before the period).
+        with stats.disk_growth_memo():
+            rows = stats.disk_growth_series(period, chosen["key"])
+            growth = stats.disk_growth(period, chosen["key"])
         # The disk's series carries the data outside Jellyfin itself (measured days only).
         outside = {r["day"]: r["outside"] for r in rows if r.get("outside") is not None}
-        growth = stats.disk_growth(period, chosen["key"], rows)
     else:
         rows = stats.snapshots(period)
         # The data outside Jellyfin (downloads, backups...) from the disks' snapshots - only
@@ -203,9 +212,10 @@ ALL_CARDS: tuple[Card, ...] = (
     Card("now_playing", "Now playing",
          "Who is watching what right now. The same card as on the Overview.",
          "_now_playing.html",
-         lambda o: {"active": stats.active_sessions(),
+         lambda o: {"active": access.visible_plays(stats.active_sessions(), current_account()),
                     "poll_interval": db.get_int_setting("poll_interval", 5, 300, 10)},
-         uses_period=False,
+         # A state without a period - but of the plays running right now, not of the library.
+         uses_period=False, sources=(PLAYS,),
          area="now_playing", wrapper_id="now-playing", refresh_partial="/partials/now-playing"),
     # By the library's version the page knows that a synchronisation finished
     # meanwhile and new titles came in - see /partials/recently-added.
@@ -260,15 +270,17 @@ ALL_CARDS: tuple[Card, ...] = (
          "_card_heatmap.html",
          lambda o: {"heatmap": stats.hourly_heatmap(o)},
          area="overview"),
+    # It fetches itself again like "Now playing" (/partials/network-live, with the page's period) - on the
+    # Network page, and in a dashboard with Refreshing cards on (_card.html).
     Card("live_traffic", "Flowing right now",
          "Concurrent throughput over time, refreshing on its own.",
          "_network_live.html",
          lambda o: {"now": stats.flow_now(), "live": stats.bandwidth_live(o)},
-         area="network"),
+         area="network", wrapper_id="network-live", refresh_partial="/partials/network-live"),
     Card("peaks_by_day", "Peak by day",
          "The highest concurrent throughput of each day.",
          "_card_peaks_by_day.html",
-         lambda o: {"daily_peaks": stats.bandwidth_daily_peaks(o)},
+         lambda o: {"daily_peaks": stats.bandwidth_daily_peaks(o, _once(stats.network_flows, o))},
          area="network"),
     Card("who_streamed", "Who streamed the most",
          "Data transferred per user.",
@@ -290,7 +302,7 @@ ALL_CARDS: tuple[Card, ...] = (
     Card("language_share", "Language ratio",
          "Which language people watch in on this server.",
          "_card_language_share.html",
-         lambda o: {"watched": _once(_watched_languages, o)}, width="half",
+         _language_share, width="half",
          area="languages"),
     Card("dubbing", "Dubbing or original?",
          "How much is watched dubbed and how much in the original.",
@@ -348,7 +360,7 @@ ALL_CARDS: tuple[Card, ...] = (
          "Files nobody played over the period, and how much space they take.",
          "_card_insights_unused.html",
          lambda o: {"dead": insights.dead_storage(insights.INSIGHT_ROWS, days=o)},
-         has_table_window=True, area="charts"),
+         has_table_window=True, area="charts", sources=(PLAYS, LIBRARY)),
     Card("insight_transcoded", "Most frequently transcoded files",
          "What the server transcodes most often, with codec and resolution.",
          "_card_insights_transcoded.html",
@@ -368,18 +380,18 @@ ALL_CARDS: tuple[Card, ...] = (
          "Often watched titles in low resolution: candidates for a better version.",
          "_card_insights_quality.html",
          lambda o: {"upgrades": insights.upgrade_candidates(o, insights.INSIGHT_ROWS)},
-         width="half", has_table_window=True, area="charts"),
+         width="half", has_table_window=True, area="charts", sources=(PLAYS, LIBRARY)),
     Card("insight_large", "Takes a lot of space, barely watched",
          "Large files that hardly anyone watches.",
          "_card_insights_oversized.html",
          lambda o: {"oversized": insights.oversized_rarely_watched(
               o, insights.INSIGHT_ROWS)},
-         width="half", has_table_window=True, area="charts"),
+         width="half", has_table_window=True, area="charts", sources=(PLAYS, LIBRARY)),
     Card("insight_libraries", "Library utilisation",
          "How much space each library takes against how much of it is watched.",
          "_card_insights_libraries.html",
          lambda o: {"efficiency": insights.storage_efficiency(o)},
-         area="charts"),
+         area="charts", sources=(PLAYS, LIBRARY)),
     Card("insight_duplicates", "Possible duplicates",
          "Titles that are probably in the library more than once. A state, not a period.",
          "_card_insights_duplicates.html",
@@ -411,7 +423,7 @@ ALL_CARDS: tuple[Card, ...] = (
          "_card_missing_stream.html",
          lambda o: {"missing_preferred": langstats.missing_preferred(
               o, _once(langstats.preferred_language))},
-         area="languages"),
+         area="languages", sources=(PLAYS, LIBRARY)),
 
     # Users. Both cards take the same table as the Users page.
     Card("users_chart", "Watch time by user",
@@ -431,7 +443,8 @@ ALL_CARDS: tuple[Card, ...] = (
     Card("network_numbers", "Network figures",
          "Peak, total transferred, transcoded share and average stream rate.",
          "_card_network_numbers.html",
-         lambda o: {"network_summary": stats.bandwidth_summary(o)}, area="network"),
+         lambda o: {"network_summary": stats.bandwidth_summary(o, _once(stats.network_flows, o))},
+         area="network"),
     Card("map", "Map",
          "Where people watch from public addresses: on a map and by country.",
          "_card_map.html",
@@ -538,11 +551,11 @@ def groups(offered: list[Card]) -> list[tuple[tuple[str, ...], list[Card]]]:
     """The cards by groups for the offer in the layout window: [(heading, cards)].
 
     The heading is the card's group (an app: ("Sonarr",)), otherwise its area in
-    the permission tree - for a sub-area the one above it ("Právě se hraje" belongs
+    the permission tree - for a sub-area the one above it ("Now playing" belongs
     under the Overview) - with its menu section, the same rule as everywhere outside the tree
-    (access.Area.heading): ("Filmy a seriály", "Přehled"). The groups go in the order they
+    (access.Area.heading): ("Movies & series", "Overview"). The groups go in the order they
     first appear in the registry, the cards inside in the registry's order. The parts of a
-    heading are Czech sentences (translation keys), or the app's own name; the template
+    heading are English sentences (translation keys), or the app's own name; the template
     translates them.
     """
     groups: dict[tuple[str, ...], list[Card]] = {}
@@ -609,7 +622,7 @@ def check_dashboard_name(text: str) -> str:
 
     Spaces at the edges gone, several spaces in a row as one. The length in
     characters (not bytes), so that it fits in the menu. And it must not be
-    mistaken for pages already in the menu - "Přehled" and "Můj přehled" in no
+    mistaken for pages already in the menu - "Overview" and "My overview" in no
     interface language: whoever switches the language would see two same items.
     """
     clean = " ".join((text or "").split())
@@ -627,7 +640,7 @@ def check_dashboard_name(text: str) -> str:
 
 
 def fill_in_dashboard_name() -> bool:
-    """Existing installations: a dashboard switched on without a name gets "Vlastní přehled".
+    """Existing installations: a dashboard switched on without a name gets "Custom overview".
 
     That is what it was called until now, so nothing changes in the menu. Called
     at start; the second time it does nothing and it never overwrites a name the
@@ -765,13 +778,3 @@ def data_for(layout: list[Card], period: Any,
         _account.reset(account_token)
         _choices.reset(choices_token)
         _memo.reset(token)
-
-
-def area_data(area: str, period: Any) -> dict[str, Any]:
-    """The data of all the cards of one area - for the page the cards come from.
-
-    The page (Insights, Network) does not take them separately: two copies of the
-    same computation drifted apart and the card in a dashboard then showed other
-    numbers than on the page.
-    """
-    return data_for([card for card in ALL_CARDS if card.area == area], period)

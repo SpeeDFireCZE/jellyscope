@@ -113,7 +113,7 @@ def _downloads(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         movie_id, title, tmdb = _title(record)
         download_id = str(record.get("downloadId") or "")
         # Without `downloadId` every record is a download of its own; an unpaired record a title of its own.
-        key = (movie_id if movie_id is not None else ("vydani", order), download_id or ("zaznam", order))
+        key = (movie_id if movie_id is not None else ("release", order), download_id or ("record", order))
         download = by_key.get(key)
         if download is None:
             size = max(0, integer(record.get("size"), 0) or 0)

@@ -10,11 +10,12 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from .. import access, accounts, api, api_query, db, i18n
-from ..jellyfin import JellyfinClient, QUICK_TIMEOUT
+from ..jellyfin import JellyfinClient, JellyfinError, QUICK_TIMEOUT
 from .base import (
     _context,
     _flash,
     _form_number,
+    _hold_new_key,
     _new_key,
     _no_cache,
     account_image_tag,
@@ -93,8 +94,11 @@ async def my_image(request: Request, account: dict[str, Any] = Depends(require_l
         return Response(status_code=304, headers=headers)
     connection = await asyncio.to_thread(db.jellyfin_connection)
     # A short limit: a person at a page waits for it, not a background task.
-    async with JellyfinClient(*connection, timeout=QUICK_TIMEOUT) as client:
-        result = await client.user_image(viewer, tag)
+    try:
+        async with JellyfinClient(*connection, timeout=QUICK_TIMEOUT) as client:
+            result = await client.user_image(viewer, tag)
+    except JellyfinError:
+        result = None   # a stored address or key the client cannot use: the letter, as when Jellyfin does not answer
     if result is None:
         return _no_image()
     content, media_type = result
@@ -136,8 +140,12 @@ def my_account_key(request: Request, name: str = Form(""),
     if not access.may_have_key(account):
         _flash(request, "The admin has not allowed you your own API keys.", "error")
         return RedirectResponse("/account#keys", status_code=303)
-    result = api.create_token(name, account["id"])
-    request.session["new_account_key"] = {"id": result["id"], "token": result["token"]}
+    result = api.create_own_token(name, account["id"])
+    if result is None:
+        _flash(request, "You already have as many active keys as the admin allows ({max}). "
+                        "Revoke one before you make another.", "error", max=api.key_limit_setting()[1])
+        return RedirectResponse("/account#keys", status_code=303)
+    _hold_new_key(request, "new_account_key", result)
     _flash(request, 'Key "{user}" created.', "success", user=result["display_name"])
     return RedirectResponse("/account#keys", status_code=303)
 
@@ -161,15 +169,19 @@ def my_account_key_revoke(request: Request, token_id: str = Form(""),
 
 
 @router.post("/account/password")
-def my_account_password(request: Request, current_password: str = Form(""),
-                        password: str = Form(""), password_again: str = Form(""),
-                        account: dict[str, Any] = Depends(require_login)):
+async def my_account_password(request: Request, current_password: str = Form(""),
+                              password: str = Form(""), password_again: str = Form(""),
+                              account: dict[str, Any] = Depends(require_login)):
     """One's own password, only with the current password. A Jellyfin account has none here.
 
     The brake against guessing is the same as at sign-in and with the same counter
     (the client's address). Without it a signed-in session - say in somebody else's
     browser - would be an unlimited oracle for the password, and every attempt on
     top costs a quarter of a second of PBKDF2.
+
+    Async on purpose: the check of the block and the counting run on the event loop with
+    nothing awaited between them (see login_submit); in the thread pool requests sent at
+    once all passed the check. The hashing goes to a thread.
     """
     back = RedirectResponse("/account", status_code=303)
     address = _client_address(request)
@@ -177,22 +189,27 @@ def my_account_password(request: Request, current_password: str = Form(""),
     if remaining:
         _flash(request, _block_message(remaining), "error")
         return back
-    try:
-        accounts.change_own_password(account["id"], current_password,
-                                     password, password_again)
-    except accounts.WrongCurrentPassword as exc:
-        block = accounts.count_failure(address)
-        if block:
-            log.warning("password change from %s blocked (level %s)", address, block["level"])
-            _flash(request, _block_message(-1 if block["permanent"]
-                                           else block["seconds"]), "error")
-        else:
+    block = accounts.begin_attempt(address, "local:" + account["username"])
+    if block is None:
+        try:
+            await asyncio.to_thread(accounts.change_own_password, account["id"], current_password,
+                                    password, password_again)
+        except accounts.WrongCurrentPassword as exc:
+            block = accounts.attempt_failed(address)
+            if block is None:
+                _flash(request, exc.translated(), "error")
+                return back
+        except accounts.AccountError as exc:
+            # No wrong password was tried (a Jellyfin account, or the new password does not fit).
+            accounts.forget_failures(address, "local:" + account["username"])
             _flash(request, exc.translated(), "error")
+            return back
+    if block:
+        log.warning("password change from %s blocked (level %s)", address, block["level"])
+        _flash(request, _block_message(-1 if block["permanent"]
+                                       else block["seconds"]), "error")
         return back
-    except accounts.AccountError as exc:
-        _flash(request, exc.translated(), "error")
-        return back
-    accounts.forget_failures(address)
+    accounts.forget_failures(address, "local:" + account["username"])
     # This session stays (a new fingerprint), the account's other sessions end -
     # see current_account.
     request.session["fingerprint"] = accounts.session_fingerprint(accounts.get(account["id"]) or {})

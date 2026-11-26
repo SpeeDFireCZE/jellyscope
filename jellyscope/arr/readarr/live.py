@@ -55,7 +55,8 @@ def _title(record: dict[str, Any]) -> str:
 
 def _queue(answer: dict[str, Any]) -> dict[str, Any]:
     """The count of items in the queue and those with an error or a warning (and why)."""
-    records = [r for r in answer.get("records") or [] if isinstance(r, dict)]
+    raw = answer.get("records")
+    records = [r for r in raw if isinstance(r, dict)] if isinstance(raw, list) else []
     with_error = []
     for r in records:
         state = str(r.get("trackedDownloadStatus") or "").lower()
@@ -71,7 +72,7 @@ def _queue(answer: dict[str, Any]) -> dict[str, Any]:
             "state": str(r.get("trackedDownloadState") or r.get("status") or ""),
             "message": str(r.get("errorMessage") or "; ".join(str(m) for m in messages[:2])),
         })
-    return {"count": int(answer.get("totalRecords") or len(records)), "with_error": with_error}
+    return {"count": integer(answer.get("totalRecords"), None) or len(records), "with_error": with_error}
 
 
 def _calendar(records: list[dict[str, Any]]) -> list[dict[str, Any]]:

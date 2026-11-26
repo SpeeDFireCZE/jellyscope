@@ -161,6 +161,13 @@ check(nested_image.count("<a ") == 1, f"an image inside a link's text is no seco
 bold_address = md("**https://x.cz/releases**")
 check(bold_address == f'<p><strong><a href="https://x.cz/releases"{LINK}>https://x.cz/releases</a></strong></p>',
       f"marks after a bare address are no part of it ({bold_address})")
+# Code right after an address was taken into it: its put-aside mark came back as <code> inside href.
+import re  # noqa: E402
+
+glued = [md(t) for t in ("https://x.cz/`path`", "<https://x.cz/`c`>", 'https://x.cz/`x" onmouseover="y`')]
+check(glued[0] == f'<p><a href="https://x.cz/"{LINK}>https://x.cz/</a><code>path</code></p>'
+      and not any("<" in address for out in glued for address in re.findall(r'href="([^"]*)"', out)),
+      f"the address ends where code starts, the code follows the link ({glued[0]})")
 
 print()
 print("--- the state for the template ---")
@@ -394,6 +401,44 @@ os.environ.pop("JELLYSCOPE_DOCKER")
 config.load_config(reload=True)
 check(updates.why_no_update() == "", "outside a container nothing stands in the way")
 
+# The systemd service of deploy/ may write only into data/ (ProtectSystem=strict, ReadWritePaths). The button used
+# to be offered there and every click ended in "Could not find out what the update would fetch. Try again in a
+# moment." - git could not write .git/FETCH_HEAD. An update writes the code (git) and the packages (pip): where the
+# app may not write them, the button is not offered and deploy/update.sh is named instead.
+import stat as _stat  # noqa: E402
+import types as _types  # noqa: E402
+
+_real_root, _real_sysconfig = updates.ROOT, updates.sysconfig if hasattr(updates, "sysconfig") else None
+_folder = Path(tempfile.mkdtemp())
+(_folder / ".git").mkdir()
+_packages = _folder / "site-packages"
+_packages.mkdir()
+if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+    print("SKIPPED  as root (or on Windows) the rights of a folder do not stop writing - the check is not shown")
+else:
+    updates.ROOT = _folder
+    updates.sysconfig = _types.SimpleNamespace(get_path=lambda name: str(_packages))
+    try:
+        check(updates.why_no_update() == "", "a git folder the app may write: the button is offered")
+        for _locked, _label in ((_folder / ".git", "git's folder"), (_folder, "the code"),
+                                (_packages, "the packages")):
+            _locked.chmod(_stat.S_IRUSR | _stat.S_IXUSR)
+            try:
+                _reason, _can = updates.why_no_update(), updates.can_update()
+                _result = asyncio.run(updates.update())
+            finally:
+                _locked.chmod(_stat.S_IRWXU)
+            check(_can is False and "deploy/update.sh" in _reason and "data/" in _reason
+                  and _result["status"] == "error" and _result["message"] == _reason,
+                  f"{_label} may not be written: no button, the reason names deploy/update.sh ({_reason!r})")
+    finally:
+        updates.ROOT = _real_root
+        if _real_sysconfig is None:
+            del updates.sysconfig
+        else:
+            updates.sysconfig = _real_sysconfig
+check(updates.why_no_update() == "", "and back in the real folder the button is there again")
+
 print()
 print("--- the waiting page after an update ---")
 # The templates are read from the file on every request, the app's code lives in
@@ -501,6 +546,8 @@ NEW_REQUIREMENTS = "starlette==9.0.0\n"
 
 
 VERIFIED = "abc123def4567890abc123def4567890abc12345"
+RUNNING = "0123456789abcdef0123456789abcdef01234567"
+INSTALL = {"code": 0, "output": ""}
 MINIMUM = {"python": "3.0"}
 BASE_REQUIREMENTS = "starlette==9.0.0\n"
 
@@ -509,9 +556,15 @@ def fake_git(*arguments):
     async def run():
         CALLS.append(("git",) + arguments)
         if arguments[:2] == ("diff", "--quiet") and "requirements.txt" in arguments:
-            return {"code": 0 if GIT["requirements_stejne"] else 1, "output": ""}
+            changed = set() if GIT["requirements_stejne"] else {"requirements.txt"}
+            changed |= GIT.get("also_changed", set())
+            return {"code": 1 if changed & set(arguments[arguments.index("--") + 1:]) else 0, "output": ""}
+        if arguments == ("rev-parse", "HEAD"):
+            return {"code": 0, "output": RUNNING + "\n"}
         if arguments[0] == "rev-parse":
             return {"code": 0, "output": VERIFIED + "\n"}
+        if arguments[0] == "reset" and GIT.get("reset_fails"):
+            return {"code": 128, "output": "error: Entry 'run.py' not uptodate. Cannot merge."}
         return {"code": 0, "output": "Already up to date."}
     return run()
 
@@ -527,12 +580,17 @@ def fake_content(*arguments):
     return run()
 
 
-def fake_run(*command):
+DRIVER = {"code": 0, "output": ""}
+
+
+def fake_run(*command, **options):
     async def run():
         CALLS.append(command)
         if "--dry-run" in command:
             return dict(PIP_TRIAL)
-        return {"code": 0, "output": ""}
+        if str(command[-1]).endswith("requirements-postgres.txt"):
+            return dict(DRIVER)
+        return dict(INSTALL)
     return run()
 
 
@@ -665,6 +723,15 @@ CALLS.clear()
 result = asyncio.run(updates.update())
 check(result["status"] == "ok" and not tried() and downloaded(),
       "requirements.txt unchanged: no trial, straight to the download")
+# The versions of what the packages pull in live in constraints.txt (requirements.txt refers to it). A new version
+# that changes only them is tried as well: a pin can need a newer Python just as a package of requirements.txt can.
+GIT["also_changed"] = {"constraints.txt"}
+CALLS.clear()
+result = asyncio.run(updates.update())
+check(result["status"] == "error" and tried() and not downloaded()
+      and result.get("parameters", {}).get("required") == "3.99",
+      f"only constraints.txt changed: tried, and not downloaded when it cannot install ({result['status']})")
+GIT["also_changed"] = set()
 GIT["requirements_stejne"] = False
 
 # The message reaches the page too, with the version numbers.
@@ -680,7 +747,145 @@ check("3.99" in page and "python3.99-venv" in page
       and "%d.%d" % sys.version_info[:2] in page,
       "the page has the message with the needed and the running version and the command for it")
 
+print()
+print("--- the packages fail to install after the download ---")
+# The dry run passed, then the network dropped or a mirror failed. Left in place, the new code would start at
+# the next restart (for any reason) with the old packages and could fail at import: it goes back to the
+# version that runs, and the message says so.
+PIP_TRIAL.update(code=0, output="Would install starlette-9.0.0")
+INSTALL.update(code=1, output="ERROR: Could not install packages due to an OSError: Connection reset by peer")
+CALLS.clear()
+result = asyncio.run(updates.update())
+i_merge = next((i for i, v in enumerate(CALLS) if v[:2] == ("git", "merge")), 10 ** 6)
+i_back = next((i for i, v in enumerate(CALLS) if v[:3] == ("git", "reset", "--keep") and v[-1] == RUNNING), -1)
+check(result["status"] == "error" and i_back > i_merge,
+      f"the code goes back to the commit that runs (git reset --keep {RUNNING[:7]}) after the download")
+check("put back" in result.get("message", "")
+      and "Connection reset" in result.get("parameters", {}).get("output", ""),
+      f"and the message says so, with what pip said ({result.get('message', '')[:80]})")
+GIT["reset_fails"] = True
+CALLS.clear()
+result = asyncio.run(updates.update())
+check(result["status"] == "error" and result.get("parameters", {}).get("commit") == RUNNING
+      and "git reset --keep {commit}" in result.get("message", ""),
+      f"when that fails too, the message gives the command to do it by hand ({result.get('message', '')[:80]})")
+GIT["reset_fails"] = False
+INSTALL.update(code=0, output="")
+# What `git reset --keep` really does to the folder - the recorded call above says nothing about it. A repository of
+# its own: the commit that runs, the downloaded one on top (a changed file and a new one), a file of the
+# installation git does not track (.env); then _put_back with the real git.
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+if not shutil.which("git"):
+    check(True, "(no git on this machine; the real way back is not tried)")
+else:
+    repository = Path(tempfile.mkdtemp())
+
+    def in_repository(*arguments: str) -> str:
+        return subprocess.run(["git", "-C", str(repository), *arguments], capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    in_repository("init", "-q")
+    in_repository("config", "user.email", "test@example.invalid")
+    in_repository("config", "user.name", "test")
+    (repository / "run.py").write_text("old\n", encoding="utf-8")
+    in_repository("add", "run.py")
+    in_repository("commit", "-qm", "the version that runs")
+    running_commit = in_repository("rev-parse", "HEAD")
+    (repository / "run.py").write_text("new\n", encoding="utf-8")
+    (repository / "added.py").write_text("new\n", encoding="utf-8")
+    in_repository("add", "run.py", "added.py")
+    in_repository("commit", "-qm", "the downloaded version")
+    (repository / ".env").write_text("SECRET_KEY=mine\n", encoding="utf-8")
+    real_root = updates.ROOT
+    updates._git, updates._run, updates.ROOT = original[0], original[2], repository
+    try:
+        put_back = asyncio.run(updates._put_back(running_commit, "ERROR: Connection reset by peer"))
+    finally:
+        updates._git, updates._run, updates.ROOT = fake_git, fake_run, real_root
+    check(put_back["status"] == "error" and "put back" in put_back["message"]
+          and in_repository("rev-parse", "HEAD") == running_commit
+          and (repository / "run.py").read_text(encoding="utf-8") == "old\n" and not (repository / "added.py").exists()
+          and (repository / ".env").read_text(encoding="utf-8") == "SECRET_KEY=mine\n",
+          f"with the real git the folder is the running version again, the installation's own file stays ({put_back['message'][:60]})")
+
+print()
+print("--- the PostgreSQL driver at its pinned version ---")
+# The driver is not in requirements.txt (a platform without its packages must not fail every update), it is pinned
+# in requirements-postgres.txt. The button does what update.sh does: where the driver is installed, it is brought
+# to that version after the packages; where it is not, nothing; a failure is only a warning in the log.
+import logging  # noqa: E402
+
+PIP_TRIAL.update(code=0, output="Would install starlette-9.0.0")
+real_available = updates.db.psycopg_available
+warnings: list[str] = []
+
+
+class _Catch(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.levelno >= logging.WARNING:
+            warnings.append(record.msg)
+
+
+_catch = _Catch()
+updates.log.addHandler(_catch)
+try:
+    for present, fails, label in ((True, False, "where it is installed, it is brought to the pinned version"),
+                                  (False, False, "where it is not, the update does not install it"),
+                                  (True, True, "a failure is a warning in the log, the update is done")):
+        updates.db.psycopg_available = lambda present=present: present
+        DRIVER.update(code=1 if fails else 0, output="ERROR: no wheel" if fails else "")
+        warnings.clear()
+        CALLS.clear()
+        result = asyncio.run(updates.update())
+        pip_calls = [v for v in CALLS if "pip" in v and "--dry-run" not in v]
+        driver = [i for i, v in enumerate(pip_calls)
+                  if v[-2:] == ("-r", str(PROJECT / "requirements-postgres.txt"))]
+        packages = [i for i, v in enumerate(pip_calls) if v[-1] == str(PROJECT / "requirements.txt")]
+        ok = result["status"] == "ok" and bool(packages)
+        if not present:
+            ok = ok and not driver
+        else:
+            ok = ok and bool(driver) and driver[0] > packages[0]
+            ok = ok and (any("PostgreSQL driver" in w for w in warnings) if fails else not warnings)
+        check(ok, f"{label} ({result['status']}, pip: {[v[-1] for v in pip_calls]}, log: {warnings})")
+finally:
+    updates.db.psycopg_available = real_available
+    updates.log.removeHandler(_catch)
+DRIVER.update(code=0, output="")
+
 updates._git, updates._git_content, updates._run = original
+
+print()
+print("--- git and pip have a time limit ---")
+# A `git fetch` against a GitHub that does not answer (or waiting for a password nobody types) used to hold the
+# administrator's request for good, and a second click started a second git next to it.
+import time as _time  # noqa: E402
+
+PID_FILE = Path(_tmp) / "slow-command.pid"
+limit_before = getattr(updates, "GIT_TIMEOUT_SECONDS", 120)
+updates.GIT_TIMEOUT_SECONDS = 1
+started = _time.monotonic()
+slow = asyncio.run(updates._run(sys.executable, "-c",
+                                f"import os, time; open({str(PID_FILE)!r}, 'w').write(str(os.getpid())); time.sleep(30)"))
+took = _time.monotonic() - started
+slow_pid = int(PID_FILE.read_text()) if PID_FILE.is_file() else 0
+alive = bool(slow_pid) and Path(f"/proc/{slow_pid}").exists()
+check(slow["code"] != 0 and took < 10, f"a command past the limit ends as a failure in time ({slow['code']}, {took:.1f} s)")
+check(not alive or sys.platform == "win32", f"and the command is stopped (process {slow_pid} running: {alive})")
+if alive:
+    os.kill(slow_pid, 9)
+started = _time.monotonic()
+content = asyncio.run(updates._git_content("-c", "alias.slow=!sleep 3", "slow"))
+check(content["code"] != 0 and _time.monotonic() - started < 2.5,
+      f"the same for git read for its content ({content['code']}, {_time.monotonic() - started:.1f} s)")
+updates.GIT_TIMEOUT_SECONDS = limit_before
+prompt = asyncio.run(updates._git_content("-c", "alias.envcheck=!printenv GIT_TERMINAL_PROMPT", "envcheck"))
+prompt_run = asyncio.run(updates._run(sys.executable, "-c", "import os; print(os.environ.get('GIT_TERMINAL_PROMPT'))"))
+check(prompt["output"].strip() == "0" and prompt_run["output"].strip() == "0",
+      f"git never asks for a password nobody can type ({prompt['output'].strip()!r}, {prompt_run['output'].strip()!r})")
+
 db.set_setting(updates.FOUND_VERSION_KEY, "")
 db.forget_settings()
 

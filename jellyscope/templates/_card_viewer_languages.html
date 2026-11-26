@@ -74,14 +74,14 @@
     {% endif %}
 
     {# The legend is shared by all bars - the colours are the same in all of them. #}
-    {{ charts.legend(watched.rows) | safe }}
+    {{ charts.stacked_legend(watched.rows) | safe }}
 
     {# The window has to be on the page even when it hides only on a phone -
        the button above points at it. #}
     {% if hide_people or hide_people_mobile %}
-    <dialog class="modal modal-wide" id="modal-languages">
+    <dialog class="modal modal-wide" id="modal-languages" aria-labelledby="modal-languages-title">
         <form method="dialog" class="modal-head">
-            <h2>{{ _("Who watches in which language") }} ({{ by_user | length }})</h2>
+            <h2 id="modal-languages-title">{{ _("Who watches in which language") }} ({{ by_user | length }})</h2>
             <button class="btn modal-close" type="submit"
                     aria-label="{{ _("Close") }}">&times;</button>
         </form>
@@ -100,7 +100,7 @@
 
         <div class="modal-body">
             {% for person in by_user %}{{ bar(person) }}{% endfor %}
-            {{ charts.legend(watched.rows) | safe }}
+            {{ charts.stacked_legend(watched.rows) | safe }}
         </div>
     </dialog>
     {% endif %}

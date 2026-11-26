@@ -203,9 +203,23 @@ for desc, hours in (("two hours", 2), ("six hours", 6), ("a day and a half", 36)
 # Whole days and "the last N days" must stay as they were.
 day = stats.period_between("2026-08-20", "2026-08-20")
 check(length(stats.previous_period(day)).days == 1, "a whole day: the previous one is a day too")
-check(stats.previous_period(30).until == stats._as_period(30).since,
-      "the last 30 days: the previous one follows on")
-check(length(stats.previous_period(30)).days == 30, "and is thirty days long")
+# "The last 30 days" hold only the part of today that has passed, so their previous window is the same span thirty
+# days back (decided 25. 11. 2026): from the local midnight thirty days before their first day to this clock time
+# thirty days ago - not thirty whole days, which made every morning look like a drop.
+from jellyscope import formatting  # noqa: E402
+
+
+def local(utc_text: str) -> datetime:
+    return (datetime.strptime(utc_text, db.TIME_FORMAT).replace(tzinfo=timezone.utc)
+            .astimezone(formatting.zone()).replace(tzinfo=None))
+
+
+chosen, before = stats._as_period(30), stats.previous_period(30)
+check(local(before.since) == local(chosen.since) - timedelta(days=30),
+      f"the last 30 days: the previous one starts thirty days before their first midnight ({local(before.since)})")
+passed = datetime.now(formatting.zone()).replace(tzinfo=None) - local(chosen.since)
+check(abs((local(before.until) - local(before.since)) - passed) < timedelta(minutes=1),
+      f"and is as long as the part of the thirty days that has passed ({local(before.until) - local(before.since)})")
 
 print()
 print(f"DONE - failures: {failures}")

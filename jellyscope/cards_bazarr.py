@@ -9,7 +9,7 @@ What it stands on:
 
 * **The period's events are selected once** (`stats.bazarr_analysis`) and the cards
   are different views of that selection; the memo of one computation holds it.
-* **Live cards** ("Teď v aplikaci") take the state from `bazarr.live_state` (a
+* **Live cards** ("In the app right now") take the state from `bazarr.live_state` (a
   one-minute cache). What did not load is None and the card says so - a zero would
   be a claim nobody checked.
 * **The texts from the app only for the administrator**: the error's detail and
@@ -37,7 +37,7 @@ from .i18n import translate as _t
 NAME = bazarr.NAME
 
 # The tab's sections and the names of their cards, in the order on the page. The
-# heading is a Czech sentence = a translation key. The layout is in arr_bazarr.html;
+# heading is an English sentence = a translation key. The layout is in arr_bazarr.html;
 # that the template draws exactly these cards in this order is guarded by
 # tests/test_bazarr_web.py.
 SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -104,7 +104,7 @@ def has_imports() -> bool:
 
 
 def language(code: str, hi: Any = False, forced: Any = False) -> str:
-    """The subtitles' language for people: "čeština", "angličtina · pro neslyšící", "angličtina · vynucené"."""
+    """The subtitles' language for people: "Czech", "English · hearing impaired", "English · forced"."""
     parts = [_t(CUSTOM_CODES[code]) if code in CUSTOM_CODES else languages.display(code)]
     if hi:
         parts.append(_t("hearing impaired"))

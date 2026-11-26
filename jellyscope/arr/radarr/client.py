@@ -89,8 +89,13 @@ class RadarrClient(HttpClient):
         return await self._get("history", params, timeout=DEFAULT_TIMEOUT) or {}
 
     async def queue(self) -> dict[str, Any]:
-        """The download queue (the first page, up to 100 items)."""
-        return await self._object("queue", {"pageSize": 100, **INCLUDE})
+        """The download queue (the first page, up to 100 items).
+
+        With the downloads the app did not pair with any movie too (`includeUnknownMovieItems`), like
+        `whole_queue`: such an item waits for a manual import, and the count and the card of items with an
+        error are to show it.
+        """
+        return await self._object("queue", {"pageSize": 100, "includeUnknownMovieItems": "true", **INCLUDE})
 
     async def whole_queue(self) -> dict[str, Any]:
         """The whole queue in one page for the live card "Stahuje se": `{"records": [...], "total": n}`.

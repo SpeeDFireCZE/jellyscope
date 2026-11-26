@@ -26,7 +26,7 @@
     }
 
     document.getElementById("quick-now").addEventListener("click", ask);
-    /* Every second, not every tenth: a person confirms it in another
-       app, so asking faster only loads Jellyfin. */
+    /* Every two seconds, not every tenth of a second: a person confirms it
+       in another app, so asking faster only loads Jellyfin. */
     setInterval(ask, 2000);
 })();

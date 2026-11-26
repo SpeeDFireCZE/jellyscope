@@ -32,6 +32,7 @@ from typing import Any
 from collections.abc import Callable, Sequence
 
 from .i18n import translate as _t
+from .i18n import translate_plural
 
 # Colour slots for telling series apart. The order is on purpose - it is picked
 # so that even a person with a colour vision deficiency tells neighbouring pairs
@@ -206,14 +207,16 @@ def _slot_of(segment: dict[str, Any], index: int) -> int:
 
 
 def _fmt(value: float) -> str:
-    """A number for a label - without needless decimal places."""
+    """A number for a label - without needless decimal places, in the page's notation."""
+    from .formatting import in_notation  # only here, so no cycle comes about
+
     if value >= 100:
-        return f"{value:,.0f}".replace(",", " ")
+        return in_notation(f"{value:,.0f}")
     if value >= 10:
         return f"{value:.0f}"
     if value >= 1:
-        return f"{value:.1f}".rstrip("0").rstrip(".").replace(".", ",")
-    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        return in_notation(f"{value:.1f}".rstrip("0").rstrip("."))
+    return in_notation(f"{value:.2f}".rstrip("0").rstrip("."))
 
 
 # Units where one step means a lot. `_fmt` drops the decimal place above ten -
@@ -425,6 +428,19 @@ def _ink(colour: str) -> str:
     return f"var(--ink-{variable.group(1)}, #fff)"
 
 
+def _stack_parts(segments: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The parts a stacked bar draws - and its legend names, so the two cannot drift apart.
+
+    Only parts with a value, the first SERIES_SLOTS of them in colour; the rest is one grey "Other".
+    """
+    positive = [s for s in segments if float(s.get("value") or 0) > 0]
+    parts = positive[:SERIES_SLOTS]
+    rest = sum(float(s.get("value") or 0) for s in positive[SERIES_SLOTS:])
+    if rest > 0:
+        parts.append({"label": _t("Other"), "value": rest, "role": "muted"})
+    return parts
+
+
 def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
     """One bar split into parts - "what the whole is made of".
 
@@ -432,7 +448,9 @@ def stacked_bar(segments: Sequence[dict[str, Any]], unit: str = "h") -> str:
     with a gap, not an outline: an outline adds ink that is not data, and the
     chart gets denser.
     """
-    segments = [s for s in segments if float(s.get("value") or 0) > 0][:SERIES_SLOTS]
+    # The shares are of the whole, as the table beside the bar counts them; what does not fit into the colour
+    # slots goes into one grey "Other", so the bar still makes 100 %.
+    segments = _stack_parts(segments)
     total = sum(float(s.get("value") or 0) for s in segments)
     if total <= 0:
         return _empty(_t("No data yet"))
@@ -549,10 +567,22 @@ def legend(items: Sequence[dict[str, Any]]) -> str:
     shades (yellow, turquoise) are unreadable as text on a light background.
 
     When a series carries the key "tip", the legend item gets a tooltip. It is
-    for cases where the name by itself is not enough - say "Ostatní", under
+    for cases where the name by itself is not enough - say "Other", under
     which more kinds of records hide at once.
     """
-    items = [item for item in items if item is not None][:SERIES_SLOTS]
+    return _legend_list([item for item in items if item is not None][:SERIES_SLOTS])
+
+
+def stacked_legend(segments: Sequence[dict[str, Any]]) -> str:
+    """The legend of a stacked_bar: the very parts the bar draws, its grey "Other" included.
+
+    The plain legend cut the list at the colour slots with no "Other" and kept the parts
+    with nothing, so under a bar with more parts it named another eight than the bar drew.
+    """
+    return _legend_list(_stack_parts(segments))
+
+
+def _legend_list(items: Sequence[dict[str, Any]]) -> str:
     if not items:
         return ""
 
@@ -739,7 +769,7 @@ def area_chart_multi(
     # page - see _transition().
     number = next(_TRANSITION_ORDER)
     gradients = {
-        entry.get("slot", 1): f"prechod-{number}-{index}"
+        entry.get("slot", 1): f"gradient-{number}-{index}"
         for index, entry in enumerate(series)
     }
     # A series can carry its own colour instead of a slot number. The chart on
@@ -784,7 +814,7 @@ def area_chart_multi(
     parts: list[str] = [
         f'<svg class="chart{" chart-selectable" if can_select else ""}" '
         f'viewBox="0 0 {width} {height}" role="img"{select_attributes} '
-        f'aria-label="Vyvoj v case, {len(series)} serii">',
+        f'aria-label="{_e(translate_plural("Trend over time, {n} series", len(series)))}">',
         "<defs>",
         # The more series, the weaker the fill. With one curve the area helps -
         # it shows the volume. With two the areas overlap and a third, murky
@@ -1028,10 +1058,10 @@ def sparkline(
         left = max(0.0, x - half)
         return left, min(float(width), x + half) - left
 
-    name = f"prechod-mini-{next(_TRANSITION_ORDER)}"
+    name = f"gradient-mini-{next(_TRANSITION_ORDER)}"
     parts = [
         f'<svg class="sparkline" viewBox="0 0 {width} {height}" role="img" '
-        f'aria-label="Vyvoj v case, {len(points)} dnu">',
+        f'aria-label="{_e(translate_plural("Trend over time, {n} days", len(points)))}">',
         f"<defs>{_transition(1, name, strength=0.28, colour='var(--data-color)')}</defs>",
         f'<path d="{area}" fill="url(#{name})" />',
         f'<path d="{line}" fill="none" stroke="var(--data-color)" '

@@ -11,6 +11,14 @@
 </div>
 
 <div class="card">
+    {# Every choice of the filter goes on to the next page (and to the bar of new plays below), each one
+       encoded: a search for "Tom & Jerry" or a player's name with a space would otherwise reach the next
+       page cut short. #}
+    {% set extra %}{% for key, value in [('user_id', user_id), ('search', search), ('day', day),
+                                         ('kind', kind if kind != 'all' else ''), ('period', period if period != 'all' else ''),
+                                         ('since', since if period == 'custom' else ''), ('until', until if period == 'custom' else ''),
+                                         ('method', method), ('client', client), ('language', language)] if value %}&{{ key }}={{ value | urlencode }}{% endfor %}{% endset %}
+
     {# The filter is in a window, not spread over the page. Eight fields above the table
        took half the screen and a person needs them once in a while -
        the table is what they come here for.
@@ -57,7 +65,20 @@
                 {{ _("not given") if language == 'und' else lang.display(language) }}
             </span>
         {% endif %}
-        {% if search %}<span class="chip active">„{{ search }}"</span>{% endif %}
+        {% if search %}<span class="chip active">{{ _("“{text}”").format(text=search) }}</span>{% endif %}
+    </div>
+    {% endif %}
+
+    {# New plays since the page was drawn (Settings → Interface → Refreshing cards): the table is not
+       rewritten under the reader's eyes. When the plays' marker moves, the page asks how many plays the
+       same filter finds more than it shows (/history/new, web/history.py; static/js/app.js) and this bar
+       says so; its link loads the page again with the same filter, from page 1, at the same place
+       (data-keep-scroll). #}
+    {% if ui_self_refresh %}
+    <div class="flash info" id="history-new" role="status" hidden
+         data-history-new="/history/new?known={{ total }}&known_id={{ last_id }}{{ extra }}">
+        <span class="dot"></span>
+        <span><span data-history-new-text></span> - <a href="/history?page=1{{ extra }}" data-keep-scroll>{{ _("show") }}</a></span>
     </div>
     {% endif %}
 
@@ -154,13 +175,12 @@
         </p>
     {% endif %}
 
-    {% set extra %}{% if user_id %}&user_id={{ user_id }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if day %}&day={{ day }}{% endif %}{% if kind != 'all' %}&kind={{ kind }}{% endif %}{% endset %}
     {{ pager(page, pages, total, '/history', extra) }}
 </div>
 
-<dialog class="modal modal-wide" id="modal-filter">
+<dialog class="modal modal-wide" id="modal-filter" aria-labelledby="modal-filter-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("History filter") }}</h2>
+        <h2 id="modal-filter-title">{{ _("History filter") }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -187,8 +207,8 @@
                 <option value="all">{{ _("all") }}</option>
                 <option value="movies" {{ 'selected' if kind == 'movies' }}>{{ _("Movies") }}</option>
                 <option value="series" {{ 'selected' if kind == 'series' }}>{{ _("TV shows") }}</option>
-                <option value="music" {{ 'selected' if kind == 'music' }}>{{ _("Music") }}</option>
-                <option value="books" {{ 'selected' if kind == 'books' }}>{{ _("Books") }}</option>
+                {% if 'music' not in hidden_kinds %}<option value="music" {{ 'selected' if kind == 'music' }}>{{ _("Music") }}</option>{% endif %}
+                {% if 'books' not in hidden_kinds %}<option value="books" {{ 'selected' if kind == 'books' }}>{{ _("Books") }}</option>{% endif %}
                 <option value="other" {{ 'selected' if kind == 'other' }}>{{ _("Other") }}</option>
                 {% if kind == 'both' %}<option value="both" selected>{{ _("Watching") }}</option>{% endif %}
             </select>

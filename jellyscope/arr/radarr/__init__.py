@@ -13,8 +13,8 @@ here and need not know which file a name lives in:
 * `progress` - the live downloads for the card "Stahuje se" (downloading): the queue by movies with
   progress, the refresh command only while something downloads, a short cache.
 * `posters` - the provisional poster of a movie that is still downloading (from Radarr, through
-  the image store), the clean-up once the movie arrives in the library and the poster for Seerr's
-  requests (`title_poster`).
+  the image store), the clean-up once the movie arrives in the library, the poster for Seerr's
+  requests (`title_poster`) and which stored posters are Radarr's (`own_posters`, kept by Seerr's deletion).
 * `titles` - Radarr's list of movies with the ids of the title databases (TMDB, IMDb): by the TMDB
   id the cards link a movie into the library.
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from .client import NAME, RadarrClient, RadarrError
 from .live import live_state
-from .posters import clean_up_posters, poster_missing, provisional_poster, title_poster
+from .posters import clean_up_posters, own_posters, poster_missing, provisional_poster, title_poster
 from .progress import download_state
 from .settings import check_connection, is_connected, save_settings, stored_settings
 from .sync import (
@@ -54,6 +54,7 @@ __all__ = [
     "event_from_history",
     "is_connected",
     "live_state",
+    "own_posters",
     "poster_missing",
     "provisional_poster",
     "refresh_counts",

@@ -1,7 +1,7 @@
 {# The Prowlarr card "Indexers now": the indexers and their state.
 
-   Live from Prowlarr (cards_prowlarr.py, `d.radky`: name, protocol, switched on,
-   blokovan_do, selhava_od - times in UTC; None = it could not be loaded).
+   Live from Prowlarr (cards_prowlarr.py, `d.rows`: name, protocol, switched on,
+   blocked_until, failing_since - times in UTC; None = it could not be loaded).
    First the indexers Prowlarr switched off for a while because of errors (for a few
    minutes, longer when it repeats) - with since when they fail and until when it skips them.
    Then those whose block expired, but Prowlarr still names them in the warning
@@ -9,7 +9,7 @@
    query, until then nobody knows whether they work - "OK" would contradict the
    warning a card lower. Then those a person switched off, then the others.
 
-   When the blocks or the warnings do not load (`d.blokovani_nezname`), "OK" is
+   When the blocks or the warnings do not load (`d.blocks_unknown`), "OK" is
    claimed for nobody - only "enabled".
 
    Only two columns: the times stand under the state. The card is often at half width (a 1024 px

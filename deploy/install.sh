@@ -85,8 +85,13 @@ VENV="$APP_DIR/.venv"
 #
 # When you run the script through sudo we want that person's name, not
 # "root" - otherwise the whole installation would belong to root and you
-# could not touch it afterwards. SUDO_USER is exactly for this.
-APP_USER="${SUDO_USER:-$(id -un)}"
+# could not touch it afterwards. SUDO_USER is exactly for this - but only
+# when sudo made us root: `sudo -u jellyscope` sets SUDO_USER to the person
+# who typed it too, and then the installation is jellyscope's.
+APP_USER="$(id -un)"
+if [[ $EUID -eq 0 && -n "${SUDO_USER:-}" ]]; then
+    APP_USER="$SUDO_USER"
+fi
 APP_GROUP="$(id -gn "$APP_USER")"
 
 # Logs stay in the project folder. Only root could write to /var/log and
@@ -525,13 +530,16 @@ ok "dependencies installed"
 # with `set -e` take down the installation of somebody who only ever
 # wanted SQLite. Hence `|| warn` - PostgreSQL simply will not be
 # available, and that is fine.
+#
+# The version is the one of requirements-postgres.txt - the one place it is
+# set, for this script, update.sh and the Update button alike.
 say "PostgreSQL driver (optional)"
-if "$PY" -m pip install --quiet "psycopg[binary,pool]" 2>/dev/null; then
+if "$PY" -m pip install --quiet -r "$APP_DIR/requirements-postgres.txt" 2>/dev/null; then
     ok "psycopg installed - PostgreSQL can be switched on in Settings"
 else
     warn "psycopg could not be installed (no prebuilt packages for this"
     warn "platform). SQLite works without it, PostgreSQL does not."
-    warn "If you want it, try:  $PY -m pip install \"psycopg[binary]\""
+    warn "If you want it, try:  $PY -m pip install -r $APP_DIR/requirements-postgres.txt"
 fi
 
 # --- 4. configuration ------------------------------------------------------
@@ -870,6 +878,18 @@ cat <<EOF
 EOF
 fi
 
+# update.sh runs as the owner of the installation and refuses root. After
+# `sudo ./install.sh` the owner is SUDO_USER, after `sudo -u <account>
+# ./install.sh` that account (a dedicated one has no shell to switch into),
+# so the advice starts it as the owner; an installation run as root
+# (ALLOW_ROOT=1) needs the same switch for the update.
+UPDATE_CMD="$APP_DIR/deploy/update.sh"
+if [[ "$APP_USER" == "root" ]]; then
+    UPDATE_CMD="ALLOW_ROOT=1 $UPDATE_CMD"
+elif [[ -n "${SUDO_USER:-}" ]]; then
+    UPDATE_CMD="sudo -u $APP_USER $UPDATE_CMD"
+fi
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────
@@ -928,7 +948,7 @@ cat <<EOF
   send the login cookie and nobody could sign in.
 
 ────────────────────────────────────────────────────────────
-  Updates:  sudo $APP_DIR/deploy/update.sh
+  Updates:  $UPDATE_CMD
 ════════════════════════════════════════════════════════════
 
 EOF

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter, table_window with context %}
+{% from "_macros.html" import period_filter, show_card, table_window with context %}
 {% block title %}{{ _("Insights") }} &middot; Jellyscope{% endblock %}
 
 {% block content %}
@@ -14,18 +14,20 @@
     {{ period_filter(period, '/video/insights') }}
 </div>
 
+{# The cards come from the registry (web/video/insights.py, INSIGHT_CARDS), each in its slot. #}
+
 {# ------------------------------------------------------------------ #}
 {# 1. Dead space - the strongest number the app has                   #}
 {# ------------------------------------------------------------------ #}
-{% include "_card_insights_unused.html" %}
+{{ show_card("insight_unused") }}
 
 {# ------------------------------------------------------------------ #}
 {# 2. What makes the server transcode                                 #}
 {# ------------------------------------------------------------------ #}
 <div class="grid-2 align-top">
-    {% include "_card_insights_transcoded.html" %}
+    {{ show_card("insight_transcoded") }}
 
-    {% include "_card_insights_transcode_reasons.html" %}
+    {{ show_card("insight_reasons") }}
 </div>
 
 {# Transcode speed. The unit is one playback and its average
@@ -33,29 +35,29 @@
    The slowest and the fastest have their title beside them, so it shows what
    it was. The split by hardware answers the question "is acceleration
    worth it?" - the processor against QSV or NVENC side by side. #}
-{% include "_card_insights_transcode_speed.html" %}
+{{ show_card("insight_speed") }}
 
 {# ------------------------------------------------------------------ #}
 {# 3. Quality versus watching                                         #}
 {# ------------------------------------------------------------------ #}
 <div class="grid-2 align-top">
-    {% include "_card_insights_quality.html" %}
+    {{ show_card("insight_quality") }}
 
-    {% include "_card_insights_oversized.html" %}
+    {{ show_card("insight_large") }}
 </div>
 
 {# ------------------------------------------------------------------ #}
 {# 4. Use of the libraries                                            #}
 {# ------------------------------------------------------------------ #}
-{% include "_card_insights_libraries.html" %}
+{{ show_card("insight_libraries") }}
 
 {# ------------------------------------------------------------------ #}
 {# 5. Duplicates and unfinished                                       #}
 {# ------------------------------------------------------------------ #}
 <div class="grid-2 align-top">
-    {% include "_card_insights_duplicates.html" %}
+    {{ show_card("insight_duplicates") }}
 
-    {% include "_card_insights_abandoned.html" %}
+    {{ show_card("insight_postponed") }}
 </div>
 {# One window for the whole table of any card - see whole_table_button. #}
 {{ table_window() }}

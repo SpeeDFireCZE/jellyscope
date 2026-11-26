@@ -385,5 +385,69 @@ for group in (access.READER, access.VIEWER):
           f"{group}: on the defaults nothing is written")
 
 print()
+print("--- Now playing: music and books with the person only with \"who listened\" and \"who read\" ---")
+# A play of music or of a book names who listens or reads - the very thing music_who and books_who guard. Now playing
+# (the card on the Overview, its partial, /api/now-playing and /api/v1/now-playing) lists it only with the sub-area;
+# a viewer's own play stays (they know about themselves). Titles of the plays' own, so they are nowhere else.
+from fastapi.testclient import TestClient  # noqa: E402
+
+from jellyscope import web  # noqa: E402
+
+LIVE = {"music_who": "ZivaSkladbaQX", "books_who": "ZivaKnihaQX", "own": "VlastniKnihaQX"}
+with db.connect() as conn:
+    for key, user_id, name, title, kind in (("np-hudba", "demo-u2", "Jana", LIVE["music_who"], "Audio"),
+                                            ("np-kniha", "demo-u2", "Jana", LIVE["books_who"], "Book"),
+                                            ("np-vlastni", "demo-u1", "Petr", LIVE["own"], "AudioBook")):
+        conn.execute(
+            "INSERT INTO playback (session_key, user_id, user_name, item_id, item_name, item_type, client, device_name,"
+            " play_method, started_at, last_seen_at, watched_seconds, paused_seconds, is_active)"
+            " VALUES (?, ?, ?, ?, ?, ?, 'Finamp', 'Telefon', 'DirectPlay', ?, ?, 120, 0, 1)",
+            (key, user_id, name, f"np-{key}", title, kind, db.utcnow(), db.utcnow()))
+    conn.commit()
+db.set_setting(access.LOGIN_KEY, "1")
+accounts.create("np-reader", "longpassword")
+accounts.create("np-viewer", "longpassword")
+with db.connect() as conn:
+    conn.execute("UPDATE accounts SET jellyfin_user_id = 'demo-u1' WHERE username = 'np-viewer'")
+    conn.execute("UPDATE accounts SET may_have_key = '1' WHERE username IN ('np-reader', 'np-viewer')")
+    conn.commit()
+NOW_PLAYING_PAGES = ("/video/overview", "/partials/now-playing", "/api/now-playing")
+
+
+def live_marks(texts: list[str]) -> set[str]:
+    return {what for what, mark in LIVE.items() if any(mark in text for text in texts)}
+
+
+def bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+for name in ("np-reader", "np-viewer"):
+    account = accounts.get_by_name(name)
+    key = api.create_token(f"klic-{name}", account_id=account["id"])["token"]
+    for extra in ((), ("music", "music_who"), ("books", "books_who"), ("music", "books")):
+        accounts.save_permissions(account["id"], access.pack_permissions(["overview", "now_playing", *extra], False))
+        db.forget_settings()
+        client = login(name)
+        pages = [client.get(address).text for address in NOW_PLAYING_PAGES]
+        in_api = TestClient(web.app).get("/api/v1/now-playing", headers=bearer(key)).text
+        # Petr's own audiobook: the viewer is Petr; a reader sees it like any other book play.
+        want = ({area for area in ("music_who", "books_who") if area in extra}
+                | ({"own"} if name == "np-viewer" or "books_who" in extra else set()))
+        check(live_marks(pages) == want and live_marks([in_api]) == want,
+              f"{name} with {list(extra) or 'no music or books'}: Now playing shows {sorted(want)}"
+              f" (pages {sorted(live_marks(pages))}, API {sorted(live_marks([in_api]))})")
+everything = login("admin")
+check(live_marks([everything.get(address).text for address in NOW_PLAYING_PAGES]) == set(LIVE),
+      "the administrator sees every play")
+# A root key with chosen rights: its tree has no Music or Books, so no music and books.
+for label, permissions, want in (
+        ("a root key with everything", None, set(LIVE)),
+        ("a root key with Now playing", api.pack_key_permissions(["overview", "now_playing"], False, False), set())):
+    token = api.create_token(f"np-{label}", permissions=permissions)["token"]
+    check(live_marks([TestClient(web.app).get("/api/v1/now-playing", headers=bearer(token)).text]) == want,
+          f"{label}: /api/v1/now-playing shows {sorted(want)}")
+
+print()
 print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

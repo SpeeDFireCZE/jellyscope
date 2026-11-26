@@ -191,7 +191,9 @@ def walk(k: TestClient, starts: list[str], depth: int) -> dict[str, str]:
 
 
 FRAGMENTS = ["/partials/now-playing", "/partials/recently-added", "/video/partials/daily", "/video/partials/top-items",
-             "/partials/network-live"]
+             "/partials/network-live",
+             # Every card of the registry drawn again at once, as an open page asks for its cards.
+             "/partials/cards?keys=" + ",".join(card.key for card in cards.ALL_CARDS)]
 admin = sign_in("admin")
 PAGES = sorted(walk(admin, ["/", "/settings"], 2)) + FRAGMENTS
 check(len(PAGES) >= 40, f"enough pages were walked through ({len(PAGES)})")

@@ -77,8 +77,9 @@ def count() -> int:
 
 
 def app_with_history(history: list[dict], requests: list[str] | None = None,
-                     code: int = 200) -> httpx.MockTransport:
-    """An app with the given history: `history/since` (the whole of it since a date) and the paged `history`.
+                     code: int = 200, status: dict | None = None) -> httpx.MockTransport:
+    """An app with the given history: `history/since` (the whole of it since a date), the paged `history`
+    and `system/status` (the recorded one unless `status` is given).
 
     It notes `since <date>` or `page <number> of <size>` into `requests`. It orders the pages by date
     ascending like a real Radarr.
@@ -98,6 +99,8 @@ def app_with_history(history: list[dict], requests: list[str] | None = None,
             ordered = sorted(history, key=lambda r: (r["date"], r["id"]))
             return httpx.Response(200, json={"page": page, "pageSize": size, "totalRecords": len(history),
                                              "records": ordered[(page - 1) * size:page * size]})
+        if request.url.path.endswith("/api/v3/system/status"):
+            return httpx.Response(200, json=status if status is not None else recorded("system_status"))
         return httpx.Response(404)
     return httpx.MockTransport(handler)
 
@@ -219,6 +222,25 @@ check(db.get_setting("arr_radarr_last_sync", "") == mark_before and count() == n
 asyncio.run(radarr.synchronize(transport=app_with_history(RADARR)))
 check(radarr.sync_state()["result"] == "ok", "the next successful sync fixes the state again")
 
+# Audit QA-2: Sonarr at Radarr's address (the same API v3) gave a history of another app, written into Radarr's
+# tables, and the mark moved past Radarr's own history. Now the sync asks the app's name first, like the
+# connection test.
+with db.connect() as conn:
+    conn.execute("DELETE FROM radarr_event")
+    conn.commit()
+db.set_setting("arr_radarr_last_sync", "")
+db.forget_settings()
+try:
+    asyncio.run(radarr.synchronize(transport=app_with_history(RADARR, status={"appName": "Sonarr", "version": "5"})))
+    other = ""
+except radarr.RadarrError as error:
+    other = str(error)
+check("Sonarr answers at this address, not Radarr" in other and radarr.sync_state()["result"] == "error" and count() == 0
+      and db.get_setting("arr_radarr_last_sync", "") == "",
+      f"another app at the address: the connection test's error, no row written, the mark unmoved ({other})")
+asyncio.run(radarr.synchronize(transport=app_with_history(RADARR)))
+check(count() == n and radarr.sync_state()["result"] == "ok", "with Radarr at the address the whole history comes again")
+
 print()
 print("--- F) web ---")
 accounts.create("admin", "longpassword", is_admin=True)
@@ -254,14 +276,16 @@ db.set_setting("backup_path", str(Path(_tmp) / "backups"))   # so list_backups()
 db.forget_settings()
 # Review finding 5: another address for an app with downloaded data (another instance, a reinstall)
 # would quietly mix two histories (the record ids start from 1 again). A warning, nothing is deleted.
-answer = admin.post("/settings/arr/radarr", data={"enabled": "1", "url": "http://jiny-radarr:7878", "api_key": "",
+# Another server needs its key typed again (the saved one goes only to its own server).
+answer = admin.post("/settings/arr/radarr", data={"enabled": "1", "url": "http://jiny-radarr:7878", "api_key": "jiny-klic",
                                                   "action": "save"})
 check("flash warning" in answer.text and "Smazat stažená data" in answer.text and count() == n,
       "a change of the address for an app with data: a warning with the button's name, the data stays")
 answer = admin.post("/settings/arr/radarr", data={"enabled": "1", "url": "http://jiny-radarr:7878", "api_key": "",
                                                   "action": "save"})
 check("flash warning" not in answer.text, "a save without a change of the address does not warn")
-admin.post("/settings/arr/radarr", data={"enabled": "1", "url": "http://nas:7878/radarr", "api_key": "", "action": "save"})
+admin.post("/settings/arr/radarr", data={"enabled": "1", "url": "http://nas:7878/radarr", "api_key": "tajny-klic",
+                                          "action": "save"})
 # A minor from a review: deleting during a sync would leave the last hour with a new mark and the
 # whole history would never come back - now it is not deleted.
 radarr.sync._RUNNING.add(radarr.NAME)

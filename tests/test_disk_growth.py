@@ -251,5 +251,25 @@ scanner.write_disk_snapshot(day(0))
 check(stats.disks_to_choose() == [], "the choice of disks is empty")
 
 print()
+print("--- E) 'the last N days' grow over all N days on a disk too ---")
+# The disk's curve started at the first of the seven days, whose snapshot already holds that day's additions: one
+# gigabyte a day came out as 6 GB in a week. The base is the end of the day before; the chart keeps seven points.
+from jellyscope import content_kinds  # noqa: E402
+
+with db.connect() as conn:
+    conn.execute("DELETE FROM library_disk_snapshot")
+    for ago in range(12, -1, -1):
+        conn.execute("INSERT INTO library_disk_snapshot (day, disk, name, kind, source, total, free, library, outside,"
+                     " fingerprint, written_at, kinds) VALUES (?, 'dev-n', 'Nove', 'physical', 'jellyfin', ?, ?, ?, 0,"
+                     " 'same', ?, ?)", (day(ago), TB, TB - (12 - ago) * GB, (12 - ago) * GB, db.utcnow(),
+                                        json.dumps({kind.key: 0 for kind in content_kinds.KINDS})))
+    conn.commit()
+week = stats.disk_growth(7, "dev-n")
+check(week["enough_data"] and week["increase"] == 7 * GB and week["days"] == 7,
+      f"a gigabyte a day: 7 GB in the last 7 days ({week.get('increase', 0) / GB:g} GB, {week.get('days')} days)")
+check([r["day"] for r in stats.disk_growth_series(7, "dev-n")] == [day(ago) for ago in range(6, -1, -1)],
+      "and the chart draws the seven days")
+
+print()
 print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

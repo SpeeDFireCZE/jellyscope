@@ -102,7 +102,7 @@ check([i18n.translate(n, "cs") if n else "" for n, _ in cards_bazarr.SECTIONS] =
       and [len(j) for _, j in cards_bazarr.SECTIONS] == [4, 4, 2, 3, 1], "five sections of the page by the spec")
 check(all(k.area == "arr" and k.group == "Bazarr" for k in CARDS), "the *Arr area, the Bazarr group")
 check({k.key for k in CARDS if not k.uses_period} == {f"bazarr_{j}" for j in NAMES[:4]}, "without a period only four live cards")
-check(all(k in cards.ALL_CARDS for k in CARDS) and len(cards.ALL_CARDS) == 206, f"they are in the registry; there are 206 cards ({len(cards.ALL_CARDS)})")
+check(all(k in cards.ALL_CARDS for k in CARDS) and len(cards.ALL_CARDS) == 211, f"they are in the registry; there are 211 cards ({len(cards.ALL_CARDS)})")
 check({k.key for k in CARDS if k.has_table_window} == {"bazarr_languages", "bazarr_providers", "bazarr_changed",
                                                   "bazarr_providers_now", "bazarr_health"},
       "the cards with a table for the window")

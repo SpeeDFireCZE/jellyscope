@@ -16,6 +16,16 @@
 (function () {
 var TEXTS = JSON.parse((document.getElementById("texts-js") || {}).textContent || "{}");
 
+/* The page's period (base.html data-period) added to an address the page asks by itself.
+   Without it the server took the period from the session - and another tab may have changed
+   that meanwhile: the card was drawn for a year under a switch saying a week. Shared by the
+   cards switched in place and the cards that refresh by themselves. */
+function withPeriod(address) {
+    var period = document.body.dataset.period;
+    if (!period) { return address; }
+    return address + (address.indexOf("?") === -1 ? "?" : "&") + period;
+}
+
 // It disappears by itself, but not before it can be read. Errors
 // stay - with those the most important thing is that a person
 // notices them, and they can close them themselves.
@@ -54,6 +64,9 @@ var TEXTS = JSON.parse((document.getElementById("texts-js") || {}).textContent |
                 || ALLOWED.indexOf(whereTo) !== -1) { return; }
 
         event.preventDefault();
+        // Into the open window, when the form is in one: a window is in the top layer and the message
+        // on the page would stay under its dimmed backdrop (the same trap as with the value tooltip).
+        (form.closest("dialog[open]") || document.body).appendChild(flash);
         flash.textContent = TEXTS.demo;
         flash.classList.add("shown");
         clearTimeout(timer);
@@ -187,6 +200,23 @@ var TEXTS = JSON.parse((document.getElementById("texts-js") || {}).textContent |
             })(day);
         }
         panel.appendChild(grid);
+        place();
+    }
+
+    // The panel is `position: fixed` (style.css): under the field, above it when there is no room
+    // below, always inside the screen. A window that scrolls (overflow) would clip a panel placed
+    // inside it - the calendar of the last date field on a phone was cut off or out of reach.
+    function place() {
+        var margin = 8;
+        var box = field.getBoundingClientRect();
+        var height = panel.offsetHeight;
+        var top = box.bottom + 6;
+        if (top + height > window.innerHeight - margin && box.top - 6 - height >= margin) {
+            top = box.top - 6 - height;
+        }
+        top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+        panel.style.top = top + "px";
+        panel.style.left = Math.max(margin, Math.min(box.left, window.innerWidth - panel.offsetWidth - margin)) + "px";
     }
 
     function open(input) {
@@ -201,10 +231,14 @@ var TEXTS = JSON.parse((document.getElementById("texts-js") || {}).textContent |
         // in the top layer and anything attached to body would hide
         // under it - the same trap as with the value tooltip.
         var wrapper = field.closest(".field") || field.parentElement;
-        wrapper.style.position = wrapper.style.position || "relative";
         wrapper.appendChild(panel);
         render();
     }
+
+    // The field moves when its window or the page scrolls (or the screen turns) - the panel goes with it.
+    // In the capture phase: a scroll of an element (the window) does not bubble.
+    document.addEventListener("scroll", function () { if (panel) { place(); } }, true);
+    window.addEventListener("resize", function () { if (panel) { place(); } });
 
     // We catch it in the capture phase (`true`), not while bubbling.
     //
@@ -222,8 +256,13 @@ var TEXTS = JSON.parse((document.getElementById("texts-js") || {}).textContent |
         if (panel && !event.target.closest(".calendar")) { close(); }
     }, true);
 
+    // preventDefault: the same Escape would also close the window around the field
+    // (and the dates typed into it would be lost) - it closes only the calendar.
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" && panel) { close(); }
+        if (event.key === "Escape" && panel) {
+            event.preventDefault();
+            close();
+        }
     });
 })();
 
@@ -456,16 +495,6 @@ document.addEventListener("click", function (event) {
 })();
 
 // ------------------------------------------------------------------
-// The "Now playing" card refreshes itself
-//
-// The collector asks Jellyfin every few seconds, but the page did not
-// know about it - it showed the state from the moment of loading. Now it
-// fetches the fragment itself at the same rhythm. Faster would make no sense:
-// newer data do not exist anywhere yet.
-//
-// Only this one piece refreshes, not the whole page. If the whole page
-// reloaded, it would scroll to the top and throw away a half-read table.
-// ------------------------------------------------------------------
 // The custom dashboard's layout
 //
 // It is put together in a window, on a grid of tiles - not by dragging the real
@@ -519,6 +548,20 @@ document.addEventListener("click", function (event) {
         grid.classList.toggle("dash-empty", tile().length === 0);
     }
 
+    // A button of a tile. `named`: the label is its name too, not only its tooltip -
+    // the width button's name is the width it shows.
+    function toolButton(className, text, label, named) {
+        var button = document.createElement("button");
+        button.className = "btn " + className;
+        button.type = "button";
+        button.textContent = text;
+        if (label) {
+            button.title = label;
+            if (named) { button.setAttribute("aria-label", label); }
+        }
+        return button;
+    }
+
     // --- adding and removing --------------------------------------
     if (menu) {
         menu.addEventListener("click", function (event) {
@@ -536,18 +579,18 @@ document.addEventListener("click", function (event) {
             title.textContent =
                 button.querySelector(".dash-item-name").textContent;
 
+            // The same buttons as the server's tiles, their names included (the grid's
+            // data-label-*): "×" alone is no name a screen reader can say.
             var tools = document.createElement("span");
             tools.className = "dash-tile-tools";
-            var toggle = document.createElement("button");
-            toggle.className = "btn dash-width";
-            toggle.type = "button";
-            toggle.textContent = MARKS[width];
-            var gone = document.createElement("button");
-            gone.className = "btn dash-removed";
-            gone.type = "button";
-            gone.textContent = "×";
-            tools.appendChild(toggle);
-            tools.appendChild(gone);
+            var earlier = toolButton("dash-move", "←", grid.dataset.labelEarlier, true);
+            earlier.dataset.move = "-1";
+            var later = toolButton("dash-move", "→", grid.dataset.labelLater, true);
+            later.dataset.move = "1";
+            tools.appendChild(earlier);
+            tools.appendChild(later);
+            tools.appendChild(toolButton("dash-width", MARKS[width], grid.dataset.labelWidth, false));
+            tools.appendChild(toolButton("dash-removed", "×", grid.dataset.labelRemove, true));
 
             fresh.appendChild(title);
             fresh.appendChild(tools);
@@ -564,6 +607,18 @@ document.addEventListener("click", function (event) {
         if (event.target.closest(".dash-removed")) {
             dl.remove();
             refreshMenu();
+            return;
+        }
+        // Moving by the arrows - the way for a finger and a keyboard, which cannot drag.
+        // The neighbour moves, not the tile: the pressed button stays where it is and keeps
+        // its focus, so pressing it again moves the tile one more step.
+        var move = event.target.closest(".dash-move");
+        if (move) {
+            var tiles = tile();
+            var step = move.dataset.move === "-1" ? -1 : 1;
+            var neighbour = tiles[tiles.indexOf(dl) + step];
+            if (!neighbour) { return; }
+            grid.insertBefore(neighbour, step < 0 ? dl.nextElementSibling : dl);
             return;
         }
         var toggle = event.target.closest(".dash-width");
@@ -602,8 +657,7 @@ document.addEventListener("click", function (event) {
 
     grid.addEventListener("pointerdown", function (event) {
         if (event.button !== 0) { return; }
-        if (event.target.closest(".dash-removed") ||
-            event.target.closest(".dash-width")) { return; }
+        if (event.target.closest("button")) { return; }
         dragged = event.target.closest(".dash-tile");
         if (!dragged) { return; }
 
@@ -656,7 +710,13 @@ document.addEventListener("click", function (event) {
     }
 
     grid.addEventListener("pointerup", endDrag);
-    grid.addEventListener("pointercancel", endDrag);
+    // A finger the browser took for scrolling (a tile has no `touch-action: none`, so the
+    // grid can still be scrolled by a swipe over it): the drag is called off and nothing
+    // moves - the stripe a first small move set would have dropped the tile somewhere.
+    grid.addEventListener("pointercancel", function () {
+        goal = null;
+        endDrag();
+    });
 
     // --- saving and closing ---------------------------------------
     if (formElement) {
@@ -664,18 +724,21 @@ document.addEventListener("click", function (event) {
             fieldOrder.value = layoutInput();
         });
     }
-    // Close without saving - the cross and the Cancel button alike. The page loads
-    // again, so no half-made layout stays in the grid: whoever closed
-    // the window threw it away.
+    // Close without saving - the cross, the Cancel button, Esc and a click on the
+    // backdrop alike. A changed layout makes the page load again, so no half-made
+    // layout stays in the grid for the next opening and the next Save: whoever closed
+    // the window threw it away. Saving does not close the window, it leaves the page.
+    var shownLayout = layoutInput();
     if (modal) {
         Array.prototype.forEach.call(
             modal.querySelectorAll(".dash-close"), function (button) {
-                button.addEventListener("click", function () {
-                    modal.close();
-                    if (window.rememberPosition) { window.rememberPosition(); }
-                    window.location.reload();
-                });
+                button.addEventListener("click", function () { modal.close(); });
             });
+        modal.addEventListener("close", function () {
+            if (layoutInput() === shownLayout) { return; }
+            if (window.rememberPosition) { window.rememberPosition(); }
+            window.location.reload();
+        });
     }
     refreshMenu();
 }());
@@ -821,6 +884,16 @@ document.addEventListener("click", function (event) {
 }());
 
 // ------------------------------------------------------------------
+// The "Now playing" card refreshes itself
+//
+// The collector asks Jellyfin every few seconds, but the page did not
+// know about it - it showed the state from the moment of loading. Now it
+// fetches the fragment itself at the same rhythm. Faster would make no sense:
+// newer data do not exist anywhere yet.
+//
+// Only this one piece refreshes, not the whole page. If the whole page
+// reloaded, it would scroll to the top and throw away a half-read table.
+// ------------------------------------------------------------------
 (function () {
     // Every element with `data-refresh` and `data-partial` refreshes itself,
     // at its own rhythm. It used to be hard-coded for "Now playing";
@@ -828,7 +901,7 @@ document.addEventListener("click", function (event) {
     // and that drifts apart from the first one over time.
     //
     // And only the first such element on a page used to refresh. Since the
-    // *Arr card "Stahuje se" there can be several at once (Sonarr and Radarr
+    // *Arr card "Downloading" there can be several at once (Sonarr and Radarr
     // next to "Now playing" on the overview), each with a different rhythm - and the
     // server decides it: the header X-Jellyscope-Refresh in the response
     // says in how many seconds to ask next (5 while downloading, otherwise
@@ -884,6 +957,28 @@ document.addEventListener("click", function (event) {
         });
     }
 
+    // The filters of an open window (the User filter of the streams' window, data-filter-modal):
+    // the new content comes with "everyone" chosen, so after every refresh the whole long list
+    // was back. The choice is carried over - when the new list still has it - and the filter
+    // applied again to the new rows.
+    function filters(modal) {
+        var chosen = {};
+        Array.prototype.forEach.call(modal.querySelectorAll("select[data-filter-modal][id]"), function (e) {
+            chosen[e.id] = e.value;
+        });
+        return chosen;
+    }
+
+    function restoreFilters(modal, chosen) {
+        Array.prototype.forEach.call(modal.querySelectorAll("select[data-filter-modal][id]"), function (e) {
+            var value = chosen[e.id];
+            var known = Array.prototype.some.call(e.options, function (o) { return o.value === value; });
+            if (!value || !known) { return; }
+            e.value = value;
+            e.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+    }
+
     // The new content of an element with an open window in it. If the window were swapped
     // with the rest of the content, it would close and open again - and a screen reader
     // would announce it from the start at every refresh. When the new response has
@@ -900,7 +995,9 @@ document.addEventListener("click", function (event) {
         if (!newModal) { return false; }
         var focus = focusPosition(modal);
         var whereTo = scrolls(modal);
+        var chosen = filters(modal);
         modal.innerHTML = newModal.innerHTML;
+        restoreFilters(modal, chosen);
         restoreScrolls(modal, whereTo);
         restoreFocus(modal, focus);
         // After closing, the browser returns focus to the button that opened the window - but
@@ -928,17 +1025,65 @@ document.addEventListener("click", function (event) {
         return true;
     }
 
-    Array.prototype.forEach.call(document.querySelectorAll("[data-refresh][data-partial]"), function (box) {
-        var cutout = box.dataset.partial;
-        var initial = parseInt(box.dataset.refresh, 10) || 10;
+    // The new content of a refreshing element (data-refresh, data-partial).
+    function swapBox(box, html) {
+        if (!html) { return; }
+        /* The response could arrive in the middle of a drag in a chart -
+           the guard of the asking only keeps the request from starting,
+           not the one already sent from arriving. The swap would
+           pull the chart out from under the hand and the marked stretch would vanish;
+           so it waits for the next round. */
+        if (document.body.dataset.dragging) { return; }
+        /* If the content were swapped with an open window, the window would
+           vanish in the middle of reading - and again at every refresh.
+           So the window stays (swapAroundModal). Where that is not possible
+           (the window is deeper in the content), we remember that it was
+           open and open it again after the swap. When the new
+           response does not have it (all of a series' downloads finished or
+           somebody cancelled them), it goes with the old one - there is nothing
+           left to show. */
+        var previous = box.querySelector("dialog[open]");
+        if (previous && swapAroundModal(box, previous, html)) { return; }
+        var wasOpen = previous ? previous.id : null;
+        /* A window with long content (a breakdown of twenty downloads) is
+           scrolled - and after the swap it would jump back up every few
+           seconds. The scroll is on .modal-body (style.css). */
+        var whereTo = previous ? scrolls(previous) : [];
+        var chosen = previous ? filters(previous) : {};
+        var focus = focusPosition(box);
+        box.innerHTML = html;
+        var reopened = false;
+        if (wasOpen) {
+            var newOnes = document.getElementById(wasOpen);
+            if (newOnes && box.contains(newOnes) && typeof newOnes.showModal === "function") {
+                newOnes.showModal();
+                reopened = true;
+                restoreFilters(newOnes, chosen);
+                restoreScrolls(newOnes, whereTo);
+            }
+        }
+        // A reopened window takes focus by itself (showModal).
+        if (!reopened) { restoreFocus(box, focus); }
+    }
+
+    // Something the page asks again and again at its own rhythm: a refreshing element, and the markers of the
+    // cards that refresh by themselves (below). What every such asking needs is here once - one request at a
+    // time (a slow server does not get a pile of them), nothing on a hidden tab or in the middle of a drag,
+    // and after a failure at most once a minute.
+    //
+    // `ask()` sends the request and returns a promise: of the next rhythm in seconds (none = the starting
+    // one), or of null after an unsuccessful answer; a rejected promise is a network error. `changed(seconds)`
+    // hears every new rhythm. Returns the asking: reload (ask now), isDue (has its rhythm passed), stop.
+    function repeated(initial, ask, changed) {
         var seconds = initial;
         var running = false;
+        var stopped = false;
         var errors = 0;
 
         function rhythm(newItem) {
             if (newItem === seconds) { return; }
             seconds = newItem;
-            box.dataset.refresh = String(newItem);
+            if (changed) { changed(newItem); }
         }
         // setInterval alone is not enough. On a hidden tab the browser throttles it
         // to one run a minute, and after the computer wakes up or sleeps
@@ -946,71 +1091,22 @@ document.addEventListener("click", function (event) {
         // rhythm has passed since the last refresh, it catches up at once.
         var last = Date.now();
 
-        function reloadAll() {
+        function reload() {
             last = Date.now();
             // Asking makes no sense on a hidden browser tab. It saves the
             // server and the phone's battery; on return the state is fetched at once.
             //
             // Not in the middle of a drag either: swapping the content would pull the chart
             // out from under the hand, together with the half-made selection.
-            if (running || document.hidden || document.body.dataset.dragging) { return; }
+            if (stopped || running || document.hidden || document.body.dataset.dragging) { return; }
             running = true;
-            fetch(cutout, {
-                headers: { "X-Requested-With": "fetch" },
-                credentials: "same-origin"
-            })
-                // `redirected` watches for an expired sign-in. In that case the server
-                // answers with a redirect to /login, fetch obediently
-                // follows it - and without this condition the sign-in page would spill
-                // into the card.
-                .then(function (r) {
+            ask()
+                // An unsuccessful answer (an expired sign-in, a disconnected app, a server error): at most once
+                // a minute from now on. The first successful answer brings the rhythm back - the one the
+                // server sent, otherwise the starting one.
+                .then(function (next) {
                     errors = 0;
-                    if (!r.ok || r.redirected) {
-                        rhythm(Math.max(seconds, AFTER_FAILURE));
-                        return null;
-                    }
-                    // The rhythm from the server: when to ask next. Without the header
-                    // (or with nonsense) the one the page came with holds.
-                    var fromServer = parseInt(r.headers.get("X-Jellyscope-Refresh"), 10);
-                    rhythm(fromServer > 0 ? fromServer : initial);
-                    return r.text();
-                })
-                .then(function (html) {
-                    if (!html) { return; }
-                    /* The response could arrive in the middle of a drag in a chart -
-                       the guard above only keeps the request from starting,
-                       not the one already sent from arriving. The swap would
-                       pull the chart out from under the hand and the marked stretch would vanish;
-                       so it waits for the next round. */
-                    if (document.body.dataset.dragging) { return; }
-                    /* If the content were swapped with an open window, the window would
-                       vanish in the middle of reading - and again at every refresh.
-                       So the window stays (swapAroundModal). Where that is not possible
-                       (the window is deeper in the content), we remember that it was
-                       open and open it again after the swap. When the new
-                       response does not have it (all of a series' downloads finished or
-                       somebody cancelled them), it goes with the old one - there is nothing
-                       left to show. */
-                    var previous = box.querySelector("dialog[open]");
-                    if (previous && swapAroundModal(box, previous, html)) { return; }
-                    var wasOpen = previous ? previous.id : null;
-                    /* A window with long content (a breakdown of twenty downloads) is
-                       scrolled - and after the swap it would jump back up every few
-                       seconds. The scroll is on .modal-body (style.css). */
-                    var whereTo = previous ? scrolls(previous) : [];
-                    var focus = focusPosition(box);
-                    box.innerHTML = html;
-                    var reopened = false;
-                    if (wasOpen) {
-                        var newOnes = document.getElementById(wasOpen);
-                        if (newOnes && box.contains(newOnes) && typeof newOnes.showModal === "function") {
-                            newOnes.showModal();
-                            reopened = true;
-                            restoreScrolls(newOnes, whereTo);
-                        }
-                    }
-                    // A reopened window takes focus by itself (showModal).
-                    if (!reopened) { restoreFocus(box, focus); }
+                    rhythm(next === null ? Math.max(seconds, AFTER_FAILURE) : (next > 0 ? next : initial));
                 })
                 // A network outage (also a proxy with a sign-in that redirects to another
                 // domain - the browser rejects that as an error). The first time it tries again
@@ -1022,14 +1118,394 @@ document.addEventListener("click", function (event) {
                 .finally(function () { running = false; });
         }
 
-        refreshers.push({
-            reload: reloadAll,
+        var asking = {
+            reload: reload,
             // Half a tick of tolerance: the timer below ticks every second, and not exactly.
             // A tick that comes a millisecond before the rhythm has passed would otherwise mean
             // waiting another whole second - five seconds would become six.
-            isDue: function () { return Date.now() - last >= seconds * 1000 - HALF_TICK; }
-        });
+            isDue: function () { return !stopped && Date.now() - last >= seconds * 1000 - HALF_TICK; },
+            stop: function () { stopped = true; }
+        };
+        refreshers.push(asking);
+        return asking;
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-refresh][data-partial]"), function (box) {
+        var cutout = box.dataset.partial;
+        repeated(parseInt(box.dataset.refresh, 10) || 10, function () {
+            return fetch(cutout, {
+                headers: { "X-Requested-With": "fetch" },
+                credentials: "same-origin"
+            })
+                // `redirected` watches for an expired sign-in. In that case the server
+                // answers with a redirect to /login, fetch obediently
+                // follows it - and without this condition the sign-in page would spill
+                // into the card.
+                .then(function (r) {
+                    if (!r.ok || r.redirected) { return null; }
+                    // The rhythm from the server: when to ask next. Without the header
+                    // (or with nonsense) the one the page came with holds.
+                    var fromServer = parseInt(r.headers.get("X-Jellyscope-Refresh"), 10);
+                    return r.text().then(function (html) {
+                        swapBox(box, html);
+                        return fromServer;
+                    });
+                });
+        }, function (seconds) { box.dataset.refresh = String(seconds); });
     });
+
+    // ------------------------------------------------------------------
+    // The cards that refresh by themselves (Settings → Interface → Refreshing cards)
+    //
+    // Every card drawn from the registry stands in its slot (_card.html: .card-slot with the card's key and
+    // the sources its data come from). Every ten seconds the page asks /health what changed - a marker per
+    // source (web/status.py) - and when one moved, it asks for the cards over that source again, all of them
+    // in ONE request (/partials/cards, web/dashboards.py: what they share is computed once). Only a card whose
+    // content really differs is swapped; the others are not touched, so whatever a person does in them stays.
+    //
+    // The rhythm (docs/superpowers/specs/2026-11-26-live-cards-design.md, part A):
+    //   * the cards over plays at most once a minute - while something plays, their marker moves every minute;
+    //   * an app's live cards (the source "live" has no marker) once a minute - as long as the server keeps
+    //     the app's live state;
+    //   * a card with a period on a page with a rolling one ("the last 7 days") once in ten minutes even when
+    //     no marker moved - the window moves on by itself;
+    //   * the cards over the other sources (the library, a task's data) at the next round after their marker moved.
+    // The cards with a refresher of their own (Now playing, Recently added, Downloading, Flowing right now)
+    // keep it and are left out here: asked here too they would be refreshed twice, and swapped around their
+    // element the refresher would go on writing into an element no longer on the page.
+    // ------------------------------------------------------------------
+    var MARKERS_EVERY = 10;
+    var PLAYS_EVERY = 60;
+    var LIVE_EVERY = 60;
+    var ROLLING_EVERY = 600;
+    var PLAYS = "plays";
+    var LIVE = "live";
+    // The cards' choices as the page shows them (the Movies/Series chips, the disk over Library growth): drawn
+    // anew, a card keeps what the person chose here, not what another tab left in the session.
+    var CHOICES = {
+        kind: ["#daily-card [data-kind].active", "kind"],
+        top_kind: ["#top-items-card [data-kind].active", "kind"],
+        growth_disk: ["#library-growth [data-growth-disk].active", "growthDisk"]
+    };
+
+    // What a card's content is for telling whether it changed: its HTML as the browser reads it, without what
+    // the page's own scripts do to it (an image that did not load hides or goes, base.js) and without the
+    // charts' gradient names - a counter of the server's process numbers them, so a card drawn again gets new
+    // ones (charts.py). Whitespace counts as one space.
+    function content(slot) {
+        var copy = slot.cloneNode(true);
+        Array.prototype.forEach.call(copy.querySelectorAll("img[data-on-error]"), function (img) {
+            var frame = img.parentElement;
+            if (frame) {
+                frame.classList.remove("no-image");
+                if (img.dataset.onError === "hide-parent") { frame.style.display = ""; }
+                if (!frame.getAttribute("style")) { frame.removeAttribute("style"); }
+            }
+            img.parentNode.removeChild(img);
+        });
+        return copy.innerHTML.replace(/gradient-(mini-)?\d+/g, "gradient").replace(/\s+/g, " ").trim();
+    }
+
+    // A field whose value is not the one the page came with - typed into and not sent. The filter of a window
+    // (data-filter-modal) is no such thing: it is not sent anywhere, and the swap carries its choice over.
+    function edited(field) {
+        if (field.hasAttribute("data-filter-modal")) { return false; }
+        if (field.type === "checkbox" || field.type === "radio") { return field.checked !== field.defaultChecked; }
+        if (field.tagName === "SELECT") {
+            var options = Array.prototype.slice.call(field.options);
+            if (field.multiple) {
+                return options.some(function (option) { return option.selected !== option.defaultSelected; });
+            }
+            // A list without a chosen option starts at its first one.
+            var original = options.filter(function (option) { return option.defaultSelected; }).pop() || options[0];
+            return !!original && !original.selected;
+        }
+        return field.value !== field.defaultValue;
+    }
+
+    // Keyboard focus, as the browser tells it (the ring around the control). A browser that does not know
+    // the question counts every focus.
+    function keyboardFocus(element) {
+        try { return element.matches(":focus-visible"); } catch (e) { return true; }
+    }
+
+    // Is a person doing something in the card right now? Then it is not swapped and is asked again next time:
+    // an open window, a field typed into and not sent (the Disks card's forms), text selected in it, a part
+    // that says it is in use (the map zoomed in or held, map.js: data-busy), a switch of the card on its way
+    // (the Movies/Series chips, the disk over Library growth: .is-loading - its answer would land in a card
+    // no longer on the page), keyboard focus on one of its controls - and a text field or a list with focus
+    // even from the mouse. (A drag in a chart stops the whole round, see swapCards.) Focus a click left on a
+    // link or a button does not stop it: the swap puts it back.
+    function busy(slot) {
+        if (slot.querySelector("dialog[open], [data-busy], .is-loading")) { return true; }
+        if (Array.prototype.some.call(slot.querySelectorAll("input, select, textarea"), edited)) { return true; }
+        var active = document.activeElement;
+        if (active && active !== slot && slot.contains(active)
+                && (active.matches("input, select, textarea, [contenteditable]") || keyboardFocus(active))) {
+            return true;
+        }
+        var selection = window.getSelection ? window.getSelection() : null;
+        return !!selection && !selection.isCollapsed && selection.rangeCount > 0 && selection.containsNode(slot, true);
+    }
+
+    // Where an element is in a card, so that the same one is found in its fresh content: by its tag, id and
+    // class (a <details> by its summary too) and by its order among the elements alike.
+    function signature(element) {
+        var summary = element.tagName === "DETAILS" ? element.querySelector("summary") : null;
+        return [element.tagName, element.id, element.getAttribute("class") || "",
+                summary ? summary.textContent.trim() : ""].join("|");
+    }
+
+    function places(slot, wanted) {
+        var counts = {};
+        var found = [];
+        Array.prototype.forEach.call(slot.querySelectorAll("*"), function (element) {
+            var sign = signature(element);
+            counts[sign] = (counts[sign] || 0) + 1;
+            if (wanted(element)) {
+                found.push({ sign: sign, order: counts[sign], top: element.scrollTop, left: element.scrollLeft });
+            }
+        });
+        return found;
+    }
+
+    function found(slot, place) {
+        var order = 0;
+        return Array.prototype.filter.call(slot.querySelectorAll("*"), function (element) {
+            if (signature(element) !== place.sign) { return false; }
+            order += 1;
+            return order === place.order;
+        })[0] || null;
+    }
+
+    // The lowest edge of a card on the screen: its slot makes no box of its own (display: contents).
+    function bottomOf(slot) {
+        return Array.prototype.reduce.call(slot.children, function (lowest, child) {
+            return Math.max(lowest, child.getBoundingClientRect().bottom);
+        }, -Infinity);
+    }
+
+    // What the person reads when a card wholly above the window is drawn anew: an element in the middle of the
+    // window, outside the card, and where it stands. The browser keeps it in place by itself (scroll anchoring);
+    // `keepInPlace` puts it back only where the browser did not.
+    function readPlace(slot) {
+        if (!slot.children.length || bottomOf(slot) > 0) { return null; }
+        var element = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        return element && !slot.contains(element) ? { element: element, top: element.getBoundingClientRect().top } : null;
+    }
+
+    function keepInPlace(place) {
+        if (!place || !place.element.isConnected) { return; }
+        var moved = place.element.getBoundingClientRect().top - place.top;
+        if (Math.abs(moved) >= 1) { window.scrollBy(0, moved); }
+    }
+
+    // The fresh card in place of the old one. What a person had in it stays: the place on the page they read
+    // (readPlace), the scroll of the card's own scrolling boxes (a wide table), the open <details>, the choice
+    // in a window's filter (filters, restoreFilters) and the focus a click left on a link or a button
+    // (focusPosition, restoreFocus). The page's own offset is not put back: when a card above the window
+    // changes its height, the content in view moves with it unless the offset changes too - the browser's
+    // scroll anchoring does exactly that. The page's listeners are on the document, and a part that binds to
+    // its own element starts again on the event card-redrawn (the map, map.js).
+    function redraw(slot, fresh) {
+        var reading = readPlace(slot);
+        var opened = places(slot, function (e) { return e.tagName === "DETAILS" && e.open; });
+        var scrolled = places(slot, function (e) { return e.scrollTop > 0 || e.scrollLeft > 0; });
+        var chosen = filters(slot);
+        var focus = focusPosition(slot);
+        while (slot.firstChild) { slot.removeChild(slot.firstChild); }
+        while (fresh.firstChild) { slot.appendChild(fresh.firstChild); }
+        opened.forEach(function (place) {
+            var element = found(slot, place);
+            if (element) { element.open = true; }
+        });
+        restoreFilters(slot, chosen);
+        scrolled.forEach(function (place) {
+            var element = found(slot, place);
+            if (element) { element.scrollTop = place.top; element.scrollLeft = place.left; }
+        });
+        restoreFocus(slot, focus);
+        keepInPlace(reading);
+        slot.dispatchEvent(new CustomEvent("card-redrawn", { bubbles: true }));
+    }
+
+    // Not the cards with a refresher of their own (above), nor a card the page keeps still (data-card-still: the
+    // page writes numbers of its own the card adds up to, _macros.html show_card).
+    var liveCards = document.body.dataset.selfRefresh !== "1" ? [] : Array.prototype.filter.call(
+        document.querySelectorAll(".card-slot[data-card-key]"),
+        function (slot) { return slot.dataset.cardStill !== "1" && !slot.querySelector("[data-partial], [data-version]"); }
+    ).map(function (slot) {
+        return {
+            slot: slot,
+            key: slot.dataset.cardKey,
+            sources: (slot.dataset.cardSources || "").split(" ").filter(Boolean),
+            period: slot.dataset.cardPeriod === "1",
+            // The content the card was drawn with, and when: the page's own drawing to begin with.
+            known: content(slot),
+            shown: Date.now(),
+            // The sources whose marker moved since the card was drawn.
+            moved: {}
+        };
+    });
+    // History's bar of new plays (see askNewPlays); none with Refreshing cards off.
+    var newPlays = document.body.dataset.selfRefresh === "1" ? document.getElementById("history-new") : null;
+    // The markers of the previous answer. To begin with those the page was drawn with (base.html: data-markers,
+    // taken before the page computed its data), so a change since - while the page was computed or on its way -
+    // moves a marker already at the first answer. A page without them: the first answer only says where it
+    // starts from.
+    var markers = drawnMarkers();
+    var markersAsking = null;
+
+    function drawnMarkers() {
+        try {
+            var drawn = JSON.parse(document.body.dataset.markers || "null");
+            return drawn && typeof drawn === "object" ? drawn : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // The sign-in has expired (14 days, signed out in another tab, a disabled account): one bar at the top says
+    // so and the asking stops - otherwise the cards would stand still without a word.
+    function expire() {
+        markersAsking.stop();
+        var bar = document.getElementById("session-expired");
+        if (bar) { bar.hidden = false; }
+        return 0;
+    }
+
+    // The left panel's "N active playbacks" and "Last run" from the same answer (base.html). The number comes
+    // only with the right "Now playing"; at nought the row hides, as the server draws it.
+    function panel(data) {
+        var count = document.querySelector("[data-active-count]");
+        if (count && typeof data.active_sessions === "number") {
+            count.textContent = String(data.active_sessions);
+            count.parentNode.hidden = !data.active_sessions;
+        }
+        var lastRun = document.querySelector("[data-last-poll]");
+        if (lastRun && data.last_poll_text) { lastRun.textContent = data.last_poll_text; }
+    }
+
+    // The cards to draw anew after an answer of the markers (by the rhythm above), and which of them a person is
+    // not busy in right now.
+    function due(current) {
+        var moved = Object.keys(current).filter(function (source) {
+            return markers !== null && markers[source] !== current[source];
+        });
+        markers = current;
+        var now = Date.now() + HALF_TICK;
+        var rolling = /(^|&)days=[1-9]/.test(document.body.dataset.period || "");
+        return liveCards.filter(function (card) {
+            moved.forEach(function (source) {
+                if (card.sources.indexOf(source) !== -1) { card.moved[source] = true; }
+            });
+            var since = now - card.shown;
+            var wanted = Object.keys(card.moved).some(function (source) {
+                return source !== PLAYS || since >= PLAYS_EVERY * 1000;
+            })
+                || (card.sources.indexOf(LIVE) !== -1 && since >= LIVE_EVERY * 1000)
+                || (card.period && rolling && since >= ROLLING_EVERY * 1000);
+            return wanted && !busy(card.slot);
+        });
+    }
+
+    function choices() {
+        return Object.keys(CHOICES).map(function (name) {
+            var chip = document.querySelector(CHOICES[name][0]);
+            return chip ? "&" + name + "=" + encodeURIComponent(chip.dataset[CHOICES[name][1]] || "") : "";
+        }).join("");
+    }
+
+    // The answer taken apart by the slots: each asked card swapped only when its content differs.
+    function swapCards(asked, html) {
+        var answer = document.createElement("template");
+        answer.innerHTML = html;
+        var fresh = {};
+        Array.prototype.forEach.call(answer.content.querySelectorAll(".card-slot[data-card-key]"), function (slot) {
+            fresh[slot.dataset.cardKey] = slot;
+        });
+        var now = Date.now();
+        asked.forEach(function (card) {
+            var next = fresh[card.key];
+            // A drag in a chart began, or the person started doing something in the card while it was being
+            // drawn: it is asked again at the next round.
+            if (next && (document.body.dataset.dragging || busy(card.slot))) { return; }
+            card.shown = now;
+            card.moved = {};
+            // Not in the answer: the account may no longer see it, or its app went away - it stays as it is.
+            if (!next) { return; }
+            var text = content(next);
+            if (text === card.known) { return; }
+            card.known = text;
+            redraw(card.slot, next);
+        });
+    }
+
+    function askCards(asked) {
+        if (!asked.length) { return 0; }
+        var keys = asked.map(function (card) { return encodeURIComponent(card.key); }).join(",");
+        var inDashboard = asked[0].slot.closest(".dash-card") ? "&in_dashboard=1" : "";
+        return fetch(withPeriod("/partials/cards?keys=" + keys + inDashboard + choices()), {
+            headers: { "X-Requested-With": "fetch" },
+            credentials: "same-origin"
+        }).then(function (r) {
+            // A redirect to /login: the sign-in expired since the markers answered.
+            if (r.redirected) { return expire(); }
+            if (!r.ok) { return null; }
+            return r.text().then(function (html) { swapCards(asked, html); });
+        });
+    }
+
+    // History (history.html) is not rewritten under the reader's eyes: it has no cards, only a bar above its
+    // table. When the plays' marker moved, the page asks how many plays its filter finds more than the page was
+    // drawn with - the server counts them by the page's own filter and rights (/history/new, web/history.py), so
+    // the number is what loading the page again adds - and the bar shows it; its link loads the page again with
+    // the same filter, at the same place (data-keep-scroll). Like the markers, never on a hidden tab (repeated).
+    function askNewPlays() {
+        return fetch(newPlays.dataset.historyNew, {
+            headers: { "X-Requested-With": "fetch" },
+            credentials: "same-origin",
+            cache: "no-store"
+        }).then(function (r) {
+            if (r.redirected) { return expire(); }
+            if (!r.ok) { return null; }
+            return r.json().then(function (data) {
+                var count = data && data.count > 0 ? data.count : 0;
+                newPlays.querySelector("[data-history-new-text]").textContent = count ? data.text : "";
+                newPlays.hidden = !count;
+            });
+        });
+    }
+
+    function askMarkers() {
+        // cache: no-store - the browser must not answer from its memory (see the watcher of finished tasks).
+        return fetch("/health", { credentials: "same-origin", cache: "no-store" }).then(function (r) {
+            // A proxy that signs in by itself redirects; the app answers a signed-out page without markers.
+            if (r.redirected) { return expire(); }
+            if (!r.ok) { return null; }
+            return r.json().then(function (data) {
+                // Signed out: the app answers only that it is alive (no version).
+                if (!data || !data.version) { return expire(); }
+                panel(data);
+                // Signed in without markers: Refreshing cards were switched off meanwhile - the page stops asking
+                // and stays as it is, as every page does with them off.
+                if (!data.markers) {
+                    markersAsking.stop();
+                    return 0;
+                }
+                var playsMoved = markers !== null && markers[PLAYS] !== data.markers[PLAYS];
+                var asked = due(data.markers);
+                // History has no cards, a page with cards no bar of new plays.
+                return newPlays && playsMoved ? askNewPlays() : askCards(asked);
+            });
+        });
+    }
+
+    if (liveCards.length || newPlays) {
+        markersAsking = repeated(MARKERS_EVERY, askMarkers);
+        // At once: what changed since the page was drawn.
+        markersAsking.reload();
+    }
     if (!refreshers.length) { return; }
 
     // The swap used to be skipped while the mouse was over the card. That sounded
@@ -1166,11 +1642,48 @@ document.addEventListener("click", function (event) {
 
     var bar = document.getElementById("task-progress-fill");
     var description = document.getElementById("task-progress-text");
+    var running = false;
+    var timer = null;
+    // Has anything on the page been typed or ticked since it loaded? (The Stop form is no such thing.)
+    var edited = false;
+    ["input", "change"].forEach(function (kind) {
+        document.addEventListener(kind, function (event) {
+            var target = event.target;
+            if (target && target.closest && target.closest("form") && !target.closest("[data-running-task]")) {
+                edited = true;
+            }
+        }, true);
+    });
 
     function reloadAll() {
+        // Not on a hidden tab (the same as the other watchers) and not while the previous
+        // request still waits - a heavy task can slow /health down and requests piled up.
+        if (running || document.hidden) { return; }
+        running = true;
         fetch("/health", { credentials: "same-origin", cache: "no-store" })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
+                // The box is drawn only while a task runs (the macro running_task). When it has
+                // ended, the asking stops and the page loads again - otherwise "A task is running."
+                // and the Stop button stayed. Where the page waits for the task by itself
+                // (data-wait-for, data-reload-on-task), it loads the page itself.
+                if (data && !data.task_running) {
+                    clearInterval(timer);
+                    box.hidden = true;
+                    if (!document.body.dataset.waitFor && document.body.dataset.reloadOnTask !== "1") {
+                        // Not over a form somebody has started to fill in: a reload would throw the typed
+                        // values away without a word. Then only the strip and the Stop button go.
+                        if (edited) {
+                            document.querySelectorAll("[data-running-task]").forEach(function (part) {
+                                part.hidden = true;
+                            });
+                        } else {
+                            if (window.rememberPosition) { window.rememberPosition(); }
+                            window.location.reload();
+                        }
+                    }
+                    return;
+                }
                 var p = data && data.progress;
                 if (!p || !p.kind) { box.hidden = true; return; }
 
@@ -1186,11 +1699,12 @@ document.addEventListener("click", function (event) {
                         + "  (" + p.percent + " %)";
                 }
             })
-            .catch(function () { /* it tries again in a while */ });
+            .catch(function () { /* it tries again in a while */ })
+            .finally(function () { running = false; });
     }
 
     reloadAll();
-    setInterval(reloadAll, 2000);
+    timer = setInterval(reloadAll, 2000);
 })();
 
 // ------------------------------------------------------------------
@@ -1287,27 +1801,29 @@ document.addEventListener("click", function (event) {
 
     /* One handler for each card that has its own switch.
        `id` is the card's element, `path` the fragment on the server and `parameter` the name
-       of the part of the address the switch changes. */
+       of the part of the address the switch changes. The listener is on the document, not on
+       the card: a card that refreshes by itself is drawn anew, wrapper included, and a listener
+       on the old element would be gone with it (the same as the disk chips below). */
     function switchableCard(id, path, parameter) {
-        var card = document.getElementById(id);
-        if (!card) { return; }
-
         var loading = false;
 
-        card.addEventListener("click", function (event) {
-            var link = event.target.closest("[data-kind]");
-            if (!link || loading) { return; }
+        document.addEventListener("click", function (event) {
+            var link = event.target.closest ? event.target.closest("[data-kind]") : null;
+            var card = link ? link.closest("#" + id) : null;
+            if (!card || loading) { return; }
 
             event.preventDefault();
             loading = true;
             card.classList.add("is-loading");
 
-            fetch(path + "?kind=" + encodeURIComponent(link.dataset.kind), {
+            fetch(withPeriod(path + "?kind=" + encodeURIComponent(link.dataset.kind)), {
                 headers: { "X-Requested-With": "fetch" },
                 credentials: "same-origin"
             })
                 .then(function (response) {
-                    if (!response.ok) { throw new Error(response.status); }
+                    // `redirected` = an expired sign-in: the server sends /login and fetch follows it -
+                    // the sign-in page would end up inside the card. The whole page goes there instead.
+                    if (!response.ok || response.redirected) { throw new Error(response.status); }
                     return response.text();
                 })
                 .then(function (html) {
@@ -1325,8 +1841,9 @@ document.addEventListener("click", function (event) {
                     // page. The user must not be left with a dead button.
                     // We remember the position again: since the click, enough time
                     // may have passed for the remembered one to no longer hold.
+                    // The page's period goes along: the link's "?kind=" alone would load the page for the session's period.
                     if (window.rememberPosition) { window.rememberPosition(); }
-                    window.location.href = link.href;
+                    window.location.href = withPeriod(link.href);
                 })
                 .finally(function () {
                     loading = false;
@@ -1365,7 +1882,7 @@ document.addEventListener("click", function (event) {
         if (cardElement.classList.contains("is-loading")) { return; }
         cardElement.classList.add("is-loading");
 
-        fetch("/library/partials/growth?growth_disk=" + encodeURIComponent(chip.dataset.growthDisk), {
+        fetch(withPeriod("/library/partials/growth?growth_disk=" + encodeURIComponent(chip.dataset.growthDisk)), {
             headers: { "X-Requested-With": "fetch" },
             credentials: "same-origin"
         })
@@ -1377,7 +1894,7 @@ document.addEventListener("click", function (event) {
                 var wrapper = document.createElement("div");
                 wrapper.innerHTML = html;
                 var fresh = wrapper.querySelector("#library-growth");
-                if (!fresh) { throw new Error("bez karty"); }
+                if (!fresh) { throw new Error("no card"); }
                 cardElement.parentNode.replaceChild(fresh, cardElement);
                 // The address matches what is visible; replaceState - a switch
                 // is not a step in history (see switchableCard).
@@ -1388,7 +1905,7 @@ document.addEventListener("click", function (event) {
             .catch(function () {
                 cardElement.classList.remove("is-loading");
                 if (window.rememberPosition) { window.rememberPosition(); }
-                window.location.href = chip.href;
+                window.location.href = withPeriod(chip.href);
             });
     });
 
@@ -1541,9 +2058,10 @@ document.addEventListener("click", function (event) {
         modal.showModal();
         if (content.dataset.loaded === anchor.href) { return; }
         content.innerHTML = '<p class="hint">…</p>';
-        fetch(anchor.href, { headers: { "X-Requested-With": "fetch" },
-                            credentials: "same-origin" })
-            .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.text(); })
+        fetch(withPeriod(anchor.href), { headers: { "X-Requested-With": "fetch" },
+                                         credentials: "same-origin" })
+            // `redirected`: an expired sign-in (see switchableCard) - not the sign-in page inside the window.
+            .then(function (r) { if (!r.ok || r.redirected) { throw new Error(r.status); } return r.text(); })
             .then(function (html) {
                 content.innerHTML = html;
                 content.dataset.loaded = anchor.href;
@@ -1554,7 +2072,7 @@ document.addEventListener("click", function (event) {
                 // for the way back: whoever comes back lands where they
                 // clicked.
                 if (window.rememberPosition) { window.rememberPosition(); }
-                window.location.href = anchor.href;
+                window.location.href = withPeriod(anchor.href);
             });
     });
 
@@ -1647,9 +2165,14 @@ document.addEventListener("click", function (event) {
             last = query;
             fetch("/archive/search?q=" + encodeURIComponent(query),
                   { credentials: "same-origin" })
-                .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+                .then(function (r) {
+                    // An expired sign-in (redirected to /login): the page goes to signing in,
+                    // otherwise the search would find nothing in silence.
+                    if (r.redirected) { if (window.rememberPosition) { window.rememberPosition(); } window.location.reload(); return null; }
+                    return r.ok ? r.json() : { items: [] };
+                })
                 .then(function (data) {
-                    if (query === last) { render(data.items || [], data.next); }
+                    if (data && query === last) { render(data.items || [], data.next); }
                 })
                 .catch(function () { /* a network outage: the menu stays as it was */ });
         }
@@ -1860,11 +2383,25 @@ document.addEventListener("click", function (event) {
 
     /* A click on the dimmed backdrop closes. The browser reports a click on
        the <dialog> itself even when you miss its content -
-       that is why the click's target is compared. */
+       that is why the click's target is compared. And where: the window's padding
+       and the gaps between its parts are the <dialog> too, and a text selection
+       dragged out of the window ends with a click on it (the common parent of where
+       it started and ended). So only a click that both started and ended outside
+       the window's box closes it. */
+    var pressedOnBackdrop = false;
+    function outsideBox(dialog, event) {
+        var box = dialog.getBoundingClientRect();
+        return event.clientX < box.left || event.clientX > box.right
+            || event.clientY < box.top || event.clientY > box.bottom;
+    }
+    document.addEventListener("pointerdown", function (event) {
+        pressedOnBackdrop = event.target.tagName === "DIALOG" && outsideBox(event.target, event);
+    });
     document.addEventListener("click", function (event) {
-        if (event.target.tagName === "DIALOG") {
+        if (event.target.tagName === "DIALOG" && pressedOnBackdrop && outsideBox(event.target, event)) {
             event.target.close();
         }
+        pressedOnBackdrop = false;
     });
 
     /* The history filter: the fields for exact dates show only when
@@ -1872,7 +2409,7 @@ document.addEventListener("click", function (event) {
        too - `hidden` is removed only here, so nobody can end up
        without the option to enter a date. */
     (function () {
-        var choice = document.querySelector("[data-period]");
+        var choice = document.querySelector("select[data-period]");
         if (!choice) { return; }
         var field = document.querySelectorAll(".filter-custom");
 

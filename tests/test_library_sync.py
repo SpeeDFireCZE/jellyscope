@@ -46,7 +46,7 @@ os.environ["JELLYFIN_API_KEY"] = "test-key"
 
 from _apps import login  # noqa: E402
 from _music import fake_jellyfin, recorded, fill_music  # noqa: E402
-from jellyscope import accounts, db, demodata, insights, scanner, stats  # noqa: E402
+from jellyscope import accounts, db, demodata, i18n, insights, scanner, stats  # noqa: E402
 from jellyscope.importers import creation  # noqa: E402
 
 failures = 0
@@ -187,6 +187,100 @@ sync(FOLDERS)
 check(db.query_value("SELECT COUNT(*) FROM libraries WHERE collection_type IN ('boxsets', 'playlists')") == 0,
       "a sync removes stored collections and playlists folders")
 check("old-boxsets" not in card_ids() and not card_ids() & NOT_LIBRARIES, "and the Library page has no tile for them")
+
+print()
+print("--- the full sync and an empty or incomplete list of libraries ---")
+# A starting Jellyfin answers, but lists no library yet - or only some of them. The items of a library it left
+# out are still in Jellyfin: the sync must not send them to the archive, and an empty list must not report
+# success with a growth snapshot of zero titles. A library is gone only after two lists in a row without it.
+from _package import substitute  # noqa: E402
+
+FILMS = {"lib-films-a": [f"film-a-{i}" for i in range(3)], "lib-films-b": [f"film-b-{i}" for i in range(4)]}
+VIDEO_FOLDERS = [folder(library, library, "movies", f"/media/{library}") for library in FILMS]
+
+
+class FullSyncJellyfin:
+    """A Jellyfin for the whole sync: its list of libraries is VIDEO_SHOWN, the items come by library."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    async def __aenter__(self) -> "FullSyncJellyfin":
+        return self
+
+    async def __aexit__(self, *args) -> bool:
+        return False
+
+    async def users(self) -> list[dict]:
+        return [{"Id": "u-library-sync", "Name": "Divák"}]
+
+    async def virtual_folders(self) -> list[dict]:
+        return copy.deepcopy(VIDEO_SHOWN)
+
+    async def item_count(self, parent_id: str | None = None, **kwargs) -> int:
+        return len(FILMS.get(parent_id or "", []))
+
+    async def iter_items(self, parent_id: str):  # noqa: ANN201
+        for item_id in FILMS.get(parent_id, []):
+            yield {"Id": item_id, "Name": item_id, "Type": "Movie", "RunTimeTicks": 60_000_000_000,
+                   "DateCreated": "2026-01-01T00:00:00.0000000Z"}
+
+    async def storage(self) -> dict:
+        return {}
+
+    async def items_by_ids(self, ids: list[str]) -> list[dict]:
+        return []
+
+
+def full_sync(shown: list[dict]) -> dict:
+    """One full sync with these libraries listed - a day after the one before (the stamps go back)."""
+    VIDEO_SHOWN[:] = shown
+    with db.connect() as conn:
+        conn.execute("UPDATE items SET synced_at = '2026-01-01 00:00:00'")
+    restore = substitute(scanner, "JellyfinClient", FullSyncJellyfin)
+    try:
+        return asyncio.run(scanner.sync_library())
+    finally:
+        restore()
+
+
+def live(library: str) -> int:
+    return db.query_value("SELECT COUNT(*) FROM items WHERE library_id = ? AND is_missing = 0", (library,))
+
+
+def task_text() -> str:
+    record = scanner.last_scan("library") or {}
+    return i18n.stored_text(record.get("message") or "", record.get("message_values") or "", "en")
+
+
+def snapshots() -> int:
+    return db.query_value("SELECT COUNT(*) FROM library_snapshot")
+
+
+VIDEO_SHOWN: list[dict] = []
+first = full_sync(VIDEO_FOLDERS)
+check(first.get("status") == "ok" and live("lib-films-a") == 3 and live("lib-films-b") == 4,
+      f"a full sync with both libraries: every film is in the library ({first})")
+with db.connect() as conn:
+    conn.execute("DELETE FROM library_snapshot")
+result = full_sync([])
+record = scanner.last_scan("library") or {}
+check(live("lib-films-a") == 3 and live("lib-films-b") == 4,
+      f"Jellyfin lists no library: no film goes to the archive ({live('lib-films-a')} + {live('lib-films-b')})")
+check(result.get("status") == "error" and record.get("status") == "error"
+      and "nothing was marked as gone" in task_text(),
+      f"and the task says so instead of reporting success ({result.get('status')}, {task_text()!r})")
+check(snapshots() == 0, "and writes no growth snapshot of an empty library")
+result = full_sync([f for f in VIDEO_FOLDERS if f["ItemId"] == "lib-films-a"])
+check(result.get("status") == "ok" and live("lib-films-a") == 3 and live("lib-films-b") == 4,
+      f"one library left out of the list once: its films stay in the library ({live('lib-films-b')})")
+check("lib-films-b" in task_text(), f"and the task log names it ({task_text()!r})")
+FILMS["lib-films-a"].pop()
+full_sync([f for f in VIDEO_FOLDERS if f["ItemId"] == "lib-films-a"])
+check(live("lib-films-a") == 2, "a film gone from a library that was read still goes to the archive")
+check(live("lib-films-b") == 0, "left out of two lists in a row: the library is gone and its films are archived")
+full_sync(VIDEO_FOLDERS)
+check(live("lib-films-b") == 4, "back in Jellyfin: its films are back too")
 
 print()
 print("--- demo data ---")

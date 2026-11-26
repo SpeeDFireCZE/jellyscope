@@ -1,0 +1,46 @@
+{# The Radarr card "Indexer reliability": how the downloads grabbed from each indexer in the period ended.
+
+   From the stored history (cards_radarr.py, `d.rows`; stats.radarr_indexer_reliability): the downloads (one
+   release is one download, however many grabs it wrote - the note says so), how many of them were imported into the
+   library, how many failed, how many cannot be matched (a client without a download id, Blackhole) and the success
+   rate as a ready text ("–" = nothing that can be matched finished). The most failures first. A download still
+   running at the period's end is neither imported nor failed. It is the
+   reliability of what the indexer delivers, not whether its API answered - the note under the heading says so.
+
+   A long table as the other *Arr tables: the first rows in the card, the whole one in the window. The table
+   follows the card's width (wrapper-by-width): on a narrow card the imported and the unmatched stand under the name. #}
+{% from "_macros.html" import row_class, whole_table_button with context %}
+<div class="card">
+    <div class="card-head">
+        <h2>{{ prefix }}{{ _(card.name) }}</h2>
+        <p class="card-note">{{ _("How reliable the releases from the indexer are, not whether its API was reachable.") }}
+            {{ _("A release grabbed again before it finished is one download.") }}</p>
+    </div>
+    {% if d.rows %}
+    <div class="table-wrap wrapper-by-width"><table class="table-dense">
+        <thead><tr>
+            <th>{{ _("Indexer") }}</th>
+            <th class="num">{{ _("Downloads") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Imported") }}</th>
+            <th class="num">{{ _("Failed") }}</th>
+            <th class="num wide-wrapper-only">{{ _("Cannot be matched") }}</th>
+            <th class="num">{{ _("Success rate") }}</th>
+        </tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+            <tr class="{{ row_class(loop.index, "arr") }}">
+                <td class="strong break-anywhere">{{ r.name }}
+                    <div class="narrow-wrapper-only cell-sub">{{ _("Imported") }} {{ r.imported | number }} &middot; {{ _("Cannot be matched") }} {{ r.unmatched | number }}</div></td>
+                <td class="num">{{ r.downloads | number }}</td>
+                <td class="num wide-wrapper-only">{{ r.imported | number }}</td>
+                <td class="num">{{ r.failed | number }}</td>
+                <td class="num wide-wrapper-only">{{ r.unmatched | number }}</td>
+                <td class="num">{{ r.success }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {{ whole_table_button(d.rows | length, "arr") }}
+    {% if d.unmatched %}<p class="card-note">{{ _("A download client that does not report the download's id (Blackhole) cannot be matched with the import or the failure; such downloads do not count into the success rate.") }}</p>{% endif %}
+    {% else %}<p class="chart-empty">{{ _("No data yet") }}</p>{% endif %}
+</div>

@@ -20,12 +20,19 @@ What does not load is None (unknown), not zero nor an empty list: "temporarily s
 failed request would be a claim nobody checked. An unavailable Prowlarr does not bring the page down:
 `dostupna: False` and the error (without the key, translated on every read); the statistics from the
 database still show.
+
+The same answers give the samples of the indexers' status (`samples.py`): a fresh load for a page
+stores one at most every ten minutes, `take_sample` after the *Arr sync task on every run - both only
+while the background loop does not measure (samples.watching); the loop asks for its own with two
+requests only (`status_sample`). A sample holds the blocks - who Prowlarr leaves out - and which
+indexers are enabled, not the warnings, which may name an indexer long after its block expired.
 """
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import time
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -33,12 +40,18 @@ import httpx
 from ... import db, i18n
 from ...services import LIVE_TIMEOUT, integer, utc_time
 from .client import ProwlarrClient, ProwlarrError
+from .samples import EVERY, store_sample, watching
 
 TTL = 60.0             # seconds in the cache
 # Prowlarr's health checks that name unavailable indexers (briefly and for longer than six hours).
 UNAVAILABLE_SOURCES = ("IndexerStatusCheck", "IndexerLongTermStatusCheck")
 # Under the key "prowlarr": (when loaded - time.monotonic(), the address and the key's fingerprint, state, error).
 CACHE: dict[str, tuple[Any, ...]] = {}
+MAX_NUMBER = 2**31 - 1   # an indexer's number must fit the column (nonsense from another app is no number)
+# A block: (until when, failing since, the most recent failure) in UTC.
+Block = tuple[str, str | None, str | None]
+# A sample: (when, [(indexer, failing since, left out until, the most recent failure), ...], the indexers enabled then).
+Sample = tuple[str, list[tuple[int, str | None, str | None, str | None]], list[int]]
 
 
 def _empty() -> dict[str, Any]:
@@ -46,14 +59,31 @@ def _empty() -> dict[str, Any]:
             "app_count": None, "health": None, "warnings": None}
 
 
-def _blocks(records: list[dict[str, Any]], now: str) -> dict[int, tuple[str, str | None]]:
-    """The indexers Prowlarr leaves out right now: {number: (until when, failing since)} in UTC. A block that expired already does not count."""
+def _blocks(records: list[dict[str, Any]], now: str) -> dict[int, Block]:
+    """The indexers Prowlarr leaves out right now: {number: (until when, failing since, the most recent failure)} in UTC.
+    A block that expired already does not count."""
     blocks = {}
     for record in records:
         number, until = integer(record.get("indexerId"), None), utc_time(record.get("disabledTill"))
         if number is not None and until and until > now:
-            blocks[number] = (until, utc_time(record.get("initialFailure")))
+            blocks[number] = (until, utc_time(record.get("initialFailure")), utc_time(record.get("mostRecentFailure")))
     return blocks
+
+
+def _sample(records: list[dict[str, Any]] | None, blocks: dict[int, Block] | None, now: str) -> Sample | None:
+    """The sample of this load: the indexers of the list that Prowlarr leaves out (an empty list = nobody) and the
+    numbers of those enabled in it - an indexer's time is measured only while it is there and enabled.
+
+    None = no sample: without the blocks nothing is known, without the list of indexers it is not known
+    which indexers the blocks are about.
+    """
+    if records is None or blocks is None:
+        return None
+    numbers = [(integer(r.get("id"), None), bool(r.get("enable"))) for r in records]
+    known = {number for number, _ in numbers}
+    enabled = sorted({number for number, on in numbers if on and number is not None and 0 < number <= MAX_NUMBER})
+    return now, [(number, since, until, last) for number, (until, since, last) in sorted(blocks.items())
+                 if number in known and 0 < number <= MAX_NUMBER], enabled
 
 
 def _names_in_text(text: str, names: list[str]) -> set[str]:
@@ -92,7 +122,7 @@ def _reported(names: list[str], health: list[dict[str, Any]] | None) -> set[str]
     return reported
 
 
-def _indexers(records: list[dict[str, Any]], blocks: dict[int, tuple[str, str | None]] | None,
+def _indexers(records: list[dict[str, Any]], blocks: dict[int, Block] | None,
               health: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """The indexers with their state: those temporarily switched off by Prowlarr first, then those it reports as
     unavailable, then those switched off by hand, then the others; within that by name.
@@ -103,34 +133,43 @@ def _indexers(records: list[dict[str, Any]], blocks: dict[int, tuple[str, str | 
     rows = []
     for record in records:
         number, name = integer(record.get("id"), None), str(record.get("name") or "?")
-        until, since = (blocks or {}).get(number, (None, None))
+        until, since, _ = (blocks or {}).get(number, (None, None, None))
         rows.append({"id": number, "name": name, "protocol": str(record.get("protocol") or ""), "enabled": bool(record.get("enable")),
                      "blocked_until": until, "failing_since": since, "reported": bool(record.get("enable")) and name in reported})
     return sorted(rows, key=lambda r: (0 if r["blocked_until"] else 1 if r["reported"] else 2 if not r["enabled"] else 3, r["name"].casefold()))
 
 
-async def _load(url: str, key: str, transport: httpx.AsyncBaseTransport | None) -> tuple[dict[str, Any], ProwlarrError | None]:
+def _app_errors(results: list[Any]) -> list[BaseException]:
+    """The failed requests of `asyncio.gather(..., return_exceptions=True)`. An error in the program, not in the app's
+    answer, is raised - let it show."""
+    errors = [r for r in results if isinstance(r, BaseException)]
+    for error in errors:
+        if not isinstance(error, (ProwlarrError, ValueError, TypeError, AttributeError)):
+            raise error
+    return errors
+
+
+async def _load(url: str, key: str,
+                transport: httpx.AsyncBaseTransport | None) -> tuple[dict[str, Any], ProwlarrError | None, Sample | None]:
     """Four requests at once. What fails stays None (unknown); if everything fails, Prowlarr is unavailable.
 
-    Returns (the state, the first error).
+    Returns (the state, the first error, the sample of the indexers' status or None - see `_sample`).
     """
     state = _empty()
     try:
         client = ProwlarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
     except ProwlarrError as error:           # an invalid stored address or key
-        return state, error
+        return state, error, None
     async with client as c:
         results = await asyncio.gather(c.indexers(), c.blocked(), c.applications(), c.health(), return_exceptions=True)
-    errors = [r for r in results if isinstance(r, BaseException)]
-    for error in errors:
-        if not isinstance(error, (ProwlarrError, ValueError, TypeError, AttributeError)):
-            raise error            # an error in the program, not in the app: let it show
+    errors = _app_errors(results)
     first = next((e if isinstance(e, ProwlarrError) else ProwlarrError("{reason}", reason=i18n.error_text(e)) for e in errors), None)
     if len(errors) == len(results):
-        return state, first
+        return state, first, None
     indexers, blocked, applications, health = (None if isinstance(r, BaseException) else r for r in results)
     state["available"] = True
-    blocks = None if blocked is None else _blocks(blocked, db.utcnow())
+    now = db.utcnow()
+    blocks = None if blocked is None else _blocks(blocked, now)
     if indexers is not None:
         state["indexers"] = _indexers(indexers, blocks, health)
         state["enabled_count"] = sum(r["enabled"] for r in state["indexers"])
@@ -142,7 +181,13 @@ async def _load(url: str, key: str, transport: httpx.AsyncBaseTransport | None) 
     if health is not None:
         state["health"] = [{"type": str(h.get("type") or ""), "message": str(h.get("message") or "")} for h in health]
         state["warnings"] = len(state["health"])
-    return state, first
+    return state, first, _sample(indexers, blocks, now)
+
+
+async def _keep(sample: Sample | None, every: timedelta | None) -> None:
+    """Store the sample in a thread (it is a database write); nothing when there is none."""
+    if sample is not None:
+        await asyncio.to_thread(store_sample, *sample, every)
 
 
 async def live_state(transport: httpx.AsyncBaseTransport | None = None) -> dict[str, Any]:
@@ -157,6 +202,42 @@ async def live_state(transport: httpx.AsyncBaseTransport | None = None) -> dict[
     if cached and cached[1] == fingerprint and time.monotonic() - cached[0] < TTL:
         _, _, state, error = cached
     else:
-        state, error = await _load(url, key, transport)
+        state, error, sample = await _load(url, key, transport)
         CACHE["prowlarr"] = (time.monotonic(), fingerprint, state, error)
+        if not watching():
+            await _keep(sample, EVERY)
     return {**state, "error": error.translated() if error else ""}
+
+
+async def take_sample(transport: httpx.AsyncBaseTransport | None = None) -> None:
+    """A sample of the indexers' status after the Prowlarr part of the *Arr sync task (registry.synchronize_all).
+
+    On every run, without the pages' ten-minute limit; the same four requests as the live state, which
+    stays as it is (its cache is not touched). Prowlarr not answering is no error here: the sample is
+    missing then, which is exactly "not measured". Nothing while the background loop measures.
+    """
+    url, key = db.get_setting("arr_prowlarr_url", ""), db.get_setting("arr_prowlarr_api_key", "")
+    if not url or not key or watching():
+        return
+    _, _, sample = await _load(url, key, transport)
+    await _keep(sample, None)
+
+
+async def status_sample(transport: httpx.AsyncBaseTransport | None = None, *, now: str | None = None) -> Sample | None:
+    """A sample of the indexers' status for the background loop (watch.py): only what it needs - the indexers and
+    who Prowlarr leaves out, two requests at once with the live time limit. The live state and its cache stay as
+    they are. None = no sample: Prowlarr did not answer (or not both), the stored address or key is not valid.
+    `now` (UTC) is the sample's time for tests.
+    """
+    url, key = db.get_setting("arr_prowlarr_url", ""), db.get_setting("arr_prowlarr_api_key", "")
+    try:
+        client = ProwlarrClient(url, key, transport=transport, timeout=LIVE_TIMEOUT)
+    except ProwlarrError:
+        return None
+    async with client as c:
+        results = await asyncio.gather(c.indexers(), c.blocked(), return_exceptions=True)
+    if _app_errors(results):
+        return None
+    indexers, blocked = results
+    moment = now or db.utcnow()
+    return _sample(indexers, _blocks(blocked, moment), moment)

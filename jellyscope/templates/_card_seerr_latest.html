@@ -1,8 +1,9 @@
 {# The Seerr card "Latest requests": a strip of posters from the newest request.
 
    Shaped like "Recently added". The poster says how the request ended (briefly;
-   the full wording in `title`), under it the title, the requester and when they requested. From the
-   database (cards_seerr.py, `d.radky`, at most insights.INSIGHT_ROWS of the newest).
+   the full wording in `title`), under it the title, the requester and when they requested. Live from
+   Seerr over the stored requests (cards_seerr.py, `d.rows`, at most insights.INSIGHT_ROWS of the
+   newest); when Seerr does not answer, from the database with a note saying when the last sync was.
 
    The same requests are here once more as a table - hidden in the card
    (`modal-only`), the button in the head opens it in the shared window
@@ -16,6 +17,9 @@
         <button class="card-note" type="button" data-table-window>{{ _("show as a table") }} &rarr;</button>
         {% endif %}
     </div>
+    {% if not d.live and d.synced_at %}
+    <p class="card-note">{{ _("Seerr is not answering. The requests are from the last sync ({when}).").format(when=d.synced_at | relative) }}</p>
+    {% endif %}
     {% if d.rows %}
     <div class="poster-strip">
         {% for z in d.rows %}

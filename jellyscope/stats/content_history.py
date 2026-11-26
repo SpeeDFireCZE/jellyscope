@@ -14,6 +14,7 @@ Spec: docs/superpowers/specs/2026-11-16-content-kinds-size-design.md, part 6.
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
@@ -26,6 +27,7 @@ Changes = dict[str, dict[str, int]]
 # What was computed for one state of the files: "fingerprint" plus "*" (every file) and
 # ("disks", assignment) -> {disk: Changes}. A new fingerprint starts it afresh.
 _remembered: dict[Any, Any] = {}
+_remembered_lock = threading.RLock()
 
 
 def kind_changes(file_history: list[dict[str, Any]],
@@ -68,12 +70,15 @@ def series_from_changes(changes: Changes, first: str, last: str) -> dict[str, di
 
 
 def _remember(fingerprint: str, key: Any, compute: Callable[[], Any]) -> Any:
-    if _remembered.get("fingerprint") != fingerprint:
-        _remembered.clear()
-        _remembered["fingerprint"] = fingerprint
-    if key not in _remembered:
-        _remembered[key] = compute()
-    return _remembered[key]
+    # One request at a time: pages run in a pool of threads, and a slow compute for old files would otherwise land
+    # under a newer fingerprint another request has set meanwhile. Re-entrant: a compute may ask for another key.
+    with _remembered_lock:
+        if _remembered.get("fingerprint") != fingerprint:
+            _remembered.clear()
+            _remembered["fingerprint"] = fingerprint
+        if key not in _remembered:
+            _remembered[key] = compute()
+        return _remembered[key]
 
 
 def all_changes() -> Changes:

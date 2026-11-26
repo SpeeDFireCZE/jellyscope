@@ -89,7 +89,12 @@ def server(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"Items": [], "TotalRecordCount": 0})
 
 
+# (address, key) of every client the app opens - the requests themselves all go to the mock server.
+CLIENTS: list[tuple[str, str]] = []
+
+
 async def substituted_client(self):
+    CLIENTS.append((self.base_url, self.api_key))
     self._client = httpx.AsyncClient(transport=httpx.MockTransport(server),
                                      base_url="http://jellyfin.test")
     return self
@@ -177,6 +182,73 @@ check(KEY not in lines, "the key is not in the log")
 check(PASSWORD not in lines, "the password is not in the log")
 
 print()
+print("--- the key does not get into the text of an error ---")
+# A debugging proxy or a gateway may repeat the request's headers in the body of its error page. The error's
+# text goes into the side panel, the log and the notifications (Discord, Telegram, e-mail).
+import asyncio  # noqa: E402
+
+
+def echoing(request: httpx.Request) -> httpx.Response:
+    if request.url.path in ("/Users", "/QuickConnect/Initiate"):
+        raise httpx.ConnectError(f"refused, sent {request.headers.get('Authorization')}")
+    # /Sessions whole; the folders with the key across the cut of the body at 200 characters (its start must not leak).
+    padding = "x" * (140 if request.url.path == "/Library/VirtualFolders" else 0)
+    return httpx.Response(502, text=padding + f"Bad gateway, request headers: {request.headers.get('Authorization')}")
+
+
+async def error_of(call: str) -> str:
+    client = jellyfin.JellyfinClient("http://jellyfin.test", KEY, version="12.0")
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(echoing), base_url="http://jellyfin.test",
+                                       headers=jellyfin.headers(KEY, "12.0"))
+    try:
+        await getattr(client, call)()
+    except jellyfin.JellyfinError as error:
+        return str(error) + str(error.values)
+    finally:
+        await client.close()
+    return ""
+
+
+for call, label in (("sessions", "an error page that repeats the headers"), ("virtual_folders", "the key across the cut"),
+                    ("users", "a connection error's text"), ("quick_connect_start", "the same when signing in")):
+    text = asyncio.run(error_of(call))
+    check(text and KEY not in text and KEY[:8] not in text, f"{label}: the key is not in the error ({text[-70:]!r})")
+
+# The Playback Reporting importer posts its query through the client's own httpx client, past `_get`: the body
+# of the error page went into the task's message, the Import page and the log file whole.
+sys.path.insert(0, str(PROJECT / "tests"))
+from _package import substitute  # noqa: E402
+
+from jellyscope import importers, scanner  # noqa: E402
+
+
+class EchoingClient(jellyfin.JellyfinClient):
+    """A gateway's error page that repeats the request's headers - the key across the cut at 300 characters."""
+
+    async def __aenter__(self) -> "EchoingClient":
+        self._client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(
+                502, text="x" * 257 + f" request headers: {request.headers.get('Authorization')}")),
+            base_url="http://jellyfin.test", headers=jellyfin.headers(self.api_key, "12.0"))
+        return self
+
+
+restore_client = substitute(importers, "JellyfinClient", EchoingClient)
+try:
+    imported = asyncio.run(importers.import_playback_reporting())
+    found, detected = asyncio.run(importers.playback_reporting_available())
+finally:
+    restore_client()
+for handler in logging.getLogger().handlers:
+    handler.flush()
+task_message = str((scanner.last_scan("import") or {}).get("message_values") or "")
+logged = "".join(p.read_text(encoding="utf-8", errors="replace") for p in applog.log_dir().glob("*.log"))
+for where, text in (("the import's answer", str(imported.get("message"))), ("the task log", task_message),
+                    ("the log file", logged), ("the plugin check", detected)):
+    check("request headers" in text and KEY[:4] not in text,
+          f"Playback Reporting, {where}: the error is told without the key, its start neither ({text[-60:]!r})")
+
+print()
 print("--- an unencrypted connection is seen in Settings ---")
 # The password for Jellyfin cannot be encrypted: encryption is done by https, not by the app
 # above it. What can be done is to say it out loud - and only where it holds.
@@ -200,6 +272,49 @@ db.forget_settings()
 check("není šifrované" not in admin.get("/settings?section=jellyfin").text,
       "on https there is no warning")
 db.set_setting("jellyfin_url", "http://jellyfin.test")
+db.forget_settings()
+
+print()
+print("--- the saved key goes only to the server it was saved for ---")
+# The saved key went to any address put into the form with the key field left empty: a test or a save sent from a
+# page of another site on the same machine, or by another administrator, who never sees the key, had the app send
+# it there (and keep it for that address).
+ANOTHER_SERVER = "the saved key is sent only to the server it was saved for"
+
+
+def connection(url: str, key: str = "", action: str = "test") -> str:
+    admin.post("/settings/connection", follow_redirects=False, data={
+        "jellyfin_url": url, "jellyfin_api_key": key, "jellyfin_generation": "auto", "action": action})
+    db.forget_settings()
+    return admin.get("/settings?section=jellyfin").text
+
+
+def went_to(*addresses: str) -> list[tuple[str, str]]:
+    return [(url, key) for url, key in CLIENTS if url.startswith(addresses)]
+
+
+CLIENTS.clear()
+OTHERS = ("http://utocnik.example:8096", "https://jellyfin.test", "http://jellyfin.test:8097")
+answers = [connection(url) for url in OTHERS]
+check(not went_to(*OTHERS) and all(ANOTHER_SERVER in answer for answer in answers),
+      f"a test at another host, scheme or port with the key field empty sends no key and asks for it ({went_to(*OTHERS)})")
+answer = connection("http://utocnik.example:8096", action="save")
+check(db.get_setting("jellyfin_url") == "http://jellyfin.test" and db.get_setting("jellyfin_api_key") == KEY
+      and ANOTHER_SERVER in answer and not went_to(*OTHERS),
+      f"nor is it saved for another server ({db.get_setting('jellyfin_url')})")
+connection("jellyfin.test/jinde")
+check(went_to("http://jellyfin.test/jinde") == [("http://jellyfin.test/jinde", KEY)],
+      f"the same server (another path) with the key field empty tests with the saved key ({went_to('http://jellyfin.test/')})")
+CLIENTS.clear()
+connection("http://novy.doma:8096", "KlicNovyQXZ")
+connection("http://utocnik.example:8096")
+connection("http://novy.doma:8096", "KlicNovyQXZ")
+connection("http://novy.doma:8096/x")
+check(not went_to("http://utocnik") and went_to("http://novy.doma") == [("http://novy.doma:8096", "KlicNovyQXZ")] * 2
+      + [("http://novy.doma:8096/x", "KlicNovyQXZ")],
+      f"a key typed at a test goes again only to the server it was typed for ({went_to('http://novy', 'http://utocnik')})")
+db.set_setting("jellyfin_url", "http://jellyfin.test")
+db.set_setting("jellyfin_api_key", KEY)
 db.forget_settings()
 
 print()

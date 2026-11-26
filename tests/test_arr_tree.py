@@ -202,7 +202,7 @@ MAY_OLD = {PACKAGE / "db.py", TESTS / "test_arr_table_conversion.py",
 nowhere(r"\barr_event\b|\barr_titul\b", [f for f in EVERYWHERE if f not in MAY_OLD],
         "the old shared tables are known only by the conversion in db.py and its test")
 APP_TABLES = {"sonarr": r"sonarr_(event|title)", "radarr": r"radarr_(event|title)", "lidarr": r"lidarr_(event|title)", "readarr": r"readarr_(event|title)", "bazarr": r"bazarr_event",
-              "prowlarr": r"prowlarr_(hour|grab|indexer)"}
+              "prowlarr": r"prowlarr_(hour|grab|indexer|sample)"}
 
 
 def card_file(app: str) -> Path:

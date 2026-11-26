@@ -6,7 +6,7 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
+{% from "_macros.html" import running_task %}
 
 {# ================================================================== #}
 <div class="card">
@@ -124,9 +124,10 @@
                         {{ _("today") if row.next_is_today else _("tomorrow") }}
                         {{ _("at") }} {{ row.time }}
                     {% elif row.due_in < 60 %}
-                        {{ _("in") }} {{ row.due_in | round | int }} min
+                        {{ _("in {n} min").format(n=row.due_in | round | int) }}
                     {% else %}
-                        {{ _("in") }} {{ (row.due_in / 60) | round(1) }} h
+                        {# In the page's notation, as every number the app writes (formatting.decimal). #}
+                        {{ _("in {n} h").format(n=(row.due_in / 60) | decimal(1)) }}
                     {% endif %}
                 </td>
             </tr>
@@ -366,12 +367,12 @@
        In the card it was always in sight, although it is an exceptional state -
        and it got in the way of what is done there usually. It does not escape
        behind the button: the button appears only when there is something to restore. #}
-    <dialog id="modal-restore" class="dialog">
-        <h2>{{ _("Forgotten viewers") }}</h2>
+    <dialog id="modal-restore" class="dialog" aria-labelledby="modal-restore-title">
+        <h2 id="modal-restore-title">{{ _("Forgotten viewers") }}</h2>
 
         <p>
             {{ _("A deletion can be taken back until the nightly clean-up makes it final.") }}
-            {% if compaction_at %}<strong>{{ _("Next clean-up") }}: {{ compaction_at.strftime("%d.%m. %H:%M") }}.</strong>{% endif %}
+            {% if compaction_at %}<strong>{{ _("Next clean-up") }}: {{ compaction_at | local_datetime }}.</strong>{% endif %}
             {{ _("After that only the backup taken just before it remains.") }}
         </p>
 
@@ -415,8 +416,8 @@
         </div>
     </dialog>
 
-    <dialog id="modal-forget" class="dialog">
-        <h2>{{ _("Forget a viewer") }}</h2>
+    <dialog id="modal-forget" class="dialog" aria-labelledby="modal-forget-title">
+        <h2 id="modal-forget-title">{{ _("Forget a viewer") }}</h2>
 
         <p class="dialog-label">{{ _("Who this is about") }}</p>
         <p><strong id="whom-to-forget"></strong></p>

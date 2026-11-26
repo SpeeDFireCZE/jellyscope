@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import period_filter with context %}
+{% from "_macros.html" import period_filter, show_card with context %}
 {% block title %}{{ _("Network") }} · Jellyscope{% endblock %}
 
 {% block content %}
@@ -20,22 +20,23 @@
     <span>{{ _("Calculated from the bitrate Jellyfin reports for each playback: the resulting stream when transcoding, the source file otherwise. Paused playback is left out, because nothing flows during a pause. It is an honest estimate, not a measurement of the wire: seeking and buffering move the real numbers. Only a reverse proxy or the system's own counters can measure it exactly.") }}</span>
 </div>
 
-{% include "_card_network_numbers.html" %}
+{# The cards come from the registry (web/network.py, NETWORK_CARDS): show_card() draws those the account may see,
+   each in its slot. #}
+{{ show_card("network_numbers") }}
 
-{# The live flow. `data-refresh` and `data-partial` are handled by base.html -
-   the same mechanism that refreshes "now playing" on the Overview. #}
-<div id="network-live" data-refresh="{{ poll_interval }}" data-partial="/partials/network-live">
-    {% include "_network_live.html" %}
-</div>
+{# The live flow refreshes itself: its wrapper (the card's `wrapper_id` and `refresh_partial`, _card.html) carries
+   `data-refresh` and `data-partial` - the same mechanism that refreshes "now playing" on the Overview. The partial
+   asks with the page's period: the session's may have been changed by another tab meanwhile. #}
+{{ show_card("live_traffic") }}
 
-{% include "_card_peaks_by_day.html" %}
+{{ show_card("peaks_by_day") }}
 
 <div class="grid-2">
-    {% include "_card_who_streamed.html" %}
-    {% include "_card_by_player.html" %}
+    {{ show_card("who_streamed") }}
+    {{ show_card("by_player") }}
 </div>
 
-{% include "_card_where_from.html" %}
+{{ show_card("origin") }}
 
-{% include "_card_map.html" %}
+{{ show_card("map") }}
 {% endblock %}

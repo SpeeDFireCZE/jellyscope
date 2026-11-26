@@ -28,6 +28,7 @@ templates. Adding a card means adding a line to `CARDS` and its name to `SECTION
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -37,14 +38,14 @@ from .cards_base import Card, _once, current_is_admin, duration, live, per_item
 from .i18n import translate as _t
 
 # The sections of the page /arr/sonarr and the names of their cards, in the order on
-# the page. The heading is a Czech sentence = a translation key. The layout (pairs,
-# triples side by side) is in arr_sonarr.html; that the template draws exactly these
+# the page. The heading is an English sentence = a translation key. The layout (pairs
+# side by side) is in arr_sonarr.html; that the template draws exactly these
 # cards in this order is guarded by tests/test_sonarr_cards.py.
 SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("In the app right now", ("live_numbers", "downloading", "queue", "calendar", "health")),
     ("What was added", ("numbers", "by_day", "when", "best_days", "largest")),
     ("Speed", ("downloads", "after_release")),
-    ("Sources and quality", ("indexers", "groups", "clients", "protocols", "qualities", "resolutions")),
+    ("Sources and quality", ("indexer_reliability", "indexers", "groups", "clients", "protocols", "qualities", "resolutions")),
     ("Upgrades", ("upgrades", "how_all", "how_upgrades", "transitions", "upgraded")),
 )
 
@@ -139,6 +140,14 @@ def with_details(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{**row, "detail_url": links.get(row.get("title_id"))} for row in rows]
 
 
+def success_rate(share: float | None) -> str:
+    """The success rate (0-1) as a percentage with one decimal, rounded down: an indexer with one failure in a thousand
+    does not read "100,0 %". Nothing finished that can be matched = "–"."""
+    if share is None:
+        return "–"
+    return formatting.percent(math.floor(share * 1000 + 1e-9) / 10, 1)
+
+
 def episode_count(count: int) -> str:
     """"1 díl", "3 díly", "5 dílů"."""
     return formatting.plural("{n} episodes", count)
@@ -171,7 +180,7 @@ def downloading(state: dict[str, Any], admin: bool) -> dict[str, Any]:
     """The data of the body of the "Stahuje se" card from the queue's state (sonarr.download_state).
 
     Blocks get a link into the library and a poster: a series from the library has
-    the one from Jellyfin (/image/, the same file as "Nedávno přidané"), the others a
+    the one from Jellyfin (/image/, the same file as "Recently added"), the others a
     provisional one from Sonarr (/arr/sonarr/poster/<id>); a download Sonarr did not
     pair, none. A block with more downloads gets the id of a window with the
     breakdown. The error's detail (the app's internal address) only for the
@@ -294,6 +303,13 @@ def _d_after_release(period: Any) -> dict[str, Any]:
             "buckets": [{"label": _t(BUCKET_LABELS[k]), "count": n} for k, n in since_release["buckets"].items()]}
 
 
+def _d_indexer_reliability(period: Any) -> dict[str, Any]:
+    rows = stats.sonarr_indexer_reliability(period, analysis=_events(period))
+    # Whether any grab cannot be matched (the Blackhole client): then the card says why.
+    return {"rows": [{**r, "success": success_rate(r["success"])} for r in rows[:ROWS]],
+            "unmatched": sum(r["unmatched"] for r in rows)}
+
+
 def _d_source(group: str) -> Callable[[Any], dict[str, Any]]:
     """The data of one of the six source cards (indexers, groups, clients…) - the same template, another group."""
     def data(period: Any) -> dict[str, Any]:
@@ -387,6 +403,9 @@ CARDS: tuple[Card, ...] = (
     _card("after_release", "How soon after release",
           "How long after it aired an episode is in the library.", _d_after_release, width="half"),
     # --- Sources and quality ---
+    _card("indexer_reliability", "Indexer reliability",
+          "How many episode downloads from each indexer were imported into the library and how many failed. The most failures come first.",
+          _d_indexer_reliability, table_window=True),
     _source("indexers", "Indexers", "Which indexers the imported files came from."),
     _source("groups", "Release groups", "Which release groups are the most common among imported files."),
     _source("clients", "Download clients", "Which client downloaded the imported files."),

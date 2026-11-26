@@ -299,6 +299,18 @@ admin.post("/settings/accounts/password", data={"account_id": str(admin_id),
 check(accounts.authenticate("admin", "longpassword") is not None,
       "Settings no longer change one's own password (that would need the current password)")
 
+# An account from Jellyfin has its password in Jellyfin. A local one set here would be a second door its owner can
+# neither change nor see, and one that ignores "sign-in through Jellyfin off".
+mirek_id = accounts.by_jellyfin_id("u-mirek")["id"]
+check(not own_password_offered(accounts_page, mirek_id), "the password form does not offer an account from Jellyfin")
+page = admin.post("/settings/accounts/password", data={"account_id": str(mirek_id), "password": "localpassword1",
+                                                       "password_again": "localpassword1"}).text
+check(not accounts.by_jellyfin_id("u-mirek")["password_hash"] and "Heslo k účtu z Jellyfinu se mění v Jellyfinu." in page,
+      "a forged request gives an account from Jellyfin no local password, and says why")
+page = admin.post("/settings/accounts/password", data={"account_id": "987654", "password": "localpassword1",
+                                                       "password_again": "localpassword1"}).text
+check("Heslo změněno." not in page and "Účet neexistuje." in page, "an account that does not exist is an error")
+
 print()
 print("--- guessing the current password is slowed down just like signing in ---")
 for _ in range(12):
@@ -388,6 +400,18 @@ unreachable = viewer.get("/account/image?v=tag1")
 check(unreachable.status_code == 404 and "max-age" in unreachable.headers.get("cache-control", ""),
       "Jellyfin does not run: 404 (the letter) and the browser does not retry for a while")
 IMAGE_STATE["error"] = False
+
+# A key stored before Settings guarded it (an invisible character): the client cannot be made at all.
+stored_key = db.get_setting("jellyfin_api_key", "")
+db.set_setting("jellyfin_api_key", "test-key\u200b")
+db.forget_settings()
+try:
+    bad_key = viewer.get("/account/image?v=tag1").status_code
+except Exception as error:   # noqa: BLE001 - which error it is, is what is checked
+    bad_key = type(error).__name__
+db.set_setting("jellyfin_api_key", stored_key)
+db.forget_settings()
+check(bad_key == 404, f"a stored key the client cannot use: 404 (the letter), not a fallen page ({bad_key})")
 
 original_ceiling = jellyfin.MAX_IMAGE_BYTES
 jellyfin.MAX_IMAGE_BYTES = 10

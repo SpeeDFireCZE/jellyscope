@@ -225,7 +225,8 @@ try:
 except lidarr.LidarrError as error:
     missing = str(error)
 check("tajny-klic" not in missing and lidarr.sync_state()["result"] == "error", "a switched-off app with no address: an error without the key")
-lidarr.save_settings(True, "http://nas:8686/lidarr", "")
+# The saved key goes only to the server it was saved for: after the address was cleared it is typed again.
+lidarr.save_settings(True, "http://nas:8686/lidarr", "tajny-klic")
 
 mark_before = db.get_setting("arr_lidarr_last_sync", "")
 with db.connect() as conn:

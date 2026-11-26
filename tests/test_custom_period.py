@@ -123,6 +123,63 @@ check(stats.period_between("nesmysl", "2026-08-01") is None, "text too")
 check(stats.period_between(None, None) is None, "and empty")
 
 print()
+print("--- bounds beyond the history are clamped ---")
+# Any date strptime reads used to pass: 2000-9000 made every daily chart build a point for each of ~2.6
+# million days (a minute of CPU and gigabytes per request, replayed from the session), 31.12.9999
+# overflowed when the day after the end was added, a year below 1000 could not be read back
+# (%Y does not pad it on Linux). Nothing is stored before OLDEST_HISTORY and nothing ahead of now,
+# so the window is cut to OLDEST_HISTORY .. the end of next year.
+THIS_YEAR = datetime.now(formatting.zone()).year
+NEXT_YEARS_END = f"{THIS_YEAR + 2}-01-01 00:00:00"
+
+
+def _period_or_error(since: str, until: str):
+    try:
+        return stats.period_between(since, until), ""
+    except Exception as e:  # noqa: BLE001
+        return None, repr(e)
+
+
+huge, error = _period_or_error("2000-01-01", "9000-01-01")
+check(huge is not None and huge.until_local == NEXT_YEARS_END and huge.days <= 30 * 366,
+      f"a 7000-year window ends with next year ({huge.until_local if huge else error},"
+      f" {huge.days if huge else '-'} days)")
+forever, error = _period_or_error("2026-11-01", "9999-12-31")
+check(forever is not None and forever.until_local == NEXT_YEARS_END,
+      f"until 31.12.9999 is no error ({forever.until_local if forever else error})")
+ancient, error = _period_or_error("0001-01-02", "2026-01-01")
+check(ancient is not None and ancient.since_local == stats.OLDEST_HISTORY,
+      f"a start in year 1 begins with the oldest history ({ancient.since_local if ancient else error})")
+check(_period_or_error("0001-01-01", "0001-01-02") == (None, ""),
+      "a window entirely before the history is no period")
+check(_period_or_error("9000-01-01", "9000-01-02") == (None, ""),
+      "nor one entirely after next year")
+for since, until in (("2026-11-01", "9999-12-31"), ("0001-01-02", "2026-01-01"),
+                     ("0999-01-01", "2026-11-24")):
+    try:
+        clamped = stats.period_between(since, until)
+        stats.previous_period(clamped)
+        stats.chart_days([{"day": "2026-01-05", "plays": 1}], clamped, ("plays",))
+        stats.daily_activity_split(clamped)
+        error = ""
+    except Exception as e:  # noqa: BLE001
+        error = repr(e)
+    check(error == "", f"{since} .. {until}: the previous period and the daily charts work {error}")
+# Ordinary periods stay as they were, byte for byte - the full current and next year too.
+whole_years = stats.period_between(f"{THIS_YEAR}-01-01", f"{THIS_YEAR + 1}-12-31")
+check(whole_years is not None and whole_years.since_local == f"{THIS_YEAR}-01-01 00:00:00"
+      and whole_years.until_local == NEXT_YEARS_END and whole_years.whole_day,
+      f"this year and the next one are not cut ({whole_years})")
+first_year = stats.period_between("2000-01-01", "2000-12-31")
+check(first_year is not None and first_year.since_local == "2000-01-01 00:00:00"
+      and first_year.until_local == "2001-01-01 00:00:00" and first_year.days == 366,
+      f"nor is the first year of the history ({first_year})")
+exact = stats.period_between("2026-10-01 10:00", "2026-10-02 11:30")
+check(exact is not None and exact.since_local == "2026-10-01 10:00:00"
+      and exact.until_local == "2026-10-02 11:30:00" and not exact.whole_day,
+      f"nor an exact span from a chart ({exact})")
+
+print()
 print("--- the chart by day has as many rows as the period has days ---")
 check(len(stats.daily_activity_split(30)) == 30, "30 days = 30 rows")
 check(len(stats.daily_activity_split(7)) == 7, "7 days = 7 rows")
@@ -133,10 +190,136 @@ check(len(stats.daily_activity_split(week)) == 7,
 
 print()
 print("--- comparison with the previous period ---")
+# The owner's decision (25. 11. 2026): the previous period of "the last N days" is the same span shifted back by N
+# days in the app's zone - from the midnight N days before the first day to this clock time N days ago.
 previous = stats.previous_period(30)
-check(previous.until == stats._as_period(30).since,
-      "the previous window ends where the chosen one starts")
-check(previous.days == 30, "and is of the same length")
+month = stats._as_period(30)
+local_now = datetime.now(formatting.zone()).replace(tzinfo=None)
+shifted_start = datetime.strptime(month.since_local, db.TIME_FORMAT) - timedelta(days=30)
+previous_end = datetime.strptime(previous.until_local, db.TIME_FORMAT)
+check(previous.since_local == shifted_start.strftime(db.TIME_FORMAT),
+      f"the previous window starts at the midnight 30 days before the chosen one ({previous.since_local})")
+check(abs((previous_end - (local_now - timedelta(days=30))).total_seconds()) < 5 and previous.until <= month.since,
+      f"and ends at this clock time 30 days ago, before the chosen one starts ({previous.until_local})")
+check(previous.days == 30, "and is of the same number of days")
+check(stats.previous_period(week).until == week.since,
+      "a custom period's previous window ends where the chosen one starts")
+
+print()
+print("--- 'the last N days' are whole calendar days, the days the chart by day draws ---")
+# The owner's decision (25. 11. 2026): the numbers count by whole days. They used to count 7 x 24 hours back from
+# now, while the chart by day draws today and the six days before it: a play in between (the rest of the eighth day
+# back) was in the headline and in no bar, so the bars added up to less than the number above them.
+zone = formatting.zone()
+today = datetime.now(zone).date()
+first_midnight = (datetime.combine(today - timedelta(days=6), datetime.min.time())
+                  .replace(tzinfo=zone).astimezone(timezone.utc).replace(tzinfo=None))
+rolling_start = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
+week_since = stats.period_of_days(7).since
+check(week_since == first_midnight.strftime(db.TIME_FORMAT),
+      f"the week starts at the local midnight six days back ({week_since}, midnight {first_midnight})")
+headline_before = int(stats.overview(7)["watched_seconds"])
+previous_before = int(stats.previous_overview(7)["watched_seconds"] or 0)
+if rolling_start < first_midnight:
+    # A play in the gap: less than 7 x 24 hours ago, but on the day before the seven.
+    add_play(rolling_start + (first_midnight - rolling_start) / 2, 7200, "qs3-gap")
+add_play(first_midnight + timedelta(minutes=1), 3600, "qs3-first-day")
+headline = int(stats.overview(7)["watched_seconds"])
+check(headline == headline_before + 3600,
+      f"the headline counts the first of the seven days, not the day before them ({headline - headline_before} s)")
+bars = sum(row["hours"] for row in stats.daily_activity_split(7))
+check(abs(bars - headline / 3600) < 0.05,
+      f"the chart's bars add up to the headline ({bars:.2f} h, headline {headline / 3600:.2f} h)")
+if rolling_start < first_midnight:
+    previous_after = int(stats.previous_overview(7)["watched_seconds"] or 0)
+    check(previous_after == previous_before,
+          f"the rest of the day before the seven belongs to neither week: the previous one ends at this clock time "
+          f"({previous_after - previous_before} s)")
+arr_chart = stats.chart_days([{"day": today.isoformat(), "plays": 1}], 7, ("plays",))
+check([p["day"] for p in arr_chart][:1] == [(today - timedelta(days=6)).isoformat()] and len(arr_chart) == 7,
+      f"the *Arr and Seerr charts draw the same seven days ({arr_chart[0]['day']}, {len(arr_chart)} points)")
+with db.connect() as conn:
+    conn.execute("DELETE FROM playback WHERE session_key LIKE 'qs3-%'")
+
+print()
+print("--- a day is not always 24 hours: the bounds stay on the local midnight across a change of the clocks ---")
+# Prague left summer time on 25 October 2026. The week before 3 November starts on 28 October at midnight (CET) and
+# the previous one on 21 October at midnight (CEST) - one hour more apart than 7 x 24 hours.
+
+
+class _Clock(datetime):
+    current = datetime(2026, 11, 3, 10, 0, tzinfo=timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        return cls.current.astimezone(tz) if tz is not None else cls.current.astimezone().replace(tzinfo=None)
+
+
+db.set_setting("app_timezone", "Europe/Prague")
+real_datetime = stats.periods.datetime
+stats.periods.datetime = _Clock
+try:
+    clock_week, clock_before = stats.period_of_days(7), stats.previous_period(7)
+finally:
+    stats.periods.datetime = real_datetime
+    db.set_setting("app_timezone", "")
+check((clock_week.since, clock_week.since_local) == ("2026-10-27 23:00:00", "2026-10-28 00:00:00"),
+      f"the week starts at the midnight of 28 October ({clock_week.since} UTC, {clock_week.since_local})")
+check((clock_before.since, clock_before.since_local) == ("2026-10-20 22:00:00", "2026-10-21 00:00:00"),
+      f"the previous week at the midnight of 21 October, in summer time ({clock_before.since} UTC,"
+      f" {clock_before.since_local})")
+check((clock_before.until, clock_before.until_local) == ("2026-10-27 10:00:00", "2026-10-27 11:00:00"),
+      f"and it ends at 11:00 on 27 October, the clock time of now a week ago ({clock_before.until} UTC,"
+      f" {clock_before.until_local})")
+stats.periods.datetime = _Clock
+db.set_setting("app_timezone", "Europe/Prague")
+try:
+    clock_fortnight = stats.previous_period(14)
+finally:
+    stats.periods.datetime = real_datetime
+    db.set_setting("app_timezone", "")
+check((clock_fortnight.since, clock_fortnight.until, clock_fortnight.until_local)
+      == ("2026-10-06 22:00:00", "2026-10-20 09:00:00", "2026-10-20 11:00:00"),
+      f"across the change of the clocks the end keeps the clock time, not 14 x 24 hours ({clock_fortnight.until} UTC,"
+      f" {clock_fortnight.until_local})")
+
+print()
+print("--- at 10:00 the same plays in the same hours of both spans give no change ---")
+# The previous period used to be N whole days, while "the last N days" hold only the part of today that has passed:
+# every morning looked like a drop. A play every day at 08:00 and every evening at 20:00 - the same in both weeks.
+from jellyscope import cards  # noqa: E402
+
+
+class _Morning(_Clock):
+    current = datetime(2030, 2, 20, 9, 0, tzinfo=timezone.utc)      # 10:00 in Prague
+
+
+db.set_setting("app_timezone", "Europe/Prague")
+real_overview_datetime = stats.overview_page.datetime
+stats.periods.datetime = stats.overview_page.datetime = _Morning
+try:
+    for ago in range(14):
+        morning = datetime(2030, 2, 20, 7, 0) - timedelta(days=ago)          # 08:00 CET
+        add_play(morning, 3600, f"qs4-morning-{ago}")
+        if ago:
+            add_play(morning + timedelta(hours=12), 3600, f"qs4-evening-{ago}")    # 20:00 CET, today's not yet
+    summary = cards.period_summary(7)
+    side_by_side = stats.comparison(7, stats.previous_period(7))
+    length_now, length_before = side_by_side["a"]["days"] * 86400, side_by_side["b"]["days"] * 86400
+    bars_now = sum(row["hours"] for row in stats.daily_activity_split(7))
+finally:
+    stats.periods.datetime, stats.overview_page.datetime = real_datetime, real_overview_datetime
+    db.set_setting("app_timezone", "")
+    with db.connect() as conn:
+        conn.execute("DELETE FROM playback WHERE session_key LIKE 'qs4-%'")
+check(summary["overview"]["watched_seconds"] == 13 * 3600 and summary["deltas"]["watched"] == 0
+      and summary["deltas"]["plays"] == 0,
+      f"13 hours in both, no change of the hours or the plays ({summary['overview']['watched_seconds'] / 3600:g} h,"
+      f" {summary['deltas']})")
+check(abs(length_now - (6 * 24 + 10) * 3600) < 1 and abs(length_before - length_now) < 1 and side_by_side["same_length"],
+      f"Comparison: both are six days and ten hours long, the time that has really passed, so the daily averages"
+      f" divide by it ({length_now / 3600:g} h, {length_before / 3600:g} h)")
+check(abs(bars_now - 13) < 0.01, f"the headline still equals the sum of the daily chart's bars ({bars_now:g} h)")
 
 print()
 print("--- the whole history ---")
@@ -246,6 +429,24 @@ with TestClient(app) as client:
         response = client.get(f"{path}?since={ten_days_ago}&until={ten_days_ago}")
         check(response.status_code == 200, f"{path} with a custom period")
 
+    # Edge-of-calendar dates written into the form: "until 31.12.9999" meant "until forever" and gave
+    # a bare 500 on every page with statistics, a start in year 1 the same.
+    def status(address: str) -> str:
+        try:
+            return str(client.get(address).status_code)
+        except Exception as e:  # noqa: BLE001
+            return repr(e)
+
+    for path in ("/video/overview", "/video/insights", "/network", "/users", "/video/languages"):
+        for query in ("since=1.1.2026&until=31.12.9999", "since=0001-01-02&until=2026-01-01"):
+            answer = status(f"{path}?{query}")
+            check(answer == "200", f"{path}?{query} -> {answer}")
+    # The remembered period is the clamped one, so the next page does not replay the huge window.
+    status("/?since=1.1.2026&until=31.12.9999")
+    check(f"31.12.{THIS_YEAR + 1}" in chosen_chip(client.get("/users").text),
+          f"the switch shows the clamped end ({chosen_chip(client.get('/users').text)})")
+    client.get("/?days=30")
+
     # The whole history: a button in the custom period's dialog, not another choice
     # in the switch.
     check('href="/video/overview?days=0"' in page, "the custom period's dialog has Celá historie")
@@ -271,6 +472,8 @@ with TestClient(app) as client:
     compare_page = client.get("/video/compare").text
     check('name="a_days" value="30"' in compare_page,
           "Compare with the whole history starts at 30 days")
+    answer = status("/video/compare?a_since=1.1.2026&a_until=31.12.9999")
+    check(answer == "200", f"/video/compare with until 31.12.9999 -> {answer}")
 
     # Languages: the choice of the preferred language sent a hidden `days` - with a period
     # it was a dump of the object and the form ended with an error 422.

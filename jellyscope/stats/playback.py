@@ -19,6 +19,39 @@ def active_session_count() -> int:
         "SELECT COUNT(*) FROM playback WHERE is_active = 1", default=0) or 0)
 
 
+def plays_state(viewer: str = "") -> dict[str, Any]:
+    """What tells a page that the plays changed (the marker "plays" in /health, web/status.py).
+
+    The newest play's row number (a play started, or an import wrote some), how many play now (one ended), the
+    minute the collector last wrote a play that runs and is not paused (while something plays, its watched time
+    grows - at most once a minute is enough for the cards; a paused play gains no time, so it moves nothing), and
+    what deletes or rewrites plays: the last finished run of the tasks that do it (history retention, tidy-up, an
+    import) and the mark the other such actions leave in the settings (db.note_plays_rewritten - forgetting a
+    viewer, a title deleted, history merged). All from the database, so every process of the app answers the
+    same; one query of index look-ups (idx_playback_active, the primary key, idx_playback_user,
+    idx_scan_log_kind), because every open page asks every ten seconds. `viewer` = only that viewer's plays (a
+    viewer from Jellyfin who sees nobody else's). `SELECT (subquery), ...` without FROM, like scanner.versions().
+    """
+    rewritten_run = ("(SELECT MAX(id) FROM scan_log WHERE kind IN ('purge', 'tidy', 'import')"
+                     " AND finished_at IS NOT NULL) AS rewritten_run")
+    if viewer:
+        row = db.query_one(
+            "SELECT (SELECT COUNT(*) FROM playback WHERE is_active = 1 AND user_id = ?) AS active,"
+            " (SELECT MAX(last_seen_at) FROM playback WHERE is_active = 1 AND is_paused = 0 AND user_id = ?)"
+            " AS last_seen,"
+            " (SELECT MAX(id) FROM playback WHERE user_id = ?) AS last_id, " + rewritten_run,
+            (viewer, viewer, viewer))
+    else:
+        row = db.query_one(
+            "SELECT (SELECT COUNT(*) FROM playback WHERE is_active = 1) AS active,"
+            " (SELECT MAX(last_seen_at) FROM playback WHERE is_active = 1 AND is_paused = 0) AS last_seen,"
+            " (SELECT MAX(id) FROM playback) AS last_id, " + rewritten_run)
+    row = row or {}
+    return {"last_id": int(row.get("last_id") or 0), "active": int(row.get("active") or 0),
+            "minute": str(row.get("last_seen") or "")[:16],
+            "rewritten": f"{row.get('rewritten_run') or 0}:{db.get_setting(db.PLAYS_REWRITTEN_KEY, '')}"}
+
+
 def transcode_speed(row: dict[str, Any]) -> dict[str, Any] | None:
     """How many frames per second the transcode managed - and whether it was enough.
 

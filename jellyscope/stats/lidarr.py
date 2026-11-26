@@ -43,6 +43,7 @@ from .shared import (
     BUCKETS,
     GRAB_WINDOW,
     UNKNOWN,
+    _downloads,
     _local,
     _pair_grabs,
     _quantile,
@@ -148,11 +149,22 @@ def _analysis(days: Any) -> dict[str, Any]:
     deletions = [r for r in rows if _is_upgrade(r)]
     imports = _album_imports(tracks)
     _mark_upgrades(deletions, imports)
+    grab_imports = _pair_grabs(grabs, imports)
+    # What happened by the period's end (indexer reliability): a later import or failure is still downloading then.
+    # A failure belongs to an album like a grab.
+    failed_by_end = [{**r, "item_id": r["title_id"]} for r in rows
+                     if r["event_type"] == "downloadFailed" and r["happened_at"] < period.until]
+    imported_grabs = {grab_imports[i["arr_id"]]["arr_id"] for i in imports
+                      if i["arr_id"] in grab_imports and i["happened_at"] < period.until}
+    failed_grabs = {g["arr_id"] for g in _pair_grabs(grabs, failed_by_end).values()}
+    # A release of several albums is a grab per album with one download_id: one download (stats/shared.py, _downloads).
+    downloads = _downloads([g for g in grabs if g["happened_at"] < period.until], imported_grabs, failed_grabs)
     return {
         "imports": [i for i in imports if in_period(i)],
         "grabs_list": [g for g in grabs if in_period(g)],
         "upgrades": [i for i in imports if i["upgrade"] and in_period(i)],
-        "grab_imports": _pair_grabs(grabs, imports),
+        "grab_imports": grab_imports,
+        "downloads": [d for d in downloads if in_period(d["grab"])],
     }
 
 
@@ -283,6 +295,40 @@ def lidarr_sources(days: Any = 30, analysis: dict[str, Any] | None = None) -> di
             counts[group][name] += 1
             sizes[group][name] += i["size_bytes"]
     return {s: _ranked(counts[s], sizes[s]) for s in groups}
+
+
+def lidarr_indexer_reliability(days: Any = 30, analysis: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """How reliable each indexer's releases are: of the period's downloads, how many were imported and how many failed.
+
+    A download is one release: Lidarr writes a grab per album, so a release of several albums is several grabs with one
+    `download_id` - one download (stats/shared.py, `_downloads`). It is paired with its imports and failures
+    (`downloadFailed`) by `download_id` the same way as the sources (`_pair_grabs`), and only by the period's end: a
+    download is imported when an album of it was imported by then, failed when it failed and nothing was imported,
+    otherwise still downloading - neither a success nor a failure. The same release grabbed again after its outcome is
+    another download. A grab without `download_id` (the Blackhole client) cannot be matched: it is a download of its own
+    that counts into `unmatched` and into no success rate.
+
+    Rows {name, downloads, imported, failed, unmatched, success}; `success` = imported / (imported + failed), None
+    when nothing that can be matched finished. The most failures first, then the lowest success rate (None last),
+    then the most downloads, then the name. It measures the releases, not whether the indexer's API was reachable.
+    """
+    r = analysis or _analysis(days)
+    rows: dict[str, dict[str, Any]] = {}
+    for d in r["downloads"]:
+        g = d["grab"]
+        name = g["indexer"] or UNKNOWN
+        row = rows.setdefault(name, {"name": name, "downloads": 0, "imported": 0, "failed": 0, "unmatched": 0})
+        row["downloads"] += 1
+        if not g["download_id"]:
+            row["unmatched"] += 1
+        elif d["imported"]:
+            row["imported"] += 1
+        elif d["failed"]:
+            row["failed"] += 1
+    for row in rows.values():
+        finished = row["imported"] + row["failed"]
+        row["success"] = row["imported"] / finished if finished else None
+    return sorted(rows.values(), key=lambda x: (-x["failed"], 2 if x["success"] is None else x["success"], -x["downloads"], x["name"]))
 
 
 # ---------------------------------------------------------------------------

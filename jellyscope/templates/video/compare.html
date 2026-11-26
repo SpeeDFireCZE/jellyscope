@@ -33,7 +33,7 @@
 {{ groups_table(comparison, period_a, period_b) }}
 
 {# A backfilled past is not a measurement and must not pass for one. #}
-{% if comparison.library_known and comparison.library_backfilled %}
+{% if comparison.library_known and comparison.library_backfilled and sees('library') %}
 <p class="card-note" style="margin:-8px 0 18px 4px">
     {{ _("Part of the library growth is reconstructed from when the items were created. It describes the past with today's sizes, so a re-encoded film was always small in it.") }}
 </p>
@@ -42,7 +42,7 @@
 {# When we know nothing about the library's growth in a period, it is said. A silently
    missing table looks like a mistake, and "nothing was added" is something other
    than "we do not know". #}
-{% if not comparison.library_known %}
+{% if not comparison.library_known and sees('library') %}
 <div class="card">
     <div class="card-head">
         <h2>{{ _("Library") }}</h2>

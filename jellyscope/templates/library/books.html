@@ -48,7 +48,7 @@
 <div class="card">
     <form method="get" action="/library/{{ library.id }}" class="btn-row" style="margin-bottom:4px">
         <input type="hidden" name="tab" value="books">
-        <input type="search" name="search" value="{{ search }}" maxlength="200"
+        <input type="search" name="search" value="{{ search }}" maxlength="200" aria-label="{{ _('Search') }}"
                placeholder="{{ _('Search title, author or series...') }}" style="width:260px">
         <select name="sort" style="width:auto" aria-label="{{ _('Sorting') }}">
             {% for key, label in (("added", _("By date added")), ("name", _("By name")), ("author", _("By author")),

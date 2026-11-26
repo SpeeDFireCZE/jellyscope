@@ -176,7 +176,7 @@ def _numbers(rows: list[dict[str, Any]]) -> dict[str, int]:
 def _listeners(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     people: dict[str, dict[str, Any]] = {}
     for x in rows:
-        person = people.setdefault(x["user_id"] or "jmeno:" + str(x["user_name"]),
+        person = people.setdefault(x["user_id"] or "name:" + str(x["user_name"]),
                                    {"user_id": x["user_id"], "user_name": x["user_name"], "seconds": 0, "plays": 0})
         person["seconds"] += x["watched_seconds"]
         person["plays"] += int(x["plays"])

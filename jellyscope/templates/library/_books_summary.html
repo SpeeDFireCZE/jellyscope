@@ -1,27 +1,20 @@
 {# The Books section of the Library page (web/library_kinds.py, books_library.library_summary; its data is
    `content_section.data`): every books library together, next to the video and music statistics above - what the
    libraries hold, in what format, of which years and genres, the largest books. The cards are the library's cards of
-   Books (cards_books.PAGES["library"]), with the same data shape. #}
-{% from "_macros.html" import tile, table_window with context %}
+   Books (cards_books.PAGES["library"]), drawn by the registry (show_card) with the data this section computed
+   (`card_data`, the same shape). #}
+{% from "_macros.html" import show_card with context %}
 <div class="section-head" id="books-in-library">
     <div>
         <h2>{{ _("Books") }}</h2>
         <p class="subtitle">{{ _("All books libraries together. Current state, regardless of the period.") }}</p>
     </div>
 </div>
-<div class="kpi-row">
-    {{ tile(_("E-books"), content_section.data.numbers.ebook_count | number) }}
-    {{ tile(_("Audiobooks"), content_section.data.numbers.audiobook_count | number) }}
-    {{ tile(_("Authors"), content_section.data.numbers.author_count | number) }}
-    {{ tile(_("Size"), content_section.data.numbers.size_bytes | bytes) }}
-    {{ tile(_("Audiobook length"), (content_section.data.numbers.seconds | seconds) if content_section.data.numbers.seconds else "–") }}
-</div>
+{# The numbers are the card Books library numbers (the same tiles, the same count): in its slot they are drawn anew
+   with the cards below. #}
+{{ show_card("books_library") }}
 <div class="grid-2">
     {% for key in content_section.data.card_keys %}
-        {# `card`, `d` and `prefix` are the names the card templates read. #}
-        {% set card = content_section.data.cards[key] %}{% set d = content_section.data.card_data[key] %}{% set prefix = "" %}
-        <!-- card: {{ key }} -->
-        {% include card.template %}
+        {{ show_card(key) }}
     {% endfor %}
 </div>
-{{ table_window() }}

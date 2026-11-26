@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -147,6 +149,7 @@ for name in ("deploy/install.sh", "deploy/update.sh"):
 
 install = (PROJECT / "deploy" / "install.sh").read_text(encoding="utf-8")
 update = (PROJECT / "deploy" / "update.sh").read_text(encoding="utf-8")
+dockerfile = (PROJECT / "Dockerfile").read_text(encoding="utf-8")
 for needle, why in [
     ("EUID -eq 0", "recognises whether it runs as root"),
     ("secrets.token_hex", "generates its own SECRET_KEY"),
@@ -172,6 +175,81 @@ for needle in ("apt-get install -y -qq nginx", "systemctl reload nginx", "certbo
 
 check("MISSING+=(supervisor)" not in install,
       "install.sh does not install supervisord")
+
+# update.sh refuses to run as root; the closing summary must not advise `sudo .../update.sh`. The
+# advice is worked out by the summary's own lines, run here in bash for who ran the installation.
+_update_advice = [line.strip() for line in install.splitlines() if "Updates:" in line]
+check(len(_update_advice) == 1 and re.search(r"\bsudo\s+(?!-u\b)\S*update\.sh", install) is None,
+      f"install.sh: the advice for updates does not run update.sh as root ({_update_advice})")
+_advice_code = re.search(r'^UPDATE_CMD=.*?^fi$', install, re.M | re.S)
+_bash = shutil.which("bash")
+if not _bash:
+    print("SKIPPED  bash is missing")
+# sudo sets SUDO_USER for `sudo -u <account>` too, not only for root: only a run as root (EUID 0) is "through sudo
+# into root". EUID cannot be set in bash, so the snippets read TEST_EUID in its place.
+for sudo_user, euid, app_user, want in [
+    ("", "1000", "anna", "/opt/js/deploy/update.sh"),
+    ("anna", "0", "anna", "sudo -u anna /opt/js/deploy/update.sh"),
+    ("", "0", "root", "ALLOW_ROOT=1 /opt/js/deploy/update.sh"),
+    ("anna", "1001", "jellyscope", "sudo -u jellyscope /opt/js/deploy/update.sh"),
+]:
+    if not _bash:
+        break
+    _env = {k: v for k, v in os.environ.items() if k != "SUDO_USER"}
+    _env.update({"APP_DIR": "/opt/js", "APP_USER": app_user, "TEST_EUID": euid},
+                **({"SUDO_USER": sudo_user} if sudo_user else {}))
+    _got = subprocess.run(
+        [_bash, "-c", "set -euo pipefail\n"
+         + (_advice_code.group(0).replace("$EUID", "$TEST_EUID") if _advice_code else "")
+         + '\nprintf "  Updates:  %s" "$UPDATE_CMD"'],
+        env=_env, capture_output=True, text=True).stdout
+    check(_advice_code is not None and _update_advice == ["Updates:  $UPDATE_CMD"]
+          and _got == f"  Updates:  {want}",
+          f"install.sh: after an installation by {app_user}"
+          f"{f' through sudo by {sudo_user}' if sudo_user else ''} (EUID {euid}) it advises {want!r} ({_got.strip()!r})")
+
+# Who the app is installed for. `sudo -u jellyscope install.sh` (the dedicated account of the script's own header)
+# run by anna sets SUDO_USER=anna: the installation is jellyscope's, not anna's. Only root reached through sudo
+# means the person behind it.
+_who_code = re.search(r'^APP_USER=.*?(?=^APP_GROUP=)', install, re.M | re.S)
+_me = subprocess.run(["id", "-un"], capture_output=True, text=True).stdout.strip()
+for sudo_user, euid, want in [("", "1000", _me), ("anna", "1001", _me), ("anna", "0", "anna")]:
+    if not _bash:
+        break
+    _env = {k: v for k, v in os.environ.items() if k != "SUDO_USER"}
+    _env.update({"TEST_EUID": euid}, **({"SUDO_USER": sudo_user} if sudo_user else {}))
+    _got = subprocess.run(
+        [_bash, "-c", "set -euo pipefail\n"
+         + (_who_code.group(0).replace("$EUID", "$TEST_EUID") if _who_code else "")
+         + '\nprintf "%s" "$APP_USER"'],
+        env=_env, capture_output=True, text=True).stdout
+    check(_who_code is not None and _got == want,
+          f"install.sh: run as {_me if euid != '0' else 'root'}"
+          f"{f' through sudo by {sudo_user}' if sudo_user else ''} installs for {want!r} ({_got!r})")
+# The two snippets chained as the script runs them - the advice from the account the script itself worked out, not
+# from an APP_USER handed in from outside: `sudo -u <account>` by anna installs for the account and advises
+# `sudo -u <account> update.sh` (the dedicated account has no shell anna could switch into), `sudo` into root
+# advises it as anna.
+for sudo_user, euid, want in [("anna", "1001", f"sudo -u {_me} /opt/js/deploy/update.sh"),
+                              ("anna", "0", "sudo -u anna /opt/js/deploy/update.sh"),
+                              ("", "1000", "/opt/js/deploy/update.sh")]:
+    if not _bash:
+        break
+    _env = {k: v for k, v in os.environ.items() if k not in ("SUDO_USER", "APP_USER")}
+    _env.update({"APP_DIR": "/opt/js", "TEST_EUID": euid}, **({"SUDO_USER": sudo_user} if sudo_user else {}))
+    _got = subprocess.run(
+        [_bash, "-c", "set -euo pipefail\n"
+         + (_who_code.group(0) + "\n" + _advice_code.group(0) if _who_code and _advice_code else "").replace("$EUID", "$TEST_EUID")
+         + '\nprintf "%s|%s" "$APP_USER" "$UPDATE_CMD"'],
+        env=_env, capture_output=True, text=True).stdout
+    check(_got == f"{sudo_user if euid == '0' else _me}|{want}",
+          f"install.sh from start to the advice: run as {_me if euid != '0' else 'root'}"
+          f"{f' through sudo by {sudo_user}' if sudo_user else ''} advises {want!r} ({_got!r})")
+
+
+def command_lines_of(text: str) -> list[str]:
+    """The lines of a shell script that are not comments."""
+    return [line for line in text.splitlines() if not line.strip().startswith("#")]
 
 
 def runnable_code(text: str) -> str:
@@ -233,8 +311,8 @@ update_code = runnable_code(update)
 check("useradd" not in install_code, "install.sh creates no system user")
 check("sudo -u" not in install_code, "install.sh runs nothing through sudo -u")
 check("sudo -u" not in update_code, "update.sh runs nothing through sudo -u")
-check("APP_USER=\"${SUDO_USER:-$(id -un)}\"" in install,
-      "install.sh takes the user from SUDO_USER, not a hard-coded 'jellyscope'")
+check('APP_USER="$(id -un)"' in install and 'APP_USER="$SUDO_USER"' in install,
+      "install.sh takes the user it runs as (SUDO_USER after sudo into root), not a hard-coded 'jellyscope'")
 
 # The app must not end up started as root. It talks over the network, reads other people's
 # files and starts ffprobe - whoever got around it would have the whole machine.
@@ -290,18 +368,21 @@ check('as_root chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"' in install,
 check("chmod -R" not in install_code, "install.sh does no blanket chmod")
 
 # The PostgreSQL driver is installed straight away, so nobody has to hunt for it
-# through the command line when they switch the database in Settings.
-check('pip install --quiet "psycopg[binary,pool]"' in install,
-      "install.sh installs the PostgreSQL driver as well")
+# through the command line when they switch the database in Settings - at the version
+# of requirements-postgres.txt, the one place it is pinned, not whatever is newest that day.
+check('pip install --quiet -r "$APP_DIR/requirements-postgres.txt"' in install,
+      "install.sh installs the PostgreSQL driver as well, from requirements-postgres.txt")
+check(not re.search(r'pip install[^\n]*"psycopg\[', "\n".join(command_lines_of(install))),
+      "and nowhere without a version")
 
 # Its failure must not bring the installation down though: psycopg-binary has no packages
 # for every platform, and `set -e` would take along the installation for whoever
 # wants only SQLite.
 # We search the original text, not the filtered code: the filter throws away
-# the content of quotes, so exactly the package's name would vanish from the line.
+# the content of quotes, so exactly the file's name would vanish from the line.
 psycopg_line = next(
     (r for r in install.splitlines()
-     if 'psycopg[binary,pool]' in r and "pip install" in r), ""
+     if "requirements-postgres.txt" in r and "pip install" in r), ""
 )
 check(psycopg_line.strip().startswith("if "),
       f"a failure of psycopg does not bring the installation down (line: {psycopg_line.strip()!r})")
@@ -495,6 +576,120 @@ for number, line in enumerate(update_code.splitlines(), 1):
 check(not outside_helper,
       f"update.sh calls git only through git_() {outside_helper}")
 
+print("--- every dependency at one tested version ---")
+# requirements.txt pins what the app uses. The packages those pull in had only lower bounds ("h11>=0.8"): a new
+# installation got whatever was newest that day - a combination nobody tested - and no update touched them again,
+# because an installed package satisfies such a bound for ever. constraints.txt pins them, and requirements.txt
+# refers to it, so every `pip install -r requirements.txt` honours it: install.sh, update.sh, the Update button
+# (its dry run too) and the Docker image. The versions are those of the environment these tests run in.
+import importlib.metadata as _metadata  # noqa: E402
+
+try:
+    from pip._vendor.packaging.requirements import Requirement as _Requirement
+except ImportError:  # pragma: no cover - a Python without pip
+    _Requirement = None
+
+
+def _canonical(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _pins(path: Path) -> dict[str, str]:
+    """name -> version of the `name==version` lines of a requirements or constraints file."""
+    found = {}
+    for line in path.read_text(encoding="utf-8").splitlines() if path.is_file() else []:
+        match = re.fullmatch(r"([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*==\s*([^\s;]+)\s*(?:;.*)?",
+                             line.split("#", 1)[0].strip())
+        if match:
+            found[_canonical(match.group(1))] = match.group(2)
+    return found
+
+
+def _roots(path: Path) -> list[str]:
+    return [line.split("#", 1)[0].strip() for line in path.read_text(encoding="utf-8").splitlines()
+            if line.split("#", 1)[0].strip() and not line.strip().startswith("-")]
+
+
+def _closure(roots: list[str]) -> tuple[dict[str, str], set[str]]:
+    """Everything the requirements pull in on this machine (name -> installed version), and what is missing."""
+    found: dict[str, tuple[str, set[str]]] = {}
+    missing: set[str] = set()
+    todo = [_Requirement(root) for root in roots]
+    while todo:
+        requirement = todo.pop()
+        name = _canonical(requirement.name)
+        try:
+            distribution = _metadata.distribution(requirement.name)
+        except _metadata.PackageNotFoundError:
+            missing.add(name)
+            continue
+        extras = found.get(name, ("", set()))[1]
+        if name in found and set(requirement.extras) <= extras:
+            continue
+        extras = extras | set(requirement.extras)
+        found[name] = (distribution.version, extras)
+        for line in distribution.requires or []:
+            sub = _Requirement(line)
+            if sub.marker is None or any(sub.marker.evaluate({"extra": extra}) for extra in extras | {""}):
+                todo.append(sub)
+    return {name: version for name, (version, _) in found.items()}, missing
+
+
+_requirements_file = PROJECT / "requirements.txt"
+_constraints_file = PROJECT / "constraints.txt"
+# The PostgreSQL driver is optional and so apart (see requirements.txt), but pinned the same way: one file for
+# install.sh, update.sh, the Update button and the image.
+_postgres_file = PROJECT / "requirements-postgres.txt"
+check(re.search(r"^-c constraints\.txt\s*$", _requirements_file.read_text(encoding="utf-8"), re.M) is not None,
+      "requirements.txt refers to constraints.txt, so every install from it honours the pins")
+check(_postgres_file.is_file()
+      and re.search(r"^-c constraints\.txt\s*$", _postgres_file.read_text(encoding="utf-8"), re.M) is not None
+      and re.search(r"^psycopg\[binary,pool\]==\d", _postgres_file.read_text(encoding="utf-8"), re.M) is not None,
+      "requirements-postgres.txt pins the driver (psycopg[binary,pool]==...) and honours the same constraints")
+_required = {**_pins(_requirements_file), **_pins(_postgres_file)}
+_constrained = _pins(_constraints_file)
+check(not set(_required) & set(_constrained),
+      f"a package is pinned in one place only ({sorted(set(_required) & set(_constrained))})")
+if _Requirement is None:
+    print("SKIPPED  pip's packaging is missing - the pins are not compared with the environment")
+else:
+    _pulled, _absent = _closure(_roots(_requirements_file))
+    _pinned = {**_required, **_constrained}
+    check(not _absent, f"the environment has everything requirements.txt pulls in (missing: {sorted(_absent)})")
+    check(len(_pulled) > len(_required) and not [n for n in _pulled if n not in _pinned],
+          f"every package requirements.txt pulls in has a version ({len(_pulled)} packages, without one: "
+          f"{sorted(n for n in _pulled if n not in _pinned)})")
+    check(not [n for n in _pulled if n in _pinned and _pinned[n] != _pulled[n]],
+          "and it is the version the tests run with "
+          f"({sorted(f'{n} {_pinned[n]} != {_pulled[n]}' for n in _pulled if n in _pinned and _pinned[n] != _pulled[n])})")
+    _driver, _no_driver = _closure(_roots(_postgres_file)) if _postgres_file.is_file() else ({}, {"psycopg"})
+    if _no_driver:
+        print(f"SKIPPED  the PostgreSQL driver is not installed here ({sorted(_no_driver)}) - its pins are not compared")
+    else:
+        check(not [n for n in _driver if n not in _pinned],
+              f"so has every package of the PostgreSQL driver ({sorted(n for n in _driver if n not in _pinned)})")
+        check(not [n for n in _driver if n in _pinned and _pinned[n] != _driver[n]],
+              "at the version installed "
+              f"({sorted(f'{n} {_pinned[n]} != {_driver[n]}' for n in _driver if n in _pinned and _pinned[n] != _driver[n])})")
+        check(not [n for n in _constrained if n not in _pulled and n not in _driver],
+              f"constraints.txt holds only what the app's requirements pull in, no development tools "
+              f"({sorted(n for n in _constrained if n not in _pulled and n not in _driver)})")
+for _file in (_requirements_file, _postgres_file):
+    if _file == _postgres_file and (_Requirement is None or _no_driver):
+        continue
+    _dry = subprocess.run([sys.executable, "-m", "pip", "install", "--dry-run", "--no-index", "--quiet",
+                           "-r", str(_file)], cwd=tempfile.gettempdir(), capture_output=True, text=True)
+    if "no such option: --dry-run" in _dry.stderr:
+        print("SKIPPED  this pip cannot do a dry run")
+        break
+    check(_dry.returncode == 0, f"pip accepts {_file.name} with its constraints, from any folder "
+                                f"and without the network ({_dry.stderr.strip()[-300:]!r})")
+
+# The image installs from requirements.txt too; the file it refers to has to be in the image by then.
+_copy_before = dockerfile[:dockerfile.find("-r requirements.txt")]
+check(re.search(r"^COPY [^\n]*\bconstraints\.txt\b", _copy_before, re.M) is not None,
+      "the Dockerfile copies constraints.txt before it installs requirements.txt")
+
 print("--- examples for a reverse proxy ---")
 for name in ("nginx.conf.example", "Caddyfile.example", "apache.conf.example"):
     path = PROJECT / "deploy" / name
@@ -586,6 +781,15 @@ check("deploy/" not in (PROJECT / ".dockerignore").read_text(encoding="utf-8"),
 check("command -v setpriv" in dockerfile,
       "the build checks that the tool for dropping the rights is in the image")
 
+# The entrypoint runs as root at every start. Were it (or any code beside it) the app user's, whoever got code
+# running as UID 10001 would rewrite it and be root at the next start. The app writes only into /app/data.
+_dockerfile_code = "\n".join(line for line in dockerfile.replace("\\\n", " ").splitlines()
+                             if not line.lstrip().startswith("#"))
+_chowns = re.findall(r"chown\s+(?:-\w+\s+)*\S+\s+(\S+)", _dockerfile_code)
+check(_chowns == ["/app/data"], f"the image hands the app user only /app/data, not its code ({_chowns})")
+check(re.search(r"chmod -R go-w /app(\s|$)", _dockerfile_code) is not None,
+      "and nobody but root may write the code, whatever rights the files had in the build context")
+
 # The app must never run with root's rights.
 check(re.search(r'id -u.*=.*"0"', entry_text) is not None,
       "the launcher recognises that it runs as root")
@@ -612,6 +816,42 @@ check("chown -R" not in entry_text.split("else", 1)[0],
 advice = entry_text.split("else", 1)[1] if "else" in entry_text else ""
 check("chown -R" in advice,
       "for a non-empty folder the recursive chown is only advised, not run")
+
+print("--- the container's health check ---")
+# Inside the container the app listens on PORT from compose (.env). A health check with a fixed port
+# asks an address nobody listens on and the container stays "unhealthy". The check's own code is run
+# here with urlopen replaced, so nothing is contacted.
+import shlex  # noqa: E402
+import urllib.request  # noqa: E402
+
+_health = re.search(r"^HEALTHCHECK [^\n]*\\\n\s+CMD (.+)$", dockerfile, re.M)
+_argv = shlex.split(_health.group(1)) if _health else []
+
+
+def _health_asks(port: str | None) -> list[str]:
+    asked: list[str] = []
+    real, saved = urllib.request.urlopen, os.environ.get("PORT")
+    urllib.request.urlopen = lambda url, timeout=None: asked.append(url)
+    if port is None:
+        os.environ.pop("PORT", None)
+    else:
+        os.environ["PORT"] = port
+    try:
+        if _argv[:2] == ["python", "-c"] and len(_argv) == 3:
+            exec(compile(_argv[2], "HEALTHCHECK", "exec"), {})
+    finally:
+        urllib.request.urlopen = real
+        if saved is None:
+            os.environ.pop("PORT", None)
+        else:
+            os.environ["PORT"] = saved
+    return asked
+
+
+_asked = _health_asks("9000")
+check(_asked == ["http://127.0.0.1:9000/setup"], f"the health check asks the port the app listens on ({_asked})")
+_asked = _health_asks(None)
+check(_asked == ["http://127.0.0.1:8097/setup"], f"and 8097 without PORT ({_asked})")
 
 print("--- a database that cannot be opened ---")
 # In a container this is the most frequent error of the first start: the mounted
@@ -706,6 +946,27 @@ check("read-only" in _message2,
       "and the message says the file is read-only")
 _os.chmod(_file, _stat.S_IWRITE | _stat.S_IREAD)
 
+# PostgreSQL configured, the driver missing (an image built with PSYCOPG=0, say): the start used to end in a
+# traceback, and with `restart: unless-stopped` the container went round in circles, the page never shown. It is
+# an unavailable database like the others - the launcher answers it with the stand-in page.
+_saved_modules = {name: sys.modules.get(name) for name in ("psycopg", "psycopg_pool")}
+sys.modules.update(psycopg=None, psycopg_pool=None)
+try:
+    _db.init_db(_dialect.DatabaseConfig(kind=_dialect.POSTGRES, host="127.0.0.1", port=1, database="none",
+                                        user="none", password=""))
+    _no_driver = None
+except Exception as error:  # noqa: BLE001
+    _no_driver = error
+finally:
+    for _name, _module in _saved_modules.items():
+        if _module is None:
+            sys.modules.pop(_name, None)
+        else:
+            sys.modules[_name] = _module
+check(isinstance(_no_driver, _db.DatabaseUnavailable) and "psycopg" in str(_no_driver),
+      f"PostgreSQL without its driver is an unavailable database, not a crash of the start "
+      f"({type(_no_driver).__name__}: {str(_no_driver)[:60]!r})")
+
 print()
 print("--- the stand-in page without a database ---")
 # The container is to come up even so and say what is going on - otherwise the browser
@@ -762,6 +1023,29 @@ for needle, why in [
     ("no-new-privileges:true", "the container does not add rights to itself"),
 ]:
     check(needle in compose, f"compose: {why}")
+
+# PostgreSQL in the image: the driver comes with the build, at the version of requirements-postgres.txt. Installed
+# by hand into a running container it was gone with the next `docker compose up -d --build` - the documented
+# update - while data/database.json still pointed at PostgreSQL.
+_driver_run = re.search(r'^RUN if \[ "\$PSYCOPG" = "1" \]; then(?:[^\n]*\\\n)*[^\n]*', dockerfile, re.M)
+check(re.search(r"^ARG PSYCOPG=1$", dockerfile, re.M) is not None and _driver_run is not None
+      and "-r requirements-postgres.txt" in _driver_run.group(0),
+      "the image carries the PostgreSQL driver from requirements-postgres.txt (build argument PSYCOPG, on by default)")
+check(_driver_run is not None and "||" in _driver_run.group(0),
+      "a platform without its packages still builds (SQLite only), as with install.sh")
+check(re.search(r"^COPY [^\n]*\brequirements-postgres\.txt\b", dockerfile[:_driver_run.start() if _driver_run else 0],
+                re.M) is not None,
+      "and the file is in the image by then")
+check('PSYCOPG: "${PSYCOPG:-1}"' in compose, "compose passes PSYCOPG from .env to the build")
+check("| `PSYCOPG` |" in (PROJECT / "DEPLOY.md").read_text(encoding="utf-8"),
+      "DEPLOY.md lists PSYCOPG with the other build switches")
+
+# The update in a container is `git pull && docker compose up -d --build` (DEPLOY.md, updates.py). A base
+# image already on the machine is fetched again only with build.pull - without it Python, OpenSSL, ffmpeg
+# and libpq stay at the versions of the first build, and the apt layer comes from the cache for ever.
+_build = re.search(r"^    build:\n((?:(?:      .*| *#.*)?\n)+)", compose, re.M)
+check(_build is not None and re.search(r"^      pull: true\s*$", _build.group(1), re.M) is not None,
+      "compose: a rebuild fetches the newest base image (build.pull)")
 
 # The demo mode must not switch on by itself - a public demo is another thing than
 # a home installation, and mixing them up means either settings that do not work, or a

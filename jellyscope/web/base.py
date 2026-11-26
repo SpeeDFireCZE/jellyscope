@@ -10,23 +10,53 @@ application is put together, otherwise it could not be used from elsewhere.
 """
 from __future__ import annotations
 
+import asyncio
 import functools
+import hashlib
 import logging
+import secrets
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import HTTPException, Request, Response
 from fastapi.templating import Jinja2Templates
 
-from .. import (access, accounts, cards, collector, conversion, db, detailed_map, formatting, i18n, navigation,
-                scanner, seasonal, stats, updates)
+from .. import (access, accounts, cards, cards_base, collector, conversion, db, detailed_map, formatting, i18n,
+                navigation, scanner, seasonal, seerr, stats, updates, web_sessions)
+from ..arr import registry
 from ..config import load_config
 
 
 log = logging.getLogger("jellyscope.web")
+
+
+# Background tasks started from a request (spawn). The loop holds a task only by a weak reference: one nobody
+# else holds could be collected in the middle of its work.
+_BACKGROUND: set[asyncio.Task[Any]] = set()
+
+
+def spawn(work: Coroutine[Any, Any, Any], name: str) -> asyncio.Task[Any]:
+    """Start a background task from a request - in the server's language, held until it ends, its failure logged.
+
+    The task log and the notifications it writes are read by everybody, so it runs without the language of
+    whoever clicked (i18n.without_account_language). An error escaping it goes into the log; otherwise only
+    "Task exception was never retrieved" would say so, once the task was collected.
+    """
+    task = asyncio.create_task(i18n.without_account_language(work), name=name)
+    _BACKGROUND.add(task)
+    task.add_done_callback(_background_done)
+    return task
+
+
+def _background_done(task: asyncio.Task[Any]) -> None:
+    _BACKGROUND.discard(task)
+    if not task.cancelled() and task.exception() is not None:
+        log.error("background task %s failed", task.get_name(), exc_info=task.exception())
 
 
 # PROJECT_DIR is the root of the project (where run.py and the data folder are),
@@ -48,9 +78,11 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def current_account(request: Request) -> dict[str, Any] | None:
     """Who is signed in. Returns None when nobody.
 
-    The cookie holds only the account's ID (signed, so it cannot be forged).
-    Everything else is rather read from the database - when somebody took the
-    account's rights away meanwhile, it shows at once, not only after signing out.
+    The cookie holds the account's ID and the token of its session (signed, so it cannot
+    be forged). The session holds only while its record on the server exists (web_sessions):
+    signing out deletes it, so a copy of the cookie made before opens nothing. Everything else
+    is rather read from the database - when somebody took the account's rights away
+    meanwhile, it shows at once, not only after signing out.
     """
     account_id = request.session.get("account_id")
     if not account_id:
@@ -60,25 +92,32 @@ def current_account(request: Request) -> dict[str, Any] | None:
     # middleware, viewer_scope_middleware and require_login - and an image or a style is a
     # request too. The session's fingerprint is part of the key: after a password
     # change within the same request the account is read again.
-    key = (account_id, request.session.get("fingerprint"))
+    token = request.session.get(web_sessions.COOKIE_KEY)
+    key = (account_id, request.session.get("fingerprint"), token)
     stored = getattr(request.state, "request_account", None)
     if stored is not None and stored[0] == key:
         return stored[1]
 
-    account = accounts.get(int(account_id))
-    if account is None:
-        # The account was deleted meanwhile - the cookie is thrown away.
+    # The record and the account in one lookup.
+    account = web_sessions.account_of(token)
+    if account is None or str(account["id"]) != str(account_id):
+        # No live record: signed out (maybe in another copy of this cookie), unused for too
+        # long, the account deleted - or a cookie from before the records, which signs in once more.
         request.session.clear()
+        account = None
     elif request.session.get("fingerprint") != accounts.session_fingerprint(account):
         # The password changed since the sign-in (by the owner, or by the administrator).
         # A session that does not know about it ends - otherwise a stolen cookie would
         # stay valid and changing the password would solve nothing. A session without a
         # fingerprint (from before this check) ends too: after an update everybody
         # signs in once.
+        web_sessions.end(token, best_effort=True)
         request.session.clear()
         account = None
-    elif accounts.disabled_in_jellyfin(account):
-        # Disabled in Jellyfin since the sign-in: the sign-in would refuse them now, so the session ends too.
+    elif accounts.disabled_in_jellyfin(account) or access.viewer_shut_out(account):
+        # Disabled in Jellyfin since the sign-in (the sign-in would refuse them now), or sign-in through
+        # Jellyfin switched off since a viewer signed in: every session of the account ends.
+        web_sessions.end_all(account["id"], best_effort=True)
         request.session.clear()
         account = None
     request.state.request_account = (key, account)
@@ -88,14 +127,82 @@ def current_account(request: Request) -> dict[str, Any] | None:
 def start_session(request: Request, account: dict[str, Any]) -> None:
     """Writes the sign-in into the session - one place for the password, the code and the first account.
 
-    The old session is thrown away: it prevents an attack where somebody slips you
-    their session ID before you sign in and then "rides along" in it. And the
-    password's fingerprint must not be missing - current_account() ends a session
-    without it at once, so a path that forgot it would silently sign the person out.
+    The old session is thrown away, its record too: it prevents an attack where somebody slips
+    you their session ID before you sign in and then "rides along" in it. The new one gets a
+    record of its own (web_sessions). And the password's fingerprint must not be missing -
+    current_account() ends a session without it at once, so a path that forgot it would
+    silently sign the person out.
     """
+    web_sessions.end(request.session.get(web_sessions.COOKIE_KEY))
     request.session.clear()
     request.session["account_id"] = account["id"]
     request.session["fingerprint"] = accounts.session_fingerprint(account)
+    request.session[web_sessions.COOKIE_KEY] = web_sessions.create(account["id"])
+
+
+def end_session(request: Request) -> None:
+    """Signs out: the session's record goes, so every copy of the cookie stops opening the account."""
+    web_sessions.end(request.session.get(web_sessions.COOKIE_KEY))
+    request.session.clear()
+
+
+# ---- secrets that must not travel in the session cookie ------------------
+#
+# The session cookie is Starlette's: signed, so nobody forges it, but not encrypted - whoever sees it (the person
+# at the browser, a proxy that logs the headers, a listener on a plain-http network) reads what is in it. Two values
+# must outlive one request and still never be readable there: the secret of a Quick Connect code (whoever has it
+# fetches the sign-in from Jellyfin, web/login.py) and a freshly made API key (shown once, see _new_key).
+#
+# Such a value waits in the memory of the app's one process under a random handle with a time limit; only the handle
+# goes into the session. Nothing of it is written to the database, a file or the log, and a restart forgets it all:
+# a code sign-in in progress has to be started again, a fresh key not shown yet is not shown (its row says to make a
+# new one). The memory has a ceiling: past HELD_SECRETS_MAX the oldest values go first. A Quick Connect code costs an
+# attempt of the sign-in brake and a key needs an account, so a thousand is far more than people ever have going.
+HELD_SECRETS_MAX = 1000
+# handle -> (the value, the time.monotonic() it expires at); the oldest first (the order of insertion).
+_held_secrets: dict[str, tuple[str, float]] = {}
+_held_lock = threading.Lock()            # the routes run on the event loop and in the thread pool alike
+
+
+def hold_secret(value: str, lifetime: float) -> str:
+    """Keeps the value for `lifetime` seconds. Returns the handle that goes into the session in its place."""
+    handle = secrets.token_urlsafe(32)
+    now = time.monotonic()
+    with _held_lock:
+        for expired in [h for h, (_, until) in _held_secrets.items() if until <= now]:
+            del _held_secrets[expired]
+        while len(_held_secrets) >= HELD_SECRETS_MAX:
+            del _held_secrets[next(iter(_held_secrets))]
+        _held_secrets[handle] = (value, now + lifetime)
+    return handle
+
+
+def peek_secret(handle: Any) -> str | None:
+    """The value under the handle, kept for the next time. None = unknown, expired or forgotten (a restart)."""
+    if not isinstance(handle, str):
+        return None
+    with _held_lock:
+        entry = _held_secrets.get(handle)
+        if entry is not None and entry[1] <= time.monotonic():
+            del _held_secrets[handle]
+            entry = None
+    return entry[0] if entry else None
+
+
+def take_secret(handle: Any) -> str | None:
+    """The value under the handle, read once: it is forgotten at the same time. None as with peek_secret."""
+    if not isinstance(handle, str):
+        return None
+    with _held_lock:
+        entry = _held_secrets.pop(handle, None)
+    return entry[0] if entry and entry[1] > time.monotonic() else None
+
+
+def forget_secret(handle: Any) -> None:
+    """Drops the value under the handle (a code that ended); an unknown handle is no error."""
+    if isinstance(handle, str):
+        with _held_lock:
+            _held_secrets.pop(handle, None)
 
 
 def require_login(request: Request) -> dict[str, Any]:
@@ -107,6 +214,7 @@ def require_login(request: Request) -> dict[str, Any]:
     account = current_account(request)
     if account is None:
         raise HTTPException(status_code=307, headers={"Location": "/login"})
+    _markers_at_start(request, account)
     return account
 
 
@@ -187,11 +295,28 @@ def _period_for_template(value: Any) -> dict[str, Any]:
                 "since_label": _period_label(value, value.since_local, since),
                 "until_label": _period_label(value, value.until_local, until),
                 "own": True,
-                "whole_history": value.whole_history}
+                "whole_history": value.whole_history,
+                "query": _period_query(value, since, until)}
     return {"days": int(value), "since": "", "until": "",
             "since_text": "", "until_text": "",
             "since_label": "", "until_label": "",
-            "own": False, "whole_history": False}
+            "own": False, "whole_history": False,
+            "query": urlencode({"days": int(value)})}
+
+
+def _period_query(period: stats.Period, since: str, until: str) -> str:
+    """The page's period as address parameters, for the requests the page sends by itself.
+
+    A card switched in place, a window loaded on a click and the live flow on Network ask
+    with it (base.html `data-period`): without it they took the period from the session,
+    which another tab may have changed meanwhile - the card then showed a year under a
+    switch saying a week. The same shapes the session keeps (web/periods.py).
+    """
+    if period.whole_history:
+        return urlencode({"days": 0})
+    if period.whole_day:
+        return urlencode({"since": since, "until": until})
+    return urlencode({"since": (period.since_local or period.since)[:16], "until": (period.until_local or period.until)[:16]})
 
 
 def _period_label(period: stats.Period, local: str, day: str) -> str:
@@ -256,6 +381,91 @@ def _skin() -> str:
 def _exact_time() -> bool:
     """Is the time in charts written to the minute, or rounded?"""
     return formatting.exact_time()
+
+
+# Do the cards of an open page refresh by themselves once their data change (the markers in /health, web/status.py)?
+# Settings → Interface → Refreshing cards; on unless switched off. Off = only the cards that always did (Now playing,
+# Recently added, Downloading, Flowing right now).
+SELF_REFRESH_KEY = "ui_self_refresh"
+
+
+def _self_refresh() -> bool:
+    """Do the cards refresh by themselves? Only an explicit "0" says no."""
+    return db.get_setting(SELF_REFRESH_KEY, "1") != "0"
+
+
+# The markers of the cards' sources (/health and the page itself, see change_markers): here and not with /health
+# (web/status.py), because the sign-in guard takes them for a page before it computes its data (require_login).
+#
+# The areas of the cards over plays. A viewer from Jellyfin who sees none of them follows only their own plays
+# (see _plays_viewer).
+_PLAYS_AREAS = frozenset(card.area for card in cards.ALL_CARDS if cards_base.PLAYS in card.sources)
+
+
+def _opaque(*parts: Any) -> str:
+    """A short fingerprint of the values. The page only compares it with the previous one; the values themselves
+    (how many play right now) are not everybody's business."""
+    return hashlib.blake2s("|".join(map(str, parts)).encode("utf-8"), digest_size=6).hexdigest()
+
+
+def _plays_viewer(account: dict[str, Any] | None) -> str | None:
+    """Whose plays the account's marker follows: "" = everybody's, otherwise the viewer's own; None = nobody's.
+
+    A viewer from Jellyfin who sees no card over the others' plays would otherwise learn from a marker that moves
+    every minute that somebody else is watching right now - and that is the business of "Now playing". The same
+    for an account that sees no card over plays and not History (a reader of only the *Arr apps, Seerr's requests
+    or the library): none of its pages shows a play, so its marker stands still.
+    """
+    if any(access.account_sees(account, area) for area in _PLAYS_AREAS):
+        return ""
+    viewer = access.own_viewer(account)
+    if viewer:
+        return viewer
+    return "" if access.sees_history(account) else None
+
+
+def change_markers(account: dict[str, Any] | None, versions: dict[str, str] | None = None) -> dict[str, str]:
+    """A marker for every source of the cards that has one (cards_base.SOURCES but "live"): an open page compares
+    them with the previous answer and redraws only the cards over a source that moved.
+
+    All from the database (several processes of the app answer the same) and nothing is written - the browser
+    asks every ten seconds (/health, web/status.py). `versions` = scanner.versions() when the caller has them
+    already. A page carries them too, as they were before it computed its data (_markers_at_start).
+
+    * plays - a play started or ended, while something plays (not paused) once a minute, and plays deleted or
+      rewritten (stats.plays_state); always the same for an account no page of which shows plays (_plays_viewer);
+    * library - the library's version (a finished library sync, the number of titles);
+    * arr, seerr, music, books - the task's last finished run, and the apps' state of their last sync: "Sync now"
+      in Settings writes no run into the tasks' log, only that state - the same every sync writes, so both move
+      the marker (and so does deleting the downloaded data, which clears it); arr also an app's own marker (Prowlarr's
+      measuring in the background stored a change of the indexers' status).
+    """
+    versions = versions or scanner.versions()
+    viewer = _plays_viewer(account)
+    plays = stats.plays_state(viewer) if viewer is not None else None
+    return {
+        "plays": _opaque(plays["last_id"], plays["active"], plays["minute"], plays["rewritten"]) if plays else "",
+        "library": versions["library"],
+        "arr": _opaque(versions["arr"], *(app.sync_state()["at"] for app in registry.APPS.values()),
+                       *(app.marker() for app in registry.APPS.values() if app.marker)),
+        "seerr": _opaque(versions["seerr"], seerr.sync_state()["at"]),
+        "music": _opaque(versions["music"]),
+        "books": _opaque(versions["books"]),
+    }
+
+
+def _markers_at_start(request: Request, account: dict[str, Any]) -> None:
+    """The markers for the page about to be drawn, taken before its data are computed (from require_login, which
+    runs before the route): the page carries them (base.html, data-markers) and the browser compares its first
+    question with them. Taken from the first answer instead, a change while the page computed its data - a task
+    finishing during a slow *Arr page - or before the first question would be lost.
+
+    Only for a page a person opens (a GET without the "X-Requested-With" of the page's own requests) and with
+    Refreshing cards on; once per request (a section's guard asks require_login too).
+    """
+    if (request.method == "GET" and "x-requested-with" not in request.headers
+            and getattr(request.state, "page_markers", None) is None and _self_refresh()):
+        request.state.page_markers = change_markers(account)
 
 
 # Long tables with a row count of their own in Settings → Interface → Long lists:
@@ -552,7 +762,9 @@ def _context(request: Request, account: dict[str, Any] | None = None,
         "collector_status": db.get_setting(collector.STATUS_KEY, "unknown"),
         # The stripe about the backup before the conversion to English names - for the administrator only.
         "conversion_notice": conversion.noted_backup() if account and account.get("is_admin") else None,
-        "collector_error": collector.error_text(),   # in the reader's language
+        # In the reader's language, and only the administrator's: it can carry an internal address, a path in
+        # Jellyfin's API, a piece of a proxy's error page. The others see only that the collector failed.
+        "collector_error": collector.error_text() if account and account.get("is_admin") else "",
         "last_poll": db.get_setting(collector.LAST_POLL_KEY, ""),
         "flash": request.session.pop("flash", None),
         # The number of running plays in the left panel - it says who watches what right
@@ -635,6 +847,10 @@ def _context(request: Request, account: dict[str, Any] | None = None,
         # flash in one skin for a moment and switch to the other.
         "ui_skin": _skin(),
         "ui_exact_time": _exact_time(),
+        # Do the cards refresh by themselves? (Settings → Interface.) And the markers the page starts from,
+        # taken before its data (_markers_at_start; none for a page not opened through the sign-in guard).
+        "ui_self_refresh": _self_refresh(),
+        "page_markers": getattr(request.state, "page_markers", None),
         # Seasonal decoration switched on by the administrator? (Interface and My account.)
         "ui_events": seasonal.enabled(),
         # Switched on in the settings? The switch in Interface needs this.
@@ -650,7 +866,7 @@ def _context(request: Request, account: dict[str, Any] | None = None,
     base.update(extra)
     # The description of API fields (`{"device": "text", "user_id": "text"}`) is
     # documentation, not data about viewers - anonymising would turn the type into
-    # "Zařízení ?" and the guide would lose the field's type. It goes around it.
+    # "Device ?" and the guide would lose the field's type. It goes around it.
     documentation = {key: base.pop(key) for key in NOT_ANONYMISED if key in base}
     # Only at the very end: what is hidden is hidden in EVERYTHING that goes to
     # the template - including what a route added through `extra`. One place
@@ -675,21 +891,41 @@ CAPACITY_UNITS = {"GB": 1024 ** 3, "TB": 1024 ** 4}
 def _clamp(raw: str, minimum: int, maximum: int, fallback: int) -> str:
     try:
         value = int(float(raw))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):    # OverflowError: 1e400, inf
         value = fallback
     return str(max(minimum, min(maximum, value)))
 
 
-def _new_key(request: Request, key: str) -> dict[str, Any] | None:
-    """A freshly made API key from the session - once, and thrown away at once.
+# How long a freshly made API key waits in the server's memory for the page after the redirect.
+NEW_KEY_SECONDS = 300
 
-    The session holds {"id", "token"}; by the id the key shows whole in the row
-    of its key (the macro bunka_klice). Anything else - say a session from the time
-    when only a text was there - is thrown away too.
+
+def _hold_new_key(request: Request, key: str, made: dict[str, Any]) -> None:
+    """Puts a freshly made API key aside for the page after the redirect (see _new_key).
+
+    Into the server's memory (hold_secret), not into the address and not into the cookie: the address shows in the
+    proxy's log and in the browser's history, the cookie is signed, not encrypted. The session gets the key's id and
+    a handle.
+    """
+    request.session[key] = {"id": made["id"], "handle": hold_secret(made["token"], NEW_KEY_SECONDS)}
+
+
+def _new_key(request: Request, key: str) -> dict[str, Any] | None:
+    """A freshly made API key - once, and thrown away at once.
+
+    The session holds {"id", "handle"} (_hold_new_key): the key itself is taken out of the server's memory, which
+    forgets it. By the id the key shows whole in the row of its key (the macro key_cell); when the memory lost it
+    (a restart, a page that came too late), {"id", "token": None} - the row says to make a new key. A session of
+    an older version held the key itself ({"id", "token"}): it is shown once too. Anything else - say a session
+    from the time when only a text was there - is thrown away.
     """
     fresh = request.session.pop(key, None)
-    if isinstance(fresh, dict) and fresh.get("token") and fresh.get("id"):
-        return fresh
+    if not isinstance(fresh, dict) or not fresh.get("id"):
+        return None
+    if fresh.get("handle"):
+        return {"id": fresh["id"], "token": take_secret(fresh["handle"])}
+    if isinstance(fresh.get("token"), str) and fresh["token"]:
+        return {"id": fresh["id"], "token": fresh["token"]}
     return None
 
 
@@ -704,13 +940,31 @@ def _no_cache(response: Response) -> Response:
     return response
 
 
+def _no_store_signed_in(request: Request, response: Response) -> Response:
+    """A page or data of a signed-in session is not kept either (the last step of web.security_headers).
+
+    On a shared computer the Back button after signing out would show it again from the browser's
+    memory - the history with names and addresses, the accounts in Settings. Only HTML and JSON of a
+    session with an account: the app's files (/static), the images and the sign-in page stay as they
+    were, and a route that sets its own header keeps it.
+    """
+    kind = response.headers.get("content-type", "")
+    if ((request.scope.get("session") or {}).get("account_id") and not request.url.path.startswith("/static/")
+            and kind.startswith(("text/html", "application/json"))):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
 def _form_number(text: Any) -> int:
-    """A positive whole number from a form or an address; nonsense = 0."""
+    """A positive whole number from a form or an address; nonsense = 0.
+
+    Above the database's integer (2**63 - 1) too: SQLite would not take it as a parameter at all.
+    """
     try:
         number = int(str(text).strip())
     except (TypeError, ValueError):
         return 0
-    return number if number > 0 else 0
+    return number if 0 < number < 2 ** 63 else 0
 
 
 # When this process started. After a restart the value differs - and that is
@@ -729,7 +983,7 @@ SETTINGS_SECTIONS = [
     ("notifications", "Notifications", True),
     ("import", "History import", True),
     ("database", "Database", True),
-    ("accounts", "Accounts", False),      # False = a reader sees it too
+    ("accounts", "Accounts", False),      # False = a reader saw it too; the page is the administrator's now
     ("api", "API", True),
     ("blocks", "Blocked logins", True),
     ("log", "Log", True),

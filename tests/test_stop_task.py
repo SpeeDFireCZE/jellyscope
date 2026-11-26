@@ -32,8 +32,10 @@ _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = str(_tmp)
 os.environ["DATABASE_PATH"] = str(Path(_tmp) / "stop.db")
 os.environ["SECRET_KEY"] = "testovaci-podpisovy-klic"
+os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"     # the start of the app below starts the collector
+os.environ["JELLYFIN_API_KEY"] = "test-key"
 
-from jellyscope import db, scanner  # noqa: E402
+from jellyscope import db, i18n, scanner  # noqa: E402
 
 failures = 0
 
@@ -223,6 +225,57 @@ check(record is not None and "the next analysis goes on" in (record["message"] o
 
 
 print()
+print("--- an unexpected error in the analysis ---")
+# A write that fails (a database locked by a VACUUM) used to end the task with the exception: the lock was
+# released, the log stayed "running" for good, and the other analyses went on writing where Stop no longer
+# reached them - while a new sync could already start.
+import sqlite3  # noqa: E402
+
+from jellyscope.scanner import tech_scan  # noqa: E402
+
+saves = {"n": 0}
+real_save = tech_scan._save_probe_result
+
+
+def flaky_save(item_id: str, tech: dict[str, Any]) -> None:
+    saves["n"] += 1
+    if saves["n"] == 3:
+        raise sqlite3.OperationalError("database is locked")
+    real_save(item_id, tech)
+
+
+async def steady_probe(path: str, ffprobe_bin: str) -> dict[str, Any]:
+    await asyncio.sleep(0.005)
+    return {"container": "mkv", "video_codec": "h264", "size_bytes": 1}
+
+
+async def scan_then_wait() -> tuple[dict[str, Any], int, int]:
+    try:
+        outcome = await scanner.run_tech_scan(only_missing=True)
+    except Exception as error:  # noqa: BLE001 - the old behaviour, measured
+        outcome = {"raised": repr(error)}
+    at_end = saves["n"]
+    await asyncio.sleep(0.3)
+    return outcome, at_end, saves["n"]
+
+
+with db.connect() as conn:
+    conn.execute("UPDATE items SET tech_source = NULL")
+probe.probe_file = steady_probe                           # type: ignore[assignment]
+restore_save = substitute(scanner, "_save_probe_result", flaky_save)
+try:
+    outcome, at_end, later = asyncio.run(scan_then_wait())
+finally:
+    restore_save()
+record = scanner.last_scan("tech") or {}
+check(outcome.get("status") == "error" and "database is locked" in str(outcome.get("message")),
+      f"the analysis ends with an error it reports ({outcome})")
+check(later == at_end, f"nothing is analysed after the task ended ({at_end} writes at its end, {later} later)")
+check(record.get("status") == "error" and bool(record.get("finished_at")),
+      f"the task log is closed as failed ({record.get('status')}, {record.get('finished_at')})")
+check(not scanner.is_scan_running(), "the lock is released")
+
+print()
 print("--- the page waits and refreshes itself ---")
 # After a restart and after a task was stopped it formerly had to be refreshed by hand - and
 # worse, it could not be told when it would work. `?wait=...` tells the page what to
@@ -260,6 +313,64 @@ for key in ("started_at", "task_running", "stop_pending"):
     check(key in state, f"/health reports {key}")
 check(state["task_running"] is False, "and nothing runs now")
 
+
+print()
+print("--- a run the previous start left running ---")
+# A restart in the middle of a task (an update, a restore, a crash) left its record "running" for good: the
+# Tasks table showed a running badge that never went away. At the start nothing runs yet.
+with db.connect() as conn:
+    conn.execute("INSERT INTO scan_log (kind, started_at, status) VALUES ('backup', '2026-01-01 00:00:00', 'running')")
+with TestClient(app):
+    pass
+record = scanner.last_scan("backup") or {}
+check(record.get("status") == "error" and bool(record.get("finished_at")),
+      f"the start of the app closes it as failed ({record.get('status')}, {record.get('finished_at')})")
+check("restart" in i18n.stored_text(record.get("message") or "", record.get("message_values") or "", "en"),
+      f"and says why ({record.get('message')!r})")
+
+print()
+print("--- a task started from Settings that fails is logged ---")
+# The routes fired a task off and kept no reference: the loop holds only weak ones, and an error escaping the
+# task reached no log - at most "Task exception was never retrieved" once it was collected.
+import logging  # noqa: E402
+import time  # noqa: E402
+
+
+class Records(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(self.format(record))
+
+
+records = Records()
+logging.getLogger("jellyscope").addHandler(records)
+
+
+async def broken_sync() -> dict[str, Any]:
+    raise RuntimeError("the sync broke unexpectedly")
+
+
+restore_sync = substitute(scanner, "sync_library", broken_sync)
+try:
+    with TestClient(app) as running:
+        running.post("/login", data={"username": "admin", "password": "longpassword"})
+        running.post("/settings/sync", follow_redirects=False)
+        for _ in range(100):
+            if any("the sync broke unexpectedly" in line for line in records.lines):
+                break
+            time.sleep(0.02)
+finally:
+    restore_sync()
+    logging.getLogger("jellyscope").removeHandler(records)
+check(any("the sync broke unexpectedly" in line for line in records.lines),
+      f"the failure of the background task is in the log ({[line.splitlines()[0] for line in records.lines][-3:]})")
+web_sources = "".join(path.read_text(encoding="utf-8") for path in sorted((PROJECT / "jellyscope" / "web").rglob("*.py"))
+                      if path.name not in ("start.py", "base.py"))
+check("asyncio.create_task(" not in web_sources,
+      "every background task of the web starts through base.spawn (start.py holds its own)")
 
 print()
 print("DONE - failures:", failures)

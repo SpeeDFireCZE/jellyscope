@@ -37,8 +37,9 @@ _TARGET = r"\(([^()\s\x00\x01]*)\)"
 _LINKED_IMAGE = re.compile(rf"\[!\[{_LABEL}\]{_TARGET}\]{_TARGET}")    # a badge: one link, its alt the text
 _IMAGE = re.compile(rf"!\[{_LABEL}\]{_TARGET}")
 _LINK = re.compile(rf"\[{_LABEL}\]{_TARGET}")
-# An address ends at a space or at an escaped <, >, " or ' - they are the text around it, not the address.
-_ADDRESS = r"https?://(?:(?!&(?:lt|gt|quot|#x27);)[^\s\x00])+"
+# An address ends at a space or at an escaped <, >, " or ' - they are the text around it, not the address - and
+# at a put-aside piece: code right after it is no part of it.
+_ADDRESS = r"https?://(?:(?!&(?:lt|gt|quot|#x27);)[^\s\x00\x01])+"
 _AUTOLINK = re.compile(f"&lt;({_ADDRESS})&gt;")
 _BARE = re.compile(f"(?<![\\w/=]){_ADDRESS}")
 _ISSUE = re.compile(r"(?<![\w&#/])#(\d{1,7})\b")

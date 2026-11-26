@@ -76,9 +76,9 @@
     </div>
 </div>
 
-<dialog class="modal modal-wide" id="modal-assign">
+<dialog class="modal modal-wide" id="modal-assign" aria-labelledby="modal-assign-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Assign to another title") }}</h2>
+        <h2 id="modal-assign-title">{{ _("Assign to another title") }}</h2>
         <button class="btn modal-close" type="submit" aria-label="{{ _("Close") }}">&times;</button>
     </form>
     <form method="post" action="/item/{{ item.id }}/assign" data-assignment>
@@ -107,8 +107,8 @@
 {# Confirming the delete. A window of our own instead of the browser's confirm(): it says
    what exactly is deleted, and Cancel has the focus - Enter out of habit deletes nothing. #}
 <form method="post" action="/item/{{ item.id }}/delete" id="delete-title"></form>
-<dialog id="modal-delete-item" class="dialog">
-    <h2>{{ _("Delete the title for good") }}</h2>
+<dialog id="modal-delete-item" class="dialog" aria-labelledby="modal-delete-item-title">
+    <h2 id="modal-delete-item-title">{{ _("Delete the title for good") }}</h2>
 
     <p class="dialog-label">{{ _("What gets deleted") }}</p>
     <p><strong>{% if item.series_name %}{{ item.series_name }} – {% endif %}{{ item.name }}</strong></p>
@@ -421,11 +421,11 @@
         </div>
         {% endif %}
 
-        {% if siblings %}
+        {% if siblings.episodes %}
         <div class="card">
             <div class="card-head">
                 <h2>{{ _("Other episodes") }}</h2>
-                <p class="card-note">{{ siblings | length }} {{ _("in the series") }}</p>
+                <p class="card-note">{{ siblings.total }} {{ _("in the series") }}</p>
             </div>
             <div class="table-wrap">
                 <table>
@@ -434,7 +434,7 @@
                         <th class="num">{{ _("Resolution") }}</th><th class="num">{{ _("Size") }}</th>
                     </tr></thead>
                     <tbody>
-                    {% for s in siblings %}
+                    {% for s in siblings.episodes %}
                     <tr {{ 'style=font-weight:600' if s.id == item.id }}>
                         <td class="nowrap muted">
                             {% if s | episode_code %}

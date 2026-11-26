@@ -240,15 +240,18 @@ def _full_pass_due() -> bool:
     return datetime.now(UTC) - when >= FULL_PASS_EVERY
 
 
-def _mark_missing(run: str) -> int:
+def _mark_missing(run: str, libraries: set[str]) -> int:
     """After a full pass: what Jellyfin did not show gets `missing = 1`. Returns the number of books.
 
     What this run saw has `synced_at` equal to `run` (the run's start time with microseconds -
-    two runs in one second do not mix).
+    two runs in one second do not mix). Only in the `libraries` this run read: one Jellyfin left out
+    of its list is not gone yet (_gone_libraries decides, after two runs).
     """
     before = int(db.query_value("SELECT COUNT(*) FROM book WHERE missing = 1") or 0)
+    marks = ", ".join("?" * len(libraries))
     with db.connect() as conn:
-        conn.execute("UPDATE book SET missing = 1 WHERE synced_at IS NULL OR synced_at <> ?", (run,))
+        conn.execute(f"UPDATE book SET missing = 1 WHERE (synced_at IS NULL OR synced_at <> ?) AND library_id IN ({marks})",
+                     (run, *sorted(libraries)))
         conn.commit()
     return int(db.query_value("SELECT COUNT(*) FROM book WHERE missing = 1") or 0) - before
 
@@ -305,7 +308,7 @@ async def _fetch(full: bool | None) -> dict[str, Any]:
     # loop and the web and the collector would stand still meanwhile.
     result["missing"] = gone
     if full:
-        result["missing"] += await asyncio.to_thread(_mark_missing, now)
+        result["missing"] += await asyncio.to_thread(_mark_missing, now, {_text(lib.get("ItemId")) for lib in libraries})
         db.set_setting(FULL_PASS_KEY, now[:19])
     result["paired"] = await asyncio.to_thread(_pair_history)
     return result

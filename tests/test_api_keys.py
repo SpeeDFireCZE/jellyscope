@@ -18,10 +18,13 @@ import os
 import re
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "tests"))
 
 _tmp = tempfile.mkdtemp()
 os.environ["JELLYSCOPE_HOME"] = _tmp
@@ -35,6 +38,7 @@ import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 
+from _apps import read_session  # noqa: E402
 from jellyscope import access, accounts, api, applog, db, jellyfin, web  # noqa: E402
 
 failures = 0
@@ -586,6 +590,24 @@ call(server_key["token"], "/api/v1/item/abc%00def")
 check("\x00" not in last_use().get("path", "x\x00"),
       "a null character from the address does not get into the record")
 
+# A key's name goes into the app's log ("API token … created"), and a viewer allowed keys of their own names it.
+# A line end in it made a forged line of its own in the log - with any level and text.
+api_log = logging.getLogger("jellyscope.api")
+catcher = Catcher()
+api_log.addHandler(catcher)
+api_level = api_log.level
+api_log.setLevel(logging.INFO)   # the app sets INFO in applog.setup(), which this test does not run
+for separator, label in (("\n", "a line end"), ("\r", "a carriage return"), ("\x0b", "a vertical tab"),
+                         ("\x85", "the next-line character"), ("\u2028", "the line separator")):
+    made = api.create_token(f"x{separator}2026-11-24 03:00:00,000 ERROR   jellyscope.db: disk failing")
+    written = [logging.Formatter(applog.FORMAT).format(r) for r in catcher.records if "created" in r.getMessage()]
+    stored = next((t["name"] for t in api.list_tokens() if t["id"] == made["id"]), "")
+    check(len(stored.splitlines()) == 1 and written and len(written[-1].splitlines()) == 1,
+          f"{label} in a key's name: one line in the log, no forged one ({written[-1:]!r})")
+    api.revoke_token(made["id"])
+api_log.removeHandler(catcher)
+api_log.setLevel(api_level)
+
 
 print("--- after the review: My account ---")
 accounts.save_may_have_key(newcomer_id, "1")
@@ -622,11 +644,15 @@ for who, key_name, client, create_url, page_url in (
     if client is newcomer_client:
         accounts.save_may_have_key(newcomer_id, "1")
     send_form(client, create_url, name=key_name, mode="all")
+    in_cookie = json.dumps(read_session(client))
     html = client.get(page_url).text
     row = key_row(html, key_name)
     whole = re.findall(WHOLE_KEY, html)
     check(len(whole) == 1 and whole[0] in row,
           f"{who}: the whole key is there once, in its key's row")
+    # The session cookie is signed, not encrypted: whoever sees it reads it (audit SA-11).
+    check(whole and whole[0] not in in_cookie and not re.findall(WHOLE_KEY, in_cookie),
+          f"{who}: the key did not travel in the session cookie ({in_cookie[:120]})")
     check('data-copy="' in row, f"{who}: the row has the Copy button")
     check("Klíč vznikl a vidíš ho naposledy." not in html,
           f"{who}: the box above the form is gone")
@@ -639,6 +665,29 @@ for r in api.list_tokens(newcomer_id):
     api.revoke_token(r["id"])
 for r in api.list_tokens():
     if r["name"] == "Radek správce":
+        api.revoke_token(r["id"])
+
+# The key waits for the page after the redirect in the server's memory only (web/base.py hold_secret). A restart in
+# between loses it: the page does not fail, the key's row says what to do - and says it once.
+from jellyscope.web import base as web_base  # noqa: E402
+
+for who, client, create_url, page_url in (("administrator", admin_client, "/settings/api/token", "/settings?section=api"),
+                                          ("user", newcomer_client, "/account/key", "/account")):
+    if client is newcomer_client:
+        accounts.save_may_have_key(newcomer_id, "1")
+    send_form(client, create_url, name="Ztraceny po restartu", mode="all")
+    web_base._held_secrets.clear()          # what a restart of the app does to the memory
+    response = client.get(page_url)
+    row = key_row(response.text, "Ztraceny po restartu")
+    check(response.status_code == 200 and not re.findall(WHOLE_KEY, response.text)
+          and "Tento klíč už nejde zobrazit. Zneplatni ho a vyrob nový." in row and 'data-copy="' not in row,
+          f"{who}: a key the memory lost is not shown, its row says to make a new one")
+    check("Tento klíč už nejde zobrazit" not in client.get(page_url).text, f"{who}: and only once")
+for r in api.list_tokens():
+    if r["name"] == "Ztraceny po restartu":
+        api.revoke_token(r["id"])
+for r in api.list_tokens(newcomer_id):
+    if r["name"] == "Ztraceny po restartu":
         api.revoke_token(r["id"])
 
 # A page with the whole key must not come back from the browser's cache (the Back
@@ -789,6 +838,120 @@ check('href="/settings?section=jellyfin#viewers"' in mirek_window
       "a viewer's Permissions window links to the group in the Jellyfin section (outside the choice's label)")
 check("section=jellyfin#viewers" not in rights_window(accounts_page, reader_id),
       "a reader's Permissions window does not have that link")
+
+
+print("--- the limit on keys of one's own (Settings -> API) ---")
+# The administrator decides: off by default (as before), then a number of ACTIVE own keys per account.
+limited_id = accounts.create("omezeny", "limitedpass")
+accounts.save_may_have_key(limited_id, "1")
+limited_client = sign_in("omezeny", "limitedpass")
+
+
+def active_own(account_id: int) -> int:
+    return sum(1 for r in api.list_tokens(account_id) if r["status"] == "active")
+
+
+def make_own_key(name: str) -> str:
+    """POST /account/key as the browser does; the page it lands on (with the flash)."""
+    return limited_client.post("/account/key", data={"name": name}).text
+
+
+def save_limit(**fields) -> int:
+    answer = send_form(admin_client, "/settings/api/key-limit", **fields)
+    db.forget_settings()
+    return answer
+
+
+api_page = admin_client.get("/settings?section=api").text
+check('name="key_limit_enabled"' in api_page and 'name="key_limit_enabled" checked' not in api_page
+      and re.search(r'name="key_limit"[^>]*value="10"', api_page),
+      "Settings -> API: the limit is off by default, the number field holds 10")
+for n in range(12):
+    make_own_key(f"Bez limitu {n}")
+check(active_own(limited_id) == 12, f"without the limit an account makes as many keys as it likes ({active_own(limited_id)})")
+for r in api.list_tokens(limited_id):
+    api.revoke_token(r["id"])
+
+check(save_limit(key_limit_enabled="on", key_limit="3") == 303
+      and db.get_setting("api_key_limit_enabled") == "1" and db.get_setting("api_key_limit") == "3",
+      "the administrator switches the limit on with 3 keys")
+api_page = admin_client.get("/settings?section=api").text
+check('name="key_limit_enabled" checked' in api_page and re.search(r'name="key_limit"[^>]*value="3"', api_page),
+      "the card shows the stored limit")
+for n in range(3):
+    make_own_key(f"S limitem {n}")
+page = make_own_key("Ctvrty")
+check(active_own(limited_id) == 3 and "Ctvrty" not in [r["name"] for r in api.list_tokens(limited_id)],
+      f"the fourth key is refused ({active_own(limited_id)} active)")
+check("Máš už tolik aktivních klíčů, kolik správce povoluje (3)." in page,
+      "the flash says the limit")
+first = api.list_tokens(limited_id)[-1]["id"]
+api.disable_token(first)
+make_own_key("Za vypnuty")
+check(active_own(limited_id) == 3 and len(api.list_tokens(limited_id)) == 4,
+      "a disabled key does not count: one more can be made")
+api.revoke_token(first)
+make_own_key("Za zruseny")
+check(active_own(limited_id) == 3 and len(api.list_tokens(limited_id)) == 3
+      and "Za zruseny" not in [r["name"] for r in api.list_tokens(limited_id)],
+      "revoking the disabled one frees nothing (it was not counted), the limit holds")
+api.revoke_token(api.list_tokens(limited_id)[0]["id"])
+make_own_key("Za zruseny aktivni")
+check("Za zruseny aktivni" in [r["name"] for r in api.list_tokens(limited_id)],
+      "revoking an active key frees a place")
+
+roots_before = len([r for r in api.list_tokens() if r["account_id"] is None])
+for n in range(4):
+    send_form(admin_client, "/settings/api/token", name=f"Korenovy {n}", mode="all")
+check(len([r for r in api.list_tokens() if r["account_id"] is None]) == roots_before + 4,
+      "root keys from Settings -> API are not limited")
+for r in api.list_tokens():
+    if r["name"].startswith("Korenovy "):
+        api.revoke_token(r["id"])
+
+made_before = api.create_token("Pred snizenim", limited_id)
+save_limit(key_limit_enabled="on", key_limit="1")
+check(active_own(limited_id) == 4 and call(made_before["token"], "/api/v1/").status_code == 200,
+      "a lowered limit leaves the keys already made working")
+for sent_fields, label in (({"key_limit": ""}, "a cleared"), ({}, "a missing"), ({"key_limit": "abc"}, "a nonsense")):
+    save_limit(key_limit_enabled="on", **sent_fields)
+    check(db.get_setting("api_key_limit") == "1", f"{label} number keeps the saved limit ({db.get_setting('api_key_limit')})")
+save_limit(key_limit_enabled="on", key_limit="0")
+check(db.get_setting("api_key_limit") == "1", f"0 becomes the least limit, 1 ({db.get_setting('api_key_limit')})")
+save_limit(key_limit_enabled="on", key_limit="99999")
+check(db.get_setting("api_key_limit") == "1000", f"a huge number becomes the most, 1000 ({db.get_setting('api_key_limit')})")
+check(send_form(reader_client, "/settings/api/key-limit", key_limit="50") == 403
+      and db.get_setting("api_key_limit") == "1000", "a reader may not change the limit (403)")
+
+# Requests sent at once must not slip past the count: each waits in create_token while the others count.
+for r in api.list_tokens(limited_id):
+    api.revoke_token(r["id"])
+save_limit(key_limit_enabled="on", key_limit="2")
+real_create = api.create_token
+
+
+def slow_create(*args, **kwargs):
+    time.sleep(0.3)
+    return real_create(*args, **kwargs)
+
+
+api.create_token = slow_create
+parallel = [threading.Thread(target=make_own_key, args=(f"Naraz {n}",)) for n in range(6)]
+for thread in parallel:
+    thread.start()
+for thread in parallel:
+    thread.join()
+api.create_token = real_create
+check(active_own(limited_id) == 2, f"six requests at once make only the two keys allowed ({active_own(limited_id)})")
+
+save_limit(key_limit="2")
+check(db.get_setting("api_key_limit_enabled") == "0" and db.get_setting("api_key_limit") == "2",
+      "an unticked box switches the limit off and keeps the number")
+make_own_key("Zase bez limitu")
+check(active_own(limited_id) == 3, "with the limit off a key is made again")
+for r in api.list_tokens(limited_id):
+    api.revoke_token(r["id"])
+accounts.save_may_have_key(limited_id, None)
 
 
 print("--- the texts about the permission ---")

@@ -1,15 +1,15 @@
 {# The Prowlarr card "Indexer performance": queries, failures, response and search success by indexer.
 
-   From the database (cards_prowlarr.py, `d.radky`; shares and the response are ready
+   From the database (cards_prowlarr.py, `d.rows`; shares and the response are ready
    text, "–" = nothing to compute from). "Selhalo" is the share of queries (from the
    column beside) an indexer answered with an error; failed sign-ins to an indexer
    are not queries and stand under the name, only when there were some.
-   "Něco našlo" is the share of searches with at least
+   "Searches with results" is the share of searches with at least
    one release of all the indexer answered. An indexer that is
    no longer in Prowlarr has "removed" at its name. A long table as on Insights: the first rows in the card, the whole one in the window.
 
    The table follows the card's width, not the window's (wrapper-by-width, see style.css):
-   on a narrow card "Něco našlo" and "Grabbed" hide and the same numbers are under
+   on a narrow card "Searches with results" and "Grabbed" hide and the same numbers are under
    the name. The window with the whole table has all the columns. #}
 {% from "_macros.html" import row_class, whole_table_button with context %}
 <div class="card">

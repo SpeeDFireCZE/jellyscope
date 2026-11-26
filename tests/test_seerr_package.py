@@ -42,7 +42,12 @@ SUBMODULES: dict[str, list[str]] = {
     "settings": ["stored_settings", "is_connected", "save_settings", "check_connection", "images_state", "settings_link"],
     "sync": ["normalize_id", "request_row", "synchronize", "sync_state", "delete_data", "delete_downloaded_data",
              "request_count", "sync_running"],
-    "live": ["pending"],
+    # The pending requests' rows, the shared cache and titles - read by now.py, nothing at the door.
+    "live": [],
+    # The page of Seerr's newest requests for "Latest requests" (26. 11. 2026) - read by now.py.
+    "latest": [],
+    # Both live cards loaded at once under one entry of the cache.
+    "now": ["pending", "latest_requests"],
     # Provisional posters of titles that are not in Jellyfin (13. 11. 2026).
     "posters": ["poster_path", "provisional_poster", "clean_up_posters", "forget_missing", "check_images"],
 }

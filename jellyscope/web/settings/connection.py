@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from typing import Any
 
-from ... import db, dbmigrate, dialect, i18n, jellyfin
+from ... import db, dbmigrate, dialect, i18n, jellyfin, services
 from ...config import BASE_DIR as PROJECT_DIR
 from ...jellyfin import JellyfinClient, JellyfinError, QUICK_TIMEOUT
 from ..base import _clamp, _flash, log, require_admin
@@ -38,9 +38,9 @@ async def settings_connection(
     the empty saved value was tested. And the filled-in values were thrown away
     on top, because sending one form throws away the content of the other.
     """
-    url = jellyfin_url.strip().rstrip("/")
-    if url and not url.startswith(("http://", "https://")):
-        url = "http://" + url
+    # The same check as for the *Arr apps: a port that is no number or a soft hyphen in the host name makes
+    # httpx fail before anything is sent - said at the form instead of a page that falls with a 500.
+    url, address_error = services.address(jellyfin_url.strip().rstrip("/"))
 
     # The server's generation. Neither the address nor the key is thrown away - those are
     # the same for both generations and only how the queries are sent differs.
@@ -56,11 +56,21 @@ async def settings_connection(
         db.set_setting(jellyfin.VERSION_KEY, "")
 
     # An empty key means "keep the existing one". At a test the draft one is taken too,
-    # so that several attempts in a row can be tested without typing it again.
+    # so that several attempts in a row can be tested without typing it again. Both only
+    # for the server they were given for: another server needs the key typed again.
     draft = _draft_read(account, "jellyfin") or {}
-    key = (jellyfin_api_key.strip()
-           or draft.get("api_key", "")
-           or db.get_setting("jellyfin_api_key", ""))
+    typed = jellyfin_api_key.strip() or services.draft_key(url, draft)
+    saved_url, saved_key = db.jellyfin_connection()
+    refused = services.key_refused(url, typed, saved_url, saved_key)
+    key = typed or ("" if refused else saved_key)
+
+    # Neither tested nor saved: a stored key with an invisible character would bring down every sign-in through
+    # Jellyfin and every poster. The address stays in the draft, a key that does not pass does not (see settings_arr).
+    error = address_error or refused or services.key_error(key)
+    if error:
+        _draft_save(account, "jellyfin", {"url": url, "api_key": "" if services.key_error(key) else key})
+        _flash(request, error, "error")
+        return RedirectResponse("/settings?section=jellyfin", status_code=303)
 
     if action == "test":
         # The draft is held, so that the form does not empty itself after the test.

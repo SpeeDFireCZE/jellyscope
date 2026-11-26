@@ -39,7 +39,7 @@ os.environ["DATABASE_PATH"] = str(Path(_tmp) / "srovnani.db")
 os.environ["SECRET_KEY"] = "testovaci-klic"
 
 from _package import sample_movie  # noqa: E402
-from jellyscope import accounts, db, stats  # noqa: E402
+from jellyscope import accounts, db, formatting, stats  # noqa: E402
 
 failures = 0
 
@@ -88,9 +88,17 @@ check(stats.can_compare(this_year) is False, "and 'letos' not at all")
 
 print()
 print("--- the previous window follows on, does not overlap ---")
+# "The last 7 days" hold only the part of today that has passed: the previous window is the same span 7 days back,
+# so it ends at this clock time a week ago - before the chosen one starts, not where it starts (25. 11. 2026).
 window = stats.previous_period(7)
-check(window.until == stats._as_period(7).since, "it ends where the chosen one starts")
-check(window.days == 7, "and is of the same length")
+chosen = stats._as_period(7)
+a_week_ago = datetime.now(formatting.zone()).replace(tzinfo=None) - timedelta(days=7)
+check(window.until <= chosen.since
+      and abs((datetime.strptime(window.until_local, db.TIME_FORMAT) - a_week_ago).total_seconds()) < 5,
+      f"it ends at this clock time a week ago, before the chosen one starts ({window.until_local})")
+check(window.since_local[11:] == "00:00:00" and window.days == 7, "and starts at a midnight, seven days before it")
+fixed = stats.period_between((NOW - timedelta(days=13)).date().isoformat(), (NOW - timedelta(days=7)).date().isoformat())
+check(stats.previous_period(fixed).until == fixed.since, "a custom period's previous window ends where it starts")
 check(window.relative is False, "it has a fixed end, it is not 'the last N days'")
 
 print()

@@ -102,9 +102,15 @@ git("push", "--quiet", "-u", "origin", "main", where=author)
 git("clone", "--quiet", "-c", "core.autocrlf=false", str(server), str(app))
 shim = app / ".venv" / "bin" / "python"
 shim.parent.mkdir(parents=True)
+# pip writes down what it was asked into .venv/bin/pip.log and fails when the call has FAKE_PIP_FAILS in it;
+# `import psycopg` (is the PostgreSQL driver installed?) answers FAKE_PSYCOPG.
 shim.write_bytes(
     ("#!/bin/bash\n"
-     'if [[ "$1" == "-m" && "$2" == "pip" ]]; then exit 0; fi\n'
+     'if [[ "$1" == "-m" && "$2" == "pip" ]]; then\n'
+     '    printf "%s\\n" "$*" >> "$(dirname "$0")/pip.log"\n'
+     '    [[ -z "${FAKE_PIP_FAILS:-}" || "$*" != *"$FAKE_PIP_FAILS"* ]]; exit $?\n'
+     'fi\n'
+     'if [[ "$1" == "-c" && "$2" == "import psycopg" ]]; then [[ "${FAKE_PSYCOPG:-0}" == "1" ]]; exit $?; fi\n'
      f'exec "{Path(sys.executable).as_posix()}" "$@"\n').encode("utf-8"))
 shim.chmod(0o755)
 
@@ -168,6 +174,29 @@ check(code == 0 and len(kept) == 10 and "jellyscope-00.db" not in kept
       and "jellyscope-01.db" not in kept,
       f"it keeps the ten newest (code {code}, kept {len(kept)})")
 
+print("--- the PostgreSQL driver at its pinned version ---")
+# The driver is not in requirements.txt: a platform without its packages must not fail every update. It is pinned
+# in requirements-postgres.txt, and update.sh brings it to that version apart - only where it is installed, and a
+# failure is only a warning (the installed driver keeps working).
+pip_log = shim.parent / "pip.log"
+for present, fails, label in ((True, False, "where it is installed, it is brought to the pinned version"),
+                              (False, False, "where it is not, it is not installed by an update"),
+                              (True, True, "a failure is a warning, the update goes on")):
+    pip_log.unlink(missing_ok=True)
+    code, output = run_update(FAKE_PSYCOPG="1" if present else "0",
+                              **({"FAKE_PIP_FAILS": "requirements-postgres.txt"} if fails else {}))
+    calls = pip_log.read_text(encoding="utf-8").splitlines() if pip_log.exists() else []
+    driver = [i for i, call in enumerate(calls)
+              if call.startswith("-m pip install") and call.endswith(f"-r {app.as_posix()}/requirements-postgres.txt")]
+    packages = [i for i, call in enumerate(calls) if call.endswith(f"-r {app.as_posix()}/requirements.txt")]
+    if not present:
+        ok = code == 0 and packages and not driver
+    elif not fails:
+        ok = code == 0 and packages and driver and driver[0] > packages[0] and "could not be updated" not in output
+    else:
+        ok = code == 0 and driver and "PostgreSQL driver could not be updated" in output
+    check(bool(ok), f"{label} (code {code}, pip: {calls})")
+
 print("--- the app runs, but shows the outage page ---")
 # A failed conversion (or a database that cannot be opened) leaves the service "active" with every address
 # answering 503 - the outage page. That is no "Done".
@@ -181,6 +210,23 @@ for name, body in (("systemctl", 'case "$*" in *"is-active"*) echo active;; esac
 code, output = run_update(PATH=f"{stubs}{os.pathsep}{os.environ.get('PATH', '')}")
 check(code != 0 and "outage page" in output and "before-conversion" in output and "Done." not in output,
       f"the update says the app shows the outage page and how to go back ({code})")
+
+print("--- the new script goes on and the app did not come up ---")
+# Started again by its previous version, the script skips the backup step - the way back must still be
+# printed whole, down to the git reset and the restart command (set -u: no unbound variable).
+failed = root / "stubs-failed"
+failed.mkdir()
+for name, body in (("systemctl", 'case "$*" in *"is-active"*) echo failed;; esac\nexit 0\n'),
+                   ("journalctl", 'echo "the app stopped"\n'), ("sleep", "exit 0\n")):
+    (failed / name).write_bytes(("#!/bin/bash\n" + body).encode("utf-8"))
+    (failed / name).chmod(0o755)
+code, output = run_update(JELLYSCOPE_UPDATE_ZNOVU="1", JELLYSCOPE_UPDATE_PRED=head(),
+                          PATH=f"{failed}{os.pathsep}{os.environ.get('PATH', '')}")
+check(code != 0 and "unbound variable" not in output and f"reset --hard {head()}" in output
+      and "systemctl --user restart jellyscope" in output and str(backups) in output
+      and "The update failed." in output,
+      f"the way back is printed whole, with the backup folder ({code}, the last lines: "
+      f"{output.strip().splitlines()[-3:]})")
 
 print("--- the app did not come up: the way back after the database's conversion ---")
 # 1.9.0 renames the database to English names at its first start; the previous version cannot run on a

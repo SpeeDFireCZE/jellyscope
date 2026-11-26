@@ -116,8 +116,8 @@
     {% if seerr.count %}
     {# Confirming the delete: it says what is deleted and what is not; Cancel has the focus. #}
     <form method="post" action="/settings/seerr/delete" id="seerr-delete"></form>
-    <dialog id="modal-seerr-delete" class="dialog">
-        <h2>{{ _("Delete stored requests") }}</h2>
+    <dialog id="modal-seerr-delete" class="dialog" aria-labelledby="modal-seerr-delete-title">
+        <h2 id="modal-seerr-delete-title">{{ _("Delete stored requests") }}</h2>
         <p>
             {{ _n("Deletes {n} requests stored from Seerr. They stay in Seerr and the next sync downloads them again - except those already deleted in Seerr.", seerr.count) }}
         </p>

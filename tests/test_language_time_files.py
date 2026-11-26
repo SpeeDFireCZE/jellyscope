@@ -209,6 +209,9 @@ check([r["id"] for r in langstats.undefined_language_files(10, 0, search="serial
       == ["bez-textu"], "a search by the path returns a row too")
 check(langstats.undefined_language_files(10, 0, search="Filmy") == [],
       "the library's name is not searched")
+check(langstats.undefined_language_count(search="_") == 0 and langstats.undefined_language_count(search="%") == 0
+      and langstats.undefined_language_count(search="S01_01") == 0,
+      "% and _ are searched as they are typed, not as wildcards")
 
 # Archived files do not belong here - they are no longer on the disk, there is nothing to fix.
 with db.connect() as conn:

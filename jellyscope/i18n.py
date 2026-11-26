@@ -206,8 +206,9 @@ LOG_TRANSLATIONS: dict[str, dict[str, str]] = _load_folder(TRANSLATIONS_DIR / "l
 SOURCE: dict[str, str] = _load(TRANSLATIONS_DIR / f"{SOURCE_LANGUAGE}.json") \
     if (TRANSLATIONS_DIR / f"{SOURCE_LANGUAGE}.json").is_file() else {}
 
-# Named shortcuts for English. Used by the log and the tests; the other
-# languages are taken through TRANSLATIONS.
+# The log's source dictionary (applog translates the log through LOG_SOURCE and
+# LOG_TRANSLATIONS), and named shortcuts for English that only the tests read; the
+# other languages are taken through TRANSLATIONS.
 LOG_SOURCE: dict[str, str] = _load(TRANSLATIONS_DIR / "log" / f"{SOURCE_LANGUAGE}.json") \
     if (TRANSLATIONS_DIR / "log" / f"{SOURCE_LANGUAGE}.json").is_file() else {}
 EN: dict[str, str] = SOURCE if SOURCE_LANGUAGE == "en" else TRANSLATIONS.get("en", {})
@@ -230,7 +231,7 @@ LANGUAGES: dict[str, str] = {code: _name(code) for code in sorted({SOURCE_LANGUA
 # otherwise overwrite the language of another. Where there is no account - the
 # sign-in page, background tasks, the log, notifications - it stays empty and
 # the server's language applies.
-_ACCOUNT_LANGUAGE: ContextVar[str | None] = ContextVar("jazyk_uctu", default=None)
+_ACCOUNT_LANGUAGE: ContextVar[str | None] = ContextVar("account_language", default=None)
 
 
 def set_account_language(code: str | None) -> Any:
@@ -251,9 +252,7 @@ async def without_account_language(coro: Any) -> Any:
     everybody sees them. The task has its own copy of the context, so clearing
     it here affects nobody else.
 
-    Use: `asyncio.create_task(i18n.without_account_language(task()))`.
-    (`create_task(..., context=...)` would be cleaner, but it needs Python
-    3.11, and this was written while the application still ran on 3.10.)
+    Use: `web.base.spawn(task(), name)`, which wraps the task in this, holds it and logs its failure.
     """
     _ACCOUNT_LANGUAGE.set(None)
     return await coro
@@ -329,7 +328,7 @@ def translate_plural(key: str, n: Any, language: str | None = None, /, **values:
     """A text with a count in the right form: "1 záznam", "3 záznamy", "5 záznamů".
 
     `key` is the text without the form suffix ("{n} records"); `{n}` gets the
-    number written like the rest of the page (a space after the thousands),
+    number written in the sentence's language (formatting.number),
     `values` the other placeholders (whole numbers among them written the same way).
 
     The lookup: the language's form, its "other" (a form a translator left out),
@@ -344,9 +343,9 @@ def translate_plural(key: str, n: Any, language: str | None = None, /, **values:
     if language != SOURCE_LANGUAGE:
         chain.append((TRANSLATIONS.get(language, {}), language))
     chain.append((SOURCE, SOURCE_LANGUAGE))     # the source (English) is the fallback
-    shown = number(n)
+    shown = number(n, language)
     # The other whole numbers of the sentence ("{total} checked") are written like the count.
-    values = {k: number(v) if isinstance(v, int) and not isinstance(v, bool) else v for k, v in values.items()}
+    values = {k: number(v, language) if isinstance(v, int) and not isinstance(v, bool) else v for k, v in values.items()}
     for table, code in chain:
         for form in (plural_tag(code, n), "other"):
             pattern = table.get(f"{key}_{form}")

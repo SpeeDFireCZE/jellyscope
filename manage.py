@@ -1,13 +1,16 @@
 """Managing accounts from the command line.
 
-What it is for: when you forget your password, you no longer get in from the
-browser. This script works with the database directly, so it needs no sign-in.
+What it is for: when you forget your password, or a sign-in block shuts you
+out, you no longer get in from the browser. This script works with the
+database directly, so it needs no sign-in.
 
     python manage.py accounts                  lists all accounts
     python manage.py add jana                  creates an account (the password is typed interactively)
     python manage.py add petr --admin          creates an account with administrator rights
     python manage.py password petr             changes the password
     python manage.py delete jana               deletes the account
+    python manage.py blocks                    lists the sign-in blocks
+    python manage.py unblock 203.0.113.7       lifts the block of an address (--all lifts every one)
 
 The old Czech commands (ucty, pridat, heslo, smazat, --spravce) still work for
 a while as aliases - TODO.md item 0 removes them with the old page addresses.
@@ -21,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import os
 import sys
 
 from jellyscope import accounts, db
@@ -105,6 +109,49 @@ def cmd_delete(args: argparse.Namespace) -> int:
                          f"Account '{args.username}' deleted.")
 
 
+def cmd_blocks(_: argparse.Namespace) -> int:
+    """The sign-in blocks, as in Settings -> Blocked addresses."""
+    rows = accounts.list_blocks()
+    if not rows:
+        print("No sign-in blocks.")
+        return 0
+
+    print(f"{'ADDRESS':<40} {'BLOCK':<12} {'LEVEL':<6} LAST FAILURE")
+    print("-" * 78)
+    for row in rows:
+        if row["permanent"]:
+            state = "permanent"
+        elif row["active"]:
+            state = f"{row['seconds_left']} s left"
+        else:
+            state = "over"
+        print(f"{row['ip']:<40} {state:<12} {row['level']!s:<6} {datetime_human(row['last_failure'])}")
+    return 0
+
+
+def cmd_unblock(args: argparse.Namespace) -> int:
+    """Lifts a sign-in block without signing in.
+
+    A permanent block shuts out everybody at that address, the administrator included -
+    behind a reverse proxy without FORWARDED_ALLOW_IPS that is every visitor - and in the
+    browser only a signed-in administrator can lift it.
+    """
+    if args.all:
+        addresses = [str(row["ip"]) for row in accounts.list_blocks()]
+    elif args.address:
+        addresses = [args.address.strip()]
+    else:
+        print("Give an address, or --all.", file=sys.stderr)
+        return 1
+
+    lifted = [address for address in addresses if accounts.unblock(address)]
+    if args.address and not lifted:
+        print(f"There is no block of {args.address}. See  python manage.py blocks", file=sys.stderr)
+        return 1
+    print(f"Unblocked: {', '.join(lifted)}" if lifted else "No sign-in blocks.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The commands. The aliases are the old Czech commands (TODO.md item 0)."""
     parser = argparse.ArgumentParser(
@@ -127,16 +174,25 @@ def build_parser() -> argparse.ArgumentParser:
     delete = subparsers.add_parser("delete", aliases=["smazat"], help="delete an account")
     delete.add_argument("username")
     delete.set_defaults(func=cmd_delete)
+
+    subparsers.add_parser("blocks", help="list the sign-in blocks").set_defaults(func=cmd_blocks)
+
+    unblock = subparsers.add_parser("unblock", help="lift a sign-in block")
+    unblock.add_argument("address", nargs="?", help="the address, as `blocks` lists it")
+    unblock.add_argument("--all", action="store_true", help="lift every block")
+    unblock.set_defaults(func=cmd_unblock)
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         parser.print_help()
         return 1
 
+    # A database this creates is for its user only, the same as one the app creates (see run.py).
+    os.umask(0o077)
     db.init_db()
     return int(args.func(args))
 

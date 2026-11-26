@@ -78,8 +78,16 @@ class ProwlarrClient(HttpClient):
 
     async def blocked(self) -> list[dict[str, Any]]:
         """The indexers Prowlarr switched off for a while because of failures: `indexerId`, `disabledTill`,
-        `mostRecentFailure`, `initialFailure`. An indexer without failures is not here."""
-        return await self._list("indexerstatus", BLOCK_FIELDS)
+        `mostRecentFailure`, `initialFailure`. An indexer without failures is not here.
+
+        An answer that is not a list (a proxy's page, an error object or an empty body with status 200) is an
+        error, as with `indexers` - not "nobody is left out": a sample of the indexers' status would end a real
+        outage by it.
+        """
+        answer = await self._json_with_list("indexerstatus", BLOCK_FIELDS)
+        if not isinstance(answer, list):
+            raise self.error_class(UNEXPECTED, name=self.name, path="indexerstatus")
+        return [record for record in answer if isinstance(record, dict)]
 
     async def applications(self) -> list[dict[str, Any]]:
         """The apps whose indexers Prowlarr manages: `name`, `implementation`, `syncLevel`. Without keys."""

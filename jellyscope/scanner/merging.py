@@ -147,6 +147,9 @@ def _merge_by_tmdb(pairs: list[tuple[tuple[str, int, int], str]],
             log.info("merged: %s -> %s", old_id, new_id)
             merged += 1
 
+    if merged:
+        # The history moved to other items: an open page draws its cards over plays again (the plays' marker).
+        db.note_plays_rewritten()
     return merged
 
 

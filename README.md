@@ -1346,7 +1346,7 @@ are only read at startup.
 | `HOST`, `PORT` | Where to listen. Default `127.0.0.1:8097`. |
 | `DATABASE_PATH` | SQLite file. Default `data/jellyscope.db`. |
 | `SECURE_COOKIES` | Turn on behind an HTTPS proxy. |
-| `FORWARDED_ALLOW_IPS` | The proxy's address, so the app sees real client addresses. |
+| `FORWARDED_ALLOW_IPS` | The proxy's address, so the app sees real client addresses. In Docker it is the address the proxy connects from inside the Docker network, not `127.0.0.1`; see [DEPLOY.md](DEPLOY.md#reverse-proxy). |
 
 Everything else (the Jellyfin connection, data source, tasks, language) is
 configured **in the app** and stored in the database.
@@ -1363,7 +1363,7 @@ one file, there is nothing to install, and it is plenty for a household.
 `psycopg` driver:
 
 ```bash
-.venv/bin/python -m pip install "psycopg[binary,pool]"
+.venv/bin/python -m pip install -r requirements-postgres.txt
 ```
 
 To switch, fill in the connection, then **Test connection**, **Copy data
@@ -1495,6 +1495,8 @@ Mainly for when you cannot get into the app:
 .venv/bin/python manage.py add petr --admin
 .venv/bin/python manage.py password petr   # change a password
 .venv/bin/python manage.py delete jana
+.venv/bin/python manage.py blocks          # list sign-in blocks
+.venv/bin/python manage.py unblock 203.0.113.7   # lift one; --all lifts every one
 ```
 
 A forgotten password cannot be read back from the hash, by design. Set a
@@ -1553,6 +1555,8 @@ jellyscope/
 ├── demo.py                 demo mode with made-up data
 ├── manage.py               account management from the command line
 ├── requirements.txt        dependencies
+├── requirements-postgres.txt  the PostgreSQL driver, pinned
+├── constraints.txt         the exact versions of every indirect dependency
 ├── .env                    your secrets (not in git)
 ├── deploy/                 installer, service configs, proxy examples
 ├── tests/                  the test suite (needs no Jellyfin); every app of the *Arr page has its own
@@ -1568,6 +1572,7 @@ jellyscope/
     ├── schema_names.py     the database's old (Czech) names and the new ones, for good
     ├── schema.sql          the shape of the database (schema_postgres.sql for PostgreSQL)
     ├── accounts.py         accounts, passwords, login blocks
+    ├── web_sessions.py     sign-in sessions kept on the server, so signing out ends them
     ├── jellyfin.py         talking to Jellyfin
     ├── content_kinds.py    where files of content outside video live (music, books)
     ├── probe.py            ffprobe
@@ -1626,7 +1631,8 @@ jellyscope/
     │   │   ├── times.py        the time of history events: recognising the text format, converting to UTC
     │   │   ├── sync.py         subtitle history into bazarr_event: pages from the newest, records told apart by a fingerprint
     │   │   └── live.py         the live state: providers, warnings (3 s, cached a minute); missing subtitles by language from the sync
-    │   └── prowlarr/       Prowlarr indexers: API client, settings, history sync, live state
+    │   └── prowlarr/       Prowlarr indexers: API client, settings, history sync, live state, samples of the
+    │                       indexers' status and the loop that measures it continuously (samples.py, watch.py)
     │       ├── __init__.py     the entry point: every prowlarr.X used elsewhere
     │       ├── client.py       the API client; query addresses and settings with keys are never read
     │       ├── settings.py     address and key, "connected", connection test
@@ -1644,6 +1650,8 @@ jellyscope/
     │   ├── settings.py     address and key, "connected", connection test
     │   ├── sync.py         all requests -> seerr_request (status-change times, deleted in Seerr, titles)
     │   ├── live.py         the live "waiting for approval" list, cached a minute
+    │   ├── latest.py       the live "latest requests", newest first, cached a minute
+    │   ├── now.py          both live lists loaded together, kept under one cache entry
     │   └── posters.py      provisional posters for titles not in Jellyfin: Radarr/Sonarr, then Seerr
     ├── services.py         shared by the apps under arr/ and by seerr/: the client core (errors without the key, address check), the rules of the app settings
     ├── importers/          history import and its repairs, one file per area
@@ -1699,6 +1707,7 @@ jellyscope/
     ├── web/                the web app, one file per area of pages
     │   ├── __init__.py     the app: middleware, error pages, connecting the routes
     │   ├── start.py        what starts and stops with the server (lifespan)
+    │   ├── body_limit.py   refuses an oversized request body before anything reads it
     │   ├── base.py         what every page needs: context, flashes, guards, CSP
     │   ├── periods.py      the period and kind choice shared by the pages
     │   ├── login.py        first run, sign-in, sign-out

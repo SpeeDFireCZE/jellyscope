@@ -1,0 +1,6 @@
+{# The cards an open page asked for again (/partials/cards, web/dashboards.py): each drawn by _card.html, in
+   its slot with its key and sources, in the asked order - the page takes the answer apart by the slots.
+   Only the cards the account may see; with the page's period, choices and `in_dashboard`. #}
+{% for card in asked_cards %}
+{% include "_card.html" %}
+{% endfor %}

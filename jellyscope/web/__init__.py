@@ -18,6 +18,7 @@ the application (app.include_router):
 
 * `__init__` - the application: app, middleware, error handling, attaching the routes
 * `start` - start and shutdown (lifespan)
+* `body_limit` - the ceiling of a request's body, before anything reads it
 * `base` - what every page needs (templates, context, flash messages, the sign-in guard)
 * `settings` - Settings
 * `periods` - the choice of the period and of the kind of content
@@ -27,12 +28,15 @@ the application (app.include_router):
 * `video` - the Movies & series section (/video/…): overview, comparison, insights, languages
 * `legacy` - old page addresses: redirects to the new ones (jellyscope/legacy_urls.py)
 * `music`, `books` - the Music and Books sections (/music/…, /books/…): overview, artist, comparison…
-* `album` - the album page of the Library (/album/<id>)
+* `album`, `book` - the album and the book pages of the Library (/album/<id>, /book/<id>)
 * `library` - the library, titles, the archive, images
+* `library_kinds`, `music_library`, `books_library` - libraries that are not video: what the Library shows for
+  each kind, a music and a books library (/library/<id>)
 * `disks` - the forms of the Disks card
 * `users` - users
 * `history` - the play history
 * `network` - the network
+* `arr`, `seerr` - the *Arr page with a tab for every connected app (/arr/…) and the Seerr page (/seerr)
 * `status` - a small JSON interface (/health, /api/now-playing)
 """
 
@@ -43,10 +47,11 @@ import importlib.util
 import time
 from typing import Any
 
-
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import pass_context
@@ -57,7 +62,7 @@ from .. import (access, api, api_query, cards, charts,
                 formatting, i18n,
                 languages,
                 seasonal,
-                stats)
+                stats, web_sessions)
 # The version of the running process. Fixed at import on purpose: after `git pull`
 # a new one lies on the disk, but this process still runs the old code - and the
 # waiting room after an update needs to know exactly what runs here, not what is on
@@ -66,55 +71,30 @@ from .. import __version__  # noqa: F401 - read from the outside too
 # The base of the web lives next door - every part of the routes needs it, so
 # they would otherwise have to import this module and it them.
 from .base import (  # noqa: F401 - used from the outside too
-    BACK_TO_IMPORT,
-    CAPACITY_UNITS,
     LIMIT_MAX,
-    LIMIT_MIN,
     PACKAGE_DIR,
     SETTINGS_SECTIONS,
-    SKINS,
     STARTED_AT,
     TABLE_LIMITS,
-    TEMPLATES_DIR,
-    ZOOM_MODES,
-    _clamp,
     _context,
-    _czech_date,
-    _exact_time,
-    _fixed_note,
     _flash,
-    _form_number,
-    _import_message,
-    _known_note,
-    _last_day,
     _limits,
-    _linked_note,
     _map_basemap,
-    _new_key,
-    _no_cache,
     _period_for_template,
-    _period_label,
-    _quick_periods,
-    _sentence,
-    _skin,
     _zoom_mode,
-    account_image_tag,
     config,
     current_account,
     log,
     own_viewer,
-    require_admin,
-    require_login,
-    start_session,
     templates,
 )
-from .base import OSM_TILES, csp  # noqa: F401 - OSM_TILES is read from the outside too
+from .base import _no_store_signed_in, csp
 from .login import _client_address
 from .periods import ALLOWED_DAYS, DAY_LABELS
 from .start import lifespan
 
 # The submodules with routes - app.include_router at the end of the file attaches them.
-from . import (album, arr, books, dashboards, disks, history, legacy, library, login, music, my_account, network, seerr, settings,
+from . import (album, arr, body_limit, books, dashboards, disks, history, legacy, library, login, music, my_account, network, seerr, settings,
                status, users, video)
 from ..arr.registry import connected as _arr_connected
 from ..music import has_music as _has_music
@@ -123,7 +103,6 @@ from ..seerr import is_connected as _seerr_connected
 # The door: the names from the submodules that are read from the outside too (web.X, tests).
 # The package's code takes them straight from the submodule, not from here.
 from .library import ARCHIVE_DELETE_LIMIT, item_image  # noqa: F401 - read from the outside too
-from .login import _setup_context  # noqa: F401 - read from the outside too
 from .my_account import my_image  # noqa: F401 - read from the outside too
 from .periods import _kind  # noqa: F401 - read from the outside too
 
@@ -278,13 +257,14 @@ async def account_language_middleware(request: Request, call_next):
         i18n.reset_account_language(token)
 
 
-# The session's old keys (TODO.md item 0): added before SessionMiddleware = right inside it, before every reader.
+# The ceiling of a request's body (body_limit.py) and the session's old keys (TODO.md item 0): right inside SessionMiddleware.
+app.add_middleware(body_limit.BodyLimit)
 app.add_middleware(legacy.LegacySession)
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.secret_key,
     session_cookie="jellyscope_session",
-    max_age=14 * 24 * 3600,
+    max_age=web_sessions.LIFETIME_SECONDS,      # a record on the server lives as long (web_sessions.py)
     # same_site="lax": the cookie is not sent with a request from a foreign site - its form cannot act in your name.
     same_site="lax",
     # Behind an HTTPS proxy SECURE_COOKIES=1 in .env: the cookie goes only over an encrypted connection. On
@@ -460,11 +440,11 @@ async def security_headers(request: Request, call_next):
     # never move in the browser after an update.
     nonce = getattr(request.state, "csp_nonce", None)
     response.headers.setdefault("Content-Security-Policy", csp(osm, nonce))
-    return response
+    return _no_store_signed_in(request, response)
 
 
 formatting.register(templates.env)
-# The kind of an item in Czech ("Episode" -> "Episode"). It lives in stats, because
+# The kind of an item in the interface language ("Audio" -> "Music"). It lives in stats, because
 # that is where it is decided what is a movie, a series and "other" - the template only writes it.
 templates.env.filters["type_name"] = stats.type_label
 # Templates may call the functions of charts - drawing belongs in the template, not in the route.
@@ -569,6 +549,21 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         body["error"] = HTTP_ERROR_CODES.get(exc.status_code, "http_error")
     return JSONResponse(body, status_code=exc.status_code,
                         headers=exc.headers or None)
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(request: Request, exc: RequestValidationError):
+    """A value FastAPI cannot read (a page's `days=abc`, `page=`): the app's error page, not a JSON dump.
+
+    An edited bookmark or a hand-typed address is a person's mistake - a browser would show the raw
+    `{"detail": [...]}`. The API keeps FastAPI's JSON answer: programs read its reasons.
+    """
+    if request.url.path.startswith("/api/"):
+        return await request_validation_exception_handler(request, exc)
+    return templates.TemplateResponse(
+        request, "error.html",
+        {"code": 400, "message": "A value in the address or the form is not valid."}, status_code=400,
+    )
 
 
 @app.exception_handler(api_query.ApiError)

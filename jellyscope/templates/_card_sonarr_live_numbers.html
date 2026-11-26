@@ -3,8 +3,8 @@
    The app's state right now, the period does not concern it. Drawn by the page
    /arr/sonarr and by dashboards (cards_sonarr.py). Expects `d` = the app's live state for
    the account (cards_sonarr.for_account): what did not load is None and shows as "–",
-   not as zero - "ve frontě 0" would be a claim nobody checked.
-   Only the admin gets the error's detail (`d.chyba`). Missing and cutoff are counted by the sync, not
+   not as zero - "In the queue" with 0 would be a claim nobody checked.
+   Only the admin gets the error's detail (`d.error`). Missing and cutoff are counted by the sync, not
    live (a big Sonarr counts them for long): the note says when, or that they are not counted yet.
 
    The only live card that says in a whole sentence what happened; the others

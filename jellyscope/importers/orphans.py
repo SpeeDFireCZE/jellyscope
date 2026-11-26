@@ -183,12 +183,12 @@ async def look_up_orphans_in_jellyfin() -> dict[str, Any]:
 # The reasons why a record could not be filed. The order goes from "something can be done about it" to
 # "really nothing any more" - they are listed in that order too.
 REASON_ID = "id"
-REASON_ONE_MATCH = "jedna_shoda"
-REASON_SEVERAL_MATCHES = "vic_shod"
-REASON_SERIES_EXISTS = "serial_je"
-REASON_NO_SERIES = "serial_neni"
-REASON_KNOWS_SERIES = "zna_serial"
-REASON_NOTHING = "nic"
+REASON_ONE_MATCH = "one_match"
+REASON_SEVERAL_MATCHES = "several_matches"
+REASON_SERIES_EXISTS = "series_exists"
+REASON_NO_SERIES = "no_series"
+REASON_KNOWS_SERIES = "knows_series"
+REASON_NOTHING = "nothing"
 
 # What each reason means and whether something can be done about it. The texts are here, not in the
 # template: they belong to the division, not to its drawing.
@@ -321,15 +321,15 @@ def candidates_for_orphan(search: str, limit: int = 25) -> list[dict[str, Any]]:
     search = (search or "").strip()
     if len(search) < 2:
         return []
-    pattern = f"%{search}%"
+    pattern = db.like_contains(search)
     return db.query_all(
-        """
+        f"""
         SELECT i.id, i.name, i.series_name, i.type, i.parent_index_number,
                i.index_number, i.production_year, i.is_missing,
                l.name AS library_name
           FROM items i
      LEFT JOIN libraries l ON l.id = i.library_id
-         WHERE i.name LIKE ? OR i.series_name LIKE ?
+         WHERE i.name LIKE ? {db.LIKE_ESCAPE} OR i.series_name LIKE ? {db.LIKE_ESCAPE}
       ORDER BY i.is_missing, i.series_name, i.parent_index_number,
                i.index_number, i.name
          LIMIT ?

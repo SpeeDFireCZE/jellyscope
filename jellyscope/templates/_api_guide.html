@@ -59,9 +59,9 @@
     ("/api/v1/item/{id}", "GET /api/v1/item/<id>",
      _("One title: the file, its versions and who watched it.")),
 ] %}
-<dialog class="modal modal-wide" id="modal-api-docs">
+<dialog class="modal modal-wide" id="modal-api-docs" aria-labelledby="modal-api-docs-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("API for tools") }}</h2>
+        <h2 id="modal-api-docs-title">{{ _("API for tools") }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>

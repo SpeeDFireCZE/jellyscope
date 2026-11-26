@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-r"""Prowlarr's cards from the registry: the live state and thirteen cards about indexers.
+r"""Prowlarr's cards from the registry: the live state and fourteen cards about indexers.
 
 Every question is a card of its own in the registry (jellyscope/cards_prowlarr.py) as
 with the other applications; the Prowlarr tab of the *Arr page and the custom
 dashboards draw them. Watched:
 
-A) the registry: 13 cards, keys, sections, area, templates, translations;
+A) the registry: 14 cards, keys, sections, area, templates, translations;
    an unconnected Prowlarr is not offered;
 B) the data of every card over the downloaded history and the recorded live state;
 C) every card is drawn alone in the dashboard and carries the name Prowlarr; the live state
@@ -18,7 +18,9 @@ E) part of the live state does not load: None, not zero, and the card says so; a
 F) the warning texts only for the administrator;
 G) an indexer without a name, a removed indexer, an unknown application, releases only
    redirected;
-H) the whole history reaches back to the first event; a disconnected Prowlarr.
+H) the indexers' availability: before the first sample only the failed queries and a sentence that it is
+   measured from now on; then the most troublesome first, a strip by days, "measured since", the row limit;
+I) the whole history reaches back to the first event; a disconnected Prowlarr.
 
 Prowlarr is not run: the answers are recorded (tests/prowlarr_responses/),
 the client is replaced by a client with httpx.MockTransport (tests/_apps.py).
@@ -99,20 +101,20 @@ db.forget_settings()
 print("--- A) the registry ---")
 from jellyscope import cards_prowlarr  # noqa: E402
 
-NAMES = ("live_numbers", "indexers_now", "health", "numbers", "by_day", "when", "who", "indexers", "response_time", "failures",
+NAMES = ("live_numbers", "indexers_now", "health", "numbers", "by_day", "when", "who", "availability", "indexers", "response_time", "failures",
          "grabbed_numbers", "grabbed_indexers", "grabbed_latest")
 CARDS = cards_prowlarr.CARDS
 check(tuple(cards_prowlarr.NAMES) == NAMES and [k.key for k in CARDS] == [f"prowlarr_{j}" for j in NAMES]
-      and cards_prowlarr.card_key("numbers") == "prowlarr_numbers", "13 cards prowlarr_<name> in the page's order")
+      and cards_prowlarr.card_key("numbers") == "prowlarr_numbers", "14 cards prowlarr_<name> in the page's order")
 check([i18n.translate(n, "cs") if n else "" for n, _ in cards_prowlarr.SECTIONS] == ["Teď v aplikaci", "Dotazy", "Výkon indexerů", "Vyžádaná vydání"]
-      and [len(j) for _, j in cards_prowlarr.SECTIONS] == [3, 4, 3, 3], "four sections of the page by the spec")
+      and [len(j) for _, j in cards_prowlarr.SECTIONS] == [3, 4, 4, 3], "four sections of the page by the spec")
 check(all(k.area == "arr" and k.group == "Prowlarr" for k in CARDS), "the *Arr area, the Prowlarr group")
 check({k.key for k in CARDS if not k.uses_period} == {f"prowlarr_{j}" for j in NAMES[:3]}, "only the three live cards without a period")
-check(all(k in cards.ALL_CARDS for k in CARDS) and len(cards.ALL_CARDS) == 206, f"they are in the registry; there are 206 cards ({len(cards.ALL_CARDS)})")
+check(all(k in cards.ALL_CARDS for k in CARDS) and len(cards.ALL_CARDS) == 211, f"they are in the registry; there are 211 cards ({len(cards.ALL_CARDS)})")
 order = [k.key for k in cards.ALL_CARDS]
 check(order.index("prowlarr_live_numbers") == max(i for i, k in enumerate(order) if k.startswith("bazarr_")) + 1,
       "in the card offer they stand right after Bazarr's cards")
-check({k.key for k in CARDS if k.has_table_window} == {"prowlarr_indexers", "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest",
+check({k.key for k in CARDS if k.has_table_window} == {"prowlarr_availability", "prowlarr_indexers", "prowlarr_grabbed_indexers", "prowlarr_grabbed_latest",
                                                   "prowlarr_indexers_now", "prowlarr_who", "prowlarr_health"},
       "cards with a table for the dialog")
 missing_templates = sorted(k.template for k in CARDS if not (PROJECT / "jellyscope" / "templates" / k.template).exists())
@@ -120,7 +122,8 @@ check(not missing_templates and [k.template for k in CARDS] == [f"_card_prowlarr
       f"every card has its template ({missing_templates})")
 for language in ("cs", "es"):            # English is the source, Czech and Spanish translate it
     dictionary = json.loads((PROJECT / "jellyscope" / "translations" / f"{language}.json").read_text(encoding="utf-8"))
-    texts = {t for k in CARDS for t in (k.name, k.description)} | {n for n, _ in cards_prowlarr.SECTIONS} | {*cards_prowlarr.RESULT_LABELS.values()}
+    texts = ({t for k in CARDS for t in (k.name, k.description)} | {n for n, _ in cards_prowlarr.SECTIONS} | {*cards_prowlarr.RESULT_LABELS.values()}
+             | {*cards_prowlarr.STRIP_LABELS.values()})
     missing = sorted(t for t in texts if t not in dictionary)
     check(not missing, f"the names, descriptions, sections and labels have a translation ({language}; missing {missing[:3]})")
 check(not [k for k in cards.allowed(list(cards.ALL_CARDS), admin_account) if k.group == "Prowlarr"], "an unconnected Prowlarr is not offered")
@@ -210,7 +213,7 @@ prowlarr.live.CACHE.clear()
 asked.clear()
 timeouts.clear()
 everything = admin.get("/dashboard?days=0")
-check(everything.status_code == 200 and len(re.findall(r"<!-- card: prowlarr_\w+ -->", everything.text)) == 13, "thirteen cards at once")
+check(everything.status_code == 200 and len(re.findall(r"<!-- card: prowlarr_\w+ -->", everything.text)) == len(NAMES), "fourteen cards at once")
 check(tile(everything.text, "Zapnuté indexery") == str(len(INDEXERS)) and tile(everything.text, "Nedostupné indexery") == "1"
       and tile(everything.text, "Hledání") == str(len(SEARCHES)) and tile(everything.text, "Vyžádaná vydání") == str(len(GRABBED)),
       f"the tiles of the live state and of the period ({tile(everything.text, 'Zapnuté indexery')}, {tile(everything.text, 'Hledání')}, {tile(everything.text, 'Vyžádaná vydání')})")
@@ -381,7 +384,138 @@ check((only["failed_count"], only["response"], only["being_grabbed"]) == ("–",
       "only redirected releases: the failure and the time are “–” (unknown, not zero) and the card says why")
 
 print()
-print("--- H) the whole history, a disconnected Prowlarr ---")
+print("--- H) the indexers' availability ---")
+AVAILABILITY = next(k for k in CARDS if k.key == "prowlarr_availability")
+check(AVAILABILITY.uses_period and AVAILABILITY.width == "full" and AVAILABILITY.has_table_window and AVAILABILITY.name == "Indexer availability",
+      "“Indexer availability”: the page's period, the full width, the window for the whole table")
+with db.connect() as conn:
+    conn.execute("DELETE FROM prowlarr_sample")        # the pages above took samples of the live state
+
+
+def availability(period: Any = None) -> dict[str, Any]:
+    """The availability card's data alone - without a live card no page takes a sample in between."""
+    return cards.data_for([AVAILABILITY], period or stats.whole_history_period(), account=admin_account)["prowlarr_availability"]
+
+
+before = availability()
+dead = next(r for r in before["rows"] if r["name"] == BLOCKED)
+check(before["sampled"] is False and before["measured_since"] == "" and {r["name"] for r in before["rows"]} >= set(INDEXER_NAMES.values())
+      and (dead["failure_share"], dead["availability"]) == ("100 %", "–"),
+      f"before the first sample: every indexer with the share of failed queries from the history, availability unknown ({dead['failure_share']})")
+cards.save_layout(["prowlarr_availability"])
+alone = admin.get("/dashboard?days=0").text
+html = html_lib.unescape(card_html(alone, "prowlarr_availability"))
+check("Dostupnost se měří od teď" in html and "day-strip" not in html and "100 %" in html and BLOCKED in html,
+      "and the card says it is measured from now on: the failed queries, no strip")
+check("při každé synchronizaci *Arr" in html, "the loop does not measure: the samples come with every *Arr sync")
+LOOP = prowlarr.samples.LOOP
+remembered = dict(LOOP)
+LOOP.update(running=LOOP["running"] + 1, answered=True)        # the background loop measures (it runs in the web app)
+measured_by_loop = html_lib.unescape(card_html(admin.get("/dashboard?days=0").text, "prowlarr_availability"))
+LOOP["answered"] = False                                          # ... but Prowlarr did not answer its last round
+no_answer = html_lib.unescape(card_html(admin.get("/dashboard?days=0").text, "prowlarr_availability"))
+LOOP.clear()
+LOOP.update(remembered)
+check("Dostupnost se od teď měří průběžně" in measured_by_loop and "synchronizaci *Arr" not in measured_by_loop
+      and "100 %" in measured_by_loop, "the loop measures: the card says it is measured continuously from now on, not with every sync")
+check("jakmile Prowlarr odpoví" in no_answer and "průběžně" not in no_answer and "synchronizaci *Arr" not in no_answer,
+      "the loop measures, Prowlarr does not answer it: the card says so")
+NOW = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
+
+
+def minutes_ago(minutes: int) -> str:
+    return (NOW - timedelta(minutes=minutes)).strftime(db.TIME_FORMAT)
+
+
+# A sample's own row keeps the indexers enabled then (the recording's, written as samples.id_list writes them) and the
+# usual interval in force (the *Arr task's hour).
+OWN_ROW = "INSERT INTO prowlarr_sample (sampled_at, indexer_id, enabled_ids, interval_seconds) VALUES (?, 0, ?, 3600)"
+ENABLED_IDS = "".join(f",{i['id']}" for i in sorted(INDEXERS, key=lambda i: i["id"]) if i["enable"]) + ","
+# Hourly samples, the last one four hours ago (nothing after it is measured): 4 measured hours. The dead indexer is left
+# out at 6 and 5 hours ago, failing since 6.5 hours ago - out until the clean sample 4 hours ago: 2.5 h of 4.
+with db.connect() as conn:
+    for minutes in (480, 420, 360, 300, 240):
+        conn.execute(OWN_ROW, (minutes_ago(minutes), ENABLED_IDS))
+    for minutes in (360, 300):
+        conn.execute("INSERT INTO prowlarr_sample (sampled_at, indexer_id, failing_since, skipped_until, last_failure) VALUES (?, ?, ?, ?, ?)",
+                     (minutes_ago(minutes), BLOCKS[0]["indexerId"], minutes_ago(390), minutes_ago(minutes - 5), minutes_ago(minutes + 1)))
+after = availability()
+dead = after["rows"][0]
+check(after["sampled"] and after["measured_since"] == minutes_ago(480)
+      and (dead["name"], dead["availability"], dead["outages"], dead["longest"], dead["running"], dead["last_failure"])
+      == (BLOCKED, "37,5 %", 1, "2 h 30 min", False, minutes_ago(301))
+      and all(r["availability"] == ("100,0 %" if r["name"] in INDEXER_NAMES.values() else "–") and r["outages"] == 0 and r["longest"] == "–"
+              for r in after["rows"][1:]),
+      f"the most troublesome first: 2.5 h out of 4 measured = 37,5 %, the other indexers of the samples 100,0 %, those with only"
+      f" old queries and in no sample “–” ({[(r['name'], r['availability']) for r in after['rows']]})")
+strip = dead["strip"]
+check(sum(p["days"] for p in strip) == stats.whole_history_period(first=stats.prowlarr_first()).days and strip[-1]["state"] in ("fine", "outage")
+      and {"outage", "unmeasured"} <= {p["state"] for p in strip} and strip[0]["state"] == "failed"
+      and all(a["state"] != b["state"] for a, b in zip(strip, strip[1:])) and all(p["title"] for p in strip),
+      f"the strip: one piece per run of days in the same state - the recorded failed queries, the days before the samples not measured,"
+      f" the outage ({[(p['state'], p['days']) for p in strip]})")
+# The samples came every hour; switching the *Arr task off (only pages sample then, every ten minutes), to 20 minutes or
+# to 12 hours today does not judge those past gaps anew - each keeps the interval it was taken with.
+task_settings = {key: db.get_setting(key, "") for key in ("task_arr_enabled", "arr_sync_minutes")}
+judged = []
+for enabled, minutes in (("0", "60"), ("1", "20"), ("1", "720")):
+    db.set_setting("task_arr_enabled", enabled)
+    db.set_setting("arr_sync_minutes", minutes)
+    db.forget_settings()
+    judged.append([(r["name"], r["availability"], r["longest"]) for r in availability()["rows"]])
+for key, value in task_settings.items():
+    db.set_setting(key, value)
+db.forget_settings()
+check(judged == [[(r["name"], r["availability"], r["longest"]) for r in after["rows"]]] * 3,
+      f"the *Arr task switched off, every 20 minutes or every 12 hours today: the measured past stays the same ({judged})")
+db.set_setting("ui_max_rows_arr", "2")
+db.set_setting("ui_max_rows_arr_mobile", "1")
+alone = admin.get("/dashboard?days=0").text
+html = html_lib.unescape(card_html(alone, "prowlarr_availability"))
+check("Prowlarr · Dostupnost indexerů" in html and "37,5 %" in html and "2 h 30 min" in html and "měřeno od" in html
+      and "Dostupnost se měří od teď" not in html and 'role="img"' in html and "výpadek: " in html,
+      "the card: the availability, the longest outage, “measured since”, a strip with a text for screen readers")
+check(all(label in html for label in ("v pořádku", "selhané dotazy", "výpadek", "neměřeno")), "the strip's legend")
+check(after.get("interval") == "1 h 00 min" and "interval měření 1 h 00 min" in html
+      and "Čím kratší interval, tím přesněji se změří i krátké výpadky." in html,
+      f"the card says the interval its period was measured with - the task's hour - and that shorter is more precise ({after.get('interval')})")
+check('href="/settings?section=arr#arr-prowlarr"' in html and "Nastavení → *Arr" in html,
+      "the administrator gets a link to Prowlarr's settings")
+reader_html = html_lib.unescape(card_html(reader.get("/dashboard?days=0").text, "prowlarr_availability"))
+check("interval měření 1 h 00 min" in reader_html and "section=arr" not in reader_html and "Nastavení → *Arr" not in reader_html,
+      "a reader gets the interval, not the link")
+check([cards_prowlarr.interval_text(s) for s in ([], [45], [60], [90], [600], [60, 3600], [15, 60, 600])]
+      == ["", "45 s", "1 min", "90 s", "10 min", "1 min – 1 h 00 min", "15 s – 10 min"],
+      "the intervals as people read them: seconds, minutes, hours; several from the shortest to the longest")
+check(html.count("extra-row") == len(after["rows"]) - 2 and html.count("desktop-only") == 1 and "data-table-window" in html
+      and 'id="table-window"' in alone, f"the *Arr row limit and the window with the whole table ({len(after['rows'])} rows)")
+db.set_setting("ui_max_rows_arr", "10")
+db.set_setting("ui_max_rows_arr_mobile", "5")
+october = availability(stats.period_between("2026-10-01", "2026-10-02"))
+check(october["measured_since"] == minutes_ago(480) and all(r["availability"] == "–" for r in october["rows"]),
+      "a period before the first sample: nothing measured, “measured since” the first sample")
+# A sample half an hour ago with the dead indexer left out again: an outage still running - a badge by the name, not by
+# the longest outage (that is the older one).
+with db.connect() as conn:
+    conn.execute(OWN_ROW, (minutes_ago(30), ENABLED_IDS))
+    conn.execute("INSERT INTO prowlarr_sample (sampled_at, indexer_id, failing_since, skipped_until, last_failure) VALUES (?, ?, ?, ?, ?)",
+                 (minutes_ago(30), BLOCKS[0]["indexerId"], minutes_ago(40), minutes_ago(20), minutes_ago(31)))
+running = availability()["rows"][0]
+alone = html_lib.unescape(card_html(admin.get("/dashboard?days=0").text, "prowlarr_availability"))
+dead_row = next((row for row in re.findall(r"<tr[ >].*?</tr>", alone, re.S) if f">{BLOCKED}" in row), "")
+check(running["name"] == BLOCKED and running["running"] is True and running["outages"] == 2 and running["longest"] == "2 h 30 min"
+      and "nedostupný" in dead_row and "nedostupný" not in alone.replace(dead_row, ""),
+      f"an outage still running: the indexer is “nedostupný” by its name, the longest outage stays the older one ({running['longest']})")
+tab = admin.get("/arr/prowlarr?days=0").text
+check(tab.index("<!-- card: prowlarr_indexers_now -->") < tab.index("<!-- card: prowlarr_availability -->") < tab.index("<!-- card: prowlarr_indexers -->"),
+      "on the Prowlarr tab between “Indexers now” and “Indexer performance”")
+CSS = (PROJECT / "jellyscope" / "static" / "style.css").read_text(encoding="utf-8")
+colours = {state: re.search(rf"\.day-strip-{state}\s*\{{[^}}]*background:\s*([^;]+);", CSS) for state in ("fine", "failed", "outage", "unmeasured")}
+check(all(found and found.group(1).strip().startswith("var(--") for found in colours.values()),
+      f"the strip's colours come from the theme's variables ({ {s: f.group(1) if f else None for s, f in colours.items()} })")
+
+print()
+print("--- I) the whole history, a disconnected Prowlarr ---")
 with db.connect() as conn:
     conn.execute("INSERT INTO prowlarr_hour (hour, indexer_id, app, kind, event_count, failed_count, response_sum, response_count, with_results)"
                  " VALUES ('2024-03-01 10:00:00', 1, 'Sonarr', 'query', 9, 0, 900, 9, 9)")

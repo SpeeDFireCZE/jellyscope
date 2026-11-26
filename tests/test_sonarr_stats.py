@@ -23,7 +23,11 @@ What follows from it and the test guards:
 - sources: an import's indexer is from its grab, i3 without a grab is "–";
 - upgrades: one, 720p -> 1080p, a manual pick brought it; all grabs in the period: two automatic (RSS, search), one
   manual;
-- failures: one.
+- failures: one;
+- indexer reliability: NZBgeek grabbed A (imported) and C (failed), DrunkenSlug B (imported); further hand-made grabs
+  add a grab still downloading at the period's end, a Blackhole grab without download_id, a grab before the period
+  and a failure of its own - each counts where the card says; a season pack, a failed pack and a double episode
+  (a grab per episode, one download_id) are one download each.
 Finally Review Focus 5: midnight in the app's zone - an import at 10-31 23:30 UTC belongs to Sunday 1. 11. in Prague
 (UTC+1), hour 0.
 
@@ -180,6 +184,76 @@ check(u["titles"] == [{"title": "Series", "count": 1, "title_id": 1}], f"titles 
 check(u["how"] == {"manual": 1}, f"a manual pick brought the upgrade ({u['how']})")
 check(u["how_all"] == {"automatic": 2, "manual": 1}, f"all grabs: 2 automatic, 1 manual ({u['how_all']})")
 check(stats.sonarr_failures(PERIOD) == 1, "failures: one")
+
+print()
+print("--- Indexer reliability: downloads of the period, their imports and failures by download_id ---")
+
+
+def reliability(period) -> list[tuple]:
+    """(name, downloads, imported, failed, unmatched, success) per indexer, in the function's order."""
+    return [(x["name"], x["downloads"], x["imported"], x["failed"], x["unmatched"], x["success"])
+            for x in stats.sonarr_indexer_reliability(period)]
+
+
+# From the data above: NZBgeek grabbed A (imported) and C (failed), DrunkenSlug grabbed B (imported).
+check(reliability(PERIOD) == [("NZBgeek", 2, 1, 1, 0, 0.5), ("DrunkenSlug", 1, 1, 0, 0, 1.0)],
+      f"a grab is imported or failed by its download_id; the most failures first ({reliability(PERIOD)})")
+insert(40, "grabbed", "2026-11-02 23:50:00", "L", 16, "WEBDL-720p", GB, source="Rss", indexer="NZBgeek")
+insert(41, "downloadFolderImported", "2026-11-03 00:05:00", "L", 16, "WEBDL-720p", GB)
+insert(42, "grabbed", "2026-11-02 09:00:00", None, 17, "WEBDL-720p", GB, source="ReleasePush", indexer="Other")
+insert(43, "downloadFolderImported", "2026-11-02 09:10:00", "Blackhole_y", 17, "WEBDL-720p", GB)
+insert(44, "grabbed", "2026-10-30 10:00:00", "P", 18, "WEBDL-720p", GB, source="Rss", indexer="DrunkenSlug")
+insert(45, "downloadFailed", "2026-10-31 01:00:00", "P", 18)
+insert(46, "grabbed", "2026-11-02 11:00:00", "Q", 19, "WEBDL-720p", GB, source="Rss", indexer="Tracker")
+insert(47, "downloadFailed", "2026-11-02 12:00:00", "Q", 19)
+rows = reliability(PERIOD)
+check(rows[1] == ("NZBgeek", 3, 1, 1, 0, 0.5),
+      f"a grab still downloading at the period's end (imported only after it) is neither a success nor a failure ({rows[1]})")
+check(("Other", 1, 0, 0, 1, None) in rows,
+      f"a grab without download_id (Blackhole) cannot be matched and lowers no success rate ({rows})")
+check(("DrunkenSlug", 1, 1, 0, 0, 1.0) in rows, "a grab before the period does not count, not even with its failure in the period")
+check([r[0] for r in rows] == ["Tracker", "NZBgeek", "DrunkenSlug", "Other"],
+      f"sorted by failures, then the lowest success rate; nothing finished comes last ({[r[0] for r in rows]})")
+analysis, before = stats.sonarr_events(PERIOD), stats.sonarr_indexer_reliability(PERIOD)
+insert(48, "grabbed", "2026-11-02 15:00:00", "S", 22, "WEBDL-720p", GB, source="Rss", indexer="Later")
+from_page = stats.sonarr_indexer_reliability(PERIOD, analysis=analysis)
+check(from_page == before and from_page != stats.sonarr_indexer_reliability(PERIOD),
+      "it computes from the page's paired events (analysis=), not from the table again: a grab stored after them is not in it")
+# The same download_id grabbed again after its failure is a download of its own (the outcome pairs with the last grab
+# before it, as the sources pair it). A download is imported when it was imported - a failure written after the import
+# (Sonarr's "mark as failed" in the history) does not make it failed: failed = a failure and no import.
+insert(60, "grabbed", "2026-12-01 10:00:00", "R", 20, "WEBDL-720p", GB, source="Rss", indexer="Again")
+insert(61, "downloadFailed", "2026-12-01 11:00:00", "R", 20)
+insert(62, "grabbed", "2026-12-02 10:00:00", "R", 20, "WEBDL-720p", GB, source="Search", indexer="Again")
+insert(63, "downloadFolderImported", "2026-12-02 10:30:00", "R", 20, "WEBDL-720p", GB)
+insert(64, "grabbed", "2026-12-03 10:00:00", "M", 21, "WEBDL-720p", GB, source="Rss", indexer="Marked")
+insert(65, "downloadFolderImported", "2026-12-03 10:20:00", "M", 21, "WEBDL-720p", GB)
+insert(66, "downloadFailed", "2026-12-03 12:00:00", "M", 21)
+december = reliability(stats.period_between("2026-12-01", "2026-12-03"))
+check(december == [("Again", 2, 1, 1, 0, 0.5), ("Marked", 1, 1, 0, 0, 1.0)],
+      f"a repeated download_id after its failure is another download; a failure after the import leaves it imported ({december})")
+check(stats.sonarr_indexer_reliability(stats.period_between("2026-01-01", "2026-01-02")) == [], "an empty period: no rows")
+# Several episodes in one release: Sonarr writes a grab, an import and a failure per EPISODE, all with one download_id.
+# A season pack of ten episodes imported, a pack of five that failed, a double episode (two grabs, both imported) and a
+# pack of three still downloading at the period's end (imported only after it) - each is ONE download.
+for n in range(10):
+    insert(70 + n, "grabbed", "2026-12-10 10:00:00", "PACK", 30 + n, "WEBDL-720p", GB, source="Rss", indexer="Packs")
+    insert(80 + n, "downloadFolderImported", "2026-12-10 11:00:00", "PACK", 30 + n, "WEBDL-720p", GB)
+for n in range(5):
+    insert(90 + n, "grabbed", "2026-12-11 10:00:00", "BAD", 40 + n, "WEBDL-720p", GB, source="Rss", indexer="Packs")
+    insert(95 + n, "downloadFailed", "2026-12-11 11:00:00", "BAD", 40 + n)
+for n in range(2):
+    insert(100 + n, "grabbed", "2026-12-12 10:00:00", "DOUBLE", 50 + n, "WEBDL-720p", GB, source="Rss", indexer="Double")
+    insert(102 + n, "downloadFolderImported", "2026-12-12 10:30:00", "DOUBLE", 50 + n, "WEBDL-720p", GB)
+for n in range(3):
+    insert(104 + n, "grabbed", "2026-12-12 20:00:00", "SLOW", 60 + n, "WEBDL-720p", GB, source="Rss", indexer="Double")
+    insert(107 + n, "downloadFolderImported", "2026-12-13 01:00:00", "SLOW", 60 + n, "WEBDL-720p", GB)
+packs = reliability(stats.period_between("2026-12-10", "2026-12-12"))
+check(packs == [("Packs", 2, 1, 1, 0, 0.5), ("Double", 2, 1, 0, 0, 1.0)],
+      f"a season pack, a failed pack and a double episode are one download each, imported when an episode was ({packs})")
+with db.connect() as conn:
+    conn.execute("DELETE FROM sonarr_event WHERE arr_id BETWEEN 40 AND 110")
+    conn.commit()
 
 print()
 print("--- Blackhole: a grab without download_id ---")

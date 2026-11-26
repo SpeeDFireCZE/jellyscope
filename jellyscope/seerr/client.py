@@ -64,15 +64,18 @@ class SeerrClient(HttpClient):
         return await self._object("settings/public")
 
     async def requests_page(self, skip: int, take: int, filter_: str = "all",
-                            timeout: httpx.Timeout | None = None) -> dict[str, Any]:
+                            timeout: httpx.Timeout | None = None, newest_first: bool = False) -> dict[str, Any]:
         """One page of requests: `{"pageInfo": {...}, "results": [...]}`.
 
-        The order asked for is oldest first (`sortDirection=asc`); Overseerr ignores it and sends the
-        newest first - whoever cares about the order sorts by themselves. `timeout`: the sync gives a
-        long one (a page of a hundred requests with titles), the live card keeps the short default -
-        a slow Seerr must not hold a page up for minutes.
+        The order asked for is by adding (`sort=added`): oldest first (`sortDirection=asc`), with
+        `newest_first` the newest first (`desc` - the live card "Latest requests" wants one page of the
+        newest). Overseerr ignores the direction and sends the newest first - whoever cares about the
+        order sorts by themselves. `timeout`: the sync gives a long one (a page of a hundred requests
+        with titles); the live cards keep the client's limit, services.LIVE_TIMEOUT - a slow Seerr must
+        not hold a page up.
         """
-        params = {"take": take, "skip": skip, "filter": filter_, "sort": "added", "sortDirection": "asc"}
+        params = {"take": take, "skip": skip, "filter": filter_, "sort": "added",
+                  "sortDirection": "desc" if newest_first else "asc"}
         return await self._object("request", params, timeout=timeout)
 
     async def request(self, request_id: int) -> dict[str, Any] | None:

@@ -238,6 +238,53 @@ with db.connect() as conn:
 pair = [g for g in _importers.import_duplicate_groups() if {r["item_id"] for r in g} == {EPISODE}]
 check(len(pair) == 1 and {r["session_key"] for r in pair[0]} == {"relace-xyz:polozka", "import:jellystat:99"},
       f"the collected and the imported record of one episode are one viewing ({[len(g) for g in pair]})")
+
+print()
+print("--- an unexpected error while writing leaves no import hanging as running ---")
+# Only the reading of the file was guarded: a database locked while the rows were written ended the import with the
+# exception, and its run stayed "running" in Settings -> Tasks until the next restart.
+import sqlite3  # noqa: E402
+
+from jellyscope import scanner  # noqa: E402
+
+
+def locked_insert(rows):
+    raise sqlite3.OperationalError("database is locked")
+
+
+fresh = {"jf_playback_activity": [dict(JELLYSTAT["jf_playback_activity"][0], Id=500,
+                                       ActivityDateInserted="2026-10-01 20:00:00")]}
+tsv = "\t".join(["DateCreated", "UserId", "ItemId", "ItemType", "ItemName", "PlaybackMethod", "ClientName",
+                 "DeviceName", "PlayDuration"]) + "\n" + "\t".join(
+    ["2026-10-02 20:00:00", USER, MOVIE, "Movie", "Matrix", "DirectPlay", "Web", "Chrome", "3600"])
+restore_insert = substitute(importers, "_insert", locked_insert)
+try:
+    for label, run in (("Jellystat", lambda: importers.import_jellystat_json(json.dumps(fresh).encode())),
+                       ("Playback Reporting (file)", lambda: importers.import_playback_reporting_tsv(tsv.encode()))):
+        try:
+            asyncio.run(run())
+            raised = ""
+        except sqlite3.OperationalError as error:
+            raised = str(error)
+        record = scanner.last_scan("import") or {}
+        check(record.get("status") == "error" and bool(record.get("finished_at")),
+              f"{label}: the run is closed as failed ({record.get('status')}, {raised!r})")
+finally:
+    restore_insert()
+
+# The try began only after the file was searched for its table: a list with a number in it (TypeError) or a JSON
+# nested too deep (RecursionError) left the run "running" just the same.
+for label, raw in (("a list with a number after a record", b'[{"x": 1}, 5]'),
+                   ("JSON nested too deep", b"[" * 100000 + b"]" * 100000)):
+    try:
+        asyncio.run(importers.import_jellystat_json(raw))
+        raised = ""
+    except Exception as error:  # noqa: BLE001 - what the test looks at
+        raised = type(error).__name__
+    record = scanner.last_scan("import") or {}
+    check(record.get("status") == "error" and bool(record.get("finished_at")),
+          f"Jellystat, {label}: the run is closed as failed ({record.get('status')}, {raised!r})")
+
 print()
 print(f"DONE - failures: {failures}")
 sys.exit(1 if failures else 0)

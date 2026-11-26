@@ -14,6 +14,7 @@ Run:
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import tempfile
@@ -131,6 +132,35 @@ print("--- browsing works whole ---")
 for path in ("/", "/video/insights", "/video/languages", "/network", "/library", "/users",
              "/history", "/settings?section=jellyfin"):
     check(client.get(path).status_code == 200, f"{path} opens")
+
+print()
+print("--- other visitors' addresses are not shown ---")
+# The sign-in details are on the sign-in page, so anybody reads Blocked addresses and the Log - and in them the IP
+# address of whoever mistyped the password, or of a robot trying passwords: a stranger's personal data, public.
+from jellyscope import applog  # noqa: E402
+
+applog.setup()
+VISITORS = {"198.51.100.77": "198.51.100.77", "2001:db8:77::5": "2001:db8:77:"}   # an IPv6 block is its /64
+for address in VISITORS:
+    stranger = TestClient(web.app, client=(address, 5555))
+    for attempt in range(8):
+        stranger.post("/login", data={"username": "demo", "password": f"wrong-{attempt}"}, follow_redirects=False)
+applog.write_api(1, "key", "-", "/api/v1/summary", "198.51.100.77", 200)
+for handler in logging.getLogger().handlers:
+    handler.flush()
+check(all(address in applog.log_path().read_text(encoding="utf-8") for address in VISITORS)
+      and len(accounts.list_blocks()) == 2, "the attempts are blocked and logged (the checks below are not empty)")
+for path in ("/settings?section=blocks", "/settings?section=log", "/settings?section=log&log_kind=api",
+             f"/settings/log/download?file={applog.log_path().name}", f"/settings/log/download?file={applog.API_NAME}"):
+    text = client.get(path).text
+    shown = [address for address, seen in VISITORS.items() if seen in text]
+    check(not shown, f"{path}: no visitor's address ({shown})")
+# Nor can an address be guessed by the API log's filter (the field shows back what was typed into it).
+guessed = client.get("/settings?section=log&log_kind=api&log_ip=198.51.100.77").text
+check("Nothing in the latest entries matches the filter." in guessed, "a guessed address finds no request")
+blocks_page = client.get("/settings?section=blocks").text
+check(blocks_page.count(applog.HIDDEN_ADDRESS) >= 2, "the blocks are listed, with the address hidden")
+check("198.51.100.77" in applog.log_path().read_text(encoding="utf-8"), "the log file itself keeps the address")
 
 print()
 print("--- outside the demo nothing is blocked ---")

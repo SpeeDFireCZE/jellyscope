@@ -125,8 +125,13 @@ class ReadarrClient(HttpClient):
         return await self._list("author", AUTHOR_FIELDS, timeout=DEFAULT_TIMEOUT)
 
     async def queue(self) -> dict[str, Any]:
-        """The download queue (the first page, up to 100 items), with the book and the author."""
-        return await self._object("queue", {"pageSize": 100, **INCLUDE})
+        """The download queue (the first page, up to 100 items), with the book and the author.
+
+        With the downloads the app did not pair with any author too (`includeUnknownAuthorItems`), like
+        `whole_queue`: such an item waits for a manual import, and the count and the card of items with an
+        error are to show it.
+        """
+        return await self._object("queue", {"pageSize": 100, "includeUnknownAuthorItems": "true", **INCLUDE})
 
     async def whole_queue(self) -> dict[str, Any]:
         """The whole queue in one page for the live card: `{"records": [...], "total": n}`.

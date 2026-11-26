@@ -6,7 +6,6 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker %}
 
 {# ================================================================== #}
 <div class="card">
@@ -19,7 +18,7 @@
         {# Whole sentences with the number inside, not fragments around it: `_("Po")` is
            also the abbreviation of Monday, and in English it used to say "Mon 5 failed…" here. #}
         {{ _("After {n} failed attempts from one address, signing in from it closes for a while. Each block in a row lasts longer:").format(n=block_attempts) }}
-        {% for block_seconds in block_levels %}{{ (block_seconds / 60) | round | int }} min{{ ", " if not loop.last }}{% endfor %},
+        {% for block_seconds in block_levels %}{{ _("{n} min").format(n=(block_seconds / 60) | round | int) }}{{ ", " if not loop.last }}{% endfor %},
         {{ _("and then permanently.") }}
         {{ _n("When an address behaves for {n} hours, the counting starts over.", block_forget_hours) }}
     </p>
@@ -50,9 +49,9 @@
                         <span class="badge warning"><span class="dot"></span>
                             {{ _("still") }}
                             {% if line.seconds_left >= 60 %}
-                                {{ (line.seconds_left / 60) | round | int }} min
+                                {{ _("{n} min").format(n=(line.seconds_left / 60) | round | int) }}
                             {% else %}
-                                {{ line.seconds_left }} s
+                                {{ _("{n} s").format(n=line.seconds_left) }}
                             {% endif %}
                         </span>
                     {% else %}

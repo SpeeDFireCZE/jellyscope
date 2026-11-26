@@ -248,6 +248,22 @@ with TestClient(app) as client:
     check(db.get_int_setting(scanner.CAPACITY_KEY, 0, 10 ** 18, 0) == 20 * 1024 ** 4,
           "and the value itself does not change meanwhile")
 
+    # Clearing the number is the way back to "find out yourself". FastAPI makes an empty field its default
+    # (None), the same as a form without the field - so the hidden fields are sent as the page renders them.
+    import re  # noqa: E402
+
+    html = client.get("/settings?section=data").text
+    form = html[html.index('method="post" action="/settings"'):]
+    form = form[:form.index("</form>")]
+    hidden = dict(re.findall(r'<input type="hidden" name="([^"]+)" value="([^"]*)"', form))
+    response = client.post("/settings", follow_redirects=False, data={
+        **hidden, "tech_source": "jellyfin", "poll_interval": "10",
+        "ffprobe_concurrency": "3", "path_mappings": "[]",
+        "library_capacity_gb": "", "library_capacity_unit": "TB"})
+    db.forget_settings()
+    check(response.status_code == 303 and db.get_int_setting(scanner.CAPACITY_KEY, 0, 10 ** 18, 0) == 0,
+          f"a cleared capacity field goes back to automatic ({db.get_setting(scanner.CAPACITY_KEY, '')})")
+
 print()
 print("--- an older Jellyfin does not have the endpoint ---")
 import asyncio  # noqa: E402

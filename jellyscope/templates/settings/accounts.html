@@ -6,7 +6,7 @@
    Macros are imported here, not in the parent: relying on a
    `{% from %}` leaking in from somewhere means a dependency that is not
    visible and works only by chance. #}
-{% from "_macros.html" import running_task, file_picker, permissions_tree %}
+{% from "_macros.html" import permissions_tree %}
 
 {# ================================================================== #}
 {# Actions on accounts. The forms used to be always open one under another and the page
@@ -144,9 +144,9 @@
 </div>
 {% endif %}
 {% if account.is_admin %}
-<dialog class="modal" id="modal-add">
+<dialog class="modal" id="modal-add" aria-labelledby="modal-add-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Add user") }}</h2>
+        <h2 id="modal-add-title">{{ _("Add user") }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -183,9 +183,9 @@
     </form>
 </dialog>
 
-<dialog class="modal" id="modal-other-password">
+<dialog class="modal" id="modal-other-password" aria-labelledby="modal-other-password-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Change another account's password") }}</h2>
+        <h2 id="modal-other-password-title">{{ _("Change another account's password") }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -193,8 +193,9 @@
         <div class="field">
             <label for="target_account">{{ _("Account") }}</label>
             <select id="target_account" name="account_id">
-                {# Without one's own account - that is changed on the My account page. #}
-                {% for row in all_accounts if row.id != account.id %}
+                {# Without one's own account - that is changed on the My account page - and without accounts
+                   from Jellyfin: their password is in Jellyfin (accounts.set_password). #}
+                {% for row in all_accounts if row.id != account.id and not row.jellyfin_user_id %}
                     <option value="{{ row.id }}">{{ row.username }}</option>
                 {% endfor %}
             </select>
@@ -220,7 +221,7 @@
 {#                                                                    #}
 {# The group (readers / Jellyfin viewers) is the default; one account #}
 {# can override it here. The tree is the same as for the group, only  #}
-{# saved with the account. After switching to "vlastní" the group's   #}
+{# saved with the account. After switching to "Custom" the group's    #}
 {# settings stop applying - and going back drops the own tree.        #}
 {# ------------------------------------------------------------------ #}
 {% for row in all_accounts if row.id in account_permissions %}
@@ -228,9 +229,9 @@
 {# The tree with its labels is taller than a laptop's screen: only the content
    scrolls (.modal-body), the header with the cross and the Save button stay
    visible. See .modal-scrolling in style.css. #}
-<dialog class="modal modal-scrolling" id="modal-permissions-{{ row.id }}">
+<dialog class="modal modal-scrolling" id="modal-permissions-{{ row.id }}" aria-labelledby="modal-permissions-{{ row.id }}-title">
     <form method="dialog" class="modal-head">
-        <h2>{{ _("Rights of account") }} {{ row.username }}</h2>
+        <h2 id="modal-permissions-{{ row.id }}-title">{{ _("Rights of account") }} {{ row.username }}</h2>
         <button class="btn modal-close" type="submit"
                 aria-label="{{ _("Close") }}">&times;</button>
     </form>
@@ -238,7 +239,7 @@
         <input type="hidden" name="account_id" value="{{ row.id }}">
 
         <div class="modal-body">
-        <div class="field">
+        <div class="field" role="radiogroup" aria-labelledby="modal-permissions-{{ row.id }}-title">
             <label class="switch">
                 <input type="radio" name="mode" value="group"
                        {{ 'checked' if not permissions.own }}>
@@ -270,7 +271,7 @@
         </div>
 
         {# The tree is always visible - with "podle skupiny" too it shows what
-           applies to the account right now. The ticks are saved only in the mode "vlastní";
+           applies to the account right now. The ticks are saved only in the mode "Custom";
            the script unlocks it after the switch, without the script it is unlocked always
            and the switch at the top decides. #}
         {{ permissions_tree(permissions.tree, dashboard_name, css_class="permissions-tree") }}

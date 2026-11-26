@@ -31,8 +31,9 @@ would let most duplicates through. See `_already_there()`.
 
 ## The package by areas
 
-From outside it is called as before (`importers.tidy_data()`, `importers.import_jellystat_json(...)`):
-this file offers everything that used to be in one importers.py (jellyscope/importers/):
+From outside it is called through this door (`importers.tidy_data()`, `importers.import_jellystat_json(...)`):
+it offers the names code and tests outside the package read, a name only the package itself uses stays in its
+submodule (both ways guarded by tests/test_importers_package.py, check a). The submodules (jellyscope/importers/):
 
 * `base` - the import's shared helpers: time, record keys, the guard "we only read from Jellyfin",
   building and writing a row, splitting an episode title.
@@ -54,87 +55,50 @@ from __future__ import annotations
 
 from ..jellyfin import JellyfinClient  # noqa: F401 - tests substitute it as importers.JellyfinClient
 from .base import (
-    FORBIDDEN_WORDS,
     ImportError_,
-    LANGUAGE_COLUMNS,
-    _EPISODE_TITLE,
-    _build_row,
-    _existing_keys,
     _insert,
     _language_from_source,
-    _normalize_id,
-    _parse_time,
     read_only,
     split_episode_title,
 )
 from .matching import (
-    _already_there,
     _epoch,
     _epoch_slow,
-    _known_items,
-    _known_users,
-    _playback_index,
-    _remember,
 )
 from .creation import (
-    _episode_in_library,
-    _episodes_under_series,
-    _libraries_by_path,
-    _library_for,
     create_from_jellyfin,
 )
 from .linking import (
-    _link_by_episode_number,
     _link_by_name,
     _link_by_tmdb,
     _orphan_item_ids,
-    _orphan_records,
-    _relink,
     _unify_ids,
     link_imported_history,
     refresh_playback_metadata,
 )
 from .pbr import (
     PBR_QUERY,
-    PBR_QUERY_WITHOUT_ROWID,
-    PBR_TSV_COLUMNS,
-    _process_pbr,
-    _tsv_columns,
     import_playback_reporting,
     import_playback_reporting_tsv,
     playback_reporting_available,
 )
 from .jellystat import (
-    JELLYSTAT_TABLES,
-    _find_jellystat_rows,
-    _jellystat_item_type,
-    _pick,
     import_jellystat_json,
 )
 from .cleanup import (
-    CAP_MULTIPLE,
     cap_nonsense_durations,
     duplicate_playback_count,
     duplicate_playback_groups,
     merge_duplicate_playback,
 )
 from .duplicates import (
-    LENGTH_TOLERANCE_S,
-    MAX_GAP_S,
-    _belong_together,
-    _completeness,
     _import_exists,
-    _title_for_comparison,
     import_duplicate_count,
     import_duplicate_groups,
     merge_import_duplicates,
     misplaced_episode_rows,
 )
 from .orphans import (
-    ANALYSIS_LIMIT,
-    LOOKUP_LIMIT,
-    REASON_ID,
-    REASON_KNOWS_SERIES,
     REASON_LABELS,
     REASON_NOTHING,
     REASON_NO_SERIES,
@@ -158,60 +122,23 @@ from .tidy import (
 )
 
 __all__ = [
-    "ANALYSIS_LIMIT",
-    "CAP_MULTIPLE",
-    "FORBIDDEN_WORDS",
     "ImportError_",
-    "JELLYSTAT_TABLES",
     "JellyfinClient",
-    "LANGUAGE_COLUMNS",
-    "LENGTH_TOLERANCE_S",
-    "LOOKUP_LIMIT",
-    "MAX_GAP_S",
     "PBR_QUERY",
-    "PBR_QUERY_WITHOUT_ROWID",
-    "PBR_TSV_COLUMNS",
-    "REASON_ID",
-    "REASON_KNOWS_SERIES",
     "REASON_LABELS",
     "REASON_NOTHING",
     "REASON_NO_SERIES",
     "REASON_ONE_MATCH",
     "REASON_SERIES_EXISTS",
     "REASON_SEVERAL_MATCHES",
-    "_EPISODE_TITLE",
-    "_already_there",
-    "_belong_together",
-    "_build_row",
-    "_completeness",
-    "_episode_in_library",
-    "_episodes_under_series",
     "_epoch",
     "_epoch_slow",
-    "_existing_keys",
-    "_find_jellystat_rows",
     "_import_exists",
     "_insert",
-    "_jellystat_item_type",
-    "_known_items",
-    "_known_users",
     "_language_from_source",
-    "_libraries_by_path",
-    "_library_for",
-    "_link_by_episode_number",
     "_link_by_name",
     "_link_by_tmdb",
-    "_normalize_id",
     "_orphan_item_ids",
-    "_orphan_records",
-    "_parse_time",
-    "_pick",
-    "_playback_index",
-    "_process_pbr",
-    "_relink",
-    "_remember",
-    "_title_for_comparison",
-    "_tsv_columns",
     "_unify_ids",
     "analyse_orphans",
     "assign_manually",

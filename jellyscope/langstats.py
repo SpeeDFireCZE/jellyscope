@@ -512,10 +512,10 @@ def _combination_rows() -> list[dict[str, Any]]:
 
 
 def all_combinations() -> list[dict[str, Any]]:
-    """The full list of combinations - the base for the window behind the row "Ostatní".
+    """The full list of combinations - the base for the window behind the row "Other".
 
     The card shows the four most frequent and sums up the rest, because nobody
-    reads a long list. But whoever wants to know what hides in that "Ostatní"
+    reads a long list. But whoever wants to know what hides in that "Other"
     is to have somewhere to click - otherwise it is a dead row.
 
     The percentages are computed from the same whole as on the card, so that
@@ -532,13 +532,13 @@ def all_combinations() -> list[dict[str, Any]]:
 
 
 def language_combinations(limit: int = 4) -> list[dict[str, Any]]:
-    """The most frequent track combinations - "CS + EN", "jen EN", ...
+    """The most frequent track combinations - "CS + EN", "EN", ...
 
     Exactly what a person asks about a home library: do I have both tracks for
     the movies, or just one?
 
     We list the `limit` most frequent combinations and sum up the rest into a
-    single row "Ostatní". A long list of combinations, each of which has two
+    single row "Other". A long list of combinations, each of which has two
     titles, nobody reads - and the overview of the main thing gets lost in it.
 
     Titles whose language nobody filled in do not belong in the overview: they
@@ -626,8 +626,9 @@ def _without_language_filter(search: str | None) -> tuple[list[str], list[Any]]:
              "OR i.audio_languages = 'und')"]
     params: list[Any] = []
     if search:
-        where.append("(i.name LIKE ? OR i.series_name LIKE ? OR i.path LIKE ?)")
-        params.extend([f"%{search}%"] * 3)
+        where.append(f"(i.name LIKE ? {db.LIKE_ESCAPE} OR i.series_name LIKE ? {db.LIKE_ESCAPE}"
+                     f" OR i.path LIKE ? {db.LIKE_ESCAPE})")
+        params.extend([db.like_contains(search)] * 3)
     return where, params
 
 
@@ -763,12 +764,12 @@ def _merge_into_rows(files: list[dict[str, Any]], whole_series: set[str],
         whole = series is not None and series in whole_series
 
         if whole:
-            key = f"serial:{series}"
+            key = f"series:{series}"
             label = file["series_name"] or file["name"]
             link = f"/series/{series}"
         else:
             # A movie, or a single episode of a series that otherwise has the track.
-            key = f"soubor:{file['item_id']}"
+            key = f"file:{file['item_id']}"
             episode_mark = _episode_label(file)
             if file["series_name"]:
                 label = f"{file['series_name']} – {episode_mark or file['name']}"

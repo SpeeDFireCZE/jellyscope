@@ -12,6 +12,8 @@ Run:
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import sys
 import tempfile
@@ -23,7 +25,9 @@ HOME = tempfile.mkdtemp()
 os.environ.update(JELLYSCOPE_HOME=HOME, DATABASE_PATH=str(Path(HOME) / "e.db"), SECRET_KEY="error-page",
                   JELLYFIN_URL="http://127.0.0.1:1", JELLYFIN_API_KEY="x", JELLYSCOPE_DEMO="0")
 
+from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from starlette.requests import Request  # noqa: E402
 
 from jellyscope import accounts, db, web  # noqa: E402
 
@@ -71,6 +75,25 @@ check(code == 404 and "Stránka nenalezena." in text and "Not Found" not in text
 code, text = page("error_reader", "en", "/users/no-such-user")
 check(code in (403, 404) and "Uzivatel" not in text and "admin" not in text,
       f"a reader's error page has no Czech either ({code})")
+
+print()
+print("--- a malformed number in a page address (audit QW-14) ---")
+# A page parameter that is no number (an edited bookmark, a hand-typed address) used to answer with
+# FastAPI's raw JSON 422 - a browser showed {"detail":[{"type":"int_parsing",...}]}. A page gets the
+# app's error page in the reader's language; the API keeps its JSON.
+SENTENCES = {"en": "A value in the address or the form is not valid.",
+             "cs": "Hodnota v adrese nebo ve formuláři není platná."}
+for language, path in (("en", "/users?days=abc"), ("cs", "/history?page="), ("en", "/network?days=1.5"),
+                       ("cs", "/settings?log_lines=x"), ("en", "/arr/sonarr/poster/x")):
+    code, text = page("error_admin", language, path)
+    check(code == 400 and SENTENCES[language] in text and "int_parsing" not in text and "<html" in text,
+          f"{language} {path}: the app's error page, not a JSON dump ({code}, {text[:80]!r})")
+handler = web.app.exception_handlers.get(RequestValidationError)
+error = RequestValidationError([{"type": "int_parsing", "loc": ("query", "days"), "msg": "x", "input": "abc"}])
+api_answer = asyncio.run(handler(Request({"type": "http", "method": "GET", "path": "/api/v1/summary", "headers": [],
+                                          "query_string": b"", "app": web.app}), error))
+check(api_answer.status_code == 422 and json.loads(api_answer.body)["detail"][0]["type"] == "int_parsing",
+      f"the API keeps the JSON answer ({api_answer.status_code})")
 
 print()
 print(f"DONE - failures: {failures}")

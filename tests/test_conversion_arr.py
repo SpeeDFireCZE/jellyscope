@@ -213,13 +213,19 @@ def app_since(request: httpx.Request) -> httpx.Response:
     if request.url.path.endswith("/api/v3/history/since"):
         asked.append(f"since {request.url.params.get('date', '')}")
         return httpx.Response(200, json=[])
+    if request.url.path.endswith("/api/v3/system/status"):      # the sync first makes sure the right app answers
+        return httpx.Response(200, json={"appName": answering["name"], "version": "1"})
     asked.append(request.url.path)
     return httpx.Response(200, json=[])
+
+
+answering = {"name": ""}
 
 
 since = (datetime.strptime(MARK, db.TIME_FORMAT) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 for name, package in (("sonarr", sonarr), ("radarr", radarr)):
     asked.clear()
+    answering["name"] = name.capitalize()
     asyncio.run(package.synchronize(transport=httpx.MockTransport(app_since)))
     # Since 23. 11. 2026 the sync also counts missing and cutoff (services.count_wanted) - not the history.
     check([a for a in asked if "/wanted/" not in a] == [f"since {since}"],

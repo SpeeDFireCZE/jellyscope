@@ -23,7 +23,11 @@ What follows from it and the test guards:
 - sources: an import's indexer is from its grab, i3 without a grab is "–";
 - upgrades: one, 720p -> 1080p, a manual pick brought it; all grabs in the period: two automatic (RSS, search), one
   manual;
-- failures: one.
+- failures: one;
+- indexer reliability: NZBgeek grabbed A (imported) and C (failed), DrunkenSlug B (imported); further hand-made grabs
+  add a grab still downloading at the period's end, a Blackhole grab without download_id, a grab before the period
+  and a failure of its own - each counts where the card says; a release grabbed again before it finished and a
+  release written for two movies (several grabs, one download_id) are one download each.
 Finally Review Focus 5: midnight in the app's zone - an import at 10-31 23:30 UTC belongs to Sunday 1. 11. in Prague
 (UTC+1), hour 0.
 
@@ -180,6 +184,74 @@ check(u["titles"] == [{"title": "Movie", "count": 1, "title_id": 1}], f"titles w
 check(u["how"] == {"manual": 1}, f"a manual pick brought the upgrade ({u['how']})")
 check(u["how_all"] == {"automatic": 2, "manual": 1}, f"all grabs: 2 automatic, 1 manual ({u['how_all']})")
 check(stats.radarr_failures(PERIOD) == 1, "failures: one")
+
+print()
+print("--- Indexer reliability: downloads of the period, their imports and failures by download_id ---")
+
+
+def reliability(period) -> list[tuple]:
+    """(name, downloads, imported, failed, unmatched, success) per indexer, in the function's order."""
+    return [(x["name"], x["downloads"], x["imported"], x["failed"], x["unmatched"], x["success"])
+            for x in stats.radarr_indexer_reliability(period)]
+
+
+# From the data above: NZBgeek grabbed A (imported) and C (failed), DrunkenSlug grabbed B (imported).
+check(reliability(PERIOD) == [("NZBgeek", 2, 1, 1, 0, 0.5), ("DrunkenSlug", 1, 1, 0, 0, 1.0)],
+      f"a grab is imported or failed by its download_id; the most failures first ({reliability(PERIOD)})")
+insert(40, "grabbed", "2026-11-02 23:50:00", "L", 16, "WEBDL-720p", GB, source="Rss", indexer="NZBgeek")
+insert(41, "downloadFolderImported", "2026-11-03 00:05:00", "L", 16, "WEBDL-720p", GB)
+insert(42, "grabbed", "2026-11-02 09:00:00", None, 17, "WEBDL-720p", GB, source="ReleasePush", indexer="Other")
+insert(43, "downloadFolderImported", "2026-11-02 09:10:00", "Blackhole_y", 17, "WEBDL-720p", GB)
+insert(44, "grabbed", "2026-10-30 10:00:00", "P", 18, "WEBDL-720p", GB, source="Rss", indexer="DrunkenSlug")
+insert(45, "downloadFailed", "2026-10-31 01:00:00", "P", 18)
+insert(46, "grabbed", "2026-11-02 11:00:00", "Q", 19, "WEBDL-720p", GB, source="Rss", indexer="Tracker")
+insert(47, "downloadFailed", "2026-11-02 12:00:00", "Q", 19)
+rows = reliability(PERIOD)
+check(rows[1] == ("NZBgeek", 3, 1, 1, 0, 0.5),
+      f"a grab still downloading at the period's end (imported only after it) is neither a success nor a failure ({rows[1]})")
+check(("Other", 1, 0, 0, 1, None) in rows,
+      f"a grab without download_id (Blackhole) cannot be matched and lowers no success rate ({rows})")
+check(("DrunkenSlug", 1, 1, 0, 0, 1.0) in rows, "a grab before the period does not count, not even with its failure in the period")
+check([r[0] for r in rows] == ["Tracker", "NZBgeek", "DrunkenSlug", "Other"],
+      f"sorted by failures, then the lowest success rate; nothing finished comes last ({[r[0] for r in rows]})")
+analysis, before = stats.radarr_events(PERIOD), stats.radarr_indexer_reliability(PERIOD)
+insert(48, "grabbed", "2026-11-02 15:00:00", "S", 22, "WEBDL-720p", GB, source="Rss", indexer="Later")
+from_page = stats.radarr_indexer_reliability(PERIOD, analysis=analysis)
+check(from_page == before and from_page != stats.radarr_indexer_reliability(PERIOD),
+      "it computes from the page's paired events (analysis=), not from the table again: a grab stored after them is not in it")
+# The same download_id grabbed again after its failure is a download of its own (the outcome pairs with the last grab
+# before it, as the sources pair it). A download is imported when it was imported - a failure written after the import
+# (Radarr's "mark as failed" in the history) does not make it failed: failed = a failure and no import.
+insert(60, "grabbed", "2026-12-01 10:00:00", "R", 20, "WEBDL-720p", GB, source="Rss", indexer="Again")
+insert(61, "downloadFailed", "2026-12-01 11:00:00", "R", 20)
+insert(62, "grabbed", "2026-12-02 10:00:00", "R", 20, "WEBDL-720p", GB, source="Search", indexer="Again")
+insert(63, "downloadFolderImported", "2026-12-02 10:30:00", "R", 20, "WEBDL-720p", GB)
+insert(64, "grabbed", "2026-12-03 10:00:00", "M", 21, "WEBDL-720p", GB, source="Rss", indexer="Marked")
+insert(65, "downloadFolderImported", "2026-12-03 10:20:00", "M", 21, "WEBDL-720p", GB)
+insert(66, "downloadFailed", "2026-12-03 12:00:00", "M", 21)
+december = reliability(stats.period_between("2026-12-01", "2026-12-03"))
+check(december == [("Again", 2, 1, 1, 0, 0.5), ("Marked", 1, 1, 0, 0, 1.0)],
+      f"a repeated download_id after its failure is another download; a failure after the import leaves it imported ({december})")
+check(stats.radarr_indexer_reliability(stats.period_between("2026-01-01", "2026-01-02")) == [], "an empty period: no rows")
+# One release, several grabs with its download_id before any outcome: grabbed again (a manual pick of the same release
+# while it still downloads) and then imported, grabbed twice and then failed, and one release written for two movies
+# with an import of each - every one of them is ONE download.
+insert(70, "grabbed", "2026-12-10 10:00:00", "TWICE", 30, "WEBDL-720p", GB, source="Rss", indexer="Twice")
+insert(71, "grabbed", "2026-12-10 12:00:00", "TWICE", 30, "WEBDL-720p", GB, source="InteractiveSearch", indexer="Twice")
+insert(72, "downloadFolderImported", "2026-12-10 13:00:00", "TWICE", 30, "WEBDL-720p", GB)
+insert(73, "grabbed", "2026-12-11 10:00:00", "BAD", 31, "WEBDL-720p", GB, source="Rss", indexer="Twice")
+insert(74, "grabbed", "2026-12-11 10:30:00", "BAD", 31, "WEBDL-720p", GB, source="Search", indexer="Twice")
+insert(75, "downloadFailed", "2026-12-11 11:00:00", "BAD", 31)
+insert(76, "grabbed", "2026-12-12 10:00:00", "DUO", 32, "WEBDL-720p", GB, source="Rss", indexer="Duo")
+insert(77, "grabbed", "2026-12-12 10:00:00", "DUO", 33, "WEBDL-720p", GB, source="Rss", indexer="Duo")
+insert(78, "downloadFolderImported", "2026-12-12 10:30:00", "DUO", 32, "WEBDL-720p", GB)
+insert(79, "downloadFolderImported", "2026-12-12 10:30:00", "DUO", 33, "WEBDL-720p", GB)
+several = reliability(stats.period_between("2026-12-10", "2026-12-12"))
+check(several == [("Twice", 2, 1, 1, 0, 0.5), ("Duo", 1, 1, 0, 0, 1.0)],
+      f"a release grabbed again before it finished and a release for two movies are one download each ({several})")
+with db.connect() as conn:
+    conn.execute("DELETE FROM radarr_event WHERE arr_id BETWEEN 40 AND 79")
+    conn.commit()
 
 print()
 print("--- Blackhole: a grab without download_id ---")

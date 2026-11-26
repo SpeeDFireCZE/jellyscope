@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from . import db
+from .arr import prowlarr
 
 log = logging.getLogger("jellyscope.purge")
 
@@ -125,6 +126,12 @@ def delete_old(days: int | None = None) -> dict[str, Any]:
     `is_active = 0` is a condition, not extra caution: a session that plays
     now belongs to the collector and deleting it means creating it again in ten
     seconds, only without the start.
+
+    The samples of Prowlarr's indexers' status older than the boundary go with
+    them: they are history too, kept as long as the plays. Only after the
+    plays' log line and the rewrite of the file, so that a failure there skips
+    neither (the next night would have no old plays and rewrite nothing); the
+    samples are tried again every night.
     """
     days = retention_days() if days is None else clamp_days(days)
     boundary = cutoff(days)
@@ -148,6 +155,7 @@ def delete_old(days: int | None = None) -> dict[str, Any]:
             # any more. When something is in the bin, it must stay: by it it is
             # told when to empty the bin, and without it the rows would get stuck there.
             db.set_setting(DEFERRED_KEY, "")
+    prowlarr.delete_old_samples(boundary)
     return {"deleted": count, "threshold": boundary, "days": days}
 
 
@@ -195,6 +203,9 @@ def forget_user(user_id: str, to_bin: bool = False,
         conn.commit()
 
     log.info("Viewer %s forgotten: %s playbacks deleted", name or user_id, count)
+    if count:
+        # An open page draws its cards over plays again (the plays' marker in /health).
+        db.note_plays_rewritten()
     if count and to_bin:
         # The rows are still in the bin, so rewriting the file makes no sense
         # now - it is done at night, when the bin is emptied.

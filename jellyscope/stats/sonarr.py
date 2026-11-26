@@ -35,6 +35,7 @@ from .shared import (
     GRAB_WINDOW,
     UNKNOWN,
     UPGRADE_PAIRING_WINDOW,
+    _downloads,
     _local,
     _pair_grabs,
     _pair_upgrades,
@@ -79,13 +80,22 @@ def _analysis(days: Any) -> dict[str, Any]:
     imports = [r for r in rows if _is_import(r)]
     upgrades = [r for r in rows if _is_upgrade(r)]
     import_by_upgrade = _pair_upgrades(upgrades, imports)
+    grab_imports = _pair_grabs(grabs, imports)
+    # What happened by the period's end (indexer reliability): a later import or failure is still downloading then.
+    failed_by_end = [r for r in rows if r["event_type"] == "downloadFailed" and r["happened_at"] < period.until]
+    imported_grabs = {grab_imports[i["arr_id"]]["arr_id"] for i in imports
+                      if i["arr_id"] in grab_imports and i["happened_at"] < period.until}
+    failed_grabs = {g["arr_id"] for g in _pair_grabs(grabs, failed_by_end).values()}
+    # A season pack is a grab per episode with one download_id: one download (stats/shared.py, _downloads).
+    downloads = _downloads([g for g in grabs if g["happened_at"] < period.until], imported_grabs, failed_grabs)
     return {
         "imports": [i for i in imports if in_period(i)],
         "grabs_list": [g for g in grabs if in_period(g)],
         "upgrades": [d for d in upgrades if in_period(d)],
-        "grab_imports": _pair_grabs(grabs, imports),
+        "grab_imports": grab_imports,
         "upgrade_import": import_by_upgrade,
         "upgrade_imports": {i["arr_id"] for i in import_by_upgrade.values()},
+        "downloads": [d for d in downloads if in_period(d["grab"])],
     }
 
 
@@ -219,6 +229,40 @@ def sonarr_sources(days: Any = 30, analysis: dict[str, Any] | None = None) -> di
     return {s: _ranked(counts[s], sizes[s]) for s in groups}
 
 
+def sonarr_indexer_reliability(days: Any = 30, analysis: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """How reliable each indexer's releases are: of the period's downloads, how many were imported and how many failed.
+
+    A download is one release: Sonarr writes a grab per episode, so a season pack or a double episode is several
+    grabs with one `download_id` - one download (stats/shared.py, `_downloads`). It is paired with its imports and
+    failures (`downloadFailed`) by `download_id` the same way as the sources (`_pair_grabs`), and only by the period's
+    end: a download is imported when an episode of it was imported by then, failed when it failed and nothing was
+    imported, otherwise still downloading - neither a success nor a failure. The same release grabbed again after its
+    outcome is another download. A grab without `download_id` (the Blackhole client) cannot be matched: it is a
+    download of its own that counts into `unmatched` and into no success rate.
+
+    Rows {name, downloads, imported, failed, unmatched, success}; `success` = imported / (imported + failed), None
+    when nothing that can be matched finished. The most failures first, then the lowest success rate (None last),
+    then the most downloads, then the name. It measures the releases, not whether the indexer's API was reachable.
+    """
+    r = analysis or _analysis(days)
+    rows: dict[str, dict[str, Any]] = {}
+    for d in r["downloads"]:
+        g = d["grab"]
+        name = g["indexer"] or UNKNOWN
+        row = rows.setdefault(name, {"name": name, "downloads": 0, "imported": 0, "failed": 0, "unmatched": 0})
+        row["downloads"] += 1
+        if not g["download_id"]:
+            row["unmatched"] += 1
+        elif d["imported"]:
+            row["imported"] += 1
+        elif d["failed"]:
+            row["failed"] += 1
+    for row in rows.values():
+        finished = row["imported"] + row["failed"]
+        row["success"] = row["imported"] / finished if finished else None
+    return sorted(rows.values(), key=lambda x: (-x["failed"], 2 if x["success"] is None else x["success"], -x["downloads"], x["name"]))
+
+
 # ---------------------------------------------------------------------------
 # Problems and activity
 # ---------------------------------------------------------------------------
@@ -230,7 +274,7 @@ def _trigger(source: Any) -> str:
 def sonarr_upgrades(days: Any = 30, analysis: dict[str, Any] | None = None, titles: int = 10) -> dict[str, Any]:
     """How often files are replaced by a better version, from which to which and how it was triggered.
 
-    `how` = what grabbed the version that brought the upgrade (automaticky, uzivatel, rucne, zvenku, nezname);
+    `how` = what grabbed the version that brought the upgrade (automatic, user, manual, external, unknown);
     `how_all` = the same for all grabs in the period, so that there is something to compare with. `titles` is how
     many of the most often upgraded titles to return (the card takes more and hides the rest in a window).
     """

@@ -23,7 +23,7 @@ from collections.abc import Callable
 from typing import Any
 
 from . import books, insights, stats
-from .cards_base import Card, _once
+from .cards_base import PLAYS, Card, _once
 
 NAME = books.NAME
 
@@ -165,15 +165,17 @@ def _d_clients(period: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _card(name: str, title: str, description: str, data: Callable[[Any], dict[str, Any]], *,
-          width: str = "full", area: str = "books", table_window: bool = False) -> Card:
-    """One books card. `data(period)` returns a dict for the template; the registry gets it under the card's key."""
+          width: str = "full", area: str = "books", table_window: bool = False, sources: tuple[str, ...] = ()) -> Card:
+    """One books card. `data(period)` returns a dict for the template; the registry gets it under the card's key.
+    `sources` only where the default (cards_base.default_sources) does not hold."""
     key = card_key(name)
 
     def compute(period: Any) -> dict[str, Any]:
         return {key: data(_once(books_period, period))}
 
     return Card(key, title, description, f"_card_books_{name}.html", compute, uses_period=name not in WITHOUT_PERIOD,
-                width=width, area=area, has_table_window=table_window, group=NAME, available=books.has_books)
+                width=width, area=area, has_table_window=table_window, group=NAME, available=books.has_books,
+                sources=sources)
 
 
 CARDS: tuple[Card, ...] = (
@@ -198,7 +200,7 @@ CARDS: tuple[Card, ...] = (
     _card("genres", "Genres by reading", "How many hours each genre was read and listened to.", _d_genres,
           width="half", area="books_insights", table_window=True),
     _card("unread", "What nobody reads", "Books without a single opening in the whole history, longest in the library first.",
-          _d_unread, area="books_insights", table_window=True),
+          _d_unread, area="books_insights", table_window=True, sources=(PLAYS, "books")),
     _card("library", "Books library numbers", "How many e-books, audiobooks and authors there are, how big the library is and how long the audiobooks play.",
           _d_library),
     _card("formats", "File formats", "EPUB, PDF, M4B, MP3…: how many files and how much space.", _d_formats, width="third", table_window=True),

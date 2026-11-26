@@ -389,6 +389,15 @@ CREATE TABLE IF NOT EXISTS login_blocks (
     note          TEXT
 );
 
+-- Sign-in sessions (jellyscope/web_sessions.py). See schema.sql.
+CREATE TABLE IF NOT EXISTS web_sessions (
+    token_hash    TEXT PRIMARY KEY,
+    account_id    BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    created_at    TEXT NOT NULL,
+    last_used_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_web_sessions_account ON web_sessions (account_id);
+
 -- Every /health asks by the kind of a task (every ten seconds from every
 -- open tab). Without an index that means walking the whole table.
 CREATE INDEX IF NOT EXISTS idx_scan_log_kind ON scan_log (kind, id);
@@ -686,6 +695,19 @@ CREATE TABLE IF NOT EXISTS prowlarr_indexer (
     enabled  INTEGER NOT NULL DEFAULT 1,
     removed  INTEGER NOT NULL DEFAULT 0,      -- 1 = no longer in Prowlarr
     seen_at  TEXT                             -- when Jellyscope last saw it in Prowlarr
+);
+
+-- Samples of the indexers' status (jellyscope/arr/prowlarr/samples.py). See schema.sql.
+CREATE TABLE IF NOT EXISTS prowlarr_sample (
+    sampled_at       TEXT NOT NULL,
+    indexer_id       INTEGER NOT NULL,
+    failing_since    TEXT,
+    skipped_until    TEXT,
+    last_failure     TEXT,
+    enabled_ids      TEXT,
+    interval_seconds INTEGER,
+    measured_until   TEXT,
+    PRIMARY KEY (sampled_at, indexer_id)
 );
 
 -- Music (jellyscope/music/sync.py): the artists, albums and tracks of the music libraries

@@ -282,7 +282,7 @@ def last_error() -> dict[str, Any] | None:
     """The last download that failed - when it is newer than the downloaded map.
 
     The task runs in the background and the page only reloads after it;
-    without this message the admin would see the "Stáhnout" button again after
+    without this message the admin would see the "Download" button again after
     a failure and not know why.
     """
     from . import scanner

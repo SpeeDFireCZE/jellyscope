@@ -226,9 +226,10 @@ def read_only(sql: str) -> str:
 #
 # It holds everything we need to identify the episode unambiguously: the series, the season and the
 # number. Looking up **the whole string** in the library makes no sense - there the episode is called
-# only "7. epizoda".
+# only "7. epizoda". The series ends in a visible character (the title is stripped): `.+?` tried every length of
+# it against a long run of spaces (seconds for one title), `.*?\S` skips the lengths that end in a space.
 _EPISODE_TITLE = re.compile(
-    r"^(?P<series>.+?)\s*[-–]\s*s(?P<season>\d{1,3})e(?P<episode>\d{1,4})"
+    r"^(?P<series>.*?\S)\s*[-–]\s*s(?P<season>\d{1,3})e(?P<episode>\d{1,4})"
     r"(?:\s*[-–]\s*(?P<name>.*))?$",
     re.I,
 )

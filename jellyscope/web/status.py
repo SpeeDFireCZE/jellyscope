@@ -7,11 +7,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from .. import __version__, access, collector, db, scanner, stats
-from .base import STARTED_AT, current_account, require_login
+from .. import __version__, access, collector, db, formatting, scanner, stats
+from .base import STARTED_AT, _self_refresh, change_markers, current_account, require_login
 
 router = APIRouter()
-
 
 # ---------------------------------------------------------------------------
 # A small JSON interface (handy for checking that the app is alive)
@@ -33,6 +32,7 @@ def health(request: Request):
         return basics
 
     versions = scanner.versions()
+    last_poll = db.get_setting(collector.LAST_POLL_KEY, "")
     return {
         **basics,
         # The version of the running process. The waiting room after an update waits
@@ -41,7 +41,9 @@ def health(request: Request):
         # is not told - for monitoring it is enough that the app is alive.
         "version": __version__,
         "collector": db.get_setting(collector.STATUS_KEY, "unknown"),
-        "last_poll": db.get_setting(collector.LAST_POLL_KEY, ""),
+        "last_poll": last_poll,
+        # The left panel's "Last run" as it writes it (in the reader's language), so an open page can keep it current.
+        "last_poll_text": formatting.relative_human(last_poll) if last_poll else "",
         # How much is being watched right now - only with the right "Now playing".
         **({"active_sessions": stats.active_session_count()} if access.account_sees(account, "now_playing") else {}),
         "task_running": scanner.is_scan_running(),
@@ -54,6 +56,9 @@ def health(request: Request):
         # comes back here every ten seconds.
         "library_version": versions["library"],
         "tasks_version": versions["tasks"],
+        # What changed for the cards, a marker per source - see change_markers. Only with Refreshing cards on
+        # (Settings -> Interface): switched off, no page asks for them.
+        **({"markers": change_markers(account, versions)} if _self_refresh() else {}),
     }
 
 
@@ -61,10 +66,11 @@ def health(request: Request):
 def api_now_playing(account: dict[str, Any] = Depends(require_login)):
     """The plays running right now as JSON for whoever is signed in (outside the API with keys).
 
-    With hidden names anonymised like the "Právě se hraje" page - raw data with
+    With hidden names anonymised like the "Now playing" page - raw data with
     names, devices and IP addresses used to be here.
     """
-    sessions = stats.active_sessions()
+    # Music and books only with "who listened" and "who read".
+    sessions = access.visible_plays(stats.active_sessions(), account)
     # Where somebody connects from belongs to Network, not to "Now playing".
     if not access.account_sees(account, "network"):
         sessions = [{k: v for k, v in r.items() if k not in access.ADDRESS_KEYS} for r in sessions]

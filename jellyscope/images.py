@@ -31,11 +31,23 @@ import tempfile
 from pathlib import Path
 
 from . import config, db
-from .jellyfin import JellyfinClient, digits_only
+from .jellyfin import JellyfinClient, JellyfinError, digits_only
 
 # The ceiling of a provisional poster. A poster a few hundred pixels wide has
 # tens of kilobytes; whatever is bigger is no poster (and the disk is no dump).
 MAX_BYTES = 5 * 1024 * 1024
+
+# The widths an item's image is kept in. The pages ask for 80 (the assignment menus), 200 (now playing),
+# 300 (grids, cards), 400 (a detail) and 600 (a library's tile); another width is rounded up to the next
+# one. A free width was a new file and a new request to Jellyfin for every number from 80 to 1200.
+WIDTHS = (80, 200, 300, 400, 600, 1200)
+
+# The ceiling of the whole folder. An image is downloaded once and kept, so without a ceiling the folder
+# only grows - and it lies next to the database, which stops writing when the disk is full. Past it the
+# images of Jellyfin items downloaded longest ago are deleted (the next page that shows one downloads it
+# again); provisional posters stay. The folder is measured again after every twentieth of it written.
+CACHE_LIMIT = 2 * 1024 * 1024 * 1024
+_written_since_measured: int | None = None      # None = not measured since the start yet
 
 FOLDER = "imagecache"
 SUFFIX = ".img"
@@ -76,6 +88,14 @@ def _check(value: str, what: str) -> str:
     if not _SAFE.fullmatch(value or ""):
         raise ValueError(f"{what} does not belong in a file name: {value!r}")
     return value
+
+
+def clean_tag(tag: str) -> str:
+    """An image's tag the way it goes into a file name: ASCII letters and digits only, at most 32 of them.
+
+    `isascii`: isalnum() alone lets through letters and digits outside ASCII too ("é", "²").
+    """
+    return "".join(c for c in tag if c.isascii() and c.isalnum())[:32]
 
 
 def item_file(item_id: str, kind: str, width: int, tag: str = "") -> Path:
@@ -125,6 +145,36 @@ def _write(path: Path, content: bytes) -> None:
 # Images of Jellyfin items
 # ---------------------------------------------------------------------------
 
+def known_tags(item_id: str) -> set[str] | None:
+    """The image tags stored for this id (cleaned like a file name), or None when Jellyscope does not know the id.
+
+    The ids the pages put into an image's address: an item, a series (its episodes carry the series' tag),
+    a music album, a book, and what is playing right now (an item the sync has not stored yet).
+    """
+    rows = db.query_all(
+        "SELECT image_tag AS tag FROM items WHERE id = ?"
+        " UNION SELECT series_image_tag FROM items WHERE series_id = ?"
+        " UNION SELECT cover_tag FROM music_album WHERE id = ?"
+        " UNION SELECT cover_tag FROM book WHERE id = ?"
+        " UNION SELECT '' FROM playback WHERE item_id = ? AND is_active = 1",
+        (item_id,) * 5)
+    if not rows:
+        return None
+    return {clean_tag(str(r["tag"])) for r in rows if r["tag"]}
+
+
+def _from_disk(path: Path) -> tuple[bytes, str] | None:
+    """A stored image with its type, or None when there is no file.
+
+    The type is told by the content; an old file for which that does not work is sent as JPEG - the way
+    everything was sent before anybody told the types apart.
+    """
+    if not path.exists():
+        return None
+    content = path.read_bytes()
+    return content, image_type(content) or "image/jpeg"
+
+
 async def item_image(item_id: str, kind: str, width: int, tag: str = "") -> tuple[bytes, str] | None:
     """An item's image with its type: from the disk, otherwise from Jellyfin (and it is stored). None = there is none.
 
@@ -133,22 +183,72 @@ async def item_image(item_id: str, kind: str, width: int, tag: str = "") -> tupl
     everything has a poster, so it is taken as a substitute - better than an
     empty space.
 
-    The type of a file from the disk is told by the content; an old file for
-    which that does not work is sent as JPEG - the way everything was sent
-    before anybody told the types apart.
+    Only what Jellyscope knows is downloaded: an id it does not have is None without asking Jellyfin, and a
+    tag other than the stored one is dropped (the image without a tag is served). The address comes from
+    the browser - a counter in the tag or the id would otherwise be a new file next to the database and a
+    new request to Jellyfin every time, until the disk is full.
     """
     path = item_file(item_id, kind, width, tag)
-    if path.exists():
-        content = path.read_bytes()
-        return content, image_type(content) or "image/jpeg"
-    async with JellyfinClient(*db.jellyfin_connection()) as client:
-        result = await client.image_bytes(item_id, kind, width)
-        if result is None and kind != "Primary":
-            result = await client.image_bytes(item_id, "Primary", width)
+    stored = _from_disk(path)
+    if stored is not None:
+        return stored
+    tags = known_tags(item_id)
+    if tags is None:
+        return None
+    if tag and tag not in tags:
+        path = item_file(item_id, kind, width)
+        stored = _from_disk(path)
+        if stored is not None:
+            return stored
+    try:
+        async with JellyfinClient(*db.jellyfin_connection()) as client:
+            result = await client.image_bytes(item_id, kind, width)
+            if result is None and kind != "Primary":
+                result = await client.image_bytes(item_id, "Primary", width)
+    except JellyfinError:
+        # A stored address or key the client cannot use: no image, the same as when Jellyfin does not answer.
+        return None
     if result is None:
         return None
     _write(path, result[0])
+    _keep_under_limit(len(result[0]))
     return result
+
+
+def _keep_under_limit(written: int) -> None:
+    """Deletes the oldest images of Jellyfin items while the folder is over CACHE_LIMIT.
+
+    Measuring means reading the size of every file, so it is not done at every write: only at the
+    first one since the start and then after every twentieth of the ceiling written. The folder can be
+    over the ceiling by that twentieth at most.
+    """
+    global _written_since_measured
+    if _written_since_measured is not None:
+        _written_since_measured += written
+        if _written_since_measured < CACHE_LIMIT // 20:
+            return
+    _written_since_measured = 0
+    where = folder()
+    total = 0
+    candidates: list[tuple[float, str, int]] = []
+    for entry in os.scandir(where):
+        if not entry.name.endswith(SUFFIX):
+            continue
+        try:
+            info = entry.stat()
+        except OSError:  # noqa: PERF203 - deleted meanwhile (the scanner tidies too)
+            continue
+        total += info.st_size
+        if not entry.name.startswith((TITLE_PREFIX, OLD_TITLE_PREFIX)):
+            candidates.append((info.st_mtime, entry.name, info.st_size))
+    for _mtime, name, size in sorted(candidates):
+        if total <= CACHE_LIMIT:
+            break
+        try:
+            (where / name).unlink()
+        except OSError:  # noqa: PERF203 - one locked file must not stop the rest
+            continue
+        total -= size
 
 
 def forget_items(ids: list[str]) -> int:

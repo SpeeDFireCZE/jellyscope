@@ -60,11 +60,11 @@
 {% if ui_events %}
 <div class="card" style="max-width:640px">
     <div class="card-head">
-        <h2>{{ _("Decoration animations") }}</h2>
+        <h2 id="motion-title">{{ _("Decoration animations") }}</h2>
     </div>
     <form method="post" action="/account/event-motion">
         <div class="field">
-            <div class="radio-set" style="margin-top:6px">
+            <div class="radio-set" style="margin-top:6px" role="radiogroup" aria-labelledby="motion-title">
                 <label class="radio-card">
                     <input type="radio" name="motion" value="1"
                            {{ 'checked' if not account or account.events_motion != '0' }}>
@@ -153,7 +153,7 @@
 
     {% if may_have_key %}
     <form method="post" action="/account/key" class="btn-row" style="margin-bottom:16px">
-        <input type="text" name="name" maxlength="60"
+        <input type="text" name="name" maxlength="60" aria-label="{{ _('Name') }}"
                placeholder="{{ _('What it is for, e.g. Grafana') }}"
                style="max-width:280px">
         <button data-keep-scroll class="btn primary" type="submit">{{ _("Make a key") }}</button>

@@ -10,7 +10,7 @@
     </div>
     {{ charts.stacked_bar(methods) | safe }}
     {# A legend is required with two or more series - colour alone carries no identity. #}
-    {{ charts.legend(methods) | safe }}
+    {{ charts.stacked_legend(methods) | safe }}
     <p class="card-note" style="margin-top:12px">
         {{ _("Direct play costs the server nothing. Transcoding means re-encoding the video on the fly, which the CPU or GPU does feel.") }}
     </p>
