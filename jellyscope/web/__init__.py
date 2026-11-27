@@ -58,7 +58,7 @@ from jinja2 import pass_context
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from .. import (access, api, api_query, cards, charts,
+from .. import (access, api, api_endpoints, api_query, cards, charts,
                 formatting, i18n,
                 languages,
                 seasonal,
@@ -502,11 +502,16 @@ templates.env.globals["asset_version"] = _asset_version()
 # A global function, not context - the sign-in pages have no _context.
 templates.env.globals["seasonal_event"] = seasonal.for_template
 templates.env.globals["seasonal_motion"] = seasonal.motion
-# The connected apps and music for Settings (the cards of *Arr, Seerr and the music rows in Interface).
-# The menu asks the same by itself (navigation.py).
+# The connected apps and music for Settings (*Arr, Seerr, Interface's music rows); the menu asks by itself.
 templates.env.globals["arr_connected"] = _arr_connected
 templates.env.globals["seerr_connected"] = _seerr_connected
 templates.env.globals["has_music"] = _has_music
+# The one list of the API's addresses for the key's tree of rights and the guide window (api_endpoints).
+templates.env.globals["api_endpoints_for_area"] = api_endpoints.for_area
+templates.env.globals["api_sections"] = api_endpoints.sections
+templates.env.globals["api_sub_area_note"] = api_endpoints.sub_area_note
+templates.env.globals["api_history_endpoints"] = lambda: [e for e in api_endpoints.ENDPOINTS if e.needs_history]
+templates.env.globals["api_area_name"] = lambda key: access.BY_KEY[key].name if key in access.BY_KEY else ""
 templates.env.globals["seasonal_year"] = seasonal.year_for_template
 # The template knows the demo mode too: the sign-in page in it says straight away
 # which credentials get one in. It is a global variable, because the sign-in

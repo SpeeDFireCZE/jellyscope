@@ -281,7 +281,8 @@ check('<option value="music"' in history_html and '<option value="all">' in hist
       "the History without a choice shows the listening too and the switch has \"Hudba\"")
 music_only_html = client.get("/history?kind=music").text
 books_html = client.get("/history?kind=books").text
-check("Kniha 0" in books_html and "Kniha 3" in books_html and "Skladba 0" not in books_html,
+# (Kniha 2, not Kniha 3: the demo's own readings of the last days fill the page, the one 100 hours ago is on the next.)
+check("Kniha 0" in books_html and "Kniha 2" in books_html and "Skladba 0" not in books_html,
       "History \"books\" shows the audiobooks and the reading, no music")
 check('<option value="books"' in history_html and "Kniha 0" in history_html, "the History switch has \"Books\" and \"all\" shows books too")
 check("Kniha" not in music_only_html, "History \"music\" shows no books")

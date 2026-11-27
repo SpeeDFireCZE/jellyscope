@@ -255,7 +255,7 @@ print("--- A) + B) every page: a viewer and a title from the library is a link, 
 all_found: dict[str, list[tuple[str, str, str, str]]] = {}
 for path in PAGES:
     code, findings = walk(admin, path)
-    page = re.sub(r"/[0-9a-f-]{16,}|/demo-[\w-]+", "/<id>", path.split("?")[0])
+    page = re.sub(r"/[0-9a-f-]{16,}", "/<id>", path.split("?")[0])
     all_found[page] = findings
     without = defaultdict(set)
     for kind, text, link, card in findings:

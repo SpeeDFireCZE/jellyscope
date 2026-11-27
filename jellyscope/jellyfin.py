@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from . import languages
+from . import demo_switch, languages
 from .i18n import TranslatableError
 
 log = logging.getLogger("jellyscope.jellyfin")
@@ -281,6 +281,10 @@ def _identity(user: dict[str, Any], name: str = "") -> dict[str, Any]:
     }
 
 
+# The name the demo's made-up Jellyfin is registered under (demo_switch, demo_apps).
+DEMO_NAME = "Jellyfin"
+
+
 class JellyfinClient:
     """A thin wrapper over HTTP calls to Jellyfin.
 
@@ -288,11 +292,15 @@ class JellyfinClient:
 
         async with JellyfinClient(url, key) as jf:
             info = await jf.system_info()
+
+    `transport` is for tests (httpx.MockTransport); without it the demo mode gives the made-up
+    Jellyfin (demo_switch, under DEMO_NAME), anywhere else it is the network.
     """
 
     def __init__(self, base_url: str, api_key: str,
                  timeout: httpx.Timeout | float | None = None,
-                 version: str | None = None) -> None:
+                 version: str | None = None,
+                 transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         # The server version: either passed (tests), or the remembered one.
@@ -306,6 +314,7 @@ class JellyfinClient:
                 base_url=self.base_url,
                 timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
                 headers=headers(api_key, self.version),
+                transport=transport if transport is not None else demo_switch.transport(DEMO_NAME),
             )
         except UnicodeEncodeError:
             raise JellyfinError(

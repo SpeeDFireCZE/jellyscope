@@ -16,7 +16,11 @@ The same rules as for the other packages (scanner/, stats/, importers/, music/):
     the package imports first in a clean process;
 (d) no file has more than 600 lines;
 (e) Seerr and *Arr use the shared core from services.py;
-(f) "already running" is the very template of services.py - tasks.py compares it by identity.
+(f) "already running" is the very template of services.py - tasks.py compares it by identity;
+(g) the demo's made-up Seerr (demo.py) lives in the package but not at the door: demo_apps imports it only in the
+    demo mode, so `import jellyscope.seerr` never loads it;
+(h) the made-up Seerr uses the other files' public names only (`sync.write_records`, not `sync._write_page`): what
+    the sync keeps to itself can change without a look at the demo.
 
 Run:
     .venv/bin/python tests/test_seerr_package.py
@@ -40,8 +44,8 @@ PACKAGE = PROJECT / "jellyscope" / "seerr"
 SUBMODULES: dict[str, list[str]] = {
     "client": ["NAME", "SeerrError", "SeerrClient"],
     "settings": ["stored_settings", "is_connected", "save_settings", "check_connection", "images_state", "settings_link"],
-    "sync": ["normalize_id", "request_row", "synchronize", "sync_state", "delete_data", "delete_downloaded_data",
-             "request_count", "sync_running"],
+    "sync": ["normalize_id", "request_row", "write_records", "synchronize", "sync_state", "delete_data",
+             "delete_downloaded_data", "request_count", "sync_running"],
     # The pending requests' rows, the shared cache and titles - read by now.py, nothing at the door.
     "live": [],
     # The page of Seerr's newest requests for "Latest requests" (26. 11. 2026) - read by now.py.
@@ -51,7 +55,12 @@ SUBMODULES: dict[str, list[str]] = {
     # Provisional posters of titles that are not in Jellyfin (13. 11. 2026).
     "posters": ["poster_path", "provisional_poster", "clean_up_posters", "forget_missing", "check_images"],
 }
-FILES = list(SUBMODULES)
+# Files of the package whose names are not at the door: the demo's made-up Seerr, imported only by the demo's seed
+# (demo_apps: the handler, and the sightings of the earlier syncs it replays).
+NOT_AT_THE_DOOR: dict[str, list[str]] = {
+    "demo": ["handler", "sightings", "fill_past"],
+}
+FILES = [*SUBMODULES, *NOT_AT_THE_DOOR]
 MAX_LINES = 600
 
 failures = 0
@@ -158,6 +167,46 @@ try:
           "sync.ALREADY_RUNNING is the template of services.py itself (tasks.py compares it by identity)")
 except ImportError as error:
     check(False, f"jellyscope.seerr.sync imports ({error})")
+
+print()
+print("--- (g) the made-up Seerr is not at the door ---")
+door_source = (PACKAGE / "__init__.py").read_text(encoding="utf-8")
+door_imports = {node.module for node in ast.walk(ast.parse(door_source)) if isinstance(node, ast.ImportFrom) and node.level == 1}
+check(not door_imports & set(NOT_AT_THE_DOOR), f"the door imports none of {sorted(NOT_AT_THE_DOOR)} ({sorted(door_imports)})")
+if package is not None:
+    check(not [name for names in NOT_AT_THE_DOOR.values() for name in names if name in getattr(package, "__all__", [])],
+          "their names are not in __all__")
+for file, names in NOT_AT_THE_DOOR.items():
+    try:
+        module = importlib.import_module(f"jellyscope.seerr.{file}")
+    except ImportError as error:
+        check(False, f"{file}.py imports ({error})")
+        continue
+    check(all(callable(getattr(module, name, None)) for name in names), f"{file}.py offers {names}")
+run = subprocess.run([sys.executable, "-c", "import sys, jellyscope.seerr; print('jellyscope.seerr.demo' in sys.modules)"],
+                     cwd=PROJECT, env=os.environ.copy(), capture_output=True, text=True, timeout=180)
+check(run.returncode == 0 and run.stdout.strip() == "False",
+      f"`import jellyscope.seerr` does not load the made-up Seerr ({run.stdout.strip() or run.stderr.strip()[-120:]})")
+
+print()
+print("--- (h) the made-up Seerr uses the other files' public names only ---")
+private = []
+for m in NOT_AT_THE_DOOR:
+    path = PACKAGE / f"{m}.py"
+    if not path.is_file():
+        continue
+    module_tree = tree(path)
+    # The package's files this one imports as modules (`from . import sync`), by the name it uses for them.
+    imported = {alias.asname or alias.name for node in ast.walk(module_tree)
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module is None
+                for alias in node.names if alias.name in FILES}
+    private += [f"{m}: {node.value.id}.{node.attr}" for node in ast.walk(module_tree)
+                if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in imported
+                and node.attr.startswith("_") and not node.attr.startswith("__")]
+    private += [f"{m}: from .{node.module} import {alias.name}" for node in ast.walk(module_tree)
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module in FILES
+                for alias in node.names if alias.name.startswith("_")]
+check(not private, f"{sorted(NOT_AT_THE_DOOR)} reach for no other file's private names ({private})")
 
 print()
 print(f"DONE - failures: {failures}")

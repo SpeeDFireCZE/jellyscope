@@ -12,6 +12,13 @@ restart.
 
 ## Unreleased
 
+### ✨ Features
+
+- Read music, books, languages, disks, *Arr and Seerr through the API
+- Show which API addresses each key right opens
+- Show My statistics in the menu of an administrator who signs in through Jellyfin
+- Split the Network right: traffic without addresses, where people watch from apart
+
 ### 🐛 Fixes
 
 - Security: Log only the names of a message's values when filling it fails
@@ -19,6 +26,7 @@ restart.
 
 ### 🔧 Changes
 
+- Sign in with one button: a local account is checked here, any other name against Jellyfin
 - Update FastAPI to 0.165.0, psycopg to 3.3.9 and twelve other dependencies
 
 ## 1.9.2

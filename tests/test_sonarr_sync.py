@@ -114,7 +114,7 @@ check(re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", r["happened_at"] or "") is
 check(r["title"] == grab["series"]["title"] and r["episode"] == "S%02dE%02d" % (
     grab["episode"]["seasonNumber"], grab["episode"]["episodeNumber"]), f"the series and the episode ({r['title']} {r['episode']})")
 check(r["item_id"] == grab["episodeId"] and r["title_id"] == grab["seriesId"], "the item = the episode, title_id = the series")
-check(r["source"] == "InteractiveSearch" and r["indexer"] == "arr-test" and r["protocol"] == "usenet",
+check(r["source"] == "InteractiveSearch" and r["indexer"] == "test-indexer" and r["protocol"] == "usenet",
       f"the source, the indexer and the protocol (protocol \"1\" = usenet) ({r['source']}, {r['indexer']}, {r['protocol']})")
 check(r["size_bytes"] == int(grab["data"]["size"]) and r["client"] == "Blackhole", "the size (a number from a string) and the client")
 check(r["released_at"] == grab["episode"]["airDateUtc"].replace("T", " ").replace("Z", ""), f"the episode aired ({r['released_at']})")

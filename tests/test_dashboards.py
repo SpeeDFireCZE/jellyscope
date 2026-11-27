@@ -182,7 +182,9 @@ EXPECTED_AREAS = {
     "now_playing": {"now_playing"},
     "library": {"recently_added", "library_total", "library_growth", "codecs",
                  "resolutions", "dynamic_range"},
-    "network": {"live_traffic", "peaks_by_day", "who_streamed", "by_player", "origin"},
+    "network": {"live_traffic", "peaks_by_day", "who_streamed", "by_player"},
+    # Where they watch from (the addresses) has its own sub-area since 27. 11. 2026.
+    "network_origin": {"origin"},
     "languages": {"language_share", "dubbing", "subtitles", "library_languages"},
 }
 invalid_areas = [s.key for s in cards.ALL_CARDS if getattr(s, "area", None) not in access.BY_KEY]

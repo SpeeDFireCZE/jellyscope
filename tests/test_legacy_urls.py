@@ -32,7 +32,7 @@ os.environ["JELLYFIN_API_KEY"] = "test-key"
 
 from _apps import login  # noqa: E402
 from _package import flat_routes  # noqa: E402
-from jellyscope import access, accounts, db, demodata, legacy_urls, web  # noqa: E402
+from jellyscope import access, accounts, db, demo_world, demodata, legacy_urls, web  # noqa: E402
 
 failures = 0
 db.init_db()
@@ -51,12 +51,14 @@ accounts.create("admin", "longpassword", is_admin=True)
 accounts.create("reader", "longpassword")
 admin = login("admin")
 QUERY = "days=30&kind=movies"
+# An artist and an album of the demo's music (demodata._seed_music), by their readable keys (demo_world).
+ARTIST, ALBUM = demo_world.jellyfin_id("demo-int-1"), demo_world.jellyfin_id("demo-alb-1")
 
 print("--- every old address redirects to its new address, query included ---")
 # Path parameters get sample values (the same name on both sides of an entry); every method of an
 # entry is tried - a form's POST keeps its method and body through 308.
 SAMPLE = {"app": "radarr", "item_id": "it-1", "library_id": "5", "title_id": "77", "detail": "1", "x": "3",
-          "y": "4", "kind": "tv", "tmdb_id": "123", "artist_id": "demo-int-1", "album_id": "demo-alb-1"}
+          "y": "4", "kind": "tv", "tmdb_id": "123", "artist_id": ARTIST, "album_id": ALBUM}
 # The pages among the new addresses (not images, downloads or fragments) open for the admin.
 PAGES = {new for _old, new, _methods in legacy_urls.LEGACY_URLS}      # every entry is a page
 
@@ -94,12 +96,13 @@ check("Přehled" in admin.get("/video/overview").text, "the overview is at /vide
 print()
 print("--- the music section is under /music (its old Czech addresses are gone, test_addresses) ---")
 # The demo data have music (demodata._seed_music): an artist and an album with known ids.
-for new in ("/music/overview?days=30", "/music/artist/demo-int-1", "/album/demo-alb-1"):
+for new in ("/music/overview?days=30", f"/music/artist/{ARTIST}", f"/album/{ALBUM}"):
     check(admin.get(new).status_code == 200, f"{new} opens (200)")
 music = admin.get("/music/overview?days=365").text
-check('href="/music/artist/demo-int-' in music and 'href="/album/demo-alb-' in music,
+check(bool(re.search(r'href="/music/artist/[0-9a-f]{32}', music) and re.search(r'href="/album/[0-9a-f]{32}', music)),
       "the Music page links artists to /music/artist/ and albums to /album/")
-check('href="/album/demo-alb-' in admin.get("/history?kind=music").text, "History links a track to its album at /album/")
+check(bool(re.search(r'href="/album/[0-9a-f]{32}', admin.get("/history?kind=music").text)),
+      "History links a track to its album at /album/")
 
 print()
 print("--- no template links to an old address or to / with parameters ---")

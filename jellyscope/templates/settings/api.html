@@ -31,12 +31,15 @@
     </label>
 </div>
 <div class="permissions-selected">
-    {{ permissions_tree(permissions.tree, dashboard_name, css_class="permissions-tree") }}
+    {{ permissions_tree(permissions.tree, dashboard_name, css_class="permissions-tree", addresses=True) }}
     <label class="switch" style="margin-top:14px">
         <input type="checkbox" name="history" {{ 'checked' if permissions.history }}>
         <span>
             {{ _("Playback history") }}
             <span class="hint">{{ _("The /api/v1/history address - who watched what and when. Without this tick the key does not get it.") }}</span>
+            <span class="tree-addresses" data-history-addresses>
+                {%- for endpoint in api_history_endpoints() %}<code>{{ endpoint.path }}</code>{% if not loop.last %}, {% endif %}{% endfor -%}
+            </span>
         </span>
     </label>
     <label class="switch" style="margin-top:8px">

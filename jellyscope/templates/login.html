@@ -56,24 +56,15 @@
             </div>
         </div>
 
-        {# Two buttons, not one clever one: a person knows which password they type, and
-           the app then need not ask two servers. The password of a local account
-           thus never goes to Jellyfin and the other way round.
-
-           The Jellyfin button appears only when the admin switches on sign-in
-           with Jellyfin accounts - otherwise it would offer a way that
-           ends in a refusal anyway. #}
-        <button class="btn primary" type="submit" name="method" value="local"
+        {# One button (27. 11. 2026): the server picks the door by the name (web/login.py, login_submit) - a
+           local account with a password is checked here only, so its password never goes to Jellyfin; any
+           other name is checked against Jellyfin when the admin switched signing in with Jellyfin accounts on. #}
+        <button class="btn primary" type="submit"
                 style="width:100%; justify-content:center">
             {{ _("Sign in") }}
         </button>
 
         {% if jellyfin_login %}
-        <div class="login-or"><span>{{ _("or") }}</span></div>
-        <button class="btn" type="submit" name="method" value="jellyfin"
-                style="width:100%; justify-content:center">
-            {{ _("Sign in with Jellyfin") }}
-        </button>
         {# Quick Connect: no password is typed anywhere. Jellyscope asks
            for a code, the person confirms it in their Jellyfin where they are signed in already -
            so the password does not even pass through our hands. #}
@@ -81,9 +72,10 @@
            the browser should not make anyone fill it in. Without it an empty
            form is not sent at all and a person just stares why nothing
            happens. #}
+        <div class="login-or"><span>{{ _("or") }}</span></div>
         <button class="btn" type="submit" formaction="/login/quick"
                 formnovalidate
-                style="width:100%; justify-content:center; margin-top:10px">
+                style="width:100%; justify-content:center">
             {{ _("Sign in with a code (Quick Connect)") }}
         </button>
         <p class="hint" style="margin-top:10px; text-align:center">

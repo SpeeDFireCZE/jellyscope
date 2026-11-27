@@ -16,7 +16,7 @@ E) the card, its body and the slice;
 F) fixes from a review.
 
 Radarr does not run: the queue is recorded from a real Radarr with a fake download client
-(tests/radarr_responses/queue_stahuje.json, see ~/projects/arr-test/stahovani.py).
+(tests/radarr_responses/queue_stahuje.json).
 
 Spec: docs/superpowers/specs/2026-11-13-zive-stahovani-design.md
 

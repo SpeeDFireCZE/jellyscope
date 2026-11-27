@@ -1202,7 +1202,6 @@
     "Saved. This is what reader accounts see.": "Gespeichert. Das sehen Leser-Konten.",
     "{n} of them replaced an older file. Those are archived and their history is attached.": "{n} davon haben eine ältere Datei ersetzt. Diese sind archiviert, und ihr Verlauf ist angehängt.",
     "or": "oder",
-    "Sign in with Jellyfin": "Mit Jellyfin anmelden",
     "The Jellyfin address starts with http://, so the connection is not encrypted. The API key and any password a viewer types here travel in the clear, and anybody on the way (a router, Wi-Fi, a proxy) can read them. With https:// they cannot.": "Die Jellyfin-Adresse beginnt mit http://, die Verbindung ist also nicht verschlüsselt. Der API-Schlüssel und jedes Passwort, das ein Zuschauer hier eingibt, werden im Klartext übertragen, und jeder auf dem Weg (ein Router, WLAN, ein Proxy) kann sie lesen. Mit https:// geht das nicht.",
     "this title is on the disk": "dieser Titel liegt auf dem Speicher",
     "switch to the file you want to see": "wechsle zu der Datei, die du sehen willst",

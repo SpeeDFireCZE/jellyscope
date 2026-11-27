@@ -18,7 +18,7 @@ D) while the loop measures, neither the *Arr sync task nor a page samples; once 
    it runs but does not measure (switched off, Prowlarr not connected) they do too;
 E) the marker of the cards that refresh by themselves (the "arr" one) moves on a stored change only;
 F) the loop never dies: an unexpected error is logged, it waits a little longer and goes on; cancelled, it ends;
-G) the app's start runs it beside the collector and stops it at the shutdown - not in the demo mode;
+G) the app's start runs it beside the collector and stops it at the shutdown - in the demo mode too (the made-up Prowlarr);
 H) its writes wait for another writer's lock only briefly: a round under it is skipped quietly (not measured); a
    broken table (an older backup restored, before the restart) is one line in the log, not one every round;
 I) a round after the process was frozen (a host suspend, docker pause) does not stretch the sample across the freeze;
@@ -423,7 +423,7 @@ check(sum("measuring the indexers' status failed: the indexers went missing" in 
 check(cancelled and not still, "cancelled, the loop ends - and measures no more")
 
 print()
-print("--- G) the app's start runs it, not in the demo mode ---")
+print("--- G) the app's start runs it, in the demo mode too ---")
 from jellyscope import demodata  # noqa: E402
 from jellyscope.web import app as application  # noqa: E402
 from jellyscope.web import start as web_start  # noqa: E402
@@ -462,7 +462,7 @@ real_config = web_start.config
 web_start.config = dataclasses.replace(real_config, demo_mode=True)
 asyncio.run(start_up())
 web_start.config = real_config
-check(events == [], f"the demo mode has no Prowlarr: no loop ({events})")
+check(events == ["started", "cancelled"], f"the demo mode runs it too: the made-up Prowlarr answers it ({events})")
 collector.run_forever, tasks.run_scheduler = real_collector, real_scheduler
 demodata.keep_refreshing, demodata.keep_live_forever = real_refresh, real_live
 for undo in restores:

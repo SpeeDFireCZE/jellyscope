@@ -21,7 +21,7 @@
     "downloadId": "SABnzbd_nzo_aaa111",
     "eventType": "grabbed",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "releaseGroup": "WRE",
       "downloadClient": "SABnzbd",
       "size": "45000000",
@@ -209,7 +209,7 @@
     "downloadId": "SABnzbd_nzo_aaa111",
     "eventType": "downloadImported",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "downloadClient": "SABnzbd",
       "downloadClientName": "SABnzbd",
       "protocol": "1"
@@ -252,7 +252,7 @@
     "downloadId": "SABnzbd_nzo_bbb222",
     "eventType": "grabbed",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "releaseGroup": "FLACGRP",
       "downloadClient": "SABnzbd",
       "size": "210000000",
@@ -563,7 +563,7 @@
     "downloadId": "SABnzbd_nzo_bbb222",
     "eventType": "downloadImported",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "downloadClient": "SABnzbd",
       "downloadClientName": "SABnzbd",
       "protocol": "1"
@@ -791,7 +791,7 @@
     "downloadId": "SABnzbd_nzo_ddd444",
     "eventType": "grabbed",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "releaseGroup": "WRE",
       "downloadClient": "SABnzbd",
       "size": "98000000",
@@ -842,7 +842,7 @@
     "eventType": "albumImportIncomplete",
     "data": {
       "statusMessages": "[]",
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "downloadClient": "SABnzbd"
     },
     "album": {
@@ -975,7 +975,7 @@
     "downloadId": "SABnzbd_nzo_eee555",
     "eventType": "downloadIgnored",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "downloadClient": "SABnzbd"
     },
     "album": {

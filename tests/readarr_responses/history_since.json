@@ -22,7 +22,7 @@
     "downloadId": "SABnzbd_nzo_aaa111",
     "eventType": "grabbed",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
       "releaseGroup": "WRE",
       "age": "0",
@@ -127,7 +127,7 @@
     "downloadId": "SABnzbd_nzo_bbb222",
     "eventType": "grabbed",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
       "releaseGroup": "AZWGRP",
       "age": "0",
@@ -475,7 +475,7 @@
     "downloadId": "SABnzbd_nzo_ddd444",
     "eventType": "grabbed",
     "data": {
-      "indexer": "arr-test",
+      "indexer": "test-indexer",
       "nzbInfoUrl": "http://127.0.0.1:8990/details/x",
       "releaseGroup": "WRE",
       "age": "0",
@@ -801,7 +801,7 @@
       "message": "Ignored by hand",
       "releaseGroup": "WRE",
       "size": "3000000",
-      "indexer": "arr-test"
+      "indexer": "test-indexer"
     },
     "book": {
       "id": 21,

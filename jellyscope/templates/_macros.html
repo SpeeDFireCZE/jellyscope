@@ -603,8 +603,9 @@
    all places (the Account permissions window, the reader group, Jellyfin viewers,
    the root key), so a new area is not forgotten in one of them.
    `form` = the form's id when the tree stands outside it (the attribute form=);
-   `css_class` = an extra class by which the page's script finds the tree. #}
-{% macro permissions_tree(tree, dashboard_name, form="", css_class="") %}
+   `css_class` = an extra class by which the page's script finds the tree;
+   `addresses` = under every area the API addresses it opens (the root key's tree - api_endpoints). #}
+{% macro permissions_tree(tree, dashboard_name, form="", css_class="", addresses=False) %}
 <div class="tree{{ ' ' ~ css_class if css_class }}">
     {# Every section of the menu is a heading over its areas, and its areas are one group -
        a screen reader says whose "Overview" it is. #}
@@ -621,6 +622,18 @@
         <span>
             {{ area_name(area) }}
             <span class="hint">{{ _(area.description) }}</span>
+            {% if addresses %}
+            {% set opened = api_endpoints_for_area(area.key) %}
+            {% if opened %}
+            <span class="tree-addresses" data-area-addresses="{{ area.key }}">
+                {%- for endpoint in opened %}<code>{{ endpoint.path | replace("{item_id}", "{id}") }}</code> {{ _(endpoint.label) }}{% if not loop.last %}<br>{% endif %}{% endfor -%}
+            </span>
+            {% elif api_sub_area_note(area.key) %}
+            <span class="tree-addresses">{{ _(api_sub_area_note(area.key)) }}</span>
+            {% elif area.parent and area.key.endswith("_who") %}
+            <span class="tree-addresses">{{ _("Adds the viewers' names to the addresses of the area above.") }}</span>
+            {% endif %}
+            {% endif %}
         </span>
     </label>
     {% if area.section and (loop.last or loop.nextitem.section != area.section) %}</div>{% endif %}

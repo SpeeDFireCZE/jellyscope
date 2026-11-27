@@ -10,8 +10,8 @@ A) the client: the key only in a header, errors without the key; from the histor
 B) settings and the connection test: an empty key keeps the stored one, the key is secret, the test
    recognises that Prowlarr is not at the address.
 
-The app does not run: the answers are recorded from a real Prowlarr 2.7.0 (tests/prowlarr_responses/,
-see ~/projects/arr-test/nahrat_prowlarr.py). The places with keys are replaced in the recordings by
+The app does not run: the answers are recorded from a real Prowlarr 2.7.0 (tests/prowlarr_responses/;
+paths and names in them are neutral). The places with keys are replaced in the recordings by
 the marks `TAJNY-KLIC-…` - the client must not read them.
 
 Spec: docs/superpowers/specs/2026-11-15-prowlarr-design.md

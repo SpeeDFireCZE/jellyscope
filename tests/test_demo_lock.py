@@ -208,6 +208,24 @@ os.environ["DATABASE_PATH"] = _original
 config.load_config(reload=True)
 db.database_config(reload=True)
 
+# The container's log is run.py's printout (docker compose logs): it names the made-up apps with their records, as
+# demo.py does, and says that Jellyfin is made up too - not an address to try.
+import re  # noqa: E402
+import subprocess  # noqa: E402
+
+_third = Path(_tempfile.mkdtemp())
+started = subprocess.run(
+    [sys.executable, "-c", "import run, uvicorn; uvicorn.run = lambda *a, **k: None; run.main()"], cwd=PROJECT,
+    env={**os.environ, "JELLYSCOPE_HOME": str(_third), "DATABASE_PATH": str(_third / "data" / "demo.db"),
+         "JELLYSCOPE_DEMO": "1"}, capture_output=True, text=True, timeout=300)
+printout = started.stdout
+apps_line = next((line for line in printout.splitlines() if line.startswith("Made-up apps:")), "")
+jellyfin_line = next((line for line in printout.splitlines() if line.startswith("Jellyfin:")), "")
+check(started.returncode == 0 and re.fullmatch(r"Made-up apps:\s+Sonarr \(\d+ records\), Radarr \(\d+ records\), .*Seerr \(\d+ records\)",
+                                               apps_line) is not None,
+      f"run.py's printout names the made-up apps with their records ({apps_line!r}, {started.stderr[-200:]!r})")
+check("made up" in jellyfin_line, f"and the made-up Jellyfin as made up ({jellyfin_line!r})")
+
 print()
 print("DONE - failures:", failures)
 sys.exit(1 if failures else 0)

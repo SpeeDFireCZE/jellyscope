@@ -39,7 +39,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 
 from _apps import read_session  # noqa: E402
-from jellyscope import access, accounts, api, applog, db, jellyfin, web  # noqa: E402
+from jellyscope import access, accounts, api, api_endpoints, applog, db, jellyfin, web  # noqa: E402
 
 failures = 0
 
@@ -312,10 +312,12 @@ for area in access.AREAS:
     db.set_setting(access.area_key(access.VIEWER, area), "1")
 viewer_key = api.create_token("Mobil", viewer()["id"])
 for path in get_paths:
-    address = path.replace("{item_id}", "i-0")
+    address = path.replace("{item_id}", "i-0").replace("{app}", ((api_endpoints.by_path(path) or api_endpoints.ENDPOINTS[0]).apps or ("sonarr",))[0])
     response = call(viewer_key["token"], address)
     leak = [s for s in (OTHER_NAME, OTHER_ID, OTHER_IP) if s in response.text]
-    check(response.status_code == 200 and not leak,
+    # No *Arr app nor Seerr is connected here: their addresses answer 404 app_not_connected - no data, nothing to leak.
+    not_connected = response.status_code == 404 and response.json().get("error") == "app_not_connected"
+    check((response.status_code == 200 or not_connected) and not leak,
           f"a viewer {address}: {response.status_code}, without somebody else's data {leak or ''}")
 
 # Somebody else's `user` used to be quietly rewritten to the viewer themselves. Now it is 403:
@@ -740,8 +742,17 @@ check("GET /api/v1/bandwidth" in admin_guide and "GET /api/v1/summary" in admin_
       "the administrator sees all addresses in the window")
 # The list in the window is written by hand (for the labels) - it must not drift apart from
 # what the API really has. Every address of ADDRESS_AREAS has to be in it.
+# A reader with "who listened" but without "who watched" has no history: its key gets 403 at every address with people's
+# plays (History's own gate, access.sees_history) - so the guide must not offer them (code review 27. 11.).
+accounts.save_permissions(account("reader")["id"], access.pack_permissions(["library", "music", "music_who"], False))
+db.forget_settings()
+offered = api.allowed_paths(account("reader"))
+check("/api/v1/history" not in offered and "/api/v1/music/history" not in offered and "/api/v1/music/summary" in offered,
+      f"the guide of a reader without the history offers no history address ({sorted(offered)})")
+accounts.save_permissions(account("reader")["id"], None)
+db.forget_settings()
 missing = [a for a in api.allowed_paths(account("admin"))
-           if "GET " + a.replace("{id}", "&lt;id&gt;") not in admin_guide]
+           if "GET " + a.replace("{id}", "&lt;id&gt;").replace("{app}", "&lt;app&gt;") not in admin_guide]
 check(not missing, f"the guide's window knows every address of the API ({missing})")
 # Filtering and sorting: the notation, examples and the fields of the addresses. The fields
 # are taken from api.LISTS - the same description the query is checked by - so the

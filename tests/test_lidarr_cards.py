@@ -161,18 +161,18 @@ check(tile(s, "Upgrady") == str(sum(r["upgrade_count"] for r in additions)) == "
 check(tile(s, "Upgradů na album") == "1,0" and tile(s, "Upgradovaná alba") == "1",
       f"Review Focus 1: three replaced tracks of one album = one upgrade, per album 1,0 ({tile(s, 'Upgradů na album')})")
 check("<h2>Lidarr · " not in s and "card-group" not in s, "on its own tab the cards have no application prefix")
-check('class="heatmap"' in card_html(s, "arr_lidarr_when") and "arr-test" in card_html(s, "arr_lidarr_indexers"),
+check('class="heatmap"' in card_html(s, "arr_lidarr_when") and "test-indexer" in card_html(s, "arr_lidarr_indexers"),
       "the heatmap and the indexer are in their cards")
 check("Has missing tracks" in card_html(s, "arr_lidarr_queue") and "Download failed" in card_html(s, "arr_lidarr_queue")
       and "Indexers unavailable due to failures" in card_html(s, "arr_lidarr_health"),
       "the administrator: the queue's messages and the application's warning in their cards")
 check("ruční výběr" in card_html(s, "arr_lidarr_how_all"), "how it was downloaded, in Czech")
-# Indexer reliability over the recorded history: every grab has a download_id - arr-test brought three albums,
+# Indexer reliability over the recorded history: every grab has a download_id - test-indexer brought three albums,
 # the tracker failed once, and that comes first.
 reliability = card_html(s, "arr_lidarr_indexer_reliability")
 reliability_rows = [(re.search(r'<td class="strong[^"]*">([^<]*)', tr).group(1).strip(), re.findall(r'<td class="num[^"]*">([^<]*)</td>', tr))
                     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", reliability, re.S) if "<td" in tr]
-check(reliability_rows == [("tracker", ["1", "0", "1", "0", "0,0 %"]), ("arr-test", ["3", "3", "0", "0", "100,0 %"])],
+check(reliability_rows == [("tracker", ["1", "0", "1", "0", "0,0 %"]), ("test-indexer", ["3", "3", "0", "0", "100,0 %"])],
       f"Spolehlivost indexerů: downloads, imported, failed, cannot be matched, success rate ({reliability_rows})")
 check("<th class=\"num\">Stahování</th>" in reliability and "několika alby je jedno stahování" in reliability,
       "the first column counts downloads and the note says one release is one download")

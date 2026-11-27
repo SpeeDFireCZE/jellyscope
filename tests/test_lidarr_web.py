@@ -107,7 +107,7 @@ check(all(f"<h2>{t}</h2>" in s for t in ("Teď v aplikaci", "Co přibylo", "Rych
       "all five sections")
 check('class="heatmap"' in s, "the imports' heatmap")
 check("tajny-klic" not in s, "the key is not in the page")
-check("Hvězdy" in s and "Kryštof" in s and "arr-test" in s, "the albums' and artists' names and the indexer from the history")
+check("Hvězdy" in s and "Kryštof" in s and "test-indexer" in s, "the albums' and artists' names and the indexer from the history")
 check("Has missing tracks" in s, "the queue: an item with a warning and its text")
 check("Indexers unavailable due to failures" in s, "the warning from the application's health")
 check("ruční výběr" in s, "how it was downloaded, in Czech")

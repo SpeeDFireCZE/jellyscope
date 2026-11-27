@@ -7,15 +7,15 @@ import) are grouped by the album and the day (UTC). The data is the recorded his
 (tests/lidarr_responses/history_since.json) synced by `fill_lidarr()`; the period is November 2026, the
 app's zone UTC. The numbers below are counted by hand from the recording:
 
-    grab 101   11-12 20:50:18  album 11  MP3-320       45 MB  Rss                  arr-test  WRE      SABnzbd  usenet  (aaa111)
+    grab 101   11-12 20:50:18  album 11  MP3-320       45 MB  Rss                  test-indexer  WRE      SABnzbd  usenet  (aaa111)
     imports    11-12 21:00:05..21:02:05   3 tracks of 15 MB (aaa111)           = import A1: 3 tracks, 45 MB
-    grab 106   11-14 08:10:00  album 11  FLAC          210 MB InteractiveSearch    arr-test  FLACGRP  SABnzbd  usenet  (bbb222)
+    grab 106   11-14 08:10:00  album 11  FLAC          210 MB InteractiveSearch    test-indexer  FLACGRP  SABnzbd  usenet  (bbb222)
     deletes    11-14 09:00:00..02  3 tracks, reason Upgrade (MP3-320)
     imports    11-14 09:00:10..12  3 tracks of 70 MB (bbb222)                  = import A2: 3 tracks, 210 MB, an upgrade
     imports    11-15 10:00:00..01  album 12, 2 tracks of 90 MB, FLAC 24bit, NO download_id
                                                                                 = import A3: 2 tracks, 180 MB (manual)
     grab 116   11-16 12:00     album 22  AAC-256 (tor_hash_ccc333), failed 12:30 - no import
-    grab 118   11-17 12:00     album 22  MP3-320 UserInvokedSearch arr-test WRE SABnzbd usenet (ddd444)
+    grab 118   11-17 12:00     album 22  MP3-320 UserInvokedSearch test-indexer WRE SABnzbd usenet (ddd444)
     imports    11-17 13:00:00..01   2 tracks of 20 MB                         = import A4: 2 tracks, 40 MB
     (downloadImported, albumImportIncomplete, downloadIgnored, renamed, retagged: not imports)
 
@@ -30,13 +30,13 @@ What follows from it and the test guards:
 - download time (grab -> the first imported track of the same download_id): A1 20:50:18 -> 21:00:05 = 587 s,
   A2 08:10:00 -> 09:00:10 = 3010 s, A4 12:00:00 -> 13:00:00 = 3600 s; A3 has no grab. Median 3010, p90 at rank
   0.9 * (3 - 1) = 1.8: 3010 + 0.8 * (3600 - 3010) = 3482;
-- sources over the four imports: indexer arr-test x3 (45 + 210 + 40 = 295 MB) and "-" x1 (180 MB); groups WRE x2
+- sources over the four imports: indexer test-indexer x3 (45 + 210 + 40 = 295 MB) and "-" x1 (180 MB); groups WRE x2
   (85 MB), FLACGRP x1 (210 MB), "-" x1 (180 MB); clients SABnzbd main x3 (the import's name), "-" x1; protocols usenet x3, "-" x1; qualities
   MP3-320 x2 (85 MB), FLAC x1 (210 MB), FLAC 24bit x1 (180 MB);
 - upgrades: one (album 11, MP3-320 -> FLAC), counted once though three tracks were replaced; the grab that brought it
   was a manual pick; all four grabs of the period: Rss + Search = 2 automatic, 1 manual, 1 user's search;
 - failures: one (grab 116);
-- indexer reliability: arr-test 3 grabs, 3 imported; tracker 1 grab, 1 failed - further hand-made grabs add a grab
+- indexer reliability: test-indexer 3 grabs, 3 imported; tracker 1 grab, 1 failed - further hand-made grabs add a grab
   still downloading at the period's end, a Blackhole grab without download_id and a grab before the period; a
   release of two albums (a grab per album, one download_id) is one download.
 
@@ -179,7 +179,7 @@ print()
 print("--- Sources and quality ---")
 sources = stats.lidarr_sources(PERIOD)
 check(set(sources) == {"indexers", "groups", "clients", "protocols", "qualities"}, f"the groups of sources (no resolutions for music) ({sorted(sources)})")
-check([(x["name"], x["count"], x["size_bytes"]) for x in sources["indexers"]] == [("arr-test", 3, 295 * MB), ("–", 1, 180 * MB)],
+check([(x["name"], x["count"], x["size_bytes"]) for x in sources["indexers"]] == [("test-indexer", 3, 295 * MB), ("–", 1, 180 * MB)],
       f"indexers: from the grab of the import; the manual import has none ({sources['indexers']})")
 check([(x["name"], x["count"], x["size_bytes"]) for x in sources["groups"]] == [("WRE", 2, 85 * MB), ("FLACGRP", 1, 210 * MB), ("–", 1, 180 * MB)],
       f"release groups ({sources['groups']})")
@@ -211,22 +211,22 @@ def reliability(period) -> list[tuple]:
             for x in stats.lidarr_indexer_reliability(period)]
 
 
-# From the recording: arr-test grabbed aaa111, bbb222 and ddd444 (all three imported as albums), tracker ccc333 (failed).
-check(reliability(PERIOD) == [("tracker", 1, 0, 1, 0, 0.0), ("arr-test", 3, 3, 0, 0, 1.0)],
+# From the recording: test-indexer grabbed aaa111, bbb222 and ddd444 (all three imported as albums), tracker ccc333 (failed).
+check(reliability(PERIOD) == [("tracker", 1, 0, 1, 0, 0.0), ("test-indexer", 3, 3, 0, 0, 1.0)],
       f"an album's grab is imported or failed by its download_id; the most failures first ({reliability(PERIOD)})")
-insert(1100, "grabbed", "2026-11-30 23:50:00", "L", None, album=90, source="Rss", indexer="arr-test")
+insert(1100, "grabbed", "2026-11-30 23:50:00", "L", None, album=90, source="Rss", indexer="test-indexer")
 insert(1101, "trackFileImported", "2026-12-01 00:10:00", "L", 9001, album=90, size=MB)
 insert(1102, "grabbed", "2026-11-26 10:00:00", None, None, album=91, source="ReleasePush", indexer="Other")
 insert(1103, "trackFileImported", "2026-11-26 10:10:00", "Blackhole_z", 9101, album=91, size=MB)
 insert(1104, "grabbed", "2026-10-30 10:00:00", "P", None, album=92, source="Rss", indexer="tracker")
 insert(1105, "downloadFailed", "2026-11-01 01:00:00", "P", None, album=92)
 rows = reliability(PERIOD)
-check(("arr-test", 4, 3, 0, 0, 1.0) in rows,
+check(("test-indexer", 4, 3, 0, 0, 1.0) in rows,
       f"a grab still downloading at the period's end (imported only after it) is neither a success nor a failure ({rows})")
 check(("Other", 1, 0, 0, 1, None) in rows,
       f"a grab without download_id (Blackhole) cannot be matched and lowers no success rate ({rows})")
 check(("tracker", 1, 0, 1, 0, 0.0) in rows, "a grab before the period does not count, not even with its failure in the period")
-check([r[0] for r in rows] == ["tracker", "arr-test", "Other"],
+check([r[0] for r in rows] == ["tracker", "test-indexer", "Other"],
       f"sorted by failures, then the lowest success rate; nothing finished comes last ({[r[0] for r in rows]})")
 analysis, before = stats.lidarr_events(PERIOD), stats.lidarr_indexer_reliability(PERIOD)
 insert(1106, "grabbed", "2026-11-27 15:00:00", "S", None, album=95, source="Rss", indexer="Later")

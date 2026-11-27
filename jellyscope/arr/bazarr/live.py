@@ -118,7 +118,10 @@ async def _load(url: str, key: str,
     else:
         state["limited_count"] = integer(badges.get("providers"), None)
     if health is not None:
-        state["health"] = [{"what": str(h.get("object") or ""), "problem": str(h.get("issue") or "")} for h in health]
+        # Also in the shape of the other apps (type, message) for the API (api_arr.health): Bazarr has no type.
+        state["health"] = [{"what": str(h.get("object") or ""), "problem": str(h.get("issue") or ""), "type": "",
+                            "message": ": ".join(part for part in (str(h.get("object") or ""), str(h.get("issue") or "")) if part)}
+                           for h in health]
         state["warnings"] = len(state["health"])
     else:
         state["warnings"] = integer(badges.get("status"), None)

@@ -41,6 +41,8 @@ ended. See record_use().
 """
 from __future__ import annotations
 
+import sys
+
 import functools
 import hashlib
 import json
@@ -52,8 +54,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from . import (access, accounts, api_query, applog, db, dialect, formatting, i18n, insights,
-               scanner, stats)
+from . import (access, accounts, api_endpoints, api_query, applog, db, dialect, formatting, i18n,
+               insights, scanner, stats)
 from .api_query import ApiError
 
 log = logging.getLogger("jellyscope.api")
@@ -86,24 +88,11 @@ router = APIRouter(prefix="/api/v1", tags=["api"])
 #
 # An address missing here is closed to everyone but the administrator - so a
 # new route without an area does not open by mistake. A test guards that every
-# one is here.
+# one is here. Made from the one list of addresses (api_endpoints), plus the index, which every key may
+# open; read by the rights check, key_areas and the rights matrix test.
 ADDRESS_AREAS: dict[str, str | None] = {
-    "/api/v1": None,
-    "/api/v1/": None,
-    "/api/v1/libraries": "library",
-    "/api/v1/library": "library",
-    "/api/v1/recently-added": "library",
-    "/api/v1/item/{item_id}": "library",
-    "/api/v1/top-items": "charts",
-    "/api/v1/least-played": "charts",
-    "/api/v1/unwatched": "charts",
-    "/api/v1/insights": "charts",
-    "/api/v1/summary": "overview",
-    "/api/v1/play-methods": "overview",
-    "/api/v1/now-playing": "now_playing",
-    "/api/v1/users": "users",
-    "/api/v1/history": None,
-    "/api/v1/bandwidth": "network",
+    **{path: None for path in api_endpoints.INDEX_PATHS},
+    **{endpoint.path: endpoint.area for endpoint in api_endpoints.ENDPOINTS},
 }
 
 
@@ -124,6 +113,10 @@ def key_areas() -> frozenset[str]:
 
 # Done once: the setting says the conversion below ran (any non-empty value).
 CONVERSION_KEY_AREAS = "conversion_key_areas"
+# The areas a root key could use when the conversion was written (16. 11. 2026, up to 1.9.x): the conversion keeps
+# only these. Not key_areas(): that grows with every version that gives an area an address (languages, music, *Arr,
+# Seerr on 27. 11. 2026), and an old key would get them without the administrator ever seeing them ticked.
+KEY_AREAS_UNTIL_1_9 = frozenset({"charts", "library", "library_who", "network", "now_playing", "overview", "users"})
 
 
 def drop_unusable_key_areas() -> bool:
@@ -142,11 +135,36 @@ def drop_unusable_key_areas() -> bool:
             rights = key_permissions(row["permissions"])
             if rights is None:
                 continue
-            packed = pack_key_permissions(rights["areas"], rights["anonymise"], rights["history"])
+            packed = pack_key_permissions(set(rights["areas"]) & KEY_AREAS_UNTIL_1_9, rights["anonymise"], rights["history"])
             if packed != row["permissions"]:
                 conn.execute("UPDATE api_tokens SET permissions = ? WHERE id = ?", (packed, row["id"]))
         conn.commit()
     db.set_setting(CONVERSION_KEY_AREAS, "1")
+    return True
+
+
+CONVERSION_NETWORK_KEYS = "conversion_network_origin_keys"
+
+
+def add_network_origin_to_keys() -> bool:
+    """One-off at start, after drop_unusable_key_areas: a root key with Network gets "...where they watch from" too.
+
+    The countries of /api/v1/bandwidth belong to the sub-area since 27. 11. 2026 (access.split_network_rights does the
+    groups and accounts); a key that had them keeps them until the administrator unticks it. True = it ran now.
+    """
+    if db.get_setting(CONVERSION_NETWORK_KEYS, ""):
+        return False
+    rows = db.query_all("SELECT id, permissions FROM api_tokens WHERE account_id IS NULL AND permissions IS NOT NULL")
+    with db.connect() as conn:
+        for row in rows:
+            rights = key_permissions(row["permissions"])
+            if rights is None or "network" not in rights["areas"]:
+                continue
+            conn.execute("UPDATE api_tokens SET permissions = ? WHERE id = ?",
+                         (pack_key_permissions(set(rights["areas"]) | {"network_origin"}, rights["anonymise"],
+                                               rights["history"]), row["id"]))
+        conn.commit()
+    db.set_setting(CONVERSION_NETWORK_KEYS, "1")
     return True
 
 
@@ -466,9 +484,10 @@ def verify_token(request: Request) -> dict[str, Any]:
 
 def _may(token: dict[str, Any], path: str) -> bool:
     """May the key's owner open an address with this route path?"""
-    # The history has no area of its own: for an account access.sees_history
-    # holds (computed in verify_token), a root key with rights has it only when ticked.
-    if path == "/api/v1/history" and not token.get("history", True):
+    # An address with people's plays (api_endpoints: needs_history) needs the history: for an account
+    # access.sees_history holds (computed in verify_token), a root key with rights has it only when ticked.
+    endpoint = api_endpoints.by_path(path)
+    if endpoint is not None and endpoint.needs_history and not token.get("history", True):
         return False
     if token["role"] == access.ADMIN:
         return True
@@ -512,7 +531,9 @@ def allowed_paths(account: dict[str, Any] | None) -> list[str]:
     The same conditions as may_open_path(), only without a key in hand. The
     index (`/api/v1/`) is here once, even though two paths lead to it.
     """
-    token = {"role": access.role(account), "account": account}
+    # The history as verify_token computes it for an account's key - otherwise the guide would offer the addresses with
+    # people's plays to an account whose key gets 403 there.
+    token = {"role": access.role(account), "account": account, "history": access.sees_history(account)}
     return [path.replace("{item_id}", "{id}") for path in ADDRESS_AREAS
             if path != "/api/v1" and _may(token, path)]
 
@@ -623,24 +644,11 @@ def index(token: dict[str, Any] = Depends(may_open_path),
 
     return {
         "jellyscope": __version__,
-        "endpoints": {address: description for address, description in {
-            "/api/v1/summary": "watching over a period (?days=30)",
-            "/api/v1/now-playing": "what is playing right now",
-            "/api/v1/library": "size of the library, growth and free space",
-            "/api/v1/libraries": "every library: items, size, codecs",
-            "/api/v1/top-items": "most watched titles (?days=30&limit=10&kind=both|movies|series)",
-            "/api/v1/least-played": "least played files, never played first; within the same play count biggest first, or by date added with order=oldest|newest (?days=365&limit=25&min_size_mb=0&order=size)",
-            "/api/v1/unwatched": "files nobody watched over the period, and how much space they take (?days=365&limit=25)",
-            "/api/v1/users": "viewers with watch time over the period (?days=30)",
-            "/api/v1/history": "recent playbacks (?days=30&limit=50&user=<id>&kind=both|movies|series)",
-            "/api/v1/recently-added": "what came into the library last (?limit=18)",
-            "/api/v1/play-methods": "direct play vs. transcode, and the clients used (?days=30)",
-            "/api/v1/insights": "transcode offenders, upgrade candidates, oversized and never finished titles, conversion speed in fps (?days=30&limit=15)",
-            "/api/v1/bandwidth": "how much data went out and where to (?days=30)",
-            "/api/v1/item/{id}": "one title: file, versions and who watched it",
-        }.items() if _may(token, address.replace("{id}", "{item_id}"))},
+        "endpoints": {endpoint.path.replace("{item_id}", "{id}"): endpoint.summary
+                      for endpoint in api_endpoints.ENDPOINTS if _may(token, endpoint.path)},
         "note": "Read-only. Authenticate with: Authorization: Bearer <token>. "
-                "Every list takes filters, sort and limit (see filtering and lists); "
+                "Every list named under lists takes filters, sort and limit (see filtering); the live lists "
+                "of the *Arr apps and Seerr (short, as the app says them now) take none; "
                 "a malformed request is a 400 with an error code, never default data.",
         "filtering": api_query.help_text(),
         "lists": {address: lists for address, lists in LISTS.items()
@@ -926,6 +934,24 @@ def viewers(token: dict[str, Any] = Depends(may_open_path),
     return {"days": days, "users": api_query.apply(rows, *query.for_list("users"), limit)}
 
 
+def history_user(token: dict[str, Any], query: api_query.Query) -> str | None:
+    """Whose plays a history address returns: the viewer asked for (`user`), a Jellyfin viewer's key only its own.
+
+    One rule for every history of the API (playbacks, listens, readings). An empty `user=` the guide showed as
+    "everyone" is taken as without it. With hidden names only a substitute id, as the API itself returns
+    (`skryto-2`); the real id of another viewer finds nothing - otherwise it would tell who "Viewer 2" is.
+    Another viewer's history for a viewer's key is a 403 - it used to be quietly rewritten to the own viewer
+    and the tool believed it had someone else's data.
+    """
+    who = None if query.values.get("user") == "" else api_query.identifier(query, "user")
+    who = access.viewer_from_address(who, token.get("account"))
+    own = access.own_viewer(token.get("account"))
+    if own and who and accounts.bare_id(who) != accounts.bare_id(own):
+        raise ApiError(403, "own_history_only",
+                       "This key sees only the history of its own account.", "user")
+    return own or who
+
+
 @router.get("/history")
 def history(token: dict[str, Any] = Depends(may_open_path),
             query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
@@ -950,21 +976,12 @@ def history(token: dict[str, Any] = Depends(may_open_path),
     # The history filters by DAYS in the local time (the way the History page
     # does), not by moments - hence a date, not a timestamp.
     since = (date.today() - timedelta(days=days - 1)).isoformat()
-    # An empty `user=` the guide showed as "everyone" - it is taken as without it.
-    who = None if query.values.get("user") == "" else api_query.identifier(query, "user")
-    # With hidden names only a substitute id, as the API itself returns
-    # (`skryto-2`); the real id of another viewer finds nothing - otherwise it
-    # would tell who "Viewer 2" is.
-    who = access.viewer_from_address(who, token.get("account"))
-    own = access.own_viewer(token.get("account"))
-    if own and who and accounts.bare_id(who) != accounts.bare_id(own):
-        raise ApiError(403, "own_history_only",
-                       "This key sees only the history of its own account.", "user")
+    user = history_user(token, query)
     # Music and books only with "who listened" and "who read", like on the History page.
     hidden = _hidden_kinds(token)
     filters, sorts = query.for_list("playbacks")
     if not (filters or sorts):
-        rows = _for_owner(token, stats.history(limit=limit, user_id=own or who,
+        rows = _for_owner(token, stats.history(limit=limit, user_id=user,
                                                kind=kind, since=since, hidden_kinds=hidden))
         plays = [_plays(r) for r in rows]
     else:
@@ -972,7 +989,7 @@ def history(token: dict[str, Any] = Depends(may_open_path),
         # filter lets through. Without a sort the first `limit` matches are
         # enough - the order is given by the query.
         plays = []
-        for batch in stats.history_for_api(user_id=own or who, kind=kind, since=since,
+        for batch in stats.history_for_api(user_id=user, kind=kind, since=since,
                                            conditions=_history_prefilter(filters), hidden_kinds=hidden):
             plays += api_query.apply([_plays(r) for r in _for_owner(token, batch)],
                                      filters, [], None)
@@ -1206,12 +1223,17 @@ def _resolution(row: dict[str, Any]) -> str | None:
 
 
 @router.get("/bandwidth")
-def traffic(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
+def traffic(token: dict[str, Any] = Depends(may_open_path),
+            query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
     """How much data went out and where to - a summary, without single people's addresses.
 
-    The filter narrows only the list of countries; the summary numbers are from all plays.
+    The filter narrows only the list of countries; the summary numbers are from all plays. Where from (home against
+    internet, the countries) only with "...including where they watch from" (network_origin, 27. 11. 2026) - the card
+    "Where they watch from" holds the same; without it null, and a filter on the countries is not applied (it would
+    only tell what is there).
     """
     days = _query_days(query)
+    where_from = token["role"] == access.ADMIN or access.sees(token["role"], "network_origin", token["account"])
     limit = _query_limit(query, None, 500)
     overview = stats.bandwidth_summary(days)
     origins = stats.watching_locations(days)["groups"]
@@ -1226,12 +1248,12 @@ def traffic(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
         "average_mbit": float(overview.get("average_mbit") or 0),
         "playbacks": int(overview.get("playbacks") or 0),
         # Home / from the internet / unknown from where - a summary, no addresses.
-        "origin": {
+        "origin": None if not where_from else {
             "home": _origin(origins["at_home"]),
             "internet": _origin(origins["internet"]),
             "unknown": _origin(origins["unknown_origin"]),
         },
-        "countries": api_query.apply([{
+        "countries": None if not where_from else api_query.apply([{
             "country": z.get("label"),
             "code": z.get("code"),
             "plays": int(z.get("plays") or 0),
@@ -1253,11 +1275,12 @@ def _origin(group: dict[str, Any]) -> dict[str, Any]:
 def title(item_id: str,
           query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
     """One title: the file, its versions and who watched it."""
-    # An id from Jellyfin is hex, in the demo "demo-ep-0-1" - letters, digits,
-    # a dash, an underscore. Anything else is a typo or an attempt and the
-    # answer is the same as for one that does not exist: what exactly is wrong
-    # is not said. The id goes into the query as a parameter, so this is not a
-    # defence against SQL, but against working with nonsense at all.
+    # An id from Jellyfin is hex (the demo's too), an imported one sometimes
+    # with dashes - letters, digits, a dash, an underscore. Anything else is a
+    # typo or an attempt and the answer is the same as for one that does not
+    # exist: what exactly is wrong is not said. The id goes into the query as
+    # a parameter, so this is not a defence against SQL, but against working
+    # with nonsense at all.
     if not item_id or len(item_id) > 64 or not all(
             c.isalnum() or c in "-_" for c in item_id):
         raise ApiError(404, "not_found", "Item not found.")
@@ -1370,3 +1393,14 @@ def library(query: api_query.Query = Depends(request_query)) -> dict[str, Any]:
             "days_until_full": growth.get("days_left"),
         },
     }
+
+
+# The addresses of the other sections live in modules of their own (api.py does not grow); each brings its
+# known parameters and lists and puts its routes on this router, with this module's dependencies.
+from . import api_arr, api_books, api_library, api_music, api_seerr  # noqa: E402 - at the end: they use this module's dependencies
+
+for _section in (api_music, api_books, api_library, api_arr, api_seerr):
+    KNOWN_PARAMS.update(_section.PARAMS)
+    LISTS.update(_section.LISTS)
+    _section.install(sys.modules[__name__])
+

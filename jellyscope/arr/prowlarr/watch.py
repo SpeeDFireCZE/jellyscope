@@ -2,9 +2,9 @@
 
 The *Arr sync task samples once an hour and a page at most every ten minutes, and only when somebody looks: an outage
 shorter than that is missed and the end of a longer one is known only within the hour. So the app runs this loop beside
-the playback collector (web/start.py, not in the demo mode): every N seconds (Settings → *Arr, Prowlarr's form; 60 by
-default) it asks Prowlarr only what a sample needs - the indexers and who it leaves out (live.status_sample, two
-requests with the live time limit) - and keeps the answer (samples.py):
+the playback collector (web/start.py; in the demo mode against the made-up Prowlarr): every N seconds (Settings → *Arr,
+Prowlarr's form; 60 by default) it asks Prowlarr only what a sample needs - the indexers and who it leaves out
+(live.status_sample, two requests with the live time limit) - and keeps the answer (samples.py):
 
 * a change of the state (an indexer starts or stops being left out, an indexer added, removed, switched on or off) is
   stored at the round that sees it, as a new sample, and moves the marker of the cards that refresh by themselves;

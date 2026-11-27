@@ -78,7 +78,7 @@
      }
     ],
     "year": 2011,
-    "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+    "path": "/media/tv/Game of Thrones",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -171,7 +171,7 @@
    "protocol": "usenet",
    "downloadClient": "Blackhole",
    "downloadClientHasPostImportCategory": false,
-   "outputPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+   "outputPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
    "episodeHasFile": false,
    "sizeleft": 0,
    "timeleft": "00:00:00",

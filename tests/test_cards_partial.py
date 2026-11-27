@@ -47,7 +47,7 @@ os.environ.pop("JELLYSCOPE_EVENT_DATE", None)
 from fastapi.testclient import TestClient  # noqa: E402
 
 from _package import substitute  # noqa: E402
-from jellyscope import access, accounts, cards, db, demodata, seerr, stats  # noqa: E402
+from jellyscope import access, accounts, cards, db, demo_world, demodata, seerr, stats  # noqa: E402
 from jellyscope.arr import bazarr, prowlarr, sonarr  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
@@ -68,7 +68,7 @@ accounts.create("admin", "longpassword", is_admin=True)
 accounts.create("reader", "longpassword")
 accounts.create("viewer", "longpassword")
 with db.connect() as conn:
-    conn.execute("UPDATE accounts SET jellyfin_user_id = 'demo-u2' WHERE username = 'viewer'")
+    conn.execute("UPDATE accounts SET jellyfin_user_id = ? WHERE username = 'viewer'", (demo_world.jellyfin_id("demo-u2"),))
     conn.commit()
 for app_module in (sonarr, bazarr, prowlarr, seerr):
     app_module.save_settings(True, "http://127.0.0.1:1", "test-key")

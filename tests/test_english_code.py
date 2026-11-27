@@ -646,7 +646,7 @@ CLASS_FIELDS: dict[str, tuple[str, set[str]]] = {
         "sync_state", "event_count", "delete_downloaded_data", "cards", "card_key", "sections", "template",
         "period", "sample_url", "key_hint", "already_running", "delete_note", "provisional_poster",
         "downloading", "downloading_template", "detected_name", "refresh_counts", "watch_settings", "save_watch_settings",
-        "marker", "shown_name"}),
+        "marker", "demo", "shown_name", "live_state", "api_stats", "api_indexers"}),
     "Area": ("jellyscope/access.py", {"key", "name", "description", "paths", "default", "parent", "section",
                                       "heading"}),
     "Message": ("jellyscope/notifications.py", {"key", "name", "subject", "text", "variables"}),
@@ -729,7 +729,6 @@ KEPT_KEYS: dict[tuple[str, str], str] = {
        for column in ("typ", "polozka", "velikost", "klient", "nazev")},
     ("jellyscope/db.py", "heslo"): "keeps the value of an old Czech setting key (smtp_heslo) out of the log",
     ("jellyscope/demodata.py", "Historie"): "a genre of the demo library (data)",
-    ("jellyscope/demodata.py", "demo-movie-nazev"): "an item id the demo database holds",
     ("jellyscope/tasks.py", "zalohy"): "the backup folder older installations have on disk",
 }
 

@@ -10,7 +10,9 @@ Guarded:
     the package imports first in a clean process;
 (d) no file has more than 600 lines;
 (e) Prowlarr uses the shared core from services.py;
-(f) "already running" is the very template of services.py - the registry compares it by identity.
+(f) "already running" is the very template of services.py - the registry compares it by identity;
+(g) the demo's made-up Prowlarr (demo.py) lives in the package but not at the door: the registry imports it only in
+    the demo mode (registry._demo), so `import jellyscope.arr.prowlarr` never loads it.
 
 Run:
     .venv/bin/python tests/test_prowlarr_package.py
@@ -40,7 +42,12 @@ SUBMODULES: dict[str, list[str]] = {
     "samples": ["delete_old_samples", "sample_interval", "status_marker", "how_measured"],
     "watch": ["watch_indexers_forever"],
 }
-FILES = list(SUBMODULES)
+# Files of the package whose names are not at the door: the demo's made-up Prowlarr, imported only by the registry
+# (its handler) and the demo's seed (demo_apps: the samples of the past).
+NOT_AT_THE_DOOR: dict[str, list[str]] = {
+    "demo": ["handler", "down_at", "outages", "past_states", "fill_past"],
+}
+FILES = [*SUBMODULES, *NOT_AT_THE_DOOR]
 MAX_LINES = 600
 
 failures = 0
@@ -147,6 +154,26 @@ try:
           "sync.ALREADY_RUNNING is the template of services.py itself (the registry compares it by identity)")
 except ImportError as error:
     check(False, f"jellyscope.arr.prowlarr.sync imports ({error})")
+
+print()
+print("--- (g) the made-up Prowlarr is not at the door ---")
+door_source = (PACKAGE / "__init__.py").read_text(encoding="utf-8")
+door_imports = {node.module for node in ast.walk(ast.parse(door_source)) if isinstance(node, ast.ImportFrom) and node.level == 1}
+check(not door_imports & set(NOT_AT_THE_DOOR), f"the door imports none of {sorted(NOT_AT_THE_DOOR)} ({sorted(door_imports)})")
+if package is not None:
+    check(not [name for names in NOT_AT_THE_DOOR.values() for name in names if name in getattr(package, "__all__", [])],
+          "their names are not in __all__")
+for file, names in NOT_AT_THE_DOOR.items():
+    try:
+        module = importlib.import_module(f"jellyscope.arr.prowlarr.{file}")
+    except ImportError as error:
+        check(False, f"{file}.py imports ({error})")
+        continue
+    check(all(callable(getattr(module, name, None)) for name in names), f"{file}.py offers {names}")
+run = subprocess.run([sys.executable, "-c", "import sys, jellyscope.arr.prowlarr; print('jellyscope.arr.prowlarr.demo' in sys.modules)"],
+                     cwd=PROJECT, env=os.environ.copy(), capture_output=True, text=True, timeout=180)
+check(run.returncode == 0 and run.stdout.strip() == "False",
+      f"`import jellyscope.arr.prowlarr` does not load the made-up Prowlarr ({run.stdout.strip() or run.stderr.strip()[-120:]})")
 
 print()
 print(f"DONE - failures: {failures}")

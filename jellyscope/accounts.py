@@ -437,6 +437,15 @@ def any_exists() -> bool:
     return count() > 0
 
 
+def has_local_password(username: str) -> bool:
+    """Does an account of this name have a password here? Then signing in checks it here only (web/login.py).
+
+    An account from Jellyfin has none (from_jellyfin stores no password), so its name goes to Jellyfin.
+    """
+    account = get_by_name(username or "")
+    return bool(account and account.get("password_hash"))
+
+
 def get_by_name(username: str) -> dict[str, Any] | None:
     # Comparing through LOWER() makes "Petr" and "petr" the same account - and
     # works the same in SQLite and PostgreSQL. Relying on COLLATE NOCASE would

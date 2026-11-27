@@ -87,12 +87,23 @@ def main() -> int:
             f"{demo['items']} titles, {demo['plays']} playbacks prepared"
             if demo["items"] else "the made-up data is in the database already")
             + " (nothing is stored in it)")
+        # The made-up *Arr apps and Seerr the demo connected, with what each
+        # holds - also when an earlier start made them (as demo.py prints them).
+        from jellyscope import demo_apps
+
+        apps = demo_apps.summary()
+        if apps:
+            print("Made-up apps:           " + ", ".join(
+                f"{name} ({records} records)" for name, records in apps.items()))
 
     # Neither Jellyfin's address nor the API key are in .env - they are set in
     # the application (Settings -> Connection to Jellyfin). An empty connection
     # is therefore NOT a reason to refuse the start: the user needs to get into
-    # the interface to fill it in. We only point it out.
-    if jellyfin_url and jellyfin_key:
+    # the interface to fill it in. We only point it out. The demo's Jellyfin is
+    # made up inside the process: its address is no server to try.
+    if demo is not None:
+        print("Jellyfin:               made up inside the demo (nothing goes to the network)")
+    elif jellyfin_url and jellyfin_key:
         print(f"Jellyfin:               {jellyfin_url}")
     else:
         print("Jellyfin:               not set "

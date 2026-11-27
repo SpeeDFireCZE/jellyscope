@@ -147,7 +147,7 @@ check(tile(s, "Upgrady") == str(sum(r["upgrade_count"] for r in additions))
 check(tile(s, "Upgradů na položku") == "1,0", f"upgrades per item with a decimal comma ({tile(s, 'Upgradů na položku')})")
 # (The window title "*Arr · Sonarr · Jellyscope" does not count - it is about the cards' headings and the tiles' labels.)
 check("<h2>Sonarr · " not in s and "card-group" not in s, "on its own tab the cards have no application prefix")
-check('class="heatmap"' in card_html(s, "arr_sonarr_when") and "arr-test" in card_html(s, "arr_sonarr_indexers")
+check('class="heatmap"' in card_html(s, "arr_sonarr_when") and "test-indexer" in card_html(s, "arr_sonarr_indexers")
       and "Game of Thrones" in card_html(s, "arr_sonarr_largest"), "the heatmap, the indexer and the series are in their cards")
 check("No audio tracks detected" in card_html(s, "arr_sonarr_queue")
       and "No indexers available with RSS sync enabled" in card_html(s, "arr_sonarr_health"),
@@ -158,7 +158,7 @@ check("ruční výběr" in card_html(s, "arr_sonarr_how_all"), "how it was downl
 reliability = card_html(s, "arr_sonarr_indexer_reliability")
 reliability_rows = [(re.search(r'<td class="strong[^"]*">([^<]*)', tr).group(1).strip(), re.findall(r'<td class="num[^"]*">([^<]*)</td>', tr))
                     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", reliability, re.S) if "<td" in tr]
-check(reliability_rows == [("arr-test", ["6", "0", "0", "6", "–"]), ("–", ["4", "0", "0", "4", "–"])],
+check(reliability_rows == [("test-indexer", ["6", "0", "0", "6", "–"]), ("–", ["4", "0", "0", "4", "–"])],
       f"Spolehlivost indexerů: downloads, imported, failed, cannot be matched, success rate ({reliability_rows})")
 check("<th class=\"num\">Stahování</th>" in reliability and "dvojdíl je jedno stahování" in reliability,
       "the first column counts downloads and the note says one release is one download")

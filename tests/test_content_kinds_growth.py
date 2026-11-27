@@ -33,18 +33,27 @@ os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
 os.environ["JELLYFIN_API_KEY"] = "test-key"
 
 from _apps import login  # noqa: E402
-from jellyscope import accounts, content_kinds, db, demodata, formatting, scanner, stats  # noqa: E402
+from jellyscope import accounts, content_kinds, db, demo_world, demodata, formatting, scanner, stats  # noqa: E402
 
 failures = 0
 GB = 1024 ** 3
 db.init_db()
 db.set_setting("ui_language", "cs")  # the checks read Czech (English is the default)
 demodata.seed()
-# These tests are about music (and video); the demo's books have their own checks in test_content_kinds.py.
+# These tests are about music (and video); the demo's books have their own checks in test_content_kinds.py. The albums
+# of the last weeks (demodata.NEW_ALBUMS, the made-up Lidarr's) are left out too: the checks count on album 3 (5 days
+# ago) being the only music of the last ten days.
+_NEW_ALBUMS = [demo_world.jellyfin_id(key) for key in demodata.NEW_ALBUMS]
+_IN = ", ".join("?" * len(_NEW_ALBUMS))
 with db.connect() as _conn:
     _conn.execute("DELETE FROM book")
+    _conn.execute(f"DELETE FROM playback WHERE item_id IN (SELECT id FROM music_track WHERE album_id IN ({_IN}))", _NEW_ALBUMS)
+    _conn.execute(f"DELETE FROM music_track WHERE album_id IN ({_IN})", _NEW_ALBUMS)
+    _conn.execute(f"DELETE FROM music_album WHERE id IN ({_IN})", _NEW_ALBUMS)
     _conn.commit()
 TODAY = datetime.now(formatting.zone()).date()
+# Two albums of the demo (demodata.MUSIC_ALBUMS): added 5 days ago and 700 days ago, by their readable keys.
+ALBUM_3, ALBUM_6 = demo_world.jellyfin_id("demo-alb-3"), demo_world.jellyfin_id("demo-alb-6")
 
 
 def check(condition: bool, label: str) -> None:
@@ -86,7 +95,7 @@ check(rows[day(0)]["size_bytes"] - rows[day(1)]["size_bytes"] == 1 * GB,
       f"from the last old snapshot to the first new one only the video grew ({(rows[day(0)]['size_bytes'] - rows[day(1)]['size_bytes']) / GB} GB)")
 check(all(rows[day(b)].get("kinds", {}).get("music") for b in range(10, 0, -1)),
       "every old snapshot carries the music computed for its day")
-added_5 = int(db.query_value("SELECT COALESCE(SUM(size_bytes), 0) FROM music_track WHERE album_id = 'demo-alb-3'") or 0)
+added_5 = int(db.query_value("SELECT COALESCE(SUM(size_bytes), 0) FROM music_track WHERE album_id = ?", (ALBUM_3,)) or 0)
 check(rows[day(5)]["kinds"]["music"] - rows[day(6)]["kinds"]["music"] == added_5 > 0,
       "an album added 5 days ago shows in the old snapshots from that day")
 check(rows[day(0)]["kinds"] == {"music": music_now["size"]}, "the new snapshot keeps its measured part")
@@ -103,8 +112,8 @@ check(last.get("day") == day(0) and last.get("size_bytes") == stats.library_stat
 print()
 print("--- (c) a track gone from Jellyfin ---")
 gone_id, gone_size = (lambda r: (r["id"], int(r["size_bytes"])))(
-    db.query_one("SELECT id, size_bytes FROM music_track WHERE album_id = 'demo-alb-6' ORDER BY id LIMIT 1"))
-unknown_id = db.query_value("SELECT id FROM music_track WHERE album_id = 'demo-alb-6' ORDER BY id LIMIT 1 OFFSET 1")
+    db.query_one("SELECT id, size_bytes FROM music_track WHERE album_id = ? ORDER BY id LIMIT 1", (ALBUM_6,)))
+unknown_id = db.query_value("SELECT id FROM music_track WHERE album_id = ? ORDER BY id LIMIT 1 OFFSET 1", (ALBUM_6,))
 sql("UPDATE music_track SET missing = 1, synced_at = ? WHERE id = ?", (day(20) + " 09:00:00", gone_id))
 sql("UPDATE music_track SET missing = 1, synced_at = '' WHERE id = ?", (unknown_id,))
 rows = by_day(stats.snapshots(30))
@@ -182,7 +191,7 @@ check(all(r["size_bytes"] == stored_b[r["day"]] for r in series_b if not r["back
 check(scanner.set_capacity("dev-a", "manual", 4000 * GB) == "", "a manual capacity on disk A")
 db.forget_settings()
 old_and_new_snapshots()
-album_3 = int(db.query_value("SELECT COALESCE(SUM(size_bytes), 0) FROM music_track WHERE album_id = 'demo-alb-3'") or 0)
+album_3 = int(db.query_value("SELECT COALESCE(SUM(size_bytes), 0) FROM music_track WHERE album_id = ?", (ALBUM_3,)) or 0)
 card = {r["key"]: r for r in stats.disks_overview(30)["disks"]}
 check(abs((card["dev-a"]["daily"] or 0) - album_3 / 10) < 1,
       f"the tempo is what really came in 10 days (an album 5 days ago), not the whole music at once "
@@ -233,7 +242,7 @@ print("--- (i) Jellyfin 10.x: tracks without a path are computed too ---")
 # of its old snapshots must count tracks Jellyfin gave no path for.
 db.set_setting(scanner.FOLDERS_KEY, "[]")
 db.forget_settings()
-sql("UPDATE music_track SET path = '' WHERE album_id = 'demo-alb-3'")
+sql("UPDATE music_track SET path = '' WHERE album_id = ?", (ALBUM_3,))
 sql("DELETE FROM library_disk_snapshot")
 for back in range(10, -1, -1):
     scanner.write_disk_snapshot(day(back))
@@ -262,7 +271,7 @@ try:
     reads.clear()
     # A track gone 5 days ago: the old snapshot 10 days ago (seated on today's measurement, which
     # still had it) now holds it on top - the computed past changed shape.
-    gone = db.query_one("SELECT id, size_bytes FROM music_track WHERE album_id = 'demo-alb-6' AND missing = 0 ORDER BY id LIMIT 1")
+    gone = db.query_one("SELECT id, size_bytes FROM music_track WHERE album_id = ? AND missing = 0 ORDER BY id LIMIT 1", (ALBUM_6,))
     sql("UPDATE music_track SET missing = 1, synced_at = ? WHERE id = ?", (day(5) + " 09:00:00", gone["id"]))
     after = stats.disk_snapshots(30)["library"]
     stats.disk_snapshots(30)

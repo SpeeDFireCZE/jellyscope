@@ -113,7 +113,7 @@ r = lidarr.event_from_history(grab)
 check(re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", r["happened_at"] or "") is not None, f"the date in the database's format ({r['happened_at']})")
 check(r["title"] == "Hvězdy" and r["artist"] == "Kryštof", f"the album and the artist ({r['title']}, {r['artist']})")
 check(r["title_id"] == 11 and r["artist_id"] == 1 and r["item_id"] is None, f"title_id = the album, artist_id = the artist, a grab has no track ({r['title_id']}, {r['artist_id']}, {r['item_id']})")
-check(r["source"] == "InteractiveSearch" and r["indexer"] == "arr-test" and r["protocol"] == "usenet" and r["client"] == "SABnzbd",
+check(r["source"] == "InteractiveSearch" and r["indexer"] == "test-indexer" and r["protocol"] == "usenet" and r["client"] == "SABnzbd",
       f"the source, the indexer, the protocol (\"1\" = usenet) and the client ({r['source']}, {r['indexer']}, {r['protocol']}, {r['client']})")
 check(r["size_bytes"] == int(grab["data"]["size"]) and r["release_group"] == "FLACGRP", "the size (a number from a string) and the release group")
 check(r["released_at"] == "2019-05-17 00:00:00", f"the album's release date in UTC ({r['released_at']})")

@@ -151,7 +151,7 @@ check(all(f"<h2>{t}</h2>" in s for t in ("Teď v aplikaci", "Co přibylo", "Rych
       "all five sections")
 check('class="heatmap"' in s, "the imports' heatmap")
 check("tajny-klic" not in s, "the key is not in the page")
-check("Game of Thrones" in s and "arr-test" in s, "the titles' names and the indexer from the history")
+check("Game of Thrones" in s and "test-indexer" in s, "the titles' names and the indexer from the history")
 check("No audio tracks detected" in s, "the queue: an item with a warning and its text")
 check("No indexers available with RSS sync enabled" in s, "the warning from the application's health")
 check("ruční výběr" in s, "how it was downloaded, in Czech")

@@ -135,12 +135,18 @@ def _is_open(path: str, prefixes: tuple[str, ...]) -> bool:
 
 
 def _personal(account: dict[str, Any], path: str) -> list[dict[str, Any]]:
-    """The entries above the sections: a viewer's own pages, the custom dashboard, My dashboard."""
+    """The entries above the sections: one's own pages, the custom dashboard, My dashboard.
+
+    My statistics for whoever signed in through Jellyfin, the administrator too (their page among the others is
+    found only through Users otherwise); lit only on that page, not on the list nor on somebody else's. My history
+    only for a viewer - the administrator's History is the shared one, in its section.
+    """
     items: list[tuple[str, str, str, tuple[str, ...]]] = []
-    viewer = access.own_viewer(account)
-    if viewer:
-        items += [("my_statistics", i18n.translate("My statistics"), f"/users/{viewer}", ("/users",)),
-                  ("my_history", i18n.translate("My history"), "/history", ("/history",))]
+    person = access.own_person(account)
+    if person:
+        items.append(("my_statistics", i18n.translate("My statistics"), f"/users/{person}", (f"/users/{person}/",)))
+    if access.own_viewer(account):
+        items.append(("my_history", i18n.translate("My history"), "/history", ("/history",)))
     if cards.shows_dashboard_tab(account):
         items.append(("dashboard", cards.dashboard_name() or i18n.translate("Custom overview"), "/dashboard", ("/dashboard",)))
     if cards.load_layout(account["id"]):

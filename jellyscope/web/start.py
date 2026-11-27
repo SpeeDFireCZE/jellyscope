@@ -43,30 +43,12 @@ async def _tidy_files() -> None:
         log.info("made %s data files and folders readable by their owner only", narrowed)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """What happens at the start and at the shutdown of the app.
+def _convert_rights() -> None:
+    """The one-off conversions of stored rights after an update - each runs once, the administrator decides after it.
 
-    The data collector is started here in the background. It runs alongside the web:
-    while you click through pages, it asks Jellyfin every few seconds what is
-    playing right now. Beside it Prowlarr's loop measures the indexers' status
-    (it idles while Prowlarr is not connected).
+    The order matters: the old root keys keep the areas a key could use until 1.9 before a key with Network gets
+    where people watch from.
     """
-    # Writing the log to a file is switched on first, so that a possible error
-    # while preparing the database gets into it too - that one is the most interesting.
-    log_file = applog.setup()
-    if log_file:
-        log.info("the log is also written to a file: %s", log_file)
-    warn_about_short_secret_key(config)
-
-    db.init_db()
-    log.info("database ready")
-    # How many old logs to keep, also for the rotation by the size safeguard.
-    # The log is switched on before the database, so it learns of it only now.
-    applog.set_count(tasks.rotation_count())
-    # The dashboard for everyone has a name since the version with My dashboard. An
-    # existing one switched on without a name gets the one people knew it by.
-    cards.fill_in_dashboard_name()
     # The custom dashboard no longer needs the overview (16. 11. 2026): where the overview was
     # off, the dashboard stays off too - once, the administrator decides from then on.
     access.keep_dashboard_with_overview()
@@ -77,6 +59,42 @@ async def lifespan(app: FastAPI):
     access.split_books_rights()
     # Root keys stored with areas the API has no address for lose them (16. 11. 2026), once.
     api.drop_unusable_key_areas()
+    # After it: the old keys keep the areas a key could use until 1.9 first, then a key with Network gets where people
+    # watch from (27. 11. 2026); the groups and accounts the same.
+    access.split_network_rights()
+    api.add_network_origin_to_keys()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """What happens at the start and at the shutdown of the app.
+
+    The data collector is started here in the background. It runs alongside the web:
+    while you click through pages, it asks Jellyfin every few seconds what is
+    playing right now. Beside it Prowlarr's loop measures the indexers' status
+    (it idles while Prowlarr is not connected; in the demo the made-up one).
+    """
+    # Writing the log to a file is switched on first, so that a possible error
+    # while preparing the database gets into it too - that one is the most interesting.
+    log_file = applog.setup()
+    if log_file:
+        log.info("the log is also written to a file: %s", log_file)
+    warn_about_short_secret_key(config)
+    if config.demo_mode:
+        # The demo's made-up apps before anything else: from here on no client of the demo reaches the network.
+        from .. import demo_apps
+
+        demo_apps.load_fakes()
+
+    db.init_db()
+    log.info("database ready")
+    # How many old logs to keep, also for the rotation by the size safeguard.
+    # The log is switched on before the database, so it learns of it only now.
+    applog.set_count(tasks.rotation_count())
+    # The dashboard for everyone has a name since the version with My dashboard. An
+    # existing one switched on without a name gets the one people knew it by.
+    cards.fill_in_dashboard_name()
+    _convert_rights()
     # The mail server's certificate is checked (25. 11. 2026): an SMTP set up before keeps sending unchecked, once.
     notifications.convert_smtp_verification()
 
@@ -151,7 +169,7 @@ async def lifespan(app: FastAPI):
     if config.demo_mode:
         # In the demo mode there is nothing to connect to. The collector would only
         # fill the log with errors and at start close the made-up playback that is
-        # to be seen on the Overview. Nor is there a Prowlarr to measure.
+        # to be seen on the Overview.
         db.set_setting(collector.STATUS_KEY, "demo")
         log.info("demo mode: the collector is not started")
         # Made-up data age: they are made for the moment of the seed and the public
@@ -173,9 +191,8 @@ async def lifespan(app: FastAPI):
         background.append(
             asyncio.create_task(tasks.run_scheduler(), name="scheduler")
         )
-        background.append(
-            asyncio.create_task(prowlarr.watch_indexers_forever(), name="prowlarr-watch")
-        )
+    # In the demo too: the made-up Prowlarr answers it, after the seed's samples of the past (arr/prowlarr/demo.py).
+    background.append(asyncio.create_task(prowlarr.watch_indexers_forever(), name="prowlarr-watch"))
 
     try:
         yield

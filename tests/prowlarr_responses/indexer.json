@@ -21,7 +21,7 @@
   "downloadClientId": 0,
   "added": "2026-11-15T06:32:18Z",
   "sortName": "arr test",
-  "name": "arr-test",
+  "name": "test-indexer",
   "fields": [
    {
     "order": 0,
@@ -151,7 +151,7 @@
   "downloadClientId": 0,
   "added": "2026-11-15T06:36:32Z",
   "sortName": "arr test torrent",
-  "name": "arr-test-torrent",
+  "name": "test-indexer-torrent",
   "fields": [
    {
     "order": 0,

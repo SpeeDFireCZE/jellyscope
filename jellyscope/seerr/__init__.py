@@ -10,7 +10,8 @@ everything from here:
 * `settings` - on, address and key, "connected", the connection test; what is known about Seerr
   (does it serve images? the address for the link to its settings).
 * `sync` - all requests into the table `seerr_request` (upsert, times of state changes, deleted in
-  Seerr, the titles' names), the state, deleting the stored data.
+  Seerr, the titles' names), the state, deleting the stored data; `write_records` stores records got
+  elsewhere as one page of the sync (the demo's made-up Seerr replays its earlier syncs through it).
 * `live` - the live card "Waiting for approval" (the pending requests' rows) and what both live
   cards share: the one-minute cache `live.CACHE`, the names of titles the table does not know yet.
 * `latest` - the page of Seerr's newest requests for "Latest requests" and its rows
@@ -20,6 +21,9 @@ everything from here:
 * `posters` - the provisional poster of a title that is not in Jellyfin: from Radarr or Sonarr,
   else from Seerr; the clean-up once the title arrives in the library; finding out whether Seerr
   serves images ("Enable Image Caching").
+
+Not at the door: `demo` - the demo's made-up Seerr (the demo's viewers' requests for its titles, demo mode only);
+demo_apps imports it when the demo starts, `import jellyscope.seerr` never loads it.
 
 The statistics over the stored requests are in `stats/seerr.py`, the pages in `web/`. Which name
 lives in which file is guarded by tests/test_seerr_package.py.
@@ -39,6 +43,7 @@ from .sync import (
     sync_running,
     sync_state,
     synchronize,
+    write_records,
 )
 
 __all__ = [
@@ -66,4 +71,5 @@ __all__ = [
     "sync_running",
     "sync_state",
     "synchronize",
+    "write_records",
 ]

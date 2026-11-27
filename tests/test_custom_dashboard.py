@@ -521,7 +521,7 @@ MORE = {
 }
 MORE_AREAS = {"who_language": "languages", "combinations": "languages", "missing_track": "languages",
               "users_chart": "users", "users_table": "users",
-              "libraries": "library", "network_numbers": "network", "map": "network"}
+              "libraries": "library", "network_numbers": "network", "map": "network_origin"}
 check(all(getattr(cards.BY_KEY.get(k), "area", None) == o for k, o in MORE_AREAS.items()),
       "8 more cards are in the registry with the right area")
 # 42 page cards (+ Disks 7. 11. 2026), 2 × 24 *Arr cards (Sonarr, Radarr) and 10 Seerr cards (13. 11. 2026), 20 music cards,
@@ -569,7 +569,7 @@ print("--- a card in the dashboard gets the same data as on its page ---")
 from jellyscope.web import base as web_base  # noqa: E402
 
 AREA_PAGE = {"overview": "/video/overview", "now_playing": "/video/overview", "library": "/library",
-             "network": "/network", "languages": "/video/languages", "users": "/users",
+             "network": "/network", "network_origin": "/network", "languages": "/video/languages", "users": "/users",
              "charts": "/video/insights"}
 # A card whose page is not the page of its area (the area by the spec).
 CARD_PAGE = {"recently_added": "/video/overview"}

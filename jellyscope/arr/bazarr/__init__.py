@@ -23,6 +23,7 @@ file is guarded by tests/test_bazarr_package.py.
 from __future__ import annotations
 
 from .client import ACQUIRED, ACTIONS, NAME, BazarrClient, BazarrError
+from .api_data import api_stats
 from .live import live_state
 from .settings import check_connection, is_connected, save_settings, stored_settings
 from .sync import (

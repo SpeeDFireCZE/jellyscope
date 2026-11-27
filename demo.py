@@ -43,7 +43,7 @@ _PORT = int(os.environ["PORT"])
 
 import uvicorn  # noqa: E402
 
-from jellyscope import db, demodata  # noqa: E402
+from jellyscope import db, demo_apps, demodata  # noqa: E402
 
 
 def main() -> None:
@@ -55,6 +55,12 @@ def main() -> None:
     if counts["items"]:
         print(f"  {counts['items']} titles, {counts['plays']} playbacks, "
               f"{counts['users']} users")
+    # The made-up *Arr apps and Seerr the demo connected, with what each holds -
+    # also when an earlier start made them.
+    apps = demo_apps.summary()
+    if apps:
+        print("  Made-up apps: " + ", ".join(
+            f"{name} ({records} records)" for name, records in apps.items()))
 
     print()
     print("=" * 58)

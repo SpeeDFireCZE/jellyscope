@@ -975,8 +975,40 @@ curl -H "Authorization: Bearer js_your_key" http://localhost:8097/api/v1/summary
 | `GET /api/v1/recently-added?limit=18` | What came into the library last. |
 | `GET /api/v1/play-methods?days=30` | Direct play against transcoding, and the clients people watch with. |
 | `GET /api/v1/insights?days=30&limit=15` | The Insights page in numbers: transcode offenders, upgrade candidates, oversized and rarely watched, never finished, and the conversion speed in fps (average, slowest, fastest, by hardware). |
-| `GET /api/v1/bandwidth?days=30` | Data sent out, the peak, transcode share, home against internet, and by country. Without addresses. |
+| `GET /api/v1/bandwidth?days=30` | Data sent out, the peak, transcode share, home against internet, and by country (home against internet and the countries only with *…including where they watch from*, otherwise `null`). Without addresses. |
 | `GET /api/v1/item/<id>` | One title: the file, its versions and who watched it. |
+| `GET /api/v1/languages?days=30` | Audio languages by watched time, and how much was watched with and without subtitles, and in which. |
+| `GET /api/v1/music/summary?days=30` | Music over the period: listening time, plays, listeners, tracks, albums, artists. |
+| `GET /api/v1/music/top?days=30&kind=tracks` | The most listened tracks, albums or artists (`kind`). |
+| `GET /api/v1/music/history?days=30&limit=50` | Recent listens, newest first. Needs the playback history and *…including who listened*. |
+| `GET /api/v1/books/summary?days=30` | Books and audiobooks over the period: listening and reading time, plays, readers, works, authors. |
+| `GET /api/v1/books/top?days=30&kind=books` | The most read books or authors (`kind`). |
+| `GET /api/v1/books/history?days=30&limit=50` | Recent readings, newest first. Needs the playback history and *…including who read*. |
+| `GET /api/v1/disks?days=30` | Every disk: capacity, free space, what the library takes, daily growth and when it fills up. |
+| `GET /api/v1/arr` | The *Arr apps: which are connected, warnings, the last sync. |
+| `GET /api/v1/arr/<app>/queue` | Live: what Sonarr, Radarr, Lidarr or Readarr is downloading, and the downloads that failed. |
+| `GET /api/v1/arr/<app>/calendar?days=14` | Live: what comes out in the next days (Sonarr, Radarr, Lidarr, Readarr). |
+| `GET /api/v1/arr/<app>/health` | Live: the app's health warnings. |
+| `GET /api/v1/arr/<app>/stats?days=30` | The app over the period: downloads, how soon after release, upgrades, failures, missing, and each indexer's reliability; Bazarr's subtitles and providers; Prowlarr's queries. |
+| `GET /api/v1/arr/prowlarr/indexers?days=30` | Every indexer's availability, outages and state right now. |
+| `GET /api/v1/seerr/requests?days=30&status=waiting` | Requests, newest first, with their state. |
+| `GET /api/v1/seerr/pending` | Live: the requests waiting for approval and how long they have waited. |
+| `GET /api/v1/seerr/stats?days=30` | Requests over the period: counts by state, how soon approved and in the library, watched by the requester or not. |
+
+**Which right opens which address.** **Settings → API** and the Rights
+dialog list the addresses under each area of the tree, and the guide on My
+account says for each address which area opens it. The *Arr and Seerr
+addresses follow the same areas as their pages. `<app>` is `sonarr`,
+`radarr`, `lidarr`, `readarr`, `bazarr` or `prowlarr`; an app that is not
+connected, or an address the app does not have (a queue in Bazarr), is a
+404 with `app_not_connected` or `not_available_for_app`. A live address
+whose app does not answer is a 200 with `"available": false` and a
+`reason`, never an old answer passed off as a new one. The apps' own
+messages (health warnings, why a download failed) are only in an admin's
+answers, as on the pages; other keys get the type without the text. The
+requester of a Seerr request needs *…including who requested*, and every
+name follows the key's anonymization. Times are UTC, durations seconds
+and shares a fraction from 0 to 1.
 
 Every item that is one file (least played, unwatched, recently added, one
 title, and the oversized list in insights) carries its full `path` and
@@ -987,8 +1019,11 @@ file.
 
 #### Filtering and sorting
 
-Every list in an answer can be narrowed, sorted and cut by the fields it
-already returns, so one address answers many questions:
+Every list the index names under `lists` can be narrowed, sorted and cut
+by the fields it already returns, so one address answers many questions.
+The live lists of the *Arr apps and Seerr (a queue, a calendar, health,
+the waiting requests) are short, as the app says them right now, and take
+none:
 
 ```
 GET /api/v1/least-played?path[starts_with]=/media/movies&sort=plays,added_at&limit=5
@@ -1165,6 +1200,12 @@ username and password. Switch on **Enable Jellyfin sign-in** in
 because opening the household's statistics is your decision and an update
 will not make it for you.
 
+There is one **Sign in** button. A name that has a local account with a
+password is checked here only, so that password never goes to Jellyfin,
+and a wrong one is refused. Any other name is checked against Jellyfin.
+When a local account and a Jellyfin user share a name, the local account
+wins; the Jellyfin user signs in with a code (below).
+
 The password is never stored here, only passed to Jellyfin to check, and
 the access token that check produces is revoked straight away. A Jellyfin
 administrator is an administrator here too: rights given or taken away in
@@ -1187,7 +1228,8 @@ languages; *Music* with its overview (comparison and who listened under
 it) and insights and charts; *Books* in the same way (comparison and who
 read under the overview, insights and charts apart); *\*Arr*; *Seerr*
 with requests (and who requested); *Library* (and who watched);
-*Network*; *Users*. A family server can hide nothing, while a server
+*Network* traffic (and where people watch from: the addresses and the
+map); *Users*. A family server can hide nothing, while a server
 shared by people who should not see each other can hide a lot. Local
 reader accounts have the same tree, set separately.
 
@@ -1225,7 +1267,7 @@ administrator from Jellyfin stay too.
 
 #### Signing in with a code (Quick Connect)
 
-Under the Jellyfin button is a second one: **Sign in with a code**. It
+Under the **Sign in** button is a second one: **Sign in with a code**. It
 works the other way round from a password. Jellyscope shows a six-digit
 code, you approve it in a Jellyfin you are already signed in to, and no
 password is typed here at all. It needs Quick Connect switched on in the
@@ -1611,7 +1653,9 @@ jellyscope/
     │   │   ├── live.py         the live state (queue, calendar, health; 3 s, cached a minute) plus the counts the sync stored
     │   │   ├── progress.py     live downloads: the queue grouped into series with progress, the refresh command only while downloading
     │   │   ├── posters.py      provisional posters for series that are still downloading, from Sonarr itself; posters for Seerr requests
-    │   │   └── titles.py       the series with their TVDB/TMDB/IMDb ids, matched to Jellyfin series (links into the library)
+    │   │   ├── titles.py       the series with their TVDB/TMDB/IMDb ids, matched to Jellyfin series (links into the library)
+    │   │   ├── api_data.py     its statistics for the API (/api/v1/arr/sonarr/stats)
+    │   │   └── demo.py         the demo's made-up Sonarr: the demo's series as Sonarr's API answers them (demo mode only)
     │   ├── radarr/         Radarr (movies): the same set of files for movies
     │   │   ├── __init__.py     the entry point: every radarr.X used elsewhere
     │   │   ├── client.py       the API v3 client; errors never contain the key
@@ -1620,8 +1664,11 @@ jellyscope/
     │   │   ├── live.py         the live state (queue, release calendar, health; 3 s, cached a minute) plus the counts the sync stored
     │   │   ├── progress.py     live downloads: the queue grouped into movies with progress, the refresh command only while downloading
     │   │   ├── posters.py      provisional posters for movies that are still downloading, from Radarr itself; posters for Seerr requests
-    │   │   └── titles.py       the movies with their TMDB/IMDb ids (links into the library)
-    │   ├── lidarr/         Lidarr (music): the same set of files for albums (client, settings, sync, live, progress, posters, titles)
+    │   │   ├── titles.py       the movies with their TMDB/IMDb ids (links into the library)
+    │   │   ├── api_data.py     its statistics for the API (/api/v1/arr/radarr/stats)
+    │   │   └── demo.py         the demo's made-up Radarr: the demo's movies as Radarr's API answers them (demo mode only)
+    │   ├── lidarr/         Lidarr (music): the same set of files for albums (client, settings, sync, live, progress, posters, titles,
+    │   │                   api_data, demo)
     │   ├── readarr/        Readarr (books), also Chaptarr and Bookshelf: the same set of files for books; `settings.py` remembers
     │   │                   which of the three answers (the tab's subtitle)
     │   ├── bazarr/         Bazarr subtitles: API client, settings, history sync, live state
@@ -1630,14 +1677,18 @@ jellyscope/
     │   │   ├── settings.py     address and key, "connected", connection test
     │   │   ├── times.py        the time of history events: recognising the text format, converting to UTC
     │   │   ├── sync.py         subtitle history into bazarr_event: pages from the newest, records told apart by a fingerprint
-    │   │   └── live.py         the live state: providers, warnings (3 s, cached a minute); missing subtitles by language from the sync
+    │   │   ├── live.py         the live state: providers, warnings (3 s, cached a minute); missing subtitles by language from the sync
+    │   │   ├── api_data.py     its statistics for the API (/api/v1/arr/bazarr/stats)
+    │   │   └── demo.py         the demo's made-up Bazarr: subtitles for the demo's series and movies (demo mode only)
     │   └── prowlarr/       Prowlarr indexers: API client, settings, history sync, live state, samples of the
     │                       indexers' status and the loop that measures it continuously (samples.py, watch.py)
     │       ├── __init__.py     the entry point: every prowlarr.X used elsewhere
     │       ├── client.py       the API client; query addresses and settings with keys are never read
     │       ├── settings.py     address and key, "connected", connection test
     │       ├── sync.py         history folded into hourly sums (prowlarr_hour), grabbed releases one by one; read from the newest event, written in one transaction
-    │       └── live.py         the live state: indexers and which of them Prowlarr skips right now, connected apps, warnings; cached a minute
+    │       ├── live.py         the live state: indexers and which of them Prowlarr skips right now, connected apps, warnings; cached a minute
+    │       ├── api_data.py     its statistics and every indexer's availability for the API (/api/v1/arr/prowlarr/...)
+    │       └── demo.py         the demo's made-up Prowlarr: the demo apps' indexers, queries and grabs, a schedule of outages (demo mode only)
     ├── books/              books: e-books and audiobooks of Jellyfin's books libraries
     │   ├── __init__.py     the entry point: every books.X used elsewhere
     │   └── sync.py         what was added every hour, everything once a day (what disappeared gets `missing`), history of imported listens paired
@@ -1652,7 +1703,8 @@ jellyscope/
     │   ├── live.py         the live "waiting for approval" list, cached a minute
     │   ├── latest.py       the live "latest requests", newest first, cached a minute
     │   ├── now.py          both live lists loaded together, kept under one cache entry
-    │   └── posters.py      provisional posters for titles not in Jellyfin: Radarr/Sonarr, then Seerr
+    │   ├── posters.py      provisional posters for titles not in Jellyfin: Radarr/Sonarr, then Seerr
+    │   └── demo.py         the demo's made-up Seerr: the demo viewers' requests for its movies and series (demo mode only)
     ├── services.py         shared by the apps under arr/ and by seerr/: the client core (errors without the key, address check), the rules of the app settings
     ├── importers/          history import and its repairs, one file per area
     │   ├── __init__.py     the entry point: every importers.X used elsewhere
@@ -1700,7 +1752,17 @@ jellyscope/
     ├── applog.py           log file and its viewer
     ├── outage.py           the page shown when the database will not open
     ├── demodata.py         generator of made-up data for the demo
+    ├── demo_world.py       the demo's world: ids in the apps' shapes, its library's catalogs, its clock, what the made-up apps share
+    ├── demo_jellyfin.py    the demo's made-up Jellyfin: the series Sonarr's sync pairs with, the server's info
+    ├── demo_switch.py      the demo's switch: in the demo mode the clients get made-up apps, not the network
+    ├── demo_apps.py        the demo's made-up apps: registering, connecting and syncing them, deleting their data
     ├── api.py              the read-only API and its keys
+    ├── api_endpoints.py    the one list of the API's addresses: area of rights, section, description, example
+    ├── api_arr.py          the API's *Arr addresses: the apps, live queue, calendar, health, statistics
+    ├── api_books.py        the API's books addresses: summary, charts, readings
+    ├── api_library.py      the API's languages and disks
+    ├── api_music.py        the API's music addresses: summary, charts, listens
+    ├── api_seerr.py        the API's Seerr addresses: requests, live pending, statistics
     ├── api_query.py        filters, sorting and checks for API requests
     ├── legacy_urls.py      old page addresses and their new ones (each old one redirects)
     ├── navigation.py       the menu as data: sections, their pages, what an account sees

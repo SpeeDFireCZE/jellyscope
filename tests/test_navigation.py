@@ -42,7 +42,7 @@ os.environ["JELLYFIN_API_KEY"] = "test-key"
 from _apps import (no_network, not_responding, login, connect_bazarr, connect_radarr, connect_seerr,  # noqa: E402
                         connect_sonarr, sonarr_client)
 from _package import substitute  # noqa: E402
-from jellyscope import access, accounts, db, demodata, i18n, navigation  # noqa: E402
+from jellyscope import access, accounts, db, demo_world, demodata, i18n, navigation  # noqa: E402
 from jellyscope.arr import bazarr, radarr, sonarr  # noqa: E402
 from jellyscope.arr import registry as arr_registry  # noqa: E402
 
@@ -84,6 +84,28 @@ def entry(entries: list[dict], key: str) -> dict:
     return next(e for e in entries if e["key"] == key)
 
 
+print("--- My statistics: whoever signed in through Jellyfin, the administrator too ---")
+jf_admin = accounts.from_jellyfin({"id": "u-boss", "name": "boss", "is_admin": True, "is_disabled": False})
+jf_viewer = accounts.from_jellyfin({"id": "u-petr", "name": "petr", "is_admin": False, "is_disabled": False})
+
+
+def personal(account: dict, path: str) -> dict:
+    return {e["key"]: e for e in navigation.menu(account, path) if e["key"] not in SECTION_KEYS}
+
+
+mine = personal(jf_admin, "/users/u-boss").get("my_statistics")
+check(bool(mine) and mine["url"] == "/users/u-boss" and mine["active"],
+      f"an administrator from Jellyfin has My statistics - their own page, lit on it ({mine})")
+check(not personal(jf_admin, "/users")["my_statistics"]["active"]
+      and not personal(jf_admin, "/users/u-petr")["my_statistics"]["active"],
+      "...but not lit on the list of users nor on somebody else's page")
+check("my_history" not in personal(jf_admin, "/"), "the administrator's History is the shared one: no My history")
+check("my_statistics" not in personal(admin, "/"), "a local administrator has no person in Jellyfin: no My statistics")
+mine = personal(jf_viewer, "/users/u-petr")
+check(mine.get("my_statistics", {}).get("url") == "/users/u-petr" and mine["my_statistics"]["active"] and "my_history" in mine,
+      f"a viewer keeps My statistics and My history ({sorted(mine)})")
+check("my_statistics" not in personal(reader, "/"), "a local reader has no person: no My statistics")
+
 print("--- the tree ---")
 check([s.key for s in navigation.SECTIONS] == ["video", "music", "books", "arr", "seerr", "library", "network", "users",
                                               "history", "settings"],
@@ -113,11 +135,13 @@ check([p["active"] for p in insights_menu["pages"]] == [False, False, True],
       "on Music's insights the insights are active, not the overview (whose prefix used to be all of /music/)")
 check(navigation.current_title(navigation.menu(admin, "/network")) == "Síť", "a single item: just its name")
 check(not any(e["expanded"] for e in navigation.menu(admin, "/account")), "a page outside the sections expands nothing")
-artist = navigation.menu(admin, "/music/artist/demo-int-1")
+# An artist, an album and a book of the demo (demodata), by their readable keys (demo_world).
+ARTIST, ALBUM, BOOK = (demo_world.jellyfin_id(key) for key in ("demo-int-1", "demo-alb-1", "demo-kn-1"))
+artist = navigation.menu(admin, f"/music/artist/{ARTIST}")
 check(entry(artist, "music")["expanded"] and entry(artist, "music")["pages"][0]["active"],
       "an artist's page belongs to Music")
-check(entry(navigation.menu(admin, "/album/demo-alb-1"), "library")["active"], "an album's page belongs to the Library")
-check(entry(navigation.menu(admin, "/book/demo-book-1"), "library")["active"], "a book's page belongs to the Library")
+check(entry(navigation.menu(admin, f"/album/{ALBUM}"), "library")["active"], "an album's page belongs to the Library")
+check(entry(navigation.menu(admin, f"/book/{BOOK}"), "library")["active"], "a book's page belongs to the Library")
 
 print()
 print("--- *Arr: a submenu of the connected apps, no tabs on the page ---")
@@ -187,7 +211,7 @@ check("music" not in sections(navigation.menu(admin, "/")), "no track left: no M
 check(k_admin.get("/music/overview").status_code == 404 and k_admin.get("/music").status_code == 404,
       "and its overview answers 404")
 # An artist's page stays, like an album's in the Library: album and viewer pages link to it.
-check(k_admin.get("/music/artist/demo-int-1").status_code == 200, "an artist's page stays (album pages link to it)")
+check(k_admin.get(f"/music/artist/{ARTIST}").status_code == 200, "an artist's page stays (album pages link to it)")
 sql("UPDATE music_track SET missing = 0")
 sql("UPDATE book SET missing = 1")
 check("books" not in sections(navigation.menu(admin, "/")), "no book left: no Books section")

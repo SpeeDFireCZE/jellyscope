@@ -15,7 +15,7 @@ D) the library and the posters of titles in the queue;
 E) the card, its body and the slice.
 
 Sonarr does not run: the queue is recorded from a real Sonarr with a fake download client
-(tests/sonarr_responses/queue_stahuje.json, see ~/projects/arr-test/stahovani.py).
+(tests/sonarr_responses/queue_stahuje.json).
 
 Spec: docs/superpowers/specs/2026-11-13-zive-stahovani-design.md
 

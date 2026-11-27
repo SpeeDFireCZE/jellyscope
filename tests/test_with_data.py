@@ -36,7 +36,7 @@ os.environ["JELLYSCOPE_HOME"] = tempfile.mkdtemp()
 os.environ["DATABASE_PATH"] = str(TMP_DB)
 os.environ["SECRET_KEY"] = "testovaci-klic"
 
-from jellyscope import accounts, db, demodata, langstats, languages  # noqa: E402
+from jellyscope import accounts, db, demo_world, demodata, langstats, languages  # noqa: E402
 
 db.init_db()
 db.set_setting("ui_language", "cs")  # the checks read Czech (English is the default)
@@ -45,6 +45,9 @@ accounts.create("reader", "readerpass1", is_admin=False)
 
 counts = demodata.seed()
 print(f"OK  data poured in ({counts['items']} titles, {counts['plays']} plays)")
+# The demo's ids by their readable keys (demo_world): what the seed writes is Jellyfin's shape.
+PETR, JANA = demo_world.jellyfin_id("demo-u1"), demo_world.jellyfin_id("demo-u2")
+TV_LIBRARY, MOVIES_LIBRARY = demo_world.jellyfin_id("demo-tv"), demo_world.jellyfin_id("demo-movies")
 
 failures = 0
 
@@ -65,9 +68,9 @@ ROUTES = [
     "/video/insights", "/video/insights?days=30",
     "/video/languages", "/video/languages?days=7", "/video/languages?days=365",
     "/library", "/library?sort=plays", "/library?search=Duna&sort=name",
-    "/library?library_id=demo-tv", "/library?page=2",
-    "/users", "/users?days=90", "/users/demo-u1", "/users/demo-u2?days=7",
-    "/history", "/history?page=2", "/history?user_id=demo-u1", "/history?search=Chernobyl",
+    f"/library?library_id={TV_LIBRARY}", "/library?page=2",
+    "/users", "/users?days=90", f"/users/{PETR}", f"/users/{JANA}?days=7",
+    "/history", "/history?page=2", f"/history?user_id={PETR}", "/history?search=Chernobyl",
     # Dates at the calendar's edge: the index bounds two days around them overflowed (500).
     "/history?day=0001-01-01", "/history?day=9999-12-31", "/history?since=0001-01-01&until=2026-11-24",
     "/history?period=custom&since=1.1.2026&until=31.12.9999",
@@ -289,11 +292,11 @@ with TestClient(app) as client:
     # Jellystat: we upload a made-up JSON and verify the data appears.
     import json as _json
     fake_backup = _json.dumps({"jf_playback_activity": [
-        {"Id": "a1", "UserId": "demo-u1", "NowPlayingItemId": "demo-movie-0",
+        {"Id": "a1", "UserId": PETR, "NowPlayingItemId": demo_world.jellyfin_id("demo-movie-0"),
          "NowPlayingItemName": "Duna", "ActivityDateInserted": "2025-03-01T20:00:00Z",
          "PlaybackDuration": "3600", "Client": "Jellyfin Web", "DeviceName": "Chrome",
          "PlayMethod": "DirectPlay"},
-        {"Id": "a2", "UserId": "demo-u2", "NowPlayingItemId": "demo-movie-1",
+        {"Id": "a2", "UserId": JANA, "NowPlayingItemId": demo_world.jellyfin_id("demo-movie-1"),
          "NowPlayingItemName": "Neco", "ActivityDateInserted": "2025-03-02T21:00:00Z",
          "PlaybackDuration": "30", "Client": "Findroid", "DeviceName": "Pixel",
          "PlayMethod": "Transcode"},
@@ -648,12 +651,12 @@ api_header = {"Authorization": f"Bearer {api.create_token('History check')['toke
 with TestClient(app) as client:
     client.post("/login", data={"username": "tester", "password": "testingpass"})
     for key, days in (("7", 7), ("30", 30)):
-        page_html = client.get(f"/history?period={key}&user_id=demo-u1").text
+        page_html = client.get(f"/history?period={key}&user_id={PETR}").text
         shown = re.search(r'<span class="card-note"[^>]*>\s*([\d\s  ]+?)\s*[^\d\s<]', page_html)
         on_page = int(re.sub(r"\D", "", shown.group(1))) if shown else None
-        from_api = client.get(f"/api/v1/history?days={days}&user=demo-u1&limit=500",
+        from_api = client.get(f"/api/v1/history?days={days}&user={PETR}&limit=500",
                               headers=api_header).json().get("count")
-        expected = stats.history_count(user_id="demo-u1",
+        expected = stats.history_count(user_id=PETR,
                                        since=(date.today() - timedelta(days=days - 1)).isoformat())
         check(on_page == from_api == expected and 0 < expected < 500,
               f"History 'last {days} days' = {on_page}, the API days={days} = {from_api},"
@@ -681,7 +684,7 @@ def pager_total(page_html: str) -> int | None:
 with TestClient(app) as client:
     client.post("/login", data={"username": "tester", "password": "testingpass"})
     for query in ("method=Transcode", "period=7", f"client={options['clients'][0]}",
-                  f"language={options['languages'][0]}", "kind=movies&user_id=demo-u1",
+                  f"language={options['languages'][0]}", f"kind=movies&user_id={PETR}",
                   f"period=custom&since={month_ago.day}.{month_ago.month}.{month_ago.year}"
                   f"&until={date.today().day}.{date.today().month}.{date.today().year}",
                   "search=Tom%20%26%20Jerry%20%232"):
@@ -702,9 +705,9 @@ with TestClient(app) as client:
     with db.connect() as conn:
         conn.execute("UPDATE items SET name = 'Tom & Jerry #2 ' || name, audio_languages = NULL")
         for number in range(60):                 # the demo's movies fit one page of the library's list
-            conn.execute("INSERT INTO items (id, name, type, library_id) VALUES (?, ?, 'Movie', 'demo-movies')",
-                         (f"pager-{number}", f"Tom & Jerry #2 ({number})"))
-    for address in ("/library/demo-movies?tab=media", "/video/languages/undetermined?page=1"):
+            conn.execute("INSERT INTO items (id, name, type, library_id) VALUES (?, ?, 'Movie', ?)",
+                         (f"pager-{number}", f"Tom & Jerry #2 ({number})", MOVIES_LIBRARY))
+    for address in (f"/library/{MOVIES_LIBRARY}?tab=media", "/video/languages/undetermined?page=1"):
         first = client.get(f"{address}&search=Tom%20%26%20Jerry%20%232").text
         link = re.search(r'<a class="btn" href="([^"]*\?page=2[^"]*)"', first)
         carried = parse_qs(urlsplit(_html.unescape(link.group(1))).query) if link else {}

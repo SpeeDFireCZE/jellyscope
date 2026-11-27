@@ -298,7 +298,7 @@ ALL_CARDS: tuple[Card, ...] = (
          "The addresses streams come from: home network, or outside.",
          "_card_where_from.html",
          lambda o: {"where_from": stats.watching_locations(o)},
-         area="network"),
+         area="network_origin"),
     Card("language_share", "Language ratio",
          "Which language people watch in on this server.",
          "_card_language_share.html",
@@ -449,7 +449,7 @@ ALL_CARDS: tuple[Card, ...] = (
          "Where people watch from public addresses: on a map and by country.",
          "_card_map.html",
          lambda o: _map_data(o),
-         area="network"),
+         area="network_origin"),
     # The apps' cards live in modules of their own, each app in its own.
     # The registry only puts them after its own (in the order of the *Arr page's
     # tabs, Seerr at the end) - for the pages and dashboards they are cards like any other.

@@ -114,7 +114,7 @@ r = radarr.event_from_history(movie)
 check(re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", r["happened_at"] or "") is not None, f"the date in the database's format ({r['happened_at']})")
 check(r["title"] == movie["movie"]["title"] and "episode" not in r and r["item_id"] == r["title_id"] == movie["movieId"],
       f"a movie: the name, no episode, the item and title_id = the movie ({r['title']})")
-check(r["indexer"] == "arr-test" and r["protocol"] in ("usenet", "torrent") and r["source"] in ("Rss", "Search", "UserInvokedSearch",
+check(r["indexer"] == "test-indexer" and r["protocol"] in ("usenet", "torrent") and r["source"] in ("Rss", "Search", "UserInvokedSearch",
                                                                                               "InteractiveSearch", "ReleasePush"),
       f"the source, the indexer and the protocol ({r['source']}, {r['indexer']}, {r['protocol']})")
 check(r["size_bytes"] == int(movie["data"]["size"]) and bool(r["client"]), "the size (a number from a string) and the client")

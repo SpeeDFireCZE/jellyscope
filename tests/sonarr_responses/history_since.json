@@ -28,7 +28,7 @@
   "date": "2026-11-12T20:50:18Z",
   "eventType": "grabbed",
   "data": {
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "nzbInfoUrl": "http://127.0.0.1:8990/details/got-s01e01-720",
    "releaseGroup": "NTb",
    "age": "0",
@@ -137,7 +137,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -203,8 +203,8 @@
   "eventType": "downloadFolderImported",
   "data": {
    "fileId": "1",
-   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
-   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "droppedPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
    "downloadClient": "Usenet Blackhole",
    "downloadClientName": "Blackhole",
    "releaseGroup": "NTb",
@@ -300,7 +300,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -364,7 +364,7 @@
   "date": "2026-11-12T21:05:38Z",
   "eventType": "grabbed",
   "data": {
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "nzbInfoUrl": "http://127.0.0.1:8990/details/got-s01e01-720",
    "releaseGroup": "NTb",
    "age": "0",
@@ -473,7 +473,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -537,7 +537,7 @@
   "date": "2026-11-12T22:10:37Z",
   "eventType": "grabbed",
   "data": {
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "nzbInfoUrl": "http://127.0.0.1:8990/details/chernobyl.s01e01.720p.web-dl.dd5.1.h.264-ntb",
    "releaseGroup": "NTb",
    "age": "0",
@@ -618,7 +618,7 @@
     }
    ],
    "year": 2019,
-   "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+   "path": "/media/tv/Chernobyl",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -684,8 +684,8 @@
   "eventType": "downloadFolderImported",
   "data": {
    "fileId": "2",
-   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
-   "importedPath": "/home/coder/projects/arr-test/media/tv/Chernobyl/Season 1/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "droppedPath": "/downloads/blackhole/sonarr/watch/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/media/tv/Chernobyl/Season 1/Chernobyl.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
    "downloadClient": "Usenet Blackhole",
    "downloadClientName": "Blackhole",
    "releaseGroup": "NTb",
@@ -753,7 +753,7 @@
     }
    ],
    "year": 2019,
-   "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+   "path": "/media/tv/Chernobyl",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -817,7 +817,7 @@
   "date": "2026-11-12T22:12:12Z",
   "eventType": "grabbed",
   "data": {
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "nzbInfoUrl": "http://127.0.0.1:8990/details/game.of.thrones.s01e03.720p.web-dl.dd5.1.h.264-flux",
    "releaseGroup": "FLUX",
    "age": "0",
@@ -926,7 +926,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -992,8 +992,8 @@
   "eventType": "downloadFolderImported",
   "data": {
    "fileId": "3",
-   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
-   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "droppedPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "importedPath": "/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E03.720p.WEB-DL.DD5.1.H.264-FLUX.mkv",
    "downloadClient": "Usenet Blackhole",
    "downloadClientName": "Blackhole",
    "releaseGroup": "FLUX",
@@ -1089,7 +1089,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -1153,7 +1153,7 @@
   "date": "2026-11-12T22:13:42Z",
   "eventType": "grabbed",
   "data": {
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "nzbInfoUrl": "http://127.0.0.1:8990/details/game.of.thrones.s01e04.720p.web-dl.dd5.1.h.264-ntb",
    "releaseGroup": "NTb",
    "age": "0",
@@ -1262,7 +1262,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -1328,8 +1328,8 @@
   "eventType": "downloadFolderImported",
   "data": {
    "fileId": "4",
-   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
-   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "droppedPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+   "importedPath": "/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E04.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
    "downloadClient": "Usenet Blackhole",
    "downloadClientName": "Blackhole",
    "releaseGroup": "NTb",
@@ -1425,7 +1425,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -1597,7 +1597,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -1663,8 +1663,8 @@
   "eventType": "downloadFolderImported",
   "data": {
    "fileId": "5",
-   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
-   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "droppedPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
+   "importedPath": "/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E05.720p.WEB-DL.DD5.1.H.264-CAKES.mkv",
    "downloadClient": "Usenet Blackhole",
    "downloadClientName": "Blackhole",
    "releaseGroup": "CAKES",
@@ -1759,7 +1759,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -1823,7 +1823,7 @@
   "date": "2026-11-12T22:16:40Z",
   "eventType": "grabbed",
   "data": {
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "nzbInfoUrl": "http://127.0.0.1:8990/details/game.of.thrones.s01e01.1080p.web-dl.dd5.1.h.264-flux",
    "releaseGroup": "FLUX",
    "age": "0",
@@ -1932,7 +1932,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -1970,7 +1970,7 @@
  {
   "episodeId": 56,
   "seriesId": 1,
-  "sourceTitle": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
+  "sourceTitle": "/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.720p.WEB-DL.DD5.1.H.264-NTb.mkv",
   "languages": [
    {
     "id": 1,
@@ -2089,7 +2089,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -2155,8 +2155,8 @@
   "eventType": "downloadFolderImported",
   "data": {
    "fileId": "6",
-   "droppedPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
-   "importedPath": "/home/coder/projects/arr-test/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "droppedPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
+   "importedPath": "/media/tv/Game of Thrones/Season 1/Game.of.Thrones.S01E01.1080p.WEB-DL.DD5.1.H.264-FLUX.mkv",
    "downloadClient": "Usenet Blackhole",
    "downloadClientName": "Blackhole",
    "releaseGroup": "FLUX",
@@ -2252,7 +2252,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -2425,7 +2425,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -2582,7 +2582,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -2754,7 +2754,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,
@@ -2926,7 +2926,7 @@
     }
    ],
    "year": 2011,
-   "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+   "path": "/media/tv/Game of Thrones",
    "qualityProfileId": 1,
    "seasonFolder": true,
    "monitored": true,

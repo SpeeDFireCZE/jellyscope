@@ -108,6 +108,14 @@ def login_form(request: Request):
         {"error": None, "jellyfin_login": access.login_enabled()})
 
 
+async def _refused_without_asking(password: str) -> None:
+    """A refusal at the Jellyfin door without asking Jellyfin takes as long as a local one: the hash is computed for
+    nothing, as accounts.authenticate does for an unknown name. Otherwise the time of the answer would tell which
+    names have a local account (one button since 27. 11. 2026: such a name goes here, the others to the hash)."""
+    await asyncio.to_thread(accounts.hash_password, password or "")
+    return None
+
+
 async def _sign_in_through_jellyfin(name: str, password: str) -> dict[str, Any] | None:
     """Tries the name and the password against Jellyfin. None = not signed in.
 
@@ -126,11 +134,11 @@ async def _sign_in_through_jellyfin(name: str, password: str) -> dict[str, Any] 
     open Jellyscope to anybody who knows its name. Such a user signs in with a code.
     """
     if not access.login_enabled() or not password:
-        return None
+        return await _refused_without_asking(password)
 
     url, api_key = db.jellyfin_connection()
     if not url or not api_key:
-        return None
+        return await _refused_without_asking(password)
 
     try:
         async with JellyfinClient(url, api_key, timeout=QUICK_TIMEOUT) as jf:
@@ -148,16 +156,16 @@ async def _sign_in_through_jellyfin(name: str, password: str) -> dict[str, Any] 
     return accounts.from_jellyfin(details)
 
 
-def _brake_name(method: str, username: str) -> str:
-    """The name the brake counts an attempt under: with the door. A local account and a user of Jellyfin may share
-    a name - a success at one door must not forget the guesses at the other."""
-    return f"{'jellyfin' if method == 'jellyfin' else 'local'}:{username}"
+def _brake_name(door: str, username: str) -> str:
+    """The name the brake counts an attempt under: with the door the server picked (login_submit). An account from
+    Jellyfin and a name Jellyfin does not know go to the other door than a local one - a success at one door must
+    not forget the guesses at the other."""
+    return f"{'jellyfin' if door == 'jellyfin' else 'local'}:{username}"
 
 
 @router.post("/login")
 async def login_submit(
     request: Request, username: str = Form(""), password: str = Form(""),
-    method: str = Form("local"),
 ):
     # The brake against guessing passwords. The key is the address the attempt came
     # from - not the user name: by the name somebody else's account could easily be
@@ -172,17 +180,20 @@ async def login_submit(
             status_code=429,
         )
 
+    # One Sign in button (27. 11. 2026): the server picks the door by the name. A local account with a
+    # password is checked here only - its password never leaves for Jellyfin and a wrong one is a refusal;
+    # any other name goes to Jellyfin (when signing in through it is on). A form from before sends a
+    # `method` of its own; it is not read.
+    door = "local" if accounts.has_local_password(username) else "jellyfin"
+
     # Counted before the password is checked and with nothing awaited since the check above,
     # so requests sent at once cannot all pass it while the first ones wait for the answer.
     # A success forgets the attempt again.
-    block = accounts.begin_attempt(address, _brake_name(method, username))
+    block = accounts.begin_attempt(address, _brake_name(door, username))
 
-    # The door a person chose is the one knocked on. So the password of a local
-    # account never leaves for Jellyfin and a password from Jellyfin is not compared
-    # with the local hashes.
     if block:
         account = None
-    elif method == "jellyfin":
+    elif door == "jellyfin":
         account = await _sign_in_through_jellyfin(username, password)
     else:
         # In a thread: the hash takes a quarter of a second and would hold up every other request.
@@ -203,7 +214,7 @@ async def login_submit(
             )
         # The door from a fixed pair, not the form's text, and no name: a password typed
         # into the name field must not end up in the log.
-        log.warning("sign-in failed from %s (%s)", address, "jellyfin" if method == "jellyfin" else "local")
+        log.warning("sign-in failed from %s (%s)", address, door)
         # On purpose it is not said whether the name or the password was wrong. Were
         # they told apart, the list of accounts could be found out this way.
         return templates.TemplateResponse(
@@ -214,7 +225,7 @@ async def login_submit(
             status_code=401,
         )
 
-    accounts.forget_failures(address, _brake_name(method, username))
+    accounts.forget_failures(address, _brake_name(door, username))
 
     start_session(request, account)
     return RedirectResponse(_landing_after_login(account), status_code=303)

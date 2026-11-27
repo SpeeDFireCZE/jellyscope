@@ -118,7 +118,7 @@ r = readarr.event_from_history(grab)
 check(re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", r["happened_at"] or "") is not None, f"the date in the database's format ({r['happened_at']})")
 check(r["title"] == "Válka s mloky" and r["author"] == "Karel Čapek", f"the book and the author ({r['title']}, {r['author']})")
 check(r["title_id"] == 11 and r["author_id"] == 1 and r["item_id"] is None, f"title_id = the book, author_id = the author, a grab has no file ({r['title_id']}, {r['author_id']}, {r['item_id']})")
-check(r["source"] == "InteractiveSearch" and r["indexer"] == "arr-test" and r["protocol"] == "usenet" and r["client"] == "SABnzbd",
+check(r["source"] == "InteractiveSearch" and r["indexer"] == "test-indexer" and r["protocol"] == "usenet" and r["client"] == "SABnzbd",
       f"the source, the indexer, the protocol (\"1\" = usenet) and the client's type from a grab ({r['source']}, {r['indexer']}, {r['protocol']}, {r['client']})")
 check(r["size_bytes"] == int(grab["data"]["size"]) and r["release_group"] == "AZWGRP", "the size (a number from a string) and the release group")
 check(r["released_at"] == "1936-01-01 00:00:00", f"the book's release date in UTC ({r['released_at']})")

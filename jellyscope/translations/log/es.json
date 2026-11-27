@@ -228,5 +228,6 @@
     "rolling back the conversion failed": "no se pudo deshacer la conversión",
     "%s: could not count wanted/%s, the last known count stays: %s": "%s: no se pudo contar wanted/%s, se mantiene el último recuento conocido: %s",
     "bazarr: could not read the missing subtitles, the last known languages stay: %s": "bazarr: no se pudieron leer los subtítulos que faltan, se mantienen los últimos idiomas conocidos: %s",
-    "%s: the counts were not updated: %s": "%s: no se pudieron actualizar los recuentos: %s"
+    "%s: the counts were not updated: %s": "%s: no se pudieron actualizar los recuentos: %s",
+    "demo: the downloaded data of %s could not be deleted: %s": "demo: no se pudieron borrar los datos descargados de %s: %s"
 }

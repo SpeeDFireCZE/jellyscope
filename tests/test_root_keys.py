@@ -36,7 +36,7 @@ os.environ["JELLYSCOPE_DEMO"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import api, db  # noqa: E402
+from jellyscope import api, api_endpoints, db  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
 failures = 0
@@ -120,7 +120,16 @@ check(get(sub_only["token"], "/api/v1/library").status_code == 403,
 
 server_key = api.create_token("Grafana")
 paths = sorted(r.path for r in api.router.routes if "GET" in getattr(r, "methods", ()))
-wrong = [c for c in paths if "{item_id}" not in c and get(server_key["token"], c).status_code != 200]
+
+
+def answers(path: str) -> bool:
+    """200, or for an *Arr app's or Seerr's address the 404 that says it is not connected (none is, here)."""
+    endpoint = api_endpoints.by_path(path)
+    response = get(server_key["token"], path.replace("{app}", ((endpoint.apps if endpoint else None) or ("sonarr",))[0]))
+    return response.status_code == 200 or (response.status_code == 404 and response.json().get("error") == "app_not_connected")
+
+
+wrong = [c for c in paths if "{item_id}" not in c and not answers(c)]
 check(not wrong, f"a key without an owner and without rights = everything ({wrong})")
 
 with db.connect() as conn:
@@ -241,15 +250,16 @@ send(admin_k, "/settings/api/token", name="Prazdny", mode="selected", anonymise=
 check(len(api.list_tokens()) == count, "only the chosen without an area and without the history: the key is not created")
 check("aspoň jednu oblast nebo historii" in admin_k.get("/settings?section=api").text,
       "and the page says why")
-# Languages, the custom dashboard, comparison have no address in the API - a key only
+# The custom dashboard and the comparison have no address in the API (languages got one, 27. 11. 2026) - a key only
 # with them could do nothing and the administrator would not know why.
 count_before = len(api.list_tokens())
-send(admin_k, "/settings/api/token", name="Jazyky", mode="selected", sees_languages="on",
+send(admin_k, "/settings/api/token", name="Jazyky", mode="selected", sees_dashboard="on",
      sees_comparison="on")
 check(len(api.list_tokens()) == count_before
       and "nic neotevírají" in admin_k.get("/settings?section=api").text,
       "areas without an address in the API: the key is not created and the page says why")
-check(api.root_key_paths(api.pack_key_permissions(["languages"], False, False)) == []
+check(api.root_key_paths(api.pack_key_permissions(["comparison"], False, False)) == []
+      and "/api/v1/languages" in api.root_key_paths(api.pack_key_permissions(["languages"], False, False))
       and "/api/v1/history" in api.root_key_paths(api.pack_key_permissions([], False, True))
       and "/api/v1/libraries" in api.root_key_paths(api.pack_key_permissions(["library"], False, False)),
       "root_key_paths: what a key with rights really opens")

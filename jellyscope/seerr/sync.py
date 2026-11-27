@@ -164,6 +164,16 @@ def _page_rows(records: list[Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def write_records(records: list[Any], now: str) -> int:
+    """Store request records as Seerr sends them, as one page of the sync's walk: converted (a broken one skipped),
+    upserted, the approval or the decline of a request seen waiting before noted. Returns the count of new ones.
+
+    `now` is the sync's time (db.utcnow()). The made-up Seerr replays what Jellyscope's earlier syncs saw through it
+    (seerr/demo.py, fill_past).
+    """
+    return _write_page(_page_rows(records), now)
+
+
 def _missing(seen: set[int]) -> list[int]:
     """Stored requests the walk did not see that are not marked deleted yet."""
     return [r["id"] for r in db.query_all("SELECT id FROM seerr_request WHERE deleted_at IS NULL")

@@ -71,7 +71,7 @@ def api_now_playing(account: dict[str, Any] = Depends(require_login)):
     """
     # Music and books only with "who listened" and "who read".
     sessions = access.visible_plays(stats.active_sessions(), account)
-    # Where somebody connects from belongs to Network, not to "Now playing".
-    if not access.account_sees(account, "network"):
+    # Where somebody connects from belongs to Network's "...where they watch from", not to "Now playing".
+    if not access.account_sees(account, "network_origin"):
         sessions = [{k: v for k, v in r.items() if k not in access.ADDRESS_KEYS} for r in sessions]
     return access.anonymise_for({"sessions": sessions}, account)

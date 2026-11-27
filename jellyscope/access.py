@@ -80,6 +80,14 @@ def own_viewer(account: dict[str, Any] | None) -> str:
     return str(account.get("jellyfin_user_id") or "")
 
 
+def own_person(account: dict[str, Any] | None) -> str:
+    """The Jellyfin id of whoever signed in with their Jellyfin account - the administrator too. Empty = a local account.
+
+    Not a limit (that is `own_viewer`): only whose page "My statistics" is. A local account belongs to nobody in Jellyfin.
+    """
+    return str((account or {}).get("jellyfin_user_id") or "")
+
+
 def anonymise_for(data: Any, account: dict[str, Any] | None) -> Any:
     """Hides other people's names and addresses when the admin has them hidden for the account.
 
@@ -263,9 +271,15 @@ AREAS: tuple[Area, ...] = (
          "The title and library pages then list viewers too. A local account with this right also sees "
          "History (a Jellyfin viewer always sees only their own). Names can be hidden by anonymising.",
          (), parent="library", section=LIBRARY),
-    Area("network", "Connections and IP addresses",
-         "Where people connect from. These are IP addresses, so think it over.",
+    # Network traffic without an address or a place; where people watch from (the addresses, the map, the countries)
+    # is a sub-area of its own since 27. 11. 2026 (split_network_rights).
+    Area("network", "Network traffic",
+         "Peaks, what flows right now, how much went through which players, and who streamed the most. "
+         "No addresses. Names can be hidden by anonymising.",
          ("/network", "/partials/network-live"), section=NETWORK),
+    Area("network_origin", '…including "where they watch from"',
+         "Where people connect from. These are IP addresses, so think it over.",
+         (), parent="network", section=NETWORK),
     Area("users", "List of users",
          "Who watches on the server and how much. Names can be hidden by anonymising.",
          ("/users",), section=USERS),
@@ -454,6 +468,33 @@ def split_books_rights() -> bool:
                     or (parent and db.get_setting(area_key(group, BY_KEY[parent]), _UNSTORED) == "0"):
                 db.set_setting(area_key(group, BY_KEY[target]), "1" if sees(group, source) else "0")
     db.set_setting(CONVERSION_BOOKS_KEY, "1")
+    return True
+
+
+CONVERSION_NETWORK_KEY = "conversion_network_origin"
+
+
+def split_network_rights() -> bool:
+    """One-off at start: whoever had Network gets "...including where they watch from" too.
+
+    Until 27. 11. 2026 one area "network" opened the traffic and the addresses with the map together. Now the
+    addresses, the map and the countries are a sub-area of their own; without this a group or an account would lose
+    what it saw. So a group's stored value of "network" is written into the sub-area and an account's own list with
+    Network gets it, once; a group on the defaults gets nothing written (the sub-area follows the same defaults).
+    Root keys: api.add_network_origin_to_keys. True = it ran now.
+    """
+    if db.get_setting(CONVERSION_NETWORK_KEY, ""):
+        return False
+    network, origin = BY_KEY["network"], BY_KEY["network_origin"]
+    for group in (READER, VIEWER):
+        stored = db.get_setting(area_key(group, network), _UNSTORED)
+        if stored != _UNSTORED:
+            db.set_setting(area_key(group, origin), "1" if stored == "1" else "0")
+    for row in db.query_all(f"SELECT id, {ACCESS_COLUMN} FROM accounts WHERE {ACCESS_COLUMN} IS NOT NULL"):
+        own = own_permissions(row)
+        if own is not None and network.key in own["areas"]:
+            accounts.save_permissions(int(row["id"]), pack_permissions(own["areas"] | {origin.key}, own["anonymise"]))
+    db.set_setting(CONVERSION_NETWORK_KEY, "1")
     return True
 
 

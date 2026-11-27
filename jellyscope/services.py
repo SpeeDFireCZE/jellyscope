@@ -33,7 +33,7 @@ from urllib.parse import unquote, urlsplit
 
 import httpx
 
-from . import db
+from . import db, demo_switch
 from .i18n import TranslatableError
 from .jellyfin import QUICK_TIMEOUT
 from .images import MAX_BYTES
@@ -352,7 +352,8 @@ class HttpClient:
     `url` may have a path behind a reverse proxy too (`http://nas/sonarr`),
     `api` is the application's API path (`/api/v3/`). A derived client sets
     `error_class` to its own error class. `transport` is for tests
-    (httpx.MockTransport).
+    (httpx.MockTransport); without it the demo mode gives the made-up app
+    registered under `name` (demo_switch), anywhere else it is the network.
     """
 
     error_class: type[ServiceError] = ServiceError
@@ -376,7 +377,7 @@ class HttpClient:
                 base_url=url.rstrip("/") + api,
                 headers={"X-Api-Key": key, "Accept": "application/json"},
                 timeout=timeout or QUICK_TIMEOUT,
-                transport=transport,
+                transport=transport if transport is not None else demo_switch.transport(name),
             )
         except httpx.InvalidURL:
             # An address stored before address() guarded it: an error, not a failing page.

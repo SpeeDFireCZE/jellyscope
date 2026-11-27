@@ -158,7 +158,7 @@ with db.connect(source) as conn:
         ("INSERT INTO prowlarr_grab (id, happened_at, indexer_id, app, title, method, succeeded, response, client)"
          " VALUES (23, ?, 1, 'Radarr', 'Film.2024.1080p.WEB-DL', 'proxy', 1, 41, '')", (T,)),
         ("INSERT INTO prowlarr_indexer (id, name, protocol, privacy, enabled, removed, seen_at)"
-         " VALUES (1, 'arr-test', 'usenet', 'private', 1, 0, ?)", (T,)),
+         " VALUES (1, 'test-indexer', 'usenet', 'private', 1, 0, ?)", (T,)),
         # A sample of the indexers' status: the sample's own row and an indexer left out at that moment.
         ("INSERT INTO prowlarr_sample (sampled_at, indexer_id, enabled_ids, interval_seconds) VALUES (?, 0, ',1,3,', 3600)", (T,)),
         ("INSERT INTO prowlarr_sample (sampled_at, indexer_id, failing_since, skipped_until, last_failure)"
@@ -199,7 +199,7 @@ hour = db.query_one("SELECT event_count, failed_count, response_sum, response_co
 release = db.query_one("SELECT title, method, response FROM prowlarr_grab WHERE id = 23") or {}
 indexer = db.query_one("SELECT name, protocol, removed FROM prowlarr_indexer WHERE id = 1") or {}
 check(tuple(hour.values()) == (12, 2, 3400, 10, 7) and tuple(release.values()) == ("Film.2024.1080p.WEB-DL", "proxy", 41)
-      and tuple(indexer.values()) == ("arr-test", "usenet", 0), f"Prowlarr's sums, grabbed release and indexer were converted ({hour}, {release}, {indexer})")
+      and tuple(indexer.values()) == ("test-indexer", "usenet", 0), f"Prowlarr's sums, grabbed release and indexer were converted ({hour}, {release}, {indexer})")
 request = db.query_one("SELECT title, tvdb_id, poster, jellyfin_id FROM seerr_request WHERE id = 3") or {}
 check((request.get("title"), request.get("tvdb_id"), request.get("poster")) == ("Dark", "334824", "/wiiyc3m6HKaQhFBYeuM7ySCNQsG.jpg")
       and request.get("jellyfin_id") == "a427aea771c45a7d71be634b62b36e34",

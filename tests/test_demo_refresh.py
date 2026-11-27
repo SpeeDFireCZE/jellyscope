@@ -7,14 +7,21 @@ until a line remained of the charts. Now it is remembered when the seed ran,
 and after a day the data are made again - the same shape (a fixed
 `random.seed`), only relative to today. The demo's account and settings stay.
 
+And the seed remembers what content it made (`DEMO_CONTENT_VERSION`): when
+an update brings other made-up content, the data are made again at the start
+at once, fresh or not - a public demo shows the new content without deleting
+its database.
+
 Run:
     .venv/bin/python tests/test_demo_refresh.py
 """
 from __future__ import annotations
 
+import io
 import os
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -107,6 +114,51 @@ db.set_setting(demodata.SEED_KEY, "")
 db.forget_settings()
 check(demodata.is_stale(), "without a stamp = stale (a demo from before the refreshing)")
 check(demodata.prepare(quiet=True)["plays"] > 0, "and it is made again")
+
+print()
+print("--- a changed content version makes the data again, fresh or not ---")
+VERSION_KEY = "demo_content_version"
+current = getattr(demodata, "DEMO_CONTENT_VERSION", None)
+check(getattr(demodata, "CONTENT_KEY", None) == VERSION_KEY, "the version is kept under its settings key")
+check(isinstance(current, int) and current >= 2,
+      f"the content version is a number past 1 (1 = up to 1.9.1 without music and books): {current}")
+check(db.get_setting(VERSION_KEY, "") == str(current), "the seed stores the version it made")
+
+
+def fresh_with(version: str | None) -> None:
+    """Fresh data (stamped now), made as if by a seed with the given content version (None = no key)."""
+    db.set_setting(demodata.SEED_KEY, datetime.now(timezone.utc).strftime(db.TIME_FORMAT))
+    if version is None:
+        with db.connect() as conn:
+            conn.execute("DELETE FROM settings WHERE key = ?", (VERSION_KEY,))
+            conn.commit()
+    else:
+        db.set_setting(VERSION_KEY, version)
+    db.forget_settings()
+
+
+fresh_with("1")
+check(not demodata.is_stale(), "the data are fresh (younger than a day)")
+changed = demodata.prepare(quiet=True)
+check(changed["items"] > 0 and changed["plays"] > 0 and changed["users"] > 0,
+      f"an older stored version makes them again ({changed})")
+check(db.get_setting(VERSION_KEY, "") == str(current), "and the current version is stored then")
+check(count("playback") == plays and count("items") == titles and count("users") == people,
+      "the same shape as before, nothing doubled")
+
+fresh_with(None)
+check(db.get_setting(VERSION_KEY, "") == "", "a demo from before the versions has no version key")
+printed = io.StringIO()
+with redirect_stdout(printed):
+    missing = demodata.prepare()
+check(missing["plays"] > 0, "a missing version counts as 1 and the data are made again")
+check("content" in printed.getvalue(), f"the demo says why it makes them again: {printed.getvalue().strip()!r}")
+check(db.get_setting(VERSION_KEY, "") == str(current), "and the version is stored")
+
+fresh_with(str(current))
+check(demodata.prepare(quiet=True) == {"items": 0, "plays": 0, "users": 0},
+      "the same version and fresh data: nothing is made")
+check(count("accounts") == 1, "the accounts do not multiply")
 
 print()
 print("--- in the background the demo's task watches it ---")

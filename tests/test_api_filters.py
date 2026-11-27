@@ -34,7 +34,7 @@ os.environ["JELLYSCOPE_DEMO"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import accounts, api, db  # noqa: E402
+from jellyscope import accounts, api, db, langstats, seerr  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
 failures = 0
@@ -426,6 +426,16 @@ slipped_in = {(insights, "never_finished"), (insights, "oversized_rarely_watched
 original = {(m, n): getattr(m, n) for m, n in slipped_in}
 for module, name in slipped_in:
     setattr(module, name, lambda *a, **k: [{}])
+# The music and books addresses read one analysis of the period (a dict of rows) and rank it.
+slipped_shapes = {(stats, "music_analysis"): {"rows": [{}], "since": "", "until": ""}, (stats, "music_artists"): [{}],
+                  (stats, "books_analysis"): {"rows": [{}], "since": "", "until": "", "works": {}},
+                  (stats, "books_works"): [{}],
+                  (langstats, "watched_languages"): {"rows": [{}]}, (langstats, "subtitle_usage"): {"rows": []},
+                  (stats, "disks_overview"): {"disks": [{}]},
+                  (stats, "seerr_latest"): [{}], (seerr, "is_connected"): True}
+original.update({key: getattr(*key) for key in slipped_shapes})
+for (module, name), answer in slipped_shapes.items():
+    setattr(module, name, lambda *a, _answer=answer, **k: _answer)    # (is_connected: a function that says True)
 for path, listings in api.LISTS.items():
     response = get(path).json()
     for listing, fields in listings.items():

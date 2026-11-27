@@ -158,18 +158,18 @@ check(tile(s, "Upgrady") == str(sum(r["upgrade_count"] for r in additions)) == "
 check(tile(s, "Upgradů na knihu") == "1,0" and tile(s, "Upgradované knihy") == "1",
       f"Review Focus 1: a new file after the deleted one = one upgrade of the book, per book 1,0 ({tile(s, 'Upgradů na knihu')})")
 check("<h2>Readarr · " not in s and "card-group" not in s, "on its own tab the cards have no application prefix")
-check('class="heatmap"' in card_html(s, "arr_readarr_when") and "arr-test" in card_html(s, "arr_readarr_indexers"),
+check('class="heatmap"' in card_html(s, "arr_readarr_when") and "test-indexer" in card_html(s, "arr_readarr_indexers"),
       "the heatmap and the indexer are in their cards")
 check("Has missing files" in card_html(s, "arr_readarr_queue") and "Download failed" in card_html(s, "arr_readarr_queue")
       and "Indexers unavailable due to failures" in card_html(s, "arr_readarr_health"),
       "the administrator: the queue's messages and the application's warning in their cards")
 check("ruční výběr" in card_html(s, "arr_readarr_how_all"), "how it was downloaded, in Czech")
-# Indexer reliability over the recorded history: every grab has a download_id - arr-test brought three books,
+# Indexer reliability over the recorded history: every grab has a download_id - test-indexer brought three books,
 # the tracker failed once, and that comes first.
 reliability = card_html(s, "arr_readarr_indexer_reliability")
 reliability_rows = [(re.search(r'<td class="strong[^"]*">([^<]*)', tr).group(1).strip(), re.findall(r'<td class="num[^"]*">([^<]*)</td>', tr))
                     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", reliability, re.S) if "<td" in tr]
-check(reliability_rows == [("tracker", ["1", "0", "1", "0", "0,0 %"]), ("arr-test", ["3", "3", "0", "0", "100,0 %"])],
+check(reliability_rows == [("tracker", ["1", "0", "1", "0", "0,0 %"]), ("test-indexer", ["3", "3", "0", "0", "100,0 %"])],
       f"Spolehlivost indexerů: downloads, imported, failed, cannot be matched, success rate ({reliability_rows})")
 check("<th class=\"num\">Stahování</th>" in reliability and "několika knihami je jedno stahování" in reliability,
       "the first column counts downloads and the note says one release is one download")

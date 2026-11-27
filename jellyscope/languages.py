@@ -139,6 +139,12 @@ def normalize(raw: str | None) -> str:
     return key
 
 
+def english_name(code: str | None) -> str:
+    """The name of a language in English, whatever the interface language - for the API (display() translates)."""
+    canonical = normalize(code)
+    return "Not specified" if canonical == UNKNOWN else _NAMES.get(canonical, canonical.upper())
+
+
 def display(code: str | None) -> str:
     """The name of a language for display, in the interface language.
 

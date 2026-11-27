@@ -39,7 +39,7 @@ os.environ["JELLYSCOPE_DEMO"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import api, db  # noqa: E402
+from jellyscope import api, api_endpoints, db  # noqa: E402
 from jellyscope.web import app  # noqa: E402
 
 failures = 0
@@ -105,10 +105,13 @@ H = {"Authorization": f"Bearer {TOKEN}"}
 print("--- the index does not lie: every address answers and every route is in it ---")
 index = client.get("/api/v1/", headers=H).json()["endpoints"]
 for path in index:
-    real = path.replace("{id}", "i1")
+    endpoint = api_endpoints.by_path(path.replace("{id}", "{item_id}"))
+    real = path.replace("{id}", "i1").replace("{app}", ((endpoint.apps if endpoint else None) or ("sonarr",))[0])
     without = client.get(real)
     s = client.get(real, headers=H)
-    check(without.status_code == 401 and s.status_code == 200,
+    # No *Arr app nor Seerr is connected here: their addresses answer, with a 404 and the code that says so.
+    answers = s.status_code == 200 or (s.status_code == 404 and s.json().get("error") == "app_not_connected")
+    check(without.status_code == 401 and answers,
           f"{path}: without a token {without.status_code}, with a token {s.status_code}")
     check(client.post(real, headers=H).status_code == 405,
           f"{path}: POST is 405")

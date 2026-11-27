@@ -47,7 +47,7 @@ os.environ["JELLYFIN_URL"] = "http://127.0.0.1:1"
 os.environ["JELLYFIN_API_KEY"] = "test-key"
 
 from _apps import login  # noqa: E402
-from jellyscope import access, accounts, api, cards, db, demodata, i18n  # noqa: E402
+from jellyscope import access, accounts, api, cards, db, demo_world, demodata, i18n  # noqa: E402
 
 failures = 0
 db.init_db()
@@ -71,7 +71,7 @@ print("--- the tree in the order of the menu ---")
 tree = access.tree(access.READER)
 keys = [row["key"] for row in tree]
 check(keys == ["dashboard", "overview", "comparison", "now_playing", "charts", "languages", "music", "music_comparison",
-               "music_who", "music_insights", "books", "books_comparison", "books_who", "books_insights", "arr", "seerr", "seerr_who", "library", "library_who", "network", "users"],
+               "music_who", "music_insights", "books", "books_comparison", "books_who", "books_insights", "arr", "seerr", "seerr_who", "library", "library_who", "network", "network_origin", "users"],
       f"order of the menu ({keys})")
 by_key = {row["key"]: row for row in tree}
 SECTIONS = ["Vlastní přehled", "Filmy a seriály", "Hudba", "Knihy", "*Arr", "Seerr", "Knihovna", "Síť", "Uživatelé"]
@@ -90,7 +90,7 @@ labels = {k: cs(by_key[k]["name"]) for k in ("dashboard", "overview", "compariso
                                           "network", "users")}
 check(labels == {"dashboard": "Přehled z vybraných karet", "overview": "Přehled", "comparison": "Srovnání",
                  "music": "Přehled", "arr": "Sonarr, Radarr, Lidarr, Readarr, Bazarr a Prowlarr", "seerr": "Žádosti",
-                 "library": "Knihovny a tituly", "network": "Připojení a IP adresy", "users": "Seznam uživatelů"},
+                 "library": "Knihovny a tituly", "network": "Síťový provoz", "users": "Seznam uživatelů"},
       f"under a heading the label names what the section shows, not the section again ({labels})")
 check(not by_key["dashboard"]["parent"] and by_key["comparison"]["parent"] == "overview"
       and by_key["now_playing"]["parent"] == "overview",
@@ -206,21 +206,22 @@ form = api_page[api_page.index('id="new-key-smi"'):]
 form = form[:form.index("</form>")]
 offered = set(re.findall(r'name="sees_(\w+)"', form))
 with_api = {area for area in api.ADDRESS_AREAS.values() if area}
-check(offered == with_api | {"library_who"} == api.key_areas(),
+who_under = {area.key for area in access.AREAS if not area.paths and area.parent in with_api}
+check(who_under == {"library_who", "music_who", "books_who", "seerr_who", "network_origin"} and offered == with_api | who_under == api.key_areas(),
       f"the new key's tree: areas of the API and the names under them ({sorted(offered)})")
 check("Filmy a seriály" in form, "with the same headings")
 # The same rule when saving (a form from an older page) and in the table of keys.
-admin.post("/settings/api/token", data={"name": "starsi-formular", "mode": "selected", "sees_languages": "on",
+admin.post("/settings/api/token", data={"name": "starsi-formular", "mode": "selected", "sees_comparison": "on",
                                         "sees_dashboard": "on", "sees_library": "on"})
 saved = db.query_value("SELECT permissions FROM api_tokens WHERE name = 'starsi-formular'", default="") or ""
-check('"library"' in saved and "languages" not in saved and "dashboard" not in saved,
+check('"library"' in saved and "comparison" not in saved and "dashboard" not in saved,
       f"saving keeps only areas a key can use ({saved})")
 # A key saved before 16. 11. 2026 with areas the API has no address for (stored as it was then).
 api.create_token("stary-klic", None, json.dumps({"areas": ["dashboard", "languages", "overview", "users"],
                                           "anonymise": False, "history": False}))
 row = next(r for r in re.findall(r"<tr>.*?</tr>", admin.get("/settings?section=api").text, re.S) if ">stary-klic<" in r)
 row = re.sub(r"\s+", " ", row)
-check("Vlastní přehled" not in row and "Jazyky" not in row and "Filmy a seriály · Přehled" in row and "Uživatelé" in row,
+check("Vlastní přehled" not in row and "Filmy a seriály · Přehled" in row and "Uživatelé" in row,
       f"the table of keys names only what a key can use, an area with its section ({row[:220]})")
 # Stored as well, not only hidden when read: should a later version give Languages an address in
 # the API, an old key must not get it without the administrator seeing it (code review 16. 11.).
@@ -228,8 +229,12 @@ db.set_setting(api.CONVERSION_KEY_AREAS, "")
 db.forget_settings()
 check(api.drop_unusable_key_areas() is True, "the conversion of stored key rights runs once")
 stored = json.loads(db.query_value("SELECT permissions FROM api_tokens WHERE name = 'stary-klic'", default="{}") or "{}")
+# Only the areas a key could use before this version: Languages (an address since 27. 11. 2026) was never ticked
+# in a key's tree the administrator saw, so an old key does not open it after the update (code review 27. 11.).
 check(stored.get("areas") == ["overview", "users"] and stored.get("anonymise") is False,
-      f"an old key keeps only areas a key can use, the rest of its rights as they were ({stored})")
+      f"an old key keeps only areas a key could use then, the rest of its rights as they were ({stored})")
+row = next(r for r in re.findall(r"<tr>.*?</tr>", admin.get("/settings?section=api").text, re.S) if ">stary-klic<" in r)
+check("Jazyky" not in re.sub(r"\s+", " ", row), "...and the table of keys does not name Languages for it")
 db.forget_settings()
 check(api.drop_unusable_key_areas() is False, "and never again")
 
@@ -394,10 +399,11 @@ from fastapi.testclient import TestClient  # noqa: E402
 from jellyscope import web  # noqa: E402
 
 LIVE = {"music_who": "ZivaSkladbaQX", "books_who": "ZivaKnihaQX", "own": "VlastniKnihaQX"}
+PETR, JANA = demo_world.jellyfin_id("demo-u1"), demo_world.jellyfin_id("demo-u2")   # the demo's viewers
 with db.connect() as conn:
-    for key, user_id, name, title, kind in (("np-hudba", "demo-u2", "Jana", LIVE["music_who"], "Audio"),
-                                            ("np-kniha", "demo-u2", "Jana", LIVE["books_who"], "Book"),
-                                            ("np-vlastni", "demo-u1", "Petr", LIVE["own"], "AudioBook")):
+    for key, user_id, name, title, kind in (("np-hudba", JANA, "Jana", LIVE["music_who"], "Audio"),
+                                            ("np-kniha", JANA, "Jana", LIVE["books_who"], "Book"),
+                                            ("np-vlastni", PETR, "Petr", LIVE["own"], "AudioBook")):
         conn.execute(
             "INSERT INTO playback (session_key, user_id, user_name, item_id, item_name, item_type, client, device_name,"
             " play_method, started_at, last_seen_at, watched_seconds, paused_seconds, is_active)"
@@ -408,7 +414,7 @@ db.set_setting(access.LOGIN_KEY, "1")
 accounts.create("np-reader", "longpassword")
 accounts.create("np-viewer", "longpassword")
 with db.connect() as conn:
-    conn.execute("UPDATE accounts SET jellyfin_user_id = 'demo-u1' WHERE username = 'np-viewer'")
+    conn.execute("UPDATE accounts SET jellyfin_user_id = ? WHERE username = 'np-viewer'", (PETR,))
     conn.execute("UPDATE accounts SET may_have_key = '1' WHERE username IN ('np-reader', 'np-viewer')")
     conn.commit()
 NOW_PLAYING_PAGES = ("/video/overview", "/partials/now-playing", "/api/now-playing")

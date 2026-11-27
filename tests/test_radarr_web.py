@@ -142,7 +142,7 @@ check(all(f"<h2>{t}</h2>" in s for t in ("Teď v aplikaci", "Co přibylo", "Rych
       "all five sections")
 check('class="heatmap"' in s, "the imports' heatmap")
 check("tajny-klic" not in s, "the key is not in the page")
-check("Sintel" in s and "Big Buck Bunny" in s and "arr-test" in s, "the movies' names and the indexer from the history")
+check("Sintel" in s and "Big Buck Bunny" in s and "test-indexer" in s, "the movies' names and the indexer from the history")
 check("No audio tracks detected" in s, "the queue: an item with a warning and its text")
 check(WARNING_TEXT in s, "the warning from the application's health")
 check("ruční výběr" in s, "how it was downloaded, in Czech")

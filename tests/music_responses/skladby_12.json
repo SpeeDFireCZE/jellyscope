@@ -13,7 +13,7 @@
     {
      "Protocol": "File",
      "Id": "765a9ea1c3c5bb87231cbeb4ef33818d",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/04 Station Identification.mp3",
+     "Path": "/media/Music/Velvet Static/Midnight Radio (2019)/04 Station Identification.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801639,
@@ -137,7 +137,7 @@
     {
      "Protocol": "File",
      "Id": "b16b1a9fc535346e7c363adc39bfaa5e",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/03 Late Night Request.mp3",
+     "Path": "/media/Music/Velvet Static/Midnight Radio (2019)/03 Late Night Request.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801635,
@@ -261,7 +261,7 @@
     {
      "Protocol": "File",
      "Id": "7c66221225b849d24a66ecdcc088c7e2",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/02 Rain on the Antenna.mp3",
+     "Path": "/media/Music/Velvet Static/Midnight Radio (2019)/02 Rain on the Antenna.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801636,
@@ -385,7 +385,7 @@
     {
      "Protocol": "File",
      "Id": "df94b791fa02561107ee06960437bb7b",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Velvet Static/Midnight Radio (2019)/01 Dial Tone Lullaby.mp3",
+     "Path": "/media/Music/Velvet Static/Midnight Radio (2019)/01 Dial Tone Lullaby.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801634,
@@ -509,7 +509,7 @@
     {
      "Protocol": "File",
      "Id": "613d3ecadad7bdbaf7c3a6dbb3f56ce0",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/04 Saltwater Grid.mp3",
+     "Path": "/media/Music/Pixel Harbor/Synth Tide (2023)/04 Saltwater Grid.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801629,
@@ -633,7 +633,7 @@
     {
      "Protocol": "File",
      "Id": "2b7283cc3faa323f4bfc9e6821878ac3",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/03 Arcade Lighthouse.mp3",
+     "Path": "/media/Music/Pixel Harbor/Synth Tide (2023)/03 Arcade Lighthouse.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801632,
@@ -757,7 +757,7 @@
     {
      "Protocol": "File",
      "Id": "85719124f9eeca24e1627f0dfabbdfcb",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/02 Low Tide Drive.mp3",
+     "Path": "/media/Music/Pixel Harbor/Synth Tide (2023)/02 Low Tide Drive.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801629,
@@ -881,7 +881,7 @@
     {
      "Protocol": "File",
      "Id": "1b4da132948b8e0a8810dc1957286aed",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Pixel Harbor/Synth Tide (2023)/01 Neon Pier.mp3",
+     "Path": "/media/Music/Pixel Harbor/Synth Tide (2023)/01 Neon Pier.mp3",
      "Type": "Default",
      "Container": "mp3",
      "Size": 801624,
@@ -1005,7 +1005,7 @@
     {
      "Protocol": "File",
      "Id": "baa7d3afa0af5443e062327783bcb737",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/05 Last Aurora.flac",
+     "Path": "/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/05 Last Aurora.flac",
      "Type": "Default",
      "Container": "flac",
      "Size": 1631356,
@@ -1130,7 +1130,7 @@
     {
      "Protocol": "File",
      "Id": "d1d1a22fcc72f9a6a1c00b453f1cb39d",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/04 Silent Fjord.flac",
+     "Path": "/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/04 Silent Fjord.flac",
      "Type": "Default",
      "Container": "flac",
      "Size": 1518012,
@@ -1255,7 +1255,7 @@
     {
      "Protocol": "File",
      "Id": "202d35041a5d3bb62fe3bf4075bd3261",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/03 Magnetic North.flac",
+     "Path": "/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/03 Magnetic North.flac",
      "Type": "Default",
      "Container": "flac",
      "Size": 1475789,
@@ -1380,7 +1380,7 @@
     {
      "Protocol": "File",
      "Id": "63b7b46fce742f0372c0469d4f41c32b",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/02 Polar Drift.flac",
+     "Path": "/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/02 Polar Drift.flac",
      "Type": "Default",
      "Container": "flac",
      "Size": 1390036,
@@ -1505,7 +1505,7 @@
     {
      "Protocol": "File",
      "Id": "1368b5173165b3cb21f1b6b7ed9c76a2",
-     "Path": "/home/coder/projects/jellycanvas-dev/test/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/01 First Light.flac",
+     "Path": "/media/Music/Northern Lights Ensemble/Aurora Sessions (2021)/01 First Light.flac",
      "Type": "Default",
      "Container": "flac",
      "Size": 1347905,

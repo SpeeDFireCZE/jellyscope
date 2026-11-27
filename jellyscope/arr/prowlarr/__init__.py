@@ -27,6 +27,7 @@ Which name lives in which file is guarded by tests/test_prowlarr_package.py.
 from __future__ import annotations
 
 from .client import KINDS, NAME, ProwlarrClient, ProwlarrError
+from .api_data import api_indexers, api_stats
 from .live import live_state, take_sample
 from .samples import delete_old_samples, how_measured, sample_interval, status_marker
 from .settings import check_connection, is_connected, save_settings, save_watch_settings, stored_settings, watch_settings

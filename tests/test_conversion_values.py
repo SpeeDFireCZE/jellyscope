@@ -113,9 +113,11 @@ def in_step6_keys(value: Any) -> Any:
 
 # The areas that existed when the expectations below were measured (the Books areas came later: pinned separately).
 BOOKS_AREAS = ("books", "books_comparison", "books_who", "books_insights")
-OLD_AREAS = [a.key for a in access.AREAS if a.key not in BOOKS_AREAS]
+OLD_AREAS = [a.key for a in access.AREAS if a.key not in BOOKS_AREAS and a.key != "network_origin"]
 # Measured on the code before the step over this state (areas in the order of access.AREAS without the Books areas).
-EXPECTED_RIGHTS = json.loads('{"reader_own": {"sees": [true, true, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false], "hides": true, "key": false, "history": true}, "reader_open": {"sees": [false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, true, true], "hides": false, "key": true, "history": false}, "reader_group": {"sees": [true, true, false, true, false, true, false, false, false, false, false, true, false, true, false, false, false], "hides": true, "key": true, "history": false}, "viewer": {"sees": [false, true, false, false, true, false, true, true, true, true, false, false, false, true, true, true, false], "hides": false, "key": false, "history": true}, "api full": [200, 200, 200, 200, 200, 404], "api limited": [200, 200, 403, 200, 403, 404], "api disabled": [403, 403, 403, 403, 403, 404]}')
+# /api/v1/languages (the last of PATHS) was a 404 until 27. 11. 2026: now the key with everything opens it, the
+# limited one (charts and the library) and the disabled one do not.
+EXPECTED_RIGHTS = json.loads('{"reader_own": {"sees": [true, true, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false], "hides": true, "key": false, "history": true}, "reader_open": {"sees": [false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, true, true], "hides": false, "key": true, "history": false}, "reader_group": {"sees": [true, true, false, true, false, true, false, false, false, false, false, true, false, true, false, false, false], "hides": true, "key": true, "history": false}, "viewer": {"sees": [false, true, false, false, true, false, true, true, true, true, false, false, false, true, true, true, false], "hides": false, "key": false, "history": true}, "api full": [200, 200, 200, 200, 200, 200], "api limited": [200, 200, 403, 200, 403, 403], "api disabled": [403, 403, 403, 403, 403, 403]}')
 
 db.init_db()
 ids, tokens = write_old(db, accounts, api)
@@ -519,6 +521,18 @@ check({("api_tokens", "status"), ("forgettings", "status")} <= set(stale),
 check(checked >= 2 and not without, f"every INSERT into them names the column ({checked} checked, {without})")
 check(inserts_without('run("INSERT INTO forgettings (user_id, name) VALUES (?, ?)")', "sample")[1] != [],
       "and an INSERT without it is found (the guard can fail)")
+
+
+print("--- the sub-area of Network after the conversions above (27. 11. 2026) ---")
+# Where people watch from got a sub-area of Network (27. 11. 2026): whoever saw Network sees it too, once.
+api.drop_unusable_key_areas()
+access.split_network_rights()
+api.add_network_origin_to_keys()
+db.forget_settings()
+everyone = {**ids, "viewer": viewer["id"]}
+check(all(access.account_sees(accounts.get(i), "network_origin") == access.account_sees(accounts.get(i), "network")
+          for i in everyone.values()) and any(access.account_sees(accounts.get(i), "network") for i in everyone.values()),
+      "where they watch from: exactly whoever saw Network (someone did)")
 
 print()
 print(f"DONE - failures: {failures}")

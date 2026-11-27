@@ -125,13 +125,10 @@ def client() -> TestClient:
 
 
 def sign_in(name: str, password: str, method: str = "") -> tuple[TestClient, int]:
-    """Signing in with the button a person would press.
+    """Signing in with the one Sign in button (27. 11. 2026): the server picks the door by the name.
 
-    `method` is derived from whether Jellyfin knows such an account -
-    the sign-in page has two buttons and each knocks on a different door.
+    `method` is what a sign-in page from before sent; it is not read any more - the checks below prove it.
     """
-    if not method:
-        method = "jellyfin" if any(jm == name for jm, _ in JELLYFIN_ACCOUNTS) else "local"
     k = client()
     response = k.post("/login",
                       data={"username": name, "password": password,
@@ -161,16 +158,16 @@ _, status = sign_in("admin", "tajne", method="local")
 check(status == 401, "and the Jellyfin password does not let one into it")
 
 print()
-print("--- every button knocks on a different door ---")
+print("--- the server picks the door by the name, not by the form ---")
 _, status = sign_in("mirek", "tajne", method="local")
-check(status == 401,
-      "the Jellyfin password is not compared with the local fingerprints")
+check(status == 303,
+      "an account from Jellyfin goes to Jellyfin whatever an old form says")
 _, status = sign_in("admin", "longpassword", method="jellyfin")
-check(status == 401,
-      "and the local account's password is not sent to Jellyfin")
+check(status == 303,
+      "and a local account's password is checked here (it never goes to Jellyfin)")
 page = client().get("/login").text
-check('value="jellyfin"' in page,
-      "with signing in switched on the button is on the page")
+check('formaction="/login/quick"' in page,
+      "with signing in switched on the code (Quick Connect) is on the page")
 
 print()
 print("--- the rights are taken from Jellyfin at every sign-in ---")
@@ -328,8 +325,8 @@ check(response.status_code in (302, 303, 307) and "/login" in response.headers.g
       f"switching it off ends the session of a viewer signed in before ({response.status_code})")
 _, status = sign_in("mirek", "tajne")
 check(status == 401, f"a viewer does not sign in ({status})")
-check('value="jellyfin"' not in client().get("/login").text,
-      "and the button is not on the sign-in page at all")
+check('formaction="/login/quick"' not in client().get("/login").text,
+      "and the code is not on the sign-in page at all")
 _, status = sign_in("admin", "longpassword")
 check(status == 303, "a local account can still get in")
 set_options(**{access.LOGIN_KEY: True})

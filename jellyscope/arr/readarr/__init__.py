@@ -22,6 +22,7 @@ cards. It touches no other app of the *Arr page (guarded by tests/test_arr_tree.
 from __future__ import annotations
 
 from .client import FAMILY, NAME, ReadarrClient, ReadarrError
+from .api_data import api_stats
 from .live import live_state
 from .posters import clean_up_posters, poster_missing, provisional_poster
 from .progress import download_state

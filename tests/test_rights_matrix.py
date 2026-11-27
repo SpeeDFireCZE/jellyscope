@@ -41,7 +41,7 @@ os.environ.pop("JELLYSCOPE_EVENT_DATE", None)
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from jellyscope import access, accounts, api, cards, collector, db, seerr, web  # noqa: E402
+from jellyscope import access, accounts, api, api_endpoints, cards, collector, db, seerr, web  # noqa: E402
 from jellyscope.arr import bazarr, prowlarr, sonarr  # noqa: E402
 
 failures = 0
@@ -210,6 +210,7 @@ AREA_ADDRESSES = {
     "languages": ["/video/languages"],
     "users": ["/users", "/users/u-jana"],
     "network": ["/network", "/partials/network-live"],
+    "network_origin": [],
     "arr": ["/arr/sonarr", "/arr/bazarr", "/arr/prowlarr"],
     "seerr": ["/seerr"],
     "seerr_who": [],
@@ -244,7 +245,10 @@ CONTENT = {
     # The play "now" is recognised by the card and the position in the title (position_seconds).
     "now_playing": [("the playback card", '<div class="session"'), ("the playback's position", '"position_seconds"')],
     "library": [("Recently added", 'id="recently-added"')],
-    "network": [("the IP address", "203.0.113.77"), ("the live one's IP address", "198.51.100.9")],
+    # The traffic with Network; the addresses and the map only with "...where they watch from" (27. 11. 2026).
+    "network": [("a card of the traffic", "<!-- card: network_numbers -->")],
+    "network_origin": [("the IP address", "203.0.113.77"), ("the live one's IP address", "198.51.100.9"),
+                       ("the map", "<!-- card: map -->"), ("where they watch from", "<!-- card: origin -->")],
     "seerr_who": [("the requester's name", "Žadatel Matice")],
     # The music cards are on the Music page and in the custom dashboard. A listener's name cannot be a mark:
     # it is in History and in Users too, which other areas control - tests/test_music_web.py watches the names.
@@ -270,7 +274,9 @@ CONTENT["now_playing"].append(("the number of plays in /health", '"active_sessio
 # ...and in the left panel of every page (under the collector's state) and in the API's summary.
 CONTENT["now_playing"].append(("the number of plays in the panel", "aktivních přehrávání"))
 # In the API the summary too (on the My account page "active_now" is only in the guide's sample).
-API_CONTENT = {"now_playing": [("the number of plays in the API summary", '"active_now"')]}
+API_CONTENT = {"now_playing": [("the number of plays in the API summary", '"active_now"')],
+               # The countries of /api/v1/bandwidth (a list; null without the sub-area).
+               "network_origin": [("the countries in the API", '"countries":[')]}
 # Who watched it - the title's detail and the library's activity (names elsewhere are governed by anonymising).
 WHO_WATCHED = ("/item/film-1", "/library/filmy?tab=activity")
 NAME = "JanaZQX"
@@ -493,8 +499,17 @@ with db.connect() as conn:
 # --- API ------------------------------------------------------------------
 print()
 print("--- the API: an account's key sees exactly what its owner does ---")
-API_ADDRESSES = {path.replace("{item_id}", "film-1"): area for path, area in api.ADDRESS_AREAS.items()
-                 if path not in ("/api/v1", "/api/v1/")}
+
+
+def concrete(path: str) -> str:
+    """A route path as an address: the title, and the first app the address is for (Sonarr, Prowlarr - connected above)."""
+    endpoint = api_endpoints.by_path(path)
+    return path.replace("{item_id}", "film-1").replace("{app}", ((endpoint.apps if endpoint else None) or ("sonarr",))[0])
+
+
+API_ADDRESSES = {concrete(path): area for path, area in api.ADDRESS_AREAS.items() if path not in api_endpoints.INDEX_PATHS}
+# Addresses with people's plays (History, music's listens, books' readings) want the history besides their area.
+WITH_HISTORY = {concrete(e.path) for e in api_endpoints.ENDPOINTS if e.needs_history}
 keys = {}
 for name in ("reader", "viewer"):
     account = accounts.get_by_name(name)
@@ -510,7 +525,7 @@ def walk_api(token: str, valid: set[str], history: bool, label: str, viewer: boo
     for address, area in API_ADDRESSES.items():
         r = api_get(token, address)
         answers[address] = r
-        may = (history if address == "/api/v1/history" else (area is None or area in valid))
+        may = (area is None or area in valid) and (history or address not in WITH_HISTORY)
         if may:
             check(r.status_code == 200, f"{label}: {address} answers ({r.status_code})")
         else:

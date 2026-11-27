@@ -25,6 +25,7 @@ lives in which file is guarded by tests/test_radarr_package.py.
 from __future__ import annotations
 
 from .client import NAME, RadarrClient, RadarrError
+from .api_data import api_stats
 from .live import live_state
 from .posters import clean_up_posters, own_posters, poster_missing, provisional_poster, title_poster
 from .progress import download_state

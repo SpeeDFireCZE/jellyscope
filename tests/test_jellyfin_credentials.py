@@ -110,13 +110,10 @@ response = client.post("/login", data={"username": "mirek", "password": PASSWORD
 print("--- somebody else's password passes and stays nowhere ---")
 check(response.status_code == 303, f"the viewer signed in ({response.status_code})")
 
-# The two buttons of the sign-in page send the way of signing in as a field. The route's default is
-# the local sign-in, so a field renamed on one side only would still sign in locally - only the
-# Jellyfin button would break. Hence both sides are checked: the page's buttons and the route.
+# One Sign in button (27. 11. 2026): the server picks the door by the name, the page sends no way of signing in.
 page = TestClient(web.app).get("/login").text
 buttons = set(re.findall(r'<button[^>]*\bname="(\w+)"[^>]*\bvalue="(\w+)"', page))
-check(buttons == {("method", "local"), ("method", "jellyfin")},
-      f"the sign-in page's buttons send method=local / method=jellyfin ({sorted(buttons)})")
+check(not buttons and 'name="method"' not in page, f"the sign-in page sends no door of its own ({sorted(buttons)})")
 count = len(REQUESTS)
 old_client = TestClient(web.app)
 old = old_client.post("/login", data={"username": "mirek", "password": PASSWORD, "zpusob": "jellyfin"},  # old name on purpose

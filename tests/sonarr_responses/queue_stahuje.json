@@ -70,7 +70,7 @@
      }
     ],
     "year": 2015,
-    "path": "/home/coder/projects/arr-test/media/tv/The Expanse",
+    "path": "/media/tv/The Expanse",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -154,7 +154,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 2147483648,
    "id": 1085511966
@@ -204,7 +204,7 @@
      }
     ],
     "year": 2019,
-    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "path": "/media/tv/Chernobyl",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -288,7 +288,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": true,
    "sizeleft": 21104689152,
    "timeleft": "05:35:27",
@@ -339,7 +339,7 @@
      }
     ],
     "year": 2019,
-    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "path": "/media/tv/Chernobyl",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -423,7 +423,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 21104689152,
    "timeleft": "05:35:27",
@@ -474,7 +474,7 @@
      }
     ],
     "year": 2019,
-    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "path": "/media/tv/Chernobyl",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -558,7 +558,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 21104689152,
    "timeleft": "05:35:27",
@@ -609,7 +609,7 @@
      }
     ],
     "year": 2019,
-    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "path": "/media/tv/Chernobyl",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -693,7 +693,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 21104689152,
    "timeleft": "05:35:27",
@@ -744,7 +744,7 @@
      }
     ],
     "year": 2019,
-    "path": "/home/coder/projects/arr-test/media/tv/Chernobyl",
+    "path": "/media/tv/Chernobyl",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -829,7 +829,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 21104689152,
    "timeleft": "05:35:27",
@@ -900,7 +900,7 @@
      }
     ],
     "year": 2015,
-    "path": "/home/coder/projects/arr-test/media/tv/The Expanse",
+    "path": "/media/tv/The Expanse",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -985,7 +985,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 3924819968,
    "timeleft": "01:02:23",
@@ -1056,7 +1056,7 @@
      }
     ],
     "year": 2015,
-    "path": "/home/coder/projects/arr-test/media/tv/The Expanse",
+    "path": "/media/tv/The Expanse",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -1141,7 +1141,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 3924819968,
    "timeleft": "01:02:23",
@@ -1195,7 +1195,7 @@
      }
     ],
     "year": 2017,
-    "path": "/home/coder/projects/arr-test/media/tv/Dark",
+    "path": "/media/tv/Dark",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -1278,7 +1278,7 @@
     {
      "title": "Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
      "messages": [
-      "No files found are eligible for import in /home/coder/projects/arr-test/klient/hotove/Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb"
+      "No files found are eligible for import in /downloads/complete/Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb"
      ]
     }
    ],
@@ -1287,8 +1287,8 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
-   "outputPath": "/home/coder/projects/arr-test/klient/hotove/Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
+   "indexer": "test-indexer",
+   "outputPath": "/downloads/complete/Dark.S01E04.720p.WEB-DL.DD5.1.H.264-NTb",
    "episodeHasFile": false,
    "sizeleft": 0,
    "timeleft": "00:00:00",
@@ -1367,7 +1367,7 @@
      }
     ],
     "year": 2011,
-    "path": "/home/coder/projects/arr-test/media/tv/Game of Thrones",
+    "path": "/media/tv/Game of Thrones",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -1460,7 +1460,7 @@
    "protocol": "usenet",
    "downloadClient": "Blackhole",
    "downloadClientHasPostImportCategory": false,
-   "outputPath": "/home/coder/projects/arr-test/blackhole/sonarr/watch/Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
+   "outputPath": "/downloads/blackhole/sonarr/watch/Game.of.Thrones.S01E07.720p.WEB-DL.DD5.1.H.264-NOAUDIO",
    "episodeHasFile": false,
    "sizeleft": 0,
    "timeleft": "00:00:00",
@@ -1514,7 +1514,7 @@
      }
     ],
     "year": 2017,
-    "path": "/home/coder/projects/arr-test/media/tv/Dark",
+    "path": "/media/tv/Dark",
     "qualityProfileId": 1,
     "seasonFolder": true,
     "monitored": true,
@@ -1598,7 +1598,7 @@
    "protocol": "usenet",
    "downloadClient": "Klient s průběhem",
    "downloadClientHasPostImportCategory": false,
-   "indexer": "arr-test",
+   "indexer": "test-indexer",
    "episodeHasFile": false,
    "sizeleft": 4294967296,
    "timeleft": "00:00:00",

@@ -4243,3 +4243,11 @@ table.forget-table form { display: inline; }
 }
 .delete-row:hover { background: var(--surface-2); }
 .delete-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+
+/* The API addresses an area of a key's rights opens (Settings → API, the root key's tree). */
+.tree-addresses { display: block; margin-top: 3px; color: var(--text-muted); font-size: 12.5px; line-height: 1.55; }
+.tree-addresses code { font-size: 12px; }
+/* The guide window: a heading row per section of the API, and the right that opens an address. */
+#modal-api-docs tr.api-section th { padding-top: 14px; text-align: left; }
+#modal-api-docs .api-area { display: block; margin-top: 3px; color: var(--text-muted); font-size: 12.5px; }
+

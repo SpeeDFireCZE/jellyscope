@@ -259,6 +259,7 @@ ERROR_VALUES: dict[str, tuple[int, ...]] = {
     'backup %s skipped by the pruning, its time cannot be read: %s': (1,),
     'books sync failed: %s': (0,),
     'collector: %s': (0,),
+    'demo: the downloaded data of %s could not be deleted: %s': (1,),
     'could not download poster %s from Seerr: %s': (1,),
     'could not download the poster of %s %s from %s: %s': (3,),
     'could not download the artist list of %s, the albums keep the names they came with: %s': (1,),

@@ -19,7 +19,8 @@ F) the warning texts only for the administrator;
 G) an indexer without a name, a removed indexer, an unknown application, releases only
    redirected;
 H) the indexers' availability: before the first sample only the failed queries and a sentence that it is
-   measured from now on; then the most troublesome first, a strip by days, "measured since", the row limit;
+   measured from now on; then the most troublesome first, a strip by days, "measured since", the row limit (in a
+   zone where now is early in the afternoon: the samples of the last hours lie on today at any hour it runs);
 I) the whole history reaches back to the first event; a disconnected Prowlarr.
 
 Prowlarr is not run: the answers are recorded (tests/prowlarr_responses/),
@@ -421,6 +422,12 @@ check("Dostupnost se od teď měří průběžně" in measured_by_loop and "sync
 check("jakmile Prowlarr odpoví" in no_answer and "průběžně" not in no_answer and "synchronizaci *Arr" not in no_answer,
       "the loop measures, Prowlarr does not answer it: the card says so")
 NOW = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
+# The strip is by days in the app's zone and the samples below lie 8-4 hours before now: in the first hours after the
+# zone's midnight they would fall on yesterday and today would stay unmeasured (the suite run at midnight did). So the
+# app's zone is the fixed offset (no summer time) in which now is about 13:00 - the samples lie on today whenever
+# the test runs. Etc/GMT-3 is UTC+3 (POSIX). Back to the system's zone after this section.
+db.set_setting("app_timezone", f"Etc/GMT{NOW.hour - 13:+d}")
+db.forget_settings()
 
 
 def minutes_ago(minutes: int) -> str:
@@ -513,6 +520,8 @@ CSS = (PROJECT / "jellyscope" / "static" / "style.css").read_text(encoding="utf-
 colours = {state: re.search(rf"\.day-strip-{state}\s*\{{[^}}]*background:\s*([^;]+);", CSS) for state in ("fine", "failed", "outage", "unmeasured")}
 check(all(found and found.group(1).strip().startswith("var(--") for found in colours.values()),
       f"the strip's colours come from the theme's variables ({ {s: f.group(1) if f else None for s, f in colours.items()} })")
+db.set_setting("app_timezone", "")
+db.forget_settings()
 
 print()
 print("--- I) the whole history, a disconnected Prowlarr ---")

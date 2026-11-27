@@ -89,8 +89,8 @@ def _sample(records: list[dict[str, Any]] | None, blocks: dict[int, Block] | Non
 def _names_in_text(text: str, names: list[str]) -> set[str]:
     """Which indexer names are written whole in a warning's text.
 
-    It searches from the longest name and a place one name took no other can get: "arr-test" inside
-    "arr-test-torrent" does not count. The separators do not matter - Prowlarr in another language
+    It searches from the longest name and a place one name took no other can get: "test-indexer" inside
+    "test-indexer-torrent" does not count. The separators do not matter - Prowlarr in another language
     writes the list of names with other punctuation.
     """
     taken: list[tuple[int, int]] = []

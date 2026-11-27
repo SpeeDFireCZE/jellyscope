@@ -367,7 +367,8 @@ def level_of(address: str) -> tuple[int, bool] | None:
 original_verify_login, original_verify_password = jellyfin.JellyfinClient.verify_login, accounts.verify_password
 jellyfin.JellyfinClient.verify_login = slow_jellyfin  # type: ignore[method-assign]
 try:
-    statuses = asyncio.run(burst("198.51.100.7", "/login", {"username": "admin", "method": "jellyfin"}))
+    # A name without a local account goes to Jellyfin (one Sign in button, 27. 11. 2026).
+    statuses = asyncio.run(burst("198.51.100.7", "/login", {"username": "jf-guesser"}))
     check(len(guessed) == accounts.ATTEMPTS_BEFORE_BLOCK and statuses.count(429) == 40 - len(guessed),
           f"40 sign-ins at once through Jellyfin: {len(guessed)} reach Jellyfin as in a series, the rest wait "
           f"({statuses.count(429)}x 429)")
@@ -406,9 +407,10 @@ accounts._attempts.clear()
 jellyfin.JellyfinClient.verify_login = jellyfin_without_passwords  # type: ignore[method-assign]
 empty_door = TestClient(web.app)
 try:
-    empty_answers = [empty_door.post("/login", data={"username": "owner", "method": "jellyfin", **password},
+    # "owner" has no local account, so it goes to Jellyfin; a wrong password of a local account is the comparison.
+    empty_answers = [empty_door.post("/login", data={"username": "owner", **password},
                                      follow_redirects=False) for password in ({}, {"password": ""})]
-    wrong_answer = TestClient(web.app).post("/login", data={"username": "owner", "password": "wrong-one", "method": "local"},
+    wrong_answer = TestClient(web.app).post("/login", data={"username": "reader", "password": "wrong-one"},
                                             follow_redirects=False)
 finally:
     jellyfin.JellyfinClient.verify_login = original_verify_login  # type: ignore[method-assign]
@@ -553,7 +555,7 @@ accounts.forget_failures("198.51.100.78", "local:petr")
 check(len(accounts._attempts.get("198.51.100.78", [])) == 3, "a success at one door leaves the guesses at the other door counted")
 accounts._attempts.clear()
 door = (PROJECT / "jellyscope" / "web" / "login.py").read_text(encoding="utf-8")
-check(door.count("_brake_name(method, username)") == 2 and 'accounts.begin_attempt(address, username)' not in door,
+check(door.count("_brake_name(door, username)") == 2 and 'accounts.begin_attempt(address, username)' not in door,
       "the sign-in counts and forgets with the door in the name")
 
 # Blocks stored by an older version under the whole address still hold after the upgrade: the brake now counts an

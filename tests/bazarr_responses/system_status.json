@@ -8,8 +8,8 @@
   "python_version": "3.13.5",
   "database_engine": "Sqlite 3.46.1",
   "database_migration": "unknown",
-  "bazarr_directory": "/home/coder/projects/arr-test/bazarr/app",
-  "bazarr_config_directory": "/home/coder/projects/arr-test/bazarr/data",
+  "bazarr_directory": "/app/bazarr/bin",
+  "bazarr_config_directory": "/config",
   "start_time": 1794678881.7772264,
   "timezone": "Etc/UTC",
   "cpu_cores": 4

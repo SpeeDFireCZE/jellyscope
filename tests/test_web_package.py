@@ -93,6 +93,23 @@ GET /api/now-playing api_now_playing
 GET /api/v1 index
 GET /api/v1/ index
 GET /api/v1/bandwidth traffic
+GET /api/v1/arr arr_overview
+GET /api/v1/arr/{app}/calendar arr_calendar
+GET /api/v1/arr/{app}/health arr_health
+GET /api/v1/arr/{app}/indexers arr_indexers
+GET /api/v1/arr/{app}/queue arr_queue
+GET /api/v1/arr/{app}/stats arr_stats
+GET /api/v1/books/history books_history
+GET /api/v1/books/summary books_summary
+GET /api/v1/books/top books_top
+GET /api/v1/disks disks
+GET /api/v1/languages audio_languages
+GET /api/v1/music/history music_history
+GET /api/v1/music/summary music_summary
+GET /api/v1/music/top music_top
+GET /api/v1/seerr/pending seerr_pending
+GET /api/v1/seerr/requests seerr_requests
+GET /api/v1/seerr/stats seerr_stats
 GET /api/v1/history history
 GET /api/v1/insights insights_report
 GET /api/v1/item/{item_id} title
@@ -255,7 +272,8 @@ ERROR_HANDLERS = ['fastapi.exceptions.HTTPException', 'fastapi.exceptions.Reques
                   'jellyscope.web.legacy.StaleForm', 'starlette.exceptions.HTTPException']
 # The keys the templates call - Jinja's own and Starlette's `url_for` aside. A renamed key is an
 # UndefinedError on the page that uses it. `devtools_date` comes from devtools.py (dev only).
-OWN_GLOBALS = ['_', '_n', 'allowed_days', 'arr_connected', 'asset_version', 'card_data', 'charts', 'check_card', 'day_labels',
+OWN_GLOBALS = ['_', '_n', 'allowed_days', 'api_area_name', 'api_endpoints_for_area', 'api_history_endpoints',
+               'api_sections', 'api_sub_area_note', 'arr_connected', 'asset_version', 'card_data', 'charts', 'check_card', 'day_labels',
                'demo_mode', 'devtools_date', 'has_music', 'lang', 'seasonal_event', 'seasonal_motion', 'seasonal_year',
                'seerr_connected', 'stored_text', 'ui_languages']
 OWN_FILTERS = ['bitrate', 'bytes', 'czech_date', 'datetime', 'decimal', 'episode_code', 'hours', 'local_datetime',

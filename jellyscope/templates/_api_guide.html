@@ -13,10 +13,9 @@
                            the expandable "Fields for filters and sorting" at an address.
      api_guide_operators - operators by the field's type (api_query.OPERATORS).
 
-   The table is a list (address, sample call, description): it is filtered by the first
-   column, so the user does not see addresses that would return 403 to them.
-   It is written by hand because of the descriptions; test_api_keys checks that every
-   address of api.ADDRESS_AREAS is in it.
+   The table is the one list of addresses (api_endpoints) by the menu's sections, filtered by
+   api_guide_paths, so the user does not see addresses that would return 403 to them; at every
+   address the right that opens it.
 
    Sentences only for readers and viewers ("jen adresy, na které tvůj klíč smí",
    "správce vidí použití") follow the role, not the page they are on -
@@ -27,38 +26,9 @@
 {% set endpoint_fields = api_guide_fields or {} %}
 {% set field_types = {"text": _("text"), "number": _("number"), "time": _("time"),
                     "bool": _("yes/no")} %}
-{% set endpoint_rows = [
-    ("/api/v1/", "GET /api/v1/",
-     _("An index: the version and the list of addresses.")),
-    ("/api/v1/summary", "GET /api/v1/summary?days=30",
-     _("Watching over a period: hours watched, plays, viewers, titles, the transcode share and how much is playing right now.")),
-    ("/api/v1/now-playing", "GET /api/v1/now-playing",
-     _("Playback running right now: who, what, on what, whether it is being transcoded and how far in it is.")),
-    ("/api/v1/library", "GET /api/v1/library",
-     _("The size of the library, item counts, free space and the growth over a period.")),
-    ("/api/v1/libraries", "GET /api/v1/libraries",
-     _("Every library on its own: items, size, hours of content.")),
-    ("/api/v1/top-items", "GET /api/v1/top-items?days=30&limit=10&kind=both",
-     _("Most watched titles; episodes of a series add up. kind = both / movies / series.")),
-    ("/api/v1/least-played", "GET /api/v1/least-played?days=365&limit=25&min_size_mb=0&order=size",
-     _("Files from the least played up, never played first. With the same play count the largest first, or by date added: order = oldest / newest. With the last time each was played, over the whole history.")),
-    ("/api/v1/unwatched", "GET /api/v1/unwatched?days=365&limit=25",
-     _("What nobody watched over the period and how much space it takes, as a share of the library too.")),
-    ("/api/v1/users", "GET /api/v1/users?days=30",
-     _("Viewers and their watching over the period: hours, plays, titles, transcodes.")),
-    ("/api/v1/history", "GET /api/v1/history?days=30&limit=50&kind=both",
-     _("Recent playbacks, newest first. No IP addresses; the API never hands those out.")),
-    ("/api/v1/recently-added", "GET /api/v1/recently-added?limit=18",
-     _("What came into the library last.")),
-    ("/api/v1/play-methods", "GET /api/v1/play-methods?days=30",
-     _("Direct play against transcoding, and what people watch with.")),
-    ("/api/v1/insights", "GET /api/v1/insights?days=30&limit=15",
-     _("The Insights page in numbers: what gets transcoded most, what deserves better quality, large and rarely watched, never finished, and the conversion speed in frames per second.")),
-    ("/api/v1/bandwidth", "GET /api/v1/bandwidth?days=30",
-     _("Data sent out, the peak, transcode share, home against internet and by country. Without addresses.")),
-    ("/api/v1/item/{id}", "GET /api/v1/item/<id>",
-     _("One title: the file, its versions and who watched it.")),
-] %}
+{# The addresses come from the one list (api_endpoints): the same the rights check reads, so the window
+   cannot show an address the key would get 403 for, nor miss one. #}
+{% set opened_by = _("Opened by:") %}
 <dialog class="modal modal-wide" id="modal-api-docs" aria-labelledby="modal-api-docs-title">
     <form method="dialog" class="modal-head">
         <h2 id="modal-api-docs-title">{{ _("API for tools") }}</h2>
@@ -89,11 +59,25 @@
                     <th>{{ _("What it returns") }}</th>
                 </tr></thead>
                 <tbody>
-                {% for endpoint, calls, description in endpoint_rows if endpoint in allowed %}
-                <tr>
-                    <td class="nowrap"><code>{{ calls }}</code></td>
+                {% if "/api/v1/" in allowed %}
+                <tr data-endpoint="/api/v1/">
+                    <td class="nowrap"><code>GET /api/v1/</code></td>
+                    <td>{{ _("An index: the version and the list of addresses.") }}</td>
+                </tr>
+                {% endif %}
+                {% for heading, section_endpoints in api_sections() %}
+                {% set shown = [] %}
+                {% for item in section_endpoints if (item.path | replace("{item_id}", "{id}")) in allowed %}{% set _x = shown.append(item) %}{% endfor %}
+                {% if shown %}
+                <tr class="api-section" data-endpoint-section="{{ heading }}"><th colspan="2">{{ _(heading) }}</th></tr>
+                {% for item in shown %}
+                {% set endpoint = item.path | replace("{item_id}", "{id}") %}
+                <tr data-endpoint="{{ endpoint }}">
+                    <td class="nowrap"><code>{{ item.example }}</code></td>
                     <td>
-                        {{ description }}
+                        {{ _(item.label) }}
+                        {% if item.apps %}<span class="api-area"><code>app</code> = {{ item.apps | join(" / ") }}</span>{% endif %}
+                        <span class="api-area">{{ opened_by }} {{ _(api_area_name(item.area)) if item.area else _("Playback history") }}{% if item.needs_history and item.area %} + {{ _("Playback history") }}{% endif %}</span>
                         {# The fields are taken from api.LISTS - the same description
                            the query is checked by. `.items()` is the
                            dict's method here, not the list key "items". #}
@@ -111,6 +95,8 @@
                         {% endif %}
                     </td>
                 </tr>
+                {% endfor %}
+                {% endif %}
                 {% endfor %}
                 </tbody>
             </table>

@@ -7,14 +7,14 @@ import) are grouped by the book and the day (UTC). The data is the recorded hist
 (tests/readarr_responses/history_since.json) synced by `fill_readarr()`; the period is November 2026, the
 app's zone UTC. The numbers below are counted by hand from the recording:
 
-    grab 101   11-12 20:50:18  book 11  EPUB  4 MB  Rss               arr-test  WRE     SABnzbd  usenet  (aaa111)
+    grab 101   11-12 20:50:18  book 11  EPUB  4 MB  Rss               test-indexer  WRE     SABnzbd  usenet  (aaa111)
     import 102 11-12 21:00:05  1 file of 4 MB (aaa111)                         = import B1: 1 file, 4 MB
-    grab 103   11-14 08:10:00  book 11  AZW3  6 MB  InteractiveSearch arr-test  AZWGRP  SABnzbd  usenet  (bbb222)
+    grab 103   11-14 08:10:00  book 11  AZW3  6 MB  InteractiveSearch test-indexer  AZWGRP  SABnzbd  usenet  (bbb222)
     delete 104 11-14 09:00:00  the EPUB file, reason Upgrade (no file id: a deletion carries none)
     import 105 11-14 09:00:10  1 file (a NEW file id, 1108) of 6 MB (bbb222)   = import B2: 1 file, 6 MB, an upgrade
     imports    11-15 10:00:00..01  book 12, 2 PDF files of 1 MB, NO download_id = import B3: 2 files, 2 MB (manual)
     grab 108   11-16 12:00     book 22  MP3  (tor_hash_ccc333), failed 12:30 - no import
-    grab 110   11-17 12:00     book 22  MP3  98 MB  UserInvokedSearch arr-test WRE SABnzbd usenet (ddd444)
+    grab 110   11-17 12:00     book 22  MP3  98 MB  UserInvokedSearch test-indexer WRE SABnzbd usenet (ddd444)
     imports    11-17 13:00:00..01   2 files of 49 MB                      = import B4: 2 files, 98 MB
     (downloadImported, bookImportIncomplete, downloadIgnored, renamed, retagged, a Manual deletion: not imports)
 
@@ -27,13 +27,13 @@ What follows from it and the test guards:
   (B1, B3, B4 not counted, B2 an upgrade);
 - download time: B1 20:50:18 -> 21:00:05 = 587 s, B2 08:10:00 -> 09:00:10 = 3010 s, B4 12:00:00 -> 13:00:00 = 3600 s;
   B3 has no grab. Median 3010, p90 at rank 0.9 * (3 - 1) = 1.8: 3010 + 0.8 * (3600 - 3010) = 3482;
-- sources over the four imports: indexer arr-test x3 (4 + 6 + 98 = 108 MB) and "-" x1 (2 MB); groups WRE x2 (4 + 98 = 102 MB),
+- sources over the four imports: indexer test-indexer x3 (4 + 6 + 98 = 108 MB) and "-" x1 (2 MB); groups WRE x2 (4 + 98 = 102 MB),
   AZWGRP x1 (6 MB), "-" x1 (2 MB); clients SABnzbd main x3 (108 MB; the import's name), "-" x1; protocols usenet x3, "-" x1;
   qualities one each, by size: MP3 98, AZW3 6, EPUB 4, PDF 2 MB;
 - upgrades: one (book 11, EPUB -> AZW3); the grab that brought it was a manual pick; all four grabs of the period:
   Rss + Search = 2 automatic, 1 manual, 1 user's search;
 - failures: one (event 109);
-- indexer reliability: arr-test 3 grabs, 3 imported; tracker 1 grab, 1 failed - further hand-made grabs add a grab
+- indexer reliability: test-indexer 3 grabs, 3 imported; tracker 1 grab, 1 failed - further hand-made grabs add a grab
   still downloading at the period's end, a Blackhole grab without download_id and a grab before the period; a
   release of two books (a grab per book, one download_id) is one download.
 
@@ -174,7 +174,7 @@ print()
 print("--- Sources and quality ---")
 sources = stats.readarr_sources(PERIOD)
 check(set(sources) == {"indexers", "groups", "clients", "protocols", "qualities"}, f"the groups of sources (no resolutions for books) ({sorted(sources)})")
-check([(x["name"], x["count"], x["size_bytes"]) for x in sources["indexers"]] == [("arr-test", 3, 108 * MB), ("–", 1, 2 * MB)],
+check([(x["name"], x["count"], x["size_bytes"]) for x in sources["indexers"]] == [("test-indexer", 3, 108 * MB), ("–", 1, 2 * MB)],
       f"indexers: from the grab of the import; the manual import has none ({sources['indexers']})")
 check([(x["name"], x["count"], x["size_bytes"]) for x in sources["groups"]] == [("WRE", 2, 102 * MB), ("AZWGRP", 1, 6 * MB), ("–", 1, 2 * MB)],
       f"release groups ({sources['groups']})")
@@ -206,22 +206,22 @@ def reliability(period) -> list[tuple]:
             for x in stats.readarr_indexer_reliability(period)]
 
 
-# From the recording: arr-test grabbed aaa111, bbb222 and ddd444 (all three imported as books), tracker ccc333 (failed).
-check(reliability(PERIOD) == [("tracker", 1, 0, 1, 0, 0.0), ("arr-test", 3, 3, 0, 0, 1.0)],
+# From the recording: test-indexer grabbed aaa111, bbb222 and ddd444 (all three imported as books), tracker ccc333 (failed).
+check(reliability(PERIOD) == [("tracker", 1, 0, 1, 0, 0.0), ("test-indexer", 3, 3, 0, 0, 1.0)],
       f"a book's grab is imported or failed by its download_id; the most failures first ({reliability(PERIOD)})")
-insert(1100, "grabbed", "2026-11-30 23:50:00", "L", None, book=90, source="Rss", indexer="arr-test")
+insert(1100, "grabbed", "2026-11-30 23:50:00", "L", None, book=90, source="Rss", indexer="test-indexer")
 insert(1101, "bookFileImported", "2026-12-01 00:10:00", "L", 9001, book=90, size=MB)
 insert(1102, "grabbed", "2026-11-26 10:00:00", None, None, book=91, source="ReleasePush", indexer="Other")
 insert(1103, "bookFileImported", "2026-11-26 10:10:00", "Blackhole_z", 9101, book=91, size=MB)
 insert(1104, "grabbed", "2026-10-30 10:00:00", "P", None, book=92, source="Rss", indexer="tracker")
 insert(1105, "downloadFailed", "2026-11-01 01:00:00", "P", None, book=92)
 rows = reliability(PERIOD)
-check(("arr-test", 4, 3, 0, 0, 1.0) in rows,
+check(("test-indexer", 4, 3, 0, 0, 1.0) in rows,
       f"a grab still downloading at the period's end (imported only after it) is neither a success nor a failure ({rows})")
 check(("Other", 1, 0, 0, 1, None) in rows,
       f"a grab without download_id (Blackhole) cannot be matched and lowers no success rate ({rows})")
 check(("tracker", 1, 0, 1, 0, 0.0) in rows, "a grab before the period does not count, not even with its failure in the period")
-check([r[0] for r in rows] == ["tracker", "arr-test", "Other"],
+check([r[0] for r in rows] == ["tracker", "test-indexer", "Other"],
       f"sorted by failures, then the lowest success rate; nothing finished comes last ({[r[0] for r in rows]})")
 analysis, before = stats.readarr_events(PERIOD), stats.readarr_indexer_reliability(PERIOD)
 insert(1106, "grabbed", "2026-11-27 15:00:00", "S", None, book=95, source="Rss", indexer="Later")

@@ -11,8 +11,8 @@ B) settings and the connection test: an empty key keeps the stored one, the key 
 C) time: Bazarr returns an event's time only as text in the system's format (`11/14/26 08:31:35`) in
    its zone - the format is recognised from the whole page.
 
-The app does not run: the answers are recorded from a real Bazarr 1.6.2 (tests/bazarr_responses/, see
-~/projects/arr-test/nahrat_bazarr.py).
+The app does not run: the answers are recorded from a real Bazarr 1.6.2 (tests/bazarr_responses/; paths and names
+in them are neutral).
 
 Spec: docs/superpowers/specs/2026-11-14-bazarr-design.md
 

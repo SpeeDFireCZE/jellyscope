@@ -20,10 +20,13 @@ load the others with it.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
+
+import httpx
 
 from .. import cards_bazarr, cards_lidarr, cards_prowlarr, cards_radarr, cards_readarr, cards_sonarr
 from ..cards_base import Card
@@ -64,6 +67,12 @@ class App:
     # The provisional poster of a title being downloaded: (title id) -> (content, image type), or None.
     provisional_poster: Callable[[int], Awaitable[tuple[bytes, str] | None]] | None = None
     # The data of the slice of the card "Downloading" for an admin (True) or the others (False), with `refresh`.
+    # The live state (queue, calendar, health; 3 s, a minute's memory) - the API reads it (api_arr).
+    live_state: Callable[[], Awaitable[dict[str, Any]]] | None = None
+    # The API's statistics of the app (arr/<app>/api_data.py): (days, the live state) -> the answer of /stats;
+    # Prowlarr also every indexer's availability (/indexers).
+    api_stats: Callable[[int, dict[str, Any]], dict[str, Any]] | None = None
+    api_indexers: Callable[[int, dict[str, Any]], dict[str, Any]] | None = None
     downloading: Callable[[bool], Awaitable[dict[str, Any]]] | None = None
     downloading_template: str = ""                          # the template of that slice
     # The name of the app that really answers when it can differ from `name` (Readarr, Chaptarr or Bookshelf).
@@ -79,6 +88,9 @@ class App:
     watch_settings: Callable[[], dict[str, Any]] | None = None
     save_watch_settings: Callable[[bool, str], None] | None = None
     marker: Callable[[], str] | None = None
+    # The demo only: a function that gives the app's made-up handler (its package's demo.py, imported only when asked
+    # - see _demo). demo_apps.load_fakes registers it in demo_switch under `name`. None = the demo leaves the app out.
+    demo: Callable[[], Callable[[httpx.Request], httpx.Response]] | None = None
 
     def shown_name(self) -> str:
         """The name people see - in the *Arr menu, on the tab and in Settings: the app that answers, else `name`
@@ -91,6 +103,17 @@ def _later(package: Any, name: str, *bound: Any) -> Callable[..., Any]:
     def call(*args: Any, **kwargs: Any) -> Any:
         return getattr(package, name)(*bound, *args, **kwargs)
     return call
+
+
+def _demo(package: Any) -> Callable[[], Callable[[httpx.Request], httpx.Response]]:
+    """The app's made-up handler for the demo: `handler` of its package's `demo.py` (`arr/<app>/demo.py`).
+
+    The module is imported only when the function is called (demo_apps.load_fakes, in the demo mode only), so a
+    real installation never loads it.
+    """
+    def handler() -> Callable[[httpx.Request], httpx.Response]:
+        return importlib.import_module(f"{package.__name__}.demo").handler
+    return handler
 
 
 def _slice_data(package: Any, cards: Any) -> Callable[[bool], Awaitable[dict[str, Any]]]:
@@ -113,6 +136,8 @@ def _sonarr_app() -> App:
         refresh_counts=_later(sonarr, "refresh_counts"),
         sync_running=_later(sonarr, "sync_running"),
         sync_state=_later(sonarr, "sync_state"),
+        live_state=_later(sonarr, "live_state"),
+        api_stats=_later(sonarr, "api_stats"),
         event_count=_later(sonarr, "event_count"),
         delete_downloaded_data=_later(sonarr, "delete_downloaded_data"),
         cards=lambda: cards_sonarr.CARDS,
@@ -125,6 +150,7 @@ def _sonarr_app() -> App:
         provisional_poster=_later(sonarr, "provisional_poster"),
         downloading=_slice_data(sonarr, cards_sonarr),
         downloading_template="_sonarr_downloading_body.html",
+        demo=_demo(sonarr),
     )
 
 
@@ -139,6 +165,8 @@ def _radarr_app() -> App:
         refresh_counts=_later(radarr, "refresh_counts"),
         sync_running=_later(radarr, "sync_running"),
         sync_state=_later(radarr, "sync_state"),
+        live_state=_later(radarr, "live_state"),
+        api_stats=_later(radarr, "api_stats"),
         event_count=_later(radarr, "event_count"),
         delete_downloaded_data=_later(radarr, "delete_downloaded_data"),
         cards=lambda: cards_radarr.CARDS,
@@ -151,6 +179,7 @@ def _radarr_app() -> App:
         provisional_poster=_later(radarr, "provisional_poster"),
         downloading=_slice_data(radarr, cards_radarr),
         downloading_template="_radarr_downloading_body.html",
+        demo=_demo(radarr),
     )
 
 
@@ -165,6 +194,8 @@ def _lidarr_app() -> App:
         refresh_counts=_later(lidarr, "refresh_counts"),
         sync_running=_later(lidarr, "sync_running"),
         sync_state=_later(lidarr, "sync_state"),
+        live_state=_later(lidarr, "live_state"),
+        api_stats=_later(lidarr, "api_stats"),
         event_count=_later(lidarr, "event_count"),
         delete_downloaded_data=_later(lidarr, "delete_downloaded_data"),
         cards=lambda: cards_lidarr.CARDS,
@@ -177,6 +208,7 @@ def _lidarr_app() -> App:
         provisional_poster=_later(lidarr, "provisional_poster"),
         downloading=_slice_data(lidarr, cards_lidarr),
         downloading_template="_lidarr_downloading_body.html",
+        demo=_demo(lidarr),
     )
 
 
@@ -191,6 +223,8 @@ def _readarr_app() -> App:
         refresh_counts=_later(readarr, "refresh_counts"),
         sync_running=_later(readarr, "sync_running"),
         sync_state=_later(readarr, "sync_state"),
+        live_state=_later(readarr, "live_state"),
+        api_stats=_later(readarr, "api_stats"),
         event_count=_later(readarr, "event_count"),
         delete_downloaded_data=_later(readarr, "delete_downloaded_data"),
         cards=lambda: cards_readarr.CARDS,
@@ -204,6 +238,7 @@ def _readarr_app() -> App:
         downloading=_slice_data(readarr, cards_readarr),
         downloading_template="_readarr_downloading_body.html",
         detected_name=_later(readarr, "app_name"),
+        demo=_demo(readarr),
     )
 
 
@@ -218,6 +253,8 @@ def _bazarr_app() -> App:
         refresh_counts=_later(bazarr, "refresh_counts"),
         sync_running=_later(bazarr, "sync_running"),
         sync_state=_later(bazarr, "sync_state"),
+        live_state=_later(bazarr, "live_state"),
+        api_stats=_later(bazarr, "api_stats"),
         event_count=_later(bazarr, "event_count"),
         delete_downloaded_data=_later(bazarr, "delete_downloaded_data"),
         cards=lambda: cards_bazarr.CARDS,
@@ -227,6 +264,7 @@ def _bazarr_app() -> App:
         period=cards_bazarr.bazarr_period,
         sample_url="http://localhost:6767",
         key_hint="In Bazarr: Settings → General → Security → API Key.",
+        demo=_demo(bazarr),
     )
 
 
@@ -246,6 +284,9 @@ def _prowlarr_app() -> App:
         refresh_counts=_later(prowlarr, "take_sample"),
         sync_running=_later(prowlarr, "sync_running"),
         sync_state=_later(prowlarr, "sync_state"),
+        live_state=_later(prowlarr, "live_state"),
+        api_stats=_later(prowlarr, "api_stats"),
+        api_indexers=_later(prowlarr, "api_indexers"),
         event_count=_later(prowlarr, "event_count"),
         delete_downloaded_data=_later(prowlarr, "delete_downloaded_data"),
         cards=lambda: cards_prowlarr.CARDS,
@@ -261,6 +302,7 @@ def _prowlarr_app() -> App:
         watch_settings=_later(prowlarr, "watch_settings"),
         save_watch_settings=_later(prowlarr, "save_watch_settings"),
         marker=_later(prowlarr, "status_marker"),
+        demo=_demo(prowlarr),
     )
 
 
