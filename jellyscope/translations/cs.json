@@ -2871,5 +2871,17 @@
     "Network traffic": "Síťový provoz",
     "Peaks, what flows right now, how much went through which players, and who streamed the most. No addresses. Names can be hidden by anonymising.": "Špičky, co právě teče, kolik prošlo kterými přehrávači a kdo nejvíc streamoval. Bez adres. Jména lze skrýt anonymizací.",
     "…including \"where they watch from\"": "…včetně „odkud se dívají“",
-    "Adds home against internet and the countries to /api/v1/bandwidth.": "Přidá domov proti internetu a země do /api/v1/bandwidth."
+    "Adds home against internet and the countries to /api/v1/bandwidth.": "Přidá domov proti internetu a země do /api/v1/bandwidth.",
+    "is already running.": "už běží.",
+    "Every day at": "Denně v",
+    "Every#interval_one": "Každou",
+    "Every#interval_few": "Každé",
+    "Every#interval_other": "Každých",
+    "minutes#interval_one": "minutu",
+    "minutes#interval_few": "minuty",
+    "minutes#interval_other": "minut",
+    "hours#interval_one": "hodinu",
+    "hours#interval_few": "hodiny",
+    "hours#interval_other": "hodin",
+    "Only by hand": "Jen ručně"
 }

@@ -43,6 +43,9 @@ FULL_PASS_KEY = "music_full_pass"            # when the last full pass ran (UTC)
 GONE_LIBRARIES_KEY = "music_vanished_libraries"   # music libraries with stored music the last run did not find in Jellyfin (JSON)
 PAGE_SIZE = 200                                 # items per request
 FULL_PASS_EVERY = timedelta(hours=24)
+# A task at a time every day starts a minute earlier or later than yesterday (when the scheduler's tick falls):
+# without slack the full pass came about every other day (28. 11. 2026).
+FULL_PASS_SLACK = timedelta(hours=1)
 TABLES_BY_TYPE = (("MusicArtist", "music_artist"), ("MusicAlbum", "music_album"), ("Audio", "music_track"))
 # A sentence of its own, not services.SYNC_ALREADY_RUNNING: "Synchronizace {nazev}" would read
 # "Synchronizace Hudba" here.
@@ -285,7 +288,7 @@ def _full_pass_due() -> bool:
         when = datetime.strptime(last, db.TIME_FORMAT).replace(tzinfo=UTC)
     except ValueError:
         return True
-    return datetime.now(UTC) - when >= FULL_PASS_EVERY
+    return datetime.now(UTC) - when >= FULL_PASS_EVERY - FULL_PASS_SLACK
 
 
 def _mark_missing(run: str, libraries: set[str]) -> int:

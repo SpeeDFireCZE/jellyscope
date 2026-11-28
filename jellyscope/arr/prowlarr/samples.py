@@ -61,6 +61,8 @@ RUN = 0                         # the indexer number of a sample's own row
 # The *Arr sync task's settings and its default interval (tasks.py, the task "arr" - this package does not import the
 # tasks, which import the apps; tests/test_prowlarr_samples.py compares them).
 TASK_ENABLED, TASK_MINUTES, TASK_DEFAULT_MINUTES = "task_arr_enabled", "arr_sync_minutes", 60
+# The *Arr sync's chosen schedule (tasks.Task.mode_setting): "daily" = once a day at its time, whatever the interval.
+TASK_MODE = "task_arr_mode"
 # PostgreSQL's SQLSTATE of a lock not had within lock_timeout (psycopg.errors.LockNotAvailable).
 LOCK_NOT_AVAILABLE = "55P03"
 # The rows of a sample. A second sample within the same second is the same one (the task and a page meeting): nothing.
@@ -217,8 +219,11 @@ def delete_old_samples(before: str) -> int:
 
 def sample_interval() -> timedelta:
     """The usual time between two samples: the *Arr sync task's interval while it runs on its own (it samples on every
-    run), otherwise the pages' ten minutes (`EVERY`) - then only pages that load the live state sample."""
+    run), a day when it runs at a time every day, otherwise the pages' ten minutes (`EVERY`) - then only pages that
+    load the live state sample."""
     if db.get_setting(TASK_ENABLED, "0") == "1":
+        if db.get_setting(TASK_MODE, "") == "daily":
+            return timedelta(days=1)
         minutes = db.get_int_setting(TASK_MINUTES, 0, 10080, TASK_DEFAULT_MINUTES)
         if minutes > 0:
             return timedelta(minutes=minutes)

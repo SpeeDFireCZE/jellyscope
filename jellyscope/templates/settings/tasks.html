@@ -41,7 +41,7 @@
             <thead>
             <tr>
                 <th>{{ _("Task") }}</th><th>{{ _("Automatic") }}</th>
-                <th class="num">{{ _("When") }}</th>
+                <th class="when">{{ _("When") }}</th>
                 <th>{{ _("Last run") }}</th><th>{{ _("Next run") }}</th>
             </tr>
             </thead>
@@ -61,38 +61,56 @@
                         <span>{{ _("on") if row.enabled else _("off") }}</span>
                     </label>
                 </td>
-                {# Nightly tasks are set by a time, not an interval. An interval
-                   counts from the last run, so every manual
-                   run would shift the whole schedule - and the task would in time
-                   turn round into the afternoon.
+                {# The schedule: at a time every day, or every N minutes or hours (28. 11. 2026) - the task's
+                   kind by default, the administrator chooses; the log rotation stays daily (it turns after N
+                   days), and so does the clearing out (a backup before it deletes). Radios, no script (CSP): the chosen
+                   one holds, the other keeps its value. "Every" and the unit agree with the saved number (_n: the Czech
+                   one/few/other forms of both, "every 1 hour" and "every 6 hours" alike).
 
-                   Two number fields, not `<input type="time">` nor two
-                   `<select>`. Both open a pop-up of their own
-                   drawn by the browser: CSS cannot reach it
-                   and it decides the direction it opens in by the space on the
-                   screen - for the bottom row of the table it went up.
-                   This way nothing opens and the field looks the same as the
-                   neighbouring field with minutes. #}
-                <td class="num">
-                    {% if row.daily %}
+                   The time is two number fields, not `<input type="time">` nor two `<select>`. Both open a
+                   pop-up of their own drawn by the browser: CSS cannot reach it and it decides the direction it
+                   opens in by the space on the screen - for the bottom row of the table it went up. #}
+                <td>
+                    {% set key = row.task.key %}
+                    <div class="task-schedule"{% if row.switchable %} role="radiogroup" aria-label="{{ _('When') }}: {{ _(row.task.name) }}"{% endif %}>
+                    {% if row.switchable or row.daily %}
+                    {% if row.switchable %}
+                    <label class="task-mode">
+                        <input type="radio" name="mode_{{ key }}" value="daily" form="tasks" {{ 'checked' if row.daily }}>
+                        <span>{{ _("Every day at") }}</span>
+                    </label>
+                    {% endif %}
                     <div class="time-picker">
-                        <input type="number" name="time_{{ row.task.key }}_h" form="tasks"
+                        <input type="number" name="time_{{ key }}_h" form="tasks"
                                value="{{ row.hour }}" min="0" max="23"
                                aria-label="{{ _('Hour') }}">
                         <span aria-hidden="true">:</span>
-                        <input type="number" name="time_{{ row.task.key }}_m" form="tasks"
+                        <input type="number" name="time_{{ key }}_m" form="tasks"
                                value="{{ row.minute }}" min="0" max="59"
                                aria-label="{{ _('Minute') }}">
                     </div>
-                    <div class="card-note">{{ _("every day") }}</div>
-                    {% else %}
-                    {# The same width as the time field, so all
-                       rows have an equally wide column and line up. #}
-                    <input type="number" name="minutes_{{ row.task.key }}" form="tasks"
-                           value="{{ row.minutes }}" min="0" max="10080"
-                           style="width:110px" aria-label="{{ _('Interval') }}">
-                    <div class="card-note">{{ _("minutes") }}</div>
                     {% endif %}
+                    {% if row.switchable or not row.daily %}
+                    {% if row.switchable %}
+                    <label class="task-mode">
+                        <input type="radio" name="mode_{{ key }}" value="interval" form="tasks" {{ 'checked' if not row.daily }}>
+                        <span>{{ _n("Every#interval", row.interval) }}</span>
+                    </label>
+                    {% endif %}
+                    <div class="interval-picker">
+                        <input type="number" name="interval_{{ key }}" form="tasks"
+                               value="{{ row.interval }}" min="0" max="10080"
+                               aria-label="{{ _('Interval') }}">
+                        <select name="unit_{{ key }}" form="tasks" aria-label="{{ _('Interval') }}">
+                            <option value="minutes" {{ 'selected' if row.unit == 'minutes' }}>{{ _n("minutes#interval", row.interval) }}</option>
+                            <option value="hours" {{ 'selected' if row.unit == 'hours' }}>{{ _n("hours#interval", row.interval) }}</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    {% if not row.switchable and row.daily %}
+                    <div class="card-note">{{ _("every day") }}</div>
+                    {% endif %}
+                    </div>
                 </td>
                 <td class="nowrap">
                     {% if row.last %}
@@ -116,6 +134,8 @@
                 <td class="nowrap muted">
                     {% if not row.enabled %}
                         {{ _("off") }}
+                    {% elif row.by_hand_only %}
+                        {{ _("Only by hand") }}
                     {% elif row.next_date %}
                         {{ row.next_date }} {{ _("at") }} {{ row.time }}
                     {% elif row.due_in is none or row.due_in <= 0 %}

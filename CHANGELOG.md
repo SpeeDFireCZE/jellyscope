@@ -10,10 +10,18 @@ grows rather than a new one arriving.
 The database migrates itself on start, so upgrading is `git pull` and a
 restart.
 
-## Unreleased
+## 1.9.3
+
+Choose how each task is scheduled, read every section through the API, and give Network traffic without the addresses.
+
+**Before you upgrade:**
+
+- Signing in has one button: a local account is checked here, any other name against Jellyfin. A Jellyfin user named like a local account signs in with a code.
+- Whoever had Network keeps the addresses and the map: the new right "…including where they watch from" is ticked for them. Untick it to show only the traffic.
 
 ### ✨ Features
 
+- Run any task at a time every day or every N minutes or hours
 - Read music, books, languages, disks, *Arr and Seerr through the API
 - Show which API addresses each key right opens
 - Show My statistics in the menu of an administrator who signs in through Jellyfin
@@ -21,6 +29,7 @@ restart.
 
 ### 🐛 Fixes
 
+- Never run the same task twice at once, by the scheduler or by hand
 - Security: Log only the names of a message's values when filling it fails
 - Refuse to restore a `pg_dump` backup that was cut off, instead of emptying the database
 
@@ -28,6 +37,9 @@ restart.
 
 - Sign in with one button: a local account is checked here, any other name against Jellyfin
 - Update FastAPI to 0.165.0, psycopg to 3.3.9 and twelve other dependencies
+- Show made-up music, books, the *Arr apps and Seerr in the demo
+
+**Full Changelog**: https://github.com/SpeeDFireCZE/jellyscope/compare/1.9.2...1.9.3
 
 ## 1.9.2
 

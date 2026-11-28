@@ -229,5 +229,6 @@
     "%s: could not count wanted/%s, the last known count stays: %s": "%s: wanted/%s se nepodařilo spočítat, zůstává poslední známý počet: %s",
     "bazarr: could not read the missing subtitles, the last known languages stay: %s": "bazarr: chybějící titulky se nepodařilo načíst, zůstávají poslední známé jazyky: %s",
     "%s: the counts were not updated: %s": "%s: počty se nepodařilo aktualizovat: %s",
-    "demo: the downloaded data of %s could not be deleted: %s": "demo: stažená data aplikace %s nešlo smazat: %s"
+    "demo: the downloaded data of %s could not be deleted: %s": "demo: stažená data aplikace %s nešlo smazat: %s",
+    "task %s is running already, not started again": "uloha %s uz bezi, znovu se nespousti"
 }

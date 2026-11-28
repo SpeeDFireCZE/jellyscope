@@ -109,6 +109,39 @@ def conversion_notice_close(account: dict[str, Any] = Depends(require_admin)):
     return RedirectResponse("/settings?section=tasks", status_code=303)
 
 
+def _save_schedule(task: tasks.Task, form: Any) -> None:
+    """A task's time and interval - both are on the page - and, when it can switch, which of them holds.
+
+    The hour and the minute come from two separate fields, here "HH:MM" is put together from them again. `_clamp`
+    guards the range and pads with a zero (typed "3" and "5" is "03:05"), `valid_time` is the last safeguard: what
+    still would not fit the shape is saved as the default, not as a broken schedule. The fallback for nonsense is
+    what is saved now, so a cleared field does not change the schedule (zero would silently turn it into midnight).
+    """
+    current = tasks.daily_time(task).split(":")
+    hour = _clamp(str(form.get(f"time_{task.key}_h", "")), 0, 23, int(current[0]))
+    minute = _clamp(str(form.get(f"time_{task.key}_m", "")), 0, 59, int(current[1]))
+    db.set_setting(task.time_setting, tasks.valid_time(f"{int(hour):02d}:{int(minute):02d}", task.default_time))
+    minutes = _interval_from_form(task, form)
+    if minutes is not None:
+        db.set_setting(task.interval_setting, str(minutes))
+    mode = form.get(f"mode_{task.key}")
+    if task.switchable and mode in ("daily", "interval"):
+        tasks.set_mode(task, mode == "daily")
+
+
+def _interval_from_form(task: tasks.Task, form: Any) -> int | None:
+    """The interval in minutes from the number and its unit (minutes, hours), at most a week; no limit below
+    (28. 11. 2026: "leave the intervals without a limit"). None = keep the saved one - a cleared or nonsense field.
+    A page opened before this version sends `minutes_<key>`."""
+    raw = str(form.get(f"interval_{task.key}", form.get(f"minutes_{task.key}", ""))).strip()
+    try:
+        number = int(float(raw))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    per_unit = 60 if form.get(f"unit_{task.key}") == "hours" else 1
+    return max(0, min(10080, number * per_unit))
+
+
 @router.post("/settings/tasks")
 async def tasks_save(
     request: Request,
@@ -132,30 +165,7 @@ async def tasks_save(
         enabled = "1" if form.get(f"enabled_{task.key}") else "0"
         db.set_setting(task.enabled_setting, enabled)
 
-        if task.is_daily:
-            # The hour and the minute come from two separate fields, here "HH:MM"
-            # is put together from them again. `_clamp` guards the range and pads with a zero
-            # (typed "3" and "5" is "03:05"), `valid_time` is the last
-            # safeguard: what still would not fit the shape is saved as
-            # the default, not as a broken schedule.
-            #
-            # The fallback for nonsense is what is saved now: so a cleared
-            # field does not change the schedule. Zero would silently turn it into midnight.
-            current = tasks.daily_time(task).split(":")
-            hour = _clamp(str(form.get(f"time_{task.key}_h", "")),
-                          0, 23, int(current[0]))
-            minute = _clamp(str(form.get(f"time_{task.key}_m", "")),
-                            0, 59, int(current[1]))
-            time_text = f"{int(hour):02d}:{int(minute):02d}"
-            db.set_setting(task.time_setting,
-                           tasks.valid_time(time_text, task.default_time))
-        else:
-            # The same for an interval: a cleared field keeps the saved one.
-            db.set_setting(
-                task.interval_setting,
-                _clamp(str(form.get(f"minutes_{task.key}", "")),
-                       0, 10080, tasks.interval_minutes(task)),
-            )
+        _save_schedule(task, form)
 
     # How much history is kept. It is saved even when purging is off -
     # once it is switched on, the number the person saw on the page is to hold.
@@ -216,6 +226,10 @@ async def tasks_run(
         # "recent" used to be missing here, so it could be started alongside a scan -
         # and the second task then only hit the lock and ended silently.
         _flash(request, "Another task is already running, wait for it to finish.", "warning")
+    elif tasks.is_running(key):
+        # The same task runs already (the scheduler's run, or a click before): it does not start a second time.
+        _flash(request, "{task}: {state}", "warning",
+               task=i18n.translate(task.name), state=i18n.translate("is already running."))
     else:
         spawn(tasks.run_now(key), f"task {key}")
         # The task's name is a Czech constant of tasks.py - in an English

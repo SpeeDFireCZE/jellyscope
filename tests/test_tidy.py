@@ -122,12 +122,12 @@ print()
 print("--- the task runs the same ---")
 check("tidy" in tasks.TASKS, "the task exists")
 task = tasks.TASKS["tidy"]
-check(task.is_daily and tasks.daily_time(task) == "04:00",
+check(tasks.is_daily(task) and tasks.daily_time(task) == "04:00",
       f"it is daily and has the default time ({tasks.daily_time(task)})")
 check(tasks.is_enabled(task), "and it is on by default")
 # The order is not random: tidying works with what the synchronisation pulled,
 # and the backup should already store tidied data.
-times = {k: tasks.daily_time(t) for k, t in tasks.TASKS.items() if t.is_daily}
+times = {k: tasks.daily_time(t) for k, t in tasks.TASKS.items() if tasks.is_daily(t)}
 check(times["sync"] < times["tidy"] < times["backup"],
       f"it runs between the synchronisation and the backup ({times})")
 

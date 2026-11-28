@@ -113,12 +113,12 @@ check(set(tasks.TASKS) == {"sync", "recent", "tidy", "notifications", "arr", "se
                            "updates", "purge", "backup", "logrotate"},
       f"twelve tasks (the log rotation and the *Arr, Seerr, music and books synchronisations too); the analysis "
       f"is not one of its own, the update check and the notifications are ({sorted(tasks.TASKS)})")
-check(not tasks.TASKS["arr"].is_daily and tasks.TASKS["arr"].default_minutes == 60,
+check(not tasks.is_daily(tasks.TASKS["arr"]) and tasks.TASKS["arr"].default_minutes == 60,
       "the *Arr synchronisation is an interval one, once an hour")
 check(all(name in i18n.translate(tasks.TASKS["arr"].description, "cs") for name in ("Sonarru", "Radarru", "Bazarru", "Prowlarru")),
       "the description of the *Arr synchronisation names all four apps it synchronises")
-check(SYNC.is_daily and BACKUP.is_daily, "the synchronisation and the backup run at a given time")
-check(not RECENT.is_daily, "the newly added titles stay on minutes")
+check(tasks.is_daily(SYNC) and tasks.is_daily(BACKUP), "the synchronisation and the backup run at a given time")
+check(not tasks.is_daily(RECENT), "the newly added titles stay on minutes")
 
 
 print()
@@ -255,7 +255,7 @@ try:
           "the condition alone would start it (today's time has been)")
 
     # ...and exactly that is why the scheduler stamps first.
-    if tasks.TASKS["sync"].is_daily and tasks.last_automatic_run(
+    if tasks.is_daily(tasks.TASKS["sync"]) and tasks.last_automatic_run(
             tasks.TASKS["sync"]) is None:
         tasks._record_automatic_run(tasks.TASKS["sync"])
     check(tasks._is_due(tasks.TASKS["sync"]) is False,

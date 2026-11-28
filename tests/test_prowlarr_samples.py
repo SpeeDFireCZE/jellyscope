@@ -364,6 +364,14 @@ check(prowlarr.sample_interval() == prowlarr.samples.EVERY, "the task switched o
 db.set_setting(ARR_TASK.enabled_setting, "1")
 db.forget_settings()
 check(prowlarr.sample_interval() == timedelta(hours=2), "switched on again: its two hours")
+# The *Arr sync switched to a time every day (28. 11. 2026): it samples once a day, whatever its stored interval says.
+check(ARR_TASK.mode_setting == prowlarr.samples.TASK_MODE, "the chosen schedule is read from the task's own setting")
+tasks.set_mode(ARR_TASK, daily=True)
+db.forget_settings()
+check(prowlarr.sample_interval() == timedelta(days=1), f"the task daily: a day ({prowlarr.sample_interval()})")
+tasks.set_mode(ARR_TASK, daily=False)
+db.forget_settings()
+check(prowlarr.sample_interval() == timedelta(hours=2), "every N again: its two hours")
 
 print()
 print("--- a samples table from before its last columns gets them at the start ---")

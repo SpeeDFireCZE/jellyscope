@@ -836,7 +836,7 @@ card takes the full width.
 
 **Settings → Tasks and backups** has twelve tasks:
 
-| Task | When | What it does |
+| Task | When (by default) | What it does |
 |---|---|---|
 | Library sync | daily at a set time | Downloads users, libraries and titles. With ffprobe selected, an analysis of files without technical data follows. |
 | Recently added titles | every N minutes | Only fetches what is not in the library yet. It barely touches Jellyfin, so it can run often. |
@@ -860,11 +860,24 @@ just after midnight.
 The same page also holds **File analysis** (reading technical data with
 ffprobe, with its coverage) and the manual **Data tidy-up** button.
 
-The nightly tasks run at a **time of day**, not at an interval. An interval
-counts from the last run, so every manual run would push the schedule and
-a 3:30 AM task would drift into the afternoon. A missed run (the machine
-was off) is caught up after start, and a manual run never changes the
-schedule.
+Each task but Log rotation, Clearing out the history and Notifications can
+run either **at a time every day** or **every N minutes or hours**: the table says which one it starts with, and
+the Tasks page switches it. A task at a time of day keeps its time: a
+manual run never changes the schedule, and a missed run (the machine was
+off) is caught up after start. One switched to a time of day starts at that
+time, not at once. An interval counts from the last run, manual ones
+included, and has no lower limit (the library sync every minute, if you
+want). Log rotation stays daily, since it turns the logs after N days, and
+so does Clearing out the history: it makes a full backup before it deletes,
+and on an interval those backups would push the kept ones out within hours.
+Notifications stay every N minutes: they watch the collector and the free
+space, and the weekly summary has its own day and time in Notifications.
+
+**A task never runs twice at once.** The scheduler starts the due tasks one
+after another and skips one that is running (a task at a time of day that
+was started by hand at its time counts as done for the day). **Run now**
+starts a task at once, beside any other, unless that same task is running
+already; then it says so and starts nothing.
 
 Backups can be downloaded, deleted and restored from the same page.
 Restoring saves the current state first, so a misclick costs nothing.

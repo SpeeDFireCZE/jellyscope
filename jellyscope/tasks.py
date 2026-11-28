@@ -39,12 +39,18 @@ for it.
 
 A task can become due in two ways, and each suits something else:
 
-  * **every day at a given time** (the library synchronisation, the backup) -
-    those are tasks that should run at night, when nobody watches. Were they
+  * **every day at a given time** (by default the library synchronisation, the
+    backup) - tasks that should run at night, when nobody watches. Were they
     counted from the last run, every manual start would shift the whole
     schedule and the task would in time "turn" into the afternoon.
-  * **every N minutes** (newly added titles) - there the exact time does not
-    matter, the point is to ask often.
+  * **every N minutes** (by default newly added titles) - there the exact time
+    does not matter, the point is to ask often.
+
+Each task is declared with one of them and carries the other too; since 28. 11.
+2026 the administrator chooses per task (`is_daily`, `task_<key>_mode`). The log
+rotation and the clearing out stay daily, the notifications every N minutes
+(`switchable=False`). A task never runs twice at once: the scheduler and "Run
+now" both start it through `run_guarded`.
 
 The daily time is compared in the **local** time: whoever writes 3:30 means
 half past three at home, not in UTC.
@@ -128,12 +134,17 @@ class Task:
     runner: Callable[[], Awaitable[dict[str, Any]]]
     log_kind: str                              # the name it is written under into scan_log
 
-    # A task is either daily (a key with the time "HH:MM"), or an interval one
-    # (a key with a count of minutes). Exactly one pair is always filled in.
+    # The schedule the task is declared with: daily (a key with the time "HH:MM") or an interval (a key with a count
+    # of minutes). Since 28. 11. 2026 every task carries both - __post_init__ fills in the other one - and the
+    # administrator chooses which holds (is_daily, `task_<key>_mode`); the declared one is the default.
     time_setting: str = ""
     default_time: str = ""
     interval_setting: str = ""
     default_minutes: int = 0
+    # Fixed to the declared schedule, no choice on the page: the log rotation (turns the logs after N days) and the
+    # clearing out (a backup before it deletes) daily, the notifications (the collector, the space, the summary's hour)
+    # every N minutes.
+    switchable: bool = True
 
     # When a manual start behaves differently than the scheduled one (Log
     # rotation: the scheduled one turns the logs only after the set count of
@@ -142,13 +153,33 @@ class Task:
     # The date of the next real run, when it is not every day (Log rotation).
     next_run: Callable[[], date | None] | None = None
 
-    @property
-    def is_daily(self) -> bool:
-        return bool(self.time_setting)
+    # Daily until the administrator chooses otherwise: the kind the task was declared with (resolved in __post_init__
+    # from the declared schedule; an init field, so dataclasses.replace carries it instead of recomputing it from the
+    # time setting __post_init__ filled in - that turned an interval task daily).
+    daily_by_default: bool | None = None
+
+    def __post_init__(self) -> None:
+        """Fills in the schedule the task was not declared with: an interval task gets a time (03:00), a daily one an
+        interval (24 hours) - shown on the page when the administrator switches it."""
+        setting = object.__setattr__    # a frozen dataclass
+        if self.daily_by_default is None:
+            setting(self, "daily_by_default", bool(self.time_setting))
+        if not self.time_setting:
+            setting(self, "time_setting", f"task_{self.key}_time")
+            setting(self, "default_time", "03:00")
+        if not self.interval_setting:
+            # Not "task_<key>_minutes": db.DROPPED_SETTINGS deletes the backup's old one of that name at every start.
+            setting(self, "interval_setting", f"task_{self.key}_interval")
+            setting(self, "default_minutes", 24 * 60)
 
     @property
     def enabled_setting(self) -> str:
         return f"task_{self.key}_enabled"
+
+    @property
+    def mode_setting(self) -> str:
+        """The chosen schedule: "daily" or "interval"; unstored = the declared one (daily_by_default)."""
+        return f"task_{self.key}_mode"
 
 
 async def _run_sync() -> dict[str, Any]:
@@ -563,6 +594,9 @@ TASKS: dict[str, Task] = {
             default_minutes=15,
             runner=_run_notifications,
             log_kind="notifications",
+            # Every N minutes only (28. 11. 2026, the owner: the weekly summary keeps its own fixed day and time): it
+            # watches the collector and the free space, and a run once a day would miss the summary's hour for good.
+            switchable=False,
         ),
         Task(
             key="arr",
@@ -643,6 +677,9 @@ TASKS: dict[str, Task] = {
             default_time="04:45",
             runner=_run_purge,
             log_kind="purge",
+            # Daily only (28. 11. 2026, the owner's choice): it makes a full backup before it deletes, and on an
+            # interval those would push the kept backups - the safety net - from a week down to hours.
+            switchable=False,
         ),
         Task(
             key="logrotate",
@@ -658,6 +695,7 @@ TASKS: dict[str, Task] = {
             manual_runner=_rotate_logs,
             next_run=next_rotation,
             log_kind="logrotate",
+            switchable=False,
         ),
         Task(
             key="backup",
@@ -746,13 +784,17 @@ async def _write_backup(reason: str) -> dict[str, Any]:
     `reason` is appended to the file's name (the backup before deleting) and
     allows a fallback folder when none is set - see backup_folder().
     """
+    # A backup made for a reason (before deleting, restoring, converting) has a record of its own kind: under
+    # "backup" it reset the regular backup's interval. The record comes first, so a backup without a folder leaves a
+    # failed one - without it the page said "never" and an interval task tried again every minute.
+    scan_id = scanner.start_task_log(f"backup-{reason}" if reason else "backup")
     target = backup_folder(reason)
     if not target:
         failure = i18n.Message("No folder for backups is set.")
+        scanner.finish_task_log(scan_id, "error", message=failure)
         return {"status": "error", "message": failure.translated(), "reason": failure}
 
     target_dir = Path(target)
-    scan_id = scanner.start_task_log("backup")
 
     try:
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -1674,16 +1716,32 @@ def is_enabled(task: Task) -> bool:
     return db.get_setting(task.enabled_setting, "0") == "1"
 
 
+def is_daily(task: Task) -> bool:
+    """Does the task run at a time every day (or every N minutes)? The administrator's choice, else as declared."""
+    if not task.switchable:
+        return task.daily_by_default
+    mode = db.get_setting(task.mode_setting, "")
+    return mode == "daily" if mode in ("daily", "interval") else task.daily_by_default
+
+
+def set_mode(task: Task, daily: bool) -> None:
+    """Chooses the task's schedule. Switched to daily it counts from now: an old stamp of a scheduled run (the task was
+    daily once before) would make it look like a missed night and start it at once - it starts at its time."""
+    if not task.switchable:
+        return
+    was_daily = is_daily(task)
+    db.set_setting(task.mode_setting, "daily" if daily else "interval")
+    if daily and not was_daily:
+        _record_automatic_run(task)
+
+
 def interval_minutes(task: Task) -> int:
-    if task.is_daily:
-        return 0
+    """The task's interval in minutes, whichever schedule holds (the page shows both)."""
     return db.get_int_setting(task.interval_setting, 0, 10080, task.default_minutes)
 
 
 def daily_time(task: Task) -> str:
-    """The daily task's time as "HH:MM". Nonsense in the settings is replaced by the default."""
-    if not task.is_daily:
-        return ""
+    """The task's time as "HH:MM", whichever schedule holds. Nonsense in the settings is replaced by the default."""
     return valid_time(db.get_setting(task.time_setting, task.default_time),
                       task.default_time)
 
@@ -1711,6 +1769,14 @@ def time_choices(task: Task) -> dict[str, Any]:
     return {"hour": hour, "minute": minute}
 
 
+def interval_choice(task: Task) -> dict[str, Any]:
+    """The interval for the form: whole hours as hours (6 hours, not 360 minutes), anything else in minutes."""
+    minutes = interval_minutes(task)
+    if minutes >= 60 and minutes % 60 == 0:
+        return {"interval": minutes // 60, "unit": "hours"}
+    return {"interval": minutes, "unit": "minutes"}
+
+
 def status(task: Task) -> dict[str, Any]:
     """Everything the Settings page needs to know about a task."""
     last = scanner.last_scan(task.log_kind)
@@ -1718,7 +1784,7 @@ def status(task: Task) -> dict[str, Any]:
     row = {
         "task": task,
         "enabled": is_enabled(task),
-        "daily": task.is_daily,
+        "daily": is_daily(task),
         "time": daily_time(task),
         "minutes": interval_minutes(task),
         "last": last,
@@ -1726,11 +1792,15 @@ def status(task: Task) -> dict[str, Any]:
         # For a daily task the time is shown right away instead of "in 12.3 h"
         # - that is the number the person wrote into the settings, so they
         # recognise it.
-        "next_is_today": (task.is_daily and due_in is not None
+        "next_is_today": (is_daily(task) and due_in is not None
                           and datetime.now() < _todays_target(task, datetime.now())),
     }
-    if task.is_daily:
-        row.update(time_choices(task))
+    # An interval of 0 = it never starts by itself (only by hand) - not "at next check".
+    row["by_hand_only"] = bool(row["enabled"] and not row["daily"] and not row["minutes"])
+    # Both schedules: the page offers the other one too.
+    row.update(time_choices(task))
+    row.update(interval_choice(task))
+    row["switchable"] = task.switchable
     # A task that does not run every day: the date when it really does something.
     upcoming = task.next_run() if task.next_run else None
     row["next_date"] = (upcoming.strftime("%d.%m.")
@@ -1769,7 +1839,7 @@ def _minutes_until_due(task: Task, last: dict[str, Any] | None) -> float | None:
     if not is_enabled(task):
         return None
 
-    if task.is_daily:
+    if is_daily(task):
         now = datetime.now()
         target = _todays_target(task, now)
         if _daily_task_due(task, now, target):
@@ -1846,7 +1916,7 @@ def _is_due(task: Task) -> bool:
     if not is_enabled(task):
         return False
 
-    if task.is_daily:
+    if is_daily(task):
         now = datetime.now()
         return _daily_task_due(task, now, _todays_target(task, now))
 
@@ -1859,12 +1929,34 @@ def _is_due(task: Task) -> bool:
     return _minutes_elapsed(last) >= minutes
 
 
+# The tasks running right now (in this process - the app runs one). The scheduler and "Run now" both start a task
+# through run_guarded, so the same task never runs twice at once (28. 11. 2026: "if it runs when it is to start again,
+# it must not start again"); different tasks may run side by side as before.
+_running: set[str] = set()
+
+
+def is_running(key: str) -> bool:
+    """Does the task run right now?"""
+    return key in _running
+
+
+async def run_guarded(task: Task, runner: Callable[[], Awaitable[dict[str, Any]]]) -> dict[str, Any]:
+    """Runs the task unless it runs already - then nothing starts. The mark goes with the end, an error included."""
+    if task.key in _running:     # no await between the check and the mark: nothing can slip in between
+        return {"status": "running", "message": "This task is already running."}
+    _running.add(task.key)
+    try:
+        return await runner()
+    finally:
+        _running.discard(task.key)
+
+
 async def run_now(key: str) -> dict[str, Any]:
-    """A manual start of a task from Settings."""
+    """A manual start of a task from Settings: at once, beside any other task - but not the same one twice."""
     task = TASKS.get(key)
     if task is None:
         return {"status": "error", "message": "Unknown task."}
-    return await (task.manual_runner or task.runner)()
+    return await run_guarded(task, task.manual_runner or task.runner)
 
 
 def deferred_compaction_time(now: datetime | None = None) -> datetime | None:
@@ -1906,6 +1998,50 @@ async def _finish_deferred_compaction() -> None:
     await asyncio.to_thread(purge.finish_deferred_compaction)
 
 
+async def _tick() -> None:
+    """One pass of the scheduler: the due tasks one after another (each runs to its end before the next), then the
+    deferred compaction. A task running right now is not started again (run_guarded)."""
+    for task in TASKS.values():
+        # A task we know nothing about yet (a fresh installation or a
+        # change just deployed) is **not caught up**. We only note "we
+        # count from now" and the first run comes at its time.
+        #
+        # Without this, after deploying at half past three in the
+        # afternoon the night synchronisation started at once: today's
+        # time had come and no record of a run existed, so it looked
+        # like a missed time. Only what we know should have run is
+        # caught up - not the first acquaintance.
+        if is_daily(task) and last_automatic_run(task) is None:
+            _record_automatic_run(task)
+            log.info("task %s: counting the schedule from now, "
+                     "first run at %s", task.key, daily_time(task))
+            continue
+
+        if _is_due(task):
+            if is_running(task.key):
+                # Running right now (started by hand): not a second time. A daily one counts as handled - it
+                # runs at its time after all - so it does not start again right after the manual run ends.
+                if is_daily(task):
+                    _record_automatic_run(task)
+                log.info("task %s is running already, not started again", task.key)
+                continue
+            log.info("scheduled task: %s", i18n.UiName(task.name))
+            if is_daily(task):
+                _record_automatic_run(task)
+            try:
+                result = await run_guarded(task, task.runner)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - one failing task must not hold up the ones after it
+                log.exception("task %s failed", task.key)
+                continue
+            log.info("task %s finished: %s", task.key, result.get("status"))
+
+    # It is not a task - it has no switching on nor a schedule, only a
+    # debt after forgetting a viewer by hand that is paid off at night.
+    await _finish_deferred_compaction()
+
+
 async def run_scheduler() -> None:
     """The loop in the background. Once a minute it checks what is due already.
 
@@ -1916,40 +2052,7 @@ async def run_scheduler() -> None:
 
     while True:
         try:
-            for task in TASKS.values():
-                # A task we know nothing about yet (a fresh installation or a
-                # change just deployed) is **not caught up**. We only note "we
-                # count from now" and the first run comes at its time.
-                #
-                # Without this, after deploying at half past three in the
-                # afternoon the night synchronisation started at once: today's
-                # time had come and no record of a run existed, so it looked
-                # like a missed time. Only what we know should have run is
-                # caught up - not the first acquaintance.
-                if task.is_daily and last_automatic_run(task) is None:
-                    _record_automatic_run(task)
-                    log.info("task %s: counting the schedule from now, "
-                             "first run at %s", task.key, daily_time(task))
-                    continue
-
-                if _is_due(task):
-                    log.info("scheduled task: %s", i18n.UiName(task.name))
-                    if task.is_daily:
-                        _record_automatic_run(task)
-                    try:
-                        result = await task.runner()
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:  # noqa: BLE001 - one failing task must not hold up the ones after it
-                        log.exception("task %s failed", task.key)
-                        continue
-                    log.info("task %s finished: %s", task.key, result.get("status"))
-
-            # It is not a task - it has no switching on nor a schedule, only a
-            # debt after forgetting a viewer by hand that is paid off at night.
-            await _finish_deferred_compaction()
-
-
+            await _tick()
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001

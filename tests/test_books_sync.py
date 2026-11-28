@@ -181,9 +181,10 @@ now = datetime.now(UTC)
 without_one = [new_book, *others]
 gone = next(i for i in without_one if i["Name"] == "Staré pověsti")
 without_one.remove(gone)
-db.set_setting("books_full_pass", (now - timedelta(hours=23)).strftime("%Y-%m-%d %H:%M:%S"))
+# 22, not 23: a full pass is due an hour early (FULL_PASS_SLACK), a daily task starts a minute earlier or later.
+db.set_setting("books_full_pass", (now - timedelta(hours=22)).strftime("%Y-%m-%d %H:%M:%S"))
 result = run_sync(fake_jellyfin_books(items=without_one))
-check(result.get("full") is False and count("missing = 1") == 0, "23 hours after a full pass: incremental only, nothing missing")
+check(result.get("full") is False and count("missing = 1") == 0, "22 hours after a full pass: incremental only, nothing missing")
 db.set_setting("books_full_pass", (now - timedelta(hours=25)).strftime("%Y-%m-%d %H:%M:%S"))
 result = run_sync(fake_jellyfin_books(items=without_one))
 missing = {r["name"] for r in db.query_all("SELECT name FROM book WHERE missing = 1")}
@@ -250,7 +251,7 @@ print()
 print("--- H) the task ---")
 task = tasks.TASKS.get("books_sync")
 check(task is not None and task.name == "Books sync" and task.default_minutes == 60 and task.interval_setting == "books_sync_minutes"
-      and task.log_kind == "books" and tasks.is_enabled(task) and not task.is_daily,
+      and task.log_kind == "books" and tasks.is_enabled(task) and not tasks.is_daily(task),
       "the task books_sync: 60 minutes (books_sync_minutes), on")
 restore = substitute(sync, "JellyfinClient", fake_jellyfin_books())
 outcome = asyncio.run(tasks.run_now("books_sync"))

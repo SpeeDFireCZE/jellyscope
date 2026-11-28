@@ -839,7 +839,7 @@ print("--- the task ---")
 from jellyscope import tasks  # noqa: E402
 
 check("notifications" in tasks.TASKS, "the check has a task of its own")
-check(not tasks.TASKS["notifications"].is_daily,
+check(not tasks.is_daily(tasks.TASKS["notifications"]),
       "and it runs at an interval - a fault is to be known today, not tomorrow morning")
 
 print()

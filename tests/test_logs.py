@@ -217,7 +217,7 @@ check(held == {"app": True, "API": True}, f"the rollover holds the handler's loc
 print()
 print("--- the Log rotation task ---")
 task = tasks.TASKS.get("logrotate")
-check(task is not None and task.is_daily and tasks.is_enabled(task),
+check(task is not None and tasks.is_daily(task) and tasks.is_enabled(task),
       "it is among the tasks, daily and switched on by default")
 db.set_setting(applog.DAYS_KEY, "7")
 db.set_setting(applog.LAST_ROTATION_KEY, date.today().isoformat())

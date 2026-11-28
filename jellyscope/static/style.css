@@ -2047,6 +2047,26 @@ select, textarea {
 
 .time-picker span { color: var(--text-secondary); }
 
+/* A task's schedule (28. 11. 2026): "( ) Every day at [03]:[30]" over "( ) Every [6] [hours]" - a radio with its
+   label in the left column, its fields in the right one. The log rotation has no radios: only its time, right. */
+/* The header over the schedules, right as they are. */
+th.when { text-align: right; }
+.task-schedule {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    justify-content: end;
+    gap: 6px 10px;
+}
+.task-schedule .task-mode { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.task-schedule .time-picker { margin-left: 0; }
+.task-schedule > .time-picker:first-child { grid-column: 2; }
+.task-schedule > .card-note { grid-column: 2; text-align: right; }
+.task-schedule > .interval-picker:first-child { grid-column: 2; }
+.interval-picker { display: flex; align-items: center; gap: 5px; }
+.interval-picker input { width: 64px; text-align: center; padding-inline: 6px; font-variant-numeric: tabular-nums; }
+.interval-picker select { min-width: 96px; }
+
 textarea { min-height: 92px; resize: vertical; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 13px; }
 
 /* :focus-visible, not :focus.

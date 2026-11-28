@@ -145,7 +145,13 @@ async def history_tidy(request: Request,
 
     It can be run repeatedly; the second time it finds nothing.
     """
-    result = await importers.tidy_data()
+    # The same task as the scheduled one: through its guard, so it does not run beside it (28. 11. 2026).
+    tidy = tasks.TASKS["tidy"]
+    result = await tasks.run_guarded(tidy, importers.tidy_data)
+    if result.get("status") == "running":
+        _flash(request, "{task}: {state}", "warning", task=i18n.translate(tidy.name),
+               state=i18n.translate("is already running."))
+        return RedirectResponse("/settings?section=tasks#cleanup", status_code=303)
 
     jf = result.get("jellyfin") or {}
     if jf.get("status") == "error":

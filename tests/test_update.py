@@ -488,7 +488,7 @@ from jellyscope import tasks  # noqa: E402
 
 check("updates" in tasks.TASKS, "the task „Kontrola aktualizací“ is in the schedule")
 task = tasks.TASKS["updates"]
-check(task.is_daily and task.time_setting == "task_updates_time",
+check(tasks.is_daily(task) and task.time_setting == "task_updates_time",
       "it is planned for a time like the other daily tasks")
 check(updates.ENABLED_KEY == task.enabled_setting,
       "it is switched on by the same key as the task - two places would be a trap")

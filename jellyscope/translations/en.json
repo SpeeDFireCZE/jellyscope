@@ -2795,5 +2795,14 @@
     "Network traffic": "Network traffic",
     "Peaks, what flows right now, how much went through which players, and who streamed the most. No addresses. Names can be hidden by anonymising.": "Peaks, what flows right now, how much went through which players, and who streamed the most. No addresses. Names can be hidden by anonymising.",
     "…including \"where they watch from\"": "…including \"where they watch from\"",
-    "Adds home against internet and the countries to /api/v1/bandwidth.": "Adds home against internet and the countries to /api/v1/bandwidth."
+    "Adds home against internet and the countries to /api/v1/bandwidth.": "Adds home against internet and the countries to /api/v1/bandwidth.",
+    "is already running.": "is already running.",
+    "Every day at": "Every day at",
+    "Every#interval_one": "Every",
+    "Every#interval_other": "Every",
+    "minutes#interval_one": "minute",
+    "minutes#interval_other": "minutes",
+    "hours#interval_one": "hour",
+    "hours#interval_other": "hours",
+    "Only by hand": "Only by hand"
 }

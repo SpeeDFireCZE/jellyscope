@@ -60,10 +60,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "poll_interval": "10",
     # When the library is synchronised every day (local time "HH:MM").
     #
-    # A time, not an interval: it is a night task that goes through the whole
-    # library. Were it counted from the last run, every manual run would move
-    # the schedule, and over time the task would drift into the afternoon,
-    # when people watch. See tasks.py.
+    # By default a time, not an interval: a night task that goes through the
+    # whole library, and a time does not drift with manual runs. The
+    # administrator may switch it to an interval (task_sync_mode). See tasks.py.
     "library_sync_time": "03:30",
     # How often to look for newly added titles. The task costs a few calls to
     # Jellyfin (one per library), so it can run often.

@@ -179,9 +179,10 @@ without_one = [new_track, *tracks]
 gone_track = without_one.pop(3)
 albums = copy.deepcopy(recorded("alba_10")["Items"])
 gone_album = next(a for a in albums if a["Name"] == "Bez alba")
-db.set_setting("music_full_pass", (now - timedelta(hours=23)).strftime("%Y-%m-%d %H:%M:%S"))
+# 22, not 23: a full pass is due an hour early (FULL_PASS_SLACK), a daily task starts a minute earlier or later.
+db.set_setting("music_full_pass", (now - timedelta(hours=22)).strftime("%Y-%m-%d %H:%M:%S"))
 result = run_sync(fake_jellyfin(tracks=without_one, albums=[a for a in albums if a is not gone_album]))
-check(result.get("full") is False and count("music_track", "missing = 1") == 0, "23 hours after a full pass: incremental only, nothing missing")
+check(result.get("full") is False and count("music_track", "missing = 1") == 0, "22 hours after a full pass: incremental only, nothing missing")
 db.set_setting("music_full_pass", (now - timedelta(hours=25)).strftime("%Y-%m-%d %H:%M:%S"))
 result = run_sync(fake_jellyfin(tracks=[t for t in without_one if t["Name"] != "Přejmenovaná"],
                                    albums=[a for a in albums if a is not gone_album]))

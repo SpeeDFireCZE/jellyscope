@@ -2871,5 +2871,17 @@
     "Network traffic": "Tráfico de red",
     "Peaks, what flows right now, how much went through which players, and who streamed the most. No addresses. Names can be hidden by anonymising.": "Picos, lo que fluye ahora, cuánto pasó por qué reproductores y quién transmitió más. Sin direcciones. Los nombres se pueden ocultar con la anonimización.",
     "…including \"where they watch from\"": "…incluido «desde dónde ven»",
-    "Adds home against internet and the countries to /api/v1/bandwidth.": "Añade casa frente a internet y los países a /api/v1/bandwidth."
+    "Adds home against internet and the countries to /api/v1/bandwidth.": "Añade casa frente a internet y los países a /api/v1/bandwidth.",
+    "is already running.": "ya se está ejecutando.",
+    "Every day at": "Cada día a las",
+    "Every#interval_one": "Cada",
+    "Every#interval_many": "Cada",
+    "Every#interval_other": "Cada",
+    "minutes#interval_one": "minuto",
+    "minutes#interval_many": "minutos",
+    "minutes#interval_other": "minutos",
+    "hours#interval_one": "hora",
+    "hours#interval_many": "horas",
+    "hours#interval_other": "horas",
+    "Only by hand": "Solo a mano"
 }
